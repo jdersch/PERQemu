@@ -1,0 +1,562 @@
+! Part - PERQ Memory Parity Diagnostic.
+! Copyright (C) Three Rivers Computer Corporation, 1981, 1982, 1983.
+
+! 21 Aug 81  JPS  V1.1  Add copyright notice and change history.
+
+
+! For all possible stores the test will do all possible reads both expecting
+! parity errors and not expecting parity errors.
+
+! Errors
+!         21X   Error detected during Fetch 1
+!         22X                         Fetch 2
+!         23X                         Fetch 4
+!         24X                         Fetch 4R
+
+!          X is 1 if we got an unexpected PE
+!               2 Did not get PE as expected
+!               3 Data Error
+
+          Define(ErAddr,5);
+          Define(Maddr,1);
+          Define(Adr,2);
+          Define(Tmp,3);
+          Define(CurPat,4);
+          Define(RanSeed,5);
+          Define(ParityAdr,7);
+          Define(Error,370);
+          Define(DpyTmp,10);
+          Define(DpyCnt,11);
+          Define(PE, 12);
+          Define(WBadPar,13);
+          Define(Pat1,14);
+          Define(Pat2,15);
+          Define(Pat3,16);
+          Define(Pat4,17);
+          Define(Dat1,24);
+          Define(Dat2,25);
+          Define(Dat3,26);
+          Define(Dat4,27);
+          Define(LpCnt, 30);
+          
+          Constant(BreakPoint,7401);
+          Constant(MaxAddr,177740);
+          
+
+! Store 4 forward
+
+St4F:     Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+St4FLp:   If IntrPend Call(VecInt);
+          PE;
+          If EQL GoTo(St4FCnt);
+          Error := 131, Return;
+          
+St4FCnt:  Call(PDSLGenerate);
+          Pat1 := CurPat;
+          Call(PDSLGenerate);
+          Pat2 := CurPat;
+          Call(PDSLGenerate);
+          Pat3 := CurPat;
+          Call(PDSLGenerate);
+          Pat4 := CurPat;
+          
+          WBadPar OR DpyTmp, IOB(343);
+          Adr, Store4;
+          Pat1;
+          Pat2;
+          Pat3;
+          Pat4;
+          DpyTmp,IOB(343);
+          Adr :=Adr + 4;
+          LpCnt := LpCnt - 4;
+          Error := 0, If C19 Return;
+          GoTo(St4FLp);
+          
+! Store 4 reverse.
+
+St4R:     Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+St4RLp:   If IntrPend Call(VecInt);
+          PE;
+          If EQL GoTo(St4RCnt);
+          Error := 141, Return;
+          
+St4RCnt:  Call(PDSLGenerate);
+          Pat1 := CurPat;
+          Call(PDSLGenerate);
+          Pat2 := CurPat;
+          Call(PDSLGenerate);
+          Pat3 := CurPat;
+          Call(PDSLGenerate);
+          Pat4 := CurPat;
+          
+          WBadPar OR DpyTmp, IOB(343);
+          Adr, Store4R;
+          Pat4;
+          Pat3;
+          Pat2;
+          Pat1;
+          DpyTmp,IOB(343);
+          Adr :=Adr + 4;
+          LpCnt := LpCnt - 4;
+          Error := 0, If C19 Return;
+          GoTo(St4RLp);
+          
+! Store 2.
+
+St2:      Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+St2Lp:    If IntrPend Call(VecInt);
+          PE;
+          If EQL GoTo(St2Cnt);
+          Error := 121, Return;
+          
+St2Cnt:   Call(PDSLGenerate);
+          Pat1 := CurPat;
+          Call(PDSLGenerate);
+          Pat2 := CurPat;
+         
+          
+          WBadPar OR DpyTmp, IOB(343);
+          Adr, Store2;
+          Pat1;
+          Pat2;
+          
+          DpyTmp,IOB(343);
+          Adr :=Adr + 2;
+          LpCnt := LpCnt - 2;
+          Error := 0, If C19 Return;
+          GoTo(St2Lp);
+          
+! Store 1.
+
+St1:     Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+St1Lp:   If IntrPend Call(VecInt);
+          PE;
+          If EQL GoTo(St1Cnt);
+          Error := 111, Return;
+          
+St1Cnt:  Call(PDSLGenerate);
+          Pat1 := CurPat;
+                    
+          WBadPar OR DpyTmp, IOB(343);
+          Adr, Store;
+          
+          Pat1;
+          
+          DpyTmp,IOB(343);
+          Adr :=Adr + 1;
+          LpCnt := LpCnt - 1;
+          MAddr - Adr;
+          Error := 0, If C19 Return;
+          GoTo(St1Lp);
+          
+          
+! Fetch 4.
+ 
+F4F:     Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+F4FLp:    Call(PDSLGenerate);
+          Pat1 := CurPat;
+          Call(PDSLGenerate);
+          Pat2 := CurPat;
+          Call(PDSLGenerate);
+          Pat3 := CurPat;
+          Call(PDSLGenerate);
+          Pat4 := CurPat;
+          
+          Adr, Fetch4;
+          Dat1 := MDI;
+          Dat2 := MDI;
+          Dat3 := MDI;
+          Dat4 := MDI;
+          
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          
+          WBadPar;
+          If NEQ GoTo(F4FExpPE);
+          
+! should not get a parity error
+
+          PE;
+          If EQL GoTo(F4FCnt);
+          Error := 231, Return;
+          
+! Should expect PE
+
+F4FExpPE: PE;
+          If NEQ GoTo(F4FCnt);
+          Error := 232, Return;
+          
+F4FCnt:   Pat1 XOR Dat1;
+          Pat2 XOR Dat2, If NEQ GoTo(F4Err);
+          Pat3 XOR Dat3, If NEQ GoTo(F4Err);
+          Pat4 XOR Dat4, If NEQ GoTo(F4Err);
+          If NEQ GoTo(F4Err);
+          
+          PE := 0;
+          Adr := Adr + 4;
+          LpCnt := LpCnt - 4;
+          Error := 0, If C19 Return;
+          GoTo(F4FLp);
+F4Err:    Error := 233, Return;
+
+! Fetch 4R.
+ 
+F4R:     Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+F4RLp:    Call(PDSLGenerate);
+          Pat1 := CurPat;
+          Call(PDSLGenerate);
+          Pat2 := CurPat;
+          Call(PDSLGenerate);
+          Pat3 := CurPat;
+          Call(PDSLGenerate);
+          Pat4 := CurPat;
+          
+          Adr, Fetch4R;
+          Dat4 := MDI;
+          Dat3 := MDI;
+          Dat2 := MDI;
+          Dat1 := MDI;
+                   
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          
+          WBadPar;
+          If NEQ GoTo(F4RExpPE);
+          
+! should not get a parity error
+
+          PE;
+          If EQL GoTo(F4RCnt);
+          Error := 241, Return;
+          
+! Should expect PE
+
+F4RExpPE: PE;
+          If NEQ GoTo(F4RCnt);
+          Error := 242, Return;
+          
+F4RCnt:   Pat1 XOR Dat1;
+          Pat2 XOR Dat2, If NEQ GoTo(F4RErr);
+          Pat3 XOR Dat3, If NEQ GoTo(F4RErr);
+          Pat4 XOR Dat4, If NEQ GoTo(F4RErr);
+          If NEQ GoTo(F4RErr);
+          
+          PE := 0;
+          Adr :=Adr + 4;
+          LpCnt := LpCnt - 4;
+          Error := 0, If C19 Return;
+          GoTo(F4RLp);
+          
+F4RErr:    Error := 243, Return;
+
+! Fetch 2.
+ 
+F2:     Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+F2Lp:    Call(PDSLGenerate);
+          Pat1 := CurPat;
+          Call(PDSLGenerate);
+          Pat2 := CurPat;
+                   
+          Adr, Fetch2;
+          Dat1 := MDI;
+          Dat2 := MDI;
+                   
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          
+          WBadPar;
+          If NEQ GoTo(F2ExpPE);
+          
+! should not get a parity error
+
+          PE;
+          If EQL GoTo(F2Cnt);
+          Error := 221, Return;
+          
+! Should expect PE
+
+F2ExpPE: PE;
+          If NEQ GoTo(F2Cnt);
+          Error := 222, Return;
+          
+F2Cnt:    Pat1 XOR Dat1;
+          Pat2 XOR Dat2, If NEQ GoTo(F2Err);
+          If NEQ GoTo(F2Err);
+          PE := 0;
+          Adr :=Adr + 2;
+          LpCnt := LpCnt - 2;
+          Error := 0, If C19 Return;
+          GoTo(F2Lp);
+          
+F2Err:    Error := 223, Return;
+
+! Fetch 1.
+ 
+F1:       Adr := 0;
+          LpCnt := MAddr;
+          IOB(147);                       ! Clean up any parity errors
+          PE := 0;
+          CurPat := 0;
+          
+
+F1Lp:     Call(PDSLGenerate);
+          Pat1 := CurPat;
+          
+          
+          Adr, Fetch;
+          Dat1 := MDI;
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          If IntrPend Call(VecInt);
+          
+          WBadPar;
+          If NEQ GoTo(F1ExpPE);
+          
+! should not get a parity error
+
+          PE;
+          If EQL GoTo(F1cnt);
+          Error := 211, Return;
+          
+! Should expect PE
+
+F1ExpPE:  PE;
+          If NEQ GoTo(F1Cnt);
+          Error := 212, Return;
+          
+F1Cnt:    Pat1 XOR Dat1;
+          If NEQ GoTo(F1Err);
+          
+          PE := 0;
+          Adr :=Adr + 1;
+          LpCnt := LpCnt - 1;
+          Error := 0, If C19 Return;
+          GoTo(F1Lp);
+          
+F1Err:    Error := 213, Return;
+
+
+! Random number generator.
+
+PDSLGenerate:
+
+        If IntrPend Call(VecInt);
+        CurPat;
+        CurPat, If NEQ GoTo(GenA);
+        CurPat := RanSeed;
+GenA:   Tmp := 1, If LSS GoTo(Genb);
+        Tmp := 0;
+GenB:   CurPat AND 100;
+        If  EQL GoTo(GenC);
+        Tmp := Tmp XOR 1;
+        
+GenC:   CurPat := CurPat + CurPat;
+        CurPat := CurPat OR Tmp, Return;
+        
+        
+! Interrupt routines
+
+VecInt: Vector(Z80Int);
+
+Z80Int: Return, Loc(300);
+BadInt1: Return, Loc(304);
+BadInt2: Return, Loc(310);
+BadInt3: Return, Loc(314);
+BadInt4: Return, Loc(320);
+
+! Display interrupt routine
+
+DpyInt: DpyTmp, IOB(343), Loc(324);
+        DpyTmp, IOB(340);
+Dpy1:   0, IOB(342);
+        DpyCnt := DpyCnt - 1;
+        DpyTmp := 102000, If GTR Return;
+        DpyCnt;
+        DpyTmp := 101154, If EQL Return;
+        DpyTmp := 101351;
+        0, IOB(341);
+        0, IOB(344);
+        DpyCnt := 11, GoTo(Dpy1);
+        
+BadInt5: Return, Loc(330);
+
+ParInt: PE := 1, Loc(334);
+       IOB(147);
+       ParityAdr := IOD, Return;
+       
+       
+! Main Routine to drive the test
+
+PART:  Maddr := 100000, Loc(2400);
+       Maddr := Maddr + Maddr; 
+       Maddr := Maddr + Maddr;
+       Maddr := Maddr - 1;                  ! the top of memory
+       DpyTmp := 101154;
+       DpyCnt := 0;
+       RanSeed := 0;
+       WBadPar := 0;                        ! write correct parity first
+
+MainLp:CurPat := 0;                         ! Init the pattern generator
+       
+       Call(St4F);
+       If NEQ GoTo(BreakPoint);
+       Call(F4F);
+       If NEQ GoTo(BreakPoint);
+       Call(F2);
+       If NEQ GoTo(BreakPoint);
+       Call(F1);
+       If NEQ GoTo(BreakPoint);
+       Call(F4R);
+       If NEQ GoTo(BreakPoint);
+
+       Call(St4R);
+       If NEQ GoTo(BreakPoint);
+       Call(F4F);
+       If NEQ GoTo(BreakPoint);
+       Call(F2);
+       If NEQ GoTo(BreakPoint);
+       Call(F1);
+       If NEQ GoTo(BreakPoint);
+       Call(F4R);
+       If NEQ GoTo(BreakPoint);
+       
+       Call(St2);
+       If NEQ GoTo(BreakPoint);
+       Call(F4F);
+       If NEQ GoTo(BreakPoint);
+       Call(F2);
+       If NEQ GoTo(BreakPoint);
+       Call(F1);
+       If NEQ GoTo(BreakPoint);
+       Call(F4R);
+       If NEQ GoTo(BreakPoint);
+              
+       Call(St1);
+       If NEQ GoTo(BreakPoint);
+       Call(F4F);
+       If NEQ GoTo(BreakPoint);
+       Call(F2);
+       If NEQ GoTo(BreakPoint);
+       Call(F1);
+       If NEQ GoTo(BreakPoint);
+       Call(F4R);
+       If NEQ GoTo(BreakPoint);
+       
+       WBadPar := WBadPar XOR 10000;        ! Toggle the write parity bit
+       RanSeed := RanSeed + 1;
+       If Neq GoTo(MAinLp);
+       Error := 100, GoTo(BreakPoint);        ! In about 2 yrs this instruction
+                                            ! will be executed
+       
+       
+! following are a set of loops to help trouble shooting
+
+! Loop does a store 4 with the write wrong parity bit turned on.
+! Address should be specified in R0 and the patterns in R14 Thru R17
+! and reads the location specified in reg 2. This register should
+! already be pointing at the right address if the main routine 
+! has been run.
+        
+       Define(TSAdr,0);
+        
+       WBadPar := 10000, Loc(100);
+       DpyTmp := 101154;
+       DpyCnt := 0;
+ 
+TSLp1:  DpyTmp OR WBadPar, IOB(343);                   ! set write wrong parity bit
+        Adr, Store4;
+        PAt1;
+        Pat2;
+        Pat3;
+        Pat4;
+        DpyTmp, IOB(343);                   ! reset write wrong parity bit
+        IOB(147), PE :=0;           ! Dismiss  parity interrupts
+        
+        Adr, Fetch;                 ! fetch the offending word
+        MDI;
+        If IntrPend CALL(VecInt);
+        If IntrPend CALL(VecInt);
+        If IntrPend CALL(VecInt);   ! allow time for interrupt to be taken
+        
+        PE;
+        If NEQ GoTo(TsLp1);         ! should get a PE
+        
+! Fall thru did not get PE as expected.
+  
+        StackReset, GoTo(TsLp1);    ! Something to scope out
+
+
+! Following loop does a store4 followed by a fetch 4 not expecting any 
+! parity errors        
+
+
+       
+       DpyTmp := 101154, Loc(200);
+       DpyCnt := 0;
+ 
+TSLp2:  Adr, Store4;
+        PAt1;
+        Pat2;
+        Pat3;
+        Pat4;
+        IOB(147), PE :=0;           ! Dismiss  parity interrupts
+        
+        Adr, Fetch4;                 ! fetch the offending word
+        MDI;
+        If IntrPend CALL(VecInt);
+        If IntrPend CALL(VecInt);
+        If IntrPend CALL(VecInt);   ! allow time for interrupt to be taken
+        
+        PE;
+        If EQL GoTo(TsLp2);         ! should get a PE
+        
+! Fall thru got an unexpected pe.
+  
+        StackReset, GoTo(TsLp2);    ! Something to scope out
+        
+        
+        END;

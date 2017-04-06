@@ -1,0 +1,52 @@
+     define (IOdata,0);
+     define (IOaddr,1);
+     define (temp,2);
+
+     constant(IOinst,77);            ! A=6 (X), W=0, ALU=0 (A)
+
+!****************************************************************************
+!* THIS PROGRAM IS USED TO TEST THE ADDRESS RAMS OF THE ETHERNET CIRCUIT    *
+!* TO RUN THIS YOU MUST:                                                    *
+!* (1) LIFT PIN 1 OF U87 AND TIE IT LOW                                     *
+!* (2) LIFT PIN 11 OF U56 AND TIE IT HIGH                                   *
+!* (3) RUN THIS TEST WITH A GO 0                                            *
+!*                        IT WILL LOOP THRU ALL ADDRESS DOING               *
+!*                        WRITES AND READS WITH DATA IN R0                  *
+!*                        USE SCOPE TO READ Y MUX LINES                     *
+!****************************************************************************
+ 
+     
+     
+!!!!!  WRITES   !!!!!
+
+
+start: IOaddr := 0,loc(0);
+here: IOaddr := IOaddr or 310;
+w:   IOaddr and 177, LeftShift(10);  ! Clear bit 7 and put in Z field
+     shift or IOinst;                ! Add A, W and ALU fields
+     WCSLOW, next;                   ! Write to loopw
+loopw: IOdata, IOB(200), next;       ! **** MODIFIED ****
+     nop;
+     nop;
+     loadS(20);
+wait: repeat(wait);                    ! Wait a while
+
+
+!!!!!  READS   !!!!!
+
+     temp := 7;
+     IOaddr := IOaddr and temp;
+b:   IOaddr or 200, LeftShift(10);   ! Set bit 7 and put in Z field
+     shift or IOinst;                ! Add A, W and ALU fields
+     WCSLOW, next;                   ! Write to loopr
+loopr: IOB(0), next;                 ! **** MODIFIED ****
+     nop;
+     nop;
+     loadS(20);
+dely: repeat(dely);                    ! Wait a while
+     IOdata := IOD;
+     IOaddr := IOaddr+1;             !increment address
+     IOaddr-7;
+     if gtr goto(start);
+     goto (here);
+     end;

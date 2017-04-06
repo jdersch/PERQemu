@@ -1,0 +1,1216 @@
+$Title Short Raster-Op Test
+!******************************************************************************
+!******************************************************************************
+!**********    CPU Diagnostic Test  --  RasterOp (Short Version)    ***********
+!******************************************************************************
+!******************************************************************************
+!            Copyright (C) International Computers LTD 1982
+!
+!  AUTHOR :  BEN CHEUNG
+!  DATE   :  02/02/83
+!  PROJECT:  ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest
+!  REF.   :  ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest/ConSRat
+!            ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest/ConSRo
+!            ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest/SizeSMemory
+!
+!  REMARKS:  This is a shortened version (ConSTest) of the existing CPU  
+!            RasterOP confidence test (ConXTest) and is to be used as an 
+!            alternative test although it further tests RasterOp on other 
+!            parts of the memory.
+! 
+!  Modification History.
+!
+!  27 Mar 83  CHC   *** Release 5 (Diagnostics) ***
+!                   Modified for CPU diagnostic test.
+!
+!  
+!  31 Jan 83  CHC   *** Release 5 ***
+!
+!                   Modify the CPU RasterOp Confidence Test (2 hr. version)
+!                   and use this as an alternative test (faster version) 
+!                   for Release 5
+!
+!                   Cut down the testing time  from about two hours to 
+!                   about 1, 2, 5 and 11 minutes for 1/4, 1/2, 1 and 2 
+!                   MBytes memory respectively.
+!
+!                   RasterOp on various parts of different sized memories
+!                   (SizeMemory finds out the size of the memory).
+!
+!                   Remove DrawByte routine (** redundant for this test).
+!
+!                   Improve legitability and put in comments.
+!
+!                   Handle video interrupt at end of test : 
+!                     a WHITE screen shows test successful
+!                     a BLACK screen shows test failed.
+!
+!                   **NOTE** all changes denoted by #
+!
+!  25 May 82  HC   VD1.0    Start program.
+!
+!
+!       This confidence test is a simplified compilation of the 3RCC 
+!       diagnostic tests for the CPU. Most of the component tests have been
+!       modified  but the best description of what they do is still
+!       SID E615 or customer documents derived from it. SID E614 describes
+!       this test.
+!       Briefly it is designed to be booted using VFY and SYSB and if successful!       will set the DDS to ZERO on exiting. Any other value on the DDS 
+!       indicates some failure has occured and the CPU board is probably faulty
+!       though there is an outside chance the memory board may be the culprit.
+!       The DDS value should give a general indication of the type of fault;
+!       see SID E614.
+!       The documentation at the start of each test describes the diagnostic
+!       test version of each program but there is generally little functional
+!       change in the confidence test version.
+!       Note that CONRO.micro is called by CONRAT.micro and not directly.
+!       Note also that this test ( Raster-Op ) uses memory extensively
+!       so that problems may occur if the memory board is faulty. This test 
+!       takes about 2 hours to run.
+
+!-------------------
+! DECLARATION
+!-------------------
+!      This group inserted to deal with memory size for Release 5
+
+              Define   (DDSinc,         307);
+              Define   (TopOfMemory,    300);    ! Size/Top of memory
+              Define   (MemoryCount,    302);    ! Each unit = 1/4 Mbyte
+              Define   (TmpMemCnt,      303);    ! Temporary Memory counters
+              Define   (TmpMemCnt1,     304);
+              Define   (ScreenCount,    305);    ! 3 times for 1/4 MBytes
+              Define   (BlackWhite,     306);    ! Black 177777, white 0
+              Define   (RATr370,        370);    ! Breakpoint No. (Krnl.Micro)
+              Place    (0,             7000);    ! Microcode locations
+
+
+!-------------------
+! CONTESTS
+!-------------------
+DiagTestS:    0, loc(2400);                      !Entry point
+              GoTo (RAT);                        ! RasterOp tests
+
+FoulUp:       0;                                 ! Return from RasterOp tests
+              ! BlackWhite := 177777                ** Test failed **
+              ! Call (SetMemory);                   Set Screen black
+              RatR370:=100;
+              RatR370:=RatR370+DDSinc;
+              GoTo(HangUp);
+
+RATReturn:    0;                                 ! Return from RasterOp tests
+              BlackWhite := 0;                   !  ** Test successful **
+              Call (SetMemory);                  ! Set Screen white
+              RatR370:=100;
+              
+HangUp:       If IntrPend Call (VecSrv);         ! End of RasterOp Test
+              GoTo (7401);                       ! Return to KRNL
+
+
+!************************ END OF CONSTEST CODE ******************************
+$Title SRat
+!!!     Rat - Raster-op Test.
+!       J. P. Strait    14 Sep 80.
+!       Copyright (C) Three Rivers Computer Corporation, 1980.
+
+
+!!      Rat - Change log.
+!
+!       31 Jan 83  CHC  Make changes for Release 5 ConSTest [ICL].
+!
+!                       Cut down the testing time  from about two hours to 
+!                       about 1, 2, 5 and 11 minutes for 1/4, 1/2, 1 and 2 
+!                       MBytes memory respectively.
+!
+!                       RasterOp on various parts of different sized memories
+!                       (SizeMemory finds out the size of the memory).
+!
+!                       Improve legitability and put in comments.
+!
+!                       Handle video interrupt at end of test : 
+!                         a WHITE screen shows test successful
+!                         a BLACK screen shows test failed.
+!
+!       V1.2C3 HC  25 May 82  Make changes for confidence test.
+!
+!       V1.2C2 HC  11 May 82  Have RAT handle its own interrupts for confidence
+!                             test.
+!
+!       V1.2D1 HC   9 May 82  make RAT compatible with RO V0.5.
+!
+!       V1.2  JPS   6 Nov 80  Fix the format of the screen a bit.
+!
+!       V1.1  JPS   5 Nov 80  Didn't make it.
+!
+!       V1.0  JPS  13 Oct 80  Reconstruct program after loss of source file.
+
+
+!!!     Rat - Raster-op Test.
+!
+!       Rat is a source-data-suspicious raster-op test.  To run Rat,
+!       load Rat (in OdtPrq) and overlay RO.  Then set the Option
+!       register (200) to one of the following values.
+!
+!            0 - Return to Krnl on error.
+!            1 - Loop forever on the case with the first error.
+!            2 - Repeat after a small delay whenever an error is found.
+!            3 - Continue after a small delay whenever an error is found.
+!
+!       Then type 'G'.
+!
+!       Rat may return to the Krnl with one of the following breakpoints.
+!
+!            100 - Successful completion of the test with no errors.  Rat
+!                  takes about 2 hours to complete.
+!            101 - Rat detected an error (option 0).
+!            111 - Rat detected an error, but the Option register had an
+!                  undefined value.
+!
+!       When Rat detects an error, you may examine the four registers
+!       that give Source, Destination, Width, and Direction.
+
+
+!------------------
+! DECLARATION
+!------------------
+              Define   (Option,         200);    ! Rat option
+              Define   (Source,         201);    ! Source bit in quad
+              Define   (Destination,    247);    ! Destination bit in quad
+              Define   (RATwidth,       203);    ! Raster-Op width
+              Define   (RATdirection,   204);    ! 0 = LtoR, 1 = RtoL
+              Define   (xSource,        205);    ! Source X-coordinate
+              Define   (ySource,        206);    ! Source Y-coordinate
+              Define   (xDestination,   207);    ! Destination X-coordinate
+              Define   (yDestination,   210);    ! Destination Y-coordinate
+              Define   (RATY,           211);    ! General purpose Y-coordinate
+              Define   (Word,           212);    ! Word address
+              Define   (W,              213);    ! General purpose word address
+              Define   (Bit,            214);    ! Only a single bit is set 
+              Define   (Top,            215);    ! Top and bottom margin above
+              Define   (Bottom,         216);    !   and below diagonal line
+              Define   (LeftWord,       217);    ! Wrd with left edge of dest
+              Define   (RightWord,      220);    ! Word with right edge 
+              Define   (MaskL,          221);    ! Mask at left edge of dest.
+              Define   (MaskR,          222);    ! mask at right edge 
+              Define   (RATheight,      223);    ! Raster-Op height
+              Define   (wEnd,           224);    ! Ending word address
+              Define   (Fail,           225);    ! Failure/success flag
+              Define   (RATscreen,      226);    ! Base address of the screen
+              Define   (wSource,        227);    ! 1st addr. of the source area
+              Define   (wDestination,   230);    ! 1st addr. of dest. area
+              Define   (TopSource,      231);    ! Top source area Y-coordinate
+              Define   (TopDestination, 232);    ! Top dest. area Y-coordinate
+              Define   (Scan,           233);    ! Scan line address
+              Define   (yEnd,           234);    ! Ending Y-coordinate
+              Define   (MarkWidth,      244);    ! Address of RATwidth marker
+              Define   (MarkSource,     245);    ! Address of source marker
+              Define   (MarkDestination,246);    ! Address of dest. marker
+              Define   (I,              240);    ! Counter
+              Define   (T1,             241);    !   temporary
+              Define   (T2,             242);    !   temporary
+              Define   (C100000,        243);    ! 100000
+              Define   (SB,               7);    ! Stack base (RO.Micro)
+              Define   (AllOnes,         60);    ! 177777 (RO.Micro)
+              
+!      This group inserted to satisfy references in  Ro V0.5
+              
+              Define   (Tmp,             30);
+              Define   (Tmp1,            31);
+              Define   (Tmp2,            32);
+              Define   (SrcByte,         56);
+              Define   (SrcWord,         57);
+              Define   (C1777,          253);    ! 1777
+
+!      This group inserted to allow RAT to handle interrupts itself 
+              
+              Define   (vr,              34);    ! Video refresh temp
+              Define   (vcount,          35);    ! Video counter
+              Define   (HalfScreen,      36);    ! Screen base div 2
+        
+!      This group use as variables rather than constants (for Realease 5)
+
+              Define   (ScreenBase,       0);    !#Address of the screen(3000)
+              Define   (wTop,            41);    !#yTop * 60 + ScreenBase
+              Define   (wBottom,         42);    !#yBottom * 60 + ScreenBase
+              
+              Constant (yTop,             0);    ! Y-coord. of the top area
+              Constant (yBottom,       1000);    ! Y-coord. of the bottom area
+              Constant (qStart,           2);    ! First quad across scan line
+              Constant (wStart,          10);    ! qStart * 4
+              Constant (xStart,         250);    ! wStart * 20
+              Constant (RasterOp,      4000);    ! Micro address of Raster-Op
+              Constant (BreakPoint,    2000);    ! Breakpoint address V1.2D2 
+              Constant (KrnlSrv,       7600);    ! Interrupt serv in Krnl.Micro
+              Constant (IOSrv,         3400);    ! Interrupt service called by 
+                                                 !   RO.Micro
+
+!       This group inserted to satisfy references in RO V0.5
+
+              Constant (IntVec,        5000);    ! Loc. of interrupt routine
+              Constant (VidInt,        5024);    ! Video interrupt
+              Constant (ResetMarks,      31);    !#Loc. for reset Marks
+                                         
+
+!------------------
+! SETMEMORY
+!------------------
+!
+!        Initialize the memory (black or white).
+
+SetMemory:    Word := 0;                         !#starting at 1st word 
+              I := 0;                        
+              TmpMemCnt1 := MemoryCount;         !#use temporary register
+              
+FindQuads:    I := I + 100000;                   !#No. of quads for 1/4 MByte
+              TmpMemCnt1 := TmpMemCnt1 - 1;      !#each unit is 1/4 MBytes
+              If Neq GoTo (FindQuads);           !#next 1/4 MByte
+                             
+SetQuad:      Word,  Store4;                     !#Set  next quad words 
+              MDO := BlackWhite;                                  
+              MDO := BlackWhite;
+              MDO := BlackWhite;
+              MDO := BlackWhite,  
+                If IntrPend Call (VecSrv);
+              I := I - 1;                        !#Decrement I to next quad
+              If Neq GoTo (SetQuad), 
+                Word := Word + 4;                !#If set memory not finished
+              Return;
+              
+!------------------
+! INITIALIZE
+!------------------
+!
+!         Initialize the blank screen to avoid overlapping.
+
+Initialize:   Word := RATScreen;                 ! Clear screen
+              I := 30000;                        ! No. of quads on screen
+Init1:        Word, Store4;                      ! Clear next quad
+              MDO := 0;
+              MDO := 0;
+              MDO := 0;
+              MDO := 0,  
+                If IntrPend Call (VecSrv);
+              I := I - 1;
+              If Neq GoTo (Init1),
+                Word := Word + 4;
+
+!        Draw a diagonal line in the source area (bottom half of the screen
+!          with 10 (wStart) * 16 (Bits in word) = 160 bits offset).
+
+              Word := wSource;
+              Word := Word + wStart;
+              Bit := c100000;                    ! Set bit 15 of Bit to 1
+              I := 40;                           ! Bits on the line div 16
+Init2:        Word,  Store;                      ! Store bit pattern in next 
+                                                 !   vertical word
+              Bit,  RightShift(1);               ! Shift the set bit right 1
+              Bit := Shift;                      ! Store the new setbit posit'n
+              if Neq goto(Init2), Word:=Word+60; ! If bit not round once
+              Word:=Word+1,                      
+                if IntrPend call(VecSrv);        ! Move to next horizontal word
+              I := I - 1;                        ! Move to next word (16 bits)
+              if Neq GoTo (Init2), Bit:=c100000; ! Reset bit 15 of Bit to 1
+              I := 110054;                       !#move to the next line
+              RATscreen + I, Store4;             ! This draws a horizontal line
+              MDO := 177777;                     !   near the bottom left hand 
+              MDO := 177777;                     !   corner of the screen
+              MDO := 177777;
+              MDO := 177777, Loc(31);            !#reset Marks to top of screen
+              RATscreen+MarkDestination, Store;
+              MDO := 177777;
+              RATscreen + MarkSource,  Store;
+              MDO := 177777;
+              RATscreen + MarkWidth,  Store;
+              MDO := 177777;
+              Return;
+        
+
+!------------------
+! CHECK
+!------------------
+!
+!        Check - Check screen for errors.
+
+Check:
+        
+!       Rotate to correct bit position;
+
+              Bit := c100000;
+              Word := wStart;
+              Scan := wDestination;
+              RATY := TopDestination, 
+                GoTo (Check2);
+
+Check1:       RATY := RATY + 1;
+              Bit, RightShift(1);
+              Bit := Shift;
+              Scan := Scan + 60, 
+                If Neq GoTo (Check2);            ! If bit not wrapped around
+              Word := Word + 1;
+              Bit := c100000, 
+                If IntrPend Call (VecSrv);
+Check2:       RATY - yDestination;
+              If Neq GoTo (Check1);
+              xDestination,  RightShift(4);
+              LeftWord := Shift + 1;
+              T1 := xDestination;
+              T1 := T1 + RATwidth;
+              T1 - 1;
+              RightWord := Shift + 1;
+              MaskL := 177777;
+              MaskR := MaskL;
+              I := xDestination;
+              I := I and 17,  GoTo (Check4);
+        
+Check3:       MaskL,  RightShift(1);
+              MaskL := Shift, 
+                If IntrPend Call (VecSrv);
+Check4:       I := I - 1;
+              If Geq GoTo (Check3);
+              I := T1;
+              I := I and 17,  GoTo (Check6);
+
+Check5:       MaskR, RightShift(1);
+              MaskR := Shift, 
+                if IntrPend Call (VecSrv);
+Check6:       I := I - 1;
+              If Geq GoTo (Check5);
+              MaskR := Not MaskR;
+              LeftWord - RightWord;
+              W := wStart,  If Neq GoTo (Check7);
+              MaskL := MaskL and MaskR;
+              MaskR := MaskL;
+Check7:       wEnd := RightWord, 
+                If IntrPend call(VecSrv);
+              wEnd := wEnd + 3;
+              wEnd := wEnd and Not 3;
+              yEnd := yDestination;
+              yEnd := yEnd + RATheight;
+              RightWord := RightWord - wEnd;
+              LeftWord := LeftWord - wEnd;
+              Word := Word - wEnd;
+              Scan:=Scan+wEnd,  GoTo (Check14);
+
+Check8:       W := wStart;
+              W := W - wEnd, 
+                If IntrPend call(VecSrv);
+Check9:       W + Scan,  Fetch;
+              W - Word, 
+                If IntrPend GoTo (Check9a);
+              W := W + 1,  If Eql GoTo (Check10);
+              Fail := MDI Or Fail, 
+                If Neq GoTo (Check9);
+              Fail, GoTo (Check13);
+        
+Check9a:      Call (VecSrv);
+              GoTo (Check9);
+        
+Check10:      T1 := MDI;
+              W - RightWord;
+              If Gtr GoTo (Check12),   
+                W - LeftWord;
+              If Lss GoTo (Check12);
+              T1 := T1 Xor Bit;
+              W - LeftWord;
+              If Neq GoTo (Check11),  
+                W - RightWord;
+              T1 := T1 and MaskL,  
+                GoTo (Check12);
+        
+Check11:      If Neq GoTo (Check12);
+              T1 := T1 and MaskR;
+Check12:      Fail := Fail Or T1;
+              If IntrPend Call (VecSrv);
+              W;
+              Fail, If Neq GoTo (Check9);
+Check13:      RATY:=RATY+1, if Neq GoTo (Check15);
+              Bit, RightShift(1);
+              Bit := Shift;
+              If Neq GoTo (Check14),
+                Scan := Scan + 60 ;
+              Word := Word + 1, 
+                If IntrPend Call (VecSrv);
+              Bit := c100000;
+Check14:      RATY - yEnd;
+              If Neq GoTo (Check8);
+              Fail, Return;
+        
+Check15:      Scan := Scan - 60;
+              Scan, Store4;
+              177777;
+              177777;
+              177777;
+              177777;
+              If IntrPend Call (VecSrv);
+              Scan + 4, Store2;
+              177777;
+              177777;
+              Fail, Return;
+
+
+!------------------
+! TEST
+!------------------
+!
+!      Test - Run a set of tests.
+
+Test:         Destination := 0;  
+              MarkDestination := 56;             ! Start from line 1 (right) 
+Test1:        RATscreen + MarkDestination, Store;! Move Mark to next position
+              MDO := 177777;
+              xDestination := Destination, 
+                If IntrPend Call (VecSrv);
+              xDestination:=xDestination+xStart;
+              xDestination:=xDestination+100;
+              Source := 0; 
+              MarkSource := 55;                  ! Start from line 1 (middle) 
+Test2:        RATscreen + MarkSource, Store;     ! Move Mark to next position
+              MDO := 177777;
+              xSource := Source, 
+                If IntrPend call(VecSrv);
+              xSource := xSource + xStart;
+              xSource := xSource + 100;
+              Source - Destination;
+              If Geq GoTo (Test3), Top := Source;
+              Top := Destination;
+Test3:        ySource := TopSource;
+              ySource := ySource + Source;
+              ySource := ySource + 100;
+              ySource := ySource - Top;
+              yDestination := TopDestination;
+              yDestination := yDestination + Destination;
+              yDestination := yDestination + 100;
+              yDestination := yDestination - Top;
+              MarkWidth := 54;                   ! Start from line 1 (left)
+              RATwidth := 1,  Call (Initialize);
+Test4:        RATscreen + MarkWidth, Store;      ! Move Mark to next position
+              MDO := 177777;
+              T1 := Source, 
+                If IntrPend Call (VecSrv);
+              T1 := T1 + RATwidth;
+              T1 := T1 and 77;
+              T2 := Destination;
+              T2 := T2 + RATwidth;
+              T2 := T2 and 77;
+              T1 - T2;
+              Bottom := T1,  If Leq GoTo (Test5);
+              Bottom := T2;
+Test5:        Tos := 100; 
+              Bottom := Tos - Bottom, 
+                If IntrPend Call (VecSrv);
+              RATheight := RATwidth;
+              RATheight := RATheight + Top;
+              RATheight := RATheight + Bottom;
+Test6:        Fail := 0,  Loc(2300);             !#remove Loc(2300) (**no ref.)
+Test7:        If IntrPend Call (VecSrv);
+              BPC := 10;
+              Tos := 0, Push;                    ! Loading RasterOp parameters
+              Tos := RATwidth, Push;
+              Tos := RATheight, Push;
+              Tos := xDestination, Push;
+              Tos := yDestination, Push;
+              Tos := 60, Push;
+              Tos := RATscreen - SB, Push; 
+              Tos := xSource, Push;
+              Tos := ySource, Push;
+              Tos := 60, Push;
+              Tos := RATscreen - SB, Push;
+              GoTo (RasterOp);                   ! Ready for RasterOp
+
+Loc(0),       Fail;                              ! Ret. fr. RasterOp explicitly
+              If Neq GoTo (Test7);               ! if loop on error desired
+              Call(Check);
+              If Neq GoTo (Test8);
+Test7a:       RATscreen + MarkWidth, Store;      ! Routine for moving Mark's
+              MDO := 0;
+              MarkWidth := MarkWidth + 1400;     !#replace 300 by 1400 to widen
+              RATwidth - 300;                    !#  the gap
+              If Lss GoTo (Test4), 
+                RATwidth := RATwidth + 4;        !#replace 1 by 4, Neq by Lss
+                                                 !#  to shorten testing time 
+              RATscreen + MarkSource, Store;
+              MDO := 0;
+              MarkSource := MarkSource + 11000;  !#replace 1100 by 11000
+              Source - 77;
+              If Lss GoTo (Test2), 
+                Source := Source + 10;           !#replace 1 by 10, Neq by Lss
+              RATscreen + MarkDestination, Store;
+              MDO := 0;
+              MarkDestination:=MarkDestination + 
+                               11000;            !#replace 1100 by 11000
+              Destination - 77;
+              If Lss GoTo (Test1), 
+                Destination := Destination + 10; !#replace 1 by 10, Neq by Lss
+              Return;
+        
+Test8:        Option;
+              DDSinc:=1, If Eql GoTo (FoulUp);  
+              T1 := 10;                          ! Wait for a moment
+Test9:        T2 := 0;
+Test10:       If IntrPend call(VecSrv);
+              T2 := T2 - 1;
+              If Neq GoTo (Test10);
+              T1 := T1 - 1;
+              If Neq GoTo (Test9);              ! Waiting time elapsed
+              Call(Initialize);
+              Option - 1;
+              Option - 2,  If Eql GoTo (Test7);
+              Option - 3,  If Eql GoTo (Test6);
+              0,  If Eql GoTo (Test7a);
+              DDSinc := 11,  GoTo (FoulUp);
+        
+Loc(2500),    Call(Initialize);   !#No reference to these 
+              0,  GoTo (Test7a);                !#
+
+
+!------------------
+! RAT
+!------------------
+!
+!      Rat - Main program.
+                                                 ! First two instructions 
+                                                 !   for V1.2D3 .
+Rat:          StackReset;                        ! Show we got here ok.   
+              Option := 0;                       ! ensure return to control 
+                                                 !   sequence on error
+              c100000 := 100000;
+              AllOnes := 177777;
+              C1777 := 1777;                     ! NEW for V1.2D1
+              vr := 101154;                      ! V1.2D2 next cmd: 
+                                                 !   1st vertical retrace
+              vcount := 0;                       !   starting vertical retrace
+              HalfScreen := 0;                   !#ScreenBase/2 for 1/4 MBytes
+                                                 !#  ScreenBase/16 for 1/2 or 1
+              ScreenCount := 2;                  !#2 times for 1/4 MBytes
+              ScreenBase:=0,  Call (SizeMemory); !#find size of the memory 
+              BlackWhite := 0, Call (SetMemory); !#set memory white
+              TmpMemCnt := MemoryCount;          !#Avoid corrupting MemoryCount
+              
+NextMemory:   RATscreen := ScreenBase;           !#put in label
+              wTop := ScreenBase;                !#yTop * 60 + ScreenBase
+              wBottom := 60000;
+              wBottom := wBottom + ScreenBase;   !#yBottom * 60 + ScreenBase
+              TopSource := yBottom;              ! FIRST half of screen test
+              wSource := wBottom;
+              TopDestination := yTop;
+              wDestination := wTop;
+              RATdirection := 0,  Call (Test);
+              TopSource := yTop;                 ! SECOND half of screen test
+              wSource := wTop;
+              TopDestination := yBottom;
+              wDestination := wBottom;
+              RATdirection := 1,  Call (Test);
+              ScreenBase := ScreenBase + 100000; !#Base Address of the screen
+              ScreenBase := ScreenBase + 100000; !#  inc. to next 1/8 MBytes
+              MemoryCount - 1;                   !#test memory size
+              If Eql GoTo (Jump1);               !#  1/2, 1 or 2MByte 
+              HalfScreen := HalfScreen + 10000;  !#ScreenBase/16
+              MemoryCount -1;                    !#test memory size
+              If Eql GoTo (Jump2);               !#  1/4 MByte 
+Jump1:        HalfScreen := HalfScreen + 100000; !#ScreenBase/2
+Jump2:        ScreenCount := ScreenCount - 1;    !#2 times for 1/4 MBytes
+              If Neq GoTo (NextMemory);          !#end of current 1/4 MByte?
+              TmpMemCnt := TmpMemCnt - 1;        !#each unit is 1/4 MBytes
+              If Neq GoTo (NextMemory),
+                ScreenCount := 2;                !#reset for next 1/4 MBytes
+              GoTo (RatReturn);
+
+
+!------------------
+! VecInt
+!------------------
+!
+!      Interrupt service.                       ( from kernel. NEW for V1.2C2)
+
+VecSrv:       Vector(5000);
+
+z80int:       Loc(5000), IOB (106),  Return;     ! NEW locations for V1.2D1
+badint1:      Loc(5004), DDSinc:=2;
+              GoTo (IntBad);          ! compatibility with RO V0.5
+dskint:       Loc(5010), 0, IOB (301),  Return;
+badint3:      Loc(5014), DDSinc:=3;
+              GoTo (IntBad);
+badint4:      Loc(5020), DDSinc:=4;
+              GoTo (IntBad);
+                                                 ! ***** VidInt *****
+              Loc(5024), vr, IOB (343);          ! load Vidstate
+              vr,  IOB (340);                    ! load line count
+vid1:         0,  IOB (342);                     ! load cursor address
+              vr And 200;
+              If Eql GoTo(vid2);                 ! if we didnt load 2nd retrace
+              HalfScreen,  IOB (341);            ! addr of screen bit map div 2
+              0,  IOB (344);                     ! load cursor X value
+              vcount := 11;
+vid2:         vr := 102000;                      ! next command: display normal
+              vcount := vcount - 1;
+              If Gtr Return;
+              vr := 101154;                      ! next cmd: 1st vert. retrace
+              vcount;
+              If Eql Return;                     ! If end of screen
+              vr := 101351;                      ! next cmd: 2nd vert. retrace
+              Return;
+badint6:      Loc(5030), DDSinc:=5;
+              GoTo (IntBad);
+parint:       Loc(5034),  IOB (147);             ! Dismiss parity interrupt
+              Return;
+        
+IntBad:       GoTo (FoulUp);                     ! Report bad interrupts 
+
+enfin:        GoTo (enfin),  Loc (2000);         ! NEW for V1.2C2
+
+
+
+$Title  General Subroutine - SizeMemory
+!******************************************************************************
+!******************************************************************************
+!**********                         SizeSMemory                     ***********
+!******************************************************************************
+!******************************************************************************
+!            Copyright (C) International Computers LTD 1982
+!
+!  AUTHOR :  BEN CHEUNG
+!  DATE   :  02/02/83
+!  PROJECT:  ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest/SizeSMemory
+!  REF.   :  ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest
+!            ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest/ConSRat
+!            ICL/DSDD/SDC/Perq Test Software/ConfCPU/ConSTest/ConSRo
+!
+!  
+! Abstract    -  finds out size of the memory in the machine (1/4, 1/2,
+!                1 or 2 MBytes).
+!
+! Parameters  -  entry:  none.
+!                exit :  TopOfMemory  - Size of the memory (words).
+!                        Tmp          - Tempory register.
+!                        MemoryCount  - Step up counter for size of memory 
+!                                        (each unit = 1/4 MBytes).
+!                NOTE :  registers are defined in ConTestS.micro
+!
+! Design      -  this can only consider maximum size of 2 MBytes memory  
+!                (TopOfMemory is 20 bit register) and assumes that writing 
+!                to the address TopOfMemory (if this is the size of memory)
+!                will write to address 0.
+!
+! Side Effects-  none.
+
+
+!------------------
+! SIZEMEMORY
+!------------------
+SizeMemory:   0,  Fetch;                         ! Get the 1st word 
+              Tmp := MDI;                        !   don't have to wait 2cycle?
+              MemoryCount := 1;                  ! Initialise MemoryCount 
+              TopOfMemory := 100000;             ! Size/Top of 1/4 MByte memory
+              TopOfMemory := TopOfMemory +
+                             TopOfMemory;
+SizeTimes2:   TopOfMemory := TopOfMemory +
+                             TopOfMemory,
+              Store;                             ! Write to Top+1
+              MDO := Not Tmp;                    !   1's complement of Tmp
+              0,  Fetch;                         ! Get 1st word again
+              MDI - Tmp;                         !   0 if overwritten (found)
+              If Eql GoTo (SizeTimes2), 
+                MemoryCount := MemoryCount + 
+                               MemoryCount;      ! Count unit of memory*2
+              0,  Store;                         ! Restore value of word 0
+              MDO := Tmp;
+              MemoryCount,  RightShift(1);       ! Div 2 to counter off *2
+              MemoryCount := Shift,  Return;
+
+
+!********************** END OF SIZESMEMORY CODE *******************************
+
+
+
+$Title Ro
+!!!      RasterOp Microcode Version 0.1
+!
+!        Brian Rosen & Stan Kriz & John Strait
+!        Copyright (C) Three Rivers Computer, 1981.
+!
+!
+!  R. 5   2 Feb 83  CHB  Remove DrawByte routine  [ICL]
+!
+!  V0.5  16 Jul 81  JPS  Change "Company Confidential" notice to "Copyright".
+!
+!  V0.4  18 May 81  JPS  Change RO to be an include file.
+!
+!  V0.3  29 Apr 81  JPS  Provide an entrypoint that writes from a packed array
+!                        of characters (or from a string for that matter).
+!
+!  V0.2  22 Oct 80  JPS  Added 'Hold's that were lost in version 0.1.
+!
+!  V0.1   8 Oct 80   BR  Added No Power Down bit to SrcRasterOp
+!
+
+!------------------
+! DECLARATION
+!------------------
+define(SrcBase,116);    ! base address (origin word) of source
+define(DstBase,117);    ! base address (origin word) of destination
+define(SrcQuad,100);    ! memory address of source data (quad aligned)
+define(DstQuad,101);    ! memory address of destination data (quad aligned)
+define(SrcLineInc,102); ! # of words between last quad of one line and 1st
+                        ! quad of next line -> ScanLineLength - width (words)
+                        ! with -1, +1 effects taken into account
+define(DstLineInc,103); ! same for destination
+define(Height,104);     ! height (in bits) of area to be moved
+define(Width,105);      ! width (in Bits) of area to be moved
+define(Func,111);       ! RasterOp function (3 bits)
+
+!        ***Note*** Following register definitions use the SAME register.
+
+define(XtraSrcFetch,106);  ! Bit 7 set if more source than dest quads needed
+define(XtraSrcWord,106);   ! Bit 0 set if more source than dest words needed
+define(OneQuad,106);    ! Bit 15 set if only 1 dest quad is needed
+
+define(MidNum,107);     ! number of quads wide - 2 (ie # of mid cycles to do)
+define(MidCnt,110);     ! counter for MidNum
+
+define(SrcX,112);       ! source X value
+define(SrcY,113);       ! source Y value
+define(DstX,114);       ! destination X value
+define(DstY,115);       ! destination Y value
+
+define(SrcBinQ,112);    ! source bit in quad  *** same register as SrcX ***
+define(SrcBinW,113);    ! source bit in word  *** same register as SrcY ***
+define(DstBinQ,114);    ! destination bit in quad  *** same register as DstX ***
+define(DstBinW,115);    ! destination bit in word  *** same register as DstY ***
+
+define(LeftSrc,120);    ! leftmost source bit in word
+define(LeftDst,121);    ! leftmost destination bit in word
+define(LastDst,122);    ! last destination word in quad
+
+define(DstRas,121);     ! DstRasterOp value *** same register as LeftDst ***
+define(SrcRas,120);     ! srcRasterOp value *** same register as LeftSrc ***
+
+define(Flag,123);       ! bit 7 = 1 SrcQuad, bit 0 = trip flag in SetUp
+define(Direction,124);  ! 0 for left to right, not 0 for right to left
+
+define(r370,370);
+
+!------------------
+! DECLARATION
+!------------------
+!!       CntlRasterOp Functions
+!        Bit 0 = LtoR
+!        Bit 1 = RO/PS  (1 = RasterOp On)
+!        Bit 2:4 = RasterOp Functions
+!        Bit 5 = XtraSrcWord
+!        Bit 6 = disable processor shift
+
+constant (Off,       200);    ! RasterOp Off
+constant (PauseLR,   100);    ! RasterOp Pause, processor shift is disabled
+constant (PauseRL,   101);
+
+constant (Phase0LR,  102);    ! Begin       - NoClear
+constant (Phase0XLR, 142);    ! Begin       - NoClear - XtraSourceWord
+constant (Phase1LR,  106);    ! Mid         - NoClear
+constant (Phase2LR,  112);    ! End         - NoClear
+constant (Phase3LR,  116);    ! Begin/End   - NoClear
+constant (Phase3XLR, 156);    ! Begin/End   - NoClear - XtraSourceWord
+constant (Phase4LR,  122);    ! XtraSource  - NoClear
+constant (Phase5LR,  126);    ! FirstSource - Clear
+constant (Phase6LR,  132);    ! End         - Clear
+constant (Phase7LR,  136);    ! Begin/End   - Clear
+constant (Phase7XLR, 176);    ! Begin/End   - Clear   - XtraSourceWord
+
+constant (Phase0RL,  103);    ! Begin       - NoClear
+constant (Phase0XRL, 143);    ! Begin       - NoClear - XtraSourceWord
+constant (Phase1RL,  107);    ! Mid         - NoClear
+constant (Phase2RL,  113);    ! End         - NoClear
+constant (Phase3RL,  117);    ! Begin/End   - NoClear
+constant (Phase3XRL, 157);    ! Begin/End   - NoClear - XtraSourceWord
+constant (Phase4RL,  123);    ! XtraSource  - NoClear
+constant (Phase5RL,  127);    ! FirstSource - Clear
+constant (Phase6RL,  133);    ! End         - Clear
+constant (Phase7RL,  137);    ! Begin/End   - Clear
+constant (Phase7XRL, 177);    ! Begin/End   - Clear   - XtraSourceWord
+
+
+!------------------
+! RASTEROP
+!------------------
+Loc(RasterOp), Call(Rop);
+               NextInst(0);
+
+!------------------
+! ROP
+!------------------
+Rop:     SrcBase := Tos, Pop;           ! source address, 20-bit offset
+         SrcLineInc := Tos and AllOnes, Pop;  ! source words per scan line
+         SrcY := Tos and AllOnes, Pop;  ! source Y
+         SrcX := Tos and AllOnes, if IntrPend call(IntrIt);  ! source X
+         LeftSrc := Tos and 17;         ! leftmost source bit in word
+         tmp := Tos and 77, Pop;        ! source bit in quad
+         DstBase := Tos, Pop;           ! destination address, 20-bit offset
+         DstLineInc := Tos and AllOnes, Pop;  ! destination words per scan line
+         DstY := Tos and AllOnes, Pop;  ! destination Y
+         DstX := Tos and AllOnes;       ! destination X
+         LeftDst := Tos and 17;         ! leftmost destination bit in word
+         tmp1 := Tos and 77, Pop;       ! destination bit in quad
+         LastDst := DstX;               ! in preparation for LastDst computation
+         Height := Tos - 1, Pop;        ! height-1 of block in bits
+         Direction := 0, if IntrPend call(IntrIt);  ! assume left to right
+         Width := Tos - 1, Pop;         ! width-1 of block in bits
+         Width := Width and AllOnes;
+         Func := not Tos;               ! function code
+Rop0:    tmp1 + Width, RightShift(6);
+         MidNum := Shift - 1;           ! # of middle quads (quad width - 2)
+         OneQuad := 200, if Geq goto(Rop1);     ! clear all flags
+         OneQuad := OneQuad or 100000;          ! set one quad
+Rop1:    Flag := 0, if IntrPend call(IntrIt);
+         tmp + Width, RightShift(6);
+         Shift;
+         Tos := SrcBase - DstBase, if Neq goto(Rop2);  ! if source > 1 quad
+         Flag := 200;                   ! set 1 source quad
+Rop2:    Tos - 1;                       ! 20-bit equality test
+         SrcY - DstY, if C19 goto(Compare);     ! if Eql, compare X and Y
+
+!------------------
+! LTOR
+!------------------
+!
+!       Perform raster-op left to right if
+!              (SrcBase <> DstBase) or
+!              ((SrcBase = DstBase) and
+!               ((SrcY > DstY) or ((SrcY = DstY) and (SrcX >= DstX))))
+!
+LtoR:    LastDst := LastDst + Width, Call (SetUp);
+
+!        Synchronize memory and code with a fetch.  For some obscure reason,
+!        memory cycles are numbered differently here:  T1 is the cycle a
+!        Fetch starts in.
+!
+!        Labels on micro-instructions indicate the action being performed:
+!
+!        Xsr - Extra source fetch cycle.
+!        Beg - Begin cycle.
+!        Mid - Middle cycle.
+!        End - End cycle.
+!        BgE - Begin/End cycle.
+!
+!        Qn - Quad timing cycle n.
+!        Tn - Micro timing cycle n.
+
+         DstQuad := DstQuad - DstLineInc, Fetch, Call(Nop1); !synchronize
+         CntlRasterOp(Phase5LR);                  !t3  and here we go
+         Hold, LoadS(IntrCom);                    !Q0 0 First Src is always 1st
+         SrcQuad := SrcQuad, Fetch4, call(Nop1);  !   1
+         OneQuad;                                 !   3
+         XtraSrcFetch, Hold, if geq GoTo(EndQ2T1);!Q2 0
+         XtraSrcWord, If ByteSign GoTo(XsrQ2T2b); !   1
+         GoTo(EndQ2T3);                           !   2
+
+XsrQ0T2: nop, call(Nop1);                         !Q0 2 Xtra Src has only 2
+         OneQuad, Hold;                           !Q2 0         quad cycles
+         XtraSrcWord, If lss Goto(XsrQ2T2b);      !   1
+XsrQ2T2: If Odd GoTo(XsrQ2T3b);                   !   2
+XsrQ2T3: CntlRasterOp(Phase0LR);                  !   3
+BegQ0T0: If IntrPend GoTo(IntrB);                 !Q0 0  Begin
+         DstQuad := DstQuad + DstLineInc, Fetch4, call(Nop1); !   1
+BegQ0T3: nop, call(Nop1);                         !   3
+BegQ1T1: SrcQuad := SrcQuad + 4, Fetch4;          !Q1 1
+         MA := DstQuad, Store4, call(Nop2);       !   2
+         MidCnt := MidNum;                        !Q0 1
+BegQ2T2: if Neq GoTo(BegQ2T3b);                   !   2 away if > 2 quads
+BegQ2T3: CntlRasterOp(Phase6LR);                  !   3 else, this is the end
+         nop;                                     !Q0 0  End
+         DstQuad := DstQuad + 4, Fetch4, Call(LREndCom); !   1
+         XtraSrcFetch, If Lss GoTo(ExitRO);       !Q2 0
+EndQ2T1: XtraSrcWord, IF ByteSign GoTo(XsrQ2T2);  !   1
+         nop;                                     !   2
+EndQ2T3: CntlRasterOp(Phase4LR);                  !   3
+XsrQ0T0: Hold;                                    !Q0 0  Xtra Src
+         SrcQuad := SrcQuad + 4, Fetch4, GoTo(XsrQ0T2); !   1
+
+BegQ2T3b:0, CntlRasterOp(Phase1LR);               !Q2 3  no Video interrupt
+MidQ0T0: If Neq GoTo(IntrA);                      !Q0 0  Mid
+         DstQuad := DstQuad + 4, Fetch4, call(Nop3);!   1
+         SrcQuad := SrcQuad + 4, Fetch4;          !Q1 1
+         MA := DstQuad, Store4, call(Nop2);       !   2
+         IOB(145), MidCnt := MidCnt - 1;          !Q2 1  Video state
+         tmp := IOD and 20, if eql goto(BegQ2T3); !   2  Video interrupt bit
+         tmp, GoTo(MidQ0T0);                      !   3
+
+XsrQ2T3b:CntlRasterOp(Phase0XLR);                 !Q2 3  Xtra Src
+         if IntrPend GoTo(IntrE);                 !Q0 0  Begin
+         DstQuad := DstQuad + DstLineInc, Fetch4; !   1
+         GoTo(BegQ0T3);                           !Q0 2
+        
+XsrQ2T2b:If Odd GoTo(XsrQ2T3d);                   !Q2 2  Xtra Src
+XsrQ2T3c:CntlRasterOp(Phase7LR);                  !   3
+BgEQ0T0: If IntrPend GoTo(IntrC);                 !Q0 0  Begin/End
+         DstQuad := DstQuad + DstLineInc, Fetch4, Call(LREndCom); !   1
+         XtraSrcFetch, Hold, If Lss GoTo(ExitRO); !Q2 0
+         XtraSrcWord, IF ByteSign GoTo(XsrQ2T2b); !   1
+         GoTo(EndQ2T3);                           !   2
+
+XsrQ2T3d:CntlRasterOp(Phase7XLR);                 !Q2 3  Xtra Src
+         If IntrPend GoTo(IntrD);                 !Q0 0  Begin/End
+         DstQuad := DstQuad + DstLineInc, Fetch4, Call(LREndCom); !   1
+         XtraSrcFetch, If Lss GoTo(ExitRO);       !Q2 0
+         XtraSrcWord, Hold, IF ByteSign GoTo(XsrQ2T2b); !   1
+         GoTo(EndQ2T3);                           !   2
+        
+LREndCom:nop, call(Nop2);                         !Q0 2 End and Begin/End
+         SrcQuad := SrcQuad + SrcLineInc, Fetch4; !Q1 1
+         MA := DstQuad, Store4;                   !   2
+         Height := Height - 1, Return;            !   3
+
+IntrA:   CntlRasterOp(PauseLR);              !Video interrupt in Middle
+         Call(VidInt);                       !Video interrupt service
+         Call(IntrComA);                     !join common code in IntrCom
+         GoTo(BegQ2T3b);                     !Happens at t2, will return to t3
+
+IntrB:   CntlRasterOp(Off), CallS;           !Interrupt in Begin
+         GoTo(XsrQ2T3);                      !Happens at t2, will return to t3
+
+IntrC:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End
+         GoTo(XsrQ2T3c);                     !Happens at t2, will return to t3
+
+IntrD:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End XtraSrc
+         GoTo(XsrQ2T3d);                     !Happens at t2, will return to t3
+
+IntrE:   CntlRasterOp(Off), CallS;           !Interrupt in Begin XtraSrc
+         GoTo(XsrQ2T3b);                     !Happens at t2, will return to t3
+
+!------------------
+! COMPARE
+!------------------
+!
+!!       Compare source start bit with destination start bit.
+
+Compare: SrcY - DstY, if Gtr goto(LtoR);        ! if SrcY > DstY
+         SrcX - DstX, if Neq goto(RtoL);        ! if SrcY < DstY
+                      if Geq goto(LtoR);        ! if SrcX >= DstX
+
+!------------------
+! RTOL
+!------------------
+!
+!       Perform raster-op right to left if
+!               (SrcBase = DstBase) and
+!               ((SrcY < DstY) or ((SrcY = DstY) and (SrcX < DstX)))
+
+RtoL:    SrcY := SrcY + Height;                 ! start X, Y for RtoL case
+         SrcX := SrcX + Width;
+         DstY := DstY + Height;
+         DstX := DstX + Width;
+         Direction := not 0, call(SetUp);
+
+!        Synchronize memory and code with a fetch.  For some obscure reason,
+!        memory cycles are numbered differently here:  T1 is the cycle a
+!        Fetch starts in.
+!
+!        Labels on micro-instructions indicate the action being performed:
+!
+!        Xsr - Extra source fetch cycle.
+!        Beg - Begin cycle.
+!        Mid - Middle cycle.
+!        End - End cycle.
+!        BgE - Begin/End cycle.
+!
+!        Kn - Quad timing cycle n (Qn).
+!        Tn - Micro timing cycle n.
+
+         DstQuad := DstQuad + DstLineInc, Fetch, Call(Nop1); !synchronize
+         CntlRasterOp(Phase5RL);                  !t3  and here we go
+         Hold, LoadS(IntrCom);                    !Q0 0 First Src is always 1st
+         SrcQuad := SrcQuad, Fetch4R, call(Nop1); !   1
+         OneQuad;                                 !   3
+         XtraSrcFetch, Hold, if geq GoTo(EndK2T1);!Q2 0
+         XtraSrcWord, If ByteSign GoTo(XsrK2T2b); !   1
+         GoTo(EndK2T3);                           !   2
+
+XsrK0T2: nop, call(Nop1);                         !Q0 2 Xtra Src has only 2
+         OneQuad, Hold;                           !Q2 0         quad cycles
+         XtraSrcWord, If lss Goto(XsrK2T2b);      !   1
+XsrK2T2: If Odd GoTo(XsrK2T3b);                   !   2
+XsrK2T3: CntlRasterOp(Phase0RL);                  !   3
+BegK0T0: If IntrPend GoTo(IntrG);                 !Q0 0  Begin
+         DstQuad := DstQuad - DstLineInc, Fetch4R, call(Nop1);!   1
+BegK0T3: nop, call(Nop1);                         !   3
+BegK1T1: SrcQuad := SrcQuad - 4, Fetch4R;         !Q1 1
+         MA := DstQuad, Store4R, call(Nop2);      !   2
+         MidCnt := MidNum;                        !Q2 1
+BegK2T2: if Neq GoTo(BegK2T3b);                   !   2 away if > 2 quads
+BegK2T3: CntlRasterOp(Phase6RL);                  !   3 else, this is the end
+         nop;                                     !Q0 0  End
+         DstQuad := DstQuad - 4, Fetch4R, Call(RLEndCom); !   1
+         XtraSrcFetch, Hold, If Lss GoTo(ExitRO); !Q2 0
+EndK2T1: XtraSrcWord, IF ByteSign GoTo(XsrK2T2);  !   1
+         nop;                                     !   2
+EndK2T3: CntlRasterOp(Phase4RL);                  !   3
+XsrK0T0: Hold;                                    !Q0 0  Xtra Src
+         SrcQuad := SrcQuad - 4, Fetch4R, GoTo(XsrK0T2);!   1
+
+BegK2T3b:0, CntlRasterOp(Phase1RL);               !Q2 3  no Video interrupt
+MidK0T0: If Neq GoTo(IntrF);                      !Q0 0  Mid
+         DstQuad := DstQuad - 4, Fetch4R, call(Nop3);!   1
+         SrcQuad := SrcQuad - 4, Fetch4R;         !Q1 1
+         MA := DstQuad, Store4R, call(Nop2);      !   2
+         IOB(145), MidCnt := MidCnt - 1;          !Q2 1  Video state
+         tmp := IOD and 20, if eql goto(BegK2T3); !   2  Video interrupt bit
+         tmp, GoTo(MidK0T0);                      !   3
+
+XsrK2T3b:CntlRasterOp(Phase0XRL);                 !Q2 3  Xtra Src
+         If IntrPend GoTo(IntrJ);                 !Q0 0  Begin
+         DstQuad := DstQuad - DstLineInc, Fetch4R;!   1
+         GoTo(BegK0T3);                           !Q0 2
+        
+XsrK2T2b:If Odd GoTo(XsrK2T3d);                   !Q2 2  Xtra Src
+XsrK2T3c:CntlRasterOp(Phase7RL);                  !   3
+BgEK0T0: If IntrPend GoTo(IntrH);                 !Q0 0  Begin/End
+         DstQuad := DstQuad - DstLineInc, Fetch4R, Call(RLEndCom);!   1
+         XtraSrcFetch, Hold, If Lss GoTo(ExitRO); !Q2 0
+         XtraSrcWord, IF ByteSign GoTo(XsrK2T2b); !   1
+         GoTo(EndK2T3);                           !   2
+
+XsrK2T3d:CntlRasterOp(Phase7XRL);                 !Q2 3  Xtra Src
+         If IntrPend GoTo(IntrI);                 !Q0 0  Begin/End
+         DstQuad := DstQuad - DstLineInc, Fetch4R, Call(RLEndCom);!   1
+         XtraSrcFetch, If Lss GoTo(ExitRO);       !Q2 0
+         XtraSrcWord, IF ByteSign GoTo(XsrK2T2b); !   1
+         GoTo(EndK2T3);                           !   2
+
+RLEndCom:nop, call(Nop2);                         !Q0 2 End and Begin/End
+         SrcQuad := SrcQuad - SrcLineInc, Fetch4R;!Q1 1
+         MA := DstQuad, Store4R;                  !   2
+         Height := Height - 1, Return;            !   3
+
+
+!------------------
+! INTERRUPTS
+!------------------
+IntrF:   CntlRasterOp(PauseRL);              !Video interrupt Middle
+         Call(VidInt);                       !Video interrupt service
+         Call(IntrComA);                     !Join common code in IntrCom
+         GoTo(BegK2T3b);                     !Happens at t2, will return to t3
+
+IntrG:   CntlRasterOp(Off), CallS;           !Interrupt in Begin
+         GoTo(XsrK2T3);                      !Happens at t2, will return to t3
+
+IntrH:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End
+         GoTo(XsrK2T3c);                     !Happens at t2, will return to t3
+
+IntrI:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End XtraSrc
+         GoTo(XsrK2T3d);                     !Happens at t2, will return to t3
+
+IntrJ:   CntlRasterOp(Off), CallS;           !Interrupt in Begin XtraSrc
+         GoTo(XsrK2T3b);                     !Happens at t2, will return to t3
+
+!       common interrupt routine.
+
+IntrCom:      Call(IntrIt);
+IntrComA:     SrcRasterOp := SrcRas;             ! restore SrcRasterOp
+              DstRasterOp := DstRas;             ! restore DstRasterOp
+              Fetch, Return;                     ! Happens at t1
+
+!       vector off to the interrupt handler.
+
+IntrIt:       Vector(IntVec);
+
+!------------------
+! EXITRO
+!------------------
+ExitRO:  CntlRasterOp(Off);                      ! turn RasterOp off
+         Pop, Return;                            ! exit from raster-op.
+
+!------------------
+! SETUP
+!------------------
+SetUp:        Flag := Flag or 1, 
+                if IntrPend call(IntrIt);        ! first time thru
+              tmp1 := SrcLineInc;
+              DstQuad := SrcX, LeftShift(4);
+Set1:         tmp1 - 60;
+              SrcY, if Neq goto(Set3);           ! if not 60
+              
+              tmp := Shift + SrcBase;            ! special case: 60 words/line
+                                                 ! 20*Y + BaseAddress
+              SrcY, LeftShift(5);
+              tmp := Shift + tmp;                ! 40*Y + 20*Y + Base
+Set2:         DstQuad, RightShift(4);
+              DstQuad := Shift + tmp;            ! X/20 + LineLength*Y + Base
+              Flag := Flag xor 1;
+              DstQuad := DstQuad + SB, 
+                if Odd goto(Set6);               ! physical address
+              SrcQuad := DstQuad;                ! roll down
+              SrcY := DstY;
+              DstQuad := DstX;
+              SrcBase := DstBase, LeftShift(4);
+              tmp1 := DstLineInc, goto(Set1);
+Set3:         tmp1 - 40;
+              tmp := SrcY, if Neq goto(Set4);    ! if not 40
+         
+!        another special case: 40 words/line.  the MoveMem routine depends
+!        on raster-op being able to do a 20-bit multiply by 40 words/line.
+
+              tmp := tmp + tmp;                  ! 2 * SrcY
+              tmp := tmp + tmp;                  ! 4 * SrcY
+              tmp := tmp + tmp;                  ! 10 * SrcY
+              tmp := tmp + tmp;                  ! 20 * SrcY
+              tmp := tmp + tmp, goto(Set5);      ! 40 * SrcY
+Set4:         tmp := SrcY, call(ResetMarks);     ! compute SrcLineInc * SrcY
+Set5:         tmp := tmp + SrcBase, goto(Set2);
+Set6:         Tos := SrcBinQ 
+                  := SrcX and 77, 
+                If IntrPend call(IntrIt);
+              SrcBinW := Tos and 17;
+              Tos := DstBinQ 
+                  := DstX and 77;
+              DstBinW := Tos and 17;
+         
+              LastDst := LastDst and 60;         ! set DstRasterOp.
+              Tos := Width and 17;
+              WidRasterOp := Tos or LastDst;
+         
+              Func := Func or 10, LeftShift(2);  ! set SrcLineInc & DstLineInc.
+                                                 ! will be No Power Down bit
+              MidNum + 1;
+              tmp := Shift;                      ! width in words
+              SrcLineInc := SrcLineInc - tmp;
+              DstLineInc := DstLineInc - tmp,
+                if IntrPend call(IntrIt);        ! last chance
+         
+              Tos := SrcBinQ and 60;             ! set SrcRasterOp.
+              tmp := Tos or LeftSrc;
+              Func and 14, LeftShift(4);         !No Power Down and Function[2]
+              SrcRas := SrcRasterOp 
+                     := Shift or tmp;
+
+              Tos := DstBinQ and 60;             ! set DstRasterOp.
+              tmp := Tos or LeftDst;
+              Func and 3, LeftShift(6);
+              DstRas := DstRasterOp 
+                     := Shift or tmp;
+         
+              Flag;                              ! set XtraSrcFetch and 
+                                                 !     XtraSrcWord.
+              If ByteSign GoTo (Set7),
+                Tos := DstBinQ - SrcBinQ;        ! if XtraSrcFetch not possible
+              Tos Xor Direction;
+              if Geq GoTo (Set7);                ! if no extra source fetch
+              XtraSrcFetch := XtraSrcFetch and 
+                              Not 200;           ! set extra source fetch
+              SrcLineInc := SrcLineInc - 4;
+Set7:         Tos := DstBinW - SrcBinW;
+              Tos Xor Direction;
+              if Geq return;                     ! if no extra source word
+              XtraSrcWord := XtraSrcWord Or 1, 
+                Return;                          ! set extra source word
+
+!------------------
+! NOP
+!------------------
+!
+!       spending time doing nothing.
+
+Nop3:         Hold;
+Nop2:         Hold;
+Nop1:         Hold, return;
+
+!************************ END OF CONSRO CODE **********************************
+
+
+End;

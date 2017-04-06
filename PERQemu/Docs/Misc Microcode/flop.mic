@@ -1,0 +1,1150 @@
+! Floppy.Micro   Z80 - Perq Test
+!
+!
+! Change Log:
+!
+!  24 Jun 85  V1.0  Rich Huber  Used SysB to Create Z80 Floppy Test
+!                               Primarily for Z80/Perq protocol to test
+!                               Low Speed FIFO channels and also PERQ-Z80
+!                               High speed FIFO's through DMA.
+
+$perq1a
+$nobase
+place(0,1777);              
+!
+!=========================== VERSION CONTROL ===============================
+
+        Place(7777,7777);
+        Define(MajorVersion, 1); ! 1.x    ! ## KEEP THESE UP TO DATE ##
+        Define(MinorVersion, 0); ! x.0
+          
+Version: MajorVersion - MinorVersion, Loc(7777);                            
+         ! This allows for Version number in Bin File For ODTprq
+
+!===========================================================================
+!
+! ODTprq entry points:
+!    0 - Initialize Z80 and Try to configure the Floppy for Single Density
+!    5 - Switch to Double Density
+!   10 - Read Floppy Status Register SR3
+!   15 - Do a Floppy ReadID
+!   30 - Do a Recal to Cyl=0
+!   70 - Do a Seek Cyl, Head (R2, R3)
+!
+!  110 - Do a Go/Nogo Seek Test and read sector zero
+!  120 - do another seek test
+!  130 - Do a Go/Nogo Seek test without Reading sectors
+!  140 - do a 1/3 stroke Seek test
+!
+!  250   = generate write buffer from R0 at M1000
+!  260   = generate alternating 0/1 bits in write buffer
+!  270   = generate alternating 0/1 words in write buffer
+!
+!  300 - Bang a shifting pattern on the Lo Spped Fifo. Scopes Only.
+!
+!  420 - Write 1 Sector in Cyl, Head, Sector (R2, R3, R4) from M1000
+!  450 - Read 1 Sector in Cyl, Head, Sector (R2, R3, R4) into M0
+!  470 - Read a sector and compare Data from Read and Write Buffers
+!  510 - Format one Track in Cyl, Head (R2, R3) Using FormFill (R45)
+!
+!  500 - Format the entire floppy Interleave=1 and fill with R45
+!  520 - Write the whole Floppy with Write Buffer at M400
+!  540 - Read the whole Floppy Into Read Buff and Do A Data Compare to Wr Buff
+!  550 - Read the whole Floppy Into Read Buffer at M0
+!
+!  Setting R56 to 0 Means execute the Cmd only once.
+!  Setting R56 to 1 Means Continuous loop until Failure
+!  Setting R56 to 2 Means Continuous loop And Continue On Failure
+!
+! ODTprq BreakPoints:
+!  A--  Where A is:
+!    1xx - Initialization Failure 
+!    2xx - Seek Failure
+!    3xx - Read Failure
+!    4xx - Write Failure
+!    5xx - Format Failure
+!
+!  -BC  Where BC is:
+!    x01 - No Response From Z80. (TimedOut After Sending Initial Cmd)
+!    x02 - Wrong Z80 Msg Count. Z80InCnt contains actual # Received
+!    x03 - Wrong Device in Msg from Z80. Z80InDev Should be #3 (Device Floppy)
+!    x04 - No ack from first Cmd Or Wrong Cmd in Z80InCmd
+!    x05 - DMA Request from Z80 returned wrong number of Bytes
+!    x06 - Data Mismatch error on Read
+!    x07 - No Ack from Flush of second cmd (Such as DMA completion)
+!
+!
+    define(r0,           0);
+    Define(Bite,         1);
+
+    define(Cyl,          2);
+    define(Head,         3);
+    define(Sector,       4);
+
+    Define(NumPasses,    5);
+    define(NumFails,     6);
+
+    define(BigDly,       7);
+    
+    Define(ToZ80Ptr,    10);
+    Define(FromZ80Ptr,  11);
+    
+    define(TryCnt,      12);
+    define(SDataBase,   13);
+    define(SData,       14);
+    Define(LastOut,     15);
+    Define(Count,       16);
+      
+    define(SeekCnt,     17);
+    define(tmp,         20);
+    Define(Tmp1,        21);
+    Define(Tmp2,        22);
+    define(c1777,       23);
+    define(SecCnt,      24);
+    define(Dly,         25);
+    define(KeyTryCnt,   26);
+    define(c400,        27);
+    
+    define(DevNum,      30);
+    define(MemAdr,      31);
+    define(StartSec,    32);
+    define(ByteCnt,     33);
+    define(Intrpt,      34);           ! which interrupt is desired.
+    define(WasInter,    35);           ! which interrupt happened.
+    Define(DpyTmp,      36);
+    Define(DpyCnt,      37);
+    Define(SmallDly,    40);
+    Define(NextCyl,     41);
+    
+    Define(TmpA,        42);
+    Define(Incr,        43);
+    Define(C60,         44);
+    Define(Filler,      45);
+    Define(dsktmp,      46);
+    Define(iotmp1,      47);
+
+    Define(GPL,         50);  ! Gap Length for Reads/Writes 7=Sngl, 
+    Define(FormGPL,     51);  ! Gap length for Formats 10#27=Sngl,
+    Define(DTL,         52);  !0->128 for single density, 1->256 for double
+    Define(Density,     53);  !0 -> for single density, 100(0) -> dbl density
+    Define(BytesSec,    54);  ! 200 = Single, 400 = Double
+    
+    Define(WasError,    55);
+    Define(Option ,     56);
+
+    Define(Z80InCnt,    60);    ! All Valid Z80 Messages are here - STX(#252)
+    Define(Z80InDev,    61);
+    Define(Z80InCmd,    62);
+    Define(Z80In03 ,    63);
+    Define(Z80In04 ,    64);
+    Define(Z80In05 ,    65);
+    Define(Z80In06 ,    66);
+    Define(Z80In07 ,    67);
+    Define(Z80In08 ,    70);
+    Define(Z80In09 ,    71);
+    Define(Z80In10 ,    72);
+                 
+    Define(Z80OutCnt,  100);    ! All Valid Z80 Messages are here - STX(#252)
+    Define(Z80OutDev,  101);
+    Define(Z80OutCmd,  102);
+    Define(Z80Out03 ,  103);
+    Define(Z80Out04 ,  104);
+    Define(Z80Out05 ,  105);
+    Define(Z80Out06 ,  106);
+    Define(Z80Out07 ,  107);
+    Define(Z80Out08 ,  110);
+    Define(Z80Out09 ,  111);
+    Define(Z80Out10 ,  112);
+                 
+    Define(LineCount,  121);
+    Define(LScape,     122);
+    Define(ShowSpot,   123);
+    Define(LastSpot,   124);
+    
+    Define(R370,       370);
+    Define(R371,       371);       ! ODTprq screen base
+!
+    Constant(Z80InInter,    1);
+    Constant(DiskInter,     3);
+
+
+        ! disk DMA constants.
+
+    Constant(uProcChan,     1);         ! uP (Z80) <==> PERQ DMA Channel
+    constant(ChanSel,     300);
+    constant(DMALhLo,     326);
+    constant(DMALhHi,     327);
+    constant(DMADbLo,     324);
+    constant(DMADbHi,     325);
+
+! disk IO Ports
+
+    constant(dskstat,     123);
+    constant(smctl,       322);
+    constant(dskctl,      323);
+    
+    constant(MaxCyl,    10#76);
+    constant(MaxSect,   10#26);
+    constant(EOT,          32);  ! Last Sector per track                   
+    
+    !Z80 communication
+    
+    constant(Floppy,        3);  ! Device Codes for The Low Volume Requests
+    constant(Z80,          17);
+    constant(Keyboard,     10);
+
+    constant(STX,         252);  ! This Cmd Starts All Low Volume Transfers
+    constant(ACKcmd,        4);  ! This means The cmd Passed
+    constant(NACKcmd,       5);  ! This means the Cmd Failed
+
+    constant(REQDATAcmd,    1);  ! DMA Perq Mem to  Z80 Mem
+    constant(BLKDATAcmd,    2);  ! DMA  Z80 Mem to Perq Mem
+    constant(DATAcmd,       3);
+    constant(CONFIG,       11);  ! This Command sets up the Floppy
+    constant(ReadData,     20);
+    constant(WriteData,    21);
+    Constant(FlFormat,     26);
+    Constant(Recal,        27);
+    constant(Seekcmd,      10);  ! Seek cmd
+
+    constant(keyON,         1);
+    constant(keyOff,        0);
+
+    Constant(EnableRead,    5);  ! Z80 Interupt Constants
+    Constant(EnableWrRd,    7);
+                            
+
+            Option := 0,loc(0);                ! Clear Option Register
+            not 0, IOB(346);                   ! Put ones on the IOB
+            IOB(145);                          ! Bit 7 = 0 for land
+            LScape := IOD and 200;             ! LScape = 200 for port
+            LineCount := 60, if neq goto(PS);
+            LineCount := 120;
+PS:         
+            ToZ80Ptr := 177777 , Loc(1);       !    
+            ToZ80Ptr := ToZ80Ptr + ToZ80Ptr;   !
+            ToZ80Ptr := ToZ80Ptr + 1;          ! Start at M400000
+            FromZ80Ptr := ToZ80Ptr;            !
+            FromZ80Ptr := FromZ80Ptr + 100000; ! Start at M500000
+            WasError := 0;
+            NumPasses := 0;
+            NumFails := 0;
+            MemAdr := 0;                       !
+            WasInter := 0;
+            C400 := 400;                       ! A constant used many times
+            LastOut := 0;
+            R371 := 0;
+            C1777 := 1777;
+            Filler := 125;                     ! Format Filler Byte
+            Dpytmp := 161154;                  ! Set up for Vert Retrace
+            DpyTmp, IOB(343);                  ! Enable Video
+            0, IOB(DskCtl);                    ! Disable Disk and Dib board
+            0, IOB(SmCtl); 
+            Call(Z80Off);                      ! Reset Z80
+                                               ! Shut down Z80 to stop boot
+            Call(WaitAWhile);                  ! Delay a few milliseconds
+            R370 := 101;
+FlushBuf:   Call(RecZ80Byte);
+            If EQL GoTo(FlushBuf);
+            R370 := 102;
+
+            EnableRead, IOB(305);              ! turn Z80 on, read Intrupt only
+            Cyl := 0, Call(WaitAWhile);        ! Let it start up
+            Head := 0;
+            Sector := 1;
+Flush1Buf:  Call(RecZ80Byte);
+            If EQL GoTo(Flush1Buf);
+
+        
+         ! Set single density, 2 sides, Z80 interrupts enabled
+         ! Format STX <6> <floppy> <config> <EOT> <GPL> <DTL> <density>
+
+            GPL      :=   7;                   ! Single Density By Default
+            FormGPL  :=  27;                   !
+            Density  :=   0;                   !
+            DTL      :=   0;                   !
+            BytesSec := 200;                   !
+            Z80OutCnt := 6;                    ! <n>
+            Z80OutDev := Floppy;               ! <floppy>
+            Z80OutCmd := CONFIG;               ! <config>
+            Z80Out03 := EOT;                   ! <EOT> = Last Sector 10#26
+            Z80Out04 := GPL;                   ! <GPL> = Gap Length  7
+            Z80Out05 := DTL;                   ! <DTL> = 1->256, 0->128
+            Z80Out06 := Density, call(SndZ80Msg); ! <density = single);
+            R370 := 104;                       ! If error then is floppy error
+            DevNum := Floppy, Call(Flush);     ! Ignore status returned
+            Tmp := 177777;
+            Tmp := Tmp + 1;
+            Tmp1 := Tmp;
+CSloop:     MA := Tmp, Store4;
+            MDO := 0;
+            MDO := 0;
+            MDO := 0;
+            MDO := 0;
+            MA := Tmp + Tmp1, Store4;
+            MDO := 0;
+            MDO := 0;
+            MDO := 0;
+            MDO := 0;
+            Tmp := Tmp - 4;
+            If Neq Goto(CSloop);
+            MA := Tmp, Store4;         ! Now Clear out M0-M3
+            MDO := 0;
+            MDO := 0;
+            MDO := 0;
+            MDO := 0;
+            Call(ClrProg);
+            Tmp1 := Not 0;             ! Put Count Pattern at Write Buffer
+            Tmp := 777;                ! Buffer at 1000
+FillLp:     MA := Tmp := Tmp + 1, Store;
+            MDO := Tmp1 := Tmp1 + 1;
+            Tmp1 - 377;
+            If Neq Goto(FillLp);
+            R370 := 100, Goto(7401);
+!
+        
+SetDouble:  GPL      := 10#14, Loc(5); ! Set Double Density Now.
+            FormGPL  := 10#54;         !
+            Density  := 100;           !
+            DTL      :=   1;           !
+            BytesSec := 400;           !
+            Z80OutCnt := 6;                       ! <n>
+            Z80OutDev := Floppy;                  ! <floppy>
+            Z80OutCmd := CONFIG;                  ! <config>
+            Z80Out03 := EOT;                      ! <EOT> = Last Sector 10#26
+            Z80Out04 := GPL;                      ! <GPL> = Gap Length  7
+            Z80Out05 := DTL;                      ! <DTL> = 1->256, 0->128
+            Z80Out06 := Density, call(SndZ80Msg); ! <density = single);
+            R370 := 104;                      ! If error then is floppy error
+            DevNum := Floppy, Call(Flush);    ! Ignore status returned
+            R370 := 100, Call(ODTreturn);
+            Goto(SetDouble);
+
+RdStatus:   Nop, Loc(10);                         !
+            Z80OutCnt := 3, If IntrPend Call(VectInt);    ! <n>
+            Z80OutDev := Floppy;                  ! <floppy>
+            Z80OutCmd := 30, Call(SndZ80Msg);     ! <Sense Drive Status 018H>
+            Head, LeftShift(2);
+            Z80Out03 := Shift Or Density;
+            Call(RecZ80Msg);
+            R370 := 100, Call(ODTreturn);
+            Goto(SetDouble);
+
+ReadID:     Nop, Loc(15);                         ! 
+            Z80OutCnt := 3, If IntrPend Call(VectInt);    ! <n>
+            Z80OutDev := Floppy;                  ! <floppy>
+            Z80OutCmd := 14, Call(SndZ80Msg);     ! <ReadID 012H>
+            Head, LeftShift(2);
+            Z80Out03 := Shift Or Density;
+            Call(RecZ80Msg);
+            R370 := 100, Call(ODTreturn);
+            Goto(SetDouble);
+
+    loc(250), sdataBase := 1000;
+            SData := r0;               !user-specified data in r0
+            Call(GenCdata);
+            R370 := 100, Goto(7401);
+
+    
+    loc(260), sdataBase := 1000;
+            SData := 125252;           !alternating bits
+            Call(GenCdata);
+            R370 := 100, Goto(7401);
+
+           
+    loc(270), sDataBase := 1000;        !alternating words
+            PushLoad(177);
+             MA := sdatabase,store2;
+             MDO := 0;
+             MDO := not 0;
+             if intrpend call(CheckVid);
+             sdatabase := sdatabase + 2;
+             RepeatLoop;
+            R370 := 100, Goto(7401);
+           
+genCdata:   PushLoad(377);          !constant data
+             MA := sdatabase,store;
+             MDO := sdata;
+             if intrpend call(CheckVid);
+             sdatabase := sdatabase + 1;
+             RepeatLoop;
+            return;
+            
+DoRecal:    Cyl := 0, Loc(30);                    ! Do a Seek Track Zero
+            Head := 0, If IntrPend Call(VectInt);
+            Sector := 0, Call(InitProg);
+            Call(Seek);
+            Call(ShowProg);
+            R370 := 100, Call(ODTreturn);
+            Goto(DoRecal);
+
+DoAseek:    Call(Seek), Loc(70); ! Do a seek to Cyl, Head
+            If IntrPend Call(VectInt);
+            R370 := 100, Call(ODTreturn);
+            Goto(DoAseek);
+
+            call(Seek),     Loc(420);    ! Write One Floppy Sector
+WrOneLp:    Call(WriteSec), loc(421);
+            If IntrPend Call(VectInt);
+            R370 := 100, Call(ODTreturn);
+            Goto(WrOneLp);
+            
+            call(Seek),     Loc(450);    ! Read One Floppy Sector
+RdOneLp:    Call(ReadSec), loc(451);          
+            If IntrPend Call(VectInt);
+            R370 := 100, Call(ODTreturn);
+            Goto(RdOneLp);
+
+            call(Seek),     Loc(470);    ! Read One Floppy Sector
+RdCkOneLp:  Call(ReadSec), loc(471);     ! And Check the Data     
+            Call(CheckData);
+            If IntrPend Call(VectInt);
+            R370 := 100, Call(ODTreturn);
+            Goto(RdCkOneLp);
+
+            Sector := 1,call(Seek),     Loc(510);  ! Format One Floppy Sector
+FmOneLp:    Call(FormTrack), loc(511);          
+            If IntrPend Call(VectInt);
+            R370 := 100, Call(ODTreturn);
+            Goto(FmOneLp);
+            
+FormFlop:   Cyl := 0,  Loc(500);
+FormZ:      Call(ClrProg);               ! Format Entire Floppy
+            Head := 0;
+            Sector := 1, Loc(501);       ! Format Rest Of Floppy
+FLp:        call(Seek); 
+            If IntrPend Call(VectInt);
+            Call(FormTrack);
+            Call(IncrCyl);
+            If Eql Goto(FLp);
+            R370 := 100, Call(ODTreturn);
+            Goto(FormZ);                 ! Returns Here If R56 set
+
+WriteFlop:  Cyl := 0, Loc(520);          ! Write Entire Floppy       
+WrZ:        Call(ClrProg);
+            Head := 0;
+            Sector := 1, Loc(521);       ! Write Rest of Floppy
+WrLpSk:     Call(Seek);
+WrLp:       If IntrPend Call(VectInt);
+            Call(WriteSec);
+            Call(ISect);
+            If Eql Goto(WrLp);
+            Call(IncrCyl);
+            If Eql Goto(WrLpSk);
+            R370 := 100, Call(ODTreturn);
+            Goto(WrZ);                   ! Returns Here If R56 set
+
+RdCkFlop:   Cyl := 0, Loc(540);          ! Read Entire Floppy 
+RdCkZ:      Call(ClrProg);
+            Head := 0;
+            Sector := 1, Loc(541);       ! Read Rest of Floppy
+RdCkLpSk:   Call(Seek);
+RdCkLp:     If IntrPend Call(VectInt);
+            Call(ReadSec);
+            Call(CheckData);             ! Do a Data Check Between Rd/Wr Bufrs
+            Call(ISect);
+            If Eql Goto(RdCkLp);
+            Call(IncrCyl);
+            If Eql Goto(RdCkLpSk);
+            R370 := 100, Call(ODTreturn);
+            Goto(RdCkZ);                  ! Returns Here If R56 set
+
+
+ReadFlop:   Cyl := 0, Loc(550);          ! Read Entire Floppy (No Data Check)
+RdZ:        Call(ClrProg);
+            Head := 0;
+            Sector := 1, Loc(551);       ! Read Rest of Floppy
+RdLpSk:     Call(Seek);
+RdLp:       If IntrPend Call(VectInt);
+            Call(ReadSec);
+            Call(ISect);
+            If Eql Goto(RdLp);
+            Call(IncrCyl);
+            If Eql Goto(RdLpSk);
+            R370 := 100, Call(ODTreturn);
+            Goto(RdZ);                   ! Returns Here If R56 set
+
+!
+
+       ! Seek Tests
+          
+            call(restore), loc(110); !move to cyl 0
+            Count := 0, LeftShift(0);
+            Head := 0;
+            Sector := 1, Call(ClrProg);
+SeekTest:   Cyl := 0;
+            incr := MaxCyl;          !start with all-track seeks
+sklp:       Nop, If IntrPend Call(CheckVid);
+            cyl := cyl + incr;       !next cylinder
+            Count := Count + 1, call(seek);
+            If IntrPend Call(VectInt);
+            Call(ReadSec);
+            tmp := incr;             !decrement and invert increment
+            if gtr goto(skp);
+            incr := not tmp, goto(skchk);
+skp:        incr := 1;
+            incr := incr - tmp;
+skchk:      if neq goto(sklp);      !at zero?
+            R370 := 100, Call(ODTreturn);
+            Head := Head Xor 1, Goto(SeekTest); 
+            
+! Code to do single-track seeks.  It steps all the way in,
+! then all the way out.
+
+            Head := 0, call(restore), loc(120); !move to cyl 0
+            Count := 0, LeftShift(0);
+            Sector := 0, Call(ClrProg);
+seektest1:  incr := 1;                          !one track seeks
+            cyl := 0;
+sk1lp:      call(seek);
+            If IntrPend Call(VectInt);
+            cyl := cyl + incr;                  !next cylinder
+            cyl - maxcyl, if Lss goto(sk1Done); !if negative, start again
+            if lss goto(sk1lp);                 !at inner track?
+            incr := not incr, If IntrPend Call(CheckVid);  !yep, turn around
+            incr := incr + 1, goto(sk1lp);
+Sk1Done:    R370 := 100, Call(ODTreturn);
+            Head := Head Xor 1, Goto(SeekTest1);
+            
+          
+! Code to do "average" seeks.  It oscillates around the
+! cylinder MaxCyl/2 starting with the longest possible
+! seek and doing seeks that are one cylinder shorter
+! each time through the loop.
+          
+            Head := 0, call(restore), loc(130); !move to cyl 0
+            Sector := 0, Call(ClrProg);
+            Count := 0, LeftShift(0);
+seektest2:  Cyl := 0;
+            incr := MaxCyl;         !start with all-track seeks
+sk2lp:      Nop, If IntrPend Call(CheckVid);
+            cyl := cyl + incr;       !next cylinder
+            Count := Count + 1, call(seek);
+            If IntrPend Call(VectInt);
+            tmp := incr;             !decrement and invert increment
+            if gtr goto(sk2p);
+            incr := not tmp, goto(sk2chk);
+sk2p:       incr := 1;
+            incr := incr - tmp;
+sk2chk:     if neq goto(sk2lp);      !at zero?
+            Option;
+            cyl := 0, if neq goto(seektest2);
+            R370 := 100, Call(ODTreturn);
+            Head := Head Xor 1, Goto(SeekTest2); 
+!
+! Code to do 1/3 stroke seeks.
+! Alternates in and out, walking inward one cylinder each time
+! until it reaches MaxCyl.  It does 2 * (MaxCyl div 3) seeks.
+          
+
+            Head := 0, call(restore), loc(140); !move to cyl 0
+            Sector := 1, Call(ClrProg);
+            Count := 0, LeftShift(0);
+SeekTest3:  Cyl := 0;
+            Count := 0;
+            Incr := Not 0;                     ! Start out with -1
+            TmpA := MaxCyl;
+SeLoop:     Incr := Incr + 1;                  ! This is a Divide by 3 loop
+            TmpA := TmpA - 3;
+            If Gtr Goto(SeLoop);
+            NextCyl := 0;                      ! lo cylinder
+sk3lp:      incr := incr + 1;                  ! next hi cylinder
+            incr - MaxCyl;
+            if gtr goto(sk3end);
+            cyl := incr, If IntrPend Call(CheckVid);
+            Count := Count + 1, call(seek);
+            If IntrPend Call(VectInt);
+            Call(ReadSec);
+            NextCyl := NextCyl + 1;    !next lo cylinder
+            Cyl := NextCyl;
+            Count := Count + 1, call(seek);
+            If IntrPend Call(VectInt);
+            Call(ReadSec);
+            goto(sk3lp);
+sk3end:     R370 := 100, Call(ODTreturn);
+            Head := Head Xor 1, Goto(SeekTest3); 
+
+Restore:    Cyl := 0;
+            Head := 0, Call(Seek);
+            Sector := 1,Return; 
+        
+IncrSect:   sector := sector + 1;     !increment the sector count
+            sector - maxsect;
+            0, if lss return;           !sectors 0 to maxsect-1
+            Sector := 1, return;        !otherwise continue
+
+!
+!generate interleaved sectors for reading or writing, sectors start at 1
+
+ISect:      sector := sector + 2;       !interleaving of two
+            sector - maxsect;           ! Start at 1
+            sector - maxsect, if geq goto(zsect); ! OverFlow
+            0, return;                  !
+ZSect:      0, If Eql Return;           ! Must be Sector 26 if Eql
+            sector - (MaxSect + 2);     ! If 10#28 Then All Done
+            Sector := 1, if eql return; !
+            sector := 2;                ! Now to 2 if sector > maxsect
+            0, return;                  ! Return zero to show More to do
+
+    ! note: head =4 => head unit selected is 1
+
+IncrCyl:    Sector := 1;                 ! Start Sector Over
+            Cyl := Cyl + 1;              ! Cyl = NextCyl mod 77
+            Cyl - MaxCyl;
+            0, if Leq Return;            ! Head = NextCyl div 77
+            Head;
+            1, If Neq Goto(AlDone);      
+            Head := 1;
+            Cyl := 0, Return;            ! Return with Zero if More to do
+AlDOne:     Cyl := 0;
+            Head := 0;
+            Sector := 1, Return;         ! Return with 1 if all done
+            
+CheckData:  Tmp := 0;                    ! Read Buffer is at Loc-0
+            Tmp1 := 1000;                ! Write Buffer is at Loc-1000
+CkDataLp:   MA := Tmp, Fetch;            ! Get a Word from the Read Buffer
+            Nop;
+            Nop;
+            TmpA := MDI, If IntrPend Call(VectInt);
+            MA := Tmp + Tmp1, Fetch;     ! Get a Word from the Write Buffer
+            Tmp := Tmp + 1;              ! Bump Up Pointer to Rd/Wr Buffers
+            Nop;
+            MDI - TmpA;                  ! Compare the two words
+            If Neq Goto(DataErr);
+            BytesSec, RightShift(1);     ! Only compare as many Bytes as the
+            Shift - Tmp;                 ! Floppy sector contains 100 = SD
+            If Neq Goto(CKDataLp);       !                        200 = DD
+            Return;
+DataErr:    R370 := 306, Goto(Busted);   ! Data Didn't match So Error
+
+FlopErr:
+Busted:     NumFails := NumFails + 1;
+            WasError := 1, Call(ShowProg);
+            Option - 2;
+            If Neq JumpPop(7401);
+!           
+! Bump Diagnostic Display on Error
+
+            Tmp := 1;
+SetDDS:     Dly := 10, StackReset;       ! Increment display
+DDSWt:      if eql goto(DDSWt1);         ! wait 8 cycles
+            Dly := Dly - 1, goto(DDSWt);
+DDSWt1:     tmp := tmp - 1;
+            if neq goto(SetDDS);
+            return;
+
+ODTreturn:  Option;                      ! A "Call" was done to this Location
+            NumPasses := NumPasses + 1, If Eql JumpPop(7401);
+            Return;
+
+
+            Tmp := 1, Loc(300);        ! This just generates a Walking Ones
+LoSpeedLp:  Tmp, IOB(304);             ! and the a walking Zeroes pattern
+            Tmp := Tmp + Tmp;          ! on the Low Speed Fifo lines for
+            Tmp - 400;                 ! Scope troubleshooting only.
+            If Neq Goto(LoSpeedLp);    !  Screen Interupts not serviced so
+            Tmp := 1;                  !  it will roll.
+LoASpeedLp: Not Tmp, IOB(304);
+            Tmp := Tmp + Tmp;
+            Tmp - 400;
+            If Neq Goto(LoASpeedLp);
+            Tmp := 1, Goto(LoSpeedLp);
+!
+! Turn Z80 Off
+
+
+Z80Off: 0, IOB(305);                ! mask out all Z80 interrupts
+        IOB(123);                   ! dismiss Disk interupts
+        IOB(147), return;           ! dismiss parity interrupts.
+
+!
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     ! format STX <4> <floppy> <Seek> <cmd Options > <new cyl #>        
+     !note: head =4 => head unit selected is 1
+        
+Seek:       ShowSpot := 0, Call(InitProg);
+            Z80OutCnt := 4;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := SeekCmd;  
+            Head, LeftShift(2);
+            Z80Out03 := Shift;      
+            Z80Out04 := Cyl, call(SndZ80Msg); 
+
+    ! expected response from Z80: STX <2> <Floppy> <ACK>
+            DevNum := Floppy, Call(Flush);    
+            ShowSpot := 0, Goto(ShowProg);    
+!
+
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! Read one sector from floppy
+    !  STX <6> <floppy> <ReadData> <cmd Option> <Start Sec#> <cntL> <cntH>
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ReadSec:    ShowSpot := Sector, Call(DoInitHere);
+            Z80OutCnt := 6;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := ReadData;  
+            Head, LeftShift(2);
+            Z80Out03 := Shift Or Density;      
+            Z80Out04 := Sector;
+            Z80Out05 := BytesSec;
+            Z80Out05 := Z80Out05 And 377;
+            BytesSec, RightShift(10);
+            Z80Out06 := Shift, call(SndZ80Msg); 
+        
+
+    ! Z80 responds with the  Format
+    ! <STX> <n> <Floppy> <BLKDATA> <count L> <count H> 
+
+            R370 := 301;
+       
+FWtRead:    Call(RecZ80Msg);                ! Wait for result
+            Z80InCnt - 4;
+            R370 := 302, if neq goto(Busted);
+            Z80InDev - Floppy;
+            R370 := 303, if neq goto(Busted);
+            Z80InCmd - BlkDataCmd;
+            R370 := 304, if neq goto(Busted);
+            R370 := 305;
+            ByteCnt := Z80In03;  
+            Z80In04, LeftShift(10);
+            ByteCnt := SHIFT or ByteCnt;      
+            ByteCnt - BytesSec;
+            If Neq Goto(Busted);              ! DMA request Wrong
+        
+! we now set up the DMA channel to actually get the data back.
+
+            uProcChan, IOB(ChanSel);          ! PERQ DMA channel 1
+            MemAdr, iob(DMADbLo); 
+            Not UState(MemAdr), Field(14,4);
+            SHIFT, IOB(DMADbHi);
+        
+SetHdr:     0, iob(DMALhLo);                  ! The logical headers
+            not 0, iob(DMALhHi);              ! are not present on a floppy
+        
+    ! now send an ACK to the Z80 so that the DMA operation Takes Place.
+
+            Z80OutCnt := 2;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := ACKCmd, call(SndZ80Msg); 
+        
+    ! we should now get an ACK back from the Z80 if the DMA went OK.
+    !  <STX> <2> <Floppy> <ACK>
+
+            R370 := 307;                    ! if error then is floppy error
+            DevNum := Floppy, Call(Flush);    ! flush does the return for us.
+            Goto(ShowProg);
+!
+
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! Write one sector to floppy
+    !  STX <6> <floppy> <WriteData> <cmd Option> <Start Sec#> <cntL> <cntH>
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+WriteSec:   ShowSpot := Sector, Call(DoInitHere);
+            Z80OutCnt := 6;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := WriteData;  
+            Head, LeftShift(2);
+            Z80Out03 := Shift Or Density;      
+            Z80Out04 := Sector;
+            Z80Out05 := BytesSec;
+            Z80Out05 := Z80Out05 And 377;
+            BytesSec, RightShift(10);
+            Z80Out06 := Shift, call(SndZ80Msg); 
+            
+
+    ! Z80 responds with the  Format
+    ! <STX> <n> <Floppy> <REQDATA> <count L> <count H>
+    ! then <STX> <2> <Floppy> <ACK>
+       
+            R370 := 401;
+
+FWtWrite:   Call(RecZ80Msg);                ! Wait for result
+            R370 := 402;
+            Z80InCnt - 4;
+            if neq goto(Busted);
+            R370 := 403;
+            Z80InDev - Floppy;
+            if neq goto(Busted);
+            R370 := 404;
+            Z80InCmd - ReqDataCmd;
+            if neq goto(Busted);
+            R370 := 405;
+            ByteCnt := Z80In03;  
+            Z80In04, LeftShift(10);
+            ByteCnt := SHIFT or ByteCnt;      
+            ByteCnt - BytesSec;
+            If Neq Goto(Busted);              ! DMA request Wrong
+! we now set up the DMA channel to actually transfer data to Z80 and Floppy.
+
+            uProcChan, IOB(ChanSel);          ! PERQ DMA channel 1
+            Tmp := MemAdr;
+            Tmp := Tmp + 1000;
+            Tmp, iob(DMADbLo);                ! Write DMA from Here
+            Not UState(Tmp), Field(14,4);
+            SHIFT, IOB(DMADbHi);
+        
+            0, iob(DMALhLo);                  ! The logical headers
+            not 0, iob(DMALhHi);              ! are not present on a floppy
+        
+! now send a BLKDATAcmd to the Z80 so that the DMA operation Takes Place.
+
+            Z80OutCnt := 4;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := BlkDataCmd;  
+            Z80Out03 := ByteCnt;      
+            Z80Out03 := Z80Out03 And 377; 
+            ByteCnt , RightShift(10);
+            Z80Out04 := Shift, call(SndZ80Msg); 
+            
+! we should now get an ACK back from the Z80 if the DMA went OK.
+
+            R370 := 407;                      ! if error then is floppy error
+            DevNum := Floppy, Call(Flush);    ! flush does the return for us.
+            Goto(ShowProg);
+            
+
+!   
+
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! Write one sector to floppy
+    !  STX <6> <floppy> <FlFormat> <cmd Option> <SecPerTrk> <Filler> <FormGPL>
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+FormTrack:  ShowSpot := 1, Call(DoInitHere);
+            Call(MakeFormBuf);
+            Z80OutCnt := 6;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := FlFormat;  
+            Head, LeftShift(2);
+            Z80Out03 := Shift Or Density;      
+            Z80Out04 := MaxSect;
+            Z80Out05 := Filler;
+            Z80Out06 := FormGPL, call(SndZ80Msg); 
+        
+! Z80 responds with the  Format
+! <STX> <n> <Floppy> <REQDATA> <count L> <count H> <data1>......<data2>
+! then <STX> <2> <Floppy> <ACK>
+       
+            R370 := 501;
+
+FWtForm:    Call(RecZ80Msg);                ! Wait for result
+            R370 := 502;
+            Z80InCnt - 4;
+            if neq goto(Busted);
+            R370 := 503;
+            Z80InDev - Floppy;
+            if neq goto(Busted);
+            R370 := 504;
+            Z80InCmd - ReqDataCmd;
+            if neq goto(Busted);
+            R370 := 505;
+            ByteCnt := Z80In03;  
+            Z80In04, LeftShift(10);
+            ByteCnt := SHIFT or ByteCnt;      
+        
+! we now set up the DMA channel to actually transfer data to Z80 and Floppy.
+
+            uProcChan, IOB(ChanSel);          ! PERQ DMA channel 1
+            Tmp := MemAdr;
+            Tmp := Tmp + 2000;
+            Tmp, iob(DMADbLo);                ! Use DMA from Here
+            Not UState(Tmp), Field(14,4);
+            SHIFT, IOB(DMADbHi);
+        
+            0, iob(DMALhLo);                  ! The logical headers
+            not 0, iob(DMALhHi);              ! are not present on a floppy
+        
+! now send an BLKDATAcmd to the Z80 so that the DMA operation Takes Place.
+
+            Z80OutCnt := 4;
+            Z80OutDev := Floppy;  
+            Z80OutCmd := BlkDataCmd;  
+            Z80Out03 := ByteCnt;      
+            Z80Out03 := Z80Out03 And 377; 
+            ByteCnt , RightShift(10);
+            Z80Out04 := Shift, call(SndZ80Msg); 
+            R370 := 507;
+        
+! we should now get an ACK back from the Z80 if the DMA went OK.
+
+            DevNum := Floppy, CAll(Flush);    ! flush does the return for us.
+            Goto(ShowProg);
+            
+MakeFormBuf:Head, LeftShift(10);              ! Bit 0 goes into Bit 8
+            Tmp := Shift or Cyl;              ! Byt0 = Cyl, Byt1 = Head(0 or 1)
+            DTL;                              ! 0=SD 1=DD
+            Tmp2 := Shift;
+            SecCnt := 1, If IntrPend Call(CheckVid); 
+            TmpA := MemAdr;
+            TmpA := TmpA + 1776;              ! Byte2 = Sector
+MFrmLp:     TmpA := TmpA + 2, Store2;         ! Byte3 = 0=SD, 1=DD
+            MDO := Tmp;
+            MDO := SecCnt Or Tmp2;
+            SecCnt := SecCnt + 1;
+            SecCnt - MaxSect;
+            If Leq Goto(MFrmLp);
+            Return;
+        
+
+     ! response <STX> <2> <dev> <ACK/NACK> 
+     ! Wait For Ack from Specified Device OtherWise Error   
+Flush:      Call(RecZ80Msg);
+            Z80InCnt - 2;
+            Z80InDev - DevNum, If neq goto(Flush);
+            Z80InCmd - ACKCmd, if neq goTo(Flush);
+            Z80InCmd - NACKcmd, if Eql return;
+            If Eql GoTo(Busted);
+            Goto(Flush);
+
+!
+! ****************************************************************************
+!
+! Wait long enough for a sector to transfer, a head to settle, etc
+
+WaitAWhile: Dly := 77777;
+WaitLp:     if eql return;
+            If Intrpend Call(CheckVid);
+            Dly := Dly - 1, goto(WaitLp);
+
+
+!
+! Send a character to the Z80
+
+SndZ80Byte: Tmp, IOB(304);
+            MA := ToZ80Ptr := ToZ80Ptr + 1, Store; ! Save the whole Word Away
+            MDO := Tmp;
+            Nop;
+            Nop;
+            Nop, return;
+
+! 
+! Receive a character from the Z80
+
+RecZ80Byte: WasInter := 0;
+           BigDly := 77777;              ! 32k*(64*2)=4.2M cycles 
+waitbyte:  0, If Eql Return;             ! Return a Zero If Z80 Interupt
+           If Intrpend Call(VectInt);    ! * .00017 ms/cycle = .7 sec
+           Dly := 100;
+RWaitLp:   If Intrpend Call(CheckVid);  
+            Dly := Dly - 1;
+           if Neq goto(RWaitLp);
+           BigDly := BigDly - 1;
+           WasInter - Z80InInter, if neq goto(waitbyte);
+           1, return;                    ! return neq if time out
+!
+RecZ80Msg:  Z80InCnt := 0;                    ! Clear Old Registers
+            Z80InDev := 0;
+            Z80InCmd := 0;
+            Z80In03 := 0;
+            Z80In04 := 0;
+            Z80In05 := 0;
+            Z80In06 := 0;
+            Z80In07 := 0;
+            Z80In08 := 0;
+            Z80In09 := 0;
+            Z80In10 := 0;  
+RecChk:     Call(RecZ80Byte);                 ! Ignore Z80 data
+            Bite - STX, if Neq GoTo(Busted);
+            if Neq GoTo(RecChk);
+            Call(RecZ80Byte);
+            Z80InCnt := Bite, if Neq GoTo(Busted);
+            call(RecZ80Byte);
+            Z80InDev := Bite, if Neq goTo(Busted);
+            call(RecZ80Byte);
+            Z80InCmd := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 2;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In03 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 3;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In04 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 4;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In05 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 5;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In06 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 6;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In07 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 7;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In08 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 10;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In09 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 11;
+            0, if Eql return;
+            call(RecZ80Byte);
+            Z80In10 := Bite, if Neq GoTo(Busted);
+            Z80InCnt - 12;
+            0, if Eql return;
+            1, Return;
+            Z80In03 := 0;
+            Z80In04 := 0;
+            Z80In05 := 0;
+            Z80In06 := 0;
+            Z80In07 := 0;
+            Z80In08 := 0;
+            Z80In09 := 0;
+            Z80In10 := 0, Return;  
+
+SndZ80Msg:  tmp := STX,       Call(SndZ80Byte);     
+            tmp := Z80OutCnt, Call(SndZ80Byte);
+            tmp := Z80OutDev, Call(SndZ80Byte);
+            tmp := Z80OutCmd, Call(SndZ80Byte);
+            Z80OutCnt - 2;
+            0, If Eql Goto(Only02);
+            tmp := Z80Out03,  Call(SndZ80Byte); 
+            Z80OutCnt - 3;
+            0, If Eql Goto(Only03);
+            tmp := Z80Out04,  Call(SndZ80Byte); 
+            Z80OutCnt - 4;
+            0, If Eql Goto(Only04);
+            tmp := Z80Out05,  Call(SndZ80Byte); 
+            Z80OutCnt - 5;
+            0, If Eql Goto(Only05);
+            tmp := Z80Out06,  Call(SndZ80Byte); 
+            Z80OutCnt - 6;
+            0, If Eql Return;
+            1, Return;
+Only02:     Z80In03 := 0;
+Only03:     Z80In04 := 0;
+Only04:     Z80In05 := 0;
+Only05:     Z80In06 := 0, return;
+            
+ShowProg:   WasError;
+            If Neq Goto(ShowErr);
+            MA := LastSpot + ShowSpot, Store;
+            MDO := 025250;                   ! 0010101010101000 
+            Return;                          ! 0 010 101 010 101 000
+ShowErr:    MA := LastSpot + ShowSpot, Store;
+            MDO := 037770;                   ! 0011111111111000 
+            Return;
+
+InitProg:   WasError := 0, If IntrPend Call(VectInt);
+            TmpA := 10#512;                  ! Head-0 Starts here
+            Head, LeftShift(10);
+            TmpA := Shift + TmpA;            ! Head-1 Starts here
+            Tmp := Cyl;
+            tmp := tmp + tmp;                ! Double Cylinder Number
+            TmpA + tmp, LeftShift(4);        ! Multiply by 16
+            TmpA := SHIFT;
+            LScape, LeftShift(1);            ! If Portrait Multiply by 3
+            if neq goto(IPort);
+            LeftShift(2);                    ! for L/S screen Multiply by 5
+IPort:      TmpA;                            ! Set up for Multiply
+            LastSpot := SHIFT + TmpA;        ! Do it
+DoInitHere: MA := LastSpot + ShowSpot, Store;
+            MDO := 030030;                   ! 0011000000011000 
+            Return;
+
+ClrProg:    NumPasses := 0;
+            NumFails := 0;
+            WasError := 0;
+            TmpA := 10#512;                  ! Start Clearing Head-0 Progress
+            TmpA , LeftShift(4);             ! Multiply by 16
+            TmpA := SHIFT;
+            LScape, LeftShift(1);            ! If Portrait Multiply by 3
+            if neq goto(Hd0Port);
+            LeftShift(2);                    ! for L/S screen Multiply by 5
+Hd0Port:    TmpA;                            ! Set up for Multiply
+            TmpA := SHIFT + TmpA;            ! Do it
+            Tmp1 := (10#77 * 2);
+NxtHd0Line: Tmp := 10#26;
+ClrHd0:     MA := TmpA + Tmp, Store;
+            MDO := 020010;
+            Nop, If IntrPend Call(CHeckVid);
+            Tmp := Tmp - 1;
+            If Gtr Goto(ClrHd0);
+            MA := TmpA + Tmp, Store;
+            MDO := 000000;
+            TmpA := TmpA + LineCount;
+            Tmp1 := Tmp1 - 1;
+            If Neq Goto(NxtHd0Line);
+            TmpA := 10#768;                  ! Now Clear Head-1 Progress
+            TmpA , LeftShift(4);             ! Multiply by 16
+            TmpA := SHIFT;
+            LScape, LeftShift(1);            ! If Portrait Multiply by 3
+            if neq goto(Hd1Port);
+            LeftShift(2);                    ! for L/S screen Multiply by 5
+Hd1Port:    TmpA;                            ! Set up for Multiply
+            TmpA := SHIFT + TmpA;            ! Do it
+            Tmp1 := (10#77 * 2);
+NxtHd1Line: Tmp := 10#26;
+ClrHd1:     MA := TmpA + Tmp, Store;
+            MDO := 020010;
+            Nop, If IntrPend Call(CHeckVid);
+            Tmp := Tmp - 1;
+            If Gtr Goto(ClrHd1);
+            MA := TmpA + Tmp, Store;
+            MDO := 000000;
+            TmpA := TmpA + LineCount;
+            Tmp1 := Tmp1 - 1;
+            If Neq Goto(NxtHd1Line);
+            Return;
+!
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INTERUPT HANDLING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+CheckVid:   IOB(145);
+            IOD And 20;
+            if Neq goto(DpyInt);              ! if video interrupt
+            Return;
+
+VectInt:    Vector(IntrVect);
+
+IntrVect:
+Z80Int:     IOB(124), loc(1000);              ! Here when Z80 sends a byte
+            MA := FromZ80Ptr := FromZ80Ptr + 1, Store; ! Save the whole Word
+            Bite := MDO := IOD;
+            Bite := iod and 377;              ! pick up byte
+            WasInter := Z80InInter;           !
+            0, return;                        ! return eql
+         
+! 
+! All other interrupts are verboten
+
+BadInt1:    R370 := 771, loc(1004);
+            goto(Busted); 
+DiskIntr:   R370 := 772, loc(1010);      ! read disk status
+            Goto(Busted);
+BadInt3:    R370 := 773, loc(1014);
+            goto(Busted); 
+Z80Sent:    R370 := 774, loc(1020);
+            goto(Busted); 
+
+        ! Display interrupt routine
+DpyInt:     DpyTmp, IOB(343), Loc(1024);
+            DpyTmp, IOB(340);
+Dpy1:       0, IOB(342);
+            Dpytmp and 200;
+            if eql goto(Dpy2);
+            R371, IOB(341);
+            0, IOB(344);
+            DpyCnt := 11;
+Dpy2:       DpyTmp := 162000;
+            DpyCnt := DpyCnt - 1;
+            If GTR Return;
+            DpyTmp := 161154;
+            DpyCnt;
+            If EQL Return;
+            C60 := C60+1;
+            DpyTmp := 161351, return;
+        
+
+BadInt6:    R370 := 776, loc(1030);
+            goto(Busted); 
+BadInt7:    R370 := 777, loc(1034);
+            goto(Busted); 
+
+END;
+

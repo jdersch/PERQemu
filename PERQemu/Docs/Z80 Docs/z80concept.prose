@@ -1,0 +1,261 @@
+.Title  The New Z80 System Design: Concept Document
+.Comment
+.Comment   The New Z80 System Design: Concept Document
+.Comment   Dirk L. Kalp   13 Aug 1981
+.Comment   Copyright (C) Three Rivers Computer Corporation, 1981
+.Comment
+.Output( ASC E+ U+ )
+.Input( H~ U\ B# )
+.Paragraph( F@ S1 P5 I5 )
+.Margin( L0 R68 )
+.Form( [ /////  L56 ///// ] )
+.Margin( L+4 R-4 )
+
+
+
+
+
+
+
+
+
+
+
+
+.Option( F- L- R- P- )
+The New Z80 System Design: Concept Document
+
+
+
+
+
+Dirk L. Kalp
+.Skip 11
+.Option
+On July 30, 1981 an initial meeting was held to discuss the design of the new 
+Z80 system software. Attending this meeting were Brian Rosen, Don Scelza, John 
+Strait, and myself. This report is intended as a brief summary of the ideas 
+presented at that meeting and thus should serve as a preliminary basis for the 
+new Z80 system design. 
+Besides this meeting, some ad~di~tion~al conversations with  
+Don Scelza and John Rose have contributed to both the clarity and substance 
+of this report. 
+Hopefully, this initial concept document for the new design will stimulate 
+ad~di~tion~al thought and discussion. 
+Any new ideas, sug~ges~tions, crit~i~cisms, and comments concerning  the new 
+Z80 design as well as this presentation will be appreciated. 
+.Skip 6
+.Option( F- P- )
+Copyright (C) 1981
+Three Rivers Computer Corporation
+720 Gross Street
+Pittsburgh, PA  15224
+(412) 621-6250
+.Option
+.Form( [ // T #60 E ///  L56 // #31 "- " Pr:1 " -" /// ] )
+.Page
+
+
+
+
+
+
+
+
+
+
+This document is not to be reproduced in any form or
+transmitted in whole or in part, without the prior written
+authorization of Three Rivers Computer Corporation.
+
+The information in this document is subject to change
+without notice and should not be construed as a commitment
+by Three Rivers Computer Corporation. The Company assumes
+no responsibility for any errors that may appear in this
+document.
+
+Three Rivers Computer Corporation will make every effort to
+keep customers apprised of all documentation changes as
+quickly as possible. The Reader's Comments card is distrib~uted
+with this document to request users' critical evalu~ation
+to assist us in preparing future documentation.
+
+
+
+
+
+PERQ is a trademark of Three Rivers Computer Corporation.
+.Margin
+.Form([ // T #60 E ///  L56 // #31 "- " PN:1 " -" /// ])
+.Page
+.Count 1
+
+\INTRODUCTION AND GOALS\
+@The current Z80 subsystem has not proved adequate in meeting either 
+functional requirements or performance criteria needed by PERQ users. 
+While proposed solutions to this problem have at various times embraced 
+hardware modifications to the PERQ I/O board, the current strategy calls for 
+effecting the necessary improvements through software only. 
+The solution proposed requires a com~pre~hen~sive and simultaneous redesign 
+and integration of the Z80 code, the PERQ microcode, and the Pascal I/O 
+support code along with a new specification for the PERQ<-->Z80 communication 
+protocol.
+A major consideration in this new design effort will be to adhere to the 
+established principles of software engineering that contribute to the 
+understandability and, thus, future usability of the software produced. 
+The software should be responsive to future modification with a minimum of 
+effort in order to accomodate future changes to the I/O board. 
+@Some of the goals and general requirements that have been expressed for the 
+new system design are: 
+.Margin( L+5 R-5).Paragraph( U3 NN1 )
+@. to implement all the functions provided by the peripheral support chips. 
+@. to modularize the Z80 code to make it understandable and maintainable. 
+@. to minimize the size of the PERQ microcode and place  as much 
+responsibility with the Z80 as possible. 
+@. to maximize speed and flexibility with a minimum ex~pec~ta~tion of driving 
+one device at a time at full speed. 
+@. to include some diagnostic capabilities to provide device status and error 
+conditions to the user. 
+.Margin.Paragraph
+.Skip 1
+These points will be further elaborated in the material that follows. 
+.Skip 4.Page 10
+\PROBLEMS\, \SOLUTIONS\, \AND NEW IDEAS\
+@The construction of the current Z80 software system as a monolithic state 
+machine along with some rather unconventional and subtle programming 
+techniques have made maintainance of this soft~ware an almost impossible task. 
+These conditions have pre~vent~ed, or have at least made extremely difficult, 
+any attempt to incorporate new functional components as well as to modify 
+those existing. 
+While this is not the only weakness of the current Z80 system, this lack of 
+maintainability is certainly a major obstacle in improving the current system. 
+Thus a new system design should place a high emphasis on facilitating 
+maintainance. 
+This goal can be achieved through the standard software engineering techniques 
+of clear and modular design of functional components, well-defined and minimal 
+interfaces, and adequate specification and documentation. 
+@In large part, the redesign of the Z80 subsystem is ne~ces~si~tat~ed by this 
+lack of maintainability of the current system. 
+By no means, however, is this the sole factor. 
+Currently, the PERQ microcode implements its own state machine to support the 
+Z80 system and the communication protocol. 
+Much of this intelligence residing within the PERQ more properly belongs 
+within the Z80 software or is, in fact, already duplicated by it. 
+Concentrating the intelligence in the Z80 will help in the goal to minimize 
+the size of the PERQ microcode. 
+Also, a redesign of the communication protocol between PERQ and Z80 should be 
+made to improve the speed and efficiency of the communication and to further 
+reduce the amount of microcode needed to handle the protocol. 
+@Another significant problem within the Z80 subsystem is the ineffective use 
+of the DMA chip to handle data transfer operations. 
+Here the term, DMA, is something of a misnomer since the chip can directly 
+handle not only transfers between peripheral and memory but also between two 
+peripherals. 
+Currently, only floppy data transfers to/from RAM are assigned to the DMA chip 
+with all others being handled by the Z80 processor. 
+Clearly, relieving the Z80 CPU of this burdensome overhead and reserving the 
+Z80 primarily for control purposes will contribute to improved performance 
+of the total Z80 subsystem. 
+The use of the DMA chip with the  PERQ I/O port should also serve to speed 
+communication and reduce the overhead assoc~i~at~ed with the protocol on both 
+the PERQ and Z80 sides. 
+Since several "devices" (floppy, GPIB, PERQ I/O port, RS-232, and speech 
+output) will be competing for the DMA chip, a mechanism for scheduling the use 
+of the DMA chip must be im~ple~ment~ed. 
+To what extent the DMA chip can be multiplexed among the devices to meet their 
+data transfer needs is not yet clear; however, it is certainly  possible to 
+drive at least one device selected at a time at full speed.
+This device might be implicitly selected by the type of user activity (eg., 
+producing speech output from GPIB input) being performed with user 
+awareness that certain other devices (eg., PERQ I/O port to floppy) might not 
+perform at full speed. 
+@In connection with the DMA chip, the RAM of 1K bytes also represents a scarce 
+resource that will need to be shared. 
+In order to accomodate the increased DMA activity, the need for addditional 
+RAM buffers will arise. 
+To meet this requirement, a scheduling mechanism will also be needed to 
+dynamically administer the a~vail~a~ble RAM that is not permanently committed 
+to system data areas. 
+@While the preceding has focused on the major issues in the redesign effort, 
+several other areas in need of improvement have also been addressed and are 
+briefly mentioned here. 
+First among these is the need to provide the user with some information 
+concerning device status changes and error conditions. 
+While the current system provides little support in this area, the new system 
+design would rely on exceptions to propogate this information back to the 
+user. 
+One feature included in the current system and to be eliminated from the new 
+design is the checksum. 
+The checksum, used to verify data transmissions over the PERQ I/O port, is 
+currently unused and there appears to be little reason for keeping it. 
+Finally, a proposed addition to the new system is to include a command to 
+"execute" a buffer. 
+The intent here is to provide a facility for sending a segment of Z80 code to 
+the RAM and scheduling it for execution. 
+Certainly such an ad hoc mechanism must be viewed as a rather unsafe feature 
+requiring careful handling; however, its justification is based on its 
+anticipated usefulness in areas such as testing, patching code, and 
+non-standard device support. 
+.Skip 4.Page 10
+\DEVICE SPECIFICS\
+@To conclude this report,the proposed effect on each of the devices in the new 
+Z80 system design is briefly outlined here.
+.Margin( L+5)
+.Skip 2
+\Keyboard\
+@The current ring buffered implementation is satisfactory. 
+On the PERQ side, the raw characters transmitted from the keyboard are 
+translated by a function. This should be made table driven.
+.Skip 2
+\Time of Day Clock\
+@No change is required. 
+.Skip 2
+\Touch Tablet\
+@No support will be provided. 
+.Skip 2
+\Pointing Tablet\
+@This is currently being handled through GPIB; but a new mouse will be 
+developed and will be supported on the unused receive port on the speech half 
+of the SIO.
+.Skip 2
+.Page 10
+\RS-232\
+@We must be able to handle ASYNC, BISYNC, and SDLC protocols and modem 
+control. 
+Both sequential and block trans~fer modes will be supported requiring the use 
+of ring and message buffers respectively. 
+In the block mode and using DMA, full speed transmission of data at 56K baud 
+must be provided. 
+Sequential mode transmission is performed without DMA and a data trans~fer 
+rate of 9600 baud will be possible. 
+Status updates on modem change and errors are required. 
+.Skip 2
+.Page 10
+\Speech\
+@We must handle 16KHz continuously, at least in the absence of other devices 
+running. 
+.Skip 2
+.Page 10
+\Floppy\
+@Read, write, and format a sector commands already exist but are very slow. 
+To increase their speed, we want every other floppy sector on a 
+given track to be accessible in a single revolution (at least when no other 
+devices are running). 
+In order to provide flexibility in formatting floppy sectors, we require that 
+PERQ be able to supply the format spec~i~fi~ca~tions rather than simply 
+accepting the fixed formats supplied by the current Z80 software. 
+Additional commands to read and write a track will be implemented and may 
+require DMA with the PERQ I/O port. 
+These commands will serve as a basis for developing an efficient PERQ utility 
+to transfer the contents of an entire floppy to/from the hard disk. 
+.Skip 2
+\GPIB\
+@All functions - talker, listener, and controller - must be implemented. 
+Serial and parallel polling must be handled. 
+Like RS-232, we will also implement sequential and block transfer modes. 
+To support this, we will augment the ring buffering with block 
+buffering in order to permit DMA con~trol~led data transfer. 
+.Skip 2
+\Hard Disk Addressing\
+@No change needed except, perhaps, for a simpler protocol. 
+.Reset

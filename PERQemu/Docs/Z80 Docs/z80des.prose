@@ -1,0 +1,1086 @@
+.Title The Z80 System Design: PERQ <--> Z80 Communication
+.Comment
+.Comment   The Z80 System Design: PERQ <--> Z80 Communication  
+.Comment   Dirk L. Kalp
+.Comment   Copyright (C) Three Rivers Computer Corporation, 1981
+.Comment
+.Output( ASC E+ U+ )
+.Input( H~ U\ B^ )
+.Paragraph( F@ S1 P5 I5 )
+.Margin( L0 R68 )
+.Form( [ /////  L56 ///// ] )
+.Margin( L+4 R-4 )
+
+
+
+
+
+
+
+
+
+
+
+
+.Option( F- L- R- P- )
+The Z80 System Design: PERQ <--> Z80 Communication
+
+
+
+
+Dirk L. Kalp
+.Skip 5
+.Option
+This document presents the proposed communication protocol for exchanging 
+messages between PERQ and the Z80 subsystem and specifies the type and form of 
+the messages related to each device under the Z80's control. The protocol and 
+message forms outlined here are intended to support the goals and requirements 
+established for the new Z80 system design. The goals and requirements have been
+expressed in The Z80 System Design: Concept Document and have been further 
+elaborated and clarified in the Concept Review Meeting held on August 21, 1981.
+Participants of that meeting included Ed Frankenberry, Fred Hansen, Brad Myers,
+Pradeep Reddy, John Rose, Brian Rosen, Don Scelza, and John Strait. Their 
+contributions were significant and, hope~ful~ly, will be accurately reflected in
+this document and in the overall Z80 system design. A special acknowledgement 
+must also be made to Don Scelza who designed the general form of the protocol 
+and contributed a great deal to this report. Any additional suggestions and 
+criticisms con~cern~ing the new Z80 system design, the communication protocol, 
+and the device specific messages are openly solicited and should be submitted 
+as soon as possible.
+.Skip 3
+.Option( F- P- )
+Copyright (C) 1981
+Three Rivers Computer Corporation
+720 Gross Street
+Pittsburgh, PA  15224
+(412) 621-6250
+.Option
+.Option(J4)
+.Form( [ // T #60 E ///  L56 // #31 "- " Pr:1 " -" /// ] )
+.Page
+
+
+
+
+
+
+
+
+
+
+This document is not to be reproduced in any form or
+transmitted in whole or in part, without the prior written
+authorization of Three Rivers Computer Corporation.
+
+The information in this document is subject to change
+without notice and should not be construed as a commitment
+by Three Rivers Computer Corporation. The Company assumes
+no responsibility for any errors that may appear in this
+document.
+
+Three Rivers Computer Corporation will make every effort to
+keep customers apprised of all documentation changes as
+quickly as possible. The Reader's Comments card is distrib~uted
+with this document to request users' critical evalu~ation
+to assist us in preparing future documentation.
+
+
+
+
+
+PERQ is a trademark of Three Rivers Computer Corporation.
+.Margin
+.Form([ // T #60 E ///  L56 // #31 "- " PN:1 " -" /// ])
+.Page
+.Count 1
+.Skip 3.Page 10
+\1.0 Introduction\
+.Inx 1.0 Introduction
+.Skip 1
+@Before proceeding to the discussion of the proposed protocol and specification
+of the message formats for each device, it is useful to examine the general 
+goals and requirements established for the new Z80 system. While this has been
+previously done in The Z80 System Design: Concept Document, the Concept 
+Review Meeting has served to point out some omissions and misinterpretations 
+in that document and to further clarify our set of goals and requirements. This 
+set is enumerated below along with some side remarks.
+
+.Margin(L+5).Paragraph(P3 U3 NN1)
+@. Implement all the necessary functions provided by the peripheral support 
+chips on the I/O board and all those additional worthwhile functions that can 
+be reasonably obtained. We would like to have available to us as much of the 
+chips' full capabilities as possible. 
+
+@. In conjunction with (1), provide the Pascal support code with the 
+flexibility to remotely access and program the peripheral chips. This low level
+control provides a great deal of power to the Pascal code in configuring and 
+manipulating device interfaces.
+
+@. Modularize the Z80 code and make it understandable, maintainable, and 
+responsive to future design changes.
+
+@. Minimize the size of the microcode. The role of the microcode is to support
+PERQ <--> Z80 communication and interrupts. Knowledge of message content and 
+device characteristics should be known only to the Z80 and Pascal support code.
+
+@. Provide the Pascal support code with the raw images of status registers and
+include some diagnostic capabilities to report device status and error 
+conditions to the user. This is consistent with (2).
+
+@. Maximize speed and flexibility with a minimum expectation of driving one 
+device at a time at full speed. Effective scheduling of the DMA chip is a 
+requisite subgoal here. Users will need to be aware of any performance 
+limitations.
+.Margin.Paragraph
+
+.Skip 2.Page 10
+\2.0 General Protocol and Device Specific Messages\
+.Inx 2.0 General Protocol and Device Specific Messages
+.Skip 1
+@With the above goals in mind, the communication protocol and device specific 
+message formats have been designed. The protocol is based on an exchange 
+between PERQ and Z80 of six types of messages for any given device or 
+interface. The general form of a message is:
+@<Device, Msg Type> <n> <Msg 1> <Msg 2> ...... <Msg n>
+.Skip 1
+where
+.Margin(L+16).Paragraph(U11)
+@Device ::= Clock | Floppy | GPIB | Hard Disk | Keyboard | Pointer | RS-232 | 
+Speech Out | TIMER | Z80
+.Margin.Paragraph
+.Margin(L+18).Paragraph(U13)
+@Msg Type ::= Command | Status | Data | Acknowledge | Negative Acknowledge | 
+Attention
+.Margin.Paragraph
+
+and <n> is the number of message bytes that follow. An "n" of 0 will be 
+interpreted as 0 in all cases except for "Data" message types. In this case, 
+an "n" of 0 will denote a special condition in which the actual number of bytes
+is 256 or greater - depending upon the device.
+Some of these "Data" messages for which "n" is 0 will provide a 16-bit byte 
+count with Msg 1 and Msg 2 concatenated to form this 16-bit value. This count
+is subsequently loaded directly into the DMA chip's Block Length Register.
+"Command" or "Status" message types for a given device are 
+distinguished by <Msg 1> when more than one of that particular message type 
+exists.
+@In this document, a matching angle bracket pair will always be used to enclose
+a byte of information.
+Note also that the <Device, Msg Type> byte is divided on the basis of 5 and 3
+bits. Bit assignments for other message bytes that represent more than one 
+piece of information will be specified according to conventions best 
+illustrated with examples. For <X(5), head(1), unit(2)>, the numbers in 
+parentheses indicate the number of bits representing the associated component. 
+Thus "unit" is specified by the rightmost 2 bits, "head" by 1 bit, and the 5 
+leftmost bits are meaningless. ("X" will always be used to denote these "don't 
+care" bits.) For <0(3), Specify(5)>, "Specify" is denoted by the rightmost 5 
+bits while the leftmost 3 bits must all be  0.
+@In the specifications to follow, the following obvious abbreviations are 
+used:
+.Margin(L+16).Paragraph(U11)
+@Device ::= CLK | FLOP | GPIB | KEY | POINT | RS | SPEECH | TIMER | Z80
+.Margin.Paragraph
+.Margin(L+18).Paragraph(U13)
+@Msg Type ::= CMD | STAT | DATA | ACK | NACK | ATN
+.Margin.Paragraph
+
+@Handling of communication is simplified on the Z80 side by having PERQ manage
+the message queues and by permitting only a single "CMD" per device to be 
+outstanding on the Z80 side. In most instances, PERQ <--> Z80 communication 
+consists of a "CMD" message sent by PERQ followed up with a response from Z80
+of "ACK" or "NACK". In between these, there may be some number of "DATA" 
+messages exchanged, depending upon the particular device and "CMD". The "ACK" 
+message for a given device signals PERQ that the last "CMD" for that device 
+along with any associated "DATA" messages were sucessfully received and 
+carried out. The "NACK" message, of course, indicates the opposite. In the
+event a device returns a "NACK", PERQ will probably want to interrogate 
+the device's status by sending a "STAT" message to request it. The Z80 will
+then respond to the request by sending back a "STAT" message containing the 
+required information. Note that PERQ may send a "STAT" message at any time 
+to request a device's status and that "STAT" messages are sent by Z80 only as a
+result of explicit PERQ requests. 
+@For some of the devices, "DATA" messages are passed between PERQ and Z80 in a 
+more independent fashion, that is, without being prompted by a "CMD" message
+and followed by an "ACK"/"NACK" message. Keyboard data transmitted to PERQ 
+is typical of this kind of communication. In order to provide for status 
+change updates for devices in this category (eg., ring buffer overflow in the
+keyboard) and for transitions in devices that are between commands, the final
+message type, "ATN", has been included. An "ATN" message signals PERQ that a 
+status change has occurred for the specified device. PERQ can then discover 
+what change occurred by obtaining the device's status with a "STAT" message.
+@Some of the rules and restrictions adopted to govern the usage of the 
+device specific messages are summarized as follows:
+.Margin(L+6).Paragraph(U4)
+@1.^^Only 1 CMD per device may be outstanding on the Z80 side.
+@2.^^A CMD is always followed by an ACK/NACK with possible DATA messages in 
+between.
+@3.^^DATA messages may occur outside the context of a CMD - 
+ACK/NACK pair.
+@4.^^Status is sent to PERQ only upon request.
+@5.^^PERQ can request status any time.
+@6.^^Device errors and transitions not associated with a CMD are signaled by 
+an ATN message.
+@7.^^Aborts may be accomplished by inducing device errors or upon request to
+the "Z80 Device" (see Section 2.10).
+.Margin.Paragraph
+
+
+.Page
+\2.1 CLOCK\
+.Inx 2.1 CLOCK
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <CLK, CMD> <1> <Enable>
+.Paragraph(U0)
+@<CLK, CMD> <1> <Disable>
+@<CLK, CMD> <1> <GetTime>
+@<CLK, CMD> <8> <SetTime> <cycles> <day> <month> <year> <hour> <min> <sec>
+.Paragraph
+.Margin(L+4)
+.Skip 1
+- cycles is 50 or 60 per sec.
+.Margin.Skip 1
+@B.  <CLK, STAT> <0>
+.Margin(L+4)
+.Skip 1
+- is it on or off?
+.Margin.Margin.Paragraph.Skip 2
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@B.  <CLK, STAT> <2> <cycles> <enabled/disabled>
+.Skip 1
+@C.  <CLK, DATA> <7> <day> <month> <year> <hour> <min> <sec> <jif>
+.Paragraph.Margin(L+4)
+.Skip 1
+- jiffies are provided for time stamping.
+.Margin.Skip 1.Paragraph(U4)
+@D.  <CLK, ACK> <0> 
+.Skip 1
+@E.  <CLK, NACK> <0>
+.Paragraph
+.Margin.Margin.Skip 2
+
+.Page
+.Margin(L+10).Paragraph(U6)
+@\Example\:
+.Skip 1
+@PERQ: <CLK, STAT> <0>
+@^Z80: <CLK, STAT> <2> <60 cyc> <disabled>
+.Skip 1
+@PERQ: <CLK, CMD> <8> <SetTime> <60 cyc> <15> <Sept> <1981> <9> <30> <0>
+@^Z80: <CLK, ACK> <0> 
+.Skip 1
+@PERQ: <CLK, CMD> <1> <Enable>
+@^Z80: <CLK, ACK> <0> 
+.Skip 1
+@PERQ: <CLK, CMD> <1> <GetTime>
+@^Z80: <CLK, DATA> <7> <15> <Sept> <1981> <9> <32> <14> <25>
+@^Z80: <CLK, ACK> <0>
+.Margin.Paragraph
+
+.Page
+\2.2 FLOPPY\
+.Inx 2.2 FLOPPY
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <FLOP, CMD> <5> <R/W Data(3), Configure(5)> <N> <EOT> <GPL> <DTL>
+.Margin(L+6).Paragraph(U2)
+@-^these are parameters that go with each "Read Data" and "Write Data" CMD; 
+but since they are relatively constant, a separate CMD is provided to define 
+the configuration.
+@-^this is not a distinct NEC floppy command and the
+5 bit pattern for Configure will be "00000".
+.Margin.Paragraph.Pargraph(U0)
+@<FLOP, CMD> <4> <Modes(3), Read Data(5)> <sect> <#bytes H> <#bytes L>
+.Margin(L+6).Paragraph(U2)
+@-^Modes will be used to specify multi-track transfers.
+@-^give full 16-bit count for DMA chip (assuming that it's quicker for PERQ to
+calculate the 16-bit value and transmit an extra byte than it is for Z80 to 
+calculate the 16-bit value from a block count).
+@-^the Seek CMD must be used to select unit, head, and cylinder.
+.Margin.Paragraph
+@<FLOP, CMD> <2> <Modes(3), Write Data(5)> <sect>  
+.Margin(L+6).Paragraph(U2)
+@-^similar to "Read Data".
+@-^byte count supplied by the DATA message.
+.Margin.Paragraph
+@<FLOP, CMD> <5+m> <Format(3), Configure(5)> <N> <#sectors> <GPL> <Data 
+Pattern> <sect 1 ID> <sect 2 ID> .... <sect m ID>
+.Margin(L+6).Paragraph(U2)
+@-^these are parameters that go with each "Trk Format" CMD; like the parameters
+for Read/Write, they are relatively constant and thus a separate CMD to 
+configure them is useful.
+@-^m = #sectors is the number of sectors to be formatted on the track; and the 
+mapping of physical to logical sector ID's must be provided.
+@-^we could provide just an interleave factor here if we don't want to transmit
+the table.
+.Margin.Paragraph
+@<FLOP, CMD> <1> <0(1), Density(1), 0(1), Trk Format(5)> 
+.Margin(L+6).Paragraph(U2)
+@-^the Seek CMD must be used to select unit, head and cylinder.
+.Margin.Paragraph
+@<FLOP, CMD> <3> <0(3), Specify(5)> <SRT(4), HUT(4)> <HLT(7), ND(1)>
+@<FLOP, CMD> <3> <0(3), Seek(5)> <X(5), head(1), unit(2)> <cyl>
+@<FLOP, CMD> <2> <0(3), Recalib(5)> <X(5), 0(1), unit(2)>
+@<FLOP, CMD> <1> <0(3), Sense INT Status(5)>
+@<FLOP, CMD> <2> <0(3), Sense Drv Status(5)> <X(5), head(1), unit(2)>
+@The above CMD's are very device specific in that most of their message bytes 
+are loaded directly into the NEC floppy chip.
+Other commands that don't explicitly load device registers can be 
+encoded by the top 3 bits of the third byte when the lower 5 bits specify such 
+a command with GENERIC (11111 in binary). Two such GENERIC CMD's follow.
+@<FLOP, CMD> <2> <Set Interrupts(3), GENERIC(5)> <on/off>
+@<FLOP, CMD> <1> <RESET(3), GENERIC(5)>
+@Note: The NEC floppy chip uses the lower 5 bits of its first command byte  to 
+identify the function. While there are 32 possible bit patterns, there are only
+15 NEC floppy commands. The use of GENERIC here provides a convenient
+uniformity but is not a hard limitation on the number of additional commands
+that could be provided (i.e., 17*2**3 = 136 CMD's are possible using the <3, 5>
+format).
+.Skip 1.Paragraph
+@B.  <FLOP, STAT> <0>
+.Margin(L+6).Paragraph(U2)
+@- here we are asking for:
+.Paragraph.Paragraph
+.Paragraph(S0)
+@<Idle/Current CMD>
+@<Main Status Reg>
+@<INT Enabled?>
+@<Last CMD>
+.Break
+and 
+@<ST0> <ST1> <ST2> <cyl> <head> <sect> <N>
+.Break
+or
+@<ST0> <cyl>
+.Break
+or
+@<ST1>
+.Skip 1
+Note: Different amounts of status are returned by the chip for each 
+command.
+.Paragraph
+.Margin.Paragraph(U4).Skip 1
+@C.  <FLOP, DATA> <0> <#bytes H> <#bytes L> <data 1> <data 2> ..... <data m>
+.Margin(L+6).Paragraph(U2)
+@-^this message follows a "Write Data" CMD
+@-^in all cases, a 16 bit value for #bytes to be transferred is supplied 
+by PERQ; this value is loaded directly into the DMA chip.
+@-^if error termination occurs, Z80 itself must read the remaining data bytes
+from the PERQ output port and follow up with a "NACK" message to PERQ.
+@-^DMA is always used.
+@-^abort could be performed if PERQ  indirectly underruns the FLOPPY data 
+register and waits for a NACK.
+.Margin.Margin.Paragraph.Paragraph
+.Skip 2
+
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@B.  <FLOP, STAT> <11, 6, or 5> <..>...the status requested by the
+PERQ --> Z80  "<FLOP, STAT>" message...
+.Skip 1
+@C.  <FLOP, DATA> <0> <#bytes H> <#bytes L> <data 1> <data 2> ..... <data m>
+.Margin(L+6).Paragraph(U2)
+@-^this message is sent in response to a "Read Data" CMD.
+@-^byte count not really needed; PERQ knows how much is coming;
+@-^if error termination occurs, Z80 must transmit dummy bytes to satisfy the 
+count and follow with a "NACK" message.
+@-^DMA is always used.
+@-^aborts may not be possible here.
+.Margin.Paragraph.Skip 1
+@D.  <FLOP, ACK> <0> 
+.Skip 1
+@E.  <FLOP, NACK> <0>
+.Skip 1
+@F.  <FLOP, ATN> <0>
+.Margin(L+6).Paragraph(U2)
+@-^signals PERQ when FLOPPY is in the "ready" state but idle and the device
+encounters an error (eg., a diskette is loaded and the drive door opens).
+.Margin.Paragraph
+.Margin.Paragraph.Skip 2
+
+.Paragraph(U0)
+@Modes ::= MT MFM SK
+.Margin(L+10)
+@where:
+.Margin(L+4)
+@MT = 1 (for 2-sided disks) -> transfer from both tracks of the given cylinder.
+@MFM = 0/1 for single/double density.
+@SK = Skip Flag = 1 -> skip sectors with deleted data address marks.
+.Margin.Margin.Paragraph
+
+.Margin(L+6).Paragraph(U6)
+@N ::= 00 ->  128 or use DTL.
+.Paragraph(U0 S0)
+@01 ->  256 bytes to read/write/format in a sector.
+@02 ->  512 "                                     "
+@03 -> 1024 "                                     "
+@04 -> 2048 "                                     "
+@05 -> 4096 "                                     "
+@06 -> 8192 "                                     "
+.Paragraph.Paragraph.Margin
+
+.Margin(L+8).Paragraph(U8)
+@DTL ::= 00 - FF; user defined data length for a sector; valid only if N=00; 
+DTL should be FF when N is non-zero.
+.Margin.Paragraph
+
+.Margin(L+8).Paragraph(U8)
+@EOT ::= End Of Track; the final sector number of the current track.
+.Margin.Paragraph
+
+.Paragraph(U0)
+@GPL ::= Gap 3 length; interrecord gap length.
+
+@SRT ::= Step rate interval; 1 - 16 ms in 1 ms increments.
+
+@HUT ::= Head unload time; 16 - 240 ms in 16 ms increments.
+
+@HLT ::= Head load time; 2 - 256 ms in 2 ms increments.
+
+@ND ::= 1 for non-DMA mode.
+.Paragraph
+
+.Margin(L+17).Paragraph(U17)
+@Data Pattern ::= data value written into the sector data field when formatted.
+.Margin
+.Margin.Paragraph
+.Skip 2
+
+.Margin(L+10).Paragraph(U6)
+@\Example\:
+.Skip 1
+@Read  sector #15, cyl 49, side 1 of double density floppy.
+.Skip 1
+@PERQ: looks at its "ready" bit for FLOPPY and proceeds if it is set.
+.Skip 1
+@PERQ: <FLOP, CMD> <3> <Specify> <3, 160> <35, 0>
+@^Z80: <FLOP, ACK> <0> 
+.Skip 1
+@PERQ: <FLOP, CMD> <5> <R/W Data, Configure> <01> <26> <14> <FF>
+@^Z80: <FLOP, ACK> <0> 
+.Skip 1
+@PERQ: <FLOP, CMD> <3> <Seek> <1, 0> <49>
+@^Z80: <FLOP, ACK> <0> 
+.Skip 1
+@PERQ: <FLOP, CMD> <1> <Sense INT Status>
+@^Z80: <FLOP, ACK> <0> 
+.Skip 1
+@PERQ: <FLOP, CMD> <4> <011, Read Data> <15> <00000001> <00000000>
+@^Z80: <FLOP, DATA> <0> <00000001> <00000000> <data 1> ..... <data 256>
+.Margin.Paragraph
+
+.Skip 1
+.Margin(L+4).Paragraph(I0)
+@\Comment\:
+@PERQ requests to Z80 to abort a Write Data command may be achieved by 
+underrunning the FLOPPY data register and waiting for a "NACK" message from 
+Z80. To correctly carry out a PERQ request to abort a FLOPPY Read Data command 
+may incur as much or more overhead as would completing the command! DMA 
+always assumes (I believe) that the receiver can keep up with the sender. Thus,
+it is not possible to induce a FLOPPY error by overrunning the PERQ receive 
+port since the port will just be overwritten by the DMA chip and the FLOPPY
+will continue to put out data. Certainly the Read can be aborted if PERQ sends
+a message instructing Z80 to do this; however, PERQ will not be able to tell
+when the abort takes place and, thus, can not determine when the data at the 
+PERQ receive port is a new message from Z80. (see also Section 2.10)
+.Margin.Paragraph
+
+
+.Page
+\2.3 GPIB\
+.Inx 2.3 GPIB
+.Skip 2.Margin(L+4)
+@.
+@.
+@.
+@yet to be specified
+.Margin
+
+.Page
+\2.4 HARD DISK\
+.Inx 2.4 HARD DISK
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <HDISK, CMD> <1> <#cyl>
+.Margin(L+4)
+.Skip 1
+- Seek is only command.
+.Skip 2.Margin.Margin.Paragraph
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@D.  <HDISK, ACK> <0>
+.Margin(L+4)
+.Skip 1
+- only response is seek complete.
+.Skip 2.Margin.Margin.Margin.Paragraph
+
+.Margin(L+10).Paragraph(U6)
+@\Example\:
+.Skip 1
+@PERQ: <HDISK, CMD> <1> <cyl 75>
+@^Z80: <HDISK, ACK> <0>
+.Margin.Paragraph
+
+.Page
+\2.5 KEYBOARD\
+.Inx 2.5 KEYBOARD
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragarph(U4)
+@A.  <KEY, CMD> <1> <Enable>
+.Paragraph(U0)
+@<KEY, CMD> <1> <Disable>
+@<KEY, CMD> <1> <Flush Ring Buffer>
+@<KEY, CMD> <1> <RESET>
+.Skip 1.Paragraph
+@B.  <KEY, STAT> <0>
+.Margin(L+6).Paragraph(U2)
+@-^are interrupts on/off, how many chars are in ring buffer, and has any ring 
+buffer overflow occurred?
+.Margin.Paragraph
+.Skip 2.Margin.Paragraph
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@B.  <KEY, STAT> <3> <enabled/disabled> <#chars in ring> <any ring buffer 
+overflow?>
+.Skip 1
+@C.  <KEY, DATA> <n> <char 1> <char 2> ..... <char n>
+.Margin(L+6).Paragraph(U2)
+@-^Keyboard always sends whatever it has in the ring.
+.Margin.Paragraph
+.Skip 1
+@D.  <KEY, ACK> <0> 
+.Skip 1
+@E.  <KEY, NACK> <0>
+.Skip 1
+@F.  <KEY, ATN> <0>
+.Margin(L+6).Paragraph(U2)
+@-^may indicate ring buffer overflow; PERQ should send a "STAT" message to
+find out cause.
+.Margin.Paragraph
+.Skip 2.Paragraph.Margin.Margin
+
+.Page
+.Margin(L+10).Paragraph(U6)
+@\Example\:
+.Skip 1
+@^Z80: <KEY, DATA> <1> <char>
+.Skip 1
+@^Z80: <KEY, DATA> <2> <char 1> <char 2>
+.Skip 1
+@PERQ: <KEY, STAT> <0>
+@^Z80: <KEY, STAT> <2> <enabled> <6 chars in ring>
+.Skip 1
+@^Z80: <KEY, DATA> <6> <char 1> <char 2> .... <char 6>
+.Margin.Paragraph
+
+.Page
+\2.6 POINTER\ (SIO Ch B)
+.Inx 2.6 POINTER
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <POINT, CMD> <1> <Init Device>
+.Paragraph(U0)
+@<POINT, CMD> <1> <Enable>
+@<POINT, CMD> <1> <Disable>
+@<POINT, CMD> <1> <RESET>
+.Skip 1.Paragraph
+@B.  <POINT, STAT> <0>
+.Margin(L+4)
+.Skip 1
+- ????? asking for ?????
+.Skip 2.Margin.Margin.Paragraph
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@B.  <POINT, STAT> <n> <on/off> ...regular SIO status??...
+.Skip 1
+@C.  <POINT, DATA> <5> <Xhigh> <Xlow> <Yhigh> <Ylow> <switches>
+.Margin(L+6).Paragraph(U2)
+@-^absolute values for X and Y co-ords.
+.Margin.Paragraph
+.Skip 1
+@D.  <POINT, ACK> <0> 
+.Skip 1
+@E.  <POINT, NACK> <0>
+.Skip 1
+@F.  <POINT, ATN> <0>
+.Margin(L+6).Paragraph(U2)
+@-^may signal SIO External Status Changes (eg., loss of DCD, CTS); PERQ 
+should interrogate with a "STAT" message.
+.Margin.Paragraph
+.Skip 2.Margin.Margin.Paragraph
+
+.Page
+.Margin(L+10).Paragraph(U6)
+@\Example\:
+.Skip 1
+@PERQ: <POINT, CMD> <1> <Init Device>
+@^Z80: <POINT, ACK> <0>
+.Skip 1
+@PERQ: <POINT, STAT> <0>
+@^Z80: <POINT, STAT> <2> <disabled> <Auto Enables, RTS, DTR>
+.Skip 1
+@PERQ: <POINT, CMD> <1> <Enable>
+@^Z80: <POINT, ACK> <0> 
+.Skip 1
+@^Z80: <POINT, DATA> <5> <Xhigh> <Xlow> <Yhigh> <Ylow> <switches>
+.Skip 1
+@^Z80: <POINT, DATA> <5> <Xhigh> <Xlow> <Yhigh> <Ylow> <switches>
+.Skip 1
+@^Z80: <POINT, DATA> <5> <Xhigh> <Xlow> <Yhigh> <Ylow> <switches>
+@^^^^^^^^^^^^^.
+@^^^^^^^^^^^^^.
+@^^^^^^^^^^^^^. ^^^^ about every sixtieth of a second
+@^^^^^^^^^^^^^.
+.Margin.Paragraph
+
+.Skip 1
+.Margin(L+4).Paragraph(U0)
+@\Comment\:
+@We might be able to implement all the SIO modes and functions on the channel
+to permit the channel to be configured as we please.
+.Margin.Paragraph
+
+.Page
+\2.7 RS-232\ (SIO Ch A)
+.Inx 2.7 RS-232
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <RS, CMD> <4> <Set ASYNC> <clock> <settings> <modem ctrl>
+.Paragraph(U0)
+@<RS, CMD> <5> <Set MONO> <clock> <settings> <sync char> <modem ctrl>
+@<RS, CMD> <6> <Set BISYNC> <clock> <settings> <sync char 1> <sync char 2> 
+<modem ctrl>
+@<RS, CMD> <4> <Set SDLC> <clock> <settings> <modem ctrl>
+@<RS, CMD> <2> <Flush Buffer> <transmitter/receiver>
+@<RS, CMD> <2> <Enable/Disable> <X(4), TeTdReRd(4)>
+@<RS, CMD> <1> <RESET>
+.Skip 1
+@Note: These CMD's may be replaced with a CMD that just supplies bytes to be 
+loaded into the SIO's 7 Write Registers.
+.Skip 1.Paragraph
+@B.  <RS, STAT> <0>
+.Margin(L+6).Paragraph(U2)
+@-^asking for:
+.Margin(L+4).Paragraph(U0)
+@<#chars in trans ring buf>
+@<#chars in rec ring buf>
+@<last char received>
+@<Read Regster 0>
+@<Read Regster 1>
+@<Read Regster 2>
+.Margin.Margin.Paragraph.Paragraph
+.Skip 1
+@C.  <RS, DATA> <n> <char 1> <char 2> ..... <char n>
+.Margin(L+6).Paragraph(U2)
+@-^transmitted chars.
+@-^non-DMA mode; n will be <= 1/2 size of the  transmit ring buffer.
+.Margin.Paragraph
+.Paragraph(U0)
+@<RS, DATA> <0> <#bytes H> <#bytes L> <char 1> ... <char m>
+.Margin(L+6).Paragraph(U2)
+@-^DMA transmission; need to learn more about how DMA works with SIO.
+@-^should probably DMA in short blocks since underrunning the SIO to abort is
+not possible in certain SIO modes.
+.Margin.Paragraph
+.Skip 2.Margin.Paragraph
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@B.  <RS, STAT> <6> <#chars in trans ring buf> <#chars in rec ring buf> 
+<last char received> <Read Register 0> <Read Register 1> <Read Register 2> 
+.Paragraph(U0)
+@PERQ decides what to do when errors occur - ignore, flush buffer, .....
+.Skip 1.Paragraph
+@C.  <RS, DATA> <n> <char 1> <char 2> ..... <char n>
+.Margin(L+6).Paragraph(U2)
+@-^all good, received without error. 
+@-^non-DMA mode; n is <= 1/2 size of rec buffer.
+.Margin.Paragraph
+.Paragraph(U0)
+@<RS, DATA> <0> <#bytes H> <#bytes L> <char 1> ... <char m>
+.Margin(L+6).Paragraph(U2)
+@-^for block mode DMA transfers.
+@-^the 16 bit byte count is loaded directly into the DMA chip (need to check 
+how DMA works with SIO).
+@-^should probably DMA in short blocks since forcing a SIO receiver overrun
+(under DMA) from the PERQ side is not possible and, thus, abort is not possible
+(unless PERQ sends Z80 an abort request and the Z80 transmits dummy bytes to 
+satisfy the count).
+.Margin.Paragraph.Paragraph
+.Skip 1
+@D.  <RS, ACK> <0> 
+.Skip 1
+@E.  <RS, NACK> <0>
+.Skip 1
+@F.  <RS, ATN> <0>
+.Margin(L+6).Paragraph(U2)
+@-^in non-DMA mode, it may indicate errors, External Status Changes, or 
+receive ring buffer overflow; PERQ should interrogate to find out why.
+.Margin.Paragraph
+.Skip 2.Paragraph.Margin
+
+.Page
+clock ::= 01 -> DMA      
+.Margin(L+10).Paragraph(S0 U0)
+@02 -> 110
+@03 -> 300
+@04 -> 600
+@05 -> 1200
+@06 -> 2400
+@07 -> 4800
+@08 -> 9600
+.Skip 1
+@Note: The RS-232 channel will operate in the usual stream mode or in the block
+mode. Block mode uses DMA and is thus selected by the clock value.
+.Skip 2.Margin.Paragraph
+settings ::= rrttsspp
+.Margin(L+13)
+.Skip 1
+where:
+.Margin(L+6).Paragraph(U3)
+@rr^is the number of bits per receive character.
+.Paragraph(U0 S0)
+@00 -> 5 bits
+@01 -> 6  "
+@10 -> 7  "
+@11 -> 8  "
+.Paragraph
+@tt^is the number of bits per transmit character (same definition as rr).
+@ss^is the number of stop bits.
+.Paragraph(U0 S0)
+@00 -> synchronous
+@01 -> 1 bit
+@10 -> 1.5 bits
+@11 -> 2 bits
+.Paragraph
+@pp^is the parity setting.
+.Paragraph(U0 S0)
+@00 -> no parity
+@01 -> odd
+@11 -> even
+.Paragraph.Paragraph
+.Margin.Margin
+
+.Skip 2.Margin(L+13).Paragraph(U13)
+@TeTdReRd ::= these 4 bits allow the transmitter and receiver to be selectively
+enabled, disabled, or left unchanged, where both TeTd and ReRd are defined by:
+.Margin(L+5).Paragraph(U0 S0)
+@01 -> disable
+@10 -> enable
+@00 -> no change
+@11 -> "       "
+.Margin.Paragraph
+.Margin.Paragraph
+.Margin
+
+.Page
+.Skip 3
+.Margin(L+4)
+\Example\:
+.Skip 2
+Transmit a message in Mono-sync protocol with half duplex transmission in 
+stream mode; receive the response; and release the channel.
+.Skip 1
+.Margin.Margin(L+10).Paragraph(U6)
+@PERQ: looks at the RS-232 bit in its "ready" flags byte and proceeds if it is
+set.
+.Skip 1
+@PERQ: <RS, CMD> <5> <Set MONO> <07> <111100001> <8-bit sync char> <Auto 
+Enables, RTS, DTR>
+@^Z80: <RS, ACK> <0> 
+.Skip 1
+@PERQ: <RS, CMD> <2> <Enable/Disable> <00001000> ^^^ ^^^ {enable transmit}
+@^Z80: <RS, ACK> <0> 
+.Skip 1
+@PERQ: checks the RS-232 transmit "ready" bit in its "ready" flags byte before
+sending data.
+@PERQ: <RS, DATA> <16> <char 1> .... <char 16> 
+.Skip 1
+@PERQ: checks the RS-232 transmit "ready" bit again.
+@PERQ: <RS, DATA> <12> <char 1> .... <char 12>
+.Skip 1
+@^Z80: <RS, ATN> <0> 
+@PERQ: <RS, STAT> <0>
+@^Z80: <RS, STAT> <5> <0,0> <..>......shows transmitter underrun.
+.Skip 1
+@PERQ: <RS, CMD> <2> <Enable/Disable> <00000110> ^^^^^{trans off & rec on}
+@^Z80: <RS, ACK> <0> 
+.Skip 1
+@^Z80: <RS, DATA> <16> <char 1> .... <char 16> 
+@^^^^^^<RS, DATA> <16> <char 1> .... <char 16>
+@^^^^^^<RS, DATA> <10> <char 1> .... <char 10>
+.Skip 1
+@^^^^^^<RS, ATN> <0> 
+@PERQ: <RS, STAT> <0> 
+@^Z80: <RS, STAT> <5> <0, 0> <..>......shows CTS, DCD lost.
+.Skip 1
+@PERQ: <RS, CMD> <1> <RESET>
+@^Z80: <RS, ACK> <0> 
+.Margin.Paragraph
+
+.Skip 2
+.Margin(L+4).Paragraph(I0)
+@\Comment\:
+@More thought needs to be put into RS-232 
+messages, the SIO, and how the DMA chip is used with the SIO 
+and allocated between transmit and receive.
+DMA should probably be done in short blocks to avoid the need for abort 
+messages. Aborting may be difficult, if not impossible, under certain 
+conditions.
+.Margin.Paragraph
+
+.Page
+\2.8 SPEECH OUT\ (SIO Ch B)
+.Inx 2.8 SPEECH OUT
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <SPEECH, CMD> <1> <Init Device> 
+.Margin(L+6).Paragraph(U2)
+@-^what SIO mode will we use here? POINTER is dependent upon this selection.
+.Margin.Paragraph
+.Paragraph(U0)
+@<SPEECH, CMD> <1> <Enable>
+@<SPEECH, CMD> <1> <Disable>
+@<SPEECH, CMD> <1> <RESET>
+.Paragraph
+.Skip 1
+@B.  <SPEECH, STAT> <0>
+.Skip 1
+@C.  <SPEECH, DATA> <n> <data 1> <data 2> ..... <data n>
+.Margin(L+6).Paragraph(U2)
+@-^n=0 -> 256.
+@-^data is sent in blocks in order to avoid need for an Abort CMD on the Z80 
+side.
+@-^PERQ can maintain continuous transmission by continuing to allocate
+(or not deallocate) the DMA chip to SPEECH OUT.
+@-^block at a time transmission permits PERQ to break in and, if necessary, 
+do something else.
+.Margin.Paragraph
+.Skip 2.Margin
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4)
+@B.  <SPEECH, STAT> <n> <on/off> <..>....regular SIO status??....
+.Skip 1
+@D.  <SPEECH, ACK> <0> 
+.Skip 1
+@E.  <SPEECH, NACK> <0>
+.Skip 1
+@F.  <SPEECH, ATN> <0>
+.Margin(L+6).Paragraph(U2)
+@-^may signal SIO External Status Changes; PERQ should check with "STAT" 
+message.
+.Margin.Paragraph
+.Skip 2.Margin.Margin.Paragraph
+
+.Margin(L+10) .Paragraph(U6)
+@\Example\:
+.Skip 1
+@PERQ: <SPEECH, CMD> <1> <Init Device>
+@^Z80: <SPEECH, ACK> <0> 
+.Skip 1
+@PERQ: <SPEECH, CMD> <1> <Enable> 
+@^Z80: <SPEECH, ACK> <0> 
+.Skip 1
+@PERQ: <SPEECH, DATA> <0> <data 1> .... <data 256>
+@PERQ: <SPEECH, DATA> <0> <data 1> .... <data 256> 
+@PERQ: <SPEECH, DATA> <147> <data 1> .... <data 147>
+.Margin.Paragraph
+
+.Margin(L+4).Paragraph(U0)
+.Skip 1
+@\Comment\:
+@Same comment as for POINTER.
+.Margin.Paragraph
+
+.Page
+\2.9 TIMER\
+.Inx 2.9 TIMER
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <TIMER, CMD> <1> <Enable>
+.Paragraph(U0)
+@<TIMER, CMD> <1> <Disable>
+.Skip 1.Paragraph
+@B.  <TIMER, STAT> <0>
+.Skip 2.Margin
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4)
+@B.  <TIMER> <2> <eanbled/disabled> <CLOCK enabled?>
+.Skip 1
+@C.  <TIMER, DATA> <1> <elapsed jifies since last sent>
+.Margin(L+6).Paragraph(U2)
+@-^asynchronously provided (if TIMER enabled)  every clock cycle or whenever 
+the PERQ receive port is available.
+@-^permits watchdog timing to be implemented.
+.Margin.Paragraph
+.Skip 1
+@D.  <TIMER, ACK> <0>
+.Skip 1
+@E.  <TIMER, NACK> <0>
+.Skip 1
+@F.  <TIMER, ATN> <0>
+.Skip 2.Margin.Margin.Paragraph
+
+.Page
+.Margin(L+10) .Paragraph(U6)
+@\Example\:
+.Skip 1
+@PERQ: <TIMER, STAT> <0>
+@^Z80: <TIMER, STAT> <2> <disabled> <CLOCK enabled>
+.Skip 1
+@PERQ: <TIMER, CMD> <1> <Enable>
+@^Z80: <TIMER, ACK> <0>
+.Skip 1
+@^Z80: <TIMER, DATA> <1> <elapsed jiffies>
+@^Z80: <TIMER, DATA> <1> <elapsed jiffies>
+@^^^^^^^^^^^.
+@^^^^^^^^^^^.
+@^^^^^^^^^^^.
+@^^^^^^^^^^^. usually every jiffy
+@^^^^^^^^^^^.
+.Margin.Paragraph
+
+.Page
+\2.10 Z80\
+.Inx 2.10 Z80
+.Skip 2.Margin(L+4)
+\PERQ --> Z80\:
+.Skip 1.Margin(L+4).Paragraph(U4)
+@A.  <Z80, CMD> <1> <RESET>
+.Paragraph(U0)
+@<Z80, CMD> <3> <EXEC BUF> <#blocks> <priority,etc,....>
+@<Z80, CMD> <2> <Abort> <which devices>
+@<Z80, CMD> <n> <other commands???? .....>
+.Skip 1.Paragraph
+@B.  <Z80, STAT> <1> <Device Summary>
+.Margin(L+6).Paragraph(U2)
+@-^used to explicitly request the "ready/notready" state of all devices.
+.Margin.Paragraph
+.Paragraph(U0)
+@<Z80, STAT> <1> <other PERQ Req Status> 
+.Margin(L+4)
+.Skip 1
+- ??????.....
+.Skip 1.Margin.Paragraph
+@C.  <Z80, DATA> <n> <byte 1> <byte 2> ...... <byte n>
+.Skip 2.Margin
+\Z80 --> PERQ\:
+.Skip 1.Margin(L+4)
+@B.  <Z80, STAT> <2> <Device Summary> <ready/notready bit map for devices>
+.Paragraph(U0)
+@<Z80, STAT> <n> <other PERQ Req Status> <.........>
+.Skip 1.Paragraph
+@C.  <Z80, DATA> <n> <byte 1> <byte 2> ...... <byte n>
+.Skip 1
+@D.  <Z80, ACK> <0> 
+.Skip 1
+@E.  <Z80, NACK> <0> 
+.Skip 1
+@F.  <Z80, ATN> <0>
+.Skip 2.Paragraph.Margin.Margin
+
+.Page
+.Margin(L+4).Paragraph(U0)
+@\Comment\:
+@The specification here is very incomplete. CMD's are also needed to set the
+connection between devices, i.e., GPIB Data to SPEECH OUT. Not much thought 
+has been given to these types of transfers!
+.Margin.Paragraph
+
+.Page
+\3.0 Remarks and Questions\
+.Inx 3.0 Remarks and Questions
+@Many of the comments and questions concerning the protocol and messages have 
+been included with the descriptions of the messages for each device. 
+Nevertheless, we shall repeat some of those concerns here in addition to 
+listing some that have not yet been touched upon. Certainly, this is not an 
+exhaustive list; but, hopefully, it will indicate the type of problems that 
+must be resolved and, in addition, motivate some thought and discussion 
+concerning their solution. This should then help to bring into focus some of 
+the issues related to the design of the PERQ Pascal code, the microcode, and the Z80 code.
+Ultimately, the design decisions that are made will influence the set of 
+required messages and their formats. Hopefully, however, the general form of 
+the protocol will prove adequate.
+.Margin(L+4).Paragraph(U4)
+@1.^^A primary concern expressed at the Concept Review Meeting was the problem 
+associated with dedicating the PERQ I/O ports to a large DMA data transfer.
+With the DMA in progress, gaining access to the port to communicate high 
+priority control and status information between PERQ and the Z80 subsystem 
+becomes a problem. This difficulty was brought out in the discussion of SPEECH
+OUT, and the proposal at that time was to set up DMA one block at a time 
+rather than to set up the entire SPEECH OUT transfer as a single DMA transfer 
+of several blocks. In this way, an Abort message could be transmitted in 
+between to terminate the SPEECH OUT transfer, or other important control and 
+status messages could be exchanged. This approach is the basis for the 
+previously presented SPEECH OUT message forms.
+@^^^^The same problem exists for FLOPPY transfers of more than one sector.
+In particular, the transfer of a full cylinder of FLOPPY data would tie up the
+port a considerable time. However, the problem here is not amenable to the 
+same solution as with SPEECH OUT. The overhead, associated with the block at a
+time approach, in intercepting each message and configuring the FLOPPY and DMA
+chips for each sector would not permit us to transfer sequential sectors
+without losing revolutions. Thus we must set up DMA for the full transfer with
+the realization that  
+aborting the DMA will not always be possible.
+If transfer is PERQ --> FLOPPY, the PERQ can
+abort the transfer by withholding data from the PERQ out port and thus time 
+out the FLOPPY. Z80 then responds to the "Write Data" CMD with a NACK. If
+transfer is from the FLOPPY --> PERQ, PERQ could still communicate to
+Z80 over the PERQ out port and request the abort. However, the PERQ can not
+know when the abort will actually occur and, thus, can not determine when the 
+PERQ receive port holds the start of a new Z80 message. Thus aborts in this 
+direction do not seem possible (unless the PERQ could time the transfer of each
+FLOPPY data byte).
+@2.^^Another issue affecting the set of PERQ <--> Z80 messages is the 
+responsibility for consistency of the Z80 subsystem. Ensuring that a device or 
+resource is available and is properly assigned, accessed, and released will be
+necessary. A discipline must be established for PERQ processes to secure and
+relinquish the use of Z80 services and resources and to protect the integrity
+of the Z80 subsystem. From a logical standpoint, administering this discipline
+belongs with the PERQ while providing for 
+protection and integrity of the Z80 subsystem should reside with the Z80. 
+But due to performance considerations, these responsibilities should, perhaps,
+all be handled by the PERQ. Ultimately, however, the decision here may prompt
+addition of new communication messages as well as changes to those already
+proposed. The "Device Summary" Status message in Section 2.10 was include to
+emphasize this concern.
+It is not clear, yet, what we mean by a device being "ready" or just how the
+"ACK", "NACK", "STAT", and "ATN"
+messages will ultimately be used to determine "readiness". Certainly
+"readiness" is more than just a device specific hardware condition. It is also
+related to availability of logical and physical resources needed  to support
+the device's activity (i.e., free buffer space for the device's transfers, 
+use of the DMA chip, access to another device, priority of access to the PERQ I/O ports, etc.).
+Thus it seems appropriate that the interrogation of a device's "readiness" 
+should be directed to the Z80 system and not the device itself.
+@3.^^Some thought needs to be given to direct transfers between two devices 
+(eg., GPIB --> SPEECH OUT) with the DMA chip and to messages for setting 
+up these connections. Probably such messages should be classified with Z80 
+in Section 2.10.
+@4.^^How much generality can we provide in configuring the SPEECH OUT and 
+POINTER half of the SIO? This would give us flexibility to handle future
+changes to the devices connected to SIO channel B.
+@5.^^Should PERQ do most of the DMA and Z80 RAM buffer scheduling and allocation
+and send messages to the Z80 to control this?
+@6.^^We need to ensure that DMA transfers to PERQ receive port that terminate
+prematurely (due to error) do not cause subsequent messages to be accepted
+in place of the data not received. This may require a disipline involving 
+addition of some new messages.
+@7.^^More thought needs to go into RS-232 transfers along with the use of 
+DMA with the SIO.
+.Margin.Paragraph
+.Comment Produce the index
+.Form( [ // T #60 E /// L56 // #31 '- ' Pr:1 ' -' ])
+.Page
+.Count 3
+.Skip 4.Page 10
+\Table of Contents\
+
+.Sortindex(Sp R4 M5)

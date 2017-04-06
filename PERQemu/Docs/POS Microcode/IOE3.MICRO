@@ -1,0 +1,166 @@
+! IO Microcode for 3MHz Ethernet
+! Included by IO.Micro (basic IO microcode for Perq)
+!
+! 28 Sep 81  V1.2  Don Scelza
+!                  Made changes to use the new IO.DFS.
+!
+! 16 Apr 81  V1.1  George Robertson
+!                  Upgraded for version C microcode and set up separate
+!                  file IOE3.Micro.
+!
+!  2 Feb 81  V1.0  Gene Ball
+!                  Created
+
+$Title Register definitions
+
+! Ether registers -- 270 thru 274
+
+define(etherTmp, 270);
+define(etherDCBptr, 271);
+define(etherCmd, 272);
+define(etherDly, 273);
+define(etherCnt, 274);
+
+
+$Title Ethernet IO register addresses
+
+! Ethernet IO register addresses
+
+constant(E3WrRecWdCnt, 370);  ! WriteReceiveWordCount register
+constant(E3RdRecWdCnt, 171);  ! ReadReceiveWordCount register
+constant(E3WrCSR, 372);       ! WriteControlStatusRegister
+constant(E3RdCSR, 173);       ! ReadCSR
+constant(E3WrXmtWdCnt, 374);  ! WriteTransmitWordCount
+constant(E3RdXmtWdCnt, 175);  ! ReadTransmit Word Count
+constant(E3WrDly, 376);       ! Write start delay register
+constant(E3RdNetAddr, 177);   ! Read Network address  bits <7::0>
+constant(E3WrBuffHi, 326);    ! write high 4 bits of physical buffer addr
+constant(E3WrBuffLo, 336);    ! write low 16 bits of buffer addr
+constant(E3WrHdrHi, 327);     ! write high 4 bits of header buffer address
+constant(E3WrHdrLo, 337);     ! write low 16 bits of header addr
+
+
+! Ether CSR fields
+! bit 10 -- transmitter done
+! bit 11 -- transmitter error
+! bit 9 -- receiver error
+! bit 8 -- receiver done
+! bit 4 -- receiver is promiscuous
+! bit 3 -- start the transmitter on 0=> 1
+! bit 2 -- transmitter Interrupt enable
+! bit 1 -- start the receiver, on 0=> 1
+! bit 0 -- receiver interrupt enable
+
+constant(eRecStart, 3);        ! RecIntEn, RecGo
+constant(ePromStart, 23);      ! RecIntEn, Promisc, RecGo
+constant(eXmtStart, 14);       ! XmtIntEn, XmtGo
+
+
+constant(etherDTentry, 20);    ! Ether3 Device table entry (10 * 2)
+constant(etherIntMsk, 23);     ! Ether3 interrupt mask offset
+
+
+
+
+$Title Ethernet Driver
+
+! E3MHz Ethernet Driver
+!------------------------------------------------------------------------------
+! jeb  2-feb-81 @CMU
+! Ether IOCB:
+!     BuffPtr    2 words;  virtual address, quad aligned, can't cross 4K
+!     Cmd        1 word;   0 => Reset, 1=> Status, 2 => Receive,
+!                          3=> Promiscuous Receive, 4 => Transmit
+!     Delay      1 word;   XMT timeout delay
+!     WordCount  1 word;   words to xmt/rec - should leave extra space
+!                          - is set to wds transferred
+!     Result     1 word;   Device status  (Ether addr in high byte)
+!     NextIOCB   2 words;  ptr to next control block
+!------------------------------------------------------------------------------
+
+etherStart: ioDevTab + etherDTentry, Fetch2, case(StartIO,2); !Get DCB ptr
+          Call(ioTLate);
+          etherDCBptr := ioPhysAdr, Fetch4;   ! read IOCB
+          ioOffset := MDI;
+          ioSeg := MDI;
+          etherCMD := MDI;
+          etherDly := MDI;
+          etherCmd;                           ! = 0?  Reset
+          if Neq GoTo(eStat);
+          0, IOB(E3WrCSR);                    ! reset the device
+          IOB(E3RdNetAddr);                   ! get the net address
+          etherTmp := IOD;
+          TOS := etherTmp and 377, push, NextInst(0);  ! return net address
+          
+eStat:    etherCmd-1;                         ! > 1?  Do a transfer
+          if Gtr GoTo(eXfr);
+eRet:     IOB(E3RdCSR);
+          etherTmp := IOD;
+          TOS := etherTmp, push, NextInst(0); ! return status from StartIO
+
+eXfr:     Call(ioXLateA);                     ! convert ioSeg,ioOffset to
+                                              !    ioPhAdrHi, ioPhysAdr
+                                        
+          etherDCBptr+4, Fetch;                  ! get transfer count
+          ioPhysAdr xnor C1777, IOB(E3WrHdrLo);  ! give buffer addr to DMA controller
+          not ioPhAdrHi, IOB(E3WrHdrHi);
+          etherCnt := MDI;
+          
+          ! now must add 8 wds & set as buffer address due to hdr/buffer kludge
+          ! in DMA controller
+          
+          ioPhysAdr := ioPhysAdr + 10;
+          ioPhAdrHi := ioPhAdrHi + 0 + OldCarry; ! double precision add
+          ioPhysAdr xnor C1777, IOB(E3WrBuffLo);
+          not ioPhAdrHi, IOB(E3WrBuffHi);
+          
+          etherCmd-4;                            ! = 4? Transmit
+          if Neq GoTo(eRec);
+          etherDly, IOB(E3WrDly);                ! set up timeout delay
+          etherCnt, IOB(E3WrXmtWdCnt);           ! and transfer count
+          eXmtStart, IOB(E3WrCSR);               ! start the transmitter
+          goto(eRet);
+          
+eRec:     etherCnt, IOB(E3WrRecWdCnt);           ! setup receive transfer count
+          etherCmd-2;                            ! = 2?  not Promiscuous
+          if Neq GoTo(eProm);
+          eRecStart, IOB(E3WrCSR);
+          goto(eRet);
+eProm:    ePromStart, IOB(E3WrCSR);
+          goto(eRet);
+
+
+$Title Ethernet Interrupt Service
+
+! Ethernet 3MHz Interrupt Service
+
+eIntrServ: IOB(E3RdCSR),loc(E3Int);             ! Ether3 Interrupt Service
+          etherTmp := IOD;                      ! get ether status and save it
+          etherCmd-4;
+          if Neq GoTo(eRCnt);
+          IOB(E3RdXmtWdCnt);
+          etherDly := IOD;
+          goto(eCnt);
+eRCnt:    IOB(E3RdRecWdCnt);
+          etherDly := IOD;          
+
+eCnt:     etherDly := etherDly and 7777;
+!          etherCmd := 404;
+!          MA := etherCmd, Store2;  
+!          MDO := etherDly;                    ! put word count in Post loc
+!          MDO := etherTmp;                    ! put status in Post loc
+!nop;        ! t2  
+!nop;        ! t3  -- still can't start another store
+
+          MA := etherDCBptr+4, Store2;
+          MDO := etherDly;                     ! put final word count in IOCB
+          MDO := etherTmp;                     ! put status in IOCB
+          0, IOB(E3WrCSR);                     ! t2 --Dismiss Interrupt
+
+          ! someday,  check EtherDCBptr+5,6 for next IOCB
+          nop;                                 ! t3 - can't start the fetch yet
+          ioDevTab + etherIntMsk, Fetch;       ! get Interrupt mask
+          UserIntr := MDI or UserIntr;         ! Cause Pascal interrupt
+          return;
+
+          

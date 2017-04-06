@@ -1,0 +1,140 @@
+!   MemAdd.Micro
+!
+!  07 Aug 85   Ver 1.1   R. Huber   Added 4Meg Test at Go 10
+!
+!  24 Jul 84   Ver 1.0   R. Huber   Started Version Control
+!
+!  Program MemAdd
+!
+!  Finds Memory Addressing Problems up to 2MEG
+!
+        Place(0,1777);
+!
+!=========================== VERSION CONTROL ===============================
+
+        Place(7777,7777);
+        Define(MajorVersion, 1); ! 1.x    ! ## KEEP THESE UP TO DATE ##
+        Define(MinorVersion, 1); ! x.1
+          
+Version: MajorVersion - MinorVersion, Loc(7777);                            
+         ! This allows for Version number in Bin File For ODTprq
+
+!===========================================================================
+!
+!
+           Define(AddressBit, 0);
+           Define(Address, 1);
+           Define(Data, 2);
+           Define(InvData, 3);
+           Define(HLAddress, 4);
+           Define(DataRead, 5);
+           Define(StuckAt, 6);
+           Define(MaxAddMask, 7);
+           Define(MaxAddLines, 10);
+           Define(BitPosition, 11);
+           Define(Tmp, 20);
+           Define(Tmp1, 21);
+           
+           Define(BreakPoint, 370);
+           Constant(Krnl, 7401);
+           Constant(Passed, 100);
+           Constant(Failed, 101);
+
+           !
+           !      ****** Start Here ******
+           
+            MaxAddMask := 0,Loc(0);              ! 2MEG
+            MaxAddLines := 10#20, Goto(Start);
+         
+            MaxAddMask := 100000, Loc(2);        ! 1MEG
+            MaxAddLines := 10#19, Goto(Start);
+           
+            MaxAddMask := 110000,Loc(4);         ! 1/2 MEG
+            MaxAddLines := 10#18, Goto(Start);
+            
+            MaxAddMask := 111000,Loc(6);         ! 1/4 MEG
+            MaxAddLines := 10#17, Goto(Start);
+
+            MaxAddMask := 0,Loc(10);             ! 4MEG
+            MaxAddLines := 10#21, Goto(Start);
+         
+Start:      Nop;
+            
+            !*** Start Walking Ones Test ***
+           
+            Data    := 125252, Loc(15);
+            InvData :=  52525; 
+            StuckAt := 0;                   ! Failure here means stuck at Zero
+            HLAddress := 0;
+            Call(WalkIt);
+
+            BreakPoint - Passed;
+            If Eql Goto(DoZeroes);
+            BreakPoint := 200;
+            BreakPoint := BreakPoint + AddressBit;
+            Goto(Krnl);
+            Nop;
+           
+            !*** Start Walking Zeroes Test ***
+           
+DoZeroes:   Data    :=  52525, Loc(25);      !Invert the data from above
+            InvData := 125252; 
+            StuckAt := 1;                   ! Failure here means stuck at one
+            HLAddress := 0;
+            HLAddress := HLAddress - 1;
+            Tmp := MaxAddMask;
+            Tmp := Tmp + Tmp;
+            Tmp := Tmp + Tmp;
+            Tmp := Tmp + Tmp;
+            Tmp := Tmp + Tmp;              ! Now the Mask is out to 20bits
+            HLAddress := HLAddress Xor Tmp;
+            Call(WalkIt);
+            
+            BreakPoint - Passed;
+            If Eql Goto(Krnl);
+            BreakPoint := 300;
+            BreakPoint := BreakPoint + AddressBit;
+            Goto(Krnl);
+            Nop;
+            
+            Call(WalkIt), Loc(100);        !Only if everything is set up
+            Goto(Krnl);
+
+            !
+            ! Subroutine to Walk the ones or zeroes through
+            
+WALKIT:     AddressBit := 0;
+            BitPosition := 1;
+            MA := HLAddress, Store;        ! Load HLAddress with Data
+            MDO := Data;
+            Nop;
+            Nop;
+NextAdd:    Address := HLAddress;
+            Address := Address Xor BitPosition;
+            MA := Address, Store; 
+            MDO := InvData;                ! Load other addresses with Invdata
+            Nop;
+            Nop;
+            Nop;
+            MA := HLAddress, Fetch;
+            Nop;
+            Nop;
+            DataRead := MDI;
+            DataRead - Data;
+            If Neq Goto(BadBit);
+            BitPosition := BitPosition + BitPosition;
+            AddressBit := AddressBit + 1;  ! Check the Next Bit
+            AddressBit - MaxAddLines;      ! if not at last address line go on
+            If Neq Goto(NextAdd);
+         
+            BreakPoint := Passed;
+            Return;
+
+                          ! Read The Parity Address Registers so you have
+BadBit:     IOB(146);     ! Something to Trigger Biomation on
+            IOB(145);     ! 
+            BreakPoint := Failed;
+            Return;
+            
+            
+            End;

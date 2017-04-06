@@ -1,0 +1,198 @@
+! Perq Definitions.
+!-----------------------------------------------------------------------------
+!
+!       Perq.Dfs - QCode Interpreter definitions.
+!       Horst Mauersberg, Brian Rosen, Miles Barel    ca. 1 Jan 80.
+!       J. P. Strait                     rewritten       21 Nov 80.
+!       Copyright (C) Three Rivers Computer Corporation, 1980.
+!
+! Abstract:
+!       This file provides the register and constant definitions provided
+!       by the Perq QCode interpreter microcode for other microprograms.
+!
+!-----------------------------------------------------------------------------
+
+
+! 13 Jan 82  1.6  Brad Myers
+!                 Increase stackLimit (400 -> 600) for stack overflow.
+
+! 03 Jan 82  1.5  M. Kristofic
+!                 Register definitions for floating point.
+
+! 25 Oct 81  1.4  J. Strait
+!                 Define entry point for RasterOp as routine call.
+
+! 21 Apr 81  1.3  George Robertson
+!                 Added more registers for double precision arith.
+
+! 10 Apr 81  1.2  George Robertson
+!                 Added registers and constants for double precision arith.
+
+! 16 Mar 81  1.1  John Strait
+! Miscellaneous changes for exceptions.
+
+! 21 Nov 80  1.0  John Strait
+! Start file.
+
+!        Entry points into this piece of microcode.
+
+Constant(Error,2100);   ! entry point for microcode detected errors
+Constant(Mult,31);      ! entry point of multiply routine
+Constant(RunError,601); ! entry point of run-time error routine
+Constant(SetQState,2600);  ! entry point of set Q-interpreter state routine
+Constant(LongOps,3000); ! start of long operations dispatch table
+Constant(RasterOp,4000);  ! entry point for RasterOp QCode
+Constant(DrawByte,4010);  ! entry point for DrawByte RasterOp code
+Constant(DrawLine,4020);  ! entry point for Line drawing microcode
+Constant(Rop,4030);     ! entry point for RasterOp routine
+
+
+
+
+!       Entry points to other related microcode.
+
+Constant(KrnlOps,7000);   ! start of Spice kernel operations dispatch table
+
+
+
+
+!       QCode state registers.
+
+Define(UPC,16);         ! User Program Counter, quad word addr  ] absolute
+Define(TP,17);          ! Pointer to Top Of Memory Stack        ] 20-bit
+Define(AP,3);           ! Activation Pointer                    ] memory
+Define(GP,4);           ! Global Pointer                        ] addresses
+Define(LP,5);           ! Local Pointer                         ]
+Define(CB,6);           ! Code Base                             ]
+Define(SB,7);           ! Stack Base                            ]
+Define(RN,10);          ! Routine Number
+Define(CS,11);          ! Code Segment
+Define(SS,12);          ! Stack Segment
+Define(SL,13);          ! Stack Limit                           ]
+
+
+
+
+!       Distinguished segments and pointers.
+
+Define(ExcCS,14);       ! Code segment of Except
+Define(ExcGP,15);       ! Global pointer of Except
+
+
+
+
+!       Stack limits.
+
+Constant(StackLimit,570);  ! stack-overflow buffer area
+Constant(StackLSlop,600);  ! StackLimit + slop factor
+
+
+
+
+!       Pascal level interrupts.
+
+Define(UserIntr,20);    ! user interrupt register:
+                        !       if bit 15 is zero, interrupts are enabled
+                        !       if bit 15 is set, interrupts are disabled
+Define(IntPtr,21);      ! address of interrupt table
+
+
+
+
+!       Temporaries.
+
+Define(tmp,30);
+Define(tmp1,31);
+Define(tmp2,32);
+Define(tmp3,33);
+Define(tmp4,34);
+Define(tmp5,35);
+Define(tmp6,36);
+Define(tmp7,37);
+Define(tmp10,40);
+Define(tmp11,41);
+Define(tmp12,42);
+Define(tmp13,43);
+
+
+Define(BLow,43);       ! Double precision arithmetic temps
+Define(BHigh,44);
+Define(ALow,45);
+Define(AHigh,46);
+Define(ResSign,47);
+Define(RemSign,50);
+
+
+Define(BSign,62);       ! Floating point arithmetic temps
+Define(BExp,26);
+Define(ASign,63);
+Define(AExp,27);
+
+
+
+
+
+!       Long constants kept in registers.
+
+Define(AllOnes,60);     ! 0177777, used for masking
+Define(SignXtnd,61);    ! 3700000, used for sign extension
+Define(Zero,51);        ! 0000000, used for 1 instruction negate
+Define(SignBit,53);     ! 0100000, used in double precision arithmetic
+
+
+
+
+!       Offsets in stack bottom:
+
+Constant(StkTP,0);      ! top pointer (-SB) for initialization
+Constant(StkGP,1);      ! global pointer (-SB) of system segment
+
+
+
+
+!       Temporary save area for E-stack (during Tlate).
+
+Define(tmpstk0,70);
+Define(tmpstk1,71);
+Define(tmpstk2,72);
+Define(tmpstk3,73);
+Define(tmpstk4,74);
+Define(tmpstk5,75);
+Define(tmpstk6,76);
+Define(tmpstk7,77);
+
+
+
+
+!       Byte offset for jumps.
+
+Define(JmpOffset,52);   !# of bytes to add to pc  in jumps etc.
+
+
+
+
+!       For byte array operations.
+
+Define(Src,54);           ! in byte moves, pointer to source word
+Define(SrcLsb,55);        ! bit 0 sez high byte (=1) or low byte (=0)
+Define(SrcByte,56);       ! the right byte
+Define(SrcWord,57);       ! the whole word fetched
+Define(Dst,64);           ! pointer to destination word
+Define(DstLsb,65);        ! 1 = high byte, 0 = low byte
+Define(DstByte,66);
+Define(DstWord,67);
+
+
+
+
+!       Krnl's registers.
+
+Define(BrkReg,370);
+
+
+
+
+! Initialization:
+
+Constant(InitBlock,400);! memory address of boot initialization info
+Constant(InitProc,0);   ! initial proc #

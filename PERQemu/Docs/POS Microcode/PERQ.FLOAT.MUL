@@ -1,0 +1,98 @@
+! Routines TMultiply (Mult) and TMultiplyLong.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       TMultiply: forms the lower 16 bits of the product of two integers.
+!
+!       TMultiplyLong: forms a 32 bit result (used by MPR),
+!                     assumes: operands are positive
+!
+! Environment:
+!       tmp = Multiplier.
+!       tmp1 = Multiplicand.
+!
+! Work registers:
+!       tmp5   :        sign
+!       tmp6   :        multiplier
+!       tmp11  :        high order result
+!       tmp12  :        high order multiplicand
+!
+! Result:
+!       tmp = Result<15:0>
+!       tmp1 = Result<31:16>
+!
+! Calls:
+!       VectSrv.
+!
+! Note:
+!       These routines are called only by the floating point microcode,
+!       and should eventually replace other multiply routines in the
+!       Qcode interpreter ( remove the T in front of the labels).
+!
+!-----------------------------------------------------------------------------
+
+TMultiplyLong:
+        loads(TMul7);
+        tmp11 := 0; 
+        tmp12 := 0;
+        tmp5 := 0, push,goto(TMul2);
+
+TMultiply: Tos := 0, Push, loads(TMul11);
+        tmp, LeftShift(0);
+        tmp5 := Shift xor tmp1,              ! tmp5 has sign bit of result
+                                if Geq Goto(TMul1);  ! if tmp >= 0
+        tmp := Tos - tmp, if IntrPend Call(VectSrv);  ! absolute value of tmp
+TMul1:   tmp1;
+TMul2:   tmp - tmp1, if Geq Goto(TMul3);       ! if tmp1 >= 0
+        tmp1 := Tos - tmp1, Goto(TMul2);      ! absolute value of tmp1
+
+!       tmp6 = smaller of tmp and tmp1.
+!       arrange tmp and tmp1 so than tmp <= tmp1.
+
+TMul3:   if Leq Goto(TMul4), tmp6 := tmp;
+
+!       Exchange tmp and tmp1.
+        tmp := tmp1;
+        tmp1 := tmp6;
+        tmp6 := tmp;
+TMul4:   tmp := 0;                            ! initialize product = 0
+        tmp6, RightShift(1);                 ! shift multiplier right
+TMul5:   tmp6 := Shift, if Odd Goto(TMul6);    ! if bit set in multiplier
+TMul55:  tmp1 := tmp1 + tmp1,                 ! shift multiplicand left
+                             if eql Goto(TMul9);  ! if multiplier is zero   
+        tmp12 := tmp12 + tmp12 + oldcarry, if IntrPend Goto(TMul8);
+TMulx:   tmp6,Goto(TMul5);                          ! shift multiplier right
+
+!       Accumulate partial product.
+ 
+TMul6:   tmp := tmp + tmp1;                   ! accumulate product
+        tmp11 := tmp11 + tmp12 + oldcarry,  if lss GotoS; ! save overflow        
+TMul7:   tmp6, goto(TMul55);     ! shift multiplicand left
+
+!       Serve an interrupt.
+
+TMul8:   Call(VectSrv);
+        RightShift(1);
+        Goto(TMulx);
+
+!       Return the result.
+
+TMul9:   tmp5;                                ! check sign of result
+        tmp := tmp and AllOnes, if Lss Goto(TMul10);  ! if result is negative
+
+!       Set a positive result. MultiplyLong has always positive result              
+
+        tmp1 := tmp11,Pop, Return;
+
+!       Set a negative result.
+
+TMul10:  tmp := TOS - tmp;               ! negate result
+        tmp := tmp and AllOnes, Pop, Return;
+
+!       Signal integer multiply overflow.
+TMul11:  tmp6, Goto(TMul5);!TP := TP + 1, Store;         ! overflow in multiplication
+!****** temporarily disabled ************************************************
+! ***** ErrMulOvfl, Goto(ERREXIT);
+
+
+

@@ -1,0 +1,157 @@
+$Title Line drawing microcode.
+!!!     Line - Perq line drawing micro-code.
+!
+!       J. Strait       10 April 80.
+!       Three Rivers Computer Corporation.
+!
+!       See ACM algorithm 162:
+!               XYMove Plotting
+!               Fred G. Stockton
+!
+!
+!       Calling sequence:
+!
+!       push Style
+!       push X1;
+!       push Y1;
+!       push X2;
+!       push Y2;
+!       push Origin;
+!       call Line;
+!
+!
+!       Style = 1       Erase line.
+!               2       Xor line.
+!               else    Draw line.
+!
+!
+!       X coordinates range from 0 (left) to 1377 (right).
+!       Y coordinates range from 0 (top) to 1777 (bottom).
+
+
+! 18 May 81  V1.1  John Strait
+! Change Line to be an include file.
+
+
+        
+        define(Origin,100);
+        define(X1,101);
+        define(Y1,103);
+        define(dX,104);
+        define(dY,105);
+        define(Word,106);
+        define(Bit,107);
+        define(AddY,110);
+        define(Last,111);
+        define(D,112);
+        define(E,113);
+        define(F,114);
+        define(T,115);
+        define(TplusD,116);
+        
+        
+        
+Loc(DrawLine),
+        
+!       get the Origin.
+        
+        Origin := Tos, Pop;
+        
+!       Get X1,Y1 and initial Word and Bit addresses.
+        
+        Y1 := Tos and AllOnes, LeftShift(4);
+        Word := Shift;                          !*****
+        Word := Word + Origin;                  !*****
+!*****  Word := Shift + Origin;
+        Y1, LeftShift(5);
+        Word := Shift + Word, Pop;              ! Y1 * 60 + Origin
+        X1 := Tos and AllOnes, RightShift(4);
+        Word := Shift + Word;                   ! Y1 * 60 + X1 div 20 + Origin
+        X1 and 17, LeftShift(4);
+        not Shift, ShiftOnR;
+        1, Pop;
+        Bit := Shift, if IntrPend Call(LineInt); ! X1 bit mask
+        
+!       Get X2,Y2 and calculate dX,dY.
+        
+        Tos := Tos and AllOnes;
+        dY := Tos - Y1, Pop, LeftShift(17);
+        AddY := 60, if Geq goto(L1);
+        AddY := not 57;                         ! -60
+        dY := Shift - dY;                       ! Shift = 0
+L1:     Tos := Tos and AllOnes;
+        dX := Tos - X1, Pop;
+        Last := 1, if Geq goto(L2);
+        Last := 100000;
+        dX := Shift - dX;                       ! Shift = 0
+        
+!       Determine line style.
+
+L2:     Tos := Tos and AllOnes;
+        Tos - 1, LoadS(Clear);
+        Word := Word + SB, if Eql goto(L3);     ! physical address
+        Tos - 2, LoadS(Flip);
+        if Eql goto(L3);
+        LoadS(Set);
+
+!       Calculate derived values.
+        
+L3:     T := Tos := dY, if IntrPend Call(LineInt);
+        D := Tos - dX;
+        F := Tos + dX, if Lss goto(L4);
+        T := Tos := dX;
+        D := Tos - dY;
+L4:     E := 0;
+        TplusD := Tos + D;
+
+!       Main loop.
+
+Top:    Tos := E + E, if IntrPend Call(LineInt);
+        F := F - 1;
+        Tos + TplusD, if Lss goto(ExitLine);
+        Tos := D + E, if Lss goto(L5);
+        F := F - 1;
+        E := Tos;
+        Last;
+        Word := Word + AddY, Fetch, if Lss goto(Minus);
+        
+!       X is going positive.
+        
+Plus:   Bit and not Last, Rotate(1);
+PlusA:  Bit := Shift, if eql goto(PlusB);
+        Word, Store, GotoS;
+PlusB:  Nop;
+        Word := Word + 1, Fetch;
+        Last, goto(PlusA);
+
+L5:     dY - dX;
+        E := E + T, if Gtr Goto(Same);
+        Last;
+        Word, Fetch, if Gtr goto(Plus);
+
+!       X is going negative.
+
+Minus:  Bit and not Last, Rotate(17);
+MinusA: Bit := Shift, if eql goto(MinusB);
+        Word, Store, GotoS;
+MinusB: Word := Word - 1, Fetch;
+        Last, goto(MinusA);
+        
+!       X is not changing.
+        
+Same:   Word := Word + AddY, Fetch;
+        Nop;
+        Nop;
+        Word, Store, GotoS;
+        
+!       Combine new bit with old word.
+        
+Set:    MDO := MDI or Bit, Goto(Top);
+Clear:  MDO := MDI and not Bit, Goto(Top);
+Flip:   MDO := MDI xor Bit, Goto(Top);
+        
+LineInt: Vector(IntVec);
+
+!       Exit.
+
+ExitLine: Pop, NextInst(0);

@@ -1,0 +1,557 @@
+$Title Double precision arithmetic operators.
+
+!  3 Jan 82  Michael Kristofic
+!            Fix bug in CVTLI -- not returning negative numbers correctly.
+!
+!  9 Sep 81  John Strait
+!            Fix bug in CVTLI--not checking properly for overflow.
+!            Get rid of extraneous instruction in long ABS.
+!            Make full use of hardware double precision subtract.
+!
+! 31 Aug 81  John Strait
+!            Fixed more bugs in multiply and divide.
+!
+! 22 Apr 81  George Robertson
+!            Fixed bugs in multiply and divide setup.
+!
+! 21 Apr 81  Bernd Bruegge & Horst Mauersberg
+!            Redefined multiply and divide.
+!
+! 20 Apr 81  George Robertson
+!            Fixed bugs in inequality comparisons.
+!            Fixed bug in remainder result of LDIVIDE.
+!
+!
+! 17 Apr 81  Bernd Bruegge & George Robertson
+!            Fixed bug in LDIVIDE.
+!            Changed form of dispatch to Spice kernel ops.
+!
+!  9 Apr 81  George Robertson
+!            Converted for latest version of interpreter.
+!            Converted to two byte opcodes.
+!            Added interrupt check to multiple and divide loops.
+!
+! 11 Mar 81  Bernd Bruegge
+!            Changed opcode for ABSLong.
+!
+!  8 Mar 81  Bernd Bruegge & Horst Mauersberg
+!            Defined.
+
+! Opcode LOPS
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       LOPS is a two byte opcode for performing arithemetic
+!       operations on long (32 bit) values.  The second byte is used
+!       as a dispatch into the 15 operations.
+!
+! Instruction:
+!       LOPS
+!
+! Environment:
+!       In general, long operations take their arguments from the EStack
+!       with the low-order word on top:
+!           (Tos) = low word of long
+!           (Tos-1) = high word of long
+!
+!---------------------------------------------------------------------
+
+Opcode(LOPS), tmp := NextOp;
+        tmp, Field(0,4);
+        Dispatch(LongOps); 
+
+! Opcode CVTLI
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       CVTLI is a two byte instruction that converts a long to an integer.
+!
+! Instruction:
+!       LOPS-CVTLI
+!
+! Environment:
+!       (Tos) = low word of Long
+!       (Tos-1) = high word of Long
+!
+! Result:
+!       (Tos) = low word of Long
+!
+! Errors:
+!       ErrCVTLI is generated if there is an overflow converting long
+!       to integer.  There is no overflow if
+!
+!            ((low >= 0) and (high = 0)) or
+!            ((low < 0)  and (high = -1))
+!
+!       otherwise there is an overflow.
+!
+!---------------------------------------------------------------------
+
+Case(LongOps,CVTLI), blow := TOS, pop;       ! save low 
+        bhigh := TOS, if lss Goto(CVTLI1);   ! if low < 0
+        TOS := blow, if eql goto(CVTLIEXIT); ! if (low >= 0) and (high = 0)
+CVTLIERROR:
+        tmp2 := ErrOvflLI, goto(RunError0);  ! raise OvflLI
+
+CVTLI1: bhigh xor ALLONES;
+        TOS := blow, if neq goto (CVTLIERROR); ! if (low < 0) and (high <> -1)
+CVTLIEXIT: NextInst(0);                
+
+! Opcode CVTIL
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       CVTIL is a two byte instruction that converts an integer to a long.
+!
+! Instruction:
+!       LOPS-CVTIL
+!
+! Environment:
+!       (Tos) = integer
+!
+! Result:
+!       (Tos) = low word of Long
+!       (Tos-1) = high word of Long
+!
+!---------------------------------------------------------------------
+
+Case(LongOps,CVTIL), blow := TOS and AllOnes;
+        TOS := 0, if geq goto (CVTILEXIT);       ! positive?
+        TOS := ALLONES;                          ! no, signextend
+CVTILEXIT:
+        TOS := blow, push, NextInst(0);          ! push sign, then value
+
+! Opcode ABL, NGL
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       ABL and NGL are two byte instructions that return absolute value
+!       or negation of a long value.
+!
+! Instruction:
+!       LOPS-ABL, LOPS-NGL
+!
+! Environment:
+!       (Tos) = low word of Long
+!       (Tos-1) = high word of Long
+!
+! Result:
+!       (Tos) = low word of Long
+!       (Tos-1) = high word of Long
+!
+!---------------------------------------------------------------------
+
+Case(LongOps,ABL), blow := not TOS, pop;
+        bhigh := not TOS;
+        if Lss goto(ABSPUSH);
+ABSLONGa:
+        blow := blow + 1;
+        TOS := bhigh + 0 + OldCarry;
+        TOS := blow, push, NextInst(0);
+
+ABSPUSH:
+        TOS := not blow, push, NextInst(0);
+
+
+
+
+Case(LongOps,NGL), blow := not TOS, pop;
+        bhigh := not TOS, goto(ABSLONGa);
+
+! Opcode EQULong, NEQLong, LEQLong, LESLong, GEQLong, GTRLong
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxLong opcodes are two byte instructions that compare two long
+!       values in the expression stack for equality and/or order.
+!
+! Instruction:
+!       LOPS-xxxLong
+!
+! Environment:
+!       (Tos) = low word of Long1
+!       (Tos-1) = high word of Long1  (B)
+!       (Tos-2) = low word of Long0
+!       (Tos-3) = high word of Long0  (A)
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Long0 xxx Long1
+!
+! Calls:
+!       SetFalse, LSSUB
+!
+!---------------------------------------------------------------------
+
+LongCmp: BLow := Tos, Pop; 
+        BHigh := Tos, Pop;
+        ALow := Tos, Pop;
+        ALow - BLow;
+        Tos - BHigh - OldCarry, if Eql Goto(LC1);
+        not 0, if Lss Return;
+        1, Return;
+   
+LC1:    ALow - BLow, if Lss Goto(LC2);
+        Tos - BHigh - OldCarry;
+        1, if Neq Return;
+        0, Return;
+   
+LC2:    not 0, Return;
+
+{*****
+LongCmp: BLow := Tos, Pop; 
+        BHigh := Tos, Pop;
+        ALow := Tos, Pop;
+        Tos - BHigh;
+        Tos - BHigh, if Neq Return;
+        ALow - BLow;
+        ALow - BLow, if Eql Return;
+        1, if Carry Return;
+        not 0, Return;
+*****}
+ 
+
+
+EQLong:
+Case(LongOps,EQULong), call(LongCmp);
+        if Eql Goto(SetTrue);
+        TOS := 0, NextInst(0);
+
+NELong:
+Case(LongOps,NEQLong), call(LongCmp);
+        if Neq Goto(SetTrue);
+        TOS := 0, NextInst(0);
+
+Case(LongOps,LEQLong), Call(LongCmp);
+        if Leq goto(SetTrue);   
+        TOS := 0, NextInst(0);
+
+Case(LongOps,LESLong), CALL(LongCmp);
+        if Lss goto(SetTrue);
+        TOS := 0, NextInst(0);
+
+Case(LongOps,GEQLong), CALL(LongCmp);
+        if Geq goto(SetTrue);   
+        TOS := 0, NextInst(0);
+
+Case(LongOps,GTRLong), CALL(LongCmp);
+        if Gtr goto(SetTrue);   
+        TOS := 0, NextInst(0);
+
+! Opcode ADL, SBL
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       The ADL/SBL opcodes are two byte instructions that add or
+!       subtract two long values in the expression stack.
+!
+! Instruction:
+!       LOPS-ADL, LOPS-SBL
+!
+! Environment:
+!       (Tos) = low word of Long1
+!       (Tos-1) = high word of Long1
+!       (Tos-2) = low word of Long0
+!       (Tos-3) = high word of Long0
+!
+! Result:
+!       Stack popped.
+!       (Tos) = low word of result Long0 xxx Long1
+!       (Tos-1) = high word of result Long0 xxx Long1
+!
+!---------------------------------------------------------------------
+
+Case(LongOps,ADL), tmp := TOS and AllOnes, pop;    ! b<low>
+        tmp1 := TOS and AllOnes, pop;              ! b<high>
+        tmp2 := TOS + tmp, pop;
+        TOS := TOS + tmp1 + oldcarry;
+        TOS := tmp2, push, NextInst(0);
+
+
+
+Case(LongOps,SBL), call(LSSUB);
+        TOS := tmp2, push, NextInst(0);        
+
+LSSUB:  tmp := TOS and AllOnes, pop;              ! b<low>
+        tmp1 := TOS and AllOnes, pop;             ! b<high>
+        tmp2 := TOS - tmp, pop;                   ! a<low> - b<low>
+        TOS := TOS - tmp1 - oldcarry, Return;     ! a<high> - b<high>
+
+! Opcode MPL, DVL, MODL
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       The MPL, DVL, and MODL opcodes are two byte instructions that
+!       multiply, divide, or mod two long values in the expression stack.
+!
+! Instruction:
+!       LOPS-MPL, LOPS-DVL, LOPS-MODL
+!
+! Environment:
+!       (Tos) = low word of Long1
+!       (Tos-1) = high word of Long1
+!       (Tos-2) = low word of Long0
+!       (Tos-3) = high word of Long0
+!
+! Result:
+!       Stack popped.
+!       (Tos) = low word of result Long0 xxx Long1
+!       (Tos-1) = high word of result Long0 xxx Long1
+!
+! Calls:
+!       LMULTIPLY, LDIVIDE
+!
+!---------------------------------------------------------------------
+
+Case(LongOps,MPL), call(LPopStack);
+        call(LMultiply);
+        TOS := bhigh and AllOnes;      
+        TOS := blow and AllOnes, push, NextInst(0);
+
+
+Case(LongOps,DVL), call(LPopStack);
+        call(LDivide);
+        TOS := ahigh and AllOnes;
+        TOS := alow and AllOnes, push, NextInst(0);
+
+
+Case(LongOps,MODL), call(LPopStack);
+        call(LDivide);
+        TOS := bhigh and AllOnes;
+        TOS := blow and AllOnes, push, NextInst(0);
+
+! Utility: LPopStack
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       Utility used by MPL, DVL, and MODL to set up their environments.
+!
+! Environment:
+!       (Tos) = low word of long0
+!       (Tos-1) = high word of long0
+!       (Tos-2) = low word of long1
+!       (Tos-3) = high word of long1
+!
+! Result:
+!       Stack popped three times.
+!       blow := (Tos)
+!       bhigh := (Tos-1)
+!       alow := (Tos-2)
+!       ahigh := (Tos-3)
+!       (Tos) = (Tos-3)
+!
+!---------------------------------------------------------------------
+
+LPopStack: blow := TOS and AllOnes, pop;
+        bhigh := TOS and AllOnes, pop;
+        alow := TOS and AllOnes, pop;
+        ahigh := TOS and AllOnes, return;
+
+! Utility: LMULTIPLY, LMULTIPLYALL
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       Subroutine Long Multiply ( b := b * a)
+!
+! Environment:
+!       blow:        b.low , result.low
+!       bhigh:       b.high, result.high
+!       alow:        a.low
+!       ahigh:       a.high
+!
+! Work registers:
+!       tmp4 : add-flag. Add multiplicand if 1, else not.
+!       tmp5 : sign of result (- : if tmp5 < 0. 
+!                              + : if tmp5 >= 0) 
+!       tmp6 : multiplicator.low
+!       tmp7 : multiplicator.high             
+!
+!---------------------------------------------------------------------
+
+LMULTIPLYALL: tmp7 := bhigh;                    ! special entry to bypass
+        tmp5 := 0, goto(LMUL1);                 ! sign checks
+
+LMULTIPLY: tmp7 := bhigh, leftshift(0);         ! hold b temporarily
+        tmp5 := shift XOR ahigh, if geq goto(LMUL1); ! keep sign for result,
+                                                ! if b is positive.
+        call(LNEGB);                            ! negate b
+        tmp7 := bhigh;
+        ahigh;
+LMUL1:  alow - blow, if geq goto(LMUL2);        ! if a is positive
+        call(LNEGA);                            ! negate a
+        alow - blow;
+LMUL2:  ahigh - bhigh - oldcarry;               ! long compare
+        tmp6 := blow, if Geq Goto(Positive);    ! if a LSS b
+        tmp6 := alow;                           ! exchange operands
+        tmp7 := ahigh;
+        alow := blow;
+        ahigh := bhigh;
+
+! Assertion : Both operands are positive at this point. The larger
+! one is in ahigh and alow (multiplicand), the smaller one
+! is in tmp6 and tmp7 (multiplicator).
+Positive:
+        blow := 0;                              ! initialize result
+        bhigh := 0, goto(LMULNEXT);
+
+LMULLOOP:tmp6 or tmp7, rightshift(1);           ! end test
+        tmp7, if eql goto(LMULEND);
+        tmp7 := shift, if odd goto(LMUL5);
+LMUL6:  tmp6; 
+        tmp6 := shift or tmp4, if odd goto(LMULADD);
+        alow := alow + alow;                    ! 2*a<low>        
+LMUL7:  ahigh := ahigh + ahigh + oldcarry;      ! 2*a<high>
+
+LMULNEXT: if intrpend call(VectSrv);
+        tmp4 := 0, goto(LMULLOOP);
+
+LMUL5:  tmp4 := SIGNBIT, goto(LMUL6);
+
+LMULADD: blow := blow + alow;                   ! add a<low> to result
+        bhigh := bhigh + ahigh + oldcarry;      ! add a<high> to result
+        if carry goto(LMULERR);
+        alow := alow + alow, goto(LMUL7);       ! 2*a<low>
+
+LMULERR: alow := alow + alow, goto(LMUL7);
+        ! **** TP := TP + 1, Store;
+        ! **** ErrMulOvfl, goto(ErrExit);
+
+LMULEND: tmp5;                                  ! check sign of result
+LMULRETURN: if geq return;
+LMULNEGEND: goto(LNEGB);
+
+
+
+! Utility: LDIVIDE, LDIVIDEALL
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       Subroutine Long Divide ( a := a : b)
+!
+! Environment:
+!       alow:      a.low,  result.low
+!       ahigh:     a.high, result.high
+!       blow:      b.low,  remainder.low
+!       bhigh:     b.high, remainder.high
+!
+! Work registers:
+!       remsign:   sign of remainder
+!       ressign:   sign of result
+!       tmp6:      partial dividend.low
+!       tmp7:      partial dividend.high
+!
+!---------------------------------------------------------------------
+
+LDIVIDEALL: ressign := 0;                     ! special entry to bypass
+        remsign := 0, goto(LDIV1);            ! sign checks
+
+LDIVIDE: remsign := ahigh, leftshift(0);      ! holds sign of remainder
+        ressign := shift XOR bhigh, if geq goto(LDIV1); ! sign of result
+        call(LNEGA);                          ! negate a
+        bhigh;
+
+LDIV1:  tmp7 := 0, if lss Call(LNEGB);        ! negate b if b LSS zero
+        tmp6 := 0;
+
+! Assertion : Both operands are positive at this point.
+        bhigh or blow;                                ! check whether b zero
+        push, if eql goto(DIVZERO); 
+
+LDIV4:  TOS := 40;                            ! loop count
+        ahigh;                                ! check a.high zero
+        alow, if neq goto(LDIV5);
+        ahigh := alow, if eql goto(LDIVZERORESULT); ! shift 1 word
+        alow := 0;
+        TOS := TOS - 20;                      ! adjust loop count: skip 1 word
+LDIV5:  ahigh and not 377, leftshift(10);     ! check whether high byte zero
+        ahigh, if neq goto(LDIVLOOP);
+        ahigh := shift;                       ! shift 1 byte
+        alow, rightshift(10); 
+        ahigh := shift or ahigh;
+        alow, leftshift(10);
+        alow := shift; 
+        TOS := TOS - 10;                      ! adjust loop count: skip 1 byte 
+
+LDIVLOOP: alow := alow + alow;                ! shift dividend.low
+        ahigh := ahigh + ahigh + oldcarry;    ! shift dividend.high
+        tmp6 := tmp6 + tmp6 + oldcarry;       ! shift partial dividend.low
+        tmp7 := tmp7 + tmp7 + oldcarry,       ! shift partial dividend.high
+                if intrpend call(VectSrv); 
+LDIV11: tmp6 - blow;                          ! is tmp >= b ?
+        tmp7 - bhigh - oldcarry; 
+        if lss goto(LDIVDEC);
+        tmp6 := tmp6 - blow;                  ! partial dividend + (- divisor)
+        tmp7 := tmp7 - bhigh - oldcarry;
+        alow := alow or 1;                    ! increase result
+
+LDIVDEC: TOS := TOS - 1;
+        remsign, if gtr goto(LDIVLOOP);
+        blow := tmp6, pop, if lss goto(LDIVNEGREM); ! remainder.low
+        bhigh := tmp7;                              ! remainder.high
+        ressign;
+LDIVEND: if geq return;
+        goto(LNEGA);                          ! negate result
+
+LDIVNEGREM: bhigh := tmp7, call(LNEGB);       ! negate remainder
+        ressign, goto(LDIVEND);
+
+LDIVZERORESULT: blow := 0, pop;
+        bhigh := 0, return;
+
+! Utility: LNEGA, LNEGB
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       Negate long operand a
+!
+! Environment for LNEGA:
+!       alow
+!       ahigh
+!
+! Environment for LNEGB:
+!       blow
+!       bhigh
+!
+!---------------------------------------------------------------------
+
+LNEGA:  alow := not alow;
+        ahigh := not ahigh;
+        alow := alow + 1;
+        ahigh := ahigh + 0 + OldCarry, return; 
+
+
+
+
+LNEGB:  blow := not blow;
+        bhigh := not bhigh;
+        blow := blow + 1;
+        bhigh := bhigh + 0 + OldCarry, return;
+
+
+
+
+$Title Double precision arithmetic operators.
+
+! Opcode KOPS
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       KOPS is a two byte opcode for performing Spice Kernel operations.
+!       The second byte is used as a dispatch into the 16 operations.
+!       The actual support for these 16 ops is in MicroKernel.Micro.
+!
+! Instruction:
+!       KOPS
+!
+!---------------------------------------------------------------------
+
+Opcode(KOPS),
+        Goto(Uop);
+{KOPS is not supported.
+        call(KOpsDispatch);
+        NextInst(0);
+
+KOpsDispatch: tmp := NextOp;
+        tmp, Field(0,4);
+        Dispatch(KrnlOps); 
+ KOPS is not supported.}

@@ -1,0 +1,21 @@
+
+
+  define(r0,0);
+  define(R1,1);
+  define(R2,2);
+  
+
+Start:     R0 := 100000, loc(4001);
+           R0 := R0 + R0;
+           R0 := R0 + R0;
+           R0 := R0 + R0;
+           R2 := 0;
+Lp:        R0, Store;
+           MDO := R1;
+           R1 := R1+1;
+           R0 := R0 - 1;
+           R2 - R0;
+           if C19 goto(LP);
+           goto(7401);
+           
+           END;

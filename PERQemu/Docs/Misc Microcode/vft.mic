@@ -1,0 +1,1264 @@
+! VFY  Version 2.0
+! Diagnostic Micro-Code for Perq
+! Copyright (C) Three Rivers Computer Corporation, 1981.
+! Can be used stand alone, or as part of boot sequence
+
+
+! Change Log:
+! 18 may 84  REH  Changed read victim to valid test.
+!                 Also changed memory inverse test errors to denote inverse 
+!                 memory error.
+!                 Made parity errors work for vfy test.
+! 29 Mar 83  BC   Version 2.0    *****ICL*****
+!                 Change Vfy16 to VFY Version 2.0 and combine with Vfy
+!                 version 1.8  
+!
+!                 Use Vfy version 2.0 for CPU Diagnostic tests (4K and 16K) 
+!                 and in General BootStrap System.
+!
+!                 Separate IOB from Return at Z80Int, DskInt to ensure
+!                 IntrPend cleared (avoids spurious parity interrupts)
+!
+!                 Check the CPU board is a 4K or a 16K
+!
+!                 Tidy up the DDS and ErrorType
+!
+! 16 Feb 82  WCH  Version 1.0   VFY16
+!                               16K CPU test. Added  to version 1.3
+!                                  Push LongConstant on EStack test
+!                                  Indexing test
+!                               to the old VFY tests
+!
+!                               test ShiftOnR
+! 27 Jan 82  LFK  V1.8          submitted to perq.files
+!
+! 22 Jan 82  WJH  V1.7d         fix error msg comment 130
+!                               use 119 instead of 140 for store/fetch fail
+!
+! 21 Jan 82  WJH  V1.7c         new inverted sweep
+!                               straighten out WLoop4
+!                               optimize RLoop4
+!
+! 19 Jan 82  WJH  V1.7b         new uninverted sweep: shift and check data err
+!                               move "IntrPend" in W4Lp to avoid parity errors
+!                               (it works with one IntrPend in t1 before fetch
+!                                   and another in a t2 well before store)
+!                               (it works using only the IntrPend after fetch4)
+!                     ==>       (it fails with one IntrPend just before Fetch4)
+!
+! 19 Jan 82  WJH  V1.7a         clear ParityHit at FPE3
+!                               reorder reg decls & assign those now 17-24
+!                               call DpyInt & ChkParity before ParityHit:=0
+!                               restore extra IntrPend in Sweeps
+!                               install LongPause for debugging
+!
+! 19 Jan 82  WJH  V1.7          Set MaxAdrP1 to any multiple of 2^17
+!                               check all memory using only store4/fetch4
+!                               check fetch/store separately
+!                               install ChkParity
+!                               reorder: Bpc, NextOp, Parity err, Sweep
+!                               reinstall subtract-oldcarry test
+!                               put CR in before the Data-Error-on-stack test
+!                               add comment explaining initial LoadOp
+!                               change err msg 119, 133, 134. Add 138, 139,140
+!                               correct memory cycle comments (t0->t3)
+!                               remove extra IntrPend in Sweeps
+!
+! 18 Dec 81  WJH  Version 1.6.  Find size of memory and only check that much
+!
+! 16-Oct-81  JPS  Version 1.5.  Run memory diagnostic over all 2^20 possible
+!                               memory words.  This is a hack done to make
+!                               the 1 MByte memory work!  The memory
+!                               diagnostic should be modified to really
+!                               test all the memory that is present.
+!
+! 21-Aug-81  JPS  Version 1.4.  Add copyright notice.
+!
+!  8-Mar-81  BR   Version 1.3.  Recreated source code from binary
+!
+! ??-???-??  ???  Version 1.2.  Moved C19 test past top 4 test
+!                               Added dispatch test
+!                               Made DDS sequence work correctly
+!
+! 17-Sep-80  DAS  Version 1.1.  Added the code to allow VFY to
+!                  be used at boot time.  BVFY no longer lives.
+                  
+! 12-Sep-80  DAS  Added version numbers and reformated the file.
+
+
+
+!
+! Running instructions:
+!
+!  R0 is used by VFY as a switch register.  
+!  The bits have the following meaning when set:
+!
+!    Bit0  -  Multiple passes.  When set do more than one pass.
+!    Bit1  -  If Set, Ignore parity test.
+!    Bit7  -  VFY was started at boot time.  This will effect
+!             error reporting and termination.
+!
+! After setting R0 simply type "4001G" to ODTPRQ.
+!
+                             
+! 
+!
+! Error Codes:
+!
+!    ErrorType        DDS
+!
+!        1             51        Empty stack bit not working
+!        2             52        Could not load TOS
+!        3             53        Push did not work
+!        4             54        Stack Empty did not go off
+!        5             55        Data error in push
+!        6             56        Empty or Full set when that is not the case
+!        7             57        Data error in bit 15 of the stack
+!        10            58        Stack empty set when the stack is full
+!        11            59        Data error on stack
+!        12            60        Data error after POP.  Bit 14
+!        13            61        Data error after POP.  Bit 13
+!        14            62        Data error after POP.  Bit 12
+!        15            63        Data error after POP.  Bit 11
+!        16            64        Data error after POP.  Bit 10
+!        17            65        Data error after POP.  Bit 9
+!        20            66        Data error after POP.  Bit 8
+!        21            67        Data error after POP.  Bit 7
+!        22            68        Data error after POP.  Bit 6
+!        23            69        Data error after POP.  Bit 5
+!        24            70        Data error after POP.  Bit 4
+!        25            71        Data error after POP.  Bit 3
+!        26            72        Data error after POP.  Bit 2
+!        27            73        Empty wrong.
+!        30            74        Data error after POP.  Bit 1
+!        31            75        Data error after POP.  Bit 0
+!        32            76        Empty not set after all pops.
+!        33            77        Call test falied
+!        34            78        Odd didn't jump on a 1.
+!        35            79        Odd jumped on a 0.
+!        36            80        Byte sign didn't jump on 200.
+!        37            81        Byte sign jumped on 0.
+!        40            82        C19 didn't jump when it should have.
+!        41            83        BCP[3] didn't jump when it should have.
+!        42            84        C19 jumped when it shouldn't have.
+!        43            85        BCP[3] jumped when it shouldn't have.
+!        44            86        GTR didn't jump.
+!        45            87        GTR jumped when it shouldn't have.
+!        46            88        GEQ didn't jump.
+!        47            89        GEQ jumped when it shouldn't have.
+!        50            90        LSS didn't jump when it should have.
+!        51            91        LSS jumped when it shouldn't have.
+!        52            92        LEQ didn't jump.
+!        53            93        LEQ jumped when it shouldn't have.
+!        54            94        GEQ didn't jump on equal.
+!        55            95        LEQ didn't jump on equal.
+!        56            96        Carry didn't jump when it should have.
+!        57            97        Carry jumped when it shouldn't have.
+!        60            98        Overflow didn't jump when it should have.
+!        61            99        Overflow jumped when it shouldn't have.
+!        62           100        And-Not ALU function failed.
+!        63           101        Or ALU function failed.
+!        64           102        Or-Not ALU function failed.
+!        65           103        And ALU function failed.
+!        66           104        Or-Not ALU function failed.
+!        67           105        Not-A ALU function failed.
+!        70           106        Not-B ALU function failed.
+!        71           107        Xor ALU function failed.
+!        72           108        Xnor ALU function failed.
+!        73           109        OldCarry-Add ALU function failed.
+!        74           110        OldCarry-Sub ALU function failed.
+!        75           111        OldCarry-Add /w No OldCarry failed.
+!        76           112        Fetch error on Force Bad Parity.
+!        77           113        Unexpected Parity error.
+!        100          114        No parity errors on force bad parity.        
+!        101          115        Wrong address on force bad parity.        
+!        102          116        Upper 4 bit test failed.        
+!        103          117        MDX test failed.        
+!        104          118        Stack upper bits test failed.        
+!        105          119        Dual Addr/Fetch4 test failed.        
+!        106          120        Unexpected refill.        
+!        107          121        BPC test failed.        
+!        110          122        Fetch4 test failed.        
+!        111          123        Fetch4R test failed        
+!        112          124        Store4 test failed.        
+!        113          125        Fetch2 test failed.        
+!        114          126        Store2 test failed.        
+!        115          127        NextOp test failed.        
+!        116          128        Fetch/Store overlap failed.        
+!        117          129        Bad interrupt Loc 4.        
+!        120          130        Bad interrupt Loc  9.        
+!        121          131        Bad interrupt Loc 20.        
+!        122          132        Bad interrupt Loc 30.        
+!        123          133        Data error on Memory Sweep.
+!        124          134        Address error on Memory Sweep.
+!        125          135        Field didn't work
+!        126          136        Dispatch did not jump
+!        127          137        Wrong Dispatch target
+!        130          138        Data error on Inverted Memory Sweep.
+!        131          139        Address error on Inverted Memory Sweep.
+!*****                           ***** Added for 16K CPU tests *****
+!        132          140        Indexing didn't work
+!        133          141        Pushed wrong long constant on ESTK
+!        134          142        Read Victim Latch test failed
+!        135          143        Make Victim test failed
+        
+$perq1a                                          ! use 16K assembler
+$nobase                                          ! not using indexing
+
+!
+! Register definitions.
+!
+
+define   (TestContinue,     0);
+define   (r0,               0);                  !Register 0 define twice
+define   (r1,               1);
+define   (r2,               2);
+define   (r3,               3);
+define   (r4,               4);
+define   (r5,               5);
+define   (r6,               6);
+define   (tmp1,             7);
+define   (R10,             10);
+define   (R11,             11);
+define   (R12,             12);
+define   (R13,             13);
+define   (etmp,            14);
+define   (ecnt,            15);
+define   (MaxAdrP1,        16);                  !Top of memory plus 1
+define   (ParityHit,       17);
+define   (CPUSize,         20);                  !4K or 16K CPU  *** ICL ***
+define   (ErrorType,       21);
+define   (tmp,             22);
+define   (adr,             23);
+define   (last,            24);
+define   (TShift,          25);
+define   (ParityErr,       26);
+define   (r77,             77);
+define   (r100,           100);
+define   (Bank,           200);
+define   (State,          200);
+define   (dpytmp,         300);
+define   (dpycnt,         301);
+define   (R370,           370);                  !Breakpoint register
+define   (R377,           377);
+
+constant (BreakPoint,    7401);                  !Return address to Krnl
+constant (SYSBEntry,     7000);                  !Entry to Bootstrap system
+constant (ErrorReturn,    101);
+constant (GoodReturn,     100);
+constant (LongConst1,   12345);
+constant (LongConst2,    5432);
+
+
+!This program enters at DDS = 29 during boot
+! The instruction at 4001 increments it to 30
+! Error codes lie between 50 and 149
+! The Error reporting scheme increments the error register by 10#20
+constant(DDSoffset,10#20);
+!Vfy exits with 150 in the DDS, therefore we ask for 150 - 29 - 1 - 20 = 100
+! increments before exiting              exit - start - first - offset = diff
+constant(DDSDif,10#100);
+
+
+place(4000,6377);
+
+
+!
+! Start here on Boot.  Set the Boot bit in TestContinue.
+!                      (LoadOp turns off the boot proms)
+
+BStart: TestContinue := 202, LoadOP, Loc(4000);         ! Booting and no parity.
+        
+!
+! Test the E stack. (Start here for VFY from ODTPRQ).
+!
+
+StackTest: StackReset, ErrorType := 0, Loc(4001);       ! Bump DDS to 30
+        dpytmp := 101154;
+        dpycnt := 0;
+        !TestContinue := 2;
+        tmp := UState AND 1000;                         ! Check Empty Flag
+        if neq GoTo(ErrorExit), ErrorType := 1;         ! 051-Empty Stack bit not working
+
+        TOS := 1;                                       ! Load a one
+        tmp := TOS - 1;                                 ! Check it
+        if neq GoTo(ErrorExit), ErrorType := 2;         ! 052-Couldn't load TOS
+        
+        TOS := 2, Push;                                 ! try pushing a value
+        tmp := TOS - 2;
+        if neq GoTo(ErrorExit), ErrorType := 3;         ! 053-Push Didn't work
+        
+        tmp := UState AND 1000;                         ! Check empty again
+        if eql GoTo(ErrorExit), ErrorType := 4;         ! 054-Stack Empty did not go off
+
+        tmp1 := 4;                                      ! Start data value
+        
+Pushl:  TOS := tmp1, Push;                              ! Push new value on stack
+        tmp := TOS - tmp1;                              ! Make sure it worked
+        if neq GoTo(ErrorExit), ErrorType := 5;         ! 055-Data error in push
+        
+        tmp1 := tmp1 + tmp1;                            ! LeftShift data value
+        tmp1 - 100000;                                  ! Are we done?
+        if neq goto(Pushl);                             ! No, do again
+        
+        tmp := UState AND 1000;                         ! Check no empty
+        if eql GoTo(ErrorExit), ErrorType := 6;         ! 056-Empty or Full when not so
+ 
+        tmp := 100000;                                  ! Push last item on stack
+        TOS := tmp, Push;                               ! Check it
+        tmp := TOS - 100000;
+        if neq GoTo(ErrorExit), ErrorType := 7;         ! 057-Data error bit 15 on stack
+
+        tmp := UState AND 1000;                         ! Check for full
+        tmp - 1000;                                     ! Empty Clear
+        if neq GoTo(ErrorExit), ErrorType := 10;        ! 058-Stack Empty set when full
+
+        tmp := TOS xor 100000;                        ! Check data still there
+        if neq GoTo(ErrorExit), ErrorType := 11;      ! 059-Data Error on stack
+        Pop;                                            ! Pop one off
+        tmp := TOS xor 40000;                           ! Should be 40000
+        if neq GoTo(ErrorExit), ErrorType := 12;        ! 060-Data error after pop bit 14
+
+        Pop;
+        tmp := TOS xor 20000;
+        if neq GoTo(ErrorExit), ErrorType := 13;        ! 061-Data error after pop bit 13
+
+        Pop;
+        tmp := TOS xor 10000;
+        if neq GoTo(ErrorExit), ErrorType := 14;        ! 062-Data error after pop bit 12
+
+        Pop;
+        tmp := TOS xor 4000;
+        if neq GoTo(ErrorExit), ErrorType := 15;        ! 063-Data error after pop bit 11
+
+        Pop;
+        tmp := TOS xor 2000;
+        if neq GoTo(ErrorExit), ErrorType := 16;        ! 064-Data error after pop bit 10
+
+        Pop;
+        tmp := TOS xor 1000;
+        if neq GoTo(ErrorExit), ErrorType := 17;        ! 065-Data error after pop bit 9
+
+        Pop;
+        tmp := TOS xor 400;
+        if neq GoTo(ErrorExit), ErrorType := 20;        ! 066-Data error after pop bit 8
+
+        Pop;
+        tmp := TOS xor 200;
+        if neq GoTo(ErrorExit), ErrorType := 21;        ! 067-Data error after pop bit 7
+
+        Pop;
+        tmp := TOS xor 100;
+        if neq GoTo(ErrorExit), ErrorType := 22;        ! 068-Data error after pop bit 6
+
+        Pop;
+        tmp := TOS xor 40;
+        if neq GoTo(ErrorExit), ErrorType := 23;        ! 069-Data error after pop bit 5
+
+        Pop;
+        tmp := TOS xor 20;
+        if neq GoTo(ErrorExit), ErrorType := 24;        ! 070-Data error after pop bit 4
+
+        Pop;
+        tmp := TOS xor 10;
+        if neq GoTo(ErrorExit), ErrorType := 25;        ! 071-Data error after pop bit 3
+
+        Pop;
+        tmp := TOS xor 4;
+        if neq GoTo(ErrorExit), ErrorType := 26;        ! 072-Data error after pop bit 2
+
+        tmp := UState AND 1000;
+        if eql GoTo(ErrorExit), ErrorType := 27;        ! 073-Empty wrong
+        
+        Pop;
+        tmp := TOS xor 2;
+        if neq GoTo(ErrorExit), ErrorType := 30;        ! 074-Data error after pop bit 1
+
+        Pop;
+        tmp := TOS xor 1;
+        if neq GoTo(ErrorExit), ErrorType := 31;        ! 075-Data error after pop bit 0
+
+        tmp := UState AND 1000;
+        if neq GoTo(ErrorExit), ErrorType := 32;        ! 076-Empty Not set after all pops
+
+
+
+!
+! Test the 2910 call stack
+!
+
+CallTest: tmp := 0, Call(AS);                           ! Test 2910 call stack
+        tmp - 37;                                       ! 5 levels should be 5 bit set
+        if eql GoTo(JmpTest);
+        
+CallErr:ErrorType := 33, GoTo(ErrorExit);               ! 077-Call Test failed
+
+AS:     Call(BS);                                       ! 1st level call, now call level 2
+        tmp := tmp + 1, return;                         ! 1st level return
+BS:     Call(CS);                                       ! 2nd level call, now call level 3
+        tmp := tmp + 2, return;                         ! 2nd level return
+CS:     Call(DS);                                       ! 3rd level call, now call level 4
+        tmp := tmp + 4, Return;                         ! 3rd level return
+DS:     Call(ES);                                       ! 4th level call, now call level 5
+        tmp := tmp + 10, return;                        ! 4th level return
+ES:     tmp := tmp + 20, return;                        ! 5th level call, return now
+
+
+
+!
+! Jump tests.
+!
+
+JmpTest:0;                                              ! Try Even/Odd Jump Condition
+        if Odd goto(bad1);                              ! Should not jump
+        1;
+        if Odd goto(good1);                             ! Should jump
+        ErrorType := 34, goto(ErrorExit);               ! 078-Odd didn't jump on a 1
+bad1:   ErrorType := 35, goto(ErrorExit);               ! 079-Odd jumped on a 0
+
+good1:  0;                                              ! Try Byte sign jump
+        if ByteSign goto(bad2);
+        200;
+        if ByteSign goto(good6);
+        ErrorType := 36, goto(ErrorExit);               ! 080-Byte Sign didn't jump on a 200
+bad2:   ErrorType := 37, goto(ErrorExit);               ! 081-Byte Sign jumped on a 0
+
+good6:  bpc := 0;                                       ! Try jumping on BPC[3]
+        if bpc[3] goto(bad5);
+        bpc := 10;
+        if bpc[3] goto(good7);
+        ErrorType := 41, goto(ErrorExit);               ! 083-BPC[3] didn't jump when it should
+bad5:   ErrorType := 43, goto(ErrorExit);               ! 085-BPC[3] jumped when it shouldn't
+
+good7:  r2 := 40123;                                    ! Random data to try gtr/lss/leq/geq
+        r2 - 40124;
+        if gtr goto(bad6);
+        r2 - 40122;
+        if gtr goto(good8);
+        ErrorType := 44, goto(ErrorExit);               ! 086-gtr didn't jump when it should
+bad6:   ErrorType := 45, goto(ErrorExit);               ! 087-gtr jumped when it shouldn't
+   
+good8:  r2 - 40124;
+        if geq goto(bad7);
+        r2 - 40122;
+        if geq goto(good9);
+        ErrorType := 46, goto(ErrorExit);               ! 088-geq didn't jump when it should 
+bad7:   ErrorType := 47, goto(ErrorExit);               ! 089-geq jumped when it shouldn't (gtr)
+ 
+good9:  r2 - 40122;
+        if lss goto(bad8);
+        r2 - 40124;
+        if lss goto(good10);
+        ErrorType := 50, goto(ErrorExit);               ! 090-lss didn't jump when it should
+bad8:   ErrorType := 51, goto(ErrorExit);               ! 091-lss jumped when it shouldn't
+ 
+good10: r2 - 40122;
+        if leq goto(bad9);
+        r2 - 40124;
+        if leq goto(good11);
+        ErrorType := 52, goto(ErrorExit);               ! 092-leq didn't jump when it should
+bad9:   ErrorType := 53, goto(ErrorExit);               ! 093-leq jumped when it shouldn't
+ 
+good11: r2 - 40123;
+        if geq goto(good12);
+        ErrorType := 54, goto(ErrorExit);               ! 094-geq didn't jump when it was eql
+
+good12: r2 - 40123;
+        if leq goto(good13);
+        ErrorType := 55, goto(ErrorExit);               ! 095-leq didn't jump when it was eql
+
+good13:  r2 := 177776;
+        r2 := r2 + 1;
+        if carry goto(bad10);
+        r2 := r2 + 1;
+        if carry goto(good14);
+        ErrorType := 56, goto(ErrorExit);               ! 096-Carry didn't jump when it should
+bad10:  ErrorType := 57, goto(ErrorExit);               ! 097-Carry jumped when it shouldn't
+
+good14: r2 := 77776;
+        r2 := r2 + 1;
+        if overflow goto(bad11);
+        r2 := r2 + 1;
+        if overflow goto(good15);
+        ErrorType := 60, goto(ErrorExit);               ! 098-Overflow didn't jump when it should
+bad11:  ErrorType := 61, goto(ErrorExit);               ! 099-Overflow jumped when it shouldn't
+
+good15: r2 := 12345;
+        r2 := r2 and not 770;
+        r2 - 12005;
+        if eql goto(good16);
+        ErrorType := 62, goto(ErrorExit);               ! 100-And Not ALU function failed
+
+good16: r2 := r2 or 340;
+        r2 - 12345;
+        if eql goto(good17);
+        ErrorType := 63, goto(ErrorExit);               ! 101-OR alu function failed
+
+good17: r2 := r2 or not 377;
+        r2 - 177745;
+        if eql goto(good18);
+        ErrorType := 64, goto(ErrorExit);               ! 102-OR NOT alu function failed
+
+good18: r2 := r2 and 307;
+        r2 - 305;
+        if eql goto(good19);
+        ErrorType := 65, goto(ErrorExit);               ! 103-AND alu function failed
+
+good19: r2 := r2 or not 12345;
+        r2 - 165737;
+        if eql goto(good20);
+        ErrorType := 66, goto(ErrorExit);               ! 104-OR NOT alu function failed
+
+good20: r2 := not r2;
+        r2 - 12040;
+        if eql goto(good21);
+        ErrorType := 67, goto(ErrorExit);               ! 105-NOT A alu function failed
+
+good21: r2 := not 45216;
+        r2 - 132561;
+        if eql goto(good22);
+        ErrorType := 70, goto(ErrorExit);               ! 106-NOT B alu function failed
+
+good22: r2 := r2 xor 152525;
+        r2 - 060044;
+        if eql goto(good23);
+      ErrorType := 71, goto(ErrorExit);                 ! 107-XOR alu function failed
+
+good23: r2 := r2 xnor 275;
+        r2 - 117546;
+        if eql goto(good24);
+        ErrorType := 72, goto(ErrorExit);               ! 108-XOR alu function failed
+
+good24: r2 := 177777;
+        r2 := r2 + 1;
+        r2 := r2 + 0 + oldcarry;
+        r2 - 1;
+        if eql goto(good25);
+        ErrorType := 73, goto(ErrorExit);               ! 109-OldCarry Add alu function failed
+
+good25: r2 := 0;
+        r2 := r2 - 1;
+        r2 := r2 - 0 - oldcarry;
+        r2 - 177776;
+        if eql goto(good26);
+        ErrorType := 74, goto(ErrorExit);               ! 110-OldCarry subtract function failed
+
+good26: r2 := 0;
+        r2 := r2 + 0;
+        r2 := r2 + 0 + oldcarry;
+        if eql goto(good27);
+        ErrorType := 75, goto(ErrorExit);               ! 111-OldCarry Add with no OldCarry failed
+
+
+!
+! Test the CPU board is a 4K or a 16K  *** ICL ***
+!
+
+good27:   Rotate(1);                         !Must be done for signed Mult
+          MQ := 1;                           !Write to the Mult shift reg.
+          tmp := 0;                          !Init X i.e. anything but 1
+          tmp := MQ;                         !Read MQ back i.e.X=X if no MQ
+          tmp - 1;                           !Test if equal 
+          CPUSize := 20, If Eql GoTo (Index);!  16K CPU if the same
+          CPUSize := 4,  GoTo (MemTest);     !  Skip 16K Tests if 4K
+        
+
+!
+! Index test
+!
+
+
+Index:        tos := R0, push;                          ! save registers     
+              tos := R1, push;     
+              tos := R4, push;     
+              tos := Bank, push;     
+              tos := dpytmp, push;     
+              tos := dpycnt, push;     
+              tos := R370, push;     
+              push;                                     ! open tos for program 
+              
+              
+$base                                                   ! turn on indexing
+
+define(%IndReg,0);                                      ! define base register
+! Try to write each register with its own address (R0 gets 0, etc.)
+! using the top of the stack as the source and the indexed register 
+! as the destination. NOTE: RBase gets the NOT(IndexValue) and the register
+! address is (IndexValue OR [XAddr][YAddr]).
+
+WrReg:        R377 := 400;
+              tos := R377;           ! tos gets 400
+WrRegLp:      tos := tos - 1;        ! tos gets RegAddr<n>
+              if LSS goto(DualTest); ! all registers written ?
+              RBase := not tos;      ! RBase gets NOT(0 to 377)
+              %IndReg := tos;        ! Reg<n> gets n (0 to 377) 
+              goto(WrRegLp);
+                          
+              
+! now do some indexed/nonindexed arithmetic operations 
+
+                 
+DualTest:     R377 := 377;           ! test indexed and non indexed registers
+              tos := R377;
+                                     ! assigned register contents
+DualLp:       tos := tos - 1;
+              if LSS goto(PutBack);  ! loop until all registers are tested
+              R377 := R377 - 1;
+              Rbase := not tos;      ! load new base address offset      
+              %IndReg - R377;
+              if NEQ goto(IndexErr); ! XAddr<indexed n> - YAddr<n>
+              R377 - %IndReg;            
+              if NEQ goto(IndexErr); ! XAddr<n> - YAddr<indexed n>
+              goto(DualLp);
+              
+
+$nobase                              ! turn off indexing                   
+
+PutBack:      RBase := 377;          ! clear indexing register
+              pop;                   ! clear TOS
+              R370 := tos, pop;      ! put back registers
+              dpycnt := tos, pop;      
+              dpytmp := tos, pop;      
+              bank := tos, pop;      
+              R4 := tos, pop;      
+              R1 := tos, pop;      
+              R0 := tos, pop;        
+              if IntrPend call(VecInt);
+              
+
+! 
+! push long constant test
+!
+
+LongT:  tmp := LongConst1;
+        tos := tmp, push;
+        tos - tmp, pop;
+        if NEQ goto(LongErr);
+        tmp := LongConst2;
+        tos := tmp, push;
+        tos - tmp, pop;
+        if NEQ goto(LongErr);
+        pop;
+
+
+
+! 
+! setup to test various memory access operations
+!
+MemTest:call(DpyInt);             ! start display
+        0, Iob(343);              ! off force bad parity
+        IOB(147);                 ! Read Parity error register to clear it 
+        call(ChkParity);          ! collect parity error if any
+           ! the above line is needed, otherwise spurious parity error is found
+        ParityHit := 0;           ! Should not get Parity Errors hereafter
+
+! test store/fetch
+        MA := 100, Store;
+        MDO := 1257;
+        nop;                      ! avoid abort for now
+        nop;
+        MA  := 100, Fetch;
+        nop;
+        nop;
+        tmp := MDI;
+        tmp-1257;
+        if NEQ goto (ErrorExit), ErrorType := 105;  !119-Store/Fetch failed
+        call (ChkParity);
+        if NEQ goto (IsParErr);
+
+!
+! Test the Byte Program Counter
+!
+        tmp := 17;
+        
+BpcL:   IF IntrPend Call(VecInt);
+        BPC := tmp;
+        tmp1 := USTATE AND 17;
+        tmp - tmp1;
+        IF Neq GoTo(BpcErr),tmp := tmp - 1;
+        IF Neq GoTo(BpcL);
+        MA := 100, Store4;
+        MDO := 400;
+        MDO := 1402;
+        MDO := 2404;
+        MDO := 3406;
+        0;
+        MA := 100, Fetch4;                           ! t3
+        bpc := 0;                                    ! t0
+        loadop;                                      ! t1
+        R10 := MDI;
+        R11 := MDI;
+        R12 := MDI;
+        R13 := MDI;
+        IF IntrPend Call(VecInt);
+        R10 - 400;
+        IF Neq GoTo(Fet4Err);
+        R11 - 1402;
+        IF Neq GoTo(Fet4Err);
+        R12 - 2404;
+        IF Neq GoTo(Fet4Err);
+        R13 - 3406;
+        IF Neq GoTo(Fet4Err);
+        IF IntrPend Call(VecInt);
+        call (ChkParity);  
+        if NEQ goto (IsParErr);  
+
+        tmp := 0;
+!
+! Test NextOp
+!
+NextOpT:IF IntrPend Call(VecInt);
+        tmp1 := NextOp;
+        tmp - tmp1;
+        IF Neq GoTo(NOerr);
+        tmp - 7;
+        tmp := tmp + 1, IF Neq GoTo(NextOpT);
+        MA := 100, Fetch4R;                         ! t3
+        bpc := 0;                                   ! t0
+        loadop;                                     ! t1
+        R10 := MDI;
+        R11 := MDI;
+        R12 := MDI;
+        R13 := MDI;
+        IF IntrPend Call(VecInt);
+        R10 - 3406;
+        IF Neq GoTo(Fet4RErr);
+        R11 - 2404;
+        IF Neq GoTo(Fet4RErr);
+        R12 - 1402;
+        IF Neq GoTo(Fet4RErr);
+        R13 - 400;
+        IF Neq GoTo(Fet4RErr);
+        MA := 100, Store4R;
+        MDO := 400;
+        MDO := 1402;
+        MDO := 2404;
+        MDO := 3406;
+        0;
+        MA := 100, Fetch4R;                         ! t3
+        R10 := MDI;
+        R11 := MDI;
+        R12 := MDI;
+        R13 := MDI;
+        IF IntrPend Call(VecInt);
+        R10 - 400;
+        IF Neq GoTo(Str4RErr);
+        R11 - 1402;
+        IF Neq GoTo(Str4RErr);
+        R12 - 2404;
+        IF Neq GoTo(Str4RErr);
+        R13 - 3406;
+        IF Neq GoTo(Fet4RErr);
+        MA := 100, Store2;
+        MDO := 2404;
+        MDO := 3406;
+        MA := 100, Fetch2; !t3
+        R10 := MDI;
+        R11 := MDI;
+        IF IntrPend Call(VecInt);
+        R10 - 2404;
+        IF Neq GoTo(Fet2Err);
+        R11 - 3406;
+        IF Neq GoTo(Fet2Err);
+        MA := 102, Store2;
+        MDO := 1234;
+        MDO := 5432;
+        MA := 102, Fetch2; !t3
+        R10 := MDI;
+        R11 := MDI;
+        IF IntrPend Call(VecInt);
+        R10 - 1234;
+        IF Neq GoTo(Fet2AErr);
+        R11 - 5432;
+        IF Neq GoTo(Fet2AErr);
+        MA := 100, Fetch;
+        adr;
+        MA := 200, Store;
+        MDO := MDI;
+        MA := 100, Fetch;
+        tmp := MDI;
+        tmp - 2404;
+        if neq goto(FSOvlpErr);
+        call(ChkParity);
+        if NEQ goto (IsParErr);
+        
+! test parity error
+        
+ForcePE:TestContinue and 2;
+        if neq goto(FPE3);
+        tmp := 10000;
+        tmp, iob(343);                                 ! Write Bad Parity
+        ma := 100, store;
+        12345;
+        nop;
+        ma := 100, fetch;
+        nop;
+        nop;
+        mdi - 12345;
+        if eql goto(FPE1);
+        ErrorType := 76, GoTo(ErrorExit);             ! 112-Fetch error on Force Bad Parity
+ 
+FPE1:   0, Iob(343);                                  ! turn off force bad parity
+        call(ChkParity);
+        if neq goto(FPE2);
+        ErrorType := 100, GoTo(ErrorExit);           ! 114-No parity errors on Force Bad Parity
+
+FPE2:   ParityErr - 100;
+        if eql goto(FPE3);
+        ErrorType := 101, GoTo(ErrorExit);           ! 115-Wrong address on Force Bad Parity
+
+FPE3:   ParityHit := 0;
+
+
+!
+! Memory Sweep test
+!
+! To find size of memory, assume it is a small multiple of 2^17 words.
+! Maximum is 2^20 words.
+
+        adr := 100000;
+        adr := adr+adr;
+        adr := adr+adr;                                ! adr := 2^17
+        MaxAdrP1 := 0;
+        MA := 0, Store;                         
+        MDO := 13;                                     !  non-zero to loc zero
+FindSzLp: if IntrPend call(VecInt);
+        MaxAdrP1 := MaxAdrP1+adr;                      !  next larger size
+        MA := MaxAdrP1, Store;
+        MDO := 0;                                      !  zero into MaxAdrP1
+        MaxAdrP1-1;                                    !  test for MaxAdrP1=0
+        if C19 goto(FoundSz);                          !  if so, size is 2MByte
+        MA := 0, Fetch;                                !  Check location zero
+        nop;
+        nop;
+        MDI;                                           !  if loc 0 is still 
+        if NEQ goto (FindSzLp);                        !  non-0, loop again
+FoundSz:
+
+!
+! Test the CPU board is a 4K or a 16K  *** ICL ***
+!
+        CPUSize - 4;
+        if Eql GoTo (MemTest4);                  !Skip 16K Tests if 4K CPU
+        
+        
+!
+! Test the victim latch
+!
+
+
+
+RdVicT: BPC := 10;                        ! Changed REH 14 May 84
+        State := 32;
+        tmp1 := NextOp, loc(4100);
+        Goto(MVicErr);
+VicSav: tmp := Victim;          ! ONLY 14 BITS ARE VALID
+        tmp:=tmp and 37777;
+        tmp - 4100;
+        if NEQ goto(RdVicErr);
+        BPC := 0;
+        
+
+
+
+! The following code writes a value in every word of memory.
+! The value is a rotated version of the address, so it serves as
+! a check for shorted address lines.  The value is read back
+! immediately to test for data errors.
+
+MemTest4: TShift := #215, ShiftOnR;                   !rotate right 0
+        adr := MaxAdrP1;
+WLoop4: 
+        adr := adr-4;
+        adr+1;
+        r11 := Shift, if IntrPend call(VecInt);
+        adr+2;                                      !t3
+        r12 := Shift;
+        adr+3;
+        r13 := Shift;
+        adr, Store4;                                !t3
+        MDO := Shift, R10 := Shift;
+        MDO := R11;
+        MDO := R12;
+        MDO := R13;                                 !t3
+        adr, Fetch4;                                !t3
+        MDI xor R10;
+        MDI xor R11,  if NEQ goto (MemErrD4);       !t3
+        MDI xor R12,  if NEQ goto (MemErrD4);
+        MDI xor R13,  if NEQ goto (MemErrD4);
+        adr,          if NEQ goto (MemErrD4);
+        adr-1, if NEQ goto (WLoop4);                !t3
+      !advance shift amount and check for exit
+        if C19 goto (Write4Done);
+        TShift := TShift+#20, ShiftOnR;    !rotate right one farther
+        TShift-377;
+        if Lss goto(WLoop4);
+        TShift := #216, ShiftOnR;         !rotate right 8
+        goto(WLoop4);
+Write4Done:
+
+        TShift := #215, ShiftOnR;                   !rotate right 0
+        adr := MaxAdrP1;
+Rloop4: 
+        adr := adr-1;
+        r13 := Shift, IF IntrPend Call(VecInt);
+        adr := adr-1;
+        r12 := Shift;                       !t3
+        adr := adr-1;
+        r11 := Shift;
+        adr := adr-1, Fetch4;               !t3
+        R10 := Shift;
+        nop;
+        MDI xor r10;
+        MDI xor r11, if Neq GoTo(MemErrA4); !t3
+        MDI xor r12, if Neq GoTo(MemErrA4);
+        MDI xor r13, if Neq GoTo(MemErrA4);
+        adr,         if Neq GoTo(MemErrA4);
+        adr-1, if NEQ goto(RLoop4);         !t3
+        if C19 goto (MemDone4);
+        TShift := TShift+#20, ShiftOnR;    !rotate right one farther
+        TShift-377;
+        if Lss goto(RLoop4);
+        TShift := #216, ShiftOnR, goto(Rloop4); !rotate right 8
+         
+MemDone4: 
+
+!
+! now sweep memory again, inverting all values.  This ensures that
+! no bit is "stuck" as zero or one.
+!
+
+        TShift := #215, ShiftOnR;                   !rotate right 0
+        adr := MaxAdrP1;
+WLoopI4: 
+        adr := adr-4;
+        adr+1;
+        r11 := not Shift, if IntrPend call(VecInt);
+        adr+2;                                      !t3
+        r12 := not Shift;
+        adr+3;
+        r13 := not Shift;
+        adr, Store4;                                !t3
+        MDO := not Shift, R10 := not Shift;
+        MDO := R11;
+        MDO := R12;
+        MDO := R13;                                 !t3
+        adr, Fetch4;                                !t3
+        MDI xor R10;
+        MDI xor R11,  if NEQ goto (MemErrID4);       !t3
+        MDI xor R12,  if NEQ goto (MemErrID4);
+        MDI xor R13,  if NEQ goto (MemErrID4);
+        adr,          if NEQ goto (MemErrID4);
+        adr-1, if NEQ goto (WLoopI4);               !t3
+      !advance shift amount and check for exit
+        if C19 goto (WrI4Done);
+        TShift := TShift+#20, ShiftOnR;    !rotate right one farther
+        TShift-377;
+        if Lss goto(WLoopI4);
+        TShift := #216, ShiftOnR;         !rotate right 8
+        goto(WLoopI4);
+WrI4Done:
+
+        TShift := #215, ShiftOnR;                   !rotate right 0
+        adr := MaxAdrP1;
+RLoopI4: 
+        adr := adr-1;
+        r13 := not Shift, IF IntrPend Call(VecInt);
+        adr := adr-1;
+        r12 := not Shift;                        !t3
+        adr := adr-1;
+        r11 := not Shift;
+        adr := adr-1, Fetch4;                    !t3
+        R10 := not Shift;
+        nop;
+        MDI xor r10;
+        MDI xor r11, if Neq GoTo(MemErrIA4);      !t3
+        MDI xor r12, if Neq GoTo(MemErrIA4);
+        MDI xor r13, if Neq GoTo(MemErrIA4);
+        adr,         if Neq GoTo(MemErrIA4);
+        adr-1, if NEQ goto(RLoopI4);             !t3
+        if C19 goto (MemDoneI4);
+        TShift := TShift+#20, ShiftOnR;          !rotate right one farther
+        TShift-377;
+        if Lss goto(RLoopI4);
+        TShift := #216, ShiftOnR, goto(RLoopI4); !rotate right 8
+
+MemDoneI4: call(ChkParity);
+        if Neq GoTo(IsParErr);
+
+
+! check top4 bits of CPU memory
+
+Top4:   IF IntrPend Call(VecInt);
+        r5 := 100000;
+        r2 := 10000;
+        r3 := 1;
+        
+Top4lp: r5 := r5 + 100000;                          ! try upper 4 bits, carry propogate a 1 up there
+        r6 := not USTATE(r5);                       ! Read Y[19:16] on USTATE[15:12]
+        r6 := r6 and 170000;
+        r6 - r2;
+        ErrorType := 102, if neq goto(ErrorExit);   ! 116-Upper 4 Bit Test failed
+        Ma := 100, Store2;                          ! now try to pick them up with MDX
+        0;
+        r3;
+        MA := 100, Fetch2;
+        R4 := MDI;                                  ! Make sure MDX or R4 gets good results
+        R4 := MDX or R4;
+        IF IntrPend Call(VecInt);
+        R6 := not UState(r4);
+        r6 := r6 and 170000;
+        r6 - r2;
+        ErrorType := 103, if neq goto(ErrorExit);   ! 117-MDX test failed
+
+
+!Hang:   if IntrPend Call(VecInt);
+!        Goto(Hang);
+        dpytmp := 6000;                             ! end of memory tests
+        dpytmp, Iob(343);
+        dpytmp, Iob(340);
+!        dpytmp := 6000;                             ! end of memory tests
+!        dpycnt := 1;                                ! turn off video
+!VidOff: IF IntrPend Call(VecInt);                   ! wait video interrupt
+!        dpycnt xor 1;
+!        if Eql goto(VidOff);
+
+        r5, push;                                   ! Check that the Stack upper 4 bits works
+        r4 := tos,pop;
+        r6 := not ustate(r4);
+        r6 := r6 and 170000;
+        r6 - r2;
+        ErrorType := 104, if neq goto(ErrorExit);   ! 118-Stack upper bits test failed
+
+StackOk:r5 := r5 + 100000;                          ! Cause carry, incr top4
+        r3 := r3 + 1;                               ! Next lower bit
+        r2 := r2 + 10000;                           ! Next upper 4 bit
+        if neq goto(top4lp);
+
+        tmp1 := not 0;                              ! Set no carry
+        tmp1 := tmp1 + 0;
+        if C19 goto(C19Yes);                        ! C19 test is backwards
+        ErrorType := 40, GoTo(ErrorExit);           ! 082-C19 didn't jump when it should have
+
+C19Yes: tmp1 := tmp1 + 1;                           ! -1 + 1 causes carries
+        if C19 Goto(C19No);
+
+        R3 := 0;                                    ! Prepare for Dispatch test
+DspLp:  R3, Field(0,4);                             ! first check Field
+        R4 := Shift;                                ! pick up the field
+        R4 - R3;                                    ! should be the same
+        ErrorType := 125, if Neq Goto(ErrorExit);   ! 135-Field didn't work
+        R3, Field(0,4);                             ! do it again
+constant(DspTst,5000);
+        R4 := Shift, Dispatch(DspTst);              ! save results, Dispatch
+
+        ErrorType := 126, Goto(ErrorExit);          ! 136-Dispatch did not jump
+
+C19No:  ErrorType := 42, Goto(ErrorExit);           ! 084-C19 jumped when it shouldn't
+
+Case(DspTst,0), R2 := 0;                            ! the correct answer is
+DspChk: R3 - R2;                                    ! check answer
+        ErrorType := 127, if Neq Goto(ErrorExit);   ! 137-Wrong Dispatch target
+        R3 := R3 + 1;                               ! next target
+        R3 - 20;                                    ! do 16 targets
+        if Lss Goto(DspLp);
+
+!End of Test Code
+        TestContinue and 1;                         ! shall we loop
+        if neq goto(StackTest);
+        etmp := DDSdif, Call(SetDDS);               ! set DDS to 150
+        if ByteSign GoTo(SYSBEntry);                ! if started via boot
+        r77 :=100;
+again:  r77 := r77 - 1;      
+        STACKRESET;
+        Nop;
+        tos := 10,push;
+        pop;
+        r100 := r77;
+        if neq goto(again);
+        R370 := GoodReturn;                         ! if started via ODTPRQ
+        ErrorType := 0, GoTo(BreakPoint);
+
+Case(DspTst,1), R2 := 1, Goto(DspChk);
+
+Case(DspTst,2), R2 := 2, Goto(DspChk);
+
+Case(DspTst,3), R2 := 3, Goto(DspChk);
+
+Case(DspTst,4), R2 := 4, Goto(DspChk);
+
+Case(DspTst,5), R2 := 5, Goto(DspChk);
+
+Case(DspTst,6), R2 := 6, Goto(DspChk);
+
+Case(DspTst,7), R2 := 7, Goto(DspChk);
+
+Case(DspTst,10), R2 := 10, Goto(DspChk);
+
+Case(DspTst,11), R2 := 11, Goto(DspChk);
+
+Case(DspTst,12), R2 := 12, Goto(DspChk);
+
+Case(DspTst,13), R2 := 13, Goto(DspChk);
+
+Case(DspTst,14), R2 := 14, Goto(DspChk);
+
+Case(DspTst,15), R2 := 15, Goto(DspChk);
+
+Case(DspTst,16), R2 := 16, Goto(DspChk);
+
+Case(DspTst,17), R2 := 17, Goto(DspChk);
+
+
+! Long Pause to see screen effects and DDS
+LongPause:
+       tmp := 100000;
+       PauLoop: 
+             tmp1 := 400;
+             Pinner: 
+                  if IntrPend call(VecInt);
+                  tmp1 := tmp1-1;
+                  if NEQ goto(Pinner);
+             tmp := tmp-1;
+             if EQL return;
+             goto(PauLoop);
+
+!
+! The error routines.
+!
+
+ErrorExit: etmp := ErrorType, Call(SetDDS);         ! save error code
+        if ByteSign goto(Busted);                   ! if started via boot
+        R370 := ErrorReturn, GoTo(BreakPoint);      ! if started via ODTPRQ
+
+        
+SetDDS: etmp := etmp + DDSoffset;                   ! DDS starts at 30
+ErrLp:  StackReset, ecnt := 10;                     ! increment DDS
+
+ErrWt:  ecnt := ecnt - 1, if neq goto(ErrWt);       ! but not to quickly
+        etmp := etmp - 1;                           ! how many incrs do we need
+        if neq goto(ErrLp);
+        TestContinue, return;                       ! return Switch Reg on R
+        
+Busted: goto(busted);                               ! Loop for a long time.
+
+
+MemErrD4: ErrorType := 123, GoTo(ErrorExit);        ! 133-Data error on sweep
+
+MemErrA4: ErrorType := 124, GoTo(ErrorExit);        ! 134-Addr error on Sweep
+
+MemErrID4: ErrorType := 130, GoTo(ErrorExit);       ! 138-DataErr:InvertSweep
+
+MemErrIA4: ErrorType := 131, GoTo(ErrorExit);       ! 139-AddrErr:InvertSweep
+
+IsParErr: tmp := ParityErr;                         ! we got a parity error
+         ErrorType := 77, GoTo(ErrorExit);          ! 113-Unexpected Parity Err
+         
+Refill:  State - 32;
+         State := 0, If EQL goto(VicSav);
+         ErrorType := 106, GoTo(ErrorExit);         ! 120-Unexpected refill
+
+BpcErr:  tmp := tmp + 1;
+         ErrorType := 107, GoTo(ErrorExit);         ! 121-BPC test failed
+
+Fet4Err: ErrorType := 110, GoTo(ErrorExit);         ! 122-Fetch4 test failed
+
+Fet4RErr:ErrorType := 111, GoTo(ErrorExit);         ! 123-Fetch4R test failed
+
+Str4RErr:ErrorType := 112, GoTo(ErrorExit);         ! 124-Store4 test failed
+
+Fet2Err: ErrorType := 113, GoTo(ErrorExit);         ! 125-Fetch2 test failed
+
+Fet2AErr: ErrorType := 114, GoTo(ErrorExit);        ! 126-Store2 test failed
+
+NOerr:   ErrorType := 115, GoTo(ErrorExit);         ! 127-NextOp test failed
+
+FSOvlpErr: ErrorType := 116, GoTo(ErrorExit);       ! 128-Fetch/Store Overlap failed
+
+IndexErr:     RBase := 377;          ! clear indexing register
+              pop;                   ! clear TOS
+              R370 := tos, pop;      ! pop registers back      
+              dpycnt := tos,pop;
+              dpytmp := tos, pop;      
+              bank := tos, pop;      
+              R4 := tos, pop;      
+              R1 := tos, pop;      
+              R0 := tos, pop;      
+              if IntrPend Call(VecInt);
+              ErrorType := 132, 
+                   Goto(ErrorExit);                 ! 140-Reg Index test failed
+
+LongErr:   ErrorType := 133,
+                   Goto(ErrorExit);                 ! 141-Push LongConstant failed
+
+RdVicErr:  ErrorType := 134,
+                   Goto(ErrorExit);                 ! 142-ReadVictim test failed
+MVicErr:   ErrorType := 135,
+                   Goto(ErrorExit);                 ! 143-MakeVictim test Fail
+
+!
+! clear interrupts so we get parity hit if needed
+!
+ChkParity: 
+        if IntrPend call(VecInt);
+        if IntrPend call(VecInt);
+        if IntrPend call(VecInt);
+        if IntrPend call(VecInt);
+        ParityHit, return;
+        
+!
+! Set up the interrupt vectors.
+!
+! The code for memory test assumes the shifter is not used for interrupts
+
+VecInt: Vector(Z80Int);                              ! Service interrupts
+Z80Int: IOB(106), Loc(5300);
+        Return;               ! If Z80 Interrupts, read register to dismiss it
+
+BadInt1: ErrorType := 117, GoTo(ErrorExit), Loc(5304);! 129-Bad Interrupt loc 4
+
+DskInt: 0, IOB(301), Loc(5310);
+        Return;               ! If Dsk Interrupts, function:=0 to dismiss
+
+BadInt3: ErrorType := 120, GoTo(ErrorExit), Loc(5314);! 130-Bad Interrupt loc 14
+
+BadInt4: ErrorType := 121, GoTo(ErrorExit), Loc(5320);! 131-Bad interrupt loc 20
+
+DpyInt:  dpytmp, Iob(343), Loc(5324);  ! load VidState
+         dpytmp, Iob(340);             ! load line count
+Dpy1:    0, Iob(342);                  ! load cursor address
+         dpytmp and 200;
+         if Eql Goto(Dpy2);            ! if we didn't load second retrace
+         0, Iob(341);                  ! address of screen bit map div 2
+         0, Iob(344);                  ! load cursor X value
+         dpycnt := 11;
+Dpy2:    dpytmp := 102000;             ! next command: display normal
+         dpycnt := dpycnt - 1;
+         if Gtr return;                ! if not end of screen
+         dpytmp := 101154;             ! next command: first vertical retrace
+         dpycnt;
+         if Eql return;                ! if end of screen
+         dpytmp := 101351, return;     ! next command: second vertical retrace
+         
+BadInt6: ErrorType := 122, GoTo(ErrorExit), Loc(5330);!132-Bad interrupt loc 30
+         
+ParInt: ParityHit := 1, Loc(5334);                   
+        IOB(147);                      ! Read Parity error register
+        ParityErr := IOD;
+        ParityErr := ParityErr + ParityErr;
+        ParityErr := ParityErr + ParityErr;
+        IOB(145);                      ! Read Parity error register
+        Tmp1 := IOD and 7400;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        Tmp1 := Tmp1 + Tmp1;
+        ParityErr := ParityErr or Tmp1;
+        Return;
+        
+        
+END;

@@ -1,0 +1,531 @@
+.Title PERQ <--> Z-80 Messages
+.Comment
+.Comment   PERQ <--> Z-80 Messages
+.Comment   Bill Glass and Donald A. Scelza
+.Comment   Copyright (C) Three Rivers Computer Corporation, 1981
+.Comment
+.Output( ASC E+ U+ )
+.Input( H~ U\ B# )
+.Paragraph( F@ S1 P5 I5 )
+.Margin( L0 R68 )
+.Form( [ /////  L56 ///// ] )
+.Margin( L+4 R-4 )
+
+
+
+
+
+
+
+
+
+
+
+
+.Option( F- L- R- P- )
+PERQ <--> Z-80 Messages
+
+
+
+
+Bill Glass and Donald A. Scelza
+.Skip 11
+.Option
+This document briefly describes the message protocol used in the 
+PERQ <--> Z80 communication interface.
+.Skip 10
+.Option( F- P- )
+Copyright (C) 1981
+Three Rivers Computer Corporation
+720 Gross Street
+Pittsburgh, PA  15224
+(412) 621-6250
+.Option
+.Option( J4 )
+.Form( [ // T #60 E ///  L56 // #31 "- " Pr:1 " -" /// ] )
+.Page
+
+
+
+
+
+
+
+
+
+
+This document is not to be reproduced in any form or
+transmitted in whole or in part, without the prior written
+authorization of Three Rivers Computer Corporation.
+
+The information in this document is subject to change
+without notice and should not be construed as a commitment
+by Three Rivers Computer Corporation. The Company assumes
+no responsibility for any errors that may appear in this
+document.
+
+Three Rivers Computer Corporation will make every effort to
+keep customers apprised of all documentation changes as
+quickly as possible. The Reader's Comments card is distrib~uted
+with this document to request users' critical evalu~ation
+to assist us in preparing future documentation.
+
+
+
+
+
+PERQ is a trademark of Three Rivers Computer Corporation.
+.Margin
+.Form([ // T #60 E ///  L56 // #31 "- " PN:1 " -" /// ])
+.Page
+.Count 1
+.Skip 4.Page 10
+\1. Introduction\
+.Inx 1. Introduction
+@This  document  gives  a  brief  description  of the messages that are
+interchanged between  PERQ  and  the  Z-80  on  the  I/O  board.   The
+descriptions  give  the  syntax of the command, a brief description of
+its function, and any restrictions.  Note that all commands begin with
+a 153 byte which is not shown.  In all the descriptions, <N> is a byte
+count.  An N of zero is interpreted as 256.  The <enable> byte has the
+low  order bit set if that device is to be enabled, and clear if it is
+to be disabled.  The remaining 7 bits are device specific  and  should
+normally  be  zero.   All numbers are octal unless they are terminated
+with a period.
+@Whenever PERQ sends a  message  that  requires  a  data  transfer,  no
+further  transfer  messages, for that device, should be sent until the
+Z-80 says that it is willing to accept messages for that device.
+
+.Skip 4.Page 10
+\2. Perq -> Z80 Messages\
+.Inx 2. Perq -> Z80 Messages
+.Skip 2
+.Margin( L+5 )
+
+\RS232Out Char\
+.Inx #####RS232Out Char
+.Break
+<001><N><char1><char2>...<charN>
+.Margin( L+5 R-10 )
+@This  message  places  characters  into  the  RS-232  output ring
+buffer.  The byte count  <N>  must  be  less  than  or  equal  to
+sixteen.   The Z-80 will give a transmitter ready status whenever
+there are sixteen free bytes in the ring buffer.
+.Margin.Skip 1
+
+\Floppy Command\
+.Inx #####Floppy Command
+.Break
+<002><head,unit><cyl><sec><cmd><N><Data0><Data1>...<DataN>
+.Margin( L+5 R-10 )
+@The <head,unit>, <cyl> and <sec> bytes of a floppy  command  must
+be  in  the  same format that is expected by the NEC floppy chip.
+The valid values for the <cmd> byte of a floppy command are:
+.Paragraph( S0 )
+@1 - read  a sector of data.
+@2 - write a sector of data.
+@3 - format a sector.
+@4 - seek to a cylinder.
+.Break.Paragraph
+The  write  command  is  the only  command  that  must  contain valid data. 
+This data will be written to the  floppy  in  the  specified  sector.
+All  writes transfer  256  bytes of data to the floppy.  If 256 bytes are not
+provided by PERQ then the remainder of the sector will be written
+with  what  ever  is left in the buffer.  For all of the commands
+except Write a byte count of 1 must be specified.  This data byte
+will not be used.
+.Margin.Skip 1
+
+\GPIB Command\
+.Inx #####GPIB Command
+.Break
+<003><cmd><N><Data1><Data2>...<DataN>
+.Margin( L+5 R-10 )
+.Skip 1
+The allowable  values  of cmd are:
+.Paragraph( S0 )
+@1 - write data.
+@2 - write data with EOI on last byte.
+@3 - write registers.
+.Break.Paragraph
+The  first  two commands cause a data transfer on the GPIB bus. 
+N must be in the range of 1 to 32.  The GPIB will not be marked as ready 
+until all the bytes have been transfered.  The third command allows PERQ to
+directly write into the TI-9914 registers.  In this command, each
+pair  of  data  bytes  is  treated  as the first being a register
+number, and the second a data value.  The register numbers are: 
+.Margin(L+10).Paragraph( U4 S0 )
+@0 - Interrupt  Mask  0 (The Z-80 will always enable BI and BO with
+your data).
+@1 - Address  Register
+@3 - Parallel  Poll
+@4 - Interrupt Mask 1
+@5 - Serial Poll
+@6 - Auxiliary Command
+.Margin.Paragraph
+Again, N must be in the range of 1 to 32.
+.Margin.Skip 1
+
+\Speech Command\
+.Inx #####Speech Command
+.Break
+<004><N><Data1><Data2>...<DataN>
+.Margin( L+5 R-10 )
+@This command is similar to the RS-232 output command except  that
+the  output  goes to the speech channel.  The byte count (N) must
+be less than or equal to thirty-two.  The Z-80 will give a speech
+ready status whenever there are thirty-two free bytes in the ring
+buffer
+.Margin.Skip 1
+
+\RS232 Status\
+.Inx #####RS232 Status
+.Break
+<005><3><enable><clock><settings>
+.Margin( L+5 R-10 )
+@This command sets  the  current  state  of  the  RS-232  channel.
+<clock>  represents  the  baud  rate  (1 is 9600, 2 is 4800, 4 is
+2400, etc.).  <settings> is the bit pattern  \rrttsspp\ where:
+.Margin(L+8).Paragraph( U3 S0 )  
+@\rr\ is number of bits per receive character (00 for 5, 01  for  7,
+10 for 6 and 11 for 8).
+@\tt\ is the number of bits per transmit character (same as rr).
+@\ss\ is  the  number  of stop bits (00 for synchronus, 01 for 1, 10
+for 1 1/2, and 11 for 2).
+@\pp\ is the parity setting (00 for no parity, 01 for  odd,  11  for
+even).
+.Margin.Margin.Paragraph.Skip 1
+
+\Tablet Status\
+.Inx #####Tablet Status
+.Break
+<006><1><enable>
+.Margin( L+5 R-10)
+@Turns  the  tablet  on  or  off.   No  other  status settings are
+possible.
+.Margin.Skip 1
+
+\Keyboard Status\
+.Inx #####Keyboard Status
+.Break
+<007><1><enable>
+.Margin( L+5 R-10 )
+@Turns the keyboard on or  off.   No  other  status  settings  are
+possible.
+.Margin.Skip 1
+
+\Disk Seek\
+.Inx #####Disk Seek
+.Break
+<010><count>
+.Margin( L+5 R-10 )
+@Performs  a seek of <count> cylinders.  The seek complete message
+is issued after the appropriate delay time based on the value  of
+<count>.
+.Margin.Skip 1
+
+\Voltage Settings\
+.Inx #####Voltage Settings
+.Break
+<011><N><enable><voltages>
+.Margin( L+5 R-10 )
+@Enables  or  disables  voltage/temperature  checking and sets the
+minimum and maximum allowable values (the  range  is  inclusive).
+The  values are specified as four bytes for each voltage/temperature.  
+The first byte is the low order minimum, the second is the
+high  order  minimum, the third is the low order maximum, and the
+fourth is the high order maximum.   The  ordering  of  the  
+voltages/temperatures  is: 
+.Paragraph( S0 )
+@ground
+@+5
+@+12
+@+12/-12
+@Vref
+@Network
+@CRT
+@base unit
+@+55
+@+24
+.Break.Paragraph
+The value  of  <N>  specifies  the
+number of data bytes in the command.  It may fall in the range of
+1 to 51 (octal).
+.Margin.Skip 1
+
+\Clock Status\
+.Inx #####Clock Status
+.Break
+<012><1><enable>
+.Margin( L+5 R-10)
+@Turns the  clock  on  or  off.   No  other  status  settings  are
+possible.
+.Margin.Skip 1
+
+\Request Status\
+.Inx #####Request Status
+.Break
+<013><flag>
+.Margin( L+5 R-10 )
+@Requests  the  Z-80  to return the status settings of any device.
+The <flag> byte is treated as a set of one bit flag  to  indicate
+which  device  statuses are being requested.  The bit definitions
+are:
+.Paragraph( S0 )
+@001 - RS-232
+@002 - Tablet
+@004 - Keyboard
+@010 - Voltage
+@020 - Clock
+@040 - Floppy 100 - GPIB
+@200 - send status change
+.Margin.Paragraph.Skip 1
+
+\Floppy Status\
+.Inx #####Floppy Status
+.Break
+<014><003><Density><# Heads><Interrupt enable>
+.Margin( L+5 R-10 )
+@The Floppy Status command is  used  to  set  the  status  of  the
+floppy.   <Density> is used to set the floppy to single or double
+density.   A  0  indicates  single  density  while  a  100(octal)
+indicates  double  density.   <#  Heads>  indicates the number of
+heads that the floppy has.  Valid values are 1 and 2.  <Interrupt
+Enable>  is  used  to set the interrupt status of the floppy.  If
+interrupts are disable then  the  floppy  will  not  be  able  to
+interrupt  the  Z80.   A  1  indicates  that interrupts are to be
+allowed.  A 0 will disable interruptes.
+.Margin.Skip 1
+
+.Page 10
+\Floppy Boot\
+.Inx #####Floppy Boot
+.Break
+<15>
+.Margin( L+5 R-10 )
+@The Floppy Boot message is used to request the Z80 to read a boot
+file  from  the floppy.  The format of boot floppies is described
+elsewhere.
+.Margin
+
+.Skip 4.Page 10
+.Margin
+\3. Z80 -> Perq Messages\
+.Inx 3. Z80 -> Perq Messages
+.Margin( L+5 ).Skip 2
+
+\Keyboard Char\
+.Inx #####Keyboard Char
+.Break
+<001><Char>
+.Margin( L+5 R-10 )
+@<Char> is the eight bit value received from the keyboard.
+.Margin.Skip 1
+
+\RS232In Char\
+.Inx #####RS232In Char
+.Break
+<002><2*N><Status1><Char1>...<StatusN><CharN>
+.Margin( L+5 R-10 )
+@This  message  transfers up to sixteen characters received on the
+RS-232 channel.  <Char> represents the eight bit quantity received.
+The <Status> bytes have the following error bits:
+.Paragraph( S0 )
+@1 (bit 0) - parity
+@2 (bit 1) - overrun
+@4 (bit 2) - framing.
+.Margin.Paragraph.Skip 1
+
+\Tablet\
+.Inx #####Tablet
+.Break
+<003><Xlow><Xhigh><Ylow><Yhigh><count>
+.Margin( L+5 R-10 )
+@This message reports the X and Y values  from  the  tablet.   The
+tablet  switch  appears  as the high order bit of Xhigh.  <count>
+represents the number of clock ticks (1/60 second) elapsed  since
+the sending of the last tablet message.
+.Margin.Skip 1
+
+\Clock\
+.Inx #####Clock
+.Break
+<004><count>
+.Margin( L+5 R-10 )
+@This  message  reports  the  number of clock ticks since the last
+clock message.  Note, this message is used only when the clock is
+enabled and the tablet is disabled.
+.Margin.Skip 1
+
+\Floppy Data\
+.Inx #####Floppy Data
+.Break
+<005><Status><N><Data1><Data2>...<DataN>
+.Margin( L+5 R-10 )
+@This  message  is  used to transmit data from a read operation to
+PERQ.  The low order bit of the status byte indicates if the Read
+operation  completed without error.  A 1 indicates that there was
+error.
+.Margin.Skip 1
+
+\GPIB\ (not implemented)
+.Inx #####GPIB
+.Break
+<006><Status><N><Data1><Data2>...<DataN>
+.Skip 1
+
+\RS232 Status\
+.Inx #####RS232 Status
+.Break
+<007><3><enable><clock><settings>
+.Margin( L+5 R-10 )
+@Reports the current RS-232 status.  The interpretation of <clock>
+and <settings> is the same as for the PERQ to Z-80 message.
+.Margin.Skip 1
+
+\Tablet Status\
+.Inx #####Tablet Status
+.Break
+<010><1><enable>
+.Margin( L+5 R-10 )
+@Reports the current status of the tablet.
+.Margin.Skip 1
+
+\Keyboard Status\
+.Inx #####Keyboard Status
+.Break
+<011><1><enable>
+.Margin( L+5 R-10 )
+@Reports the current status of the keyboard.
+.Margin.Skip 1
+
+\Seek Complete\
+.Inx #####Seek Complete
+.Break
+<012>
+.Margin( L+5 R-10 )
+@Acknowledges completion of a disk seek.
+.Margin.Skip 1
+
+\Status Change\
+.Inx #####Status Change
+.Break
+<013><flag>
+.Margin( L+5 R-10 )
+@This  message  reports  the  ability  of  the Z-80 to accept data
+transfer messages to different devices.  <flag> is interpreted as
+a set of one bit flags that indicate which devices are currently
+permitted:
+.Paragraph( S0 )
+@001 - Can Accept RS232 Output
+@002 - Can Accept Speech Output
+@004 - Can Accept Floppy Input/Output
+@010 - Can Accept GPIB command
+@020 - Can Accept Disk Seek
+@200 - Always set
+.Margin.Paragraph.Skip 1
+
+\Voltage Error\
+.Inx #####Voltage Error
+.Break
+<014><024><current voltages>
+.Margin( L+5 R-10 )
+@Reports that at least one of the voltage/temperatures was out  of
+the  allowable bounds.  The values are reported in the same order
+as in the PERQ to Z-80 message with the low byte  preceeding  the
+high byte in each case.
+.Margin.Skip 1
+
+\Voltage Status\
+.Inx #####Voltage Status
+.Break
+<015><75><enable><current voltages><min/max settings>
+.Margin( L+5 R-10 )
+@This  message reports the status of voltage/temperature checking.
+<current volt~ages> reports the current values (as in the  voltage
+error  message),  and <min/max settings> give the lower and upper
+bounds in the same format as the PERQ to Z-80 message.
+.Margin.Skip 1
+
+\Clock Status\
+.Inx #####Clock Status
+.Break
+<016><1><enable> 
+.Margin( L+5 R-10 )
+@Reports the status of the clock.
+.Margin.Skip 1
+
+\Floppy Status\
+.Inx #####Floppy Status
+.Break
+<20><N><reg1>..<regN>
+.Margin( L+5 R-10 )
+@This message is used to return the status of the floppy.   Up  to
+seven  registers  may be returned by this message.  These are the
+status registers that are provided by the NEC chip.
+.Margin.Skip 1
+
+\Floppy Done\
+.Inx #####Floppy Done
+.Break
+<21><Status>
+.Margin( L+5 R-10 )
+@The floppy done message is used to indicate  that  the  requested
+floppy operation has finished.  The low order bit of this message
+is used to provide error status information.  If  the  low  order
+bit  is  set  then  there was an error during the operation.  The
+Floppy Status command can be used to get more  detailed  information 
+about any errors that may have occurred.
+.Margin.Skip 1
+
+.Page 10
+\GPIB Status\
+.Inx #####GPIB Status
+.Break
+<017><6><reg1><reg2><reg3><reg4><reg5><reg6>
+.Margin( L+5 R-10 )
+@This message reports the status of the GPIB read registers at the
+last interrupt.  The order of the  registers  is:
+.Paragraph( S0 )
+@1 - Interrupt Status  0
+@2 - Address Switch
+@3 - Address Status
+@4 - Command Pass Through
+@5 - Interrupt Status 1
+@6 - Bus Status
+.Margin.Paragraph.Skip 1
+
+.Page 10
+\Floppy Boot Error\
+.Inx #####Floppy Boot Error
+.Break
+<22>
+.Margin( L+5 R-10 )
+@The floppy boot error message will be sent anytime that there  is
+an  error  while  the Z80 is reading a boot file from the floppy.
+The possible errors are:
+.Paragraph( S0 )
+@a) the floppy is  not  ready
+@b) the floppy  is not a boot floppy
+@c) any error reported by the floppy chip.
+.Margin.Paragraph.Skip 1
+
+\Floppy Boot Data\
+.Inx #####Floppy Boot Data
+.Break
+<23><N><Data1>...<DataN>
+.Margin( L+5 R-10 )
+@This message is used to send a block  of  boot  file  information
+from the Z80 to Perq.  <N> is the number of bytes in the message.
+NOTE: in a Floppy Boot Data message a byte count of zero means NO
+data  bytes.  A message with a zero byte count will be sent after
+all of the boot blocks from the floppy have been read.
+
+.Comment Produce the index
+.Form( [ // T #60 E /// L56 // #31 '- ' Pr:1 ' -' ] )
+.Page
+.Count 3
+.Skip 4.Page 10
+\Table of Contents\
+
+.Sortindex( Sp R4 M5 )

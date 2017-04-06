@@ -1,0 +1,581 @@
+
+!---------------------------------------------------------------------------
+!  Program Cursor.Micro
+!---------------------------------------------------------------------------
+!
+!  V0.0  20 Jun 84  REH    Created program to show display problems
+!
+!  V1.0  03 Aug 84  REH    Changed Screen format and Allowed User values
+!
+!  V1.1  11 Jan 85  REH    Changed to Show Cursor Addresses Better and added
+!                          more comments.
+!
+!  V1.2  22 Jan 85  REH    Added Version numbers at Loc(#7777)
+!                           
+!  V1.3  07 Aug 85  REH    Changed to Work on 4Meg memory boards also ?????
+!                           
+!
+    Define(MajorVersion,  1);  ! Update these with version number
+    Define(MinorVersion,  3);  !
+!
+!---------------------------------------------------------------------------
+!  
+! In ODTprq Type: 
+!                GO 2400  To Start Display Moving
+!                GO 2407  To Use User Values in registers and Move Screen
+!                GO 2410  To Use User Values in registers and Freeze Screen
+!
+!---------------------------------------------------------------------------
+!
+!          Displays Display Memory Addressing Problems up to 2MEG
+!       and Cursor Address and Data Problems and Line Counter problems.
+!
+!    ** NOTE: 1) All These problems can only show a Visible Failure on the
+!                Screen. So it is necessary to study the screen carefully
+!                to detemine the fault.
+!
+!             2) NO Interrupts are used. The Video State Register is read 
+!                to determine line counter overflow.
+!
+!---------------------------------------------------------------------------
+!
+!---------------------------------------------------------------------------
+!   1) CURSOR DATA TEST
+!       The Top Right Corner Displays a 64x64 Cursor with The Data loaded
+!       into the Cursor Fifos Changing one Bit and One Line at a Time. The
+!       cursor X-Position is Set to the Max Position for the type of board
+!       (Portrait or Landscape) that will display a full cursor. If multiple
+!       horizontal lines appear this could be a bad cursor address counter or
+!       other low order(bits 2..8) Cursor Address problem.
+!
+!   2) CURSOR X-POS TEST
+!       The Next 64 scan line Area Displays a 64x64 cursor with constant Data
+!       while the Cursor Xpos Register is being incremented. The cursor should
+!       move smoothly across the screen in 8 pixel steps.
+!
+!   3) LINECOUNTER TEST and CURSOR CUTOFF TEST
+!       The Next 128 scan lines Test the LineCounter Register. The linecounter
+!       is loaded with a Value(1..127) with the Cursor Disabled. When the
+!       LineCounter overflows Then (128 - Value) is loaded into the linecounter
+!       and the cursor is enabled. The First linecounter Value is Incremented
+!       While the second decrements. The Cursor Should move Smoothly through
+!       All 128 lines and also should disappear as it crosses into the next
+!       scan area. The Cursor X-Position is Set to the minimum X-Position that
+!       still displays a full cursor.
+!    
+!   4) CURSOR/VIDEO FUNCTION (MAP00) TEST
+!       The next 384 scan lines are for testing cursor functions, basically
+!       the MAP00 proms. Each Cursor function has 48 scan lines in it. The 384
+!       scan lines are in one contiguous area of memory which is Filled with
+!       Zeroes except for a 64x384 pixel stripe of Ones near the center of
+!       the screen. The cursor data is loaded with the same data as Tests 2 & 3
+!       above. The cursor X position is set to start the cursors in the center
+!       of the stripe of ones. The three bits in the video control Register
+!       that go to the MAP00 proms are incremented from 000 to 111 (Binary) as
+!       each different 48 scan line area passes by. Check all 8 areas for
+!       different ways the cursor is masked.
+!
+!   5) DISPLAY ADDRESS TEST and CURSOR ADDRESS
+!       The Rest of the screen is devoted to Display Address and Cursor Address
+!       tests. An incrementing Word offset is Set to Ones at each Screen and
+!       Cursor Address boundary in Setup. The Screen is divided into 16 areas
+!       of 24 scan lines each. One for each screen address bit that can be set
+!       in the Display and Cursor address registers. The Display Address has
+!       a different bit set in each area with the other bits cleared (Walking
+!       Ones Test). While the Cursor Address has all Bits set except for one 
+!       different bit set to zero in each area (Walking Zeroes Test).
+!       There should be a Step Pattern displayed here for each legal address
+!       A one meg board will only show 11 Steps while a 2Meg board will display
+!       12 steps and So on. The Steps Should be 16 pixels (1Word) Wide and 24
+!       Scan Lines high. These will be Solid Black. Any distorion in these 
+!       steps indicates low order Display Address problems (bits 2..8 of the
+!       video address). The Cursor is near the Right Side in All Areas and
+!       The Data should Show a Step Pattern through each area for each legal
+!       Address. These Steps will Be a White Block 4x24 pixels. Any disortion
+!       here could be Low order Cursor Address problem (Bits 2..8).
+!
+!---------------------------------------------------------------------------
+!
+!---------------------------------------------------------------------------
+!     Screen Map:
+!---------------------------------------------------------------------------
+!    
+!   ScanLine:
+!               0 -   63 (   #0 -   #77)  ~  Cursor Data Tests
+!              64 -  127 ( #100 -  #177)  ~  Cursor X-Position Tests
+!             128 -  255 ( #200 -  #377)  ~  Linecounter Tests
+!             256 -  639 ( #400 - #1177)  ~  Cursor/Video Functions Tests
+!             640 -  927 (#1200 - #1637)  ~  Screen/Cursor Address Tests
+!             928 - 1023 (#1640 - #1777)  ~  Filler (Unused)
+!
+!---------------------------------------------------------------------------
+!     Memory Map:
+!---------------------------------------------------------------------------
+!    
+!   Address:
+!              #0 
+!---------------------------------------------------------------------------
+!
+!        -------------- REGISTER AND CONSTANT DEFINITIONS --------------
+!
+
+
+           Define(FreezeFrame,   1);     ! A one Means hold display Steady
+           Define(VTime,         2);     ! How Many Jiffies to Hold Display[10]
+           Define(CursWord0,     3);     ! Cursor Data in Word-0
+           Define(CursWord1,     4);     ! Cursor Data in Word-1
+           Define(CursWord2,     5);     ! Cursor Data in Word-2
+           Define(CursWord3,     6);     ! Cursor Data in Word-3
+           Define(RotateWord,    7);     ! Cursor Word with data in it
+           Define(LineCnt,      10);     ! Linecount
+           Define(LineCnt2,     11);     ! 200 - Linecount
+           Define(CursScanLine, 12);     ! What scan line in cursor shows
+           Define(CursX,        20);     ! Actual Cursor X Value
+           Define(CursAdd,      21);     ! Actual Cursor Address * 16
+           Define(CursFunc,     22);     ! Cursor Function Shifted left(14)
+           Define(MaxX,         25);     ! Maximum value for Cursor at Right
+           Define(DataI,        26);
+           Define(Data,         27);
+           Define(Address,      30);
+           Define(Vloop,        31);
+           Define(Ones,         32);     ! set to 177777
+           Define(Tmp,          33);
+           Define(Tmp1,         34);
+           Define(Tmp2,         35);
+           Define(Tmp3,         36);
+           Define(LineLength,   37);     ! Scan Line Length in Words
+           Define(AllButLow8,   40);     ! Mask = 3777000
+           Define(DpyTmp,       61);
+           Define(DpyCnt,       62);
+           Define(MemorySize,   63);     ! How Many Words of Memory
+           Define(MemoryCount,  64);     ! How many 1/4 Megs of Memory
+           Define(VidCnt,       65);
+           Define(OldVidCnt,    66);
+           Define(CursPos,      67);
+           
+           Constant(LeftCursor,    360);   !Load cursorX for Left side Screen
+           Constant(MaxRightPort,  220);   !Load cursorX for RT side Portrait
+           Constant(MaxRightLand,  122);   !Load cursorX for RT side Landscape
+           Constant(PortLineLen,    60);   !Scan Line Length for Portrait
+           Constant(LandLineLen,   120);   !Scan Line Length for Landscape
+           Constant(MaxLineCnt,    177);   !Highest Value for Line Cnt l.c.=1
+           Constant(MinLineCnt,      1);   !Lowest Value for Line Cnt l.c.=177
+           
+           Constant(VideoStatus,   145);   ! IOB Read Address for Status
+           Constant(LineCount,     340);   ! IOB Write address for Line Counter
+           Constant(VideoAddress,  341);   ! IOB Write address for Vid Add*16
+           Constant(CursorAddress, 342);   ! IOB Write address for Curs Add*16
+           Constant(VideoControl,  343);   ! IOB Write address for Video Cntrl
+           Constant(CursorX,       344);   ! IOB Write address for Cursor X Pos
+           
+           
+           Define(Screen,        371);     ! Just For KRNL use in ODTprq
+           Define(BreakPoint,    370);     !
+           Constant(Krnl,       7401);     !
+           Constant(Passed,      100);     !
+           Constant(Failed,      101);     !
+
+!
+
+Place(7777 , 7777);
+Place(2000 , 3000);
+
+Version:      MajorVersion - MinorVersion, Loc(7777);
+
+SizeMemory:   0,  Fetch;                         ! Get the 1st word 
+              Tmp := MDI;                        ! don't have to wait 2cycle?
+              MemoryCount := 0;                  ! Initialise MemoryCount 
+              MemorySize  := 100000;             ! Size/Top of 1/4 MByte memory
+              MemorySize  := MemorySize  +
+                             MemorySize ;
+SizeTimes2:   MemorySize  := MemorySize  +
+                             MemorySize ,
+              Store;                             ! Write to Top+1
+              MDO := Not Tmp;                    !   1's complement of Tmp
+              0,  Fetch;                         ! Get 1st word again
+              MDI - Tmp;                         !   0 if overwritten (found)
+              MemoryCount := MemoryCount + 1,
+                      If Eql GoTo (SizeTimes2);  ! Count unit of memory
+              0,  Store;                         ! Restore value of word 0
+              MDO := Tmp;
+              MaxX := MaxRightPort;
+              LineLength := PortLineLen;
+              CursPos := 264;                    ! Cursor Pos for Portrait
+              IOB(VideoStatus);
+              IOD And 200;
+              If Eql Goto(SLand);
+              Return;
+SLand:        MaxX := MaxRightLand;
+              LineLength := LandLineLen;
+              CursPos := 256;                    ! Cursor Pos for LandScape
+              Return;
+
+                                    
+CurPat1:  Tmp := 4;                ! This generates a Cursor Pattern of
+Pat1Loop: MA := Address, Store4;   ! Four vertical Stripes 16 bits wide
+          MDO := Tmp1;             ! and 4 Scan Lines high at "Address".
+          MDO := Not Tmp1;         ! The Pattern in "Tmp1" is used.
+          MDO := Tmp1;             ! "Address" is Incremented.
+          MDO := Not Tmp1;
+          Address := Address + 4;
+          Tmp := Tmp - 1;
+          If Neq Goto(Pat1Loop);
+          Return;
+
+
+MakeCurs:  Nop;                 ! Make a Cursor pattern at mem loc 14400
+           Address := 14400;    ! Cursadd = 620  64 Lines of 64 bits
+           Tmp1 := 1;
+MoreCbits: Call(CurPat1);       ! Make four stripes with shifting bit
+           Tmp1 := Tmp1 + Tmp1; ! for cursor
+           If Neq Goto(MoreCbits);
+           Return;          
+
+!                         
+WrCursPatt: CursWord0 := 0;                ! Generate a Unique pattern for 
+            CursWord1 := 0;                !  each Cursor address boundary
+            CursWord2 := 0;
+            CursWord3 := 0;
+            AllButLow8 := 177770;
+            AllButLow8 := AllButLow8 + AllButLow8;
+            AllButLow8 := AllButLow8 + AllButLow8;
+            AllButLow8 := AllButLow8 + AllButLow8;
+            AllButLow8 := AllButLow8 + AllButLow8;
+            AllButLow8 := AllButLow8 + AllButLow8; ! Make 3777000 for Mask
+            Address := 400;                ! First Cursor Address bit set
+            Tmp1 := 17;                    ! Cursor Pattern of 4Bits Set
+            RotateWord := 3;               ! Start on word 3
+            Tmp := 10;
+            Tmp := Tmp + MemoryCount;      ! This is how many Address bits
+WCLoop1:    RotateWord - 3;
+            If Neq Goto(CkWord2);
+            CursWord3 := Tmp1;
+            Goto(SetNewC);
+CkWord2:    RotateWord - 2;
+            If Neq Goto(CkWord1);
+            CursWord2 := Tmp1;
+            Goto(SetNewC);
+CkWord1:    RotateWord - 1;
+            If Neq Goto(CkWord0);
+            CursWord1 := Tmp1;
+            Goto(SetNewC);
+CkWord0:    CursWord0 := Tmp1;
+
+SetNewC:     Tmp2 := 30;                    ! 24 Lines of 64 Bits
+             Tmp3 := Not Address;           ! Store it at Complement Addresses
+             Tmp3 := Tmp3 And AllButLow8;
+SetNewC1:    MA := Tmp3, Store4;            
+             MDO := Not CursWord0;          ! Write the Cursor data Inverted
+             MDO := Not CursWord1;
+             MDO := Not CursWord2;
+             MDO := Not CursWord3;
+             Tmp3 := Tmp3 + 4;              ! Bump Addr to new cursor Scan Line
+             Tmp2 := Tmp2 - 1;              ! See if all 64 cursor lines done
+             If Neq Goto(SetNewC1);
+             CursWord0 := 0;                ! Zero Out Data between cursors
+             CursWord1 := 0;
+             CursWord2 := 0;
+             CursWord3 := 0;
+             Address := Address + Address;  ! Double Address
+             Tmp1 := Tmp1 + Tmp1;           ! Shift Cursor Pattern 4 Places
+             Tmp1 := Tmp1 + Tmp1;           ! 
+             Tmp1 := Tmp1 + Tmp1;           ! 
+             Tmp1 := Tmp1 + Tmp1;           ! 
+             If Neq Goto(CkMemLimits);
+             Tmp1 := 17;
+             RotateWord := RotateWord - 1;  ! Move one to the next Word
+CkMemLimits: Tmp := Tmp - 1;
+             If Neq Goto(WCloop1);
+             Return;
+!             
+WrPattern:                  ! Generate a Unique pattern for each screen address
+            Ones := 177777; ! boundary             
+            Address := 400;                ! First Screen Address bit set
+            Tmp1 := 1;
+            Tmp := 10;
+            Tmp := Tmp + MemoryCount;      ! This is how many Address bits
+WLoop1:     Tmp2 := Address;
+            Tmp2 := Tmp2 + Tmp1;
+            Tmp3 := 30;                    ! Set to 24 Scan Lines High
+NWloop1:    MA := Tmp2 , Store;        
+            MDO := Ones;
+            Tmp2 := Tmp2 + LineLength;
+            Tmp3 := Tmp3 - 1;
+            If Gtr Goto(NWloop1);
+            Address := Address + Address;  ! Double Address
+            Tmp1 := Tmp1 + 2;              ! Double Counter Bit
+            Tmp := Tmp - 1;
+            If Neq Goto(Wloop1);
+
+            Tmp := 10#384;                 ! Put A Stripe in The cursor
+            Address := 146430;             ! function area of screen 384 
+StripeLoop: MA := Address, Store4;         ! Scan Lines Long and 64 bits wide
+            MDO := Ones;                   ! Screen reg = 6320/Add = 146430
+            MDO := Ones;
+            MDO := Ones;
+            MDO := Ones;
+            Address := Address + LineLength;
+            Tmp := Tmp - 1;
+            If Neq Goto(StripeLoop);
+            Return;
+            
+Clear:      Tmp := 0;             ! Clear 2meg's worth of Memory 
+Clr1:       MA := Tmp, Store4;    ! even If there is not 2Meg of memory
+            MDO := 0;             ! 
+            MDO := 0;             ! 
+            MDO := 0;             ! 
+            MDO := 0;             ! 
+            Nop;                  !
+            Call(VidCheck);       ! 
+            Tmp := Tmp + 4;       !
+            if C19 Goto(Clr1);    !
+            Return;
+
+!
+
+SetCursData: Address := 17400;    ! Set rotating cursor pattern at mem 17400
+             Tmp := 40;           ! Cursadd = 760  64 Lines of 64 Bits
+             Tmp1 := CursScanLine;
+             Tmp1 := Tmp1 - 40;
+SetLoop:     Tmp1 - Tmp;
+             If Neq Goto(SetDO);
+             MA := Address, Store4;
+             MDO := Ones;           ! Write a black Cursor line
+             MDO := Ones;
+             MDO := Ones;
+             MDO := Ones;
+             Goto(Setskip1);
+SetDO:       MA := Address, Store4;
+             MDO := CursWord0;      ! Write the Cursor data
+             MDO := CursWord1;
+             MDO := CursWord2;
+             MDO := CursWord3;
+Setskip1:    Address := Address + 4;
+             Tmp := Tmp - 1;
+             If Neq Goto(SetLoop);
+             Tmp := 40;             ! Cursadd = 760  64 Lines of 64 Bits
+SetLoop2:    CursScanLine - Tmp;
+             If Neq Goto(SetDO2);
+             MA := Address, Store4;
+             MDO := 0;              ! Write a White cursor line
+             MDO := 0;
+             MDO := 0;
+             MDO := 0;
+             Goto(Setskip2);
+SetDO2:      MA := Address, Store4;
+             MDO := Not CursWord0;  ! Now Invert the Cursor Data
+             MDO := Not CursWord1;
+             MDO := Not CursWord2;
+             MDO := Not CursWord3;
+Setskip2:    Address := Address + 4;
+             Tmp := Tmp - 1;
+             If Neq Goto(SetLoop2);
+             Return;
+
+RotCursData: CursScanLine := CursScanLine - 1;  !Move Horiz Line in cursor
+             RotateWord;               ! Rotate Data Through Cursor FIFO's
+             RotateWord - 1, If Eql Goto(RotWord0);
+             RotateWord - 2, If Eql Goto(RotWord1);
+             RotateWord - 3, If Eql Goto(RotWord2);
+                             If Eql Goto(RotWord3);
+RotWord3:    CursWord3 := CursWord3 + CursWord3; ! Shift through Word-3
+             If Neq Goto(EndRot);
+             CursWord3 := 0;                         ! Move On to Word-2
+             CursWord2 := 1;
+             RotateWord  := 2, Goto(EndRot);
+RotWord2:    CursWord2 := CursWord2 + CursWord2; ! Shift through Word-2
+             If Neq Goto(EndRot);
+             CursWord2 := 0;                         ! Move On to Word-1
+             CursWord1 := 1;
+             RotateWord  := 1, Goto(EndRot);
+RotWord1:    CursWord1 := CursWord1 + CursWord1; ! Shift through Word-1
+             If Neq Goto(EndRot);
+             CursWord1 := 0;                         ! Move On to Word-0
+             CursWord0 := 1;
+             RotateWord  := 0, Goto(EndRot);
+RotWord0:    CursWord0 := CursWord0 + CursWord0; ! Shift through Word-0
+             If Neq Goto(EndRot);
+             CursWord3 := 0;                         ! Move Back to Word-3
+             CursWord3 := 1;
+             CursScanLine := 100;                ! Set cursor to Top
+             RotateWord  := 3, Goto(EndRot);
+EndRot:      Return;            
+
+!
+
+ChangeScr:  FreezeFrame;
+            If Neq Return;            ! If Freeze Frame then Just return
+            CursX := CursX - 1;       ! Change Cursors X-Pos 
+            CursX - MaxX;             
+            If Gtr Goto(CkLine);
+            CursX := LeftCursor;
+CkLine:     LineCnt2 := LineCnt2 + 1; ! Change Cursors Y-Pos
+            LineCnt := LineCnt - 1;   ! This Checks Line Counter Also         
+            If Gtr Goto(CkRot);
+            LineCnt := MaxLineCnt;
+            LineCnt2 := MinLineCnt;
+CkRot:      Call(RotCursdata);
+            Call(SetCursData);
+            Return;
+
+VidWait:    Iob(VideoStatus);      ! Waits for Line counter interupt bit     
+            Iod and 20;            ! in Video Status. Always happens within   
+            if Eql goto(VidWait);  ! 128 or less scan lines unless bad mem
+            Return;                ! board
+            
+ 
+!
+        
+Start:      FreezeFrame := 0, Loc(2400);
+            Screen := 0;
+            VTime := 10;             ! A Nice value for screen updates
+            LineCnt := MaxLineCnt;
+            LineCnt2 := MinLineCnt;
+            CursX := LeftCursor;
+            Call(SizeMemory);
+            Call(Clear);
+            Call(WrPattern);
+            Call(WRCursPatt);
+            Call(MakeCurs);
+            CursWord0 := 0;
+            CursWord1 := 0;
+            CursWord2 := 0;
+            CursWord3 := 1;
+            CursScanLine := 100;
+            RotateWord := 3, Goto(InitDisp);
+            FreezeFrame := 0, Goto(InitDisp), Loc(2407); !Change screen w/User
+            FreezeFrame := 1, Loc(2410);     ! Enter here for User Values
+InitDisp:   VLoop := VTime;           ! Load up the time counter
+            CursX, IOB(CursorX);  
+            Goto (StartVR);           ! Start Off with a Vertical Retrace
+
+StartV:     Call(VidWait);            
+            Tmp1 := MaxX;
+            Tmp1 := Tmp1 + 10;
+            Tmp1, IOB(CursorX);
+            CursAdd := 760;
+            CursAdd, IOB(CursorAddress);            
+            Screen := 15150;          ! Memory Address 323000  Blank Screen
+            Screen, IOB(VideoAddress);           
+            DpyTmp := 162700;         ! Cursor on l.c. = 64 CurFunc = 7
+            DpyTmp, IOB(VideoControl); 
+            DpyTmp, IOB(LineCount);            
+            DpyTmp := 162700;         ! cursor on l.c. = 64
+LoopB:      Call(VidWait);            
+            CursX,  IOB(CursorX);
+            CursAdd := 620;
+            CursAdd, IOB(CursorAddress);            
+            DpyTmp, IOB(VideoControl); 
+            DpyTmp, IOB(LineCount);            
+            DpyTmp := 162200;         ! cursor off l.c. = LineCnt (0..177)
+LoopC:      Call(VidWait);            
+            LeftCursor,  IOB(CursorX);
+            CursAdd, IOB(CursorAddress);            
+            DpyTmp, IOB(VideoControl); 
+            LineCnt, IOB(LineCount);  ! Load Line Counter   
+            DpyTmp := 162600;         !
+LoopD:      Call(VidWait);            ! cursor on l.c. = LineCnt2 (177..0)
+            LeftCursor,  IOB(CursorX);! Cursor Will Move Down with L.C.
+            CursAdd, IOB(CursorAddress);            
+            DpyTmp, IOB(VideoControl); 
+            LineCnt2, IOB(LineCount); ! Load Line Counter with other value
+!
+                                        
+CFtest:     Call(VidWait);                 ! Cursor Function Tests 
+            DpyTmp := 002520;              ! #60(48 decimal) scan lines per CF
+            Screen := 6320;                ! Mem Address = #146400  Stripes
+            Screen, IOB(VideoAddress);           
+            CursFunc := 0, Goto(CFskip);   ! skip vid wait first time
+CFLoop:     Call(VidWait);            
+            Tmp1 := MaxX;
+            Tmp1 := Tmp1 + 100;       
+CFskip:     CursPos,  IOB(CursorX);        ! Put cursor on Stripe in Mem
+            CursAdd := 620;                ! to see cursor functions OK
+            CursAdd, IOB(CursorAddress);            
+            DpyTmp Or CursFunc, IOB(VideoControl); 
+            DpyTmp, IOB(LineCount);            
+            CursFunc := CursFunc + 020000; ! Bump The CursFunc 
+            If Neq Goto(CFLoop);           ! Until All 8 are done 
+            
+                                           ! Main Video Address Loops
+            DpyTmp := 102550;              ! 24 scan lines per Addr(30 Octal)
+            Screen := 20;                  ! First Settable Screen Addr Bit
+SALoop:     Call(VidWait);                 ! Wait For Line Counter OverFlow
+            240,  IOB(CursorX);            ! Put cursor near rt edge (Portrait)
+            Not Screen, IOB(CursorAddress);! Cursor Data at Inv address
+            Screen, IOB(VideoAddress);     ! Screen Data at address
+            DpyTmp, IOB(VideoControl);     ! Load The Video Control Register
+            DpyTmp, IOB(LineCount);        ! Start up 24 lines again (#150)    
+            Screen := Screen + Screen;     ! Bump The Screen & Cursor Address
+            If Neq Goto(SALoop);           ! Until at 2MEG limit
+                                       
+!              ** Only Works here for MultiMeg 4-??**
+!  They ran out of IO data Lines so Upper address bits 20 and 21 wrap around
+!  to bits IOD2(Addr bit 20) and IOD3(Addr bit 21). 
+!   ???? Who knows after 8-Meg (Video address bits 22 & 23 ) ????
+!
+            Screen := 4;                   ! Screen Addr for 4Meg
+SA1Loop:    Call(VidWait);                 ! Wait For Line Counter OverFlow
+            240,  IOB(CursorX);            ! Put cursor near rt edge (Portrait)
+            Not Screen, IOB(CursorAddress);! Cursor Data at Inv address
+            Screen, IOB(VideoAddress);     ! Screen Data at address
+            DpyTmp, IOB(VideoControl);     ! Load The Video Control Register
+            DpyTmp, IOB(LineCount);        ! Start up 24 scan lines (#150)    
+            Screen := Screen + Screen;     ! Bump The Screen & Cursor Address
+            Screen And 177770;             ! Until overflow into the low order
+            If Eql Goto(SA1Loop);          ! Screen Addresses
+
+            DpyTmp := 102177;              ! 1 scan lines, No Cursor
+            Screen := 0;                   ! Screen Addr to blank area
+            Tmp := 10#48;                  ! 48 Blank Lines
+FillLoop:   Call(VidWait);                 ! Wait For Line Counter OverFlow
+            240,  IOB(CursorX);            ! Put cursor near rt edge (Portrait)
+            Not Screen, IOB(CursorAddress);! Cursor Data at Inv address
+            Screen, IOB(VideoAddress);     ! Screen Data at address
+            DpyTmp, IOB(VideoControl);     ! Load The Video Control Register
+            DpyTmp, IOB(LineCount);        ! Start up 24 scan lines (#110)    
+            Tmp := Tmp - 1;                ! Decrement Counter
+            If Neq Goto(FillLoop);         ! Until at The 8MEG limit
+
+StartVR:    DpyTmp := 101154;              ! Start The Vert Retrace up the Scrn
+LoopVr1:    Call(VidWait);                 ! Wait till last scan line at bottom
+            DpyTmp, IOB(VideoControl);     ! Execute Retrace
+            DpyTmp, IOB(LineCount);        ! Set LineCount for 23 Lines for 
+                                           ! correct Vertical Sync Pulse
+            DpyTmp := 101351;              ! End The Vert Retrace at The TOP  
+LoopVR2:    Call(VidWait);                 ! Wait for 26 scan lines   
+            DpyTmp, IOB(VideoControl);     ! End it Now
+            DpyTmp, IOB(LineCount);        ! bit 7 is Set as a Flag
+            VLoop := VLoop - 1;            ! Vertical Retrace Loop counter 
+            If Neq Goto(NotYet);           ! Only Change Screen Patterns every
+            VLoop := VTime;                ! "VTime" Screens.
+            Call(ChangeScr);               ! Move Patterns and Cursors
+NotYet:     DpyTmp := 102200;              ! Normal Video, No Cursor
+            Goto(StartV);                  ! Back To The Display Loops
+
+            
+!
+!     ----- for SetUp ------
+
+
+VidCheck: Iob(VideoStatus);        ! Checks Line counter interupt bit     
+          Iod and 20;              ! in Video Status. If There then do a Video
+          if Eql Return;           ! Operation, Otherwise Return.
+
+DpyInt:   dpytmp, Iob(343);        ! load VidState
+          dpytmp, Iob(340);             ! load line count
+Dpy1:     0, Iob(342);                  ! load cursor address
+          dpytmp and 200;
+          if Eql Goto(Dpy2);            ! if we didn't load second retrace
+          140, Iob(341);                ! address of screen bit map div 2
+          0, Iob(344);                  ! load cursor X value
+          dpycnt := 11;
+Dpy2:     dpytmp := 102000;             ! next command: display normal
+          dpycnt := dpycnt - 1;
+          if Gtr return;                ! if not end of screen
+          dpytmp := 101154;             ! next command: first vertical retrace
+          dpycnt;
+          if Eql return;                ! if end of screen
+          dpytmp := 101351, return;     ! next command: second vertical retrace
+         
+         End;

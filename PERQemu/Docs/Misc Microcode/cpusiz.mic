@@ -1,0 +1,44 @@
+!*****************************************************************************
+!*****************************************************************************
+!***********************     CPUSIZE -- MICRO      ***************************
+!*****************************************************************************
+!*****************************************************************************
+!
+!  AUTHOR :  BEN CHEUNG
+!  DATE   :  07/03/83
+!  PROJECT:  ICL/DSDD/SDC/Perq Test Software/DiagCPU16K/CPUSize.micro
+!  REF.   :  This is used to supplement 3RCC's 16K CPU board diagnostics test.
+!
+!  REMARKS:  Release 5 supports both 4K and 16K CPU boards in PERQ2 machines.
+!            In order to distinguish between a 4K and a 16K CPU board, this
+!            microcode use the fact that only the 16K CPU board contains the
+!            single precision Multiply/Divide hardware, in which there is a
+!            16 bit shift register called MQ. By writing value to MQ and 
+!            reading from it, the existence of MQ is revealed and thus a 4K
+!            CPU board in the absence of MQ and a 16K CPU board in the present
+!            of MQ.
+!            The reason for using the method of testing MQ over other methods
+!            such as testing the 16K WCS by means of Indexing registers and
+!            LeapJumps etc. is that this test does not use registers that
+!            might not exist and would not jump into nowhere.
+
+$PERQ1A
+$NoBase
+              Define   (CPUSize,      20);       !Reg to store CPUSize 
+              Define   (X,           100);       !Temporary register
+              Define   (R370,        370);       !Breakpoint register
+              Place    (2400,       2700);
+              
+
+
+
+SizeByMQ:     0,  Loc(2400);
+              R370 := 100;                       !return breakpoint 100
+              MQ := 1;                           !Write to the Mult shift reg.
+              X := 0;                            !Init X i.e. anything but 1
+              X := MQ;                           !Read MQ back i.e.X=X ifno MQ
+              X - 1;                             !Test if equal then ->KRNL
+              CPUSize := 20, If Eql GoTo (7401); !  16K CPU if the same
+              CPUSize := 4, GoTo (7401);         !  4K otherwise
+              End;
+                   

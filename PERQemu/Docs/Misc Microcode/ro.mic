@@ -1,0 +1,563 @@
+$Title RasterOp Microcode.
+!!!      RasterOp Microcode Version 0.1
+!
+!        Brian Rosen & Stan Kriz & John Strait
+!        Copyright (C) Three Rivers Computer, 1981.
+!
+!
+!  V0.5  16 Jul 81  JPS  Change "Company Confidential" notice to "Copyright".
+!
+!  V0.4  18 May 81  JPS  Change RO to be an include file.
+!
+!  V0.3  29 Apr 81  JPS  Provide an entrypoint that writes from a packed array
+!                        of characters (or from a string for that matter).
+!
+!  V0.2  22 Oct 80  JPS  Added 'Hold's that were lost in version 0.1.
+!
+!  V0.1   8 Oct 80   BR  Added No Power Down bit to SrcRasterOp
+!
+
+define(SrcBase,116);    ! base address (origin word) of source
+define(DstBase,117);    ! base address (origin word) of destination
+define(SrcQuad,100);    ! memory address of source data (quad aligned)
+define(DstQuad,101);    ! memory address of destination data (quad aligned)
+define(SrcLineInc,102); ! # of words between last quad of one line and 1st
+                        ! quad of next line -> ScanLineLength - width (words)
+                        ! with -1, +1 effects taken into account
+define(DstLineInc,103); ! same for destination
+define(Height,104);     ! height (in bits) of area to be moved
+define(Width,105);      ! width (in Bits) of area to be moved
+define(Func,111);       ! RasterOp function (3 bits)
+
+!        ***Note*** Following register definitions use the SAME register.
+
+define(XtraSrcFetch,106);  ! Bit 7 set if more source than dest quads needed
+define(XtraSrcWord,106);   ! Bit 0 set if more source than dest words needed
+define(OneQuad,106);    ! Bit 15 set if only 1 dest quad is needed
+
+define(MidNum,107);     ! number of quads wide - 2 (ie # of mid cycles to do)
+define(MidCnt,110);     ! counter for MidNum
+
+define(SrcX,112);       ! source X value
+define(SrcY,113);       ! source Y value
+define(DstX,114);       ! destination X value
+define(DstY,115);       ! destination Y value
+
+define(SrcBinQ,112);    ! source bit in quad  *** same register as SrcX ***
+define(SrcBinW,113);    ! source bit in word  *** same register as SrcY ***
+define(DstBinQ,114);    ! destination bit in quad  *** same register as DstX ***
+define(DstBinW,115);    ! destination bit in word  *** same register as DstY ***
+
+define(LeftSrc,120);    ! leftmost source bit in word
+define(LeftDst,121);    ! leftmost destination bit in word
+define(LastDst,122);    ! last destination word in quad
+
+define(DstRas,121);     ! DstRasterOp value *** same register as LeftDst ***
+define(SrcRas,120);     ! srcRasterOp value *** same register as LeftSrc ***
+
+define(Flag,123);       ! bit 7 = 1 SrcQuad, bit 0 = trip flag in SetUp
+define(Direction,124);  ! 0 for left to right, not 0 for right to left
+
+define(r370,370);
+
+!!       CntlRasterOp Functions
+!        Bit 0 = LtoR
+!        Bit 1 = RO/PS  (1 = RasterOp On)
+!        Bit 2:4 = RasterOp Functions
+!        Bit 5 = XtraSrcWord
+!        Bit 6 = disable processor shift
+
+constant(Off,200);          ! RasterOp Off
+constant(PauseLR,100);      ! RasterOp Pause, processor shift is disabled
+constant(PauseRL,101);
+
+constant(Phase0LR,102);     ! Begin       - NoClear
+constant(Phase0XLR,142);    ! Begin       - NoClear - XtraSourceWord
+constant(Phase1LR,106);     ! Mid         - NoClear
+constant(Phase2LR,112);     ! End         - NoClear
+constant(Phase3LR,116);     ! Begin/End   - NoClear
+constant(Phase3XLR,156);    ! Begin/End   - NoClear - XtraSourceWord
+constant(Phase4LR,122);     ! XtraSource  - NoClear
+constant(Phase5LR,126);     ! FirstSource - Clear
+constant(Phase6LR,132);     ! End         - Clear
+constant(Phase7LR,136);     ! Begin/End   - Clear
+constant(Phase7XLR,176);    ! Begin/End   - Clear   - XtraSourceWord
+
+constant(Phase0RL,103);     ! Begin       - NoClear
+constant(Phase0XRL,143);    ! Begin       - NoClear - XtraSourceWord
+constant(Phase1RL,107);     ! Mid         - NoClear
+constant(Phase2RL,113);     ! End         - NoClear
+constant(Phase3RL,117);     ! Begin/End   - NoClear
+constant(Phase3XRL,157);    ! Begin/End   - NoClear - XtraSourceWord
+constant(Phase4RL,123);     ! XtraSource  - NoClear
+constant(Phase5RL,127);     ! FirstSource - Clear
+constant(Phase6RL,133);     ! End         - Clear
+constant(Phase7RL,137);     ! Begin/End   - Clear
+constant(Phase7XRL,177);    ! Begin/End   - Clear   - XtraSourceWord
+
+
+
+Loc(RasterOp), Call(Rop);
+         NextInst(0);
+
+Rop:     SrcBase := Tos, Pop;           ! source address, 20-bit offset
+         SrcLineInc := Tos and AllOnes, Pop;  ! source words per scan line
+         SrcY := Tos and AllOnes, Pop;  ! source Y
+         SrcX := Tos and AllOnes, if IntrPend call(IntrIt);  ! source X
+         LeftSrc := Tos and 17;         ! leftmost source bit in word
+         tmp := Tos and 77, Pop;        ! source bit in quad
+         DstBase := Tos, Pop;           ! destination address, 20-bit offset
+         DstLineInc := Tos and AllOnes, Pop;  ! destination words per scan line
+         DstY := Tos and AllOnes, Pop;  ! destination Y
+         DstX := Tos and AllOnes;       ! destination X
+         LeftDst := Tos and 17;         ! leftmost destination bit in word
+         tmp1 := Tos and 77, Pop;       ! destination bit in quad
+         LastDst := DstX;               ! in preparation for LastDst computation
+         Height := Tos - 1, Pop;        ! height-1 of block in bits
+         Direction := 0, if IntrPend call(IntrIt);  ! assume left to right
+         Width := Tos - 1, Pop;         ! width-1 of block in bits
+         Width := Width and AllOnes;
+         Func := not Tos;               ! function code
+Rop0:    tmp1 + Width, RightShift(6);
+         MidNum := Shift - 1;           ! # of middle quads (quad width - 2)
+         OneQuad := 200, if Geq goto(Rop1);     ! clear all flags
+         OneQuad := OneQuad or 100000;          ! set one quad
+Rop1:    Flag := 0, if IntrPend call(IntrIt);
+         tmp + Width, RightShift(6);
+         Shift;
+         Tos := SrcBase - DstBase, if Neq goto(Rop2);  ! if source > 1 quad
+         Flag := 200;                   ! set 1 source quad
+Rop2:    Tos - 1;                       ! 20-bit equality test
+         SrcY - DstY, if C19 goto(Compare);     ! if Eql, compare X and Y
+
+!!       Perform raster-op left to right if
+!               (SrcBase <> DstBase) or
+!               ((SrcBase = DstBase) and
+!                ((SrcY > DstY) or ((SrcY = DstY) and (SrcX >= DstX))))
+
+LtoR:    LastDst := LastDst + Width, call(SetUp);
+
+!        Synchronize memory and code with a fetch.  For some obscure reason,
+!        memory cycles are numbered differently here:  T1 is the cycle a
+!        Fetch starts in.
+!
+!        Labels on micro-instructions indicate the action being performed:
+!
+!        Xsr - Extra source fetch cycle.
+!        Beg - Begin cycle.
+!        Mid - Middle cycle.
+!        End - End cycle.
+!        BgE - Begin/End cycle.
+!
+!        Qn - Quad timing cycle n.
+!        Tn - Micro timing cycle n.
+
+         DstQuad := DstQuad - DstLineInc, Fetch, Call(Nop1); !synchronize
+         CntlRasterOp(Phase5LR);                  !t3  and here we go
+         Hold, LoadS(IntrCom);                    !Q0 0 First Src is always 1st
+         SrcQuad := SrcQuad, Fetch4, call(Nop1);  !   1
+         OneQuad;                                 !   3
+         XtraSrcFetch, Hold, if geq GoTo(EndQ2T1);!Q2 0
+         XtraSrcWord, If ByteSign GoTo(XsrQ2T2b); !   1
+         GoTo(EndQ2T3);                           !   2
+
+XsrQ0T2: nop, call(Nop1);                         !Q0 2 Xtra Src has only 2
+         OneQuad, Hold;                           !Q2 0         quad cycles
+         XtraSrcWord, If lss Goto(XsrQ2T2b);      !   1
+XsrQ2T2: If Odd GoTo(XsrQ2T3b);                   !   2
+XsrQ2T3: CntlRasterOp(Phase0LR);                  !   3
+BegQ0T0: If IntrPend GoTo(IntrB);                 !Q0 0  Begin
+         DstQuad := DstQuad + DstLineInc, Fetch4, call(Nop1); !   1
+BegQ0T3: nop, call(Nop1);                         !   3
+BegQ1T1: SrcQuad := SrcQuad + 4, Fetch4;          !Q1 1
+         MA := DstQuad, Store4, call(Nop2);       !   2
+         MidCnt := MidNum;                        !Q0 1
+BegQ2T2: if Neq GoTo(BegQ2T3b);                   !   2 away if > 2 quads
+BegQ2T3: CntlRasterOp(Phase6LR);                  !   3 else, this is the end
+         nop;                                     !Q0 0  End
+         DstQuad := DstQuad + 4, Fetch4, Call(LREndCom); !   1
+         XtraSrcFetch, If Lss GoTo(ExitRO);       !Q2 0
+EndQ2T1: XtraSrcWord, IF ByteSign GoTo(XsrQ2T2);  !   1
+         nop;                                     !   2
+EndQ2T3: CntlRasterOp(Phase4LR);                  !   3
+XsrQ0T0: Hold;                                    !Q0 0  Xtra Src
+         SrcQuad := SrcQuad + 4, Fetch4, GoTo(XsrQ0T2); !   1
+
+BegQ2T3b:0, CntlRasterOp(Phase1LR);               !Q2 3  no Video interrupt
+MidQ0T0: If Neq GoTo(IntrA);                      !Q0 0  Mid
+         DstQuad := DstQuad + 4, Fetch4, call(Nop3);!   1
+         SrcQuad := SrcQuad + 4, Fetch4;          !Q1 1
+         MA := DstQuad, Store4, call(Nop2);       !   2
+         IOB(145), MidCnt := MidCnt - 1;          !Q2 1  Video state
+         tmp := IOD and 20, if eql goto(BegQ2T3); !   2  Video interrupt bit
+         tmp, GoTo(MidQ0T0);                      !   3
+
+XsrQ2T3b:CntlRasterOp(Phase0XLR);                 !Q2 3  Xtra Src
+         if IntrPend GoTo(IntrE);                 !Q0 0  Begin
+         DstQuad := DstQuad + DstLineInc, Fetch4; !   1
+         GoTo(BegQ0T3);                           !Q0 2
+        
+XsrQ2T2b:If Odd GoTo(XsrQ2T3d);                   !Q2 2  Xtra Src
+XsrQ2T3c:CntlRasterOp(Phase7LR);                  !   3
+BgEQ0T0: If IntrPend GoTo(IntrC);                 !Q0 0  Begin/End
+         DstQuad := DstQuad + DstLineInc, Fetch4, Call(LREndCom); !   1
+         XtraSrcFetch, Hold, If Lss GoTo(ExitRO); !Q2 0
+         XtraSrcWord, IF ByteSign GoTo(XsrQ2T2b); !   1
+         GoTo(EndQ2T3);                           !   2
+
+XsrQ2T3d:CntlRasterOp(Phase7XLR);                 !Q2 3  Xtra Src
+         If IntrPend GoTo(IntrD);                 !Q0 0  Begin/End
+         DstQuad := DstQuad + DstLineInc, Fetch4, Call(LREndCom); !   1
+         XtraSrcFetch, If Lss GoTo(ExitRO);       !Q2 0
+         XtraSrcWord, Hold, IF ByteSign GoTo(XsrQ2T2b); !   1
+         GoTo(EndQ2T3);                           !   2
+        
+LREndCom:nop, call(Nop2);                         !Q0 2 End and Begin/End
+         SrcQuad := SrcQuad + SrcLineInc, Fetch4; !Q1 1
+         MA := DstQuad, Store4;                   !   2
+         Height := Height - 1, Return;            !   3
+
+IntrA:   CntlRasterOp(PauseLR);              !Video interrupt in Middle
+         Call(VidInt);                       !Video interrupt service
+         Call(IntrComA);                     !join common code in IntrCom
+         GoTo(BegQ2T3b);                     !Happens at t2, will return to t3
+
+IntrB:   CntlRasterOp(Off), CallS;           !Interrupt in Begin
+         GoTo(XsrQ2T3);                      !Happens at t2, will return to t3
+
+IntrC:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End
+         GoTo(XsrQ2T3c);                     !Happens at t2, will return to t3
+
+IntrD:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End XtraSrc
+         GoTo(XsrQ2T3d);                     !Happens at t2, will return to t3
+
+IntrE:   CntlRasterOp(Off), CallS;           !Interrupt in Begin XtraSrc
+         GoTo(XsrQ2T3b);                     !Happens at t2, will return to t3
+
+!!       Compare source start bit with destination start bit.
+
+Compare: SrcY - DstY, if Gtr goto(LtoR);        ! if SrcY > DstY
+         SrcX - DstX, if Neq goto(RtoL);        ! if SrcY < DstY
+                      if Geq goto(LtoR);        ! if SrcX >= DstX
+
+!!       Perform raster-op right to left if
+!               (SrcBase = DstBase) and
+!               ((SrcY < DstY) or ((SrcY = DstY) and (SrcX < DstX)))
+
+RtoL:    SrcY := SrcY + Height;                 ! start X, Y for RtoL case
+         SrcX := SrcX + Width;
+         DstY := DstY + Height;
+         DstX := DstX + Width;
+         Direction := not 0, call(SetUp);
+
+!        Synchronize memory and code with a fetch.  For some obscure reason,
+!        memory cycles are numbered differently here:  T1 is the cycle a
+!        Fetch starts in.
+!
+!        Labels on micro-instructions indicate the action being performed:
+!
+!        Xsr - Extra source fetch cycle.
+!        Beg - Begin cycle.
+!        Mid - Middle cycle.
+!        End - End cycle.
+!        BgE - Begin/End cycle.
+!
+!        Kn - Quad timing cycle n (Qn).
+!        Tn - Micro timing cycle n.
+
+         DstQuad := DstQuad + DstLineInc, Fetch, Call(Nop1); !synchronize
+         CntlRasterOp(Phase5RL);                  !t3  and here we go
+         Hold, LoadS(IntrCom);                    !Q0 0 First Src is always 1st
+         SrcQuad := SrcQuad, Fetch4R, call(Nop1); !   1
+         OneQuad;                                 !   3
+         XtraSrcFetch, Hold, if geq GoTo(EndK2T1);!Q2 0
+         XtraSrcWord, If ByteSign GoTo(XsrK2T2b); !   1
+         GoTo(EndK2T3);                           !   2
+
+XsrK0T2: nop, call(Nop1);                         !Q0 2 Xtra Src has only 2
+         OneQuad, Hold;                           !Q2 0         quad cycles
+         XtraSrcWord, If lss Goto(XsrK2T2b);      !   1
+XsrK2T2: If Odd GoTo(XsrK2T3b);                   !   2
+XsrK2T3: CntlRasterOp(Phase0RL);                  !   3
+BegK0T0: If IntrPend GoTo(IntrG);                 !Q0 0  Begin
+         DstQuad := DstQuad - DstLineInc, Fetch4R, call(Nop1);!   1
+BegK0T3: nop, call(Nop1);                         !   3
+BegK1T1: SrcQuad := SrcQuad - 4, Fetch4R;         !Q1 1
+         MA := DstQuad, Store4R, call(Nop2);      !   2
+         MidCnt := MidNum;                        !Q2 1
+BegK2T2: if Neq GoTo(BegK2T3b);                   !   2 away if > 2 quads
+BegK2T3: CntlRasterOp(Phase6RL);                  !   3 else, this is the end
+         nop;                                     !Q0 0  End
+         DstQuad := DstQuad - 4, Fetch4R, Call(RLEndCom); !   1
+         XtraSrcFetch, Hold, If Lss GoTo(ExitRO); !Q2 0
+EndK2T1: XtraSrcWord, IF ByteSign GoTo(XsrK2T2);  !   1
+         nop;                                     !   2
+EndK2T3: CntlRasterOp(Phase4RL);                  !   3
+XsrK0T0: Hold;                                    !Q0 0  Xtra Src
+         SrcQuad := SrcQuad - 4, Fetch4R, GoTo(XsrK0T2);!   1
+
+BegK2T3b:0, CntlRasterOp(Phase1RL);               !Q2 3  no Video interrupt
+MidK0T0: If Neq GoTo(IntrF);                      !Q0 0  Mid
+         DstQuad := DstQuad - 4, Fetch4R, call(Nop3);!   1
+         SrcQuad := SrcQuad - 4, Fetch4R;         !Q1 1
+         MA := DstQuad, Store4R, call(Nop2);      !   2
+         IOB(145), MidCnt := MidCnt - 1;          !Q2 1  Video state
+         tmp := IOD and 20, if eql goto(BegK2T3); !   2  Video interrupt bit
+         tmp, GoTo(MidK0T0);                      !   3
+
+XsrK2T3b:CntlRasterOp(Phase0XRL);                 !Q2 3  Xtra Src
+         If IntrPend GoTo(IntrJ);                 !Q0 0  Begin
+         DstQuad := DstQuad - DstLineInc, Fetch4R;!   1
+         GoTo(BegK0T3);                           !Q0 2
+        
+XsrK2T2b:If Odd GoTo(XsrK2T3d);                   !Q2 2  Xtra Src
+XsrK2T3c:CntlRasterOp(Phase7RL);                  !   3
+BgEK0T0: If IntrPend GoTo(IntrH);                 !Q0 0  Begin/End
+         DstQuad := DstQuad - DstLineInc, Fetch4R, Call(RLEndCom);!   1
+         XtraSrcFetch, Hold, If Lss GoTo(ExitRO); !Q2 0
+         XtraSrcWord, IF ByteSign GoTo(XsrK2T2b); !   1
+         GoTo(EndK2T3);                           !   2
+
+XsrK2T3d:CntlRasterOp(Phase7XRL);                 !Q2 3  Xtra Src
+         If IntrPend GoTo(IntrI);                 !Q0 0  Begin/End
+         DstQuad := DstQuad - DstLineInc, Fetch4R, Call(RLEndCom);!   1
+         XtraSrcFetch, If Lss GoTo(ExitRO);       !Q2 0
+         XtraSrcWord, IF ByteSign GoTo(XsrK2T2b); !   1
+         GoTo(EndK2T3);                           !   2
+
+RLEndCom:nop, call(Nop2);                         !Q0 2 End and Begin/End
+         SrcQuad := SrcQuad - SrcLineInc, Fetch4R;!Q1 1
+         MA := DstQuad, Store4R;                  !   2
+         Height := Height - 1, Return;            !   3
+
+IntrF:   CntlRasterOp(PauseRL);              !Video interrupt Middle
+         Call(VidInt);                       !Video interrupt service
+         Call(IntrComA);                     !Join common code in IntrCom
+         GoTo(BegK2T3b);                     !Happens at t2, will return to t3
+
+IntrG:   CntlRasterOp(Off), CallS;           !Interrupt in Begin
+         GoTo(XsrK2T3);                      !Happens at t2, will return to t3
+
+IntrH:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End
+         GoTo(XsrK2T3c);                     !Happens at t2, will return to t3
+
+IntrI:   CntlRasterOp(Off), CallS;           !Interrupt in Begin/End XtraSrc
+         GoTo(XsrK2T3d);                     !Happens at t2, will return to t3
+
+IntrJ:   CntlRasterOp(Off), CallS;           !Interrupt in Begin XtraSrc
+         GoTo(XsrK2T3b);                     !Happens at t2, will return to t3
+
+!!       exit from raster-op.
+
+ExitRO:  CntlRasterOp(Off);
+         Pop, Return;
+
+        
+!!       common interrupt routine.
+
+IntrCom: Call(IntrIt);
+IntrComA:SrcRasterOp := SrcRas;         ! restore SrcRasterOp
+         DstRasterOp := DstRas;         ! restore DstRasterOp
+         Fetch, Return;                 ! Happens at t1
+
+        
+!!       SetUp.
+
+SetUp:   Flag := Flag or 1, if IntrPend call(IntrIt);  ! first time thru
+         tmp1 := SrcLineInc;
+         DstQuad := SrcX, LeftShift(4);
+Set1:    tmp1 - 60;
+         SrcY, if Neq goto(Set3);               ! if not 60
+
+!        special case: 60 words/line.
+
+         tmp := Shift + SrcBase;                ! 20*Y + BaseAddress
+         SrcY, LeftShift(5);
+         tmp := Shift + tmp;                    ! 40*Y + 20*Y + Base
+Set2:    DstQuad, RightShift(4);
+         DstQuad := Shift + tmp;                ! X div 20 + LineLength*Y + Base
+         Flag := Flag xor 1;
+         DstQuad := DstQuad + SB, if Odd goto(Set6);  ! physical address
+         SrcQuad := DstQuad;                    ! roll down
+         SrcY := DstY;
+         DstQuad := DstX;
+         SrcBase := DstBase, LeftShift(4);
+         tmp1 := DstLineInc, goto(Set1);
+         
+Set3:    tmp1 - 40;
+         tmp := SrcY, if Neq goto(Set4);        ! if not 40
+         
+!        another special case: 40 words/line.  the MoveMem routine depends
+!        on raster-op being able to do a 20-bit multiply by 40 words/line.
+
+         tmp := tmp + tmp;                      ! 2 * SrcY
+         tmp := tmp + tmp;                      ! 4 * SrcY
+         tmp := tmp + tmp;                      ! 10 * SrcY
+         tmp := tmp + tmp;                      ! 20 * SrcY
+         tmp := tmp + tmp, goto(Set5);          ! 40 * SrcY
+
+Set4:    tmp := SrcY, call(Mult);               ! compute SrcLineInc * SrcY
+Set5:    tmp := tmp + SrcBase, goto(Set2);
+         
+Set6:    Tos := SrcBinQ := SrcX and 77, if IntrPend call(IntrIt);
+         SrcBinW := Tos and 17;
+         Tos := DstBinQ := DstX and 77;
+         DstBinW := Tos and 17;
+         
+!        set DstRasterOp.
+         
+         LastDst := LastDst and 60;
+         Tos := Width and 17;
+         WidRasterOp := Tos or LastDst;
+         
+!        set SrcLineInc and DstLineInc.
+         
+         Func := Func or 10, LeftShift(2);      !will be No Power Down bit
+         MidNum + 1;
+         tmp := Shift;                          ! width in words
+         SrcLineInc := SrcLineInc - tmp;
+         DstLineInc := DstLineInc - tmp,if IntrPend call(IntrIt); ! last chance
+         
+!        set SrcRasterOp.
+
+         Tos := SrcBinQ and 60;
+         tmp := Tos or LeftSrc;
+         Func and 14, LeftShift(4);             !No Power Down and Function[2]
+         SrcRas := SrcRasterOp := Shift or tmp;
+         
+!        set DstRasterOp.
+ 
+         Tos := DstBinQ and 60;
+         tmp := Tos or LeftDst;
+         Func and 3, LeftShift(6);
+         DstRas := DstRasterOp := Shift or tmp;
+         
+!        set XtraSrcFetch and XtraSrcWord.
+         
+         Flag;
+         Tos := DstBinQ - SrcBinQ, if ByteSign goto(Set7);
+                                                ! if XtraSrcFetch not possible
+         Tos xor Direction;
+         if Geq goto(Set7);                     ! if no extra source fetch
+         XtraSrcFetch := XtraSrcFetch and not 200;  ! set extra source fetch
+         SrcLineInc := SrcLineInc - 4;
+Set7:    Tos := DstBinW - SrcBinW;
+         Tos xor Direction;
+         if Geq return;                         ! if no extra source word
+         XtraSrcWord := XtraSrcWord or 1, return;  ! set extra source word
+
+!!       spending time doing nothing.
+
+Nop3:    Hold;
+Nop2:    Hold;
+Nop1:    Hold, return;
+
+
+!!       vector off to the interrupt handler.
+
+IntrIt:  Vector(IntVec);
+
+
+        Define(MaxX, 130);
+        Define(MaxByte, 131);
+        Define(CSet, 132);
+        Define(Screen, 133);
+        Define(X, 134);
+        Define(Y, 135);
+        Define(RFunc, 136);
+        
+        Define(CharWidth, 137);
+        Define(FontHeight, 140);
+        Define(Ch, 141);
+        Define(C402, 142);
+
+
+! Routine DrawByte.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       DrawByte puts characters from a byte array onto the screen.  It draws
+!       until a character count is exhausted, a screen width is exhausted, or
+!       a control character is reached.
+!
+! Environment:
+!       (Tos)   = Maximum X-coordinate + 1.
+!       (Tos-1) = Maximum byte offset + 1.
+!       (Tos-2) = Byte offset from the beginning of the byte array.
+!       (Tos-3) = Address of the byte array as an offset from the base of the
+!                 memory stack.
+!       (Tos-4) = Character set address as an offset from the base of the
+!                 memory stack.
+!       (Tos-5) = Destination base address as an offset from the base of the
+!                 memory stack.
+!       (Tos-6) = Destination Y-coordinate.
+!       (Tos-7) = Destination X-coordinate.
+!       (Tos-8) = Raster-op function.
+!
+! Result:
+!       Stack popped three times.
+!       (Tos)   = Current X-Coordinate.
+!       (Tos-1) = Next byte offset.
+!       (Tos-2) = Termination condition:
+!                   0 - Character count exhausted.
+!                   1 - Screen width exhausted.
+!                   2 - Control character encountered.
+!
+!-----------------------------------------------------------------------------
+
+Loc(DrawByte), MaxX := Tos, Pop;
+        MaxByte := Tos, Pop;
+        SrcByte := Tos, Pop;
+        SrcWord := Tos + SB, Pop;
+        CSet := Tos + SB, Pop;
+        Screen := Tos, Pop;
+        Y := Tos, Pop;
+        CSet, Fetch2;
+        X := Tos, Pop;
+        RFunc := Tos, Pop;
+        FontHeight := Mdi;
+        tmp := Mdi;
+        Y := Y - tmp;
+        CSet := CSet + 2;
+        C402 := 402;
+        C402 := C402 - SB;
+DB1:    SrcByte - MaxByte, RightShift(1);
+        SrcByte, if Geq Goto(DB3);       ! if character count exhausted
+        Shift + SrcWord, Fetch;
+        SrcByte xor 1, Rotate(10);
+        Ch := Mdi, if Odd Goto(DB2);
+        Ch := Shift;
+DB2:    Ch := Ch and 177;
+        Ch and not 37, LeftShift(1);
+        Ch, if Eql Goto(DB4);            ! if control character
+        Shift + CSet, Fetch2;
+        tmp := FontHeight;
+        tmp2 := Mdi;
+        CharWidth := Mdi;
+        X := X + CharWidth;
+        X - MaxX, RightShift(12);
+        tmp2, if Gtr Goto(DB5);          ! if screen width exhausted
+        tmp1 := Shift, Call(Mult);       ! tmp will contain SrcY
+        Tos := RFunc, Push;
+        Tos := CharWidth, Push;
+        Tos := FontHeight, Push;
+        Tos := X - CharWidth, Push;
+        Tos := Y, Push;
+        Tos := 60, Push;
+        Tos := Screen, Push;
+        Tos := tmp2 and C1777, Push;
+        Tos := tmp, Push;
+        Tos := 60, Push;
+        Tos := CSet + C402, Push;
+        Call(Rop);
+        SrcByte := SrcByte + 1, Goto(DB1);
+
+DB3:    Tos := 0, Push, Goto(DB6);
+
+DB4:    Tos := 2, Push, Goto(DB6);
+
+DB5:    Tos := 1, Push;
+        X := X - CharWidth, Goto(DB6);
+
+DB6:    Tos := SrcByte, Push;
+        Tos := X, Push, NextInst(0);

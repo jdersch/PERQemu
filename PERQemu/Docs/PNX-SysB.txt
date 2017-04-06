@@ -1,0 +1,1868 @@
+﻿;
+; The following is a dump of the microcode store of the PERQ after attempting to boot PNX 1.0.1 (pnx1.0.1.raw)
+; from floppy.  I'm disassembling it in an attempt to figure out why it's getting stuck.
+;
+; Currently it gets stuck at DDS 151, in a loop waiting for interrupts @ 0d5c
+;
+; To make this easier to navigate, I've removed sections with large swaths of unused space, these are
+; (usually) documented.
+;
+
+; Registers and their usages:
+
+; R (hex)	|    Usage
+------------------------------------------------------------------------------------------
+; 00		-	 technically unused
+; 01		-	 value used by DDS increment routine (specifies value to set)
+; 02		-	 data to be written to the Z80 / dispatch diagnostic value
+; 05		-	 result of last Z80 command
+; 06		-	 parity data (on parity interrupt)
+; 0b		-	 size of available memory
+; 14		-    used in sizing memory
+; 18		-	 Z80 device status (as reported from Z80 status register)
+; 23		-	 Head / Device (floppy)
+; 24		-	 Cylinder (floppy)
+; 36		-	 constant, loaded with 3ff (used for masking hard disk DMA addresses)
+; R44 + R41 -    floppy data memory location/offset
+; 4d		-	 Floppy data - top 8 bits (well, really the 15th bit) indicate whether we're waiting for data or not.
+; 57		-    total size of RAM
+; 5a		-    Sector (high 16 bits) (?)
+; 5b		-	 Sector (low 16 bits) (floppy, possibly hard disk) (may be logical sector, not physical)
+; 5d		-	 Seems to indicate whether we're booting from a floppy or from a hard disk... (0 = hard disk, nonzero = floppy)
+; 7a		-	 constant, loaded with c000
+; 7b		-	 constant, loaded with 4000	 - never used.
+; 88		-	 used in sizing memory (contains current "max" value for RAM size)
+; ac		-	 constant, loaded with 0100
+; ad		-	 constant, loaded with 0200
+; aa		-	 constant, loaded with 0300
+; c0		-	 video control register
+; c1		-    video counter (unsure of use)
+
+
+
+; 0000 - 7fff: unused
+
+; This is the entrypoint from the boot PROM.  First thing we do is kill all the ROMs with a LoadOp.
+; Continue with various verification steps.
+0800: 0082d84afe03      R00% := 82. LoadOp. Goto 0801.
+0801: 0100d842fd03      R01% := 00. Reset eStack, inc DDS. Goto 0802.
+0802: c06cd840820e      Rc0 := 826c. Continue.								; init video status register
+0803: c100d877af03      Rc1 := 00. Goto 0850.
+
+; CPU diagnostics.  If we fail we go to 084d to die.
+0804: 0102d848b283      R01% := 02. DstRstOp := (R). If Neq, Goto 084d.
+0805: 0002d044b403      02. Push R. Goto 084b.
+0806: 0103d848b283      R01% := 03. DstRstOp := (R). If Neq, Goto 084d.
+0807: 0200b900020e      R02% := UState AND 0200. Continue.
+0808: 0104d848b2d3      R01% := 04. DstRstOp := (R). If Eql, Goto 084d.
+0809: 0704d877ab03      R07% := 04. Goto 0854.
+080a: 0105d848b283      R01% := 05. DstRstOp := (R). If Neq, Goto 084d.
+080b: 0707cb37f303      R07% := R07% + R07%. Goto 080c.
+080c: 0700d380800e      R07% - 8000. Continue.
+080d: 0000c037ab83      R00%. If Neq, Goto 0854.
+080e: 0200b900020e      R02% := UState AND 0200. Continue.
+080f: 0106d848b2d3      R01% := 06. DstRstOp := (R). If Eql, Goto 084d.
+0810: 0200d840800e      R02% := 8000. Continue.
+0811: 0200c004bb03      R02%. Push R. Goto 0844.
+0812: 0111d848b283      R01% := 11. DstRstOp := (R). If Neq, Goto 084d.
+0813: 0000c005d203      R00%. Pop. Goto 082d.
+0814: 0112d848b283      R01% := 12. DstRstOp := (R). If Neq, Goto 084d.
+0815: 0000c005d303      R00%. Pop. Goto 082c.
+0816: 0113d848b283      R01% := 13. DstRstOp := (R). If Neq, Goto 084d.
+0817: 0000c005d403      R00%. Pop. Goto 082b.
+0818: 0114d848b283      R01% := 14. DstRstOp := (R). If Neq, Goto 084d.
+0819: 0000c005d503      R00%. Pop. Goto 082a.
+081a: 0115d848b283      R01% := 15. DstRstOp := (R). If Neq, Goto 084d.
+081b: 0000c005d603      R00%. Pop. Goto 0829.
+081c: 0116d848b283      R01% := 16. DstRstOp := (R). If Neq, Goto 084d.
+081d: 0200b900020e      R02% := UState AND 0200. Continue.
+081e: 0117d848b2d3      R01% := 17. DstRstOp := (R). If Eql, Goto 084d.
+081f: 0000c005d703      R00%. Pop. Goto 0828.
+0820: 0118d848b283      R01% := 18. DstRstOp := (R). If Neq, Goto 084d.
+0821: 0000c005d803      R00%. Pop. Goto 0827.
+0822: 0119d848b283      R01% := 19. DstRstOp := (R). If Neq, Goto 084d.
+0823: 0200b900020e      R02% := UState AND 0200. Continue.
+0824: 011ad848b283      R01% := 1a. DstRstOp := (R). If Neq, Goto 084d.
+0825: 0200d877a801      R02% := 00. Call 0857.
+0826: 021fd3b7aa03      R02% - 1f. Goto 0855.
+0827: 0201fab7dd03      R02% := TOS XOR 01. Goto 0822.
+0828: 0202fab7df03      R02% := TOS XOR 02. Goto 0820.
+0829: 0204fab7e303      R02% := TOS XOR 04. Goto 081c.
+082a: 0208fab7e503      R02% := TOS XOR 08. Goto 081a.
+082b: 0210fab7e703      R02% := TOS XOR 10. Goto 0818.
+082c: 0220fab7e903      R02% := TOS XOR 20. Goto 0816.
+082d: 0240fab7eb03      R02% := TOS XOR 40. Goto 0814.
+082e: 0280fab7ed03      R02% := TOS XOR 80. Goto 0812.
+082f: 0200fa80010e      R02% := TOS XOR 0100. Continue.
+0830: 0110d848b283      R01% := 10. DstRstOp := (R). If Neq, Goto 084d.
+0831: 0000c005d103      R00%. Pop. Goto 082e.
+0832: 0200fa80020e      R02% := TOS XOR 0200. Continue.
+0833: 010fd848b283      R01% := 0f. DstRstOp := (R). If Neq, Goto 084d.
+0834: 0000c005d003      R00%. Pop. Goto 082f.
+0835: 0200fa80040e      R02% := TOS XOR 0400. Continue.
+0836: 010ed848b283      R01% := 0e. DstRstOp := (R). If Neq, Goto 084d.
+0837: 0000c005cd03      R00%. Pop. Goto 0832.
+0838: 0200fa80080e      R02% := TOS XOR 0800. Continue.
+0839: 010dd848b283      R01% := 0d. DstRstOp := (R). If Neq, Goto 084d.
+083a: 0000c005ca03      R00%. Pop. Goto 0835.
+083b: 0200fa80100e      R02% := TOS XOR 1000. Continue.
+083c: 010cd848b283      R01% := 0c. DstRstOp := (R). If Neq, Goto 084d.
+083d: 0000c005c703      R00%. Pop. Goto 0838.
+083e: 0200fa80200e      R02% := TOS XOR 2000. Continue.
+083f: 010bd848b283      R01% := 0b. DstRstOp := (R). If Neq, Goto 084d.
+0840: 0000c005c403      R00%. Pop. Goto 083b.
+0841: 0200fa80400e      R02% := TOS XOR 4000. Continue.
+0842: 010ad848b283      R01% := 0a. DstRstOp := (R). If Neq, Goto 084d.
+0843: 0000c005c103      R00%. Pop. Goto 083e.
+0844: 0200fb80800e      R02% := TOS - 8000. Continue.
+0845: 0107d848b283      R01% := 07. DstRstOp := (R). If Neq, Goto 084d.
+0846: 0200b900020e      R02% := UState AND 0200. Continue.
+0847: 0200d380020e      R02% - 0200. Continue.
+0848: 0108d848b283      R01% := 08. DstRstOp := (R). If Neq, Goto 084d.
+0849: 0200fa80800e      R02% := TOS XOR 8000. Continue.
+084a: 0000c005be03      R00%. Pop. Goto 0841.
+084b: 0202fbb7f903      R02% := TOS - 02. Goto 0806.
+084c: 0201fbb7fb03      R02% := TOS - 01. Goto 0804.
+
+; Common error halt routine.  Increment DDS by specified amount, and halt the CPU in a loop.
+; Amount to increment DDS by is specified in R01, we call 09f1 to increment it.
+084d: 0c01c8760e01      R0c% := R01%. Call 09f1.			
+084e: 0000c0360b73      R00%. If ByteSign, Goto 09f4.	; 09f1 reads R00, if it is negative we go to 9f4 to die.
+														; R00 apparently holds a "fatal error" bit in bit 7.
+084f: f841d870fe03      Rf8 := 41. Goto 0f01.			; Otherwise go to 0f01 to die instead.  Setting Rf8 has no
+														; purpose other than possibly perqlink debugging.
+
+; continued from beginning of diagnostic routines at 0800.
+; many diagnostic routines, testing basic CPU and memory operations.
+; if any fail, we jump to 084d to increment DDS and die.
+0850: 0200b900020e      R02% := UState AND 0200. Continue.
+0851: 0101d848b283      R01% := 01. DstRstOp := (R). If Neq, Goto 084d.
+0852: 0001d043b303      01. TOS := (R). Goto 084c.
+0853: 0207ebb7f503      R02% := TOS - R07%. Goto 080a.
+0854: 0700c004ac03      R07%. Push R. Goto 0853.
+0855: 0000c0379fd3      R00%. If Eql, Goto 0860.
+0856: 011bd877b203      R01% := 1b. Goto 084d.
+0857: 0000c037a601      R00%. Call 0859.
+0858: 0201db00000a      R02% := R02% + 0001. Return.
+0859: 0000c037a401      R00%. Call 085b.
+085a: 0202db00000a      R02% := R02% + 0002. Return.
+085b: 0000c037a201      R00%. Call 085d.
+085c: 0204db00000a      R02% := R02% + 0004. Return.
+085d: 0000c037a001      R00%. Call 085f.
+085e: 0208db00000a      R02% := R02% + 0008. Return.
+085f: 0210db00000a      R02% := R02% + 0010. Return.
+0860: 0000d0779e03      00. Goto 0861.
+0861: 0000c0379a63      R00%. If Odd, Goto 0865.
+0862: 0001d0779c03      01. Goto 0863.
+0863: 0000c0379963      R00%. If Odd, Goto 0866.
+0864: 011cd877b203      R01% := 1c. Goto 084d.
+0865: 011dd877b203      R01% := 1d. Goto 084d.
+0866: 0000d0779803      00. Goto 0867.
+0867: 0000c0379473      R00%. If ByteSign, Goto 086b.
+0868: 0080d0779603      80. Goto 0869.
+0869: 0000c0378f73      R00%. If ByteSign, Goto 0870.
+086a: 011ed877b203      R01% := 1e. Goto 084d.
+086b: 011fd877b203      R01% := 1f. Goto 084d.
+086c: 0000c0378d43      R00%. If Opfile Empty, Goto 0872.
+086d: 0121d877b203      R01% := 21. Goto 084d.
+086e: 0000c0378e43      R00%. If Opfile Empty, Goto 0871.
+086f: 0008d04b9303      08. BPC := (R). Goto 086c.
+0870: 0000d04b9103      00. BPC := (R). Goto 086e.
+0871: 0123d877b203      R01% := 23. Goto 084d.
+0872: 0253d840400e      R02% := 4053. Continue.
+0873: 0254d380400e      R02% - 4054. Continue.
+0874: 0000c03787e3      R00%. If Gtr, Goto 0878.
+0875: 0252d380400e      R02% - 4052. Continue.
+0876: 0000c03786e3      R00%. If Gtr, Goto 0879.
+0877: 0124d877b203      R01% := 24. Goto 084d.
+0878: 0125d877b203      R01% := 25. Goto 084d.
+0879: 0254d380400e      R02% - 4054. Continue.
+087a: 0000c03781f3      R00%. If Geq, Goto 087e.
+087b: 0252d380400e      R02% - 4052. Continue.
+087c: 0000c03780f3      R00%. If Geq, Goto 087f.
+087d: 0126d877b203      R01% := 26. Goto 084d.
+087e: 0127d877b203      R01% := 27. Goto 084d.
+087f: 0252d380400e      R02% - 4052. Continue.
+0880: 0000c0377ba3      R00%. If Lss, Goto 0884.
+0881: 0254d380400e      R02% - 4054. Continue.
+0882: 0000c0377aa3      R00%. If Lss, Goto 0885.
+0883: 0128d877b203      R01% := 28. Goto 084d.
+0884: 0129d877b203      R01% := 29. Goto 084d.
+0885: 0252d380400e      R02% - 4052. Continue.
+0886: 0000c0377593      R00%. If Leq, Goto 088a.
+0887: 0254d380400e      R02% - 4054. Continue.
+0888: 0000c0377493      R00%. If Leq, Goto 088b.
+0889: 012ad877b203      R01% := 2a. Goto 084d.
+088a: 012bd877b203      R01% := 2b. Goto 084d.
+088b: 0253d380400e      R02% - 4053. Continue.
+088c: 0000c03771f3      R00%. If Geq, Goto 088e.
+088d: 012cd877b203      R01% := 2c. Goto 084d.
+088e: 0253d380400e      R02% - 4053. Continue.
+088f: 0000c0376e93      R00%. If Leq, Goto 0891.
+0890: 012dd877b203      R01% := 2d. Goto 084d.
+0891: 02fed840ff0e      R02% := fffe. Continue.
+0892: 0201db376c03      R02% := R02% + 01. Goto 0893.
+0893: 0000c03768c3      R00%. If Cry, Goto 0897.
+0894: 0201db376a03      R02% := R02% + 01. Goto 0895.
+0895: 0000c03767c3      R00%. If Cry, Goto 0898.
+0896: 012ed877b203      R01% := 2e. Goto 084d.
+0897: 012fd877b203      R01% := 2f. Goto 084d.
+0898: 02fed8407f0e      R02% := 7ffe. Continue.
+0899: 0201db376503      R02% := R02% + 01. Goto 089a.
+089a: 0000c03761b3      R00%. If Ovf, Goto 089e.
+089b: 0201db376303      R02% := R02% + 01. Goto 089c.
+089c: 0000c03760b3      R00%. If Ovf, Goto 089f.
+089d: 0130d877b203      R01% := 30. Goto 084d.
+089e: 0131d877b203      R01% := 31. Goto 084d.
+089f: 02e5d840140e      R02% := 14e5. Continue.
+08a0: 02f8d940010e      R02% := R02% AND NOT 01f8. Continue.
+08a1: 0205d380140e      R02% - 1405. Continue.
+08a2: 0000c0375bd3      R00%. If Eql, Goto 08a4.
+08a3: 0132d877b203      R01% := 32. Goto 084d.
+08a4: 02e0d9f75a03      R02% := R02% OR e0. Goto 08a5.
+08a5: 02e5d380140e      R02% - 14e5. Continue.
+08a6: 0000c03757d3      R00%. If Eql, Goto 08a8.
+08a7: 0133d877b203      R01% := 33. Goto 084d.
+08a8: 02ffda375603      R02% := R02% OR NOT ff. Goto 08a9.
+08a9: 02e5d380ff0e      R02% - ffe5. Continue.
+08aa: 0000c03753d3      R00%. If Eql, Goto 08ac.
+08ab: 0134d877b203      R01% := 34. Goto 084d.
+08ac: 02c7d9375203      R02% := R02% AND c7. Goto 08ad.
+08ad: 02c5d3b75103      R02% - c5. Goto 08ae.
+08ae: 0000c0374fd3      R00%. If Eql, Goto 08b0.
+08af: 0135d877b203      R01% := 35. Goto 084d.
+08b0: 02e5da00140e      R02% := R02% OR NOT 14e5. Continue.
+08b1: 02dfd380eb0e      R02% - ebdf. Continue.
+08b2: 0000c0374bd3      R00%. If Eql, Goto 08b4.
+08b3: 0136d877b203      R01% := 36. Goto 084d.
+08b4: 0200c8b74a03      R02% := NOT R02%. Goto 08b5.
+08b5: 0220d380140e      R02% - 1420. Continue.
+08b6: 0000c03747d3      R00%. If Eql, Goto 08b8.
+08b7: 0137d877b203      R01% := 37. Goto 084d.
+08b8: 028ed8c04a0e      R02% := NOT 4a8e. Continue.
+08b9: 0271d380b50e      R02% - b571. Continue.
+08ba: 0000c03743d3      R00%. If Eql, Goto 08bc.
+08bb: 0138d877b203      R01% := 38. Goto 084d.
+08bc: 0255da80d50e      R02% := R02% XOR d555. Continue.
+08bd: 0224d380600e      R02% - 6024. Continue.
+08be: 0000c0373fd3      R00%. If Eql, Goto 08c0.
+08bf: 0139d877b203      R01% := 39. Goto 084d.
+08c0: 02bddaf73e03      R02% := R02% XNOR bd. Goto 08c1.
+08c1: 0266d3809f0e      R02% - 9f66. Continue.
+08c2: 0000c0373bd3      R00%. If Eql, Goto 08c4.
+08c3: 013ad877b203      R01% := 3a. Goto 084d.
+08c4: 02ffd840ff0e      R02% := ffff. Continue.
+08c5: 0201db373903      R02% := R02% + 01. Goto 08c6.
+08c6: 0200db773803      R02% := R02% + 00 + Cry. Goto 08c7.
+08c7: 0201d3b73703      R02% - 01. Goto 08c8.
+08c8: 0000c03735d3      R00%. If Eql, Goto 08ca.
+08c9: 013bd877b203      R01% := 3b. Goto 084d.
+08ca: 0200d8773403      R02% := 00. Goto 08cb.
+08cb: 0201dbb73303      R02% := R02% - 01. Goto 08cc.
+08cc: 0200dbf73203      R02% := R02% - 00 - Cry. Goto 08cd.
+08cd: 0000d0773103      00. Goto 08ce.
+08ce: 0000c0372fd3      R00%. If Eql, Goto 08d0.
+08cf: 013cd877b203      R01% := 3c. Goto 084d.
+08d0: 0200d8772e03      R02% := 00. Goto 08d1.
+08d1: 0200db372d03      R02% := R02% + 00. Goto 08d2.
+08d2: 0200db772c03      R02% := R02% + 00 + Cry. Goto 08d3.
+08d3: 0000c03729d3      R00%. If Eql, Goto 08d6.
+08d4: 013dd877b203      R01% := 3d. Goto 084d.
+08d5: 000bd0772603      0b. Goto 08d9.
+08d6: 0000c0352b01      R00%. Call 0ad4.
+08d7: 0e00d840800e      R0e% := 8000. Continue.
+08d8: 0000d05f2a03      00. Store. Goto 08d5.
+08d9: 0000c035f921      R00%. If IntrPend, Call 0a06.
+08da: 0e0ecb372303      R0e% := R0e% + R0e%. Goto 08dc.
+08db: 0000d0772203      00. Goto 08dd.
+08dc: 0e00c01f2403      R0e%. Store. Goto 08db.
+08dd: 0000c0372103      R00%. Goto 08de.
+08de: 0000c0371f03      R00%. Goto 08e0.
+08df: 0000c0371e03      R00%. Goto 08e1.
+08e0: 0000d05e2003      00. Fetch. Goto 08df.
+08e1: 0000c0371d03      R00%. Goto 08e2.
+08e2: 000060371c03      MDI. Goto 08e3.
+08e3: 0000c0372683      R00%. If Neq, Goto 08d9.
+08e4: 030ec8771a03      R03% := R0e%. Goto 08e5.
+08e5: 0000c00f180e      R00%. IOB(e7). Continue.
+08e6: 0500d8771703      R05% := 00. Goto 08e8.
+08e7: 0300c0371503      R03%. Goto 08ea.
+08e8: 0000c035f921      R00%. If IntrPend, Call 0a06.
+08e9: 0301db9f1803      R03% := R03% - 01. Store. Goto 08e7.
+08ea: 0000c0371303      R00%. Goto 08ec.
+08eb: 0000c0371203      R00%. Goto 08ed.
+08ec: 0300c01e1403      R03%. Fetch. Goto 08eb.
+08ed: 0000c0371103      R00%. Goto 08ee.
+08ee: 000362b71003      MDI XOR R03%. Goto 08ef.
+08ef: 0301d3b60a83      R03% - 01. If Neq, Goto 09f5.
+08f0: 0000c0370d53      R00%. If C19, Goto 08f2.
+08f1: 0000c0371703      R00%. Goto 08e8.
+08f2: 030ec876fe03      R03% := R0e%. Goto 0901.
+08f3: 0300c0370b03      R03%. Goto 08f4.
+08f4: 020068370a03      R02% := MDI. Goto 08f5.
+08f5: 0203c2b70903      R02% XOR R03%. Goto 08f6.
+08f6: 0301d3b60a83      R03% - 01. If Neq, Goto 09f5.
+08f7: 0500c0370653      R05%. If C19, Goto 08f9.
+08f8: 0000c036fe03      R00%. Goto 0901.
+08f9: 0000c03703d3      R00%. If Eql, Goto 08fc.
+08fa: 0206c8770403      R02% := R06%. Goto 08fb.
+08fb: 013fd877b203      R01% := 3f. Goto 084d.
+08fc: 0002d136fa03      R00% AND 02. Goto 0905.
+08fd: 0000c0370003      R00%. Goto 08ff.
+08fe: 0040d05e0203      40. Fetch. Goto 08fd.
+08ff: 0000c036f603      R00%. Goto 0909.
+0900: 0300c0370c03      R03%. Goto 08f3.
+0901: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0902: 0301db9eff03      R03% := R03% - 01. Fetch. Goto 0900.
+0903: 00e5d040140e      14e5. Continue.
+0904: 0000c0370103      R00%. Goto 08fe.
+0905: 0000c036e883      R00%. If Neq, Goto 0917.
+0906: 0200d840100e      R02% := 1000. Continue.
+0907: 0200c00f9c0e      R02%. IOB(63). Continue.
+0908: 0040d05ffc03      40. Store. Goto 0903.
+0909: 00e57380140e      MDI - 14e5. Continue.
+090a: 0000c036f3d3      R00%. If Eql, Goto 090c.
+090b: 013ed877b203      R01% := 3e. Goto 084d.
+090c: 0000d04f9c0e      00. IOB(63). Continue.
+090d: 0000c035f921      R00%. If IntrPend, Call 0a06.
+090e: 0000c035f921      R00%. If IntrPend, Call 0a06.
+090f: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0910: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0911: 0500c036ed03      R05%. Goto 0912.
+0912: 0000c036eb83      R00%. If Neq, Goto 0914.
+0913: 0140d877b203      R01% := 40. Goto 084d.
+0914: 0640d3b6ea03      R06% - 40. Goto 0915.
+0915: 0000c036e8d3      R00%. If Eql, Goto 0917.
+0916: 0141d877b203      R01% := 41. Goto 084d.
+0917: 030ec876e603      R03% := R0e%. Goto 0919.
+0918: 0300c0b6e403      NOT R03%. Goto 091b.
+0919: 0000c035f921      R00%. If IntrPend, Call 0a06.
+091a: 0301db9fe703      R03% := R03% - 01. Store. Goto 0918.
+091b: 0000c036e203      R00%. Goto 091d.
+091c: 0000c036e103      R00%. Goto 091e.
+091d: 0300c01ee303      R03%. Fetch. Goto 091c.
+091e: 0000c036e003      R00%. Goto 091f.
+091f: 000362f6df03      MDI XNOR R03%. Goto 0920.
+0920: 0301d3b60983      R03% - 01. If Neq, Goto 09f6.
+0921: 0000c036dc53      R00%. If C19, Goto 0923.
+0922: 0000c036e603      R00%. Goto 0919.
+0923: 030ec876da03      R03% := R0e%. Goto 0925.
+0924: 0300c036d803      R03%. Goto 0927.
+0925: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0926: 0301db9edb03      R03% := R03% - 01. Fetch. Goto 0924.
+0927: 0300c036d703      R03%. Goto 0928.
+0928: 02006836d603      R02% := MDI. Goto 0929.
+0929: 0203c2f6d503      R02% XNOR R03%. Goto 092a.
+092a: 0301d3b60983      R03% - 01. If Neq, Goto 09f6.
+092b: 0500c036d253      R05%. If C19, Goto 092d.
+092c: 0000c036da03      R00%. Goto 0925.
+092d: 0000c0370583      R00%. If Neq, Goto 08fa.
+092e: 0000d04f9c0e      00. IOB(63). Continue.
+092f: 020fd876ce03      R02% := 0f. Goto 0931.
+0930: 070fb936cc03      R07% := UState AND 0f. Goto 0933.
+0931: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0932: 0200c00bcf03      R02%. BPC := (R). Goto 0930.
+0933: 0207c3b6c503      R02% - R07%. Goto 093a.
+0934: 0000d040010e      0100. Continue.
+0935: 0002d040030e      0302. Continue.
+0936: 0004d040050e      0504. Continue.
+0937: 0006d040070e      0706. Continue.
+0938: 0000d076bf03      00. Goto 0940.
+0939: 0201db360603      R02% := R02% + 01. Goto 09f9.
+093a: 0201db88c683      R02% := R02% - 01. DstRstOp := (R). If Neq, Goto 0939.
+093b: 0000c036ce83      R00%. If Neq, Goto 0931.
+093c: 0040d05bcb03      40. Store4. Goto 0934.
+093d: 08006836be03      R08% := MDI. Goto 0941.
+093e: 0000c00ac203      R00%. LoadOp. Goto 093d.
+093f: 0000d04bc103      00. BPC := (R). Goto 093e.
+0940: 0040d05ac003      40. Fetch4. Goto 093f.
+0941: 09006836bd03      R09% := MDI. Goto 0942.
+0942: 0a006836bc03      R0a% := MDI. Goto 0943.
+0943: 0b006836bb03      R0b% := MDI. Goto 0944.
+0944: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0945: 0800d380010e      R08% - 0100. Continue.
+0946: 0000c0360583      R00%. If Neq, Goto 09fa.
+0947: 0902d380030e      R09% - 0302. Continue.
+0948: 0000c0360583      R00%. If Neq, Goto 09fa.
+0949: 0a04d380050e      R0a% - 0504. Continue.
+094a: 0000c0360583      R00%. If Neq, Goto 09fa.
+094b: 0b06d380070e      R0b% - 0706. Continue.
+094c: 0000c0360583      R00%. If Neq, Goto 09fa.
+094d: 0000c035f921      R00%. If IntrPend, Call 0a06.
+094e: 0200d876b003      R02% := 00. Goto 094f.
+094f: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0950: 070028360743      R07% := Next Opcode. If Opfile Empty, Goto 09f8.
+0951: 0207c3b6ad03      R02% - R07%. Goto 0952.
+0952: 0000c0360083      R00%. If Neq, Goto 09ff.
+0953: 0207d3b6a803      R02% - 07. Goto 0957.
+0954: 08006836a603      R08% := MDI. Goto 0959.
+0955: 0000c00aab03      R00%. LoadOp. Goto 0954.
+0956: 0000d04baa03      00. BPC := (R). Goto 0955.
+0957: 0201db36b083      R02% := R02% + 01. If Neq, Goto 094f.
+0958: 0040d058a903      40. Fetch4R. Goto 0956.
+0959: 09006836a503      R09% := MDI. Goto 095a.
+095a: 0a006836a403      R0a% := MDI. Goto 095b.
+095b: 0b0068369e03      R0b% := MDI. Goto 0961.
+095c: 0000d040010e      0100. Continue.
+095d: 0002d040030e      0302. Continue.
+095e: 0004d040050e      0504. Continue.
+095f: 0006d040070e      0706. Continue.
+0960: 0000d0769303      00. Goto 096c.
+0961: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0962: 0806d380070e      R08% - 0706. Continue.
+0963: 0000c0360483      R00%. If Neq, Goto 09fb.
+0964: 0904d380050e      R09% - 0504. Continue.
+0965: 0000c0360483      R00%. If Neq, Goto 09fb.
+0966: 0a02d380030e      R0a% - 0302. Continue.
+0967: 0000c0360483      R00%. If Neq, Goto 09fb.
+0968: 0b00d380010e      R0b% - 0100. Continue.
+0969: 0000c0360483      R00%. If Neq, Goto 09fb.
+096a: 0040d059a303      40. Store4R. Goto 095c.
+096b: 080068369203      R08% := MDI. Goto 096d.
+096c: 0040d0589403      40. Fetch4R. Goto 096b.
+096d: 090068369103      R09% := MDI. Goto 096e.
+096e: 0a0068369003      R0a% := MDI. Goto 096f.
+096f: 0b0068368b03      R0b% := MDI. Goto 0974.
+0970: 080068368103      R08% := MDI. Goto 097e.
+0971: 0004d040050e      0504. Continue.
+0972: 0006d040070e      0706. Continue.
+0973: 0040d05c8f03      40. Fetch2. Goto 0970.
+0974: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0975: 0800d380010e      R08% - 0100. Continue.
+0976: 0000c0360383      R00%. If Neq, Goto 09fc.
+0977: 0902d380030e      R09% - 0302. Continue.
+0978: 0000c0360383      R00%. If Neq, Goto 09fc.
+0979: 0a04d380050e      R0a% - 0504. Continue.
+097a: 0000c0360383      R00%. If Neq, Goto 09fc.
+097b: 0b06d380070e      R0b% - 0706. Continue.
+097c: 0000c0360483      R00%. If Neq, Goto 09fb.
+097d: 0040d05d8e03      40. Store2. Goto 0971.
+097e: 090068367c03      R09% := MDI. Goto 0983.
+097f: 080068367603      R08% := MDI. Goto 0989.
+0980: 009cd040020e      029c. Continue.
+0981: 001ad0400b0e      0b1a. Continue.
+0982: 0042d05c8003      42. Fetch2. Goto 097f.
+0983: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0984: 0804d380050e      R08% - 0504. Continue.
+0985: 0000c0360283      R00%. If Neq, Goto 09fd.
+0986: 0906d380070e      R09% - 0706. Continue.
+0987: 0000c0360283      R00%. If Neq, Goto 09fd.
+0988: 0042d05d7f03      42. Store2. Goto 0980.
+0989: 090068367403      R09% := MDI. Goto 098b.
+098a: 0300c0366d03      R03%. Goto 0992.
+098b: 0000c035f921      R00%. If IntrPend, Call 0a06.
+098c: 089cd380020e      R08% - 029c. Continue.
+098d: 0000c0360183      R00%. If Neq, Goto 09fe.
+098e: 091ad3800b0e      R09% - 0b1a. Continue.
+098f: 0000c0360183      R00%. If Neq, Goto 09fe.
+0990: 0040d05e7503      40. Fetch. Goto 098a.
+0991: 000060366b03      MDI. Goto 0994.
+0992: 0080d05f6e03      80. Store. Goto 0991.
+0993: 020068366a03      R02% := MDI. Goto 0995.
+0994: 0040d05e6c03      40. Fetch. Goto 0993.
+0995: 0204d380050e      R02% - 0504. Continue.
+0996: 0000c035fa83      R00%. If Neq, Goto 0a05.
+0997: 0000c035f921      R00%. If IntrPend, Call 0a06.
+0998: 030ec8766503      R03% := R0e%. Goto 099a.
+0999: 0300c0366303      R03%. Goto 099c.
+099a: 0000c035f921      R00%. If IntrPend, Call 0a06.
+099b: 0304db9b6603      R03% := R03% - 04. Store4. Goto 0999.
+099c: 0301d3366203      R03% + 01. Goto 099d.
+099d: 0302d3366103      R03% + 02. Goto 099e.
+099e: 0303d3366003      R03% + 03. Goto 099f.
+099f: 0301d3b65f03      R03% - 01. Goto 09a0.
+09a0: 0000c0365d53      R00%. If C19, Goto 09a2.
+09a1: 0000c0366503      R00%. Goto 099a.
+09a2: 030ec8765b03      R03% := R0e%. Goto 09a4.
+09a3: 0203c8765903      R02% := R03%. Goto 09a6.
+09a4: 0000c035f921      R00%. If IntrPend, Call 0a06.
+09a5: 0304db9a5c03      R03% := R03% - 04. Fetch4. Goto 09a3.
+09a6: 080068365803      R08% := MDI. Goto 09a7.
+09a7: 090068365703      R09% := MDI. Goto 09a8.
+09a8: 0a0068365603      R0a% := MDI. Goto 09a9.
+09a9: 0b0068365503      R0b% := MDI. Goto 09aa.
+09aa: 0000c035f921      R00%. If IntrPend, Call 0a06.
+09ab: 0802c2b65303      R08% XOR R02%. Goto 09ac.
+09ac: 0201db360883      R02% := R02% + 01. If Neq, Goto 09f7.
+09ad: 0902c2b65103      R09% XOR R02%. Goto 09ae.
+09ae: 0201db360883      R02% := R02% + 01. If Neq, Goto 09f7.
+09af: 0a02c2b64f03      R0a% XOR R02%. Goto 09b0.
+09b0: 0201db360883      R02% := R02% + 01. If Neq, Goto 09f7.
+09b1: 0b02c2b64d03      R0b% XOR R02%. Goto 09b2.
+09b2: 0301d3b60883      R03% - 01. If Neq, Goto 09f7.
+09b3: 0500c0364a53      R05%. If C19, Goto 09b5.
+09b4: 0000c0365b03      R00%. Goto 09a4.
+09b5: 0000c0370583      R00%. If Neq, Goto 08fa.
+09b6: 0000c035f921      R00%. If IntrPend, Call 0a06.
+09b7: 0500d840800e      R05% := 8000. Continue.
+09b8: 0200d840100e      R02% := 1000. Continue.
+09b9: 0301d8764503      R03% := 01. Goto 09ba.
+09ba: 0500db00800e      R05% := R05% + 8000. Continue.
+09bb: 0605a8b64303      R06% := NOT UState. Goto 09bc.
+09bc: 0600d900f00e      R06% := R06% AND f000. Continue.
+09bd: 0602c3b64003      R06% - R02%. Goto 09bf.
+09be: 0000d0763e03      00. Goto 09c1.
+09bf: 0142d877b283      R01% := 42. If Neq, Goto 084d.
+09c0: 0040d05d4103      40. Store2. Goto 09be.
+09c1: 0300c0363c03      R03%. Goto 09c3.
+09c2: 040068363b03      R04% := MDI. Goto 09c4.
+09c3: 0040d05c3d03      40. Fetch2. Goto 09c2.
+09c4: 040489f63a03      R04% := MDX OR R04%. Goto 09c5.
+09c5: 0000c035f921      R00%. If IntrPend, Call 0a06.
+09c6: 0604a8b63803      R06% := NOT UState. Goto 09c7.
+09c7: 0600d900f00e      R06% := R06% AND f000. Continue.
+09c8: 0602c3b63403      R06% - R02%. Goto 09cb.
+09c9: 0604a8b62f03      R06% := NOT UState. Goto 09d0.
+09ca: 0400e8053603      R04% := TOS. Pop. Goto 09c9.
+09cb: 0143d877b283      R01% := 43. If Neq, Goto 084d.
+09cc: c000d8400c0e      Rc0 := 0c00. Continue.
+09cd: c000c00f9c0e      Rc0. IOB(63). Continue.
+09ce: c000c00f9f0e      Rc0. IOB(60). Continue.
+09cf: 0500c0043503      R05%. Push R. Goto 09ca.
+09d0: 0600d900f00e      R06% := R06% AND f000. Continue.
+09d1: 0602c3b62d03      R06% - R02%. Goto 09d2.
+09d2: 0144d877b283      R01% := 44. If Neq, Goto 084d.
+09d3: 0500db00800e      R05% := R05% + 8000. Continue.
+09d4: 0301db362a03      R03% := R03% + 01. Goto 09d5.
+09d5: 0200db00100e      R02% := R02% + 1000. Continue.
+09d6: 0000c0364583      R00%. If Neq, Goto 09ba.
+09d7: 0700d8f62703      R07% := NOT 00. Goto 09d8.
+09d8: 0700db362603      R07% := R07% + 00. Goto 09d9.
+09d9: 0000c0362453      R00%. If C19, Goto 09db.
+09da: 0120d877b203      R01% := 20. Goto 084d.
+09db: 0701db362303      R07% := R07% + 01. Goto 09dc.
+09dc: 0000c0361a53      R00%. If C19, Goto 09e5.
+09dd: 0300d8762103      R03% := 00. Goto 09de.
+
+; See if the Masking portion of the shifter is working, and if so, test the Dispatch functionality using
+; the results.
+09de: 0300c020fc0e      R03%. BitField, offset 0 mask 000f, . Continue.		; Take lower 4 bits of current R03 value
+09df: 040008361f03      R04% := Shifter. Goto 09e0.							; Store in R04
+09e0: 0403c3b61e03      R04% - R03%. Goto 09e1.								; Compare the two...
+09e1: 0155d877b283      R01% := 55. If Neq, Goto 084d.						; Not equal? Shifter broken.  DIE.
+09e2: 0300c020fc0e      R03%. BitField, offset 0 mask 000f, . Continue.		; Do it again...
+09e3: 04000c005f06      R04% := Shifter. Dispatch 0a00.						; Test dispatch to 0a00.
+
+
+09e4: 0156d877b203      R01% := 56. Goto 084d.	; failure
+09e5: 0122d877b203      R01% := 22. Goto 084d.	; failure
+
+; Called by diagnostic dispatch table.  R02 has the value set in the dispatch table.
+09e6: 0302c3b61803      R03% - R02%. Goto 09e7.				; Compare to R03 (expected value)
+09e7: 0157d877b283      R01% := 57. If Neq, Goto 084d.		; if not equal, die.
+09e8: 0301db361603      R03% := R03% + 01. Goto 09e9.		; increment expected value
+09e9: 0310d3b61503      R03% - 10. Goto 09ea.				; subtract 16
+09ea: 0000c03621a3      R00%. If Lss, Goto 09de.			; if R03 is < 16 then test the dispatch again.
+09eb: 0001d1361303      R00% AND 01. Goto 09ec.				; otherwise we're done with that.  Check bit 0 of R00
+09ec: 0000c037fe83      R00%. If Neq, Goto 0801.			; If non-zero, goto 0801 (? that's the beginning of the diagnostic routine... perhaps this was to allow running diags in a loop?)
+09ed: 0c64d8760e01      R0c% := 64. Call 09f1.				; Increment DDS by 120 (100, plus 0951 adds 20), this should take us to 150.
+
+; DIAGNOSTICS COMPLETE
+09ee: 0000c033ff73      R00%. If ByteSign, Goto 0c00.		; Check bit 7 of R00, if set goto 0c00 to continue the boot process.
+09ef: f840d8760f03      Rf8 := 40. Goto 09f0.				; We expect R00 to have bit 7 set at this point, otherwise we die?
+
+09f0: 0100d870fe03      R01% := 00. Goto 0f01.		; Fatal error, increment DDS and die.
+													; Setting R01 here has no purpose, it does not affect the DDS.
+													; Perhaps only for diagnostic (i.e. perqlink debugging) purposes?
+
+; part of DDS routine, invoked from 84d and 9ed
+; R0c has the amount to increment DDS by - Add 20 to it.
+09f1: 0c14db35fc03      R0c% := R0c% + 14. Goto 0a03.
+
+
+; part of DDS routine
+09f2: 0000c035fc83      R00%. If Neq, Goto 0a03.	; if R0c is not zero, continue at 0a03 and increment DDS again.
+09f3: 0000c000000a      R00%. Return.				; otherwise, return from this routine
+
+09f4: 0000c0360b03      R00%. Goto 09f4.			; A nice place to halt if we've been bad.  Loop forever.
+
+; various exits from diagnostic routines.  Set R01 to DDS increment, and go to 084d to die
+09f5: 0153d877b203      R01% := 53. Goto 084d.
+09f6: 0154d877b203      R01% := 54. Goto 084d.
+09f7: 0145d877b203      R01% := 45. Goto 084d.
+09f8: 0146d877b203      R01% := 46. Goto 084d.
+09f9: 0147d877b203      R01% := 47. Goto 084d.
+09fa: 0148d877b203      R01% := 48. Goto 084d.
+09fb: 0149d877b203      R01% := 49. Goto 084d.
+09fc: 014ad877b203      R01% := 4a. Goto 084d.
+09fd: 014bd877b203      R01% := 4b. Goto 084d.
+09fe: 014cd877b203      R01% := 4c. Goto 084d.
+09ff: 014dd877b203      R01% := 4d. Goto 084d.
+
+; Diagnostic dispatch table.  Each dispatched instruction sets R02 to the table entry it should have
+; been dispatched to.
+; 15
+0a00: 020fd8761903      R02% := 0f. Goto 09e6.
+
+0a01: 0d01dbb5fe83      R0d% := R0d% - 01. If Neq, Goto 0a01.	; decrement R0d until it is zero.  (simply a delay?)
+0a02: 0c01dbb60d03      R0c% := R0c% - 01. Goto 09f2.			; decrement main DDS increment counter
+0a03: 0d08d842fe03      R0d% := 08. Reset eStack, inc DDS. Goto 0a01.	; increment DDS, Set delay counter to 8.
+
+; 14
+0a04: 020ed8761903      R02% := 0e. Goto 09e6.
+
+0a05: 014ed877b203      R01% := 4e. Goto 084d.		; failure case
+
+
+; interrupt dispatch subroutine
+0a06: 0000c0005306      R00%. Vector 0ac0.			; subroutine -- dispatch interrupt
+
+0a07: 000000000000      Shifter. JumpZero.			; unused
+
+; 13
+0a08: 020dd8761903      R02% := 0d. Goto 09e6.
+
+														; continuation of line counter interrupt (0a3d, 0a40)
+0a09: c000d840840e      Rc0 := 8400. Continue.			; reset RC0 (video control)
+0a0a: c101dbb5f203      Rc1 := Rc1 - 01. Goto 0a0d.		; decrement Rc1 counter
+
+0a0b: 000000000000      Shifter. JumpZero.
+
+; 12
+0a0c: 020cd8761903      R02% := 0c. Goto 09e6.
+
+														; continuation of line counter interrupt (0a0a)
+0a0d: 0000c00000ea      R00%. If Gtr, Return.			; if Rc1 is > 0 then we return
+0a0e: c06cd840820e      Rc0 := 826c. Continue.			; otherwise set video control to 826c
+0a0f: c100c035ee03      Rc1. Goto 0a11.					; continue at 0a11
+
+; 11
+0a10: 020bd8761903      R02% := 0b. Goto 09e6.
+
+														; continuation of line counter interrupt (0a0f)
+0a11: 0000c00000da      R00%. If Eql, Return.			; if Rc1 (counter) = 0 (not sure how this would be possible) return
+0a12: c0e9d840820a      Rc0 := 82e9. Return.			; otherwise video control is 82e9, return.
+
+0a13: 000000000000      Shifter. JumpZero.
+
+; 10
+0a14: 020ad8761903      R02% := 0a. Goto 09e6.
+
+
+0a15: 0000c00f180e      R00%. IOB(e7). Continue.	; continuation of parity interrupt (0adc)
+0a16: 06004800000a      R06% := IOD. Return.		; read low parity into R06. Return.
+
+0a17: 000000000000      Shifter. JumpZero.
+
+; 9
+0a18: 0209d8761903      R02% := 09. Goto 09e6.
+0a19: 000000000000      Shifter. JumpZero.
+0a1a: 000000000000      Shifter. JumpZero.
+0a1b: 000000000000      Shifter. JumpZero.
+
+; 8
+0a1c: 0208d8761903      R02% := 08. Goto 09e6.
+0a1d: 000000000000      Shifter. JumpZero.
+0a1e: 000000000000      Shifter. JumpZero.
+0a1f: 000000000000      Shifter. JumpZero.
+
+; 7
+0a20: 0207d8761903      R02% := 07. Goto 09e6.
+0a21: 000000000000      Shifter. JumpZero.
+0a22: 000000000000      Shifter. JumpZero.
+0a23: 000000000000      Shifter. JumpZero.
+
+; 6
+0a24: 0206d8761903      R02% := 06. Goto 09e6.
+0a25: 000000000000      Shifter. JumpZero.
+0a26: 000000000000      Shifter. JumpZero.
+0a27: 000000000000      Shifter. JumpZero.
+
+; 5
+0a28: 0205d8761903      R02% := 05. Goto 09e6.
+0a29: 000000000000      Shifter. JumpZero.
+0a2a: 000000000000      Shifter. JumpZero.
+0a2b: 000000000000      Shifter. JumpZero.
+
+; 4
+0a2c: 0204d8761903      R02% := 04. Goto 09e6.
+0a2d: 000000000000      Shifter. JumpZero.
+0a2e: 000000000000      Shifter. JumpZero.
+0a2f: 000000000000      Shifter. JumpZero.
+
+; 3
+0a30: 0203d8761903      R02% := 03. Goto 09e6.
+0a31: 000000000000      Shifter. JumpZero.
+0a32: 000000000000      Shifter. JumpZero.
+0a33: 000000000000      Shifter. JumpZero.
+
+; 2
+0a34: 0202d8761903      R02% := 02. Goto 09e6.
+0a35: 000000000000      Shifter. JumpZero.
+0a36: 000000000000      Shifter. JumpZero.
+0a37: 000000000000      Shifter. JumpZero.
+
+; 1
+0a38: 0201d8761903      R02% := 01. Goto 09e6.
+0a39: 000000000000      Shifter. JumpZero.
+0a3a: 000000000000      Shifter. JumpZero.
+0a3b: 000000000000      Shifter. JumpZero.
+
+; 0
+0a3c: 0200d8761903      R02% := 00. Goto 09e6.
+
+; end of diagnostic dispatch table
+
+0a3d: 0000c035f6d3      R00%. If Eql, Goto 0a09.	; continuation of line counter interrupt (0ad7)
+													; if bit 7 of RC0 is clear, goto 0a09
+0a3e: 0000d04f9e0e      00. IOB(61). Continue.		; otherwise clear display address register
+0a3f: 0000d04f9b0e      00. IOB(64). Continue.		; and clear cursor X position
+0a40: c109d875f603      Rc1 := 09. Goto 0a09.		; and set RC1 to 9, continue at 0a09.
+
+; 0a41 - 0abf unused
+
+
+; Interupt vector table (used later in SYSB)
+
+; Z80 data out interrupt
+0ac0: 0000c00f390a      R00%. IOB(c6). Return.		; read Z80
+
+0ac1: 000000000000      Shifter. JumpZero.
+0ac2: 000000000000      Shifter. JumpZero.
+0ac3: 000000000000      Shifter. JumpZero.
+
+; Y interrupt (unexpected)
+0ac4: 014fd877b203      R01% := 4f. Goto 084d.		; fail
+0ac5: 000000000000      Shifter. JumpZero.
+0ac6: 000000000000      Shifter. JumpZero.
+0ac7: 000000000000      Shifter. JumpZero.
+
+; Hard Disk interrupt
+0ac8: 0000d04fbe0a      00. IOB(41). Return.		; write 0 to Shugart controller (make it idle)
+0ac9: 000000000000      Shifter. JumpZero.
+0aca: 000000000000      Shifter. JumpZero.
+0acb: 000000000000      Shifter. JumpZero.
+
+; Network interrupt (unexpected)
+0acc: 0150d877b203      R01% := 50. Goto 084d.		; fail
+0acd: 000000000000      Shifter. JumpZero.
+0ace: 000000000000      Shifter. JumpZero.
+0acf: 000000000000      Shifter. JumpZero.
+
+; Z80 input ready (unexpected)
+0ad0: 0151d877b203      R01% := 51. Goto 084d.		; fail
+0ad1: 000000000000      Shifter. JumpZero.
+0ad2: 000000000000      Shifter. JumpZero.
+0ad3: 000000000000      Shifter. JumpZero.
+
+; Line counter interrupt
+0ad4: c000c00f9c0e      Rc0. IOB(63). Continue.		; write control register
+0ad5: c000c00f9f0e      Rc0. IOB(60). Continue.		; load line counter
+0ad6: 0000d04f9d0e      00. IOB(62). Continue.		; clear cursor address
+0ad7: c080d135c203      Rc0 AND 80. Goto 0a3d.		; continue at a3d...
+
+; X interrupt (unexpected )
+0ad8: 0152d877b203      R01% := 52. Goto 084d.		; fail
+0ad9: 000000000000      Shifter. JumpZero.
+0ada: 000000000000      Shifter. JumpZero.
+0adb: 000000000000      Shifter. JumpZero.
+
+; Parity interrupt
+0adc: 0501d875ea03      R05% := 01. Goto 0a15.
+
+; 0add - 0bff unused
+
+; We jump here after diags complete and continue the boot process.
+0c00: 0000c03fff0f      R00%. ThreeWayBranch.		; These will clear anything on the callstack (5 pops, basically).
+0c01: 0000c03fff0f      R00%. ThreeWayBranch.
+0c02: 0000c03fff0f      R00%. ThreeWayBranch.
+0c03: 0000c03fff0f      R00%. ThreeWayBranch.
+0c04: 0000c03fff0f      R00%. ThreeWayBranch.
+0c05: 0201d8700501      R02% := 01. Call 0ffa.		; Increment DDS by 1, this brings us to 151.
+0c06: 0200d8400c0e      R02% := 0c00. Continue.		
+0c07: 0200c00f9c0e      R02%. IOB(63). Continue.	; Write 0c00 to the video control port (EnableDisplay + EnableParityInterrupts)
+0c08: 8001d873f603      R80 := 01. Goto 0c09.		; some initialization
+0c09: 8101d873f403      R81 := 01. Goto 0c0b.		; skip to 0c0b
+
+0c0a: 7100e833ee03      R71 := TOS. Goto 0c11.		; R71 = TOS (0x10000)  (continuation from 0c0a)
+
+0c0b: 70ffd8407f0e      R70 := 7fff. Continue.		; more init...
+0c0c: 30ffd840ff0e      R30% := ffff. Continue.
+0c0d: 7900d840800e      R79 := 8000. Continue.
+0c0e: 60f0d840ff0e      R60 := fff0. Continue.
+
+; I believe this routine is sizing memory.  It writes a "0" to location 0, then progressively writes
+; 1's to exponentially increasing addresses, starting with 0x20000 (128k) then trying 256, 512, 1024, and so
+; on.  When the end of the PERQ's installed memory is reached it'll wrap around, thus setting location 0 to 1,
+; and ending the loop.  This assumes that the memory size is always a power of two.  So no 768k or 3mb of memory
+; for you!  (I don't think such a configuration was ever supported.)
+0c0f: 7979c303f503      R79 + R79. TOS := (R). Goto 0c0a.	; set TOS to 0x10000 (2x 8000 in R79)
+
+0c10: 0000d073e703      00. Goto 0c18.				; continued from 0c17 - fill location with 0
+
+0c11: 7a00d840c00e      R7a := c000. Continue.		; continued from 0c0a.  More initialization...
+0c12: 7b00d840400e      R7b := 4000. Continue.
+0c13: ac00d840010e      Rac := 0100. Continue.
+0c14: ad00d840020e      Rad := 0200. Continue.
+0c15: aa00d840030e      Raa := 0300. Continue.
+0c16: 36ffd840030e      R36% := 03ff. Continue.
+0c17: 0000d05fef03      00. Store. Goto 0c10.		; begin store at location 0...
+
+0c18: 8871c873e603      R88 := R71. Goto 0c19.		; continued from 0c10 - R88 contains address to write "1" to
+0c19: 4a01d873e403      R4a := 01. Goto 0c1b.
+
+0c1a: 0001d073e103      01. Goto 0c1e.				; put a 1 at memory location (continuation from 0c1c)
+
+0c1b: 1400d840100e      R14% := 1000. Continue.		; Initialize R14 to 1000 (4K) (continued from 0c19)
+0c1c: 8888cb1fe503      R88 := R88 + R88. Store. Goto 0c1a.		; Begin store at 2x R88...
+
+0c1d: 1414cb33e003      R14% := R14% + R14%. Goto 0c1f.			; double R14 (continuation from 0c1e)
+
+0c1e: 0000d05ee203      00. Fetch. Goto 0c1d.					; Begin fetch from 0
+0c1f: 00006033df03      MDI. Goto 0c20.							; Read MDI	 (cont'd from 0c1d)
+0c20: 4a4acb33e3d3      R4a := R4a + R4a. If Eql, Goto 0c1c.	; if MDI was 0, repeat at 0c1c, we have not wrapped around yet.
+
+																; We got a non-zero word, memory has been sized.
+																; Looks like we're now computing offsets for loading data 
+0c21: 1400db800c0e      R14% := R14% - 0c00. Continue.			; subtract 0c00 from our tally (384), store back in R14
+0c22: 1400d380140e      R14% - 1400. Continue.					; Subtract 1400 (5120)
+0c23: 0000c033d983      R00%. If Neq, Goto 0c26.				; Is R14 = 1400? Then we only have 128K of memory, apparently we need to special case this.
+0c24: 1400c020c00e      R14%. Left Shift 3, . Continue.			; Multiply R14 by 8 (should be A000)
+0c25: 14000833d903      R14% := Shifter. Goto 0c26.				; R14 = A000
+
+0c26: 5788c873d803      R57 := R88. Goto 0c27.					; jump here from 0c23 if we have > 128k
+0c27: 0b88c873d703      R0b% := R88. Goto 0c28.					; R0b = memory size / top of memory
+0c28: 0b00db80600e      R0b% := R0b% - 6000. Continue.			; Save 6000 bytes
+0c29: 1500d873d503      R15% := 00. Goto 0c2a.					; reset a bunch of variables to zero
+0c2a: 16f0d873d403      R16% := f0. Goto 0c2b.
+0c2b: 0900d873d303      R09% := 00. Goto 0c2c.
+0c2c: 9700d873d203      R97 := 00. Goto 0c2d.
+0c2d: a100d873d103      Ra1 := 00. Goto 0c2e.
+0c2e: 1800d873d003      R18% := 00. Goto 0c2f.
+0c2f: a200d873cf03      Ra2 := 00. Goto 0c30.
+0c30: 7e00d873ce03      R7e := 00. Goto 0c31.
+0c31: 2d00d873cd03      R2d% := 00. Goto 0c32.
+0c32: 2b00d873cc03      R2b% := 00. Goto 0c33.
+0c33: 0f00d873cb03      R0f% := 00. Goto 0c34.
+0c34: 1f00d873ca03      R1f% := 00. Goto 0c35.
+0c35: 2901d873c903      R29% := 01. Goto 0c36.					; R29 = 1
+0c36: 2c00d8f3c803      R2c% := NOT 00. Goto 0c37.				; R2C = ffff
+0c37: 5071c873c703      R50 := R71. Goto 0c38.					; R50 = 10000
+0c38: 507acb33c603      R50 := R50 + R7a. Goto 0c39.			; +c000 = 1c000
+0c39: 5950c873c503      R59 := R50. Goto 0c3a.					; R59 = 1c000
+0c3a: 59ecdb00010e      R59 := R59 + 01ec. Continue.			; + 1ec = 1c1ec
+0c3b: 5c50c873c303      R5c := R50. Goto 0c3c.					; R5c = 1c000
+0c3c: 5c00db00030e      R5c := R5c + 0300. Continue.			; + 300 = 1c300
+
+; Begin I/O init
+0c3d: 0080d04fbe0e      80. IOB(41). Continue.			; reset hard disk
+0c3e: 0000d04fb80e      00. IOB(47). Continue.			; kick the z80
+0c3f: 0000c00f390e      R00%. IOB(c6). Continue.		; read the z80
+0c40: 0000c00f180e      R00%. IOB(e7). Continue.		; read low address parity
+0c41: 0000c0323001      R00%. Call 0dcf.				; wait awhile
+0c42: 0000d04fbe0e      00. IOB(41). Continue.
+0c43: 0000c0323001      R00%. Call 0dcf.				; wait awhile
+0c44: 026bd872a501      R02% := 6b. Call 0d5a.			; start Z80 message
+0c45: 020cd872a501      R02% := 0c. Call 0d5a.			; Message is: Set Floppy Status
+0c46: 0203d872a501      R02% := 03. Call 0d5a.			; length (3)
+0c47: 0200d872a501      R02% := 00. Call 0d5a.			; 0 - single-density
+0c48: 0202d872a501      R02% := 02. Call 0d5a.			; 2 - 2-sided
+0c49: 0201d872a501      R02% := 01. Call 0d5a.			; 1 - enable interrupts, End of 1st message
+0c4a: 026bd872a501      R02% := 6b. Call 0d5a.			; Start next message
+0c4b: 0205d872a501      R02% := 05. Call 0d5a.			; Message is: Set RS232 Status
+0c4c: 0203d872a501      R02% := 03. Call 0d5a.			; length (3)
+0c4d: 0201d872a501      R02% := 01. Call 0d5a.			; 1 - enable RS232
+0c4e: 0201d872a501      R02% := 01. Call 0d5a.			; 1 - clock rate (9600 baud)
+0c4f: 0255d872a501      R02% := 55. Call 0d5a.			; 55 - options - odd parity, one stop bit, 7 data bits (xmit & recv) 
+0c50: 026bd872a501      R02% := 6b. Call 0d5a.			; Start next message
+0c51: 0203d872a501      R02% := 03. Call 0d5a.			; Message is: GPIB command
+0c52: 0203d872a501      R02% := 03. Call 0d5a.			; GPIB command is: Write GPIB registers 
+0c53: 020cd872a501      R02% := 0c. Call 0d5a.			; length is 12 (6 register writes)
+0c54: 0200d872a501      R02% := 00. Call 0d5a.			; 1 - register 00 = 00  (software reset)
+0c55: 0200d872a501      R02% := 00. Call 0d5a.			;
+0c56: 0206d872a501      R02% := 06. Call 0d5a.			; 2 - register 06 = 80  (force group execute trigger)
+0c57: 0280d872a501      R02% := 80. Call 0d5a.			;
+0c58: 0206d872a501      R02% := 06. Call 0d5a.			; 3 - register 06 = 8f  (ditto)
+0c59: 028fd872a501      R02% := 8f. Call 0d5a.			;
+0c5a: 0206d872a501      R02% := 06. Call 0d5a.			; 4 - register 06 = 00
+0c5b: 0200d872a501      R02% := 00. Call 0d5a.			;
+0c5c: 0206d872a501      R02% := 06. Call 0d5a.			; 5 - register 06 = 0f
+0c5d: 020fd872a501      R02% := 0f. Call 0d5a.			;
+0c5e: 0206d872a501      R02% := 06. Call 0d5a.			; 6 - register 06 = 90
+0c5f: 0290d872a501      R02% := 90. Call 0d5a.			;
+0c60: 026bd872a501      R02% := 6b. Call 0d5a.			; Start next message
+0c61: 0207d872a501      R02% := 07. Call 0d5a.			; Message is: Set Keyboard Status
+0c62: 0201d872a501      R02% := 01. Call 0d5a.			; 1 - enable keyboard
+0c63: 0201d872a501      R02% := 01. Call 0d5a.			; dummy byte
+0c64: 0000d04fb80e      00. IOB(47). Continue.			; Kick the Z80
+0c65: 0027d04fbe0e      27. IOB(41). Continue.			; Send reset to Shugart controller, no idea what the "2" is for. 
+0c66: 3700d8f39803      R37% := NOT 00. Goto 0c67.		; R37 = ffff
+; Loop waiting for bit 15 of R37 to be cleared...
+; R37 contains the hard disk status, bit 15 is cleared when read.
+0c67: 0000c032a821      R00%. If IntrPend, Call 0d57.	; check for interrupts, we are expecting to get one from the hard disk.
+0c68: 3700d100800e      R37% AND 8000. Continue.		; R37 comes back with hard disk state
+0c69: 0000c0339883      R00%. If Neq, Goto 0c67.		; wait for bit 15 to be cleared, indicating that we got status from the disk.
+0c6a: 0000c00f3f0e      R00%. IOB(c0). Continue.		; now read the status from the drive
+0c6b: 001051339303      IOD AND 10. Goto 0c6c.			; check the TrackZero bit 
+0c6c: 7c00d8738b83      R7c := 00. If Neq, Goto 0c74.	; If set, then we're done
+0c6d: 0010d04fbe0e      10. IOB(41). Continue.			; Set step flag
+0c6e: 0110d8722f01      R01% := 10. Call 0dd0.			; Call 0dd0 to delay for a little while
+0c6f: 0000d04fbe0e      00. IOB(41). Continue.			; Clear step flag (step one track)
+0c70: 0000c00f3f0e      R00%. IOB(c0). Continue.		; read the status again
+0c71: 004051338d03      IOD AND 40. Goto 0c72.			; check the SeekComplete flag
+0c72: 0000c0338fd3      R00%. If Eql, Goto 0c70.		; if not set, loop until it is set...
+0c73: 0000c0339503      R00%. Goto 0c6a.				; we've seeked a single track toward zero!  See if we're done, and repeat if not.
+
+; Done seeking hard disk to track zero.
+; Wait awhile for...
+0c74: 8810d8738a03      R88 := 10. Goto 0c75.			; loop 10 times
+0c75: 0000c032a821      R00%. If IntrPend, Call 0d57.	; check for pending interrupts
+0c76: 0000c0323001      R00%. Call 0dcf.				; wait awhile
+0c77: 8801dbb38703      R88 := R88 - 01. Goto 0c78.		; decrement loop counter
+0c78: 0000c0338a83      R00%. If Neq, Goto 0c75.		; loop if not done
+0c79: 1804d1338503      R18% AND 04. Goto 0c7a.			; Check bit 2 of Z80 status (in R18) (floppy status)
+0c7a: 4c01d87380d3      R4c := 01. If Eql, Goto 0c7f.	; if Zero (not ready), continue at 0c7f
+
+; if floppy is ready, we will seek to track zero now.
+0c7b: 2300d8738303      R23% := 00. Goto 0c7c.			; head
+0c7c: 2400d8738203      R24% := 00. Goto 0c7d.			; cylinder
+0c7d: 3400d8724501      R34% := 00. Call 0dba.			; seek to track zero 
+
+
+0c7e: 4c05c8738003      R4c := R05%. Goto 0c7f.			; R4c has Z80 command status
+0c7f: 422dc8737983      R42 := R2d%. If Neq, Goto 0c86.	; if error (?), goto 0c86
+
+0c80: 5200d8737e03      R52 := 00. Goto 0c81.
+0c81: 5dacc8737d03      R5d := Rac. Goto 0c82.			; Rac is 1000
+0c82: 5a00d8737c03      R5a := 00. Goto 0c83.			; 
+0c83: 5b06d8737703      R5b := 06. Goto 0c88.			; Start with sector 6
+
+0c84: 00557380aa0e      MDI - aa55. Continue.			; check for magic number on disk?
+0c85: 521ed87375d3      R52 := 1e. If Eql, Goto 0c8a.	; magic number is aa55, R52 = 30
+
+0c86: 522cd840010e      R52 := 012c. Continue.			; magic number is NOT aa55, R52 = 300
+0c87: 5d00d8737503      R5d := 00. Goto 0c8a.			; Give up on booting from floppy ? 
+
+;
+0c88: 4400d8729e01      R44 := 00. Call 0d61.			; Reset data offset, and read sector into memory at R41
+0c89: 0000d05e7b03      00. Fetch. Goto 0c84.			; On return, we will fetch a word from R44 
+														; (which should now contain 0100, I think...) 
+
+; Do stuff with the data we got back from the disk?
+0c8a: 8c75d8406e0e      R8c := 6e75. Continue.		; hm, what do these two numbers have to do with anything?
+0c8b: 8d69d840780e      R8d := 7869. Continue.		;
+0c8c: 8e42c8737203      R8e := R42. Goto 0c8d.
+0c8d: 0000c0322c01      R00%. Call 0dd3.
+0c8e: 0000c0336b83      R00%. If Neq, Goto 0c94.
+0c8f: 8c75d8406e0e      R8c := 6e75. Continue.
+0c90: 8d69d840780e      R8d := 7869. Continue.
+0c91: 8e00d8736d03      R8e := 00. Goto 0c92.
+0c92: 0000c0322c01      R00%. Call 0dd3.
+0c93: 029cd87007d3      R02% := 9c. If Eql, Goto 0ff8.
+0c94: 8b59c8736903      R8b := R59. Goto 0c96.
+0c95: 5a0068336803      R5a := MDI. Goto 0c97.
+0c96: 8b00c01c6a03      R8b. Fetch2. Goto 0c95.
+0c97: 5b0068336603      R5b := MDI. Goto 0c99.
+0c98: 480088336403      R48 := MDX. Goto 0c9b.
+0c99: 4400d8729e01      R44 := 00. Call 0d61.
+0c9a: 0002d05c6703      02. Fetch2. Goto 0c98.
+0c9b: 48486b336203      R48 := MDI + R48. Goto 0c9d.
+0c9c: 490088336103      R49 := MDX. Goto 0c9e.
+0c9d: 0004d05a6303      04. Fetch4. Goto 0c9c.
+0c9e: 49496b336003      R49 := MDI + R49. Goto 0c9f.
+0c9f: 580088335f03      R58 := MDX. Goto 0ca0.
+0ca0: 58586b335d03      R58 := MDI + R58. Goto 0ca2.
+0ca1: ca0068335c03      Rca := MDI. Goto 0ca3.
+0ca2: 000bd05e5e03      0b. Fetch. Goto 0ca1.
+0ca3: 44acc8735b03      R44 := Rac. Goto 0ca4.
+0ca4: 4801dbb35903      R48 := R48 - 01. Goto 0ca6.
+0ca5: 5a0068335803      R5a := MDI. Goto 0ca7.
+0ca6: 8b02db1c5a03      R8b := R8b + 02. Fetch2. Goto 0ca5.
+0ca7: 5b0068329e01      R5b := MDI. Call 0d61.
+0ca8: 4800db80020e      R48 := R48 - 0200. Continue.
+0ca9: 0000c0335453      R00%. If C19, Goto 0cab.
+0caa: 0000c0335903      R00%. Goto 0ca6.
+0cab: 1b44c8735303      R1b% := R44. Goto 0cac.
+0cac: 4901dbb35103      R49 := R49 - 01. Goto 0cae.
+0cad: 5a0068335003      R5a := MDI. Goto 0caf.
+0cae: 8b02db1c5203      R8b := R8b + 02. Fetch2. Goto 0cad.
+0caf: 5b0068329e01      R5b := MDI. Call 0d61.
+0cb0: 4900db80020e      R49 := R49 - 0200. Continue.
+0cb1: 0000c0334853      R00%. If C19, Goto 0cb7.
+0cb2: 0000c0335103      R00%. Goto 0cae.
+0cb3: 0000d0734c09      00. Repeat 0cb3.
+0cb4: 5808dbbffc0c      R58 := R58 - 08. LoadS 0003.
+0cb5: 4404db334353      R44 := R44 + 04. If C19, Goto 0cbc.
+0cb6: 0000c0334503      R00%. Goto 0cba.
+0cb7: 5800db000c0e      R58 := R58 + 0c00. Continue.
+0cb8: 5801dbbffc0c      R58 := R58 - 01. LoadS 0003.
+0cb9: 0000c0334353      R00%. If C19, Goto 0cbc.
+0cba: 4400c01b4c03      R44. Store4. Goto 0cb3.
+0cbb: 8a0088334203      R8a := MDX. Goto 0cbd.
+0cbc: 0002d05c4403      02. Fetch2. Goto 0cbb.
+0cbd: 8a8a6b334003      R8a := MDI + R8a. Goto 0cbf.
+0cbe: 920068333f03      R92 := MDI. Goto 0cc0.
+0cbf: 0010d05c4103      10. Fetch2. Goto 0cbe.
+0cc0: 930068333d03      R93 := MDI. Goto 0cc2.
+0cc1: 8a0088333b03      R8a := MDX. Goto 0cc4.
+0cc2: 88acc871f501      R88 := Rac. Call 0e0a.
+0cc3: 0004d05c3e03      04. Fetch2. Goto 0cc1.
+0cc4: 8a8a6b333903      R8a := MDI + R8a. Goto 0cc6.
+0cc5: 920068333803      R92 := MDI. Goto 0cc7.
+0cc6: 0012d05c3a03      12. Fetch2. Goto 0cc5.
+0cc7: 930068333703      R93 := MDI. Goto 0cc8.
+0cc8: 881bc871f501      R88 := R1b%. Call 0e0a.
+0cc9: 4744c8733503      R47 := R44. Goto 0cca.
+0cca: 8c75d840630e      R8c := 6375. Continue.
+0ccb: 8d6fd840640e      R8d := 646f. Continue.
+0ccc: 4200c020700e      R42. Left Shift 8, . Continue.
+0ccd: 8e6519f33103      R8e := Shifter OR 65. Goto 0cce.
+0cce: 0000c0322c01      R00%. Call 0dd3.
+0ccf: 0000c0332a83      R00%. If Neq, Goto 0cd5.
+0cd0: 8c75d840630e      R8c := 6375. Continue.
+0cd1: 8d6fd840640e      R8d := 646f. Continue.
+0cd2: 8e65d8732c03      R8e := 65. Goto 0cd3.
+0cd3: 0000c0322c01      R00%. Call 0dd3.
+0cd4: 029bd87007d3      R02% := 9b. If Eql, Goto 0ff8.
+0cd5: 4447c8732903      R44 := R47. Goto 0cd6.
+0cd6: 5902dbb32803      R59 := R59 - 02. Goto 0cd7.
+0cd7: 542ed8732603      R54 := 2e. Goto 0cd9.
+0cd8: 5a0068332503      R5a := MDI. Goto 0cda.
+0cd9: 5902db1c2703      R59 := R59 + 02. Fetch2. Goto 0cd8.
+0cda: 5b0068329e01      R5b := MDI. Call 0d61.
+0cdb: 5401dbb32203      R54 := R54 - 01. Goto 0cdd.
+0cdc: 840068332003      R84 := MDI. Goto 0cdf.
+0cdd: 0000c0332683      R00%. If Neq, Goto 0cd9.
+0cde: 44accb9a2303      R44 := R44 - Rac. Fetch4. Goto 0cdc.
+0cdf: 850068331f03      R85 := MDI. Goto 0ce0.
+0ce0: 860068331e03      R86 := MDI. Goto 0ce1.
+0ce1: 870068331c03      R87 := MDI. Goto 0ce3.
+0ce2: 1200d8731b03      R12% := 00. Goto 0ce4.
+0ce3: 1b04d31a1d03      R1b% + 04. Fetch4. Goto 0ce2.
+0ce4: 3c1bc8731a03      R3c% := R1b%. Goto 0ce5.
+0ce5: 0e1b8b331903      R0e% := MDX + R1b%. Goto 0ce6.
+0ce6: 0e0e6b331803      R0e% := MDI + R0e%. Goto 0ce7.
+0ce7: 2a1b8b331703      R2a% := MDX + R1b%. Goto 0ce8.
+0ce8: 2a2a6b331503      R2a% := MDI + R2a%. Goto 0cea.
+0ce9: 281b8b331403      R28% := MDX + R1b%. Goto 0ceb.
+0cea: 1b0ed31c1603      R1b% + 0e. Fetch2. Goto 0ce9.
+0ceb: 28286b331203      R28% := MDI + R28%. Goto 0ced.
+0cec: 0000d0731103      00. Goto 0cee.
+0ced: 1b06d31d1303      R1b% + 06. Store2. Goto 0cec.
+0cee: 4200c0331003      R42. Goto 0cef.
+0cef: 0000c0330f03      R00%. Goto 0cf0.
+0cf0: 0000c032fc03      R00%. Goto 0d03.
+0cf1: 11116b330d03      R11% := MDI + R11%. Goto 0cf2.
+0cf2: 1c1b8b330c03      R1c% := MDX + R1b%. Goto 0cf3.
+0cf3: 1c1c6b330a03      R1c% := MDI + R1c%. Goto 0cf5.
+0cf4: 2657c8730903      R26% := R57. Goto 0cf6.
+0cf5: 1b14d31a0b03      R1b% + 14. Fetch4. Goto 0cf4.
+0cf6: 26ffdb330803      R26% := R26% + ff. Goto 0cf7.
+0cf7: 211b8b330703      R21% := MDX + R1b%. Goto 0cf8.
+0cf8: 21216b330603      R21% := MDI + R21%. Goto 0cf9.
+0cf9: 271b8b330503      R27% := MDX + R1b%. Goto 0cfa.
+0cfa: 27276b330403      R27% := MDI + R27%. Goto 0cfb.
+0cfb: 3d26c8730203      R3d% := R26%. Goto 0cfd.
+0cfc: 88ff9b330103      R88 := MDX + ff. Goto 0cfe.
+0cfd: 1b18d31a0303      R1b% + 18. Fetch4. Goto 0cfc.
+0cfe: 88886b330003      R88 := MDI + R88. Goto 0cff.
+0cff: a31b8b32fb03      Ra3 := MDX + R1b%. Goto 0d04.
+0d00: 1000d840840e      R10% := 8400. Continue.
+0d01: 1000c00f9c0e      R10%. IOB(63). Continue.
+0d02: 111b8b330e03      R11% := MDX + R1b%. Goto 0cf1.
+0d03: 1b08d31aff03      R1b% + 08. Fetch4. Goto 0d00.
+0d04: a3a36b32fa03      Ra3 := MDI + Ra3. Goto 0d05.
+0d05: 0088a0a03c0e      NOT UState. Right Shift 12, . Continue.
+0d06: 89000832f703      R89 := Shifter. Goto 0d08.
+0d07: 8900c032f603      R89. Goto 0d09.
+0d08: 1b18d31df803      R1b% + 18. Store2. Goto 0d07.
+0d09: 88ffd972f503      R88 := R88 AND NOT ff. Goto 0d0a.
+0d0a: 881bcb32f403      R88 := R88 + R1b%. Goto 0d0b.
+0d0b: 1788c872f303      R17% := R88. Goto 0d0c.
+0d0c: df17c872f203      Rdf := R17%. Goto 0d0d.
+0d0d: 0057a0a03c0e      NOT UState. Right Shift 12, . Continue.
+0d0e: 89000832ef03      R89 := Shifter. Goto 0d10.
+0d0f: 0000d072ee03      00. Goto 0d11.
+0d10: 1b0cd31bf003      R1b% + 0c. Store4. Goto 0d0f.
+0d11: 5d00c032ed03      R5d. Goto 0d12.
+0d12: 8900c032ec03      R89. Goto 0d13.
+0d13: 5730c132eb03      R57 AND R30%. Goto 0d14.
+0d14: 001ba0a03c0e      NOT UState. Right Shift 12, . Continue.
+0d15: 88000832e803      R88 := Shifter. Goto 0d17.
+0d16: 8800c032e703      R88. Goto 0d18.
+0d17: 1b10d31de903      R1b% + 10. Store2. Goto 0d16.
+0d18: 1b30c132de03      R1b% AND R30%. Goto 0d21.
+0d19: 5509d872dd03      R55 := 09. Goto 0d22.
+0d1a: d771eb05e603      Rd7 := TOS + R71. Pop. Goto 0d19.
+0d1b: d671eb03e503      Rd6 := TOS + R71. TOS := (R). Goto 0d1a.
+0d1c: d571eb03e403      Rd5 := TOS + R71. TOS := (R). Goto 0d1b.
+0d1d: d471eb03e303      Rd4 := TOS + R71. TOS := (R). Goto 0d1c.
+0d1e: d371eb03e203      Rd3 := TOS + R71. TOS := (R). Goto 0d1d.
+0d1f: d271eb03e103      Rd2 := TOS + R71. TOS := (R). Goto 0d1e.
+0d20: d171eb04e003      Rd1 := TOS + R71. Push R. Goto 0d1f.
+0d21: c21bc844df03      Rc2 := R1b%. Push R. Goto 0d20.
+0d22: 5f00d872dc03      R5f := 00. Goto 0d23.
+0d23: 13dfc872db03      R13% := Rdf. Goto 0d24.
+0d24: 1371cb32da03      R13% := R13% + R71. Goto 0d25.
+0d25: c430c8f2d603      Rc4 := NOT R30%. Goto 0d29.
+0d26: c9c88b32d403      Rc9 := MDX + Rc8. Goto 0d2b.
+0d27: c313eb03d903      Rc3 := TOS + R13%. TOS := (R). Goto 0d26.
+0d28: c400c003d803      Rc4. TOS := (R). Goto 0d27.
+0d29: c400db00060e      Rc4 := Rc4 + 0600. Continue.
+0d2a: c8acc85ad703      Rc8 := Rac. Fetch4. Goto 0d28.
+0d2b: c9c96b32d303      Rc9 := MDI + Rc9. Goto 0d2c.
+0d2c: 00006032d203      MDI. Goto 0d2d.
+0d2d: b7006832d103      Rb7 := MDI. Goto 0d2e.
+0d2e: cec8fbb2cf03      Rce := TOS - c8. Goto 0d30.
+0d2f: c671ebb2ce03      Rc6 := TOS - R71. Goto 0d31.
+0d30: c9cac31cd003      Rc9 + Rca. Fetch2. Goto 0d2f.
+0d31: c5c3c872cd03      Rc5 := Rc3. Goto 0d32.
+0d32: cbc88b32c903      Rcb := MDX + Rc8. Goto 0d36.
+0d33: 33c5c872c803      R33% := Rc5. Goto 0d37.
+0d34: cccbc84acc03      Rcc := Rcb. LoadOp. Goto 0d33.
+0d35: cd00d84bcb03      Rcd := 00. BPC := (R). Goto 0d34.
+0d36: cbcb6b1aca03      Rcb := MDI + Rcb. Fetch4. Goto 0d35.
+0d37: 3380db80040e      R33% := R33% - 0480. Continue.
+0d38: ab33c872c603      Rab := R33%. Goto 0d39.
+0d39: ab00db00010e      Rab := Rab + 0100. Continue.
+0d3a: 0244c872c403      R02% := R44. Goto 0d3b.
+0d3b: 0247cbb2c303      R02% := R02% - R47. Goto 0d3c.
+0d3c: 0200d3802d0e      R02% - 2d00. Continue.
+0d3d: 0000c032bf53      R00%. If C19, Goto 0d40.
+0d3e: 0000c032bd03      R00%. Goto 0d42.
+0d3f: 0000d072be03      00. Goto 0d41.
+0d40: 4400c01fc003      R44. Store. Goto 0d3f.
+0d41: 4401db32c503      R44 := R44 + 01. Goto 0d3a.
+0d42: 8800d87fff0f      R88 := 00. ThreeWayBranch.
+0d43: 8900d87fff0f      R89 := 00. ThreeWayBranch.
+0d44: 0000c03fff0f      R00%. ThreeWayBranch.
+0d45: 4447c87fff0f      R44 := R47. ThreeWayBranch.
+0d46: 0000c03fff0f      R00%. ThreeWayBranch.
+0d47: 4400db002d0e      R44 := R44 + 2d00. Continue.
+0d48: 0000c031000c      R00%. LoadS 0eff.
+0d49: 0000c0301403      R00%. Goto 0feb.
+
+; Handle Z80 message:
+; Mask off bottom 4 bits of message byte from Z80 (in R97) and dispatch based on it
+0d4a: 9700c020fc0e      R97. BitField, offset 0 mask 000f, . Continue.
+0d4b: 0000c4001706      R00%. Dispatch 0e80.
+
+; Keyboard input
+0d4c: 0000c032a783      R00%. If Neq, Goto 0d58.	; comparison in dispatch was R96 - 6b, (6b is the Z80 SOM code)
+													; if not SOM, ignore, return to main dispatch loop.
+0d4d: 0000c032aa03      R00%. Goto 0d55.			; SOM found, continue to next byte in Z80 message.
+ 
+; Read floppy data (jumped to from Message Routine 7)
+0d4e: 4696c872aa03      R46 := R96. Goto 0d55.		 ; R46 contains first byte, move to routine 8...
+
+; Put R46 in R... (this appears to have no purpose)
+0d4f: 4600c032ae03      R46. Goto 0d51.
+
+; Store floppy data word (16 bits) at R44 + R41 and continue with floppy data
+0d50: 4441c31fb003      R44 + R41. Store. Goto 0d4f.
+
+; (contd from 0d4f)
+; one less byte in the floppy data
+0d51: 9a01dbb2ad03      R9a := R9a - 01. Goto 0d52.
+0d52: 4101db32abd3      R41 := R41 + 01. If Eql, Goto 0d54.		; increment store address for data
+																; if we just read the last floppy byte, we are done.
+0d53: 9707d872a703      R97 := 07. Goto 0d58.					; move back to Message routine 7 (floppy data low byte)
+
+; Done at end of floppy data message, unknown what it means yet.
+; Looks like top 8 bits (of 16 bit value) are used to indicate that we're waiting for data when set,
+; and by masking the bits off below, we indicate that the data is ready.
+; Mask off bottom 8 bits of R4d, and go to 0d56 to finish with this message.
+0d54: 4dffd932a903      R4d := R4d AND ff. Goto 0d56.
+
+; Increments message routine counter by 1.
+0d55: 9701db32a703      R97 := R97 + 01. Goto 0d58.		; Increment message routine counter (R97) and return from ISR if done.
+
+; Reset Z80 message byte counter, and return from ISR if done.
+0d56: 9700d872a703      R97 := 00. Goto 0d58.
+
+; Called from below routine if an interrupt occurs, vectors to 0xe40
+0d57: 0000c0001b06      R00%. Vector 0e40.
+
+; exit from ISR service routines?
+0d58: 0000c032a823      R00%. If IntrPend, Goto 0d57.	; If we still have an interrupt to service (for example, another Z80 message), do it now.
+0d59: 0000c000000a      R00%. Return.					; otherwise return from ISR.
+
+0d5a: 02acc9cfb80e      R02% := R02% OR Rac. IOB(47). Continue.
+
+; We sit here, waiting for interrupts to come from the Z80
+0d5b: 0000c032a303      R00%. Goto 0d5c.								
+0d5c: 0000c032a821      R00%. If IntrPend, Call 0d57.
+0d5d: 0200c032a103      R02%. Goto 0d5e.
+0d5e: 0000c032a383      R00%. If Neq, Goto 0d5c.		; loop until R02 is zero, cleared by Z80 ready interrupt.
+
+0d5f: 0120d8722f01      R01% := 20. Call 0dd0.
+0d60: 0000c000000a      R00%. Return.
+
+; routine to do... something floppy related.
+0d61: 5b52cb329d03      R5b := R5b + R52. Goto 0d62.			; increment sector by R52...
+0d62: 5a00db729c03      R5a := R5a + 00 + Cry. Goto 0d63.		; r5a gets the overflow from the above 16 bit add
+0d63: 5d00c0329b03      R5d. Goto 0d64.							; check r5d...
+0d64: 3400d8f28083      R34% := NOT 00. If Neq, Goto 0d7f.		; R34 = ffff.  If r5d != 0, we jump to 0d7f to do floppy read
+																; otherwise we continue on
+; this looks hard disk related (shugart IO below)
+; (same routine as below, only for the hard drive?)
+0d65: 2300d8f29903      R23% := NOT 00. Goto 0d66.
+0d66: 5bf0dbb29803      R5b := R5b - f0. Goto 0d67.
+0d67: 5a00dbf29703      R5a := R5a - 00 - Cry. Goto 0d68.
+0d68: 3401db3299f3      R34% := R34% + 01. If Geq, Goto 0d66.
+0d69: 5bf0db329503      R5b := R5b + f0. Goto 0d6a.
+0d6a: 5b1edbb29403      R5b := R5b - 1e. Goto 0d6b.
+0d6b: 2301db3295f3      R23% := R23% + 01. If Geq, Goto 0d6a.
+0d6c: 5b1edb329203      R5b := R5b + 1e. Goto 0d6d.
+0d6d: 0000c0325501      R00%. Call 0daa.
+0d6e: 2300c00fbd0e      R23%. IOB(42). Continue.
+0d6f: 3400c020c00e      R34%. Left Shift 3, . Continue.
+0d70: 002301e0a00e      Shifter OR R23%. Left Shift 5, . Continue.
+0d71: 005b01cfb70e      Shifter OR R5b. IOB(48). Continue.
+0d72: 0000d04fa60e      00. IOB(59). Continue.
+0d73: 0001d0cfae0e      NOT 01. IOB(51). Continue.
+0d74: 4436c2cfa70e      R44 XNOR R36%. IOB(58). Continue.
+0d75: 0044a0203c0e      UState. Right Shift 12, . Continue.
+0d76: 0000000faf0e      Shifter. IOB(50). Continue.
+0d77: 3700d8f28703      R37% := NOT 00. Goto 0d78.
+0d78: 0002d04fbe0e      02. IOB(41). Continue.
+0d79: 0000c032a821      R00%. If IntrPend, Call 0d57.
+0d7a: 3700d100800e      R37% AND 8000. Continue.
+0d7b: 0000c0328683      R00%. If Neq, Goto 0d79.
+0d7c: 3707d1328203      R37% AND 07. Goto 0d7d.
+0d7d: 029dd8700783      R02% := 9d. If Neq, Goto 0ff8.		 ; error case
+0d7e: 44accb00000a      R44 := R44 + Rac. Return.
+
+; Floppy routine -- calculate next cyl/head/sector based on R5b and read multiple sectors into memory
+; Input sector # is in R5b.
+0d7f: 5b06dbb27f03      R5b := R5b - 06. Goto 0d80.									; decrement sector by 6 (interleave?)
+0d80: 3401db3280f3      R34% := R34% + 01. If Geq, Goto 0d7f.						; increment R34 (cylinder count?), until sector is < 0
+0d81: 5b06db28e00e      R5b := R5b + 06. Left Shift 1, DstRstOp := (R). Continue.	; Add 6 back to the sector, and set up shifter to shift left 1.
+0d82: 005b0320d00e      Shifter + R5b. Left Shift 2, . Continue.					; Shifter is (R5b << 1) + r5b is R5b * 3, shift result by 2.
+0d83: 5b0008327b03      R5b := Shifter. Goto 0d84.									; Shifter is ((R5b * 3) << 2), so R5b is now the original R5b * 12.
+0d84: 5b1adbb27a03      R5b := R5b - 1a. Goto 0d85.									; subtract 26 (max sector)
+0d85: 0000c0327bf3      R00%. If Geq, Goto 0d84.									; repeat until R5b is < 0
+0d86: 5b1bdb327803      R5b := R5b + 1b. Goto 0d87.									; add 27
+0d87: 4e04d8727703      R4e := 04. Goto 0d88.					; interleave count of some sort?
+0d88: 4100d8727603      R41 := 00. Goto 0d89.					; reset floppy data byte/offset counter
+0d89: 2434c8727503      R24% := R34%. Goto 0d8a.				; R24 (cylinder) = how many multiples of 6 were in R5b when we started
+0d8a: 244ddbb27403      R24% := R24% - 4d. Goto 0d8b.			; check to see if cylinder > 77, if it is then we select head 1 below
+0d8b: 2304d87271f3      R23% := 04. If Geq, Goto 0d8e.			; head / device (4), if cyl > 77 this is what we will use.  (Why 4 here and not 1?)
+0d8c: 2434c8727203      R24% := R34%. Goto 0d8d.				; otherwise, restore original cylinder before we messed with it
+0d8d: 2300d8727103      R23% := 00. Goto 0d8e.					; and use head 0
+0d8e: 0000c0324501      R00%. Call 0dba.						; Seek the floppy to computed cylinder in R24
+0d8f: 02b4d8700783      R02% := b4. If Neq, Goto 0ff8.			; If seek failed, die.
+0d90: 0000c032a821      R00%. If IntrPend, Call 0d57.			; We wait for a z80 status message...
+0d91: 1804d1326d03      R18% AND 04. Goto 0d92.					; R18 has Z80 status, we are waiting for floppy to be ready
+0d92: 0000c0326fd3      R00%. If Eql, Goto 0d90.				; loop until done
+0d93: 1804d9726b03      R18% := R18% AND NOT 04. Goto 0d94.		; clear Floppy ready bit.
+0d94: 4dffd8f26a03      R4d := NOT ff. Goto 0d95.				; Reset floppy data value (R4d = ff00 now).  Setting top 8 bits indicates that we are waiting for data.
+
+; Set up Z80 to do floppy sector read from the same head, cylinder, and sector (R23, R24, and R5b) that we computed above
+; the drive should already be at the right cylinder.
+0d95: 026bd872a501      R02% := 6b. Call 0d5a.		; SOM
+0d96: 0202d872a501      R02% := 02. Call 0d5a.	    ; Floppy command
+0d97: 0223c872a501      R02% := R23%. Call 0d5a.	; head 
+0d98: 0224c872a501      R02% := R24%. Call 0d5a.	; cyl
+0d99: 025bc872a501      R02% := R5b. Call 0d5a.		; sector
+0d9a: 0201d872a501      R02% := 01. Call 0d5a.		; this is a read
+0d9b: 0201d872a501      R02% := 01. Call 0d5a.		; 1 byte of dummy data
+0d9c: 0200d84fb80e      R02% := 00. IOB(47). Continue.
+0d9d: 0000c0326103      R00%. Goto 0d9e.
+
+; Read the returned sector data from the Z80.
+; Data is read into memory location R44 + R41
+0d9e: 0000c032a821      R00%. If IntrPend, Call 0d57.	; keep servicing interrupts until all data has been read, 
+0d9f: 4d00c0325f03      R4d. Goto 0da0.					; R4d contains the status returned from the Z80 after the read.
+0da0: 0000c03261a3      R00%. If Lss, Goto 0d9e.		; wait until we have the data we want, R4d's top 8 bits are set, 
+														; so it's negative.  When data has been read, these bits are cleared. 
+														; (and the low bits contain the success code from the Z80)
+0da1: 4d00c0325d03      R4d. Goto 0da2.					
+0da2: 029ed8700783      R02% := 9e. If Neq, Goto 0ff8.	; 1st byte is the success code, if it's not zero then we failed.  die.
+
+; Looks like we're loading multiple sectors (up to 4?) at a time,  interleaved?
+0da3: 5b03db325b03      R5b := R5b + 03. Goto 0da4.		; Add 3 to sector.
+0da4: 5b1ad3b25a03      R5b - 1a. Goto 0da5.			; see if we're at the end of the sector now
+0da5: 0000c0325893      R00%. If Leq, Goto 0da7.		; if not, skip the next couple of instructions
+0da6: 5b1adbb25803      R5b := R5b - 1a. Goto 0da7.		; decrement sector count by 26 to bring it back into range
+0da7: 4e01dbb25703      R4e := R4e - 01. Goto 0da8.		; decrement 4e, the count register for the # of sectors we're reading
+0da8: 0000c0326fe3      R00%. If Gtr, Goto 0d90.		; if R4e > 0 then we go back and wait for the Z80 to send us status...
+0da9: 44accb00000a      R44 := R44 + Rac. Return.		; Otherwise add 0100 (256) to R44 (floppy data offset in memory) 
+														; and return from the floppy routine...
+														; (Hmm -- 256?  Not 128?  I expect 128, since they're 16 bit words being written 
+														; w/one sector (256 bytes) of floppy data...)
+
+0daa: fe34c8725403      Rfe := R34%. Goto 0dab.
+0dab: fe7ccbb25303      Rfe := Rfe - R7c. Goto 0dac.
+0dac: fe00c0324fe3      Rfe. If Gtr, Goto 0db0.
+0dad: fe00c88000da      Rfe := NOT Rfe. If Eql, Return.
+0dae: 0000d04fbe0e      00. IOB(41). Continue.
+0daf: fe01db324e03      Rfe := Rfe + 01. Goto 0db1.
+0db0: 0008d04fbe0e      08. IOB(41). Continue.
+0db1: 3700d8f24d03      R37% := NOT 00. Goto 0db2.
+0db2: 026bd872a501      R02% := 6b. Call 0d5a.
+0db3: 0208d872a501      R02% := 08. Call 0d5a.
+0db4: fe00c00fb80e      Rfe. IOB(47). Continue.
+0db5: 7c34c8724903      R7c := R34%. Goto 0db6.
+0db6: 0000c032a821      R00%. If IntrPend, Call 0d57.
+0db7: 3700c0324703      R37%. Goto 0db8.
+0db8: 0000c0324983      R00%. If Neq, Goto 0db6.
+0db9: 0000c000000a      R00%. Return.
+
+
+0dba: 2c34c3b24403      R2c% - R34%. Goto 0dbb.
+0dbb: 0000d04000da      0000. If Eql, Return.					; If R2C = R34 then we don't want to read anything more?
+0dbc: 2c34c8724203      R2c% := R34%. Goto 0dbd.				; Set R2C to R34
+0dbd: 0000c032a821      R00%. If IntrPend, Call 0d57.			; Wait for the floppy to be ready again.
+0dbe: 1804d1324003      R18% AND 04. Goto 0dbf.					; R18 has the Z80 status in it
+0dbf: 0000c03242d3      R00%. If Eql, Goto 0dbd.				; wait until it indicates that the Floppy is ready (bit 2).
+																; We sit in a loop processing interrupts...
+0dc0: 1804d9723e03      R18% := R18% AND NOT 04. Goto 0dc1.		; Clear Z80 Floppy Ready flag.
+0dc1: 0500d8f23d03      R05% := NOT 00. Goto 0dc2.				; R05 = ffff (reset z80 floppy success result)
+
+; send message to Z80 to seek the floppy to the given cylinder, specified by R24
+0dc2: 026bd872a501      R02% := 6b. Call 0d5a.				; SOM
+0dc3: 0202d872a501      R02% := 02. Call 0d5a.				; Floppy Command
+0dc4: 0223c872a501      R02% := R23%. Call 0d5a.			; head /unit
+0dc5: 0224c872a501      R02% := R24%. Call 0d5a.			; cylinder
+0dc6: 0201d872a501      R02% := 01. Call 0d5a.				; sector
+0dc7: 0204d872a501      R02% := 04. Call 0d5a.				; command (Seek)
+0dc8: 0201d872a501      R02% := 01. Call 0d5a.				; count of data (1)
+0dc9: 0200d84fb80e      R02% := 00. IOB(47). Continue.		; bogus data
+0dca: 0000c0323403      R00%. Goto 0dcb.
+
+; Wait for the floppy to be ready again
+0dcb: 0000c032a821      R00%. If IntrPend, Call 0d57.
+0dcc: 0501d1723203      R05% AND NOT 01. Goto 0dcd.			; Clear z80 floppy result bit
+0dcd: 0000c0323483      R00%. If Neq, Goto 0dcb.			; bit other than zero set... keep waiting.
+
+0dce: 0501d900000a      R05% := R05% AND 0001. Return.		; R05 has the result of the operation (should be 0 for success)
+
+; Subroutine to delay for awhile counting down from ffff
+0dcf: 01ffd840ff0e      R01% := ffff. Continue.			
+0dd0: 0000c00000da      R00%. If Eql, Return.			; return when R01 is 0.
+0dd1: 0101dbb22f03      R01% := R01% - 01. Goto 0dd0.	; keep looping
+
+; cont'd from 0dd5
+0dd2: 900068322903      R90 := MDI. Goto 0dd6.				; read first word into R90...
+
+; Routine called after loading a few sectors of disk data...
+0dd3: 4f02d8720201      R4f := 02. Call 0dfd.				 ; R4f has something to do with sector calc, set to 2.  0dfd will calc some sector stuff and read sectors in.
+0dd4: 0000c0321301      R00%. Call 0dec.					 ; reead in the rest of the sectors?
+0dd5: 5104d31c2d03      R51 + 04. Fetch2. Goto 0dd2.		 ; Fetch two words from R51 + 04
+
+; cont'd from 0dd6
+0dd6: 910068322803      R91 := MDI. Goto 0dd7.				 ; Fetch second word into R91
+0dd7: 8a59c8722703      R8a := R59. Goto 0dd8.
+0dd8: 8a02dbb22503      R8a := R8a - 02. Goto 0dda.
+
+0dd9: 5a0068322403      R5a := MDI. Goto 0ddb.
+
+0dda: 8a02db1c2603      R8a := R8a + 02. Fetch2. Goto 0dd9.
+0ddb: 5b0068322303      R5b := MDI. Goto 0ddc.
+0ddc: 445cc8729e01      R44 := R5c. Call 0d61.
+0ddd: 8b5cc8722103      R8b := R5c. Goto 0dde.
+0dde: 8f20d8721f03      R8f := 20. Goto 0de0.
+0ddf: 4f0068321e03      R4f := MDI. Goto 0de1.
+0de0: 8b00c01a2003      R8b. Fetch4. Goto 0ddf.
+0de1: 008c63b21ad3      MDI - R8c. If Eql, Goto 0de5.
+0de2: 008d63b21a83      MDI - R8d. If Neq, Goto 0de5.
+0de3: 008e63b21a83      MDI - R8e. If Neq, Goto 0de5.
+0de4: 0000c03214d3      R00%. If Eql, Goto 0deb.
+0de5: 9110dbb21903      R91 := R91 - 10. Goto 0de6.
+0de6: 9000dbf21803      R90 := R90 - 00 - Cry. Goto 0de7.
+0de7: 8f01dbb215a3      R8f := R8f - 01. If Lss, Goto 0dea.
+0de8: 8b08db321f83      R8b := R8b + 08. If Neq, Goto 0de0.
+0de9: 0000c0322503      R00%. Goto 0dda.
+0dea: 0000d040000a      0000. Return.
+0deb: 0000c0320201      R00%. Call 0dfd.
+
+;
+0dec: 8951c871fd03      R89 := R51. Goto 0e02.
+
+
+0ded: 8b00c020780e      R8b. Right Shift 8, . Continue.		; Take top 8 bits of R8b (word @ R89 + 6)
+0dee: 5b000831f903      R5b := Shifter. Goto 0e06.			; sector low = bottom 8 bits of word @ R89 + 6
+
+; cont'd from 0e05
+0def: 8b00c020780e      R8b. Right Shift 8, . Continue.		; Take top 8 bits of R8b (word @ R89 + 7)
+0df0: 920008320d03      R92 := Shifter. Goto 0df2.			; R92 = top 8 bits
+
+; cont'd from 0df2
+0df1: 930068320c03      R93 := MDI. Goto 0df3.				; R93 = Word @ R89 + 8
+
+; cont'd from 0df0
+0df2: 8908d31e0e03      R89 + 08. Fetch. Goto 0df1.			; Read word from R89 + 8
+
+; cont'd from 0df1
+0df3: 8903db320a03      R89 := R89 + 03. Goto 0df5.			; R89 += 3 -- move to next set of sectors?
+
+0df4: 5a00c0320903      R5a. Goto 0df6.						; Store Sector high
+
+;
+0df5: 8a00c01b0b03      R8a. Store4. Goto 0df4.				; Begin Store4 operation at R8a
+0df6: 5b00c0320803      R5b. Goto 0df7.						; Store Sector low
+0df7: 9200c0320703      R92. Goto 0df8.						; Store R92
+0df8: 9300c0320603      R93. Goto 0df9.						; Store R93
+0df9: 8a04db31fc09      R8a := R8a + 04. Repeat 0e03.		; R8a += 4, if s > 0, go to 0e03 and do some more data moving...
+											
+0dfa: 5a5bc1f20403      R5a OR R5b. Goto 0dfb.					; otherwise or R5a w/ R5b...
+0dfb: 44accb329e83      R44 := R44 + Rac. If Neq, Goto 0d61.	; if the result is zero (i.e. R5a and R5b are both zero), 
+																; then we are done...
+																; otherwise goto 0d61 to read in another set of sectors...
+0dfc: 0001d040000a      0001. Return.							; Return if done, with 1 in R.
+
+;
+0dfd: 4f01dba8c30e      R4f := R4f - 01. Right Shift 3, DstRstOp := (R). Continue.		; decrement R4f and shift right by 3 (/ 8)
+0dfe: 5b021b320003      R5b := Shifter + 02. Goto 0dff.									; sector is 2 + (R4f - 1) / 8
+0dff: 5a00d871f803      R5a := 00. Goto 0e07.											; sector high is zero
+
+; continued from 0e03
+0e00: 8b006820f90e      R8b := MDI. BitField, offset 0 mask 007f, . Continue.			; R8b = read data, mask off bottom 7 bits. 
+0e01: 5a0008321203      R5a := Shifter. Goto 0ded.										; sector high = bottom 7 bits of word @ R89 + 6
+
+0e02: 8a59c87ffa0c      R8a := R59. LoadS 0005.							; s = 5			; repeat 5 times
+
+; cont'd from 0df9 on repeat
+0e03: 8906d31eff03      R89 + 06. Fetch. Goto 0e00.						; start fetch from r89 + 6
+
+; cont'd from 0e06
+0e04: 8b006820700e      R8b := MDI. Left Shift 8, . Continue.			; R8b = word read from R89 + 7.  Shift left 8.
+0e05: 5b5b09f21003      R5b := Shifter OR R5b. Goto 0def.				; OR-in low 8 bits from R89 + 7 to high 8 bits of sector register
+
+; cont'd from 0dee
+0e06: 8907d31efb03      R89 + 07. Fetch. Goto 0e04.		; Read word at R89 + 7
+
+0e07: 4f07d128a00e      R4f AND 07. Left Shift 5, DstRstOp := (R). Continue.			; Take bottom 3 bits of R4f, multiply by 32.
+0e08: 51500b31f603      R51 := Shifter + R50. Goto 0e09.								; R51 = 32 * R4f + R50
+0e09: 4450c8729e03      R44 := R50. Goto 0d61.											; New data offset is R50.  Go to 0d61 to read in next floppy data.
+
+0e0a: 9100d871f403      R91 := 00. Goto 0e0b.
+0e0b: 9000d871f203      R90 := 00. Goto 0e0d.
+0e0c: 8802db31f103      R88 := R88 + 02. Goto 0e0e.
+0e0d: 8800c01cf303      R88. Fetch2. Goto 0e0c.
+0e0e: 89006831f003      R89 := MDI. Goto 0e0f.
+0e0f: 91916b31ef03      R91 := MDI + R91. Goto 0e10.
+0e10: 9089cb71ee03      R90 := R90 + R89 + Cry. Goto 0e11.
+0e11: 8a04dbb1ed03      R8a := R8a - 04. Goto 0e12.
+0e12: 02a1d871f283      R02% := a1. If Neq, Goto 0e0d.
+0e13: 9130c931eb03      R91 := R91 AND R30%. Goto 0e14.
+0e14: 9030c931ea03      R90 := R90 AND R30%. Goto 0e15.
+0e15: 9391cbb1e903      R93 := R93 - R91. Goto 0e16.
+0e16: 9290cbf00783      R92 := R92 - R90 - Cry. If Neq, Goto 0ff8.
+0e17: 0000c0300783      R00%. If Neq, Goto 0ff8.
+0e18: 0000c000000a      R00%. Return.
+
+; 0e19 - 0e3f unused
+
+
+; Vector table for ISR
+
+; ISR for Z80 data out ready.  Read byte from IO port c6 (Z80 read data port)
+;							   Assign to R96 and jump to 0d4a to handle it.
+0e40: 0000c00f390e      R00%. IOB(c6). Continue.
+0e41: 96ff5932b503      R96 := IOD AND ff. Goto 0d4a.
+0e42: 000000000000      Shifter. JumpZero.
+0e43: 000000000000      Shifter. JumpZero.
+
+; ISR for Y interrupt.  (Unexpected).  Set DDS and halt in a loop.
+0e44: 02a2d8700703      R02% := a2. Goto 0ff8.
+0e45: 000000000000      Shifter. JumpZero.
+0e46: 000000000000      Shifter. JumpZero.
+0e47: 000000000000      Shifter. JumpZero.
+
+; ISR for HardDisk interrupt.  Read IO port c0 (Shugart Status) and assign lower 15 bits to R37.
+;							   Clear IO port 41 (Shugart control), setting disk to idle.
+0e48: 0000c00f3f0e      R00%. IOB(c0). Continue.
+0e49: 37ff59007f0e      R37% := IOD AND 7fff. Continue.
+0e4a: 0000d04fbe0a      00. IOB(41). Return.
+0e4b: 000000000000      Shifter. JumpZero.
+
+; ISR for Network interrupt.  (Unexpected.) Set DDS and halt in a loop.
+0e4c: 02a4d8700703      R02% := a4. Goto 0ff8.
+0e4d: 000000000000      Shifter. JumpZero.
+0e4e: 000000000000      Shifter. JumpZero.
+0e4f: 000000000000      Shifter. JumpZero.
+
+; ISR for Z80DataInReady.  Reset R02.  This should return us from the polling routine
+0e50: 0200d840000a      R02% := 0000. Return.
+0e51: 000000000000      Shifter. JumpZero.
+0e52: 000000000000      Shifter. JumpZero.
+0e53: 000000000000      Shifter. JumpZero.
+
+; ISR for LineCounter interrupt.  Send R10 to IO port 60 (Reload line counter with R10)
+0e54: 1000c00f9f0a      R10%. IOB(60). Return.
+0e55: 000000000000      Shifter. JumpZero.
+0e56: 000000000000      Shifter. JumpZero.
+0e57: 000000000000      Shifter. JumpZero.
+
+; ISR for X interrupt.  (Unexpected.) Set DDS and halt in a loop.
+0e58: 02a7d8700703      R02% := a7. Goto 0ff8.
+0e59: 000000000000      Shifter. JumpZero.
+0e5a: 000000000000      Shifter. JumpZero.
+0e5b: 000000000000      Shifter. JumpZero.
+
+;  Parity interrupt.  (Unexpected.) Set DDS and halt in a loop.
+0e5c: 02a8d8700703      R02% := a8. Goto 0ff8.
+0e5d: 000000000000      Shifter. JumpZero.
+0e5e: 000000000000      Shifter. JumpZero.
+0e5f: 000000000000      Shifter. JumpZero.
+
+; end of ISR dispatch
+
+; 0e60 - 0e7f unused
+
+;
+; Dispatch table for Z80 messages.
+; Each entry handles byte N of the Z80 message.  Cute.
+;
+
+; 0	(fallthrough)
+0e80: 000000000000      Shifter. JumpZero.
+0e81: 000000000000      Shifter. JumpZero.
+0e82: 000000000000      Shifter. JumpZero.
+0e83: 000000000000      Shifter. JumpZero.
+
+; 1	
+0e84: 000000000000      Shifter. JumpZero.
+0e85: 000000000000      Shifter. JumpZero.
+0e86: 000000000000      Shifter. JumpZero.
+0e87: 000000000000      Shifter. JumpZero.
+
+; 2 
+0e88: 000000000000      Shifter. JumpZero.
+0e89: 000000000000      Shifter. JumpZero.
+0e8a: 000000000000      Shifter. JumpZero.
+0e8b: 000000000000      Shifter. JumpZero.
+
+; 3 
+0e8c: 000000000000      Shifter. JumpZero.
+0e8d: 000000000000      Shifter. JumpZero.
+0e8e: 000000000000      Shifter. JumpZero.
+0e8f: 000000000000      Shifter. JumpZero.
+
+; 4 
+0e90: 000000000000      Shifter. JumpZero.
+0e91: 000000000000      Shifter. JumpZero.
+0e92: 000000000000      Shifter. JumpZero.
+0e93: 000000000000      Shifter. JumpZero.
+
+; 5 
+0e94: 000000000000      Shifter. JumpZero.
+0e95: 000000000000      Shifter. JumpZero.
+0e96: 000000000000      Shifter. JumpZero.
+0e97: 000000000000      Shifter. JumpZero.
+
+; 6 
+0e98: 000000000000      Shifter. JumpZero.
+0e99: 000000000000      Shifter. JumpZero.
+0e9a: 000000000000      Shifter. JumpZero.
+0e9b: 000000000000      Shifter. JumpZero.
+
+; Message routine 8 - floppy data (high byte)
+; take current floppy data byte, shift left by 8 and OR with previous data byte.
+; go to 0d50
+0e9c: 9600c020700e      R96. Left Shift 8, . Continue.
+0e9d: 464609f2af03      R46 := Shifter OR R46. Goto 0d50.
+0e9e: 000000000000      Shifter. JumpZero.
+0e9f: 000000000000      Shifter. JumpZero.
+
+; Message routine 7 - floppy data (low byte).
+; Reduce the count by 1 (since R96 contains the first byte of the data).
+; Jump to 0d4e to read rest of data.
+0ea0: 9a01dbb2b103      R9a := R9a - 01. Goto 0d4e.
+0ea1: 000000000000      Shifter. JumpZero.
+0ea2: 000000000000      Shifter. JumpZero.
+0ea3: 000000000000      Shifter. JumpZero.
+
+; Message routine 6 - floppy data length
+; R9a gets the length of the floppy data.  Continue at 0d55 to move to next Z80 message routine.
+0ea4: 9a96c872aa03      R9a := R96. Goto 0d55.
+0ea5: 000000000000      Shifter. JumpZero.
+0ea6: 000000000000      Shifter. JumpZero.
+0ea7: 000000000000      Shifter. JumpZero.
+
+; Message routine 5 - floppy data.
+; OR R4d with the floppy status (1 for error, 0 for success).  Continue at 0d55 to move to next Z80 message routine.
+0ea8: 4d96c9f2aa03      R4d := R4d OR R96. Goto 0d55.
+0ea9: 000000000000      Shifter. JumpZero.
+0eaa: 000000000000      Shifter. JumpZero.
+0eab: 000000000000      Shifter. JumpZero.
+
+; Message Routine 4 - Z80 floppy done.
+; R05 gets the floppy status, and we are done with this Z80 message.
+0eac: 0596c872a903      R05% := R96. Goto 0d56.
+0ead: 000000000000      Shifter. JumpZero.
+0eae: 000000000000      Shifter. JumpZero.
+0eaf: 000000000000      Shifter. JumpZero.
+
+; Message Routine 3 - Z80 status change.
+; R18 is set to the current Z80 status, and we are done with this Z80 message.
+0eb0: 1896c872a903      R18% := R96. Goto 0d56.
+0eb1: 000000000000      Shifter. JumpZero.
+0eb2: 000000000000      Shifter. JumpZero.
+0eb3: 000000000000      Shifter. JumpZero.
+
+; Message Routine 2 - Keyboard handling.
+; R2d is set to the key that was pressed most recently, and we are done with this Z80 message.
+0eb4: 2d96c872a903      R2d% := R96. Goto 0d56.		
+0eb5: 000000000000      Shifter. JumpZero.
+0eb6: 000000000000      Shifter. JumpZero.
+0eb7: 000000000000      Shifter. JumpZero.
+
+; Message Routine 1 - Z80 message type
+; Take Z80 data byte : if it is greater than 16 (0x10) we will dispatch to 0f80,
+; otherwise we dispatch to 0ec0 based on the low 4 bits of the message.
+; If we have a non-zero message, we will dispatch to handle it.
+; Otherwise we dispatch based on R0?
+0eb8: 9610d3a8fc0e      R96 - 10. BitField, offset 0 mask 000f, DstRstOp := (R). Continue.	
+0eb9: 9600c40007f6      R96. If Geq, Dispatch 0f80.
+0eba: 0000c4001306      R00%. Dispatch 0ec0.
+0ebb: 000000000000      Shifter. JumpZero.
+
+; Message Routine 0 - should be SOM (6b)
+0ebc: 966bd3b2b303      R96 - 6b. Goto 0d4c.	; Jump to SOM verification routine
+0ebd: 000000000000      Shifter. JumpZero.
+0ebe: 000000000000      Shifter. JumpZero.
+0ebf: 000000000000      Shifter. JumpZero.
+
+; end of Z80 message dispatch table
+
+
+; Dispatch for Z80 messages less than 16
+
+; 15 - gpib status (unexpected).  Set DDS and halt in a loop.
+0ec0: 02d7d8700703      R02% := d7. Goto 0ff8.
+0ec1: 000000000000      Shifter. JumpZero.
+0ec2: 000000000000      Shifter. JumpZero.
+0ec3: 000000000000      Shifter. JumpZero.
+
+; 14 - clock data. (unexpected). Set DDS and halt.
+0ec4: 02d6d8700703      R02% := d6. Goto 0ff8.
+0ec5: 000000000000      Shifter. JumpZero.
+0ec6: 000000000000      Shifter. JumpZero.
+0ec7: 000000000000      Shifter. JumpZero.
+
+; 13 - voltage status.  Unexpected, halt.
+0ec8: 02d5d8700703      R02% := d5. Goto 0ff8.
+0ec9: 000000000000      Shifter. JumpZero.
+0eca: 000000000000      Shifter. JumpZero.
+0ecb: 000000000000      Shifter. JumpZero.
+
+; 12 - Voltage data.  Unexpected, halt.
+0ecc: 02d4d8700703      R02% := d4. Goto 0ff8.
+0ecd: 000000000000      Shifter. JumpZero.
+0ece: 000000000000      Shifter. JumpZero.
+0ecf: 000000000000      Shifter. JumpZero.
+
+; 11 - Z80 Status Change.  Set Z80 message routine to 3.  Continue with ISR.
+0ed0: 9703d872a703      R97 := 03. Goto 0d58.
+0ed1: 000000000000      Shifter. JumpZero.
+0ed2: 000000000000      Shifter. JumpZero.
+0ed3: 000000000000      Shifter. JumpZero.
+
+; 10 - Seek Complete.  Reset R37, jump to Z80 message complete routine.
+0ed4: 3700d872a903      R37% := 00. Goto 0d56.
+0ed5: 000000000000      Shifter. JumpZero.
+0ed6: 000000000000      Shifter. JumpZero.
+0ed7: 000000000000      Shifter. JumpZero.
+
+; 9	- Keyboard status.  Unexpected, halt.
+0ed8: 02d1d8700703      R02% := d1. Goto 0ff8.
+0ed9: 000000000000      Shifter. JumpZero.
+0eda: 000000000000      Shifter. JumpZero.
+0edb: 000000000000      Shifter. JumpZero.
+
+; 8	- Tablet status.  Unexpected, halt.
+0edc: 02d0d8700703      R02% := d0. Goto 0ff8.
+0edd: 000000000000      Shifter. JumpZero.
+0ede: 000000000000      Shifter. JumpZero.
+0edf: 000000000000      Shifter. JumpZero.
+
+; 7	- RS232 status.  Unexpected, halt.
+0ee0: 02cfd8700703      R02% := cf. Goto 0ff8.
+0ee1: 000000000000      Shifter. JumpZero.
+0ee2: 000000000000      Shifter. JumpZero.
+0ee3: 000000000000      Shifter. JumpZero.
+
+; 6	- gpib data.  Unexpected, halt.
+0ee4: 02ced8700703      R02% := ce. Goto 0ff8.
+0ee5: 000000000000      Shifter. JumpZero.
+0ee6: 000000000000      Shifter. JumpZero.
+0ee7: 000000000000      Shifter. JumpZero.
+
+; 5 - floppy data.  Set	Z80 message routine to 5, continue with ISR.
+0ee8: 9705d872a703      R97 := 05. Goto 0d58.
+0ee9: 000000000000      Shifter. JumpZero.
+0eea: 000000000000      Shifter. JumpZero.
+0eeb: 000000000000      Shifter. JumpZero.
+
+; 4 - clock data.  unexpected, halt.
+0eec: 02ccd8700703      R02% := cc. Goto 0ff8.
+0eed: 000000000000      Shifter. JumpZero.
+0eee: 000000000000      Shifter. JumpZero.
+0eef: 000000000000      Shifter. JumpZero.
+
+; 3 - tablet data.  unexpected, halt.
+0ef0: 02cbd8700703      R02% := cb. Goto 0ff8.
+0ef1: 000000000000      Shifter. JumpZero.
+0ef2: 000000000000      Shifter. JumpZero.
+0ef3: 000000000000      Shifter. JumpZero.
+
+; 2	- RS232 data.  unexpected, halt.
+0ef4: 02cad8700703      R02% := ca. Goto 0ff8.
+0ef5: 000000000000      Shifter. JumpZero.
+0ef6: 000000000000      Shifter. JumpZero.
+0ef7: 000000000000      Shifter. JumpZero.
+
+; 1 - keyboard data.  Set Z80 message routine to 2, and continue with ISR.
+0ef8: 9702d872a703      R97 := 02. Goto 0d58.
+0ef9: 000000000000      Shifter. JumpZero.
+0efa: 000000000000      Shifter. JumpZero.
+0efb: 000000000000      Shifter. JumpZero.
+
+; 0	- invalid message, halt.
+0efc: 02c8d8700703      R02% := c8. Goto 0ff8.
+0efd: 000000000000      Shifter. JumpZero.
+0efe: 000000000000      Shifter. JumpZero.
+0eff: 000000000000      Shifter. JumpZero.
+
+; End of Z80 message dispatch table
+
+; 0f00 - 0f7f unused except for 0f01, which is jumped to during a fatal error, to halt.
+
+;
+; We jump here when handling errors.  Since there's nothing in the following instructions,
+; we will fall through to 0fb0 which sends us to 0ff8 where we will increment the DDS
+; and halt in a loop.
+;
+0f01: 000000000000      Shifter. JumpZero.
+
+; Z80 message type dispatch	for messages >= 16
+
+; 15 (fallthrough)
+0f80: 000000000000      Shifter. JumpZero.
+0f81: 000000000000      Shifter. JumpZero.
+0f82: 000000000000      Shifter. JumpZero.
+0f83: 000000000000      Shifter. JumpZero.
+
+; 14
+0f84: 000000000000      Shifter. JumpZero.
+0f85: 000000000000      Shifter. JumpZero.
+0f86: 000000000000      Shifter. JumpZero.
+0f87: 000000000000      Shifter. JumpZero.
+
+; 13
+0f88: 000000000000      Shifter. JumpZero.
+0f89: 000000000000      Shifter. JumpZero.
+0f8a: 000000000000      Shifter. JumpZero.
+0f8b: 000000000000      Shifter. JumpZero.
+
+; 12
+0f8c: 000000000000      Shifter. JumpZero.
+0f8d: 000000000000      Shifter. JumpZero.
+0f8e: 000000000000      Shifter. JumpZero.
+0f8f: 000000000000      Shifter. JumpZero.
+
+; 11
+0f90: 000000000000      Shifter. JumpZero.
+0f91: 000000000000      Shifter. JumpZero.
+0f92: 000000000000      Shifter. JumpZero.
+0f93: 000000000000      Shifter. JumpZero.
+
+; 10
+0f94: 000000000000      Shifter. JumpZero.
+0f95: 000000000000      Shifter. JumpZero.
+0f96: 000000000000      Shifter. JumpZero.
+0f97: 000000000000      Shifter. JumpZero.
+
+; 9
+0f98: 000000000000      Shifter. JumpZero.
+0f99: 000000000000      Shifter. JumpZero.
+0f9a: 000000000000      Shifter. JumpZero.
+0f9b: 000000000000      Shifter. JumpZero.
+
+; 8
+0f9c: 000000000000      Shifter. JumpZero.
+0f9d: 000000000000      Shifter. JumpZero.
+0f9e: 000000000000      Shifter. JumpZero.
+0f9f: 000000000000      Shifter. JumpZero.
+
+; 7
+0fa0: 000000000000      Shifter. JumpZero.
+0fa1: 000000000000      Shifter. JumpZero.
+0fa2: 000000000000      Shifter. JumpZero.
+0fa3: 000000000000      Shifter. JumpZero.
+
+; 6
+0fa4: 000000000000      Shifter. JumpZero.
+0fa5: 000000000000      Shifter. JumpZero.
+0fa6: 000000000000      Shifter. JumpZero.
+0fa7: 000000000000      Shifter. JumpZero.
+
+; 5
+0fa8: 000000000000      Shifter. JumpZero.
+0fa9: 000000000000      Shifter. JumpZero.
+0faa: 000000000000      Shifter. JumpZero.
+0fab: 000000000000      Shifter. JumpZero.
+
+; 4
+0fac: 000000000000      Shifter. JumpZero.
+0fad: 000000000000      Shifter. JumpZero.
+0fae: 000000000000      Shifter. JumpZero.
+0faf: 000000000000      Shifter. JumpZero.
+
+; 3 - invalid, halt
+0fb0: 02dbd8700703      R02% := db. Goto 0ff8.
+0fb1: 000000000000      Shifter. JumpZero.
+0fb2: 000000000000      Shifter. JumpZero.
+0fb3: 000000000000      Shifter. JumpZero.
+
+; 2	- invalid, halt
+0fb4: 02dad8700703      R02% := da. Goto 0ff8.
+0fb5: 000000000000      Shifter. JumpZero.
+0fb6: 000000000000      Shifter. JumpZero.
+0fb7: 000000000000      Shifter. JumpZero.
+
+; 1 - floppy done, Move to Z80 Message routine 4.
+0fb8: 9704d872a703      R97 := 04. Goto 0d58.
+0fb9: 000000000000      Shifter. JumpZero.
+0fba: 000000000000      Shifter. JumpZero.
+0fbb: 000000000000      Shifter. JumpZero.
+
+; 0	- invalid message (halt)
+0fbc: 02d8d8700703      R02% := d8. Goto 0ff8.
+0fbd: 000000000000      Shifter. JumpZero.
+0fbe: 000000000000      Shifter. JumpZero.
+0fbf: 000000000000      Shifter. JumpZero.
+
+; end of Z80 message dispatch table
+
+; 0fc0 - 0fea unused
+
+
+; write control store from memory
+0feb: 8889cb300901      R88 := R88 + R89. Call 0ff6.
+0fec: 0000c00e1207      R00%. WCSH. GotoS 0fed.
+0fed: 8889cb300901      R88 := R88 + R89. Call 0ff6.
+0fee: 0000c00d1007      R00%. WCSM. GotoS 0fef.
+0fef: 8889cb300901      R88 := R88 + R89. Call 0ff6.
+0ff0: 0000c00c0e07      R00%. WCSL. GotoS 0ff1.
+0ff1: 0000c0301409      R00%. Repeat 0feb.
+0ff2: 8889cb300c03      R88 := R88 + R89. Goto 0ff3.
+0ff3: 02a0d8700783      R02% := a0. If Neq, Goto 0ff8.
+0ff4: 0268d8700501      R02% := 68. Call 0ffa.
+0ff5: 0000c000ff02      R00%. NextInst 0000.
+0ff6: 4401db9e0803      R44 := R44 - 01. Fetch. Goto 0ff7.
+0ff7: 89006800000a      R89 := MDI. Return.
+
+; Error DDS increment for errors that occur after functional validation.
+; (i.e. errors during boot)
+; Subtract 151 (which is the DDS we reach after SYSB
+; has done some basic verification work) from R02.  Call 0ffa to increment
+; the DDS the requisite number of times.
+
+0ff8: 0297dbb00501      R02% := R02% - 97. Call 0ffa.				; increment DDS
+0ff9: 0000c0300603      R00%. Goto 0ff9.							; and here we will die, looping forever.	
+
+; DDS incrementing routine.
+0ffa: 0000c0020403      R00%. Reset eStack, inc DDS. Goto 0ffb.		; +1 to DDS
+0ffb: 0000c0300303      R00%. Goto 0ffc.							; waste a cycle
+0ffc: 0201dbb00203      R02% := R02% - 01. Goto 0ffd.				; decrement our increment counter
+0ffd: 0000c00000da      R00%. If Eql, Return.						; if we're done, return
+0ffe: 0000c0300503      R00%. Goto 0ffa.							; go back and increment again
+
+
+0fff: fffff67f56ff      TOS NOR ff. If Geq, ThreeWayBranch.
+
+; 1000-3fff unused

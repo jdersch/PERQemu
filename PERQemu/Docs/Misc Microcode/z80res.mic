@@ -1,0 +1,58 @@
+! Program to toggle Z80 reset line
+!
+! Load over the Link and start at 2400
+! Goto 2500 for timing pulses other than default
+!
+! SDC 5-Jan-84
+! Three Musketeers 5 Jan 84
+!  
+!  Change r3 to set Time Between resets 
+!  Change R4 to set time of the Reset Pulse
+!
+   Constant(Reset, 305);   ! Reset IOA address
+   Define(R0, 0);
+   Define(R1, 1);
+   Define(R2, 2);
+   Define(R3, 3);
+   Define(R4, 4);
+   
+  Loc(0),
+  R3 := 77;
+  R4 := 5;
+  Return;
+
+  Loc(2400),
+  R3 := 77;
+  R4 := 5;
+  Loc(2500),
+   0, IOB(Reset);          ! Reset the Z80
+   Call(Wait1);
+   4, IOB(Reset);          ! Let it go
+   Call(Wait);
+   goto(2500);             ! and repeat
+     
+
+
+!-----------------------------------------------------------------------------
+!
+! Wait - Wait awhile.   about 20 ms.
+!
+!-----------------------------------------------------------------------------
+
+Wait:   R2 := R3;        ! wait 680 ns * this number
+lp1:    R1 := 777;
+lp:     Nop;
+        Nop;
+        R1 := R1 - 1;
+        if neq goto(lp);
+        R2 := R2 - 1;
+        if neq goto(lp1);
+        Return;
+
+Wait1:   R2 := R4;        ! wait 680 ns * this number
+lpx:     Nop;
+        R2 := R2 - 1;
+        if neq goto(lpx);
+        Return;
+
+       end;

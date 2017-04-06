@@ -1,0 +1,291 @@
+! CIRCLE.MICRO
+! Brian Rosen
+! Copyright 1981, 1982
+! Three Rivers Computer Corp.
+! Pittsburgh, Pa.
+
+! Version 2.1L
+
+! Change Log
+!
+!   Ver 2.4  EMC 10 Nov 83     Relocated circle microcode to 7600-7777 because
+!                              of conflict with SidCanon microcode.
+!
+!   Ver 2.3  EMC 18 Mar 83     Added another parameter (ScanLength) to the
+!                              drawCircle routine.  Included Perq.Dfs to get
+!                              definitions of SB and temp through temp7
+!                              registers.  Renamed error to errorreg and
+!                              to resolve register name conflicts with 
+!                              Perq.Dfs. Added multiply routine from
+!                              RO.micro to do multiply in putpoint routine.
+!                              Use tmp3 as register to hold the ScanLength 
+!                              paramter.
+!
+!   Ver 2.2L EMC 17 Mar 83     Removed Circle microcode from CSDX.Micro to
+!                              this file.  The circle microcode now resides
+!                              from 7500 to 7777 with entry points 7500 for
+!                              NextXY and 7501 for drawCircle.  These entry
+!                              points are defined in Circle.Dfs and are
+!                              included into the Circle.Micro file.
+!
+!   Ver 2.1L JPS 10 Jan 83     Landscape hardwired.
+!
+!   Ver 2.0  MGF 26 Feb 82     Relocated to 7400.
+!
+!   ver 1.1  WCH  2 jan 82     modified to work with the production 
+!                              version of interface
+
+! ENTRY-POINTS:
+!           nextXY            both of these are defined in Circle.Dfs
+!           drawCircle        (7500 and 7501 right now)
+
+
+        define (Origin,  100);
+        define (x,       101);
+        define (y,       102);
+        define (errorreg,103);
+        define (errV,    104);
+        define (errH,    105);
+        define (err45,   106);
+        define (dx,      107);
+        define (dy,      110);
+        define (absH,    111);
+        define (absV,    112);
+        define (abs45,   113);
+        define (word,    114);
+        define (temp,    115);
+        define (xCenter, 116);
+        define (yCenter, 117);
+        define (xl,      120);
+        define (yb,      121);
+        define (xr,      122);
+        define (yt,      123);
+        define (first,   124);
+        define (last,    125);
+        define (finish,  126);
+        define (angle,   127);
+
+$INCLUDE Circle.DFS             ! defines addresses NextXYAddr (NextXY)
+                                ! and CircleAddr (drawCircle)
+
+$INCLUDE Perq.DFS               ! define some temporary registers we'll
+                                ! use and misc things like SB and IntVec
+
+ !Interrupt location   figured as offset from IntVec, defined in IO.dfs
+constant(IntVec,5000);
+
+!calling sequence
+!LoadAdr(SScreenP);
+!InLineByte(LDDW);
+!LoadAdr(BufferBaseAddress); {buffer 256 aligned);
+!InLineByte(LDDW);
+!LoadExpr(7400 mangled appropriately);
+!InLineByte(STLate);
+!InLineByte(JCS);
+
+place(7600,7777);   
+
+nextXY:
+        errorreg:= Tos and AllOnes, Pop, Loc (NextXYAddr); 
+        y       := Tos and AllOnes, Pop;
+        x       := Tos and AllOnes, Pop;
+        Call (getNext);
+! Now push the results on the stack
+        Tos := x, Push;
+        Tos := y, Push;
+        Tos := errorreg, Push, nextInst (0);
+
+
+! --------------------------------------------------
+!
+! Main utility routine: compute the next x,y,errorreg (given x,y,errorreg).
+!
+!
+!   { compute the new error in the 3 possible directions }
+getNext:
+        y;
+        dx := AllOnes, if GEQ goto (isGeq);
+        dx := 1;
+      isGeq:
+        x;
+        dy := 1, if GEQ goto (isXgeq);
+        dy := AllOnes;                          ! -1
+! compute errH
+      isXgeq:
+        errH := x;
+        dx;
+        errH := errH + x, if GEQ goto (lab1);     ! errH := 2*x
+          ! dx < 0 - invert errH
+          errH := not errH;
+          errH := errH + 1;
+      lab1:
+        errH := errH + 1, if IntrPend Call (vecP);
+        errH := errH + errorreg;                   ! errorreg + 1 + 2*dx*x
+! compute errV
+        errV := y;
+        dy;
+        errV := errV + y, if GEQ goto (lab2);
+          errV := not errV;
+          errV := errV + 1;
+      lab2:
+        errV := errV + 1;
+        errV := errV + errorreg;
+! compute err45;
+        err45 := errH;
+        err45 := err45 + errV;
+        err45 := err45 - errorreg, if IntrPend Call (vecP);
+!  { which direction ?
+!  }
+        errH;
+        absH := errH, if GEQ goto (lH);
+          absH := not absH;
+          absH := absH + 1;
+      lH:
+        errV;
+        absV := errV, if GEQ goto (lV);
+          absV := not absV;
+          absV := absV + 1;
+      lV:
+        err45;
+        abs45 := err45, if GEQ goto (l45);
+          abs45 := not abs45;
+          abs45 := abs45 + 1;
+!  Compare the modules now.
+!
+      l45:
+        absV - abs45;
+        absV - absH, if GTR goto (lab45);
+        if GTR goto (lab45);
+          ! (absV < abs45) and (absV < absH)
+          dx := 0;
+          errorreg := errV;
+          goto (Deltas);
+      lab45:
+        absH - abs45;
+        errorreg := err45, if GEQ goto (Deltas);
+          ! absH < abs45
+          dy := 0;
+          errorreg := errH;
+!  { deltas are ready; compute new position }
+Deltas:
+        x := x + dx, if IntrPend Call (vecP);
+        y := y + dy, Return;
+
+
+VecP:  Vector(IntVec);
+
+! --------------------------------------------------
+!
+! Draw an arc of a circle
+!
+!
+drawCircle:
+        
+        Origin  := Tos + SB, Pop, Loc (CircleAddr);  
+        tmp3   := Tos and AllOnes, Pop; ! this is the scan line length
+        yt      := Tos and AllOnes, Pop;
+        xr      := Tos and AllOnes, Pop;
+        yb      := Tos and AllOnes, Pop;
+        xl      := Tos and AllOnes, Pop;
+        finish  := Tos and AllOnes, Pop;
+        last    := Tos and AllOnes, Pop;
+        first   := Tos and AllOnes, Pop;
+        yCenter := Tos and AllOnes, Pop;
+        xCenter := Tos and AllOnes, Pop;
+        y       := Tos and AllOnes, Pop;
+        x       := Tos and AllOnes, Pop;
+
+        errorreg:= 0;
+        angle   := 0;
+        
+  WhileLoop:
+        Call (getNext);
+        angle := angle + 1;
+        ! can we display it?
+        !
+        xl - x;
+        x - xr,         if GTR goto (noDisp);
+        yb - y,         if GTR goto (noDisp);
+        y - yt,         if GTR goto (noDisp);
+        first - last,   if GTR goto (noDisp);
+        first - angle,  if GTR goto (inverted);
+          ! normal case:  first <= last
+          angle - last, if GTR goto (noDisp);
+          if GTR goto (noDisp);
+          goto (Display);
+      inverted:
+        angle - last;
+        angle - first,   if LEQ goto (Display);
+        if LSS goto (noDisp);
+      Display:
+        x := x + xCenter;
+        temp := y;
+        y := 1777;
+        y := y - temp;
+        y := y - yCenter, Call (putPoint);
+        y := temp;
+        x := x - xCenter;
+      noDisp:
+        ! check if we have finished
+        angle - finish;
+        if NEQ goto (WhileLoop);
+        
+        Pop, nextInst (0);
+        
+        
+
+!
+!
+! Invert a single bit on the screen (x,y)
+!
+!
+PutPoint:
+        tmp1:= y;           ! set up multiplicand and multiplier 
+        tmp:= tmp3;         ! multiplier is the scan length parameter
+        
+        Call (Mul20);       ! Multiply scan length by y
+
+        word:= tmp;
+        word := word + origin;
+        x, RightShift (4);
+        word := Shift + word;
+!         word := word + SB;              ! physical address of the word
+        x and 17, LeftShift (4);
+        not Shift, ShiftOnR;
+        1;
+        y := Shift;                     ! bit mask
+        word, Fetch;
+        nop;
+        word, Store;
+        MDO := MDI xor y, Return;               ! INVERT the bit
+        
+
+! 20-Bit Unsigned Multiply from RO.Micro
+!        tmp = Multiplier.
+!        tmp1 = Multiplicand.
+!        tmp = Product.
+
+        
+Mul20:  tmp - tmp1;
+        tmp2 := tmp, if Carry Goto(Mul20a);
+        tmp2 := tmp1;
+        tmp1 := tmp, if IntrPend Call(VecP);
+
+!       now tmp1 <= tmp2.
+
+Mul20a: tmp := 0;
+        tmp1, RightShift(1);
+Mul20b: tmp1 := Shift, if Odd Goto(Mul20c);
+        tmp2 := tmp2 + tmp2, if eql return;
+        tmp1, Goto(Mul20b);
+
+Mul20c: tmp := tmp + tmp2, if IntrPend Call(VecP);
+        tmp2 := tmp2 + tmp2, RightShift(1);
+        tmp1, Goto(Mul20b);
+
+
+
+
+
+
+end;

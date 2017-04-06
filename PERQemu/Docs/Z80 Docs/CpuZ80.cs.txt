@@ -1,0 +1,3394 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace gb
+{    
+    public class CpuZ80
+    {                        
+        public CpuZ80(MemoryBus mem)
+        {
+            if( mem == null )
+            {
+                throw new ArgumentNullException("mem");
+            }
+
+            _mem = mem;
+
+            Reset();
+        }
+
+        public void Reset()
+        {
+	        _pc=0x0100;
+	        _sp=0xfffe;
+	        _af=0x01b0;		//regular GB
+	        _bc=0x0013;	
+	        _de=0x00d8;	
+	        _hl=0x014d;
+	        _cycles = 0;
+	        _clocks = 0;
+	        _interruptEnable=false;
+            _halted = false;
+	        _interruptDisableCounter=0;
+            _interruptEnableCounter = 0;
+        }
+
+        public void Shutdown()
+        {
+            //nothing at the moment
+        }
+
+        //handle interrupts
+        public void Interrupt( Interrupt interrupt )
+        {
+            if (_interruptEnable)
+            {
+                _interruptEnable = false;
+                //push the _pc onto the stack
+                if (_halted)
+                {
+                    Push16((ushort)(_pc + 1));
+                    _halted = false;
+                }
+                else
+                {
+                    Push16(_pc);
+                }
+
+                _pc = interrupt.Address;
+            }
+        }
+
+        public bool InterruptEnable
+        {
+            get { return _interruptEnable; }
+        }
+
+        private byte GetImm8()
+        {
+            return _mem.ReadByte( (ushort)(_pc+1) );
+        }
+
+        //get immediate 16-bit value after _pc
+        private ushort GetImm16()
+        {
+	        return (ushort)((_mem.ReadByte( (ushort)(_pc+2) ) << 8) | _mem.ReadByte( (ushort)(_pc+1) ));
+        }
+
+        //pop a 16 bit value from the stack, move stack pointer up
+        private ushort Pop16()
+        {		                 	
+	        //16-bit values are stored LLHH
+            ushort temp = (ushort)((_mem.ReadByte((ushort)(_sp + 1)) << 8) | _mem.ReadByte(_sp));	//return 16-bits at _sp	
+	        _sp += 2;	//one integer forward (toward $FFFF )
+        			
+	        return temp;
+        }
+
+        //push a 16-bit value onto the stack, move stack pointer down
+        private void Push16( ushort value )
+        {	
+	        _sp -= 2;  //one int back (toward $0000)		
+	        _mem.WriteByte( (ushort)(_sp+1), (byte)((value &  0xff00 ) >> 8) );
+	        _mem.WriteByte( _sp, (byte)(value & 0x00ff) );
+        }
+        
+        //Addition routines
+        private byte RegisterAddWithCarry( byte r1, byte r2)
+        {
+	        uint temp = (uint)(r1 + r2 + (_flagC ? 1 : 0));
+	        //test for full-carry
+	        _flagC = ( temp > 0xff );
+        		
+	        //test for half-carry
+	        _flagH = (((r1 & 0x0f) + (r2 & 0x0f)) > 0xf );	
+
+	        //test for zero	
+	        _flagZ = ((byte)temp == 0 );
+	        _flagN = false;
+
+	        return (byte)temp;
+        }
+
+        private byte RegisterAdd( byte r1, byte r2)
+        {
+	        uint temp = (uint)(r1+r2);
+	        //test for full-carry
+	        _flagC = ( temp > 0xff );
+        		
+	        //test for half-carry
+	        _flagH = (((r1 & 0x0f) + (r2 & 0x0f)) > 0xf );	
+
+	        //test for zero	
+	        _flagZ = (byte)temp == 0;
+	        _flagN = false;
+	        return (byte)temp;
+        }
+
+        private byte RegisterIncrement( byte r1 )
+        {
+	        uint temp = (uint)(r1+1);
+	        //test for half-carry (full carry not affected)
+	        //_flagC = ( temp_int > 255 );
+	        //_flagC = 1;
+	        _flagH = ( (0xf & (r1 + 1)) == 0 );	
+	        _flagZ = (byte)temp == 0;
+	        _flagN = false;
+	        return (byte)temp;
+        }
+
+        //universal subtraction routine (r1-r2)
+        private byte RegisterSubtract( byte r1, byte r2)
+        {	
+	        int temp = r1-r2;	
+	        //test for full-borrow
+	        _flagC = (temp < 0);
+        	
+	        //test for half-borrow
+	        _flagH = (sbyte)((r1 & 0x0f) - (r2 & 0x0f)) < 0;
+        	
+	        //zero?
+	        _flagZ = (byte)temp == 0;
+	        _flagN = true;
+
+	        return (byte)temp;
+        }
+
+        //universal subtraction routine (r1-r2)
+        private byte RegisterSubtractWithCarry( byte r1, byte r2)
+        {	
+	        int temp = r1-r2-(_flagC ? 1 : 0);	
+	        //test for full-borrow
+	        _flagC = (temp < 0);
+        	
+	        //test for half-borrow
+	        _flagH = (sbyte)((r1 & 0x0f) - (r2 & 0x0f)) < 0;
+        	
+	        //zero?
+	        _flagZ = (byte)temp == 0;
+	        _flagN = true;
+
+	        return (byte)temp;
+        }
+        private byte RegisterDecrement( byte r1 )
+        {	
+	        int temp = r1-1;
+	        //test for half-borrow
+	        //_flagC = (temp < 0);
+	        //_flagC = 1;
+	        _flagH = (sbyte)((r1 & 0x0f) - 1) < 0;	
+	        _flagZ = (byte)temp == 0;
+	        _flagN = true;
+	        return (byte)temp;
+        }
+
+
+        //fetch and execute a single instruction
+        //increment _pc as necessary
+        //count clock _cycles
+        //big messy switch statement
+        public int Execute()
+        {	
+
+	        _cycles = 0;		
+
+	        if(_interruptDisableCounter == 1)
+	        {
+		        _interruptDisableCounter = 0;
+		        _interruptEnable = false;
+	        }
+
+	        if(_interruptEnableCounter == 1)
+	        {
+		        _interruptEnableCounter = 0;
+                _interruptEnable = true;
+	        }
+        	
+
+	        //now, the switch statement. whew.
+
+	        int lastPC = _pc;
+
+	        switch( _mem.ReadByte(_pc) )
+	        {
+		        case 0x00:			//nop
+			        NOP();
+		        break;
+
+		        case 0x01:			//ld BC,imm16
+			        _bc = LD_IMM16_TO_R1_16();
+		        break;
+        	
+		        case 0x02:			//ld (BC), A
+			        LD_R2_TO_ADDR_R1_16(_bc, _a);
+		        break;
+
+		        case 0x03:			//inc BC
+			        _bc =INC_16( _bc );
+		        break;
+
+		        case 0x04:			//inc B
+			        _b = INC_8( _b );
+		        break;
+
+		        case 0x05:			//dec B
+			        _b = DEC_8( _b );
+		        break;
+
+		        case 0x06:			//ld B,n
+			        _b = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x07:			//RLCA
+			        RLCA();
+                break;
+
+		        case 0x08:			//LD (imm16), _sp
+			        LD_R1_TO_IMM16_16( _sp );
+		        break;
+
+		        case 0x09:			//ADD HL, BC
+			        ADD_HL( _bc );
+		        break;
+
+		        case 0x0a:			//LD A, (BC)
+			        LD_ADDR_R1_TO_A( _bc );
+		        break;
+        		
+		        case 0x0b:			//dec BC
+			        _bc = DEC_16( _bc );
+		        break;
+
+		        case 0x0c:			//inc C
+			        _c = INC_8( _c );
+		        break;
+
+		        case 0x0d:			//dec C
+			        _c = DEC_8( _c );
+		        break;
+
+		        case 0x0e:			//LD C, imm8
+			        _c = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x0f:			//RRCA
+			        RRCA();
+		        break;
+
+		        case 0x10:			//STOP
+			        STOP();
+		        break;
+
+		        case 0x11:			//LD DE, imm16
+			        _de = LD_IMM16_TO_R1_16();
+		        break;
+
+		        case 0x12:			//LD (DE), A
+			        LD_R2_TO_ADDR_R1_16( _de, _a );
+		        break;
+        	
+		        case 0x13:			//inc de
+			        _de = INC_16( _de );
+		        break;
+
+		        case 0x14:			//inc d
+			        _d = INC_8( _d );
+		        break;
+
+		        case 0x15:			//dec d
+			        _d = DEC_8( _d );
+		        break;
+
+		        case 0x16:			//LD D, imm8
+			        _d = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x17:			//RLA
+			        RLA();
+		        break;
+
+		        case 0x18:			//JR _pc+imm8
+			        JR();
+		        break;
+
+		        case 0x19:			//ADD HL, DE
+			        ADD_HL( _de );
+		        break;
+
+		        case 0x1a:			//LD A,(DE)
+			        LD_ADDR_R1_TO_A( _de );
+		        break;
+
+		        case 0x1b:			//dec DE
+			        _de = DEC_16( _de );
+		        break;
+
+		        case 0x1c:			//inc E
+			        _e = INC_8( _e );
+		        break;
+
+		        case 0x1d:			//dec E
+			        _e = DEC_8( _e );
+		        break;
+
+		        case 0x1e:			//LD E, imm8
+			        _e = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x1f:			//RRA
+			        RRA();
+		        break;
+
+		        case 0x20:			//JR NZ,(_pc+imm8)
+			        JR( !_flagZ );
+		        break;
+
+		        case 0x21:			//LD HL, imm16
+			        _hl = LD_IMM16_TO_R1_16();
+		        break;
+
+		        case 0x22:			//ld (HLI),a
+			        LD_A_TO_HLI();
+		        break;
+
+		        case 0x23:			//INC HL
+			        _hl = INC_16( _hl );
+		        break;
+
+		        case 0x24:			//INC H
+			        _h = INC_8( _h );
+		        break;
+
+		        case 0x25:			//DEC H
+			        _h = DEC_8( _h );
+		        break;
+
+		        case 0x26:			//LD H, imm8
+			        _h = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x27:			//DAA
+			        DAA();
+		        break;
+
+		        case 0x28:			//JR Z,(_pc+imm8)			
+			        JR( _flagZ );
+		        break;
+
+		        case 0x29:			//ADD HL, HL
+			        ADD_HL( _hl );
+		        break;
+
+		        case 0x2a:			//LD A,(HLI)
+			        LD_HLI_TO_A();
+		        break;
+
+		        case 0x2b:			//DEC HL
+			        _hl = DEC_16( _hl );
+		        break;
+
+		        case 0x2c:			//INC L
+			        _l = INC_8( _l );
+		        break;
+        		
+		        case 0x2d:			//DEC L
+			        _l = DEC_8( _l );
+		        break;
+
+		        case 0x2e:			//LD L,imm8
+			        _l = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x2f:			//CPL
+			        CPL();
+		        break;
+
+		        case 0x30:			//JNC,(_pc+imm8)
+			        JR( !_flagC );
+		        break;
+
+		        case 0x31:			//LD _sp, imm16
+			        _sp = LD_IMM16_TO_R1_16();
+		        break;
+
+		        case 0x32:			//LD (HLD),A
+			        LD_A_TO_HLD();
+		        break;
+
+		        case 0x33:			//INC _sp
+			        _sp = INC_16( _sp );
+		        break;
+
+		        case 0x34:			//INC (HL)
+			        INC_ADDR( _hl );			
+		        break;
+
+		        case 0x35:			//DEC (HL)
+			        DEC_ADDR( _hl );			
+		        break;
+
+		        case 0x36:			//LD (HL), n
+			        LD_IMM8_TO_ADDR_R1( _hl );
+		        break;
+
+		        case 0x37:			//SCF
+			        SCF();
+		        break;
+
+		        case 0x38:			//JR C,(_pc+imm8)
+			        JR( _flagC );
+		        break;
+
+		        case 0x39:			//ADD HL, _sp
+			        ADD_HL( _sp );
+		        break;
+
+		        case 0x3a:			//LD A,(HLD)
+			        LD_HLD_TO_A();
+		        break;
+
+		        case 0x3b:			//DEC _sp
+			        _sp = DEC_16( _sp );
+		        break;
+
+		        case 0x3c:			//INC A
+			        _a = INC_8( _a );
+		        break;
+
+		        case 0x3d:			//DEC A
+			        _a = DEC_8( _a );
+		        break;
+
+		        case 0x3e:			//LD A,imm8
+			        _a = LD_IMM8_TO_R1();
+		        break;
+
+		        case 0x3f:			//CCF 
+			        CCF();
+		        break;
+
+		        case 0x40:			//LD B,B
+			        _b = LD_R2_TO_R1( _b );
+		        break;
+
+		        case 0x41:			//LD B,C
+			        _b = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x42:			//LD B,D
+			        _b = LD_R2_TO_R1( _d );
+		        break;
+
+		        case 0x43:			//LD B,E
+			        _b = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x44:			//LD B,H
+			        _b = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x45:			//LD B,L
+			        _b = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x46:			//LD B,(HL)
+			        _b = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+
+		        case 0x47:			//LD B,A
+			        _b = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x48:			//LD C,B
+			        _c = LD_R2_TO_R1( _b );
+		        break;
+
+		        case 0x49:			//LD C,C
+			        _c = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x4a:			//LD C,D
+			        _c = LD_R2_TO_R1( _d );
+		        break;
+
+		        case 0x4b:			//LD C,E
+			        _c = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x4c:			//LD C,H
+			        _c = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x4d:			//LD C,L
+			        _c = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x4e:			//LD C,(HL)
+			        _c = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+
+		        case 0x4f:			//LD C,A
+			        _c = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x50:			//LD D,B
+			        _d = LD_R2_TO_R1( _b );
+		        break;
+
+		        case 0x51:			//LD D,C
+			        _d = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x52:			//LD D,D
+			        _d = LD_R2_TO_R1( _d );
+		        break;
+
+		        case 0x53:			//LD D,E
+			        _d = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x54:			//LD D,H
+			        _d = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x55:			//LD D,L
+			        _d = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x56:			//LD D,(HL)
+			        _d = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+
+		        case 0x57:			//LD D,A
+			        _d = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x58:			//LD E,B
+			        _e = LD_R2_TO_R1( _b );
+		        break;
+
+		        case 0x59:			//LD E,C
+			        _e = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x5a:			//LD E,D
+			        _e = LD_R2_TO_R1( _d );
+		        break;
+
+		        case 0x5b:			//LD E,E
+			        _e = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x5c:			//LD E,H
+			        _e = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x5d:			//LD E,L
+			        _e = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x5e:			//LD E,(HL)
+			        _e = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+
+		        case 0x5f:			//LD E,A
+			        _e = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x60:			//LD H,B
+			        _h = LD_R2_TO_R1( _b );
+		        break;
+
+		        case 0x61:			//LD H,C
+			        _h = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x62:			//LD H,D
+			        _h = LD_R2_TO_R1( _d );
+		        break;
+
+		        case 0x63:			//LD H,E
+			        _h = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x64:			//LD H,H
+			        _h = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x65:			//LD H,L
+			        _h = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x66:			//LD H,(HL)
+			        _h = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+        		
+		        case 0x67:			//LD H,A
+			        _h = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x68:			//LD L,B
+                    _l = LD_R2_TO_R1(_b);
+		        break;
+
+		        case 0x69:			//LD L,C
+			        _l = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x6a:			//LD L,D
+                    _l = LD_R2_TO_R1( _d);
+		        break;
+
+		        case 0x6b:			//LD L,E
+			        _l = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x6c:			//LD L,H
+			        _l = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x6d:			//LD L,L
+			        _l = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x6e:			//LD L,(HL);
+			        _l = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+
+		        case 0x6f:			//LD L,A
+			        _l = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x70:			//LD (HL),B
+			        LD_R2_TO_ADDR_R1_16( _hl, _b );
+		        break;
+
+		        case 0x71:			//LD (HL),C
+			        LD_R2_TO_ADDR_R1_16( _hl, _c );
+		        break;
+
+		        case 0x72:			//LD (HL),D
+			        LD_R2_TO_ADDR_R1_16( _hl, _d );
+		        break;
+
+		        case 0x73:			//LD (HL),E
+			        LD_R2_TO_ADDR_R1_16( _hl, _e );
+		        break;
+
+		        case 0x74:			//LD (HL),H
+			        LD_R2_TO_ADDR_R1_16( _hl, _h );
+		        break;
+
+		        case 0x75:			//LD (HL),L
+			        LD_R2_TO_ADDR_R1_16( _hl, _l );
+		        break;
+
+		        case 0x76:			//HALT
+			        HALT();
+		        break;
+        		
+		        case 0x77:			//LD (HL),A
+			        LD_R2_TO_ADDR_R1_16( _hl, _a );
+		        break;
+
+		        case 0x78:			//LD A,B
+			        _a = LD_R2_TO_R1( _b );
+		        break;
+
+		        case 0x79:			//LD A.C
+			        _a = LD_R2_TO_R1( _c );
+		        break;
+
+		        case 0x7a:			//LD A,D
+			        _a = LD_R2_TO_R1( _d );
+		        break;
+
+		        case 0x7b:			//LD A,E
+			        _a = LD_R2_TO_R1( _e );
+		        break;
+
+		        case 0x7c:			//LD A,H
+			        _a = LD_R2_TO_R1( _h );
+		        break;
+
+		        case 0x7d:			//LD A,L
+			        _a = LD_R2_TO_R1( _l );
+		        break;
+
+		        case 0x7e:			//LD A,(HL)
+			        _a = LD_ADDR_R2_TO_R1_16( _hl );
+		        break;
+
+		        case 0x7f:			//LD A,A
+			        _a = LD_R2_TO_R1( _a );
+		        break;
+
+		        case 0x80:			//ADD A,B
+			        ADD( _b );
+		        break;
+
+		        case 0x81:			//ADD A,C
+			        ADD( _c );
+		        break;
+        		
+		        case 0x82:			//ADD A,D
+			        ADD( _d );
+		        break;
+
+		        case 0x83:			//ADD A,E
+			        ADD( _e );
+		        break;
+
+		        case 0x84:			//ADD A,H
+			        ADD( _h );
+		        break;
+
+		        case 0x85:			//ADD A,L
+			        ADD( _l );
+		        break;
+
+		        case 0x86:			//ADD A,(HL)
+			        ADD_ADDR( _hl );
+		        break;
+
+		        case 0x87:			//ADD A,A
+			        ADD( _a );
+		        break;
+
+		        case 0x88:			//ADC A,B
+			        ADC( _b );
+		        break;
+
+		        case 0x89:			//ADC A,C
+			        ADC( _c );
+		        break;
+
+		        case 0x8a:			//ADC A,D
+			        ADC( _d );
+		        break;
+
+		        case 0x8b:			//ADC A,E
+			        ADC( _e );
+		        break;
+
+		        case 0x8c:			//ADC A,H
+			        ADC( _h );
+		        break;
+
+		        case 0x8d:			//ADC A,L
+			        ADC( _l );
+		        break;
+
+		        case 0x8e:			//ADC A,(HL)
+			        ADC_ADDR( _hl );
+		        break;
+
+		        case 0x8f:			//ADC A,A
+			        ADC( _a );
+		        break;
+
+		        case 0x90:			//SUB B
+			        SUB( _b );
+		        break;
+
+		        case 0x91:			//SUB C
+			        SUB( _c );
+		        break;
+
+		        case 0x92:			//SUB D
+			        SUB( _d );
+		        break;
+
+		        case 0x93:			//SUB E
+			        SUB( _e );
+		        break;
+
+		        case 0x94:			//SUB H
+			        SUB( _h );
+		        break;
+
+		        case 0x95:			//SUB L
+			        SUB( _l );
+		        break;
+
+		        case 0x96:			//SUB (HL)
+			        SUB_ADDR( _hl );
+		        break;
+
+		        case 0x97:			//SUB A
+			        SUB( _a );
+		        break;
+
+		        case 0x98:			//SBC A,B
+			        SBC( _b );
+		        break;
+
+		        case 0x99:			//SBC A,C
+			        SBC( _c );
+		        break;
+
+		        case 0x9a:			//SBC A,D
+			        SBC( _d );
+		        break;
+
+		        case 0x9b:			//SBC A,E
+			        SBC( _e );
+		        break;
+
+		        case 0x9c:			//SBC A,H
+			        SBC( _h );
+		        break;
+
+		        case 0x9d:			//SBC A,L
+			        SBC( _l );
+		        break;
+
+		        case 0x9e:			//SBC A,(HL)
+			        SBC_ADDR( _hl );
+		        break;
+
+		        case 0x9f:			//SBC A,A
+			        SBC( _a );	
+		        break;
+
+		        case 0xa0:			//AND B
+			        AND( _b );
+		        break;
+
+		        case 0xa1:			//AND C
+			        AND( _c );
+		        break;
+
+		        case 0xa2:			//AND D
+			        AND( _d );
+		        break;
+
+		        case 0xa3:			//AND E
+			        AND( _e );
+		        break;
+
+		        case 0xa4:			//AND H
+			        AND( _h );
+		        break;
+
+		        case 0xa5:			//AND L
+			        AND( _l );
+		        break;
+
+		        case 0xa6:			//AND (HL)
+			        AND_ADDR( _hl );
+		        break;
+        		
+		        case 0xa7:			//AND A
+			        AND( _a );
+		        break;
+
+		        case 0xa8:			//XOR B
+			        XOR( _b );
+		        break;
+
+		        case 0xa9:			//XOR C
+			        XOR( _c );
+		        break;
+
+		        case 0xaa:			//XOR D
+			        XOR( _d );
+		        break;
+
+		        case 0xab:			//XOR E
+			        XOR( _e );
+		        break;
+
+		        case 0xac:			//XOR H
+			        XOR( _h );
+		        break;
+
+		        case 0xad:			//XOR L
+			        XOR( _l );
+		        break;
+
+		        case 0xae:			//XOR (HL)
+			        XOR_ADDR( _hl );
+		        break;
+
+		        case 0xaf:			//XOR A						
+			        XOR( _a );
+		        break;
+        		
+		        case 0xb0:			//OR B
+			        OR( _b );
+		        break;
+
+		        case 0xb1:			//OR C
+			        OR( _c );
+		        break;
+
+		        case 0xb2:			//OR D
+			        OR( _d );
+		        break;
+
+		        case 0xb3:			//OR E
+			        OR( _e );
+		        break;
+
+		        case 0xb4:			//OR H
+			        OR( _h );
+		        break;
+
+		        case 0xb5:			//OR L
+			        OR( _l );
+		        break;
+
+		        case 0xb6:			//OR (HL)
+			        OR_ADDR( _hl );
+		        break;
+
+		        case 0xb7:			//OR A
+			        OR( _a );
+		        break;
+
+		        case 0xb8:			//CP B
+			        CP( _b );
+		        break;
+
+		        case 0xb9:			//CP C
+			        CP( _c );
+		        break;
+        		
+		        case 0xba:			//CP D
+			        CP( _d );
+		        break;
+
+		        case 0xbb:			//CP E
+			        CP( _e );
+		        break;
+
+		        case 0xbc:			//CP H
+			        CP( _h );
+		        break;
+
+		        case 0xbd:			//CP L
+			        CP( _l );
+		        break;
+
+		        case 0xbe:			//CP (HL)
+			        CP_ADDR( _hl );
+		        break;
+
+		        case 0xbf:			//CP A
+			        CP( _a );
+		        break;
+
+		        case 0xc0:			//RET NZ
+			        RET( !_flagZ );
+		        break;
+        	
+		        case 0xc1:			//POP BC
+			        _bc = POP();
+		        break;
+
+		        case 0xc2:			//JP NZ,(immed16)
+			        JP( !_flagZ );
+		        break;
+
+		        case 0xc3:			//JP (immed16)
+			        JP();
+		        break;
+
+		        case 0xc4:			//CALL NZ, (immed16)
+			        CALL_COND( !_flagZ );
+		        break;
+
+		        case 0xc5:			//PUSH BC
+			        PUSH( _bc );
+		        break;
+
+		        case 0xc6:			//ADD A,n
+			        ADD_IMM8();
+		        break;
+
+		        case 0xc7:			//RST 0h
+			        RST( 0x0000 );
+		        break;
+
+		        case 0xc8:			//RET Z
+			        RET( _flagZ );
+		        break;
+
+		        case 0xc9:			//RET
+			        RET();
+		        break;
+
+		        case 0xca:			//JP Z, (immed16)
+			        JP(_flagZ);
+		        break;
+
+		        case 0xcb:			//handle CB-prefixed ops here
+			        _pc++;
+			        switch(_mem.ReadByte( _pc ) )
+			        {
+				        case 0x00:		//RLC B
+					        _b = RLC( _b );
+				        break;
+
+				        case 0x01:		//RLC C
+					        _c = RLC( _c );
+				        break;
+
+				        case 0x02:		//RLC D
+					        _d = RLC( _d );
+				        break;
+
+				        case 0x03:		//RLC E
+					        _e = RLC( _e );
+				        break;
+
+				        case 0x04:		//RLC H
+					        _h = RLC( _h );
+				        break;
+
+				        case 0x05:		//RLC L
+					        _l = RLC( _l );
+				        break;
+
+				        case 0x06:		//RLC (HL)
+					        RLC_ADDR( _hl );
+				        break;
+
+				        case 0x07:		//RLC A
+					        _a = RLC( _a );
+				        break;
+
+				        case 0x08:		//RRC B
+					        _b = RRC( _b );
+				        break;
+
+				        case 0x09:		//RRC C
+					        _c = RRC( _c );
+				        break;
+
+				        case 0x0a:		//RRC D
+					        _d = RRC( _d );
+				        break;
+
+				        case 0x0b:		//RRC E
+					        _e = RRC( _e );
+				        break;
+
+				        case 0x0c:		//RRC H
+					        _h = RRC( _h );
+				        break;
+
+				        case 0x0d:		//RRC L
+					        _l = RRC( _l );
+				        break;
+
+				        case 0x0e:		//RRC (HL)
+					        RRC_ADDR( _hl );
+				        break;
+
+				        case 0x0f:		//RRC A
+					        _a = RRC( _a );
+				        break;
+
+				        case 0x10:		//RL B
+					        _b = RL( _b );
+				        break;
+
+				        case 0x11:		//RL C
+					        _c = RL( _c );
+				        break;
+
+				        case 0x12:		//RL D
+					        _d = RL( _d );
+				        break;
+
+				        case 0x13:		//RL E
+					        _e = RL( _e );
+				        break;
+
+				        case 0x14:		//RL H
+					        _h = RL( _h );
+				        break;
+
+				        case 0x15:		//RL L
+					        _l = RL( _l );
+				        break;
+
+				        case 0x16:		//RL (HL)
+					        RL_ADDR( _hl );
+				        break;
+
+				        case 0x17:		//RL A
+					        _a = RL( _a );
+				        break;
+
+				        case 0x18:		//RR B
+					        _b = RR( _b );
+				        break;
+
+				        case 0x19:		//RR C
+					        _c = RR( _c );
+				        break;
+
+				        case 0x1a:		//RR D
+					        _d = RR( _d );
+				        break;
+
+				        case 0x1b:		//RR E
+					        _e = RR( _e );
+				        break;
+
+				        case 0x1c:		//RR H
+					        _h = RR( _h );
+				        break;
+
+				        case 0x1d:		//RR L
+					        _l = RR( _l );
+				        break;
+
+				        case 0x1e:		//RR (HL)
+					        RR_ADDR( _hl );
+				        break;
+
+				        case 0x1f:		//RR A
+					        _a = RR( _a );
+				        break;
+
+				        case 0x20:		//SLA B
+					        _b = SLA( _b );
+				        break;
+
+				        case 0x21:		//SLA C
+					        _c = SLA( _c );
+				        break;
+
+				        case 0x22:		//SLA D
+					        _d = SLA( _d );
+				        break;
+
+				        case 0x23:		//SLA E
+					        _e = SLA( _e );
+				        break;
+
+				        case 0x24:		//SLA H
+					        _h = SLA( _h );
+				        break;
+
+				        case 0x25:		//SLA L
+					        _l = SLA( _l );
+				        break;
+
+				        case 0x26:		//SLA (HL)
+					        SLA_ADDR( _hl );
+				        break;
+
+				        case 0x27:		//SLA A
+					        _a = SLA( _a );
+				        break;
+
+				        case 0x28:		//SRA B
+					        _b = SRA( _b );
+				        break;
+
+				        case 0x29:		//SRA C
+					        _c = SRA( _c );
+				        break;
+
+				        case 0x2a:		//SRA D
+					        _d = SRA( _d );
+				        break;
+
+				        case 0x2b:		//SRA E
+					        _e = SRA( _e );
+				        break;
+
+				        case 0x2c:		//SRC H
+					        _h = SRA( _h );
+				        break;
+
+				        case 0x2d:		//SRC L
+					        _l = SRA( _l );
+				        break;
+
+				        case 0x2e:		//SRC (HL)
+					        SRA_ADDR( _hl );
+				        break;
+
+				        case 0x2f:		//SRA A
+					        _a = SRA( _a );
+				        break;
+
+				        case 0x30:		//SWAP B
+					        _b = SWAP( _b );
+				        break;
+
+				        case 0x31:		//SWAP C
+					        _c = SWAP( _c );
+				        break;
+
+				        case 0x32:		//SWAP D
+					        _d = SWAP( _d );
+				        break;
+
+				        case 0x33:		//SWAP E
+					        _e = SWAP( _e );
+				        break;
+
+				        case 0x34:		//SWAP H
+					        _h = SWAP( _h );
+				        break;
+
+				        case 0x35:		//SWAP L
+					        _l = SWAP( _l );
+				        break;
+
+				        case 0x36:		//SWAP (HL)
+					        SWAP_ADDR( _hl );
+				        break;
+
+				        case 0x37:		//SWAP A
+					        _a = SWAP( _a );
+				        break;
+
+				        case 0x38:		//SRL B
+					        _b = SRL( _b );
+				        break;
+
+				        case 0x39:		//SRL C
+					        _c = SRL( _c );
+				        break;
+
+				        case 0x3a:		//SRL D
+					        _d = SRL( _d );
+				        break;
+
+				        case 0x3b:		//SRL E
+					        _e = SRL( _e );
+				        break;
+
+				        case 0x3c:		//SRL H
+					        _h = SRL( _h );
+				        break;
+
+				        case 0x3d:		//SRL L
+					        _l = SRL( _l );
+				        break;
+
+				        case 0x3e:		//SRL (HL)
+					        SRL_ADDR( _hl );
+				        break;
+
+				        case 0x3f:		//SRL A
+					        _a = SRL( _a );
+				        break;
+
+				        case 0x40:		//BIT 0,b
+					        BIT( 0,_b );
+				        break;
+
+				        case 0x41:		//BIT 0,c
+					        BIT( 0,_c );
+				        break;
+
+				        case 0x42:		//BIT 0,d
+					        BIT( 0,_d );
+				        break;
+
+				        case 0x43:		//BIT 0,e
+					        BIT( 0,_e );
+				        break;
+
+				        case 0x44:		//BIT 0,h
+					        BIT( 0,_h );
+				        break;
+
+				        case 0x45:		//BIT 0,l
+					        BIT( 0,_l );
+				        break;
+
+				        case 0x46:		//BIT 0,(hl)
+					        BIT_ADDR( 0,_hl );
+				        break;
+
+				        case 0x47:		//BIT 0,a
+					        BIT( 0, _a );
+				        break;
+
+				        case 0x48:		//BIT 1,b
+					        BIT( 1,_b );
+				        break;
+
+				        case 0x49:		//BIT 1,c
+					        BIT( 1,_c );
+				        break;
+
+				        case 0x4a:		//BIT 1,d
+					        BIT( 1,_d );
+				        break;
+
+				        case 0x4b:		//BIT 1,e
+					        BIT( 1,_e );
+				        break;
+
+				        case 0x4c:		//BIT 1,h
+					        BIT( 1,_h );
+				        break;
+
+				        case 0x4d:		//BIT 1,l
+					        BIT( 1,_l );
+				        break;
+
+				        case 0x4e:		//BIT 1,(hl)
+					        BIT_ADDR( 1,_hl );
+				        break;
+
+				        case 0x4f:		//BIT 1,a
+					        BIT( 1, _a );
+				        break;
+        				
+				        case 0x50:		//BIT 2,b
+					        BIT( 2,_b );
+				        break;
+
+				        case 0x51:		//BIT 2,c
+					        BIT( 2,_c );
+				        break;
+
+				        case 0x52:		//BIT 2,d
+					        BIT( 2,_d );
+				        break;
+
+				        case 0x53:		//BIT 2,e
+					        BIT( 2,_e );
+				        break;
+
+				        case 0x54:		//BIT 2,h
+					        BIT( 2,_h );
+				        break;
+
+				        case 0x55:		//BIT 2,l
+					        BIT( 2,_l );
+				        break;
+
+				        case 0x56:		//BIT 2,(hl)
+					        BIT_ADDR( 2,_hl );
+				        break;
+
+				        case 0x57:		//BIT 2,a
+					        BIT( 2, _a );
+				        break;
+
+				        case 0x58:		//BIT 3,b
+					        BIT( 3,_b );
+				        break;
+
+				        case 0x59:		//BIT 3,c
+					        BIT( 3,_c );
+				        break;
+
+				        case 0x5a:		//BIT 3,d
+					        BIT( 3,_d );
+				        break;
+
+				        case 0x5b:		//BIT 3,e
+					        BIT( 3,_e );
+				        break;
+
+				        case 0x5c:		//BIT 3,h
+					        BIT( 3,_h );
+				        break;
+
+				        case 0x5d:		//BIT 3,l
+					        BIT( 3,_l );
+				        break;
+
+				        case 0x5e:		//BIT 3,(hl)
+					        BIT_ADDR( 3,_hl );
+				        break;
+
+				        case 0x5f:		//BIT 3,a
+					        BIT( 3, _a );
+				        break;
+
+				        case 0x60:		//BIT 4,b
+					        BIT( 4,_b );
+				        break;
+
+				        case 0x61:		//BIT 4,c
+					        BIT( 4,_c );
+				        break;
+
+				        case 0x62:		//BIT 4,d
+					        BIT( 4,_d );
+				        break;
+
+				        case 0x63:		//BIT 4,e
+					        BIT( 4,_e );
+				        break;
+
+				        case 0x64:		//BIT 4,h
+					        BIT( 4,_h );
+				        break;
+
+				        case 0x65:		//BIT 4,l
+					        BIT( 4,_l );
+				        break;
+
+				        case 0x66:		//BIT 4,(hl)
+					        BIT_ADDR( 4,_hl );
+				        break;
+
+				        case 0x67:		//BIT 4,a
+					        BIT( 4, _a );
+				        break;
+
+				        case 0x68:		//BIT 5,b
+					        BIT( 5,_b );
+				        break;
+
+				        case 0x69:		//BIT 5,c
+					        BIT( 5,_c );
+				        break;
+
+				        case 0x6a:		//BIT 5,d
+					        BIT( 5,_d );
+				        break;
+
+				        case 0x6b:		//BIT 5,e
+					        BIT( 5,_e );
+				        break;
+
+				        case 0x6c:		//BIT 5,h
+					        BIT( 5,_h );
+				        break;
+
+				        case 0x6d:		//BIT 5,l
+					        BIT( 5,_l );
+				        break;
+
+				        case 0x6e:		//BIT 5,(hl)
+					        BIT_ADDR( 5,_hl );
+				        break;
+
+				        case 0x6f:		//BIT 5,a
+					        BIT( 5, _a );
+				        break;
+
+				        case 0x70:		//BIT 6,b
+					        BIT( 6,_b );
+				        break;
+
+				        case 0x71:		//BIT 6,c
+					        BIT( 6,_c );
+				        break;
+
+				        case 0x72:		//BIT 6,d
+					        BIT( 6,_d );
+				        break;
+
+				        case 0x73:		//BIT 6,e
+					        BIT( 6,_e );
+				        break;
+
+				        case 0x74:		//BIT 6,h
+					        BIT( 6,_h );
+				        break;
+
+				        case 0x75:		//BIT 6,l
+					        BIT( 6,_l );
+				        break;
+
+				        case 0x76:		//BIT 6,(hl)					
+					        BIT_ADDR( 6,_hl );
+				        break;
+
+				        case 0x77:		//BIT 6,a
+					        BIT( 6, _a );
+				        break;
+
+				        case 0x78:		//BIT 7,b
+					        BIT( 7,_b );
+				        break;
+
+				        case 0x79:		//BIT 7,c
+					        BIT( 7,_c );
+				        break;
+
+				        case 0x7a:		//BIT 7,d
+					        BIT( 7,_d );
+				        break;
+
+				        case 0x7b:		//BIT 7,e
+					        BIT( 7,_e );
+				        break;
+
+				        case 0x7c:		//BIT 7,h
+					        BIT( 7,_h );
+				        break;
+
+				        case 0x7d:		//BIT 7,l
+					        BIT( 7,_l );
+				        break;
+
+				        case 0x7e:		//BIT 7,(hl)
+					        BIT_ADDR( 7,_hl );
+				        break;
+
+				        case 0x7f:		//BIT 7,a
+					        BIT( 7, _a );
+				        break;
+
+				        case 0x80:		//RES 0,b
+					        _b = RES( 0,_b );
+				        break;
+
+				        case 0x81:		//RES 0,c
+					        _c = RES( 0,_c );
+				        break;
+
+				        case 0x82:		//RES 0,d
+					        _d = RES( 0,_d );
+				        break;
+
+				        case 0x83:		//RES 0,e
+					        _e = RES( 0,_e );
+				        break;
+
+				        case 0x84:		//RES 0,h
+					        _h = RES( 0,_h );
+				        break;
+
+				        case 0x85:		//RES 0,l
+					        _l = RES( 0,_l );
+				        break;
+
+				        case 0x86:		//RES 0,(hl)
+					        RES_ADDR( 0,_hl );
+				        break;
+
+				        case 0x87:		//RES 0,a
+					        _a = RES( 0, _a );
+				        break;
+
+				        case 0x88:		//RES 1,b
+					        _b = RES( 1,_b );
+				        break;
+
+				        case 0x89:		//RES 1,c
+					        _c = RES( 1,_c );
+				        break;
+
+				        case 0x8a:		//RES 1,d
+					        _d = RES( 1,_d );
+				        break;
+
+				        case 0x8b:		//RES 1,e
+					        _e = RES( 1,_e );
+				        break;
+
+				        case 0x8c:		//RES 1,h
+					        _h = RES( 1,_h );
+				        break;
+
+				        case 0x8d:		//RES 1,l
+					        _l = RES( 1,_l );
+				        break;
+
+				        case 0x8e:		//RES 1,(hl)
+					        RES_ADDR( 1,_hl );
+				        break;
+
+				        case 0x8f:		//RES 1,a
+					        _a = RES( 1, _a );
+				        break;
+        				
+				        case 0x90:		//RES 2,b
+					        _b = RES( 2,_b );
+				        break;
+
+				        case 0x91:		//RES 2,c
+					        _c = RES( 2,_c );
+				        break;
+
+				        case 0x92:		//RES 2,d
+					        _d = RES( 2,_d );
+				        break;
+
+				        case 0x93:		//RES 2,e
+					        _e = RES( 2,_e );
+				        break;
+
+				        case 0x94:		//RES 2,h
+					        _h = RES( 2,_h );
+				        break;
+
+				        case 0x95:		//RES 2,l
+					        _l = RES( 2,_l );
+				        break;
+
+				        case 0x96:		//RES 2,(hl)
+					        RES_ADDR( 2,_hl );
+				        break;
+
+				        case 0x97:		//RES 2,a
+					        _a = RES( 2, _a );
+				        break;
+
+				        case 0x98:		//RES 3,b
+					        _b = RES( 3,_b );
+				        break;
+
+				        case 0x99:		//RES 3,c
+					        _c = RES( 3,_c );
+				        break;
+
+				        case 0x9a:		//RES 3,d
+					        _d = RES( 3,_d );
+				        break;
+
+				        case 0x9b:		//RES 3,e
+					        _e = RES( 3,_e );
+				        break;
+
+				        case 0x9c:		//RES 3,h
+					        _h = RES( 3,_h );
+				        break;
+
+				        case 0x9d:		//RES 3,l
+					        _l = RES( 3,_l );
+				        break;
+
+				        case 0x9e:		//RES 3,(hl)
+					        RES_ADDR( 3,_hl );
+				        break;
+
+				        case 0x9f:		//RES 3,a
+					        _a = RES( 3, _a );
+				        break;
+
+				        case 0xa0:		//RES 4,b
+					        _b = RES( 4,_b );
+				        break;
+
+				        case 0xa1:		//RES 4,c
+					        _c = RES( 4,_c );
+				        break;
+
+				        case 0xa2:		//RES 4,d
+					        _d = RES( 4,_d );
+				        break;
+
+				        case 0xa3:		//RES 4,e
+					        _e = RES( 4,_e );
+				        break;
+
+				        case 0xa4:		//RES 4,h
+					        _h = RES( 4,_h );
+				        break;
+
+				        case 0xa5:		//RES 4,l
+					        _l = RES( 4,_l );
+				        break;
+
+				        case 0xa6:		//RES 4,(hl)
+					        RES_ADDR( 4,_hl );
+				        break;
+
+				        case 0xa7:		//RES 4,a
+					        _a = RES( 4, _a );
+				        break;
+
+				        case 0xa8:		//RES 5,b
+					        _b = RES( 5,_b );
+				        break;
+
+				        case 0xa9:		//RES 5,c
+					        _c = RES( 5,_c );
+				        break;
+
+				        case 0xaa:		//RES 5,d
+					        _d = RES( 5,_d );
+				        break;
+
+				        case 0xab:		//RES 5,e
+					        _e = RES( 5,_e );
+				        break;
+
+				        case 0xac:		//RES 5,h
+					        _h = RES( 5,_h );
+				        break;
+
+				        case 0xad:		//RES 5,l
+					        _l = RES( 5,_l );
+				        break;
+
+				        case 0xae:		//RES 5,(hl)
+					        RES_ADDR( 5,_hl );
+				        break;
+
+				        case 0xaf:		//RES 5,a
+					        _a = RES( 5, _a );
+				        break;
+
+				        case 0xb0:		//RES 6,b
+					        _b = RES( 6,_b );
+				        break;
+
+				        case 0xb1:		//RES 6,c
+					        _c = RES( 6,_c );
+				        break;
+
+				        case 0xb2:		//RES 6,d
+					        _d = RES( 6,_d );
+				        break;
+
+				        case 0xb3:		//RES 6,e
+					        _e = RES( 6,_e );
+				        break;
+
+				        case 0xb4:		//RES 6,h
+					        _h = RES( 6,_h );
+				        break;
+
+				        case 0xb5:		//RES 6,l
+					        _l = RES( 6,_l );
+				        break;
+
+				        case 0xb6:		//RES 6,(hl)
+					        RES_ADDR( 6,_hl );
+				        break;
+
+				        case 0xb7:		//RES 6,a
+					        _a = RES( 6, _a );
+				        break;
+
+				        case 0xb8:		//RES 7,b
+					        _b = RES( 7,_b );
+				        break;
+
+				        case 0xb9:		//RES 7,c
+					        _c = RES( 7,_c );
+				        break;
+
+				        case 0xba:		//RES 7,d
+					        _d = RES( 7,_d );
+				        break;
+
+				        case 0xbb:		//RES 7,e
+					        _e = RES( 7,_e );
+				        break;
+
+				        case 0xbc:		//RES 7,h
+					        _h = RES( 7,_h );
+				        break;
+
+				        case 0xbd:		//RES 7,l
+					        _l = RES( 7,_l );
+				        break;
+
+				        case 0xbe:		//RES 7,(hl)
+					        RES_ADDR( 7,_hl );
+				        break;
+
+				        case 0xbf:		//RES 7,a
+					        _a = RES( 7, _a );
+				        break;
+
+				        case 0xc0:		//SET 0,b
+					        _b = SET( 0,_b );
+				        break;
+
+				        case 0xc1:		//SET 0,c
+					        _c = SET( 0,_c );
+				        break;
+
+				        case 0xc2:		//SET 0,d
+					        _d = SET( 0,_d );
+				        break;
+
+				        case 0xc3:		//SET 0,e
+					        _e = SET( 0,_e );
+				        break;
+
+				        case 0xc4:		//SET 0,h
+					        _h = SET( 0,_h );
+				        break;
+
+				        case 0xc5:		//SET 0,l
+					        _l = SET( 0,_l );
+				        break;
+
+				        case 0xc6:		//SET 0,(hl)
+					        SET_ADDR( 0,_hl );
+				        break;
+
+				        case 0xc7:		//SET 0,a
+					        _a = SET( 0, _a );
+				        break;
+
+				        case 0xc8:		//SET 1,b
+					        _b = SET( 1,_b );
+				        break;
+
+				        case 0xc9:		//SET 1,c
+					        _c = SET( 1,_c );
+				        break;
+
+				        case 0xca:		//SET 1,d
+					        _d = SET( 1,_d );
+				        break;
+
+				        case 0xcb:		//SET 1,e
+					        _e = SET( 1,_e );
+				        break;
+
+				        case 0xcc:		//SET 1,h
+					        _h = SET( 1,_h );
+				        break;
+
+				        case 0xcd:		//SET 1,l
+					        _l = SET( 1,_l );
+				        break;
+
+				        case 0xce:		//SET 1,(hl)
+					        SET_ADDR( 1,_hl );
+				        break;
+
+				        case 0xcf:		//SET 1,a
+					        _a = SET( 1, _a );
+				        break;
+        				
+				        case 0xd0:		//SET 2,b
+					        _b = SET( 2,_b );
+				        break;
+
+				        case 0xd1:		//SET 2,c
+					        _c = SET( 2,_c );
+				        break;
+
+				        case 0xd2:		//SET 2,d
+					        _d = SET( 2,_d );
+				        break;
+
+				        case 0xd3:		//SET 2,e
+					        _e = SET( 2,_e );
+				        break;
+
+				        case 0xd4:		//SET 2,h
+					        _h = SET( 2,_h );
+				        break;
+
+				        case 0xd5:		//SET 2,l
+					        _l = SET( 2,_l );
+				        break;
+
+				        case 0xd6:		//SET 2,(hl)
+					        SET_ADDR( 2,_hl );
+				        break;
+
+				        case 0xd7:		//SET 2,a
+					        _a = SET( 2,_a );
+				        break;
+
+				        case 0xd8:		//SET 3,b
+					        _b = SET( 3,_b );
+				        break;
+
+				        case 0xd9:		//SET 3,c
+					        _c = SET( 3,_c );
+				        break;
+
+				        case 0xda:		//SET 3,d
+					        _d = SET( 3,_d );
+				        break;
+
+				        case 0xdb:		//SET 3,e
+					        _e = SET( 3,_e );
+				        break;
+
+				        case 0xdc:		//SET 3,h
+					        _h = SET( 3,_h );
+				        break;
+
+				        case 0xdd:		//SET 3,l
+					        _l = SET( 3,_l );
+				        break;
+
+				        case 0xde:		//SET 3,(hl)
+					        SET_ADDR( 3,_hl );
+				        break;
+
+				        case 0xdf:		//SET 3,a
+					        _a = SET( 3, _a );
+				        break;
+
+				        case 0xe0:		//SET 4,b
+					        _b = SET( 4,_b );
+				        break;
+
+				        case 0xe1:		//SET 4,c
+					        _c = SET( 4,_c );
+				        break;
+
+				        case 0xe2:		//SET 4,d
+					        _d = SET( 4,_d );
+				        break;
+
+				        case 0xe3:		//SET 4,e
+					        _e = SET( 4,_e );
+				        break;
+
+				        case 0xe4:		//SET 4,h
+					        _h = SET( 4,_h );
+				        break;
+
+				        case 0xe5:		//SET 4,l
+					        _l = SET( 4,_l );
+				        break;
+
+				        case 0xe6:		//SET 4,(hl)
+					        SET_ADDR( 4,_hl );
+				        break;
+
+				        case 0xe7:		//SET 4,a
+					        _a = SET( 4, _a );
+				        break;
+
+				        case 0xe8:		//SET 5,b
+					        _b = SET( 5,_b );
+				        break;
+
+				        case 0xe9:		//SET 5,c
+					        _c = SET( 5,_c );
+				        break;
+
+				        case 0xea:		//SET 5,d
+					        _d = SET( 5,_d );
+				        break;
+
+				        case 0xeb:		//SET 5,e
+					        _e = SET( 5,_e );
+				        break;
+
+				        case 0xec:		//SET 5,h
+					        _h = SET( 5,_h );
+				        break;
+
+				        case 0xed:		//SET 5,l
+					        _l = SET( 5,_l );
+				        break;
+
+				        case 0xee:		//SET 5,(hl)
+					        SET_ADDR( 5,_hl );
+				        break;
+
+				        case 0xef:		//SET 5,a
+					        _a = SET( 5, _a );
+				        break;
+
+				        case 0xf0:		//SET 6,b
+					        _b = SET( 6,_b );
+				        break;
+
+				        case 0xf1:		//SET 6,c
+					        _c = SET( 6,_c );
+				        break;
+
+				        case 0xf2:		//SET 6,d
+					        _d = SET( 6,_d );
+				        break;
+
+				        case 0xf3:		//SET 6,e
+					        _e = SET( 6,_e );
+				        break;
+
+				        case 0xf4:		//SET 6,h
+					        _h = SET( 6,_h );
+				        break;
+
+				        case 0xf5:		//SET 6,l
+					        _l = SET( 6,_l );
+				        break;
+
+				        case 0xf6:		//SET 6,(hl)
+					        SET_ADDR( 6,_hl );
+				        break;
+
+				        case 0xf7:		//SET 6,a
+					        _a = SET( 6, _a );
+				        break;
+
+				        case 0xf8:		//SET 7,b
+					        _b = SET( 7,_b );
+				        break;
+
+				        case 0xf9:		//SET 7,c
+					        _c = SET( 7,_c );
+				        break;
+
+				        case 0xfa:		//SET 7,d
+					        _d = SET( 7,_d );
+				        break;
+
+				        case 0xfb:		//SET 7,e
+					        _e = SET( 7,_e );
+				        break;
+
+				        case 0xfc:		//SET 7,h
+					        _h = SET( 7,_h );
+				        break;
+
+				        case 0xfd:		//SET 7,l
+					        _l = SET( 7,_l );
+				        break;
+
+				        case 0xfe:		//SET 7,(hl)
+					        SET_ADDR( 7,_hl );
+				        break;
+
+				        case 0xff:		//SET 7,a
+					        _a = SET( 7,_a );
+				        break;
+			        }
+		        break;
+
+		        case 0xcc:			//CALL Z,(immed16)
+			        CALL_COND(_flagZ);
+		        break;
+
+		        case 0xcd:			//CALL (immed16)
+			        CALL();
+		        break;
+
+		        case 0xce:			//ADC A,n
+			        ADC_IMM8();
+		        break;
+
+		        case 0xcf:			//RST 8h
+			        RST( 0x0008 );
+		        break;
+
+		        case 0xd0:			//RET NC
+			        RET( !_flagC );
+		        break;
+        		
+		        case 0xd1:			//POP DE
+			        _de = POP();
+		        break;
+
+		        case 0xd2:			//JP NC,(immed16)
+			        JP(!_flagC);
+		        break;
+
+		        case 0xd3:			//???
+			        //Beep(440, 100);
+			        _pc++;
+		        break;
+
+		        case 0xd4:			//CALL NC,(immed16)
+			        CALL_COND(!_flagC);
+		        break;
+
+		        case 0xd5:			//PUSH DE
+			        PUSH( _de );
+		        break;
+
+		        case 0xd6:			//SUB immed8
+			        SUB_IMM8();
+		        break;
+
+		        case 0xd7:			//RST 10h
+			        RST( 0x0010 );
+		        break;
+
+		        case 0xd8:			//RET C
+			        RET( _flagC );
+		        break;
+
+		        case 0xd9:			//RETI
+			        RETI();
+		        break;
+
+		        case 0xda:			//JP C,(immed16)
+			        JP( _flagC );
+		        break;
+
+		        case 0xdb:			//??
+			        //Beep(440, 100);
+			        _pc++;
+		        break;
+
+		        case 0xdc:			//CALL C,(immed16)
+			        CALL_COND(_flagC);
+		        break;
+
+		        case 0xdd:			//??
+			        //Beep(440, 100);
+			        _pc++;
+		        break;
+
+		        case 0xde:			//SBC A,n
+			        SBC_IMM8();
+		        break;
+
+		        case 0xdf:			//RST 18h
+			        RST( 0x0018 );
+		        break;
+
+		        case 0xe0:			//LD ($FF00+imm8),A     
+			        LD_R1_TO_IMM8( _a );
+		        break;
+
+		        case 0xe1:			//POP HL
+			        _hl = POP();
+		        break;
+
+		        case 0xe2:			//LD ($FF00+C), A
+			        LD_R2_TO_ADDR_R1_8( _c, _a );
+		        break;
+
+		        case 0xe3:			//??
+			        //Beep(440, 100);
+			        _pc++; 
+		        break;
+
+		        case 0xe4:			//??
+			        //Beep(440, 100);
+			        _pc++;
+		        break;
+        	
+		        case 0xe5:			//PUSH HL
+			        PUSH( _hl );
+		        break;
+
+		        case 0xe6:			//AND imm8
+			        AND_IMM8();
+		        break;
+
+		        case 0xe7:			//RST 20h
+			        RST( 0x0020 );
+		        break;
+
+		        case 0xe8:			//ADD _sp, imm8 (signed)
+			        ADD_SP();			
+		        break;
+
+		        case 0xe9:			//JP (HL)  -???? value at (HL), or value of HL?
+			        JP_ADDR( _hl );
+		        break;
+
+		        case 0xea:			//LD (imm16), A
+			        LD_R1_TO_IMM16_8( _a );
+		        break;		
+
+		        case 0xeb:			//??
+		        case 0xec:
+		        case 0xed:
+			        //Beep(440, 100);
+			        _pc++; 
+		        break;
+
+		        case 0xee:			//XOR n
+			        XOR_IMM8();
+		        break;
+
+		        case 0xef:			//RST 28h
+			        RST( 0x0028 );
+		        break;
+
+		        case 0xf0:			//LD A,$FF00+imm8
+			        _a = LD_ADDR_IMM8_TO_R1();
+		        break;
+
+		        case 0xf1:			//POP AF
+			        ushort temp;
+			        temp = POP();
+			        _af = (ushort)(temp & 0xfff0);
+		        break;
+
+		        case 0xf2:			//ld a,($FF00+c)
+			        _a = LD_ADDR_R2_TO_R1_8( _c);
+		        break;
+
+		        case 0xf3:			//DI
+			        DI();
+		        break;		
+
+		        case 0xf4:			//??
+			        //Beep(440, 100);
+			        _pc++;
+		        break;
+
+		        case 0xf5:			//PUSH AF
+			        PUSH( _af );
+		        break;
+
+		        case 0xf6:			//OR n
+			        OR_IMM8();
+		        break;
+
+		        case 0xf7:			//RST 30h
+			        RST( 0x0030 );
+		        break;
+
+		        case 0xf8:			//LD HL, _sp+imm8 (signed)
+			        LD_SPn_TO_HL();			
+		        break;
+
+		        case 0xf9:			//LD _sp, HL
+			        LD_R2_TO_SP( _hl );
+		        break;
+
+		        case 0xfa:			//LD A,(imm16)
+			        _a = LD_IMM16_TO_R1_8();
+		        break;
+
+		        case 0xfb:			//EI
+			        EI();
+		        break;
+
+		        case 0xfc:			//??
+		        case 0xfd:
+			        //Beep(440, 100);
+			        _pc++;
+		        break;
+        		
+		        case 0xfe:			//CP n
+			        CP_IMM8();
+		        break;
+
+		        case 0xff:			//RST 38h
+			        RST( 0x0038 );
+		        break;
+
+	        }		
+
+	        /*
+	        if( was_halted > 0 )
+	        {
+		        was_halted--;
+
+		        if( was_halted < 2 ) 
+		        {
+			        _pc = lastPC;
+		        }
+	        }
+	        */
+
+            return _cycles;
+        	
+        }
+
+    /******
+     *  Opcode implementations.  This is freshly ported over from my old (ugly) C++ code.
+     *  This should be cleaned up at some point, refactored, etc...
+     *******/
+
+
+        private void ADC(byte r1) 
+        {
+		    _a = RegisterAddWithCarry(_a, r1 );
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void ADC_ADDR(ushort r1) 
+        {
+		    _a = RegisterAddWithCarry( _a, _mem.ReadByte(r1) );
+		    _cycles+=8;
+		    _pc++;
+	    }
+
+        private void ADC_IMM8()
+        {
+		    _a = RegisterAddWithCarry( _a, GetImm8() );
+		    _cycles+=8;
+		    _pc+=2;
+	    }
+
+        private void ADD(byte r1)
+        {
+
+		    _a = RegisterAdd( _a, r1 );
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void ADD_ADDR(ushort r1) 
+        {
+		    _a = RegisterAdd( _a, _mem.ReadByte(r1) );
+		    _cycles += 8;
+		    _pc++; 
+        }
+
+
+        private void ADD_HL(ushort r1) 
+        {
+		    _flagC = (int)(_hl + r1) > 0xffff;
+		    _flagH = (_hl & 0xfff) + (r1 & 0xfff) > 0x0fff;
+		    _flagN = false;
+		    _hl += r1;
+		    _cycles += 8;
+		    _pc++;
+	    }	
+
+        private void ADD_IMM8()
+        { 
+	        _a = RegisterAdd( _a, GetImm8() );
+	        _cycles += 8;
+	        _pc += 2;
+	    }
+
+        private void ADD_SP()
+        {
+		     byte temp = GetImm8();
+		    _flagH = ((_sp & 0xfff) + (sbyte)temp & 0xfff) > 0xfff;
+		    _flagC = (_sp + (sbyte)temp) > 0xffff;
+		    _flagN = false;
+		    _flagZ = false;
+		    _sp = (ushort)(_sp+ (sbyte)temp);
+		    _cycles += 12;
+		    _pc+=2; 
+	    }
+
+        private void AND(byte r1) 
+        {
+		    _flagZ = (_a &= r1) == 0;
+		    _flagN = false;
+		    _flagH = true;
+		    _flagC = false;
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void AND_ADDR(ushort r1) 
+        {
+		    _flagZ = (_a &=_mem.ReadByte(r1)) == 0;
+		    _flagN = false; 
+		    _flagH = true; 
+		    _flagC = false;
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private void AND_IMM8()
+        { 
+		    _flagZ = (_a &= GetImm8()) == 0;
+		    _flagN = false; 
+		    _flagH = true; 
+		    _flagC = false;
+		    _cycles += 8;
+		    _pc+=2;
+	    }
+
+        private void BIT(int bit, byte r1) 
+        { 
+		    _flagZ = (r1 & (0x01 << bit )) == 0;
+		    _flagN = false;
+		    _flagH = true;
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private void BIT_ADDR(int bit, ushort r1) 
+        {
+		    _flagZ = (_mem.ReadByte( r1 ) & ( 0x01 << bit )) == 0;
+		    _flagN = false;
+		    _flagH = true; 
+		    _cycles += 12;
+		    _pc++;
+	    }
+
+        private void CALL()
+        {
+            Push16( (ushort)(_pc+3) );
+		    _cycles += 16; 
+		    _pc = GetImm16();
+	    }
+
+        private void CALL_COND(bool cond)
+        { 
+		    if( cond )
+		    { 
+			    Push16( (ushort)(_pc+3) );
+			    _cycles += 16;
+			    _pc = GetImm16();
+		    }
+		    else
+		    { 
+			    _cycles += 10;
+			    _pc += 3;
+		    } 
+	    }
+
+
+        private void CCF() 
+        { 
+		    _flagC = !_flagC;
+		    _flagH = false;
+		    _flagN = false;
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void CP(byte r1) 
+        { 
+	        RegisterSubtract( _a, r1 );
+	        _cycles += 4;
+	        _pc++;
+	    }
+
+        private void CP_ADDR(ushort r1) 
+        { 
+		    RegisterSubtract( _a,_mem.ReadByte(r1) );
+		    _cycles += 8;
+		    _pc++;
+	    }
+    					
+        private void CP_IMM8() 
+        {
+		    RegisterSubtract( _a, GetImm8() );
+		    _cycles += 8;
+		    _pc += 2;
+	    }
+
+        private void CPL()
+        {
+		    _a = (byte)(~_a);
+		    _flagN = true;
+		    _flagH = true;
+		    _cycles += 4;
+		    _pc++;
+	    }
+    /*
+    #define DAA { \
+				    _af = DAATable[(((unsigned short int) (_f & (0x40 | 0x10 | 0x20))) << 4) | _a]; \
+				    _cycles+=4; \
+				    _pc++; \
+			    }
+    */
+        private byte DEC_8(byte r1) 
+        {
+		    byte retVal = RegisterDecrement( r1 );
+		    _cycles += 4;
+		    _pc++;
+
+            return retVal;
+	    } 
+
+        private ushort DEC_16(ushort r1) 
+        {
+	        ushort retVal = (ushort)(r1-1);
+	        _cycles+=8;
+	        _pc++;
+
+            return retVal;
+	    }
+
+        private void DEC_ADDR(ushort r1) 
+        {
+	        _mem.WriteByte( r1, RegisterDecrement(_mem.ReadByte( r1 )) );
+	        _cycles+=12;
+	        _pc++;
+        }
+
+        private void DI()
+        {
+            _interruptDisableCounter = 1; 
+		    _cycles += 4; 
+		    _pc++;
+	    }
+    			
+        private void EI() 
+        { 
+		    _interruptEnableCounter = 1;
+		    _halted = false;
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void HALT() 
+        { 
+		    _cycles += 4;
+		    _halted = true;
+		    if( !_interruptEnable )
+		    {
+                _halted = false;
+			    _pc++;
+		    }
+	    }
+
+        private byte INC_8(byte r1)  
+        { 
+		    _cycles+=4;
+		    _pc++;
+            return RegisterIncrement(r1);
+	    }
+
+        private ushort INC_16(ushort r1) 
+        { 
+		    _cycles+=8;
+		    _pc++;
+
+            return (ushort)(r1 + 1);
+	    }
+
+        private void INC_ADDR(ushort r1) 
+        { 
+		    _mem.WriteByte( r1, RegisterIncrement(_mem.ReadByte( r1 )) );
+		    _cycles+=12;
+		    _pc++;
+	    }
+
+        private void JP()
+        {
+		    _pc = GetImm16();
+		    _cycles += 16;
+	    }
+
+        private void JP_ADDR(ushort r1) 
+        { 
+		    _pc = r1;
+		    _cycles += 4;
+	    }
+
+        private void JP(bool flag) 
+        {
+		    if( flag ) 
+		    { 
+			    _pc = GetImm16();
+			    _cycles += 16;
+		    }
+		    else
+		    { 
+			    _pc += 3;
+			    _cycles += 12;
+		    }
+	    }
+
+        private void JR()
+        {
+		    _pc = (ushort)(_pc + (sbyte)GetImm8()+2 );
+		    _cycles+=12;
+	    }
+
+        private void JR(bool flag)
+        { 
+		    if( flag )
+		    { 
+			    _pc = (ushort)(_pc + (sbyte)GetImm8()+2);
+			    _cycles += 12;
+		    } 
+		    else 
+		    { 
+			    _pc +=2;
+			    _cycles += 8;
+		    }
+	    }
+
+        private void LD_R1_TO_A(byte r1) 
+        { 
+		    _a = r1;
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void LD_ADDR_R1_TO_A(ushort r1) 
+        {
+		    _a =_mem.ReadByte(r1);
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private byte LD_A_TO_R1(byte r1) 
+        { 
+            byte retVal = _a;
+		    _cycles += 4;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private byte LD_ADDR_IMM8_TO_R1() 
+        {
+	        byte retVal =_mem.ReadByte( (ushort)(0xff00 + GetImm8()) );
+	        _cycles += 12;
+		    _pc += 2;
+
+            return retVal;
+	    }
+
+        private void LD_IMM8_TO_ADDR_R1(ushort r1) 
+        {
+		    _mem.WriteByte( r1, GetImm8() );
+		    _cycles += 12;
+		    _pc += 2;
+	    }
+
+        private byte LD_IMM16_TO_R1_8() 
+        {
+		    byte retVal =_mem.ReadByte( GetImm16() );
+		    _cycles += 16;
+		    _pc += 3;
+
+            return retVal;
+        }
+
+
+        private ushort LD_IMM16_TO_R1_16() 
+        {
+		    ushort retVal = GetImm16();
+		    _cycles += 12;
+		    _pc += 3;
+
+            return retVal;
+        }
+
+        private void LD_R1_TO_IMM8(byte r1) 
+        {
+		    _mem.WriteByte( (ushort)(0xff00+GetImm8()), r1 );
+		    _cycles += 8;
+		    _pc += 2;
+	    }
+
+        private void LD_R1_TO_IMM16_8(byte r1) 
+        {
+		    _mem.WriteByte( GetImm16(), r1 );
+		    _cycles += 16;
+		    _pc += 3;
+	    }
+
+
+        private void LD_R1_TO_IMM16_16(ushort r1) 
+        {
+		    ushort temp = GetImm16();
+		    _mem.WriteByte( (ushort)(temp+1), (byte)((r1 & 0xff00) >> 8) );
+		    _mem.WriteByte( temp, (byte)(r1 & 0x00ff) );
+		    _cycles += 12;
+		    _pc += 3;
+	    }
+    				
+    /*
+    #define LD_R1_TO_IMM16_16(r1) { \
+					    MEM->mem_write( get_imm16(),_mem.ReadByte(_sp) ); \
+					    _cycles+=12; \
+					    _pc+=3; \
+					    }
+    */
+
+        private byte LD_R2_TO_R1(byte r2) 
+        {
+		    _cycles += 4;
+		    _pc++;
+
+            return r2;
+	    }
+
+        private void LD_R2_TO_SP(ushort r1) 
+        {
+		    _sp = r1;
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void LD_R2_TO_ADDR_R1_16( ushort r1, byte r2 ) 
+        {
+		    _mem.WriteByte( r1, r2 );
+		    _cycles+=8;
+		    _pc++;
+	    }
+
+        private void LD_R2_TO_ADDR_R1_8( byte r1, byte r2 ) 
+        {
+		    _mem.WriteByte( (ushort)(r1 + 0xff00), r2 );
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private byte LD_ADDR_R2_TO_R1_16( ushort r2 ) 
+        {
+		    _cycles += 8;
+		    _pc++;
+
+            return _mem.ReadByte(r2);
+	    }
+
+        private byte LD_ADDR_R2_TO_R1_8( byte r2 ) 
+        {
+		    _cycles += 8;
+		    _pc++;
+
+            return _mem.ReadByte((ushort)(r2 + 0xff00));
+	    }
+
+        private byte LD_IMM8_TO_R1() 
+        {
+		    byte retVal = GetImm8();
+		    _cycles += 8;
+		    _pc += 2;
+
+            return retVal;
+	    }
+
+        private void LD_A_TO_HLI() 
+        {
+		    _mem.WriteByte( _hl, _a );
+		    _hl++;
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private void LD_A_TO_HLD()
+        {
+		    _mem.WriteByte( _hl, _a );
+		    _hl--;
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private void LD_HLI_TO_A()
+        {
+		    _a =_mem.ReadByte( _hl );
+		    _hl++;
+		    _cycles += 8;
+		    _pc++;
+        }
+
+        private void LD_HLD_TO_A()
+        {
+		    _a =_mem.ReadByte( _hl );
+		    _hl--;
+		    _cycles += 8;
+		    _pc++;
+	    }
+
+        private void LD_SPn_TO_HL()
+        {
+		    byte temp = GetImm8();
+		    _flagH = ((_sp & 0xfff)+(sbyte)temp > 0xfff);
+		    _flagC = _sp+(sbyte)temp > 0xffff;
+		    _hl = (ushort)(_sp + (sbyte)temp);
+		    _flagZ=false;
+		    _flagN=false;
+		    _cycles+=16;
+		    _pc+=2;
+	    }
+
+        private void NOP()
+        {
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+
+        private void OR(byte r1) 
+        {
+		    _a = (byte)(_a | r1);
+		    _flagZ = (_a == 0 );
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles += 4;
+		    _pc++;
+	    }
+
+        private void OR_ADDR(ushort r1) 
+        {
+		    _a = (byte)(_a |_mem.ReadByte(r1));
+		    _flagZ = (_a == 0 );
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles += 8;
+		    _pc++;
+        }
+
+        private void OR_IMM8()
+        {
+		    _a = (byte)(_a | GetImm8());
+		    _flagZ = (_a == 0 );
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles += 4;
+		    _pc+=2;
+	    }
+
+        private ushort POP() 
+        {
+		    _cycles += 12;
+		    _pc++;
+
+            return Pop16();
+	    }
+
+        private void PUSH(ushort r1) 
+        {
+		    Push16( r1 );
+		    _cycles += 16;
+		    _pc++;
+	    }
+
+        private byte RES(int bit, byte r1) 
+        { 
+		    byte retVal = (byte)(r1 & ~(0x01 << bit));
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void RES_ADDR(int bit, ushort r1) 
+        {
+		    _mem.WriteByte( r1, (byte)(_mem.ReadByte(r1) & ~(0x01 << bit)) );
+		    _cycles += 16;
+		    _pc++;
+	    }
+
+        private void RET()
+        {
+		    _pc = Pop16();
+		    _cycles += 16;
+	    }
+
+        private void RETI() 
+        {
+		    _pc = Pop16();
+		    _cycles += 16;
+		    _interruptEnableCounter=1;
+	    }
+
+        private void RET(bool flag) 
+        {
+		    if( flag )
+		    { 
+			    _pc = Pop16();
+			    _cycles += 20;
+		    }
+		    else
+		    {
+			    _pc++;
+			    _cycles += 8;
+		    }
+	    }
+
+    							
+        private void RLCA() 
+        {
+            byte temp = (byte)(_a >> 7);
+		    _flagC = (temp != 0);
+		    _a = (byte)((_a << 1) | temp);
+		    _flagN = false;
+		    _flagH = false;
+		    _flagZ = false;
+		    _cycles += 4;
+		    _pc++; 
+	    }
+    			
+        private byte RLC(byte r1) 
+        {
+            byte retVal = 0;
+            byte temp = (byte)(r1 >> 7);
+		    _flagC = (temp != 0);
+		    _flagZ = ((retVal = (byte)((r1 << 1) | temp)) == 0);
+		    _flagN = false; 
+		    _flagH = false;
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void RLC_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+            byte temp = (byte)(val >> 7);
+		    _flagC = (temp != 0); 
+		    _flagZ = ((val = (byte)((val << 1) | temp)) == 0);
+		    _flagN = false;
+		    _flagH = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+        }
+    					
+
+        private void RLA()
+        {
+		    byte temp = (byte)(_a >> 7);
+		    _a = (byte)(( _a<<1 ) | (_flagC ? 1 : 0));
+		    _flagC = (temp !=0 );
+		    _flagN = false;
+		    _flagH = false;
+		    _flagZ = false;
+		    _cycles+=4;
+		    _pc++;
+	    }
+
+        private byte RL(byte r1) 
+        {
+            byte retVal = 0;
+		    byte temp = (byte)(r1 >> 7);
+		    _flagZ = ((retVal = (byte)((r1 << 1) | (_flagC ? 1 : 0)))==0);
+		    _flagC = (temp != 0);
+		    _flagN = false;
+		    _flagH = false;
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void RL_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+	        byte temp = (byte)(val >> 7);
+		    _flagZ = ((val = (byte)((val << 1) | (_flagC ? 1 : 0)))==0);
+		    _flagC = (temp != 0);
+		    _flagN = false;
+		    _flagH = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+	    }
+    				
+        private void RRCA()
+        {
+            byte temp = (byte)(_a & 0x01);
+		    _flagC = (temp != 0);
+		    _a = (byte)(( _a >> 1 ) | ( temp << 7));
+		    _flagN = false;
+		    _flagH = false;
+		    _flagZ = false;
+		    _cycles+=4;
+		    _pc++;
+	    }
+
+        private byte RRC(byte r1) 
+        {
+            byte retVal = 0;
+            byte temp = (byte)(r1 & 0x01);
+		    _flagC = (temp != 0);
+		    _flagZ = ((retVal = (byte)((r1 >> 1) | (temp << 7)))==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void RRC_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+            byte temp = (byte)(val & 0x01);
+		    _flagC = (temp != 0);
+		    _flagZ = ((val = (byte)((val >> 1) | (temp << 7)))==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+	    }
+
+        private void RRA()
+        {
+		    byte temp = (byte)(_a & 0x01);
+		    _a = (byte)(( _a >> 1)|((_flagC ? 1 : 0) << 7));
+		    _flagC = (temp != 0 );
+		    _flagN = false;
+		    _flagH = false;
+		    _flagZ = false;
+		    _cycles+=8;
+		    _pc++;
+	    }
+        
+        private byte RR(byte r1) 
+        {
+            byte retVal = 0;
+		    byte temp = (byte)(r1 & 0x01);
+		    _flagZ = ((retVal = (byte)((r1 >> 1) | ((_flagC ? 1 : 0) << 7)))==0);
+		    _flagC = (temp != 0 );
+		    _flagN = false; 
+		    _flagH = false; 
+		    _cycles+=8; 
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void RR_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+		    byte temp = (byte)(val & 0x01);
+		    _flagZ = ((val = (byte)((val >> 1) | ((_flagC ? 1 : 0) << 7)))==0);
+		    _flagC = (temp != 0);
+		    _flagN = false;
+		    _flagH = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+	    }
+
+        private void RST(ushort n) 
+        { 
+            Push16((ushort)(_pc+1));
+		    _cycles+=16;
+		    _pc = n;
+	    }
+    		
+
+        private void SBC(byte r1) 
+        { 
+		    _a = RegisterSubtractWithCarry(_a, r1);
+		    _cycles+=4;
+		    _pc++;
+	    }
+
+        private void SBC_ADDR(ushort r1) 
+        {
+		    _a = RegisterSubtractWithCarry(_a, _mem.ReadByte(r1) );
+		    _cycles+=8;
+		    _pc++;
+	    }
+
+        private void SBC_IMM8() 
+        {
+		    _a = RegisterSubtractWithCarry( _a, GetImm8());
+		    _cycles+=8;
+		    _pc+=2;
+	    }
+
+        private void SCF() 
+        {
+		    _flagC = true; 
+		    _flagN = false;
+		    _flagH = false;
+		    _cycles+=4;
+		    _pc++;
+	    }
+
+        private byte SET(int bit, byte r1) 
+        {
+		    byte retVal = (byte)(r1 | (byte)(0x01 << bit));
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void SET_ADDR(int bit, ushort r1) 
+        {
+	        _mem.WriteByte(r1, (byte)(_mem.ReadByte(r1)|(0x01<<bit)));
+	        _cycles+=16;
+	        _pc++;
+        }
+
+        private byte SLA(byte r1) 
+        {
+            byte retVal = 0;
+	        _flagC = (r1 >> 7) != 0;
+	        _flagZ = ((retVal = (byte)(r1 << 1) )==0);
+	        _flagN = false;
+	        _flagH = false;
+	        _cycles += 8;
+	        _pc++;
+
+            return retVal;
+	    }
+
+        private void SLA_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+		    _flagC = (val >> 7) != 0;
+		    _flagZ = ((val = (byte)(val << 1))==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+	    }
+
+        private byte SRL(byte r1) 
+        {
+            byte retVal = 0;
+		    _flagC = (r1 & 0x01) != 0;
+		    _flagZ = ((retVal = (byte)(r1 >> 1)) == 0);
+		    _flagN = false;
+		    _flagH = false;
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void SRL_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+		    _flagC = (val & 0x01) != 0;
+		    _flagZ = ((val = (byte)(val >> 1))==0);
+		    _flagN = false; 
+		    _flagH = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+	    }
+
+
+	    private byte SRA(byte r1) 
+        {
+            byte retVal = 0;
+		    _flagC = (r1 & 0x01) != 0;
+		    byte temp = (byte)(r1 & 0x80);
+		    _flagZ = ((retVal = (byte)((r1 >> 1) | temp) )==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _cycles+=8;
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void SRA_ADDR(ushort r1) 
+        {
+	        byte val =_mem.ReadByte( r1 );
+	        byte temp = (byte)(val & 0x80);
+	        _flagC = (val & 0x01) != 0;
+	        _flagZ = ((val = (byte)((val >> 1) | temp) )==0);
+	        _flagN = false;
+	        _flagH = false;
+	        _mem.WriteByte(r1, val);
+	        _cycles+=16;
+	        _pc++;
+	    }
+
+        private void STOP() 
+        {
+		    _cycles+=8;
+		    _pc+=2;
+	    }
+
+        private void SUB(byte r1) 
+        {
+		    _a = RegisterSubtract(_a, r1);
+		    _cycles+=4;
+		    _pc++;
+	    }
+
+        private void SUB_ADDR(ushort r1) 
+        {
+		    _a = RegisterSubtract(_a, _mem.ReadByte(r1) );
+		    _cycles+=8;
+		    _pc++;
+	    }
+
+        private void SUB_IMM8() 
+        {
+		    _a = RegisterSubtract(_a, GetImm8() );
+		    _cycles+=8;
+		    _pc+=2;
+	    }
+
+        private byte SWAP(byte r1) 
+        {
+            byte retVal = 0;
+		    _flagZ = ((retVal = (byte)((r1 >> 4)|(r1 << 4)))==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles += 8; //check
+		    _pc++;
+
+            return retVal;
+	    }
+
+        private void SWAP_ADDR(ushort r1) 
+        {
+		    byte val =_mem.ReadByte(r1);
+		    _flagZ = ((val = (byte)((val>>4)|(val<<4)))==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _mem.WriteByte(r1, val);
+		    _cycles+=16;
+		    _pc++;
+	    }
+
+        private void XOR(byte r1) 
+        {
+		    _flagZ = ((_a ^= r1)==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles+=4;
+		    _pc++;
+	    }
+
+        private void XOR_ADDR(ushort r1) 
+        {
+		    _flagZ = ((_a ^=_mem.ReadByte(r1))==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles+=8;
+		    _pc++;
+	    }
+
+        private void XOR_IMM8()
+        {
+		    _flagZ = ((_a ^= GetImm8())==0);
+		    _flagN = false;
+		    _flagH = false;
+		    _flagC = false;
+		    _cycles+=8;
+		    _pc+=2;
+	    }
+
+
+
+
+        //my old DAA routine, saved for posterity
+        private void DAA()
+        {
+	        byte high= (byte)((_a & 0xf0) >> 4);
+	        byte low=(byte)((_a & 0x0f));
+	        //look up current state in daa_table
+	        //there had better be a match :)
+	        for(int i=0;i<13;i++)
+	        {
+		        //big if-statement
+		        if( daa_table[i,0] == (_flagN ? 1 : 0) &&
+			        daa_table[i,1] == (_flagC ? 1 : 0) &&
+			        daa_table[i,2] <= high &&
+			        daa_table[i,3] >= high &&
+			        daa_table[i,4] == (_flagH ? 1 : 0) &&
+			        daa_table[i,5] <= low &&
+			        daa_table[i,6] >= low ) 
+		        {
+			        //add daa_table[i][7] to _a, set _flagC to daa_table[i][8]
+			        _a+=daa_table[i,7];
+			        _flagC= (daa_table[i,8] !=0);
+			        break;
+		        }
+	        }
+
+	        _flagZ=(_a == 0);
+	        _flagH=false;
+	        _pc++;
+        	
+        } 
+
+        private MemoryBus _mem;
+
+            
+        private ushort _pc;
+        private ushort _sp;
+        private ushort _af;
+        private ushort _bc;
+        private ushort _de;
+        private ushort _hl;	
+
+        private byte _a
+        {
+            get { return (byte)((_af & 0xff00) >> 8); }
+            set { _af = (ushort)((_af & 0x00ff) | (value << 8)); }
+        }
+
+        private byte _f
+        {
+            get { return (byte)(_af & 0x00ff); }
+            set { _af = (ushort)((_af & 0xff00) | value); }
+        }
+
+        private byte _b
+        {
+            get { return (byte)((_bc & 0xff00) >> 8); }
+            set { _bc = (ushort)((_bc & 0x00ff) | (value << 8)); }
+        }
+
+        private byte _c
+        {
+            get { return (byte)(_bc & 0x00ff); }
+            set { _bc = (ushort)((_bc & 0xff00) | value); }
+        }
+
+        private byte _d
+        {
+            get { return (byte)((_de & 0xff00) >> 8); }
+            set { _de = (ushort)((_de & 0x00ff) | (value << 8)); }
+        }
+
+        private byte _e
+        {
+            get { return (byte)(_de & 0x00ff); }
+            set { _de = (ushort)((_de & 0xff00) | value); }
+        }
+
+        private byte _h
+        {
+            get { return (byte)((_hl & 0xff00) >> 8); }
+            set { _hl = (ushort)((_hl & 0x00ff) | (value << 8)); }
+        }
+
+        private byte _l
+        {
+            get { return (byte)(_hl & 0x00ff); }
+            set { _hl = (ushort)((_hl & 0xff00) | value); }
+        }
+
+        private bool _flagC
+        {
+            get { return (_f & 0x8 ) != 0; }
+            set { _f = value ? (byte)(_f | 0x8) : (byte)(_f & 0xf7 ); }
+        }
+
+        private bool _flagH
+        {
+            get { return (_f & 0x4 ) != 0; }
+            set { _f = value ? (byte)(_f | 0x4) : (byte)(_f & 0xfb ); }
+        }
+
+        private bool _flagN
+        {
+            get { return (_f & 0x2 ) != 0; }
+            set { _f = value ? (byte)(_f | 0x2) : (byte)(_f & 0xfd ); }
+        }
+
+        private bool _flagZ
+        {
+            get { return (_f & 0x1 ) != 0; }
+            set { _f = value ? (byte)(_f | 0x1) : (byte)(_f & 0xfe ); }
+        }
+        
+        private byte[] bmask = { 0xfe, 0xfd, 0xfb, 0xf7, 0xef, 0xdf, 0xbf, 0x7f };
+
+        private int _cycles;
+        private int _clocks;
+        private bool _halted;
+        private bool _interruptEnable;
+        private int _interruptEnableCounter;
+        private int _interruptDisableCounter;
+            //big-bad DAA conversion table.
+            //all this work for one frigging opcode.
+            //oh well, at least i can find out what my score in tetris is after this :).
+
+            private byte[,] daa_table = {
+            //		N   C	h-start	h-end	H	l-start	l-end	add		C (after)
+	            {	0,	0,	0x0,	0x9,	0,	0x0,	0x9,	0x00,	0	},
+	            {	0,	0,	0x0,	0x8,	0,	0xa,	0xf,	0x06,	0	},
+	            {	0,	0,	0x0,	0x9,	1,	0x0,	0x3,	0x06,	0	},
+	            {	0,	0,	0xa,	0xf,	0,	0x0,	0x9,	0x60,	1	},
+	            {	0,	0,	0x9,	0xf,	0,	0xa,	0xf,	0x66,	1	},
+	            {	0,	0,	0xa,	0xf,	1,	0x0,	0x3,	0x66,	1	},
+	            {	0,	1,	0x0,	0x2,	0,	0x0,	0x9,	0x60,	1	},
+	            {	0,	1,	0x0,	0x2,	0,	0xa,	0xf,	0x66,	1	},
+	            {	0,	1,	0x0,	0x3,	1,	0x0,	0x3,	0x66,	1	},
+	            {	1,	0,	0x0,	0x9,	0,	0x0,	0x9,	0x00,	0	},
+	            {	1,	0,	0x0,	0x8,	1,	0x6,	0xf,	0xfa,	0	},
+	            {	1,	1,	0x7,	0xf,	0,	0x0,	0x9,	0xa0,	1	},
+	            {	1,	1,	0x6,	0xf,	1,	0x6,	0xf,	0x9a,	1	}
+            };
+    }
+}

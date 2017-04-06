@@ -1,0 +1,10 @@
+              Define   (CPUSize,      20);       !Reg to store CPUSize 
+              Define   (X,           100);       !Temporary register
+
+CheckSize:    MQ := 1;                           !Write to the Mult shift reg.
+              X := 0;                            !Init X i.e. anything but 1
+              X := MQ;                           !Read MQ back i.e.X=X ifno MQ
+              X - 1;                             !Test if equal then ->KRNL
+              If Eql Return;                     !  16K CPU if the same
+              R370 := 204, GoTo (7401);          !  4K otherwise
+                   

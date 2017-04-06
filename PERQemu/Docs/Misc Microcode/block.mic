@@ -1,0 +1,545 @@
+
+
+
+Define(PEaddr,1);
+Define(PE,2);
+Define(Screen,3);
+Define(Screen1,4);
+Define(Screen2,5);
+Define(Vidtmp,6);
+Define(Vcount,10);
+Define(SB,7);
+Define(Allones,60);
+Define(Mtop,11);
+Define(Mbot,12);
+Define(Nlef,13);
+Define(Nrig,14);
+Define(Func,15);
+Define(Wid,16);
+Define(Height,17);
+Define(Xdes,20);
+Define(Ydes,21);
+Define(Xsrc,22);
+Define(Ysrc,23);
+Define(Tmp,24);
+Define(Tmp1,25);
+Define(Tmp2,26);
+Define(Tmp3,27);
+Define(Mtflag,32);
+Define(Mbflag,33);
+Define(Nlflag,34);
+Define(Nrflag,35);
+Define(Stop,36);
+Define(FFlag,37);
+Define(R370,370);
+
+
+
+!   This is the command routine. It is this part of the program that will
+! direct the subroutines.
+!
+
+Start:   call(Clear),loc(2400);
+         call(Init);            ! Go initialize the parameters
+         call(Cal);             ! Go get the Screen2 address
+         Screen2, rightshift(4);! Divid the Screen2 address by sixteen
+         Screen:= shift;        ! Load the vidio state register
+         if intrpend call(Vecint); ! Check for interrupts
+         Tmp3:= 20;             ! Load the cycle counter
+         call(Clear);           ! Go clear the memory
+Start1:  call(Function);        ! Go set the function command for Raster-Op
+Start2:  call(Reset);           ! Go setup the M and N values
+Start3:  if intrpend call(Vecint); ! Check for interrupts
+         call(Mt);              ! Go update the top of screen
+         call(Mb);              ! Go update the bottom of screen
+         call(Nl);              ! Go update the left side
+         call(Nr);              ! Go update the right side
+         if intrpend call(Vecint); ! Check for interrupts
+         call(Ras1);            ! Go set up the top line
+         call(Ras);             ! Go draw it
+         call(Ras2);            ! Go setup the bottom line
+         call(Ras);             ! Go draw it
+         call(Ras3);            ! Go setup the left side
+         call(Ras);             ! Go draw it
+         call(Ras4);            ! Go setup the right side
+         call(Ras);             ! Go draw it
+         Tmp2:= 10000;           ! Load a delay count
+Dly:     if intrpend call(Vecint); ! Check for interrupts
+         Tmp2:= Tmp2 - 1;       ! Subtract one from the delay count
+         if neq goto(Dly);      ! If not zero, loop until it is.
+         Stop - 4;              ! Subtract four from the stop register.
+         if eql goto(Start4);   ! If equal all the M and N registers have
+                                ! reach their maximuns.
+         goto(Start3);          ! Go back and do it again
+Start4:  Tmp3:= Tmp3 - 1;       ! Subtract one from the cycle counter
+         if eql goto(Start5);   ! If zero all done with left to right Raster-Op
+                                ! go do right to left Raster-Op
+         goto(Start1);          ! Go back and do it again
+Start5:  Screen1:= Screen2;     ! Change the screen addresses for the right to
+                                ! left Raster-Op
+         Screen2:= 0;           ! Clear the Screen2 register
+         Screen:= 0;            ! Clear the vidio screen register
+         call(Clear);           ! Clear the memory
+         call(Fill);            ! Fill the memory with ones
+         call(Clear);           ! Clear the memory
+         call(Fill);            ! Fill the memory with ones
+         call(Clear);           ! Clear the memory
+         Tmp3:= 20;             ! Load the cycle counter
+Start6:  call(Function);        ! Go set the function command
+Start7:  call(Reset);           ! Go setup the M and N values
+Start8:  if intrpend call(Vecint); ! Check for interrupts
+         call(Mt);              ! Go update the top of screen
+         call(Mb);              ! Go update the bottom of screen
+         call(Nl);              ! Go update the left side
+         call(Nr);              ! Go update the right side
+         if intrpend call(Vecint); ! Check for interrupts
+         call(Ras1);            ! Go setup the top line
+         call(Ras);             ! Go draw it
+         call(Ras2);            ! Go setup the bottom line
+         call(Ras);             ! Go draw it
+         call(Ras3);            ! Go setup the left side
+         call(Ras);             ! Go draw it
+         call(Ras4);            ! Go setup the right side
+         call(Ras);             ! Go draw it
+         Tmp2:= 10000;          ! Load the delay counter
+Dly1:    if intrpend call(Vecint); ! Check for interrupts
+         Tmp2:= Tmp2 - 1;       ! Subtract one from the delay counter
+         if neq goto(Dly1);     ! If not zero, loop untill it is
+         Stop - 4;              ! Subtract four from the Stop register
+         if eql goto(Start9);   ! If zero all the M and N values have reached
+                                ! their maximuns.
+         goto(Start8);          ! Go back and do it again
+Start9:  Tmp3:= Tmp3 - 1;       ! Subtract one from the cycle counter
+         if eql goto(Start10);  ! If zero all done with right to left Raster-Op
+                                ! Go exerize the shifter.
+         goto(Start6);          ! Go back to do it again.
+Start10: Wid:= 1;               ! Load the width register with a one
+         Screen2:= Screen1;     ! Change the screen address for left to right 
+                                ! raster-op
+         Screen1:= 0;           ! Clear the Screen1 register
+         Screen2,rightshift(4); ! Divid the Screen2 address by sixteen
+         Screen:= shift;        ! Get the Screen2 address divided by sixteen
+         call(Clear);           ! Go clear memory
+         call(Fill);            ! Go fill the memory with ones
+         call(Clear);           ! Go clear memory
+         call(Fill);            ! Go fill memory with ones
+         call(Clear);           ! Go clear memory
+         Tmp3:= 0;              ! clear the Tmp3 register
+         Tmp:= 1400;            ! Load the max "X" value
+         Tmp, rightshift(4);   !!! Divide by two, by right shifting one place
+         Tmp:= shift;           ! Get the "X: value divided by two
+         Xsrc:= Tmp;            ! Load the Xsrc register from tmp
+Start11: call(Function);        ! Go set the function command
+Start12: call(Reset);           ! Go setup the M and N values
+Start13: if intrpend call(Vecint);! Check for interrupts
+         call(Mt);              ! Go update the top of screen
+         call(Mb);              ! Go update the bottom of screen
+         call(Nl);              ! Go update the left side
+         call(Nr);              ! Go update the right side
+         if intrpend call(Vecint);! Check for interrupts
+         call(Ras5);            ! Go setup the top left line
+         call(Ras);             ! Go draw it
+         call(Ras6);            ! Go setup the top right line
+         call(Ras);             ! Go draw it
+         call(Ras7);            ! Go setup the botton left line
+         call(Ras);             ! Go draw it
+         call(Ras8);            ! Go setup the bottom right line
+         call(Ras);             ! Go draw it
+         Tmp2:= 17777;          ! Load the delay counter
+Dly2:    if intrpend call(Vecint);! Check for interrupts
+         Tmp2:= Tmp2 - 1;       ! Subtract one from the delay counter
+         if neq goto(Dly2);     ! If not zero, loop untill it is
+         Stop - 2;              ! Subtract two from the stop register
+         if eql goto(Start14);  ! if zero the N values have reached their
+                                ! maximums.
+         goto(Start13);         ! Go back and do it again
+Start14: Tmp3;                  ! Pass Tmp3 through the compute loop
+         if neq goto(Start15);  ! If not zero go check the width register
+         Tmp3:= 17777;          ! Load Tmp3 with ones
+         goto(Start11);         ! Go back and do it again
+Start15: Wid - 100;             ! Subtract the maximun width value from the
+                                ! present width value.
+         if neq goto(Start16);  ! If not zero go update the width register
+         goto(Start17);         ! All done, go do right to left raster-op
+Start16: Wid:= Wid + 1;         ! Add one to the width register
+         Tmp3:= 0;              ! Clear the Tmp3 register
+         goto(Start11);         ! Go back and do it again
+Start17: Wid:= 1;               ! Load the width register with a one
+         Screen1:= Screen2;     ! Change the screen address for right to left
+                                ! raster-op.
+         Screen2:= 0;           ! Clear the Screen2 register
+         Screen:= 0;            ! Clear the screen address register
+         call(Clear);           ! Go clear the memory
+         call(Fill);            ! Go fill the memory with ones
+         call(Clear);           ! Go clear the memory
+         call(Fill);            ! Go fill the memory with ones
+         call(Clear);           ! Go clear the memory
+         Tmp3:= 0;              ! Load the cycle counter
+         Tmp:= 1400;            ! Load the max "X" value
+         Tmp, rightshift(4);    ! Divide by sixteen, by rightshifting four                                      ! places
+         Tmp := shift;          ! Get the "X" value divided by two
+         Xsrc:= Tmp;            ! Load the Xsrc register from Tmp
+Start18: call(Function);        ! Go set the function command
+Start19: call(Reset);           ! Go setup the M and N values
+Start20: if intrpend call(Vecint);! Check for interrupts
+         call(Mt);              ! Go update the top of screen
+         call(Mb);              ! Go update the bottom of screen
+         call(Nl);              ! Go update the left side
+         call(Nr);              ! Go update the right side
+         if intrpend call(Vecint);! Check for interrupts
+         call(Ras5);            ! Go setup the top left line
+         call(Ras);             ! Go draw it
+         call(Ras6);            ! Go setup the top right line
+         call(Ras);             ! Go draw it
+         call(Ras7);            ! Go setup the bottom left line
+         call(Ras);             ! Go draw it
+         call(Ras8);            ! Go setup the bottom right line
+         call(Ras);             ! Go draw it
+         Tmp2:= 17777;          ! Load the delay counter
+Dly3:    if intrpend call(Vecint);! Check for interrupts
+         Tmp2:= Tmp2 - 1;       ! Subtract one from the delay counter
+         if neq goto(Dly3);     ! If not zero, loop untill it is.
+         Stop - 2;              ! Subtract two from the stop register
+         if eql goto(Start21);  ! If zero, the N values have reach their
+                                ! maximums.
+         goto(Start20);         ! Go back and do it again
+Start21: Tmp3;                  ! Pass Tmp3 through the compute loop
+         if neq goto(Start22);  ! If zero, go check the width register
+         Tmp3:= 177777;         ! Load Tmp3 with ones
+         goto(Start18);         ! Go back and do it again
+Start22: Wid - 100;              ! Subtract the maximun width value from the 
+                                ! present width value.
+         if neq goto(Start23);  ! if not zero, go update the width register
+         R370:= 100, goto(7401);! All done, exit.
+Start23: Wid:= Wid + 1;         ! Add one to the width register
+         Tmp3:= 0;              ! Clear the Tmp3 reegister
+         goto(Start18);         ! Go back and do it again.
+         
+         
+         
+         
+         
+!   This routine will calaulate the memory address for Screen2.
+
+Cal:   Tmp:= 2050;              ! Load a address constant
+Cal1:  Screen2:= Screen2 + 60;  ! Add words/line constant
+       if intrpend goto(Vecint);! Check for interrupts
+       Tmp:= Tmp - 1;           ! Subtract one scan line
+       if neq goto(Cal1);       ! If not zero, loop untill it is.
+       return;                  ! Done. Return to the program.
+       
+!   This is the function routine. Its purpose is to toggle the function
+! command between two values. The two values are: Function:= Source,
+! and Function:= not Source.
+
+
+Function:  Fflag;               ! Pass the function flag
+           if eql goto(Function1);! If zero, function gets, Not Source.
+           Func:= 0;            ! Load Func with Dest:= Source.
+           Fflag:= 0, return;   ! Clear the function flag and return
+Function1: Func:= 1;            ! Load Func with Dest:= Not Source.
+           Fflag:= 177777, return;! Load the function flag with ones and return
+                    
+
+!   This is the init routine. It will load all the registers with correct
+! values to operate.
+
+
+Init:   Screen1:= 0;            ! Clear the Screen1 register
+        Screen2:= 0;            ! Clear the Screen2 register
+        Screen:= 0;             ! Clear the vidio screen register
+        Vidtmp:= 101154;        ! Load the vidio state register with the first
+                                ! vertical retrace command.
+        Vcount:= 0;             ! Load the vidio counter
+        SB:= 0;                 ! Clear the stack base register
+        Allones:= 177777;       ! Load all ones
+        Fflag:= 0;              ! Clear the function flag
+        Xdes:= 0;               ! Clear the Xdes register
+        Ydes:= 0;               ! Clear the Ydes register
+        Xsrc:= 0;               ! Clear the Xdes register
+        Ysrc:= 0;               ! Clear the Ysrc register
+        return;                 ! Return to the program
+        
+        
+
+!   This routine will setup to draw a horizional in the top half of screen.
+! It uses the values of M and N.
+
+
+Ras1:   Wid:= Nrig;             ! Load the right side value
+        Wid:= Wid - NLef;       ! Subtract the left side value for the width
+                                ! in bits.
+        Height:= 0;             ! Set height for one scan line
+        Xdes:= Nlef;            ! Load the left side value
+        Ydes:= Mtop;            ! Load the "Y" value
+        Xsrc:= Xdes;            ! Load the "X" value
+        Ysrc:= Ydes;            ! Load the "Y" value
+        return;
+        
+        
+!   This will setup to draw a horizional line in the bottom half of the screen.
+
+
+Ras2:   Wid:= Nrig;             ! Load the right side value
+        Wid:= Wid - Nlef;       ! Subtract the  left side value for the width
+                                ! in bits.
+        Height:= 0;             ! Set height for one scan line
+        Xdes:= Nlef;            ! Load the left side value
+        Ydes:= Mbot;            ! Load the "Y" value
+        Xsrc:= Xdes;            ! Load the "X" source value
+        Ysrc:= Ydes;            ! Load the "Y" source value
+        return;                 ! Return to the program
+        
+        
+        
+!   This routine will setup to draw a line on the left side of the screen.
+
+
+Ras3:   Wid:= 1;                ! Set width for one bit position
+        Height:= Mbot;          ! Load the bottom of screen value
+        Height:= Height - Mtop; ! Subtract the Mtop value for the height in
+                                ! scan lines.
+        Xdes:= Nlef;            ! Load the left side screen value
+        Ydes:= Mtop;            ! Load the top of screen value
+        Xsrc:= Xdes;            ! Load the "X" source value
+        Ysrc:= Ydes;            ! Load the "Y" source value
+        return;                 ! Return to the progam'
+        
+        
+        
+!   This routine will setup to draw a vertical line on the right side of the
+! screen.
+
+
+Ras4:   Wid:= 1;                ! Set width for one bit position
+        Height:= Mbot;          ! Load the bottom of screen value
+        Height:= Height - Mtop; ! Subtract the Mtop value for the height in
+                                ! scan lines.
+        Height:= Height + 1;    ! This line was added to correct a cluge.
+        Xdes:= Nrig;            ! Load the right side screen value
+        Ydes:= Mtop;            ! Load the top of screen value
+        Xsrc:= Xdes;            ! Load the "X" source value
+        Ysrc:= Ydes;            ! Load the "Y" source value
+        return;                 ! Return to the progran
+        
+        
+!   TH=his routine will set up to draw a line at the top left half of the 
+! screen.
+
+Ras5:   Height:= 0;             ! Clear the Height register
+        Xdes:= Nlef;            ! Load the left side screen value
+        Ydes:= Mtop;            ! Load the top of screen value
+        Ysrc:= Ydes;            ! Load the "Y" source value
+        return;                 ! Return to the program
+        
+        
+!   This routine will setup to draw a line at the top right half of the
+! screen.
+
+
+Ras6:    Height:= 0;            ! Clear the height register
+         Xdes:= Nrig;           ! Load the right side screen value
+         Ydes:= Mtop;           ! Load the top of sereen value
+         Ysrc:= Ydes;           ! Load the "Y" source
+         return;                ! Return to the program
+         
+         
+!   This routine will setup to draw a line at the bottom left half of the 
+! screen
+
+Ras7:    Height:= 0;            ! Clear the height register
+         Xdes:= Nlef;           ! Load the left side screen value
+         Ydes:= Mbot;           ! Load the bottom screen value
+         Ysrc:= Ydes;           ! Load the "Y" source
+         return;                ! Return to the program
+         
+         
+         
+!   This routine will setup to draw a line at the bottom right half of the 
+! screen.
+
+
+Ras8:    Height:= 0;            ! Clear the Height register
+         Xdes:= Nrig;           ! Load the right side screen value
+         Ydes:= Mbot;           ! Load the bottom screen value
+         Ysrc:= Ydes;           ! Load the "Y" source value
+         return;                ! Return to the program
+         
+         
+        
+        
+!   This is the routine to setup the "RO" code for the Raster-Op function.
+! It will push all the parameters onto the stack, and then go to the "RO" code.
+
+
+Ras:    if intrpend call(Vecint);! Check for interrupts
+        Bpc:= 10;               ! Force bpc to overflow, this sets up the "RO"
+                                ! code return.
+        Tos:= Func,push;        ! Load the function code
+        Tos:= Wid,push;         ! Load the width in bits
+        Tos:= Height,push;      ! Load the height in scan lines
+        Tos:= Xdes,push;        ! Load "X" destination in bits
+        Tos:= Ydes,push;        ! Load "Y" destination in scan lines
+        Tos:= 60,push;          ! Load words/line constant
+        Tos:= Screen2,push;     ! Load the distination screen address
+        Tos:= Xsrc,push;        ! Load the "X" source in bits
+        Tos:= Ysrc,push;        ! Load the "Y" source in bits
+        Tos:= 60,push;          ! Load words/line constant
+        Tos:= Screen1,push;     ! Load the source screen address
+        goto(4000);             ! Go to the "RO" code
+Back:   Nop,loc(0);             ! Return here from the "RO" code
+        return;                 ! Return to the program
+        
+        
+        
+!   This is the fill routine. It will fill the memory with all ones.
+
+
+Fill:   Tmp:= 100000;           ! Load a constant
+        Tmp:= Tmp + Tmp;        ! Shift the bit, equals 200000
+        Tmp:= Tmp + 177777;     ! Add a constant to it, equals 377777
+        Tmp:= Tmp - 3;          ! Address equals 377774, quad word aligned
+Fill1:  Tmp, store4;            ! Send the address and store
+        177777;                 ! Send the data
+        177777;                 ! Send the data
+        177777;                 ! Send the data
+        177777;                 ! Send the data
+        if intrpend call(Vecint);! Check for interrupts
+        Tmp:= Tmp - 4;          ! Subtract a quad word
+        if c19 goto(Fill2);     ! If zero, exit
+        goto(Fill1);            ! Go back and loop
+Fill2:  return;                 ! Return to the program        
+        
+!   This is the clear routine. It will clear all of memory for use by the
+! screens.
+
+
+
+Clear:   Tmp:= 100000;          ! Load a constant
+         Tmp:= Tmp + Tmp;       ! Shift the bit, equals 200000
+         Tmp:= Tmp + 177777;    ! Add a constant, equals 377777
+         Tmp:= Tmp - 3;         ! Subtract four, equals 377774
+Clear1:  MA:= Tmp, store4;      ! Send the address and store
+         0;                     ! Send data
+         0;                     ! Send data
+         0;                     ! Send data
+         0;                     ! Send data
+         if intrpend call(Vecint);! Check for interrupts
+         Tmp:= Tmp - 4;         ! Subtract a quad word
+         if c19 goto(Clear2);   ! If zero, exit
+         goto(Clear1);          ! Go back and loop
+Clear2:  return;                ! Return to the program
+         
+         
+
+!   This is the reset routine. It will set the values of the M and N registers
+! to the starting point of the screen. The starting point is the center of the
+! screen.
+
+
+Reset:   Tmp:= 2010;            ! Load the max octal "Y" value
+         Tmp:= Tmp - 1;         ! Subtract one from it to start at zero
+         Tmp,rightshift(1);     ! Divide by two, by rightshifting one place
+         Tmp:= shift;           ! Get "Y" value divided by two
+         Mtop:= Tmp;            ! Load the M registers
+         Mbot:= Tmp;            ! Load the M registers
+         Tmp:= 1400;            ! Load the max "X" value
+         Tmp:= Tmp - 1;         ! Subtract one from it to start at zero
+         Tmp,rightshift(1);     ! Divide by two, by rightshifting one place
+         Tmp:= shift;           ! Get the "X" value divided by two
+         Nlef:= Tmp;            ! Load the N registers
+         Nrig:= Tmp;            ! Load the N registers
+         Mtflag:= 0;            ! Clear the M top flag
+         Mbflag:= 0;            ! Clear the M bottom flag
+         Nlflag:= 0;            ! Clear the N left flag
+         Nrflag:= 0;            ! Clear the N right flag
+         Stop:= 0;              ! Clear the Stop register
+         return;                ! Return to the program
+         
+         
+!   These are the M and N routines. M is the vertical axis of the screen,
+! and N is the horizional axis of the screen. The two axis start in the center
+! of the screen. Then the axis or incremented one step at a time. The M axis
+! moves to the top and bottom and the N axis moves to the right and left. After
+! every step is taken the  routine exits to draw the lines. It is the values
+! of offset from center of M and N, that are used for the X and Y coordinate
+! values for Raster-Op.
+
+
+Mt:      Mtop;                  ! Pass Mtop through the comput loop
+         if eql goto(Mt1);      ! Check for the top of screen. The lowest value
+                                ! for "Y".
+         Mtop:= Mtop - 1,return;! Subtract one from Mtop and return to the
+                                ! program.
+Mt1:     Mtflag;                ! Check the top flag, this says we have reached
+                                ! the top of screen.
+         if neq return;         ! If at top, return to the program.
+         Mtflag:= 177777;       ! Set Mtflag to ones
+         Stop:= Stop + 1;       ! Add one to the stop register
+         return;                ! Return to the program
+         
+Mb:      Mbot xor 2007;         ! Xor Mbot with the max value for "Y".
+         if eql goto(Mb1);      ! Check for the bottom of the screen
+         Mbot:= Mbot + 1,return;! Add one to Mbot, return to the program
+Mb1:     Mbflag;                ! Pass the bottom flag
+         if neq return;         ! If at bottom, return to the program
+         Mbflag:= 177777;       ! Set Mbflag to ones
+         Stop:= Stop + 1;       ! Add one to the Stop register
+         return;                ! Return to the program
+         
+Nl:      Nlef;                  ! Pass Nlef through the comput loop
+         if eql goto(Nl1);      ! Check for the left side of screen. The lowest
+                                ! value for "X".
+         Nlef:= Nlef - 1,return;! Subtract one from Nlef
+Nl1:     Nlflag;                ! Pass the left side flag
+         if neq return;         ! If at the left side, return to the program
+         Nlflag:= 177777;       ! Set Nlflag to ones
+         Stop:= Stop + 1,return;! Add one to the stop register
+         
+Nr:      Nrig xor 1377;         ! Xor Nrig with the max value for "Y"
+         if eql goto(Nr1);      ! Check for the right side of screen
+         Nrig:= Nrig + 1,return;! Add one to Nrig and return to the program
+Nr1:     Nrflag;                ! Pass the right side flag
+         if neq return;         ! If at the right side,return to the program
+         Nrflag:= 177777;       ! Set Nrflag to ones
+         Stop:= Stop + 1,return;! Add one to the stop flag and return.
+         
+         
+!   This is the vector service routine.
+
+
+Vecint:   Vector(Z80int);
+Z80int:   return, loc(3400);
+Badint1:  return, loc(3404);
+Badint2:  return, loc(3410);
+Badint3:  return, loc(3414);
+Badint4:  return, loc(3420);
+
+Vid:      Vidtmp, iob(343),loc(3424); ! Load vidio state
+          Vidtmp, iob(340);           ! Load line count
+Vid1:     0,iob(342);                 ! Load curser address
+          Vidtmp and 200;             ! Mask out the second retrace condition
+          if eql goto(Vid2);          ! If not at the second retract condition,
+                                      ! load the normal display command
+          Screen, iob(341);           ! Load the screen address
+          0, iob(344);                ! Load the curser X value
+          Vcount:= 11;                ! Load the vidio counter
+Vid2:     Vidtmp:= 102000;            ! Load the normal display command
+          Vcount:= Vcount - 1;        ! Subtract one from the vidio counter
+          if gtr return;              ! If not at end of screen,exit.
+          Vidtmp:= 101154;            ! Load the first vertical retrace command
+          Vcount;                     ! Pass the vidio counter
+          if eql return;              ! If not at end of screen,exit.
+          Vidtmp:= 101351;            ! Load the second vertical retrace
+                                      ! command.
+          return;                     ! Return to the program
+          
+Badint5:  return, loc(3430);
+
+Parint:   PE:= 1, loc(3434);          ! Parity error,load the PE flag
+          iob(147);                   ! Read the parity address register and
+                                      ! dismiss the interrupt
+          PEaddr:= iod;               ! Get the bad data
+          return;                     ! Return to the program
+          
+          end;

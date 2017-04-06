@@ -1,0 +1,71 @@
+! Diagnostic Micro-Code Model for use with PDM (until PDS.MICRO exists)
+!   copyright 1980, 1981, 1982,1983 Three Rivers Computer Corporation
+!
+
+! 12-Nov-80  MAB  Version 1.0   Initial Creation
+
+!
+! Register definitions.
+!
+
+define (PDCStat0,20);     ! Registers Used for Status Control Block
+define (PCDStat1,21);
+define (PDCStat2,22);
+define (PDCStat3,23);
+
+define(ErrorType,1);      ! Place to put error number before calling
+                          ! ErrorExit
+                          ! The following registers are needed to recreate
+                          ! the video display for KRNL (should it be destroyed)
+define(VR,374);           ! video refresh temp
+define(Cm,372);           ! pointer to current video command
+
+
+constant(BreakPoint,7401);! location to goto to breakpoint and enter KRNL
+constant(PDSEntry,20);    ! location to re-entry diagnostic from PDM
+constant(ErrorStatus,10); ! Status word to report an error
+constant(EndOfSt,2);      ! Status word to report End of Subtest
+
+!
+! GOTO here to end the SubTest
+!
+EofST:  ! Call to VidRestore is only necessary if Video Block is destroyed
+        ! by the diagnostic
+        Call(VidRestore);                           ! restore Video Block
+        PDCStat3 := EndOfST, goto(BreakPoint);      ! signal end of pass
+
+!
+! Routine to Restore the Video control block
+!
+
+VidRestore: VR := 102000;              ! Restore the Kernel Video Stuff
+            Cm := 177760;
+            Cm := Cm + Cm;
+            Cm := Cm - 1, LoadS(7);
+VidRes1:    Cm := Cm + 1, Store;
+            VR, Repeat(VidRes1);
+            Cm + 1, store;
+            101154;
+            Cm + 2, store;
+            101351;
+            return;
+            
+!
+! Error Reporting Routine.  Error Code must be put in ErrorType before calling
+!
+
+ErrorExit: ErrorType,LeftShift(10);    ! put the error code in the status reg
+           PDCStat2 := shift;
+           ! Call to VidRestore is only necessary if Video Block is destroyed
+           ! by the diagnostic
+           call(VidRestore);           ! restore Video Block
+           PDCStat3 := ErrorStatus, goto(BreakPoint);
+                                       ! Set the Error Status Bit and BPT
+
+!
+! We come back from errors (from PDM) here
+!
+
+ErrorReturn: return, Loc(PDSEntry);
+
+END;

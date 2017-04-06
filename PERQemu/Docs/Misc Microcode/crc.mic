@@ -1,0 +1,194 @@
+$Include CRC.Dfs
+$Include Perq.Dfs
+$Include IO.Dfs
+
+        Place(7000,7377);
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+!       CRC - Compute CRC for Pascal.
+!
+!       Entry:  (Tos)   = Address of buffer as offset from SB.
+!               (Tos-1) = Bit count in buffer.
+!               (Tos-2) = High order CRC so far.
+!               (Tos-3) = Low order CRC so far.
+!
+!       Exit:   (Tos)   = High order expected value.
+!               (Tos-1) = Low order expected value.
+!               (Tos-2) = High order CRC so far.
+!               (Tos-3) = Low order CRC so far.
+!
+!-----------------------------------------------------------------------------
+
+Loc(7000),
+        Call(CRCInit);
+        CRCAddr := Tos + SB, Pop;       ! buffer address
+        BCnt := Tos, Pop;               ! bit count
+        HiCRC := Tos, Pop;              ! high order CRC
+        LoCRC := Tos, Call(CRCBfr);     ! low order CRC
+        Tos := LoCRC;                   ! return low order CRC
+        Tos := HiCRC, Push;             ! return high order CRC
+        Tos := LoGood, Push;            ! return low order expected value
+        Tos := HiGood, Push, NextInst(0);! return high order expected value
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+!       CRC - Compute One Bit of the CRC for Pascal.
+!
+!       Entry:  (Tos)   = High order CRC so far.
+!               (Tos-1) = Low order CRC so far.
+!               (Tos-2) = Input bit in Bit 0.
+!
+!       Exit:   (Tos)   = High order CRC so far.
+!               (Tos-1) = Low order CRC so far.
+!
+!-----------------------------------------------------------------------------
+
+Loc(7004),
+        Call(CRCInit);
+        HiCRC := Tos, Pop;              ! high order CRC
+        LoCRC := Tos, Pop;              ! low order CRC
+        Tos, Rotate(1);                 ! input bit
+        InBit := Shift, Call(CRCBit);
+        Tos := LoCRC;                   ! return low order CRC
+        Tos := HiCRC, Push, NextInst(0);! return high order CRC
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+!       CRCBfr - Compute the CRC of a Buffer.
+!
+!       Entry:  LoCRC,,HiCRC = CRC computed so far, initially = all ones.
+!               LoMask  = 2#0001110110110111
+!               HiMask0 = 2#0000010011000001
+!               HiMask1 = 2#0000010011000000
+!               CRCAddr = Base address of buffer: must be word aligned.
+!               BCnt = Bit count in buffer: must be a multiple of 8.
+!
+!       Exit:   HiCRC   = 2#1100011100000100  iff CRC good.
+!               LoCRC   = 2#1101110101111011  iff CRC good.
+!
+!       Uses:   S register, CRCAddr, InBit, Cnt8, 4 Levels of call stack
+!                       including one level of interrupt call--all
+!                       levels of call stack in a POS system.
+!
+!-----------------------------------------------------------------------------
+
+Loc(CRCBfr),
+        CRCAddr, Fetch;                 ! fetch next word
+        CRCAddr := CRCAddr + 1;
+        Cnt8 := 10;
+        InBit := Mdi, Rotate(1);
+
+!       Compute CRC for low order byte.
+
+CRC1:   InBit := Shift, Call(CRCBit);    ! CRC one bit
+        Cnt8 := Cnt8 - 1, Rotate(1);
+        InBit, if Gtr Goto(CRC1);        ! continue if byte not completed
+
+!       Check the BCnt.
+
+        Cnt8 := 10;
+        BCnt := BCnt - 10;
+        InBit, if Leq Return;            ! return if bytes exhausted.
+
+!       Compute CRC for high order byte.
+
+CRC2:   InBit := Shift, Call(CRCBit);    ! CRC one bit
+        Cnt8 := Cnt8 - 1, Rotate(1);
+        InBit, if Gtr Goto(CRC2);        ! continue if byte not completed
+
+!       Check the BCnt.
+
+        BCnt := BCnt - 10;
+        Cnt8 := 10, if Gtr Goto(CRCBfr);  ! continue if more bytes left
+        Return;                         ! bytes exhausted, return
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+!       CRCBit - Accumulate one bit of the CRC.
+!
+!       Entry:  LoCRC,,HiCRC = CRC computed so far, initially = all ones.
+!               LoMask  = 2#0001110110110111
+!               HiMask0 = 2#0000010011000001
+!               HiMask1 = 2#0000010011000000
+!               InBit   = Input bit in sign bit.
+!
+!-----------------------------------------------------------------------------
+
+CRCBit: HiCRC xor InBit, LeftShift(1);
+        LoCRC, if Geq Goto(CRC4);
+
+!       New Bit0 is set.
+
+        LoCRC := Shift xor LoMask,      ! Shift CRC and Xor
+                                   if Geq Goto(CRC3);
+
+!       New Bit0 is set, Old Bit 15 was set.
+
+        HiCRC, if IntrPend Call(CRC6);
+        HiCRC := Shift xor HiMask1,     ! Shift CRC and Xor Input
+                                    Return;
+
+!       New Bit0 is set, Old Bit 15 was not set.
+
+CRC3:   HiCRC, if IntrPend Call(CRC6);
+        HiCRC := Shift xor HiMask0, Return;
+
+!       New Bit0 is not set.
+
+CRC4:   LoCRC := Shift, if Geq Goto(CRC5);
+
+!       New Bit0 is not set, Old Bit 15 was set.
+
+        HiCRC, if IntrPend Call(CRC6);
+        HiCRC := Shift xor 1, Return;
+
+!       New Bit0 is not set, Old Bit 15 was not set.
+
+CRC5:   HiCRC, if IntrPend Call(CRC6);
+        HiCRC := Shift, Return;
+
+CRC6:   Call(CRC7);
+        HiCRC, LeftShift(1), Return;
+
+CRC7:   Vector(IntVec);
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+!       CRCInit - Initialize CRC registers.
+!
+!       Exit:   LoMask, HiMask0, HiMask1  set to correct values.
+!               LoCRC, HiCRC  set to all ones.
+!               LoGood, HiGood  set to expected value.
+!
+!-----------------------------------------------------------------------------
+
+Loc(CRCInit),
+        LoMask  := 2#0001110110110111;
+        HiMask0 := 2#0000010011000001;
+        HiMask1 := 2#0000010011000000;
+        LoCRC   := not 0;
+        HiCRC   := not 0;
+        HiGood  := 2#1100011100000100;
+        LoGood  := 2#1101110101111011, Return;
+
+        
+
+
+
+       end;

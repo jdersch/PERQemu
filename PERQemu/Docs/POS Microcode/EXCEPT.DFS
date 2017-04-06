@@ -1,0 +1,64 @@
+{ Exception Definitions.
+{-----------------------------------------------------------------------------
+{
+{       Except.Dfs - Exception number definitions.
+{       J. P. Strait    10 Dec 80.
+{       Copyright (c) Three Rivers Computer Corporation, 1980.
+{
+{ Abstract:
+{       This file defines exception numbers used by the Perq Q-code
+{       interpreter microcode, the debugger, the exception handler, and
+{       the post-mortem dumper.  These must agree with the corresponding
+{       routine numbers in Except.Pas.
+{
+{-----------------------------------------------------------------------------}
+
+{-----------------------------------------------------------------------------
+{ Change Log:
+{
+{ 28 Dec 81  1.4 Michael R. Kristofic
+{ Add ErrRealDivZero and ErrRtoIOvfl.
+{
+{ 20 Dec 81  1.3 Michael R. Kristofic
+{ Add ErrOvrReal and ErrUnderReal.
+{
+{ 18 May 81  1.2  John Strait
+{ Add ErrOvflLI.
+{ }
+
+{ 14 Mar 81  1.1  John Strait
+{ Add ErrEStk.
+{ }
+
+{ 10 Dec 80  1.0  John Strait
+{ Start file.
+{ }
+{-----------------------------------------------------------------------------}
+
+      RNRaise          =  0;   { routine number of Raise }
+      RNInitException  =  1;   { routine number of InitException }
+
+      ErrFirst         =  2;   { first exception number }
+
+      ErrAbort         =  2;   { user abort }
+      ErrDump          =  3;   { user dump }
+      ErrSegmentFault  =  4;   { segment fault }
+      ErrStackOverflow =  5;   { stack overflow }
+      ErrDivZero       =  6;   { division by zero }
+      ErrMulOvfl       =  7;   { overflow in multiplication }
+      ErrStrIndx       =  8;   { string index out of range }
+      ErrStrLong       =  9;   { string to be assigned is too long }
+      ErrInxCase       = 10;   { array index or case expression out of range }
+      ErrSTLATE        = 11;   { parameter in STLATE instruction is too large }
+      ErrUndfQcd       = 12;   { execution of an undefined Q-code }
+      ErrUndfInt       = 13;   { undefined device interrupt detected }
+      ErrIOSFlt        = 14;   { segment fault detected during I/O }
+      ErrMParity       = 15;   { memory parity error }
+      ErrEStk          = 16;   { E-stack not empty at INCDDS }
+      ErrOvflLI        = 17;   { overflow during convert from long to integer }
+      ErrOvrReal       = 18;   { floating point overflow }
+      ErrUnderReal     = 19;   { floating point underflow }
+      ErrRealDivZero   = 20;   { floating point division by zero }
+      ErrRtoIOvfl      = 21;   { floating point to integer overflow }
+
+      ErrLast          = 21;   { last exception number }

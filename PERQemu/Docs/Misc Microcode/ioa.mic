@@ -1,0 +1,50 @@
+! IOA.MICRO
+!
+! Created:   3 Sep 82    SDC
+! Modified:  8 Sep 82    SDC - fixed WCSLOW, added read with loop
+!           10 Sep 82    SDC - fixed reads
+!
+! Routine to read or write to any IO register
+! Entry points:   100 - write R0 to R1 and quit
+!                 101 - write R0 to address R1 and loop
+!                 200 - read value of address R1 and store in R0
+!                 201 - read value of address R1 and loop
+!
+     define (IOdata,0);
+     define (IOaddr,1);
+     define (IObrk,370);
+     
+     constant(IOinst,77);            ! A=6 (X), W=0, ALU=0 (A)
+     constant(IOBrkPoint,7401);
+     
+     place (100,220);
+     
+!!!!!  WRITES   !!!!!
+
+     IObrk := 100, goto(w), loc(100);
+     IObrk := 0, loc(101);
+w:   IOaddr and 177, LeftShift(10);  ! Clear bit 7 and put in Z field
+     shift or IOinst;                ! Add A, W and ALU fields
+     WCSLOW, next;                   ! Write to loopw
+loopw: IOdata, IOB(200), next;       ! **** MODIFIED ****
+     loadS(20);
+wtw: repeat(wtw);                    ! Wait a while
+     IObrk;
+     if eql goto(loopw);
+     Goto(IOBrkPoint);
+
+!!!!!  READS   !!!!!
+
+     IObrk := 100, goto(b), loc(200);
+     IObrk := 0, loc(201);
+b:   IOaddr or 200, LeftShift(10);   ! Set bit 7 and put in Z field
+     shift or IOinst;                ! Add A, W and ALU fields
+     WCSLOW, next;                   ! Write to loopr
+loopr: IOB(0), next;                 ! **** MODIFIED ****
+     IOdata := IOD;
+     loadS(20);
+wtr: repeat(wtr);                    ! Wait a while
+     IObrk;
+     if eql goto(loopr);
+     goto(IOBrkPoint);
+     end;

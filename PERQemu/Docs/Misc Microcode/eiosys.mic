@@ -1,0 +1,1001 @@
+! SysB - Perq System Loader
+!
+!  Copyright 1981, 1982, 1983, Three Rivers Computer Corp.
+!
+! Change Log:
+!
+!  21 Feb 83 V2.94 Sandeep Johar
+!          Figure out size of screen Makeboot used and use that.
+!          Figure out the Landscape/portrait option.
+!
+!  15 Feb 83 V2.93 Sandeep Johar     Clear call stack with leap pop.
+!                                    Fix WaitInter to wait for a specific 
+!                                     interrupt.
+!
+!   7 Feb 83 V2.92 Sandeep Johar     Fix a couple of bugs.
+!                                     a> boot files in outer tracks.
+!                                     b> initialize DskStatus
+!                                     c> checksum boot files.
+!
+!   4 Feb 83 V2.91 Sandeep Johar     Retrofit changes to support large boot 
+!                                    files.
+!
+!  17 Jan 83 V2.9  Sandeep Johar     Put the retry on read error back in.
+!                                    Check logical headers.
+!
+!  18 Dec 82 V2.8  Sandeep Johar     EIO rewrite.
+!           a> few bug fixes.
+!
+!  12 Nov 82 V2.7  Kwok Sheh  change keyboard device from 7 to 10(octal)
+!
+!   3 Aug 82 V2.6  Kwok Sheh  Modify Z80<-->Perq protocal for CIO board
+! 
+!  22 Jan 81 V2.5  WJHansen  add copyright notice
+!                            change error message 156
+!                            make change log
+!
+!  2 May 81  V2.4  GGR  Change to load 3.75k instead of 3k microcode.
+
+!  6 May 81  V2.3  JPS  At end of hard disk boot, seek to cylinder 0.
+
+! 25 Apr 81  V2.2  JPS  Fix bug in hard disk seek code -- it wasn't waiting for
+!                       the seek to finish.
+
+! 24 Mar 81  V2.1  JPS  Change DIBDA to 40 for new file system.
+
+!  V2.0  George Robertson - Carnegie-Mellon University
+!  V1.0  Brian Rosen - Three Rivers Computer Corporation
+!
+! SysB starts by turning off the Z80 (in case a floppy boot was in
+! progress).
+! It then reads the boot id from the keyboard (lower case alphabetics are
+! hard disk boots, upper case alphabetics are floppy boots).
+! The default boot is 'a'.
+! Start by reading microcode and loading it into the lower 3.75k of microstore.
+! Then load system qcode.
+! Then store disk id (0 or 1) and keystroke into the 4th and 5th words
+! of the SIT table.
+! Then start microcode at QCode entry point, 2400.
+!
+! This code is loaded by Boot, The Prom Bootstrap Loader
+!
+! The Diagnostic Display is set to 150 when this code is entered
+!  Errors are:
+!    150 - Sysb not loaded correctly
+!    151 - Sysb did not complete
+!    152 - Illegal Boot Key
+!    153 - Hard Disk Restore Failure
+!    154 - No such boot
+!    155 - No interpreter for that key
+!    156 - Interpreter file is empty
+!    157 - Disk Error
+!    158 - Floppy error
+!    159 - Malformed Boot File
+!    160 - CheckSum error in microcode
+!    161 - CheckSum error in QCode
+!    162 thru 168 - Bad interrupts
+! this code sets the DDS to 198 on exit
+!
+
+$perq1a
+$nobase
+$list
+
+define(r0,0);
+define(c400,1);
+define(BootID,2);
+define(BootKey,3);
+define(c1777,4);
+define(data,5);
+define(Bite,6);
+define(BigDly,7);
+define(BootSec,10);                       ! Note same as Boot1st
+define(InterpSec,11);                     ! Note same as Interp1st
+define(TryCnt,12);
+define(NextDA,13);
+define(SaveMA,14);
+define(Cyl,15);
+define(NewCyl,16);
+define(SeekCnt,17);
+define(Head,21);
+define(tmp,22);
+define(Sec,23);
+define(SecCnt,24);
+define(Dly,25);
+define(KeyTryCnt,26);
+define(DskType,27);       !*kws not use now, may be used later for TYPE
+define(MemAdr,31);
+define(CkSum,32);
+define(StartSec,33);
+define(ByteCnt,34);
+define(NextCyl,35);
+define(NextSec,13);       !  Same as NextDA
+define(Word,36);
+define(LastHead,37);      ! used only by floppy code.
+define(newhead, 37);      ! used only by disk code.
+define(LastCyl,40);
+define(BootCyl,41);
+define(InterpCyl,42);
+define(IsFloppy,43);
+define(LastAdr,44);      ! end of system qcode
+define(DevNum,30);
+
+
+define(BA, 45);
+define(dsktmp, 46);
+define(iotmp1, 47);
+define(drivenum, 267);
+define(DskStatus, 51);
+
+Define(HighAdr, 50);
+define(LHWord1, 61);
+define(LHWord2, 62);
+define(LHWord3, 63);
+define(Intrpt, 64);              ! which interrupt is desired.
+define(WasInter, 65);            ! which interrupt happened.
+
+Define(ScreenEnd, 71);
+Define(ScreenStart, 72);
+Define(BaseAddr, 73);
+Define(SegSize, 74);
+
+Constant(ScreenSeg, 4);
+
+Constant(z80InInter, 1);
+Constant(DiskInter, 3);
+
+!* debugging.
+define(r376, 376);
+
+!disk status register bits
+
+constant(FaultBit, 40);
+constant(RdyFltSeek, 260);
+constant(FaultMsk, 60);
+constant(OnCyl, 100);
+Constant(Index, 400);
+
+! disk interface port constants
+
+constant(Preset, 10);
+constant(IntrEnb, 20);
+Constant(busen, 100);
+constant(EnbHlf, Preset or IntrEnb);
+constant(EnbAll, enbhlf or busen);
+constant(DskRead, 5);
+constant(ReadMask, DskRead Or EnbAll);
+constant(nibble, 17);
+constant(hinibble, 360);
+
+
+constant(SMStat, 123);      ! Disk controller status
+
+! disk control registers
+
+constant(BA0, 0);
+constant(BA1, 40);
+constant(BA2, 20);
+constant(BA3, 60);
+
+! disk DMA constants.
+
+constant(dskchan, 2);                      ! Disk DMA Channel
+Constant(uProcChan, 1);                    ! uP (Z80) <==> PERQ DMA Channel
+constant(dskHCnt, 320);                    ! Header count = 2
+constant(ChanSel, 300);
+constant(DMALhLo, 326);
+constant(DMALhHi, 327);
+constant(DMADbLo, 324);
+constant(DMADbHi, 325);
+
+! disk IO Ports
+
+constant(dskstat, 123);
+constant(smctl, 322);
+constant(dskctl, 323);
+
+! Load Constant Register constants
+
+constant(sync, 360);
+constant(ConstPtr, 320);
+constant(RamFile, 321);
+
+
+
+constant(DIBDA,1000);                     ! Disk Information Block disk addr
+                                          ! cyl 0, head 2, sec 0.
+constant(DIBCyl,5);                       ! Disk Info Block cylinder on Floppy
+constant(DIBSec,3);                       ! Disk Info Block sector on Floppy
+constant(SITInfo,406);
+constant(SITInfoXX, 402);
+constant(IsEIO, 4000);                    ! This bit in BootBlock.XX if EIO
+
+! The SAT/SIT table is 1st, followed by the cursor,
+!   and together, all are 3000 octal long
+
+constant(SatSitCursLen,3000);
+constant(EndSatSitCursSec,6);             ! SatSitCursLen / #400
+
+! the screen image is 1024 lines of (768/16) words or 48k
+! it starts after the SAT/SIT table
+
+(**********
+constant(ScreenLen,140000);
+constant(EndScreenP1,143000);   !end of screen+1 = SatSitCursLen + ScreenLen
+***********)
+
+!
+! For Spice boots, the microcode is loaded after the system qcode and
+! is 3.75*3 long
+
+constant(UCodeSize,26400);
+constant(sysbDDSdif,10#47);               ! What to add to DDS on good exit
+
+!
+! Offset in Disk Information Table for BootTable and InterpTable
+
+constant(BootTableOffset,10#10);          ! Must agree with DiskIO.Pas
+constant(InterpTableOffset,10#62);
+
+constant(STX,252);
+constant(keyON,1);
+constant(keyOff,0);
+constant(Keyboard,10);
+constant(ACKcmd,4);
+constant(NACKcmd,5);
+constant(DATAcmd,3);
+constant(BLKDATAcmd,2);
+constant(Floppy,3);
+constant(EOT,32);
+constant(GPL,7);
+constant(DTL,0);            !0->128 for single density, 1->256 for double
+constant(Density,0);        !0 -> for single density, 100(0) -> double density
+constant(CONFIG,11);
+constant(ReadData,20);
+constant(NoSec,200);        ! (255) no of bytes - 1/sector
+constant(HDisk, 1);         ! dev code
+constant(Seekcmd, 10);      ! Hard disk seek cmd
+define(R204,204);           ! don't YOU DARE change/reuse this register
+                            ! (io microcode will use it !)
+                            
+place(7000,7777);           ! Boot Loads into the upper 2k of microstore
+
+SysbStart:
+        Data := 0, StackReset,loc(7000);  ! Increment the Diagnostic Display
+        WasInter := 0;
+        C400 := 400;                      ! A constant used many times
+        C1777 := 1777;
+        DskStatus := 7;                   ! init status to error condition.
+        tmp := 6000;
+        tmp, IOB(343);                    ! shut off video interrupts
+        HighAdr := 177400;
+        HighAdr := HighAdr + HighAdr,
+                    LeapPop(L1);    ! Make sure 2910 stack is empty
+L1:     HighAdr := HighAdr + HighAdr,
+                    LeapPop(L2);
+L2:     HighAdr := HighAdr + HighAdr;
+        HighAdr := HighAdr + HighAdr;
+
+        DriveNum := 0;                    ! set to zero for now. ????
+! We turn the Z80 off for 2 reasons
+! First, the hardware has a glitch when first starting up the Writable
+! Control Store ram, the power surge can screw up the Z80.
+! Secondly, we want to shut off the floppy boot sequence if it had started
+
+        EnbAll, IOB(SMCtl);
+        EnbHlf, IOB(SMCtl);               ! clear disk command register.
+
+        KeyTryCnt := 2, Call(Z80Off);     ! Wait a while for key
+                                          ! Shut down Z80 to stop boot
+        Call(WaitAWhile);                 ! Delay a few milliseconds
+
+FlushBuf:Call(RecZ80Byte);
+        If EQL GoTo(FlushBuf);
+
+KeyRetry: 5, IOB(305);                    ! turn Z80 on, read and write
+        Cyl := not 0, Call(WaitAWhile);   ! Let it start up
+        Head := not 0;
+        
+!
+! Read keyboard
+! Send msg format: STX <3> <Key> <Config> <on/off>
+! Receive  Format: STX <2> <key> <ACK>
+!                  STX <3> <key> <DATA> <status> <boot char>
+
+! format: STX <n> <Keyboard> <DATA> <status> <data1>.....<data N-1>
+!  NOTE: not ACKcmd from Z80 per Roger
+! Z80 doesn't guarantee which messg will arrive first
+
+
+        Bite := keyON, Call(KeysOnOff);       ! Turn Keyboard on
+FindCh: Call(RecZ80Byte);                     ! Wait for keyboard char
+IsSTX:  Bite - STX, if neq goto(NoKeys);   
+        If neq goto(FindCh);
+        Call(RecZ80Byte);
+        ByteCnt := Bite;             
+        Call(RecZ80Byte);
+        Bite - Keyboard;
+        IsFloppy := 0, if Neq GoTo(IsSTX);   
+        Call(RecZ80Byte);                  
+        Bite - DATAcmd;                     
+        Bite - ACKcmd, If Eql GoTo(GotCh);  
+        0, If Eql GoTo(IsSTX);
+        GoTo(KeyRetry);                    
+! It is a DATA cmd 
+GotCh:  Call(RecZ80Byte);                  ! throw away status byte
+        Call(RecZ80Byte);                  ! finally, the bootchar
+        tmp := 10#152;                    ! preset error code for Illegal boot
+        BootKey := Bite;                  ! Boot keystroke
+        BootID := Bite;                   ! BootID is index
+        BootID := BootID - 101;           !subtract ASCII for"A"
+        BootID - 31, if lss goto(Busted); ! ID out of range
+        if leq goto(FlopBoot);            ! Upper case => Floppy Boot
+        
+        BootID := BootID - 40;
+        BootID - 31, if lss goto(Busted);
+        if gtr goto(Busted);
+GotID:  TryCnt := C400; 
+        IOB(SMStat);                      ! read the disktype.
+        DskType := IOD;
+        DskType, Field(11,2);             ! bits <10:9>
+        SHIFT - 3;
+                If NEQ GoTo(Busted);     ! only support micropolis.
+        Bite := keyOff, Call(KeysOnOff);       
+        Tmp := 10#152;
+        DevNum := Keyboard, call(flush);       
+        
+!
+!Position the hard disk heads
+
+Restore:DskTmp := 100, Call(LoadL);
+        BA := BA2, Call(LoadB);
+        DskTmp := 0, Call(LoadL);
+        BA := BA2, Call(LoadB);
+        BigDly := 1000;
+WaitMore: Call(WaitAWhile);
+        BigDly := BigDly - 1;
+        If NEQ GoTo(WaitMore);
+        Call(WaitOnCyl);
+        Tmp := 10#157, If NEQ GoTo(Busted);        
+        Head := 0;
+        Cyl := 0, GoTo(ReadDIB);
+
+(*****
+Restore:NextSec := 0;
+        NextCyl := 0, Call(HardSeek);     ! seek to track 0.
+        GoTo(ReadDIB);
+******)
+
+!
+! Wait for an interrupt.
+!    Return NEQ if a time out occurs.
+!    return EQL if the interrupt happens.
+!
+
+!* WaitInter: Dly := 77777;
+!* WaitLoop:  1, If EQL Return;
+!*            0, If IntrPend Return;
+!*            Dly := Dly - 1, GoTo(WaitLoop);
+
+WaitInter: BigDly := not 0;            
+                                        
+waitloop:  0, if intrpend Return;         ! Interrupt return EQL
+           BigDly := BigDly - 1;
+           1, if c19 return;
+           goto(WaitLoop);                ! return neq if time out
+
+
+
+!
+! Wait long enough for a sector to transfer, a head to settle, etc
+
+WaitAWhile: Dly := 77777;
+WaitLp: if eql return;
+        Dly := Dly - 1, goto(WaitLp);
+
+
+!
+! Here when we didn't see a keystroke
+
+
+NoKeys: KeyTryCnt := KeyTryCnt - 1;       ! Try it a few times
+        if gtr goto(KeyRetry);            ! give the Z80 another chance
+        BootKey := 141;
+        BootID := 0, goto(GotID);         ! Default boot is 'a'
+
+!
+! Send a keyboard status change message to Z80
+!  Format STX <3> <Key> <Config> <Off>
+
+KeysOnOff: tmp := STX, Call(SndZ80Byte);  
+        tmp := 3, Call(SndZ80Byte);       
+        tmp := Keyboard, Call(SndZ80Byte); 
+        tmp := Config,  Call(SndZ80Byte);  
+        bite, IOB(304);                         
+        Return;
+        
+!
+! Read Disk Information Block
+
+ReadDIB:
+        MemAdr := 0;                      ! Read into memory 0 - 377
+        NextCyl := DIBCyl;
+        IsFloppy;
+        NextSec := DIBSec, if neq goto(RdDib1);
+        DskChan, IOB(ChanSel);            ! select the disk for DMA
+
+
+        NextSec := DIBDA;
+        NextCyl := 0;                     ! Must be 0 when Hard Disk is on
+
+RdDib1: LHWord1 := NextSec;
+        LHWord2 := NextCyl;
+        LHWord3 := 0;
+        TryCnt := 10, Call(DoOneBlock);   ! Read the DIB
+        BootID := BootID + BootID;        ! Get DA of Boot, 2 words/entry
+        BootID + BootTableOffset, Fetch2; ! Offset to BootTable
+        BootSec := MDI;                   ! Boot1st overlaps BootSec
+        BootCyl := MDI;                   ! Must be 0 when Hard Disk is on
+        BootSec + BootCyl;
+        tmp := 10#154, if eql goto(Busted);! No boot for that key
+        BootID + InterpTableOffset, Fetch2; ! Get DA of Interpreter
+        InterpSec := MDI;                 ! Interp1st overlaps InterpSec
+        InterpCyl := MDI;                 ! Must be 0 when Hard Disk is on
+        InterpSec + InterpCyl;
+        tmp := 10#155, if eql goto(Busted);! No interpreter for that key
+        
+! Load system qcode first
+        
+        MemAdr := 0;
+        NextCyl := BootCyl;
+        NextSec := BootSec;
+        SecCnt := 0;
+        LHWord1 := BootSec;
+        LHWord2 := BootCyl;
+        LHWord3 := 0;                       ! log block number
+        TryCnt := 10, Call(DoOneBlock);   ! Skip over segment hdr blk
+        NextCyl + NextSec;
+        tmp := 10#159, if eql goto(Busted);! Malformed boot file
+        
+DoNextBlock: SecCnt - EndSatSitCursSec;   ! Are we at end of Sat/Sit table
+        if neq goto(NotEndSS);
+
+        Tmp := ScreenSeg, Call(SizeSeg);
+        ScreenStart := BaseAddr;
+        ScreenEnd := ScreenStart;
+        ScreenEnd := ScreenEnd + SegSize;
+
+        MemAdr := ScreenEnd;     ! Bypass screen area
+        
+NotEndSS: LHWord3 := LHWord3 + 1;
+        TryCnt := 10, Call(DoOneBlock);
+        SecCnt := SecCnt + 1;
+        NextCyl + NextSec;
+        MemAdr := MemAdr + C400, if neq goto(DoNextBlock);
+        
+! Got system boot, checksum it, then load interpreter
+        
+        LastAdr := MemAdr;                ! save end address
+        Cksum := 0, goto(CkRest);
+SkpScr: MemAdr := SatSitCursLen;          ! skip over the screen area
+CkRest: MemAdr := MemAdr - 1, Fetch;
+        Cksum, if C19 goto(LdMic);        ! if MemAdr < 20-bit zero
+        MemAdr := MemAdr - ScreenEnd;
+        Cksum := MDI + CkSum;
+        MemAdr - 1;                                
+        if C19 goto(SkpScr);              ! if MemAdr = EndScreenP1
+        MemAdr := MemAdr + ScreenEnd;
+        goto(CkRest);
+        
+! Load interpreter microcode
+! Will load all data from microcode file, but ASSUMES that it is 3.75k
+! (or 45 blocks) long.
+
+LdMic:  tmp := 10#161, if neq goto(Busted); ! Checksum error in Qcode
+        MemAdr := LastAdr;                  ! load 3.75k of Ucode in hi memory
+        NextSec := InterpSec;
+        NextCyl := InterpCyl;
+        LHWord1 := InterpSec;
+        LHWord2 := InterpCyl;
+        LHWord3 := 0;                       ! read log block num 1.
+        TryCnt := 10, Call(DoOneBlock);     ! Skip over segment hdr blk
+        NextSec + NextCyl;
+        tmp := 10#156, if eql goto(Busted); ! Interpreter file is empty
+        
+DoNextIB: LHWord3 := LHWord3 + 1;           ! Increment the log block number.
+        TryCnt := 10, Call(DoOneBlock);
+        NextSec + NextCyl;
+        MemAdr := MemAdr + C400, if neq goto(DoNextIB); ! Chain until 00
+
+! Clear the rest of the microcode image.
+
+Clear:  tmp := MemAdr;
+        tmp := tmp - LastAdr;
+        tmp - UCodeSize;
+        if C19 Goto(Cl1);                 ! if (MemAdr - LastAdr) < UCodeSize
+        Goto(Seek0);                      ! if (MemAdr - LastAdr) >= UCodeSize
+
+Cl1:    MemAdr, Store;
+        0;
+        MemAdr := MemAdr + 1, Goto(Clear);
+        
+! Seek to cylinder 0 (if booted from hard disk).
+
+Seek0:  IsFloppy;                         ! 0=>booted from H, 1=>F
+        Cksum := 0, if Neq Goto(DoCSum);  ! if booted from floppy, do checksum
+        NextCyl := 0;
+        NextDA := 0, Call(HardSeek);      ! seek to cylinder 0, head 0
+
+! Got interpreter, checksum it and put it into wcs
+        
+! *** NB:  The rest of sysb (and all that it calls) must be above 7377
+DoCSum: MemAdr := LastAdr, goto(CkMic);     ! necessary to cross page boundary
+CkMic:  MemAdr := MemAdr + UCodeSize, loc(7400);
+        CkSum := 0, LoadS(7377), loc(7401);
+wd0:    Cksum := Cksum + Data, Call(NextData), loc(7402);
+        WCShi, if true GotoS(wd1), loc(7403);
+wd1:    Cksum := Cksum + Data, Call(NextData), loc(7404);
+        WCSmid, if true GotoS(wd2), loc(7405);
+wd2:    Cksum := Cksum + Data, Call(NextData), loc(7406);
+        WCSlow, if true GotoS(wd3), loc(7407);
+wd3:    Repeat(wd0), loc(7410);
+        Cksum := Cksum + Data, loc(7411);
+        tmp := 10#160, if neq goto(Busted), loc(7412); ! CkSum Err in Microcode!        
+CkDone: MemAdr := SITInfo, loc(7413);
+        MemAdr, Store2, loc(7414);          ! Store harddisk=0 and keystroke
+        IsFloppy, loc(7415);
+        BootKey, loc(7416);
+
+        MemAdr := SITInfoXX, loc(7417);
+        loadS(37423), loc(7420);
+        not 23400, loc(7421);               ! set r47 to 1
+        wcshi, if true GoToS(Cnt1), loc(7422);
+cnt1:   iotmp1 := 1, RightShift(1), loc(7423);
+        IOB(145), Loc(7424);                ! Read the video status register
+        Tmp := IOD And 200, loc(7425);      ! Bit 7 set for portrait
+        IOTmp1 := SHIFT Or IOTmp1, loc(7426);
+        MemAdr, Store, loc(7427);           ! the XX field
+        IOTmp1 Or IsEIO, loc(7430);         ! if a 1 stored was 16kWCS
+
+        tmp := sysbDDSdif, Call(SetDDS), loc(7431);  ! Good load (we hope)
+        Call(Z80Off), loc(7432);            ! shut off disk and Z80
+        LeapPop(Lab1), loc(7433);       ! Make sure 2910 stack is empty
+Lab1:   LeapPop(Lab2), loc(7434);
+Lab2:   LeapPop(Lab3), loc(7435);
+Lab3:   LeapPop(Lab4), loc(7436);
+Lab4:   LeapPop(Lab5), loc(7437);
+Lab5:   R204 := 0, goto(2400), loc(7442); ! init disk cyl, enter QCode ucode
+        
+!
+!Get a word out of memory to load into microstore
+
+        
+NextData: MemAdr := MemAdr - 1, Fetch, loc(7440); ! Decr addr and get that word
+        Data := MDI, Return, loc(7441);           ! Data goes on R
+
+!
+! Figure out the size of a given segment.
+!
+SizeSeg: Tmp, LeftShift(1);              ! Seg number times 2
+         Tmp := SHIFT, Fetch;            ! First word of the SAT entry
+         BaseAddr := MDI And 177400;     ! Get the Base Lower.
+         Tmp + 1, Fetch;                 ! SegNumber Times 2 + 1.
+         BaseAddr := MDX Or BaseAddr;    ! Set the High four bits of Base Addr
+         Tmp + 1, Fetch;                 ! Get the seconf word of the SATEntry
+         SegSize := MDI And 177760;
+         SegSize := SegSize + 20;
+         SegSize := SegSize + SegSize;
+         SegSize := SegSize + SegSize;
+         SegSize := SegSize + SegSize;
+         SegSize := SegSize + SegSize, Return;! 20 bits( in Words).
+
+!
+! Here when we have to give up
+        
+Busted: tmp := tmp - 10#151, Call(SetDDS), loc(7450);
+Sleep:  GoTo(Sleep), loc(7451);                   ! Loop forever
+
+!
+! Set Diagnostic Display
+
+
+SetDDS: Dly := 10, StackReset, loc(7460);        ! Increment display
+DDSWt:  if eql goto(DDSWt1), loc(7461);          ! wait 8 cycles
+        Dly := Dly - 1, goto(DDSWt), loc(7462);
+DDSWt1: tmp := tmp - 1, loc(7463);
+        if neq goto(SetDDS), loc(7464);
+        return, loc(7465);
+        
+!
+! Turn Z80 Off
+
+
+Z80Off: 0, IOB(305), loc(7500);              ! mask out all Z80 interrupts
+        iob(147), return, loc(7501);         ! dismiss parity interrupts.
+        
+
+!
+! Read one Spice Segment Block from hard disk into memory
+! assume that the channel HardDisk has already been selected.
+! NextSec and NextCyl specify block to be read. 
+!
+
+DoOneBlock: IsFloppy;
+        if neq goto(FDoOneBlock);         !br, if flopy
+        Call(HardSeek);                   ! seek to right cylinder
+        Tmp := 10#157, If NEQ GoTo(Busted);  ! could not do the seek.
+
+        Call(LoadConst);                  ! load up the constants register.
+        DskChan, IOB(ChanSel);            ! select the PERQ DMA chan for disk
+        HighAdr, IOB(DMALhLo);            ! Label is at 1776000
+        Not UState(HighAdr), field(14, 4);
+        SHIFT Or 320, IOB(DMALhHi);       ! and byte count is 2 quad words
+        MemAdr, IOB(DMADblo);             ! low bits of MemAdr.
+        Not UState(MemAdr), Field(14,4);  ! magic !!!!
+        SHIFT, IOB(DMADbHi);              ! High four bits of the data address.
+
+
+DoRead: dskTmp := 0, Call(LoadL);
+        BA := BA2, Call(LoadB);
+        ReadMask, IOB(SmCTL);
+
+ReTry:  Call(WaitInter);                  ! Wait for the interrupt.
+        Tmp := 10#157, If NEQ GoTo(Busted);! no interrupt, set disk error
+                If IntrPend Call(VectInt);
+        WasInter - DiskInter;
+            If NEQ GoTo(Retry);
+        DskStatus, Field(0,3);            ! pick status bits.
+        DskStatus := SHIFT;
+        DskStatus-1, IF EQL GoTo(IsDone); ! read worked
+        TryCnt := TryCnt - 1, 
+                If EQL GoTo(Retry);       ! still in progress
+        Tmp := 10#157, If EQL GoTo(Busted);! thats it for this guy..
+        DskTmp := 100, Call(LoadL);       ! Set restore function
+        BA := BA2, Call(LoadB);           !    gate it in.
+        Call(WaitOnCyl);
+        Tmp := 10#157, If NEQ GoTo(Busted);! disk does not work
+        Head := 0;                        ! save the head and
+        Cyl := 0, GoTo(DoOneBlock);       !  and cyl and go do it again.
+        
+
+        
+
+IsDone: EnbHlf, IOB(SMCtl);               ! Clear the command.
+        SaveMA := MemAdr;
+        HighAdr + 4, Fetch2;              ! Pick it up
+        NextDA := MDI;                    ! Chain to next DiskAddress
+        NextCyl := MDI;
+        MemAdr := SaveMA, return;
+
+
+
+
+! rotuines to load data latches, for cyl head etc.
+!
+!        DskTmp has DiskCylinder
+!        DriveNum  is upper two bits ??????
+!
+LoadL:  dsktmp, rightshift(4);
+        iotmp1 := SHIFT And Nibble, Call(LoadIt);
+        EnbAll, IOB(SMCtl);
+        DskTmp := DskTmp And Nibble;
+        iotmp1 := Dsktmp, Call(LoadIt);
+        enbHlf, IOB(SMCtl);
+        Return;
+
+LoadB:  BA Or DriveNum, IOB(dskctl);
+        nop;
+        EnbAll, IOB(SMCtl);
+        nop;
+        EnbHlf, IOB(SMCtl);
+        Return;
+
+LoadIt: IOTmp1 := IOTmp1 Or DriveNum;
+        IOTmp1 Or BA3, IOB(DSKCtl);
+        Return;
+
+! subroutine to load constants into Registers
+!------------------------------------------------------------------
+!------------------------------------------------------------------
+
+LoadConst: 0, Iob(ConstPtr);
+           not 0, IOB(RamFile);            ! 0
+           not sync, IOB(RamFile);         ! sync
+           not 0, IOB(ramFile);            ! dont care
+Reload:    NextSec, Field(0, 10);
+           not SHIFT, IOB(RamFile);        ! sector
+           NextCyl, Field(0, 10);
+           not SHIFT, IOB(RamFile);      ! cylinder lo
+           Not LHWord1, IOB(RamFile);
+           Not LHWord2, IOB(RamFile);
+           Not LHWord3, IOB(RamFile);
+
+           NextCyl, RightShift(4);
+           Tmp := SHIFT And HiNibble;
+           NextSec, Field(10, 4);
+           Tmp := SHIFT Or Tmp;            ! 4 cyl bits and the head
+           Not Tmp, IOB(RamFile);
+           LHWord1, Field(10, 10);
+           Not SHIFT, IOB(RamFile);
+           LHWord2, Field(10, 10);
+           Not SHIFT, IOB(RamFile);
+           LHWord3, Field(10, 10);
+           Not SHIFT, IOB(RamFile), Return;
+
+!
+!    Seek the hard disk.
+!        NextCyl has the cylinder number in it.
+!        Head<0:3> is in NextSec<8:11>
+!        sector <0:7> is in NextSec<0:7>
+!
+
+HardSeek: NextCyl, Field(0,14);           ! lower 12 bits
+        NewCyl := Shift;                  ! Thats the cylinder
+
+        NextSec, Field(10, 4);            ! head bits.
+        NewHead := SHIFT;
+
+        NewCyl - Cyl;
+        NewHead - Head, If NEQ GOTO(SeekIt);
+        0, If EQL Return;                 ! Return EQL if not doing seek
+
+SeekIt: DskTmp := NewCyl;
+        dsktmp := DskTmp And 377, Call(LoadL);
+        BA := BA0, Call(LoadB);
+        NewCyl, rightShift(4);
+        DskTmp := SHIFT And 360;
+        NextSec, Field(10, 4);             ! get the head.
+        DskTmp := SHIFT Or DskTmp, Call(LoadL);
+        BA := BA1, Call(loadB);
+
+WaitOnCyl:
+        Call(WaitInter);
+        Tmp := 10#157, If NEQ GoTo(Busted);! no interrupt, set disk error
+        DskStatus := OnCyl,
+                 If IntrPend Call(VectInt); ! Actually a disk interrupt.
+        WasInter - DiskInter;              ! check for disk interrupt.
+        DskStatus And OnCyl, If NEQ GoTo(WaitOnCyl);
+        DskStatus := DskStatus And RdyFltSeek, If NEQ GoTo(WaitOnCyl);
+        Cyl := NewCyl;
+        Head := NewHead;
+        DskStatus XOR FaultMsk;
+        1, If NEQ Return;                   ! Return NEQ if Fault
+        0, Return;                          ! Return EQL if no Fault
+
+
+
+! 
+! Receive a character from the Z80
+
+
+RecZ80Byte: BigDly := 77777;             ! 32k*(64*2)=4.2M cycles 
+waitbyte: if intrpend Vector(IntrVect);     ! * .00017 ms/cycle = .7 sec
+        Dly := 100, call(WaitLp);
+        BigDly := BigDly - 1;
+        if neq goto(waitbyte);
+        1, return;                        ! return neq if time out
+
+VectInt: Vector(IntrVect);
+
+IntrVect:
+Z80Int: iob(124), loc(7100);              ! Here when Z80 sends a byte
+        Bite := iod and 377;              ! pick up byte
+        WasInter := Z80InInter;
+        0, return;                        ! return eql
+         
+! 
+! All other interrupts are verboten
+
+BadInt1: tmp := 10#162, goto(Busted), loc(7104);
+DiskIntr:IOB(DskStat), loc(7110);                    ! read disk status
+         DskStatus := IOD And 3777;
+         WasINter := DiskInter, return;
+!        tmp := 10#163, goto(Busted), loc(7110);
+BadInt3: tmp := 10#164, goto(Busted), loc(7114);
+Z80Sent: tmp := 10#165, goto(Busted), loc(7120);
+BadInt5: R376 := 200, GoTo(7624);        ! debug- go to krnl video rtn.
+!   tmp := 10#166, goto(Busted), loc(7124);
+BadInt6: tmp := 10#167, goto(Busted), loc(7130);
+BadInt7: tmp := 10#168, goto(Busted), loc(7134);
+
+!
+! Send a character to the Z80
+
+
+SndZ80Byte: tmp, IOB(304);
+        goto(WaitAWhile);
+
+FlopBoot: bite := Keyoff, Call(KeysOnOff);     ! Turn keyboard off
+        Tmp := 10#158;                      ! If error then is floppy error
+        DevNum := Keyboard, Call(Flush);
+        Data := 0;
+        LastCyl := 0;
+        LastHead := 0;
+        
+! Set single density, 2 sides, Z80 interrupts enabled
+! Format STX <6> <floppy> <config> <EOT> <GPL> <DTL> <density>
+
+        tmp := STX, Call(SndZ80Byte);     
+        tmp := 6, Call(SndZ80Byte);       ! <n>
+        tmp := Floppy, Call(SndZ80Byte);  ! <floppy>
+        tmp := CONFIG, Call(SndZ80Byte);  ! <config>
+        tmp := EOT, Call(SndZ80Byte);     ! <EOT> =
+        tmp := GPL, Call(SndZ80Byte);     ! <GPL> = 
+        tmp := DTL, Call(SndZ80Byte);     ! <DTL> = 1->256, 0->128
+        tmp := Density, call(SndZ80Byte); ! <density = single);
+        IsFloppy := 005, IOB(305);        ! Z80 interrupts enabled
+        Tmp := 10#158;                    ! If error then is floppy error
+        DevNum := Floppy, Call(Flush);    ! Ignore status returned
+        GoTo(ReadDib);
+        
+
+!
+! Read one Spice Segment Block from floppy into memory
+
+!note: head =4 => head unit selected is 1
+        
+FDoOneBlock: Cyl := NextCyl;              ! Cyl = NextCyl mod 77
+        Cyl := Cyl - 10#77;
+        Head := 4, if geq goto(FGotHead); ! Head = NextCyl div 77
+        Cyl := NextCyl;
+        Head := 0;
+        
+FGotHead: Head - LastHead;
+        Cyl - LastCyl, if neq goto(FDoSeek);
+        if eql goto(FGotCyl);
+
+! format STX <4> <floppy> <Seek> <cmd Options > <new cyl #>        
+
+FDoSeek: tmp := STX, Call(SndZ80Byte);
+        tmp := 4, Call(SndZ80Byte);        
+        tmp := Floppy, Call(SndZ80Byte);  
+        tmp := SeekCmd, Call(SndZ80Byte);    
+        tmp := Head, Call(SndZ80Byte);    
+        tmp := Cyl, Call(SndZ80Byte);     
+
+! expected response from Z80: STX <2> <Floppy> <ACK>
+        
+FWtDone: Call(RecZ80Byte);                ! Wait for done
+        Bite - STX, if neq goto(FlopErr);  
+        if neq goto(FWtDone);
+        Call(RecZ80Byte);                  ! throw away
+        Call(RecZ80Byte);                  
+        Bite - Floppy;                      
+        if neq goto(FWtDone);
+        Call(RecZ80Byte);                  
+        Bite - ACKcmd;                     
+        if neq goto(FlopErr);             
+        LastCyl := Cyl;
+        LastHead := Head;
+        
+FGotCyl: SaveMA := MemAdr;                ! Save address
+        
+! Read Headers from sector 1 of current cylinder
+        
+        MemAdr := HighAdr;                ! Headers at 3777000
+        Sec := 1;
+        TryCnt := 10, Call(FDoOneSec);
+        
+! Read four sectors of block
+        
+        Sec := NextSec;
+        MemAdr := SaveMA;
+        TryCnt := 10, Call(FDoOneSec);
+        MemAdr := MemAdr + 100, Call(FDoNextSec);
+        MemAdr := MemAdr + 100, Call(FDoNextSec);
+        MemAdr := MemAdr + 100, Call(FDoNextSec);
+        
+! Set next cylinder and sector
+        
+        NextSec - 3;
+        NextSec - 10#23, if eql goto(Blk0);
+        NextSec - 10#19, if eql goto(Blk1);
+        NextSec - 10#15, if eql goto(Blk2);
+        NextSec - 10#11, if eql goto(Blk3);
+        if eql goto(Blk4);
+        MemAdr := 54;                     ! 5th blk hdr at HighAdr + 54
+        
+FGotHdr:HighAdr + MemAdr, Fetch2;
+        NextSec := MDI;
+        NextCyl := MDI;
+        MemAdr := SaveMA, return;
+
+Blk0:   MemAdr := 04;                     ! 0th blk hdr at HighAdr + 04
+        goto(FGotHdr);
+Blk1:   MemAdr := 14;                     ! 1st blk hdr at HighAdr + 14
+        goto(FGotHdr);
+Blk2:   MemAdr := 24;                     ! 2nd blk hdr at HighAdr + 24
+        goto(FGotHdr);
+Blk3:   MemAdr := 34;                     ! 3rd blk hdr at HighAdr + 34
+        goto(FGotHdr);
+Blk4:   MemAdr := 44;                     ! 4th blk hdr at HighAdr + 44
+        goto(FGotHdr);
+
+FDoNextSec: Sec := Sec + 5;
+        Sec - 10#26;
+        if leq goto(FDoit);
+        Sec := Sec - 10#24;
+FDoit:  TryCnt := 10, goto(FDoOneSec);
+
+
+!
+! Read one sector from floppy
+!  STX <6> <floppy> <ReadData> <cmd Option> <Starting Sec#> <count L> <countH>
+
+FDoOneSec: tmp := STX, Call(SndZ80Byte);    
+        tmp := 6, Call(SndZ80Byte);         
+        tmp := Floppy, Call(SndZ80Byte);   
+        tmp := ReadData,Call(SndZ80Byte);  
+        tmp := Head, Call(SndZ80Byte);     
+        tmp := Sec, Call(SndZ80Byte);      
+        tmp := NoSec, Call(SndZ80Byte);    
+        tmp := 0, Call(SndZ80Byte);        
+        
+        Call(WaitAwhile);
+
+! Z80 responds with the  Format
+! <STX> <n> <Floppy> <BLKDATA> <count L> <count H> <data1>......<data2>
+! then <STX> <2> <Floppy> <ACK>
+       
+
+FWtRead: Call(RecZ80Byte);                ! Wait for result
+WtChk:  Bite - STX, if neq goto(FlopErr); 
+        if neq goto(FWtRead);
+        Call(RecZ80Byte);
+        ByteCnt := Bite, if neq goto(FlopErr); 
+        Call(RecZ80Byte);                 
+        Bite - Floppy, if neq goto(FlopErr);
+        0, if neq goto(WtChk);
+        Call(RecZ80Byte);                 
+        Bite - BLKDATAcmd, if neq goto(FlopErr);
+        0, if neq goto(WtChk);
+        Call(RecZ80Byte);                 !  <count L>
+        ByteCnt := Bite, if neq goto(FlopErr);  
+        Call(RecZ80Byte);
+        if neq goto(FlopErr);             !  <count H>
+        Bite, LeftShift(10);
+        ByteCnt := SHIFT or ByteCnt;      
+        
+! we now set up the DMA channel to actually get the data back.
+
+        uProcChan, IOB(ChanSel);          ! PERQ DMA channel 1
+        MemAdr, iob(DMADbLo); 
+        Not UState(MemAdr), Field(14,4);
+        SHIFT, IOB(DMADbHi);
+        
+SetHdr:
+        0, iob(DMALhLo);                  ! The logical headers
+        not 0, iob(DMALhHi);              ! are not present on a floppy
+        
+! now send an ACK to the Z80.
+
+        tmp := STX, Call(SndZ80Byte);
+        tmp := 2, Call(SndZ80Byte);
+        tmp := Floppy, Call(SndZ80Byte);
+        tmp := ACKCmd, Call(SndZ80Byte);
+        
+! we should now get an ACK back from the Z80.
+
+        Tmp := 10#158;                    ! if error then is floppy error
+        DevNum := Floppy, GoTo(Flush);    ! flush does the return for us.
+        
+FlopErr: tmp := 10#158, goto(Busted);
+
+! response <STX> <2> <dev> <ACK/NACK> 
+        
+Flush:  Call(RecZ80Byte);                 ! Ignore Z80 data
+Chk:    Bite - STX, if Neq GoTo(Busted);
+        if Neq GoTo(Flush);
+        Call(RecZ80Byte);
+        ByteCnt := Bite , if Neq GoTo(Busted);
+        ByteCnt - 2;
+        0, If neq goto(chk);
+        call(RecZ80Byte);
+        Bite - DevNum, if neq goTo(busted);
+        0, if Neq GoTo(Chk);
+        call(RecZ80Byte);
+        Bite - ACKcmd, if neq GoTo(Busted);
+        Bite - NACKcmd, if Eql return;
+        If Eql GoTo(Busted);
+        0, GoTo(Chk);
+END;

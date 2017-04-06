@@ -1,0 +1,48 @@
+{ ACB Definitions.
+{-----------------------------------------------------------------------------
+{
+{       ACB.Dfs - Activation control block definitions.
+{       J. P. Strait   21 Nov 80.
+{       Copyright (c) Three Rivers Computer Corporation, 1980.
+{
+{ Abstract:
+{       This file defines offsets within the Activation Control Blocks
+{       (ACB's) in the Perq memory stack.  The general form of an ACB
+{       is as follows.
+{
+{       +0   Static link - address of the ACB of the surrounding procedure.
+{       +1   Local pointer - address of the current local variables.
+{       +2   Dynamic link - address of the previous ACB on the stack.
+{       +3   Global link - address of the previous routine's global data.
+{       +4   Top link - address of the previous top-of-stack.
+{       +5   Return segment - segment number of the previous procedure.
+{       +6   Return address - offset within the return segment.
+{       +7   Return routine number - previous routine number.
+{       +8   Exception pointer - pointer to list of exception enable blocks.
+{       +9   E-Stack size - number of save words of expression stack.
+{       +10..+n+9  E-stack image - previous expression stack.
+{
+{-----------------------------------------------------------------------------}
+
+
+{ 14 Mar 81  1.1  J. P. Strait.
+{ Add ACBEP for exceptions.
+{ }
+
+{ 21 Nov 80  1.0  J. P. Strait.
+{ Start file.
+{ }
+
+        ACBSL        =   0;      { static link }
+        ACBLP        =   1;      { local pointer }
+        ACBDL        =   2;      { dynamic link }
+        ACBGL        =   3;      { global link }
+        ACBTL        =   4;      { top link }
+        ACBRS        =   5;      { return segment }
+        ACBRA        =   6;      { return address }
+        ACBRR        =   7;      { return routine number }
+        ACBEP        =   8;      { exception pointer }
+        ACBStackSize =   9;      { E-stack size }
+        ACBSaveStack =  10;      { saved E-stack }
+        ACBReserve   =  26;      { ACB size + maximum E-stack }
+        ACBLength    =  26;      { largest ACB }

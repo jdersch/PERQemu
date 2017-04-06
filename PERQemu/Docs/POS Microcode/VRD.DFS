@@ -1,0 +1,21 @@
+{ VRD Definitions.
+{-----------------------------------------------------------------------------
+{
+{       VRD.Dfs - Variable routine descriptor definitions.
+{       J. P. Strait   10 Dec 80.
+{       Copyright (c) Three Rivers Computer Corporation, 1980.
+{
+{ Abstract:
+{       This file defines offsets within Variable Routine Descriptors (VRD's).
+{
+{-----------------------------------------------------------------------------}
+
+{ 10 Dec 80  1.0  J. P. Strait.
+{ Start file.
+{ }
+
+        VRDSN = 0;     { segment number }
+        VRDGP = 1;     { global pointer }
+        VRDRN = 2;     { routine number }
+        VRDSL = 3;     { static link }
+        VRDSize = 4;   { size of a VRD }

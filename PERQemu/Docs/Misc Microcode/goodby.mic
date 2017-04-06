@@ -1,0 +1,4 @@
+        Place(5000,5377);
+        SrcRasterOp := 0, Loc(5000);
+Hang:   Goto(Hang);
+        end;

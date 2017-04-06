@@ -1,0 +1,17 @@
+!       start.Bin
+
+        Define(R0,0);
+        Define(R370,370);
+
+        Constant(C7401,7401);
+
+        Place(2400,2777);
+        Not 4, IOB(305), Loc(2400);
+        R0 := 177777;
+LoopIt: R0 := R0 - 1;   
+        If Neq Goto(LoopIt);
+        4, Iob(305);       
+        R370 := 100;       
+        R0, Goto(C7401);   
+
+        end;

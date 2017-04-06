@@ -1,0 +1,1086 @@
+!-----------------------------------------------------------------------------
+!
+!       NEcho - Network Echo Program.
+!       J Strait        17 Aug 83.
+!       P Reddy         ??.
+!       Copyright (C) 1983, PERQ Systems Corporation.
+!
+! Abstract:
+!       NEcho is a microcode Network Echo Program.  It receives packets
+!       from the network, re-transmits them, and displays status on the
+!       screen.  NEcho requires that the machine it runs on has the
+!       following options:
+!
+!       ******* EIO board.
+!       ******* PORTRAIT monitor.
+!
+!       See the NTalk/NEcho manual for a detailed description of NEcho.
+!
+!-----------------------------------------------------------------------------
+
+!-----------------------------------------------------------------------------
+!
+! Change Log:
+!
+! 12 Oct 83     V1.1    J Strait.
+! Install real RasterOp.
+! Change MinDMA to MemSize div 2 to eliminate the possibility of the
+!       DMA and RasterOp addresses crossing.
+!
+! 17 Aug 83     V1.0    J Strait.
+! Create program by stealing large portions of EioEcho.Micro.
+!
+!-----------------------------------------------------------------------------
+
+
+        Define(Status, 200);            ! net status
+        Define(Sequence, 201);          ! previous sequence number
+        Define(WVal, 202);              ! write value
+        Define(Tmp, 203);               ! temporary
+        Define(RVal, 204);              ! read value
+        Define(RHA, 205);               ! receive header address
+
+        Define(RDA, 207);               ! receive data address
+
+        Define(SHA, 211);               ! send header address
+
+        Define(SDA, 213);               ! send data address
+
+        Define(IntOccr, 215);           ! interrupt occurred flag
+        Define(Display, 216);           ! display address
+        Define(Y, 217);                 ! Y offset address from Display
+        Define(Cnt, 220);               ! counter
+        Define(RcvVal, 221);            ! RecvConst or PromConst
+        Define(Me0, 222);               ! my EtherNet address
+        Define(Me1, 223);               ! my EtherNet address
+        Define(Me2, 224);               ! my EtherNet address
+        Define(Alien0, 225);            ! other EtherNet address
+        Define(Alien1, 226);            ! other EtherNet address
+        Define(Alien2, 227);            ! other EtherNet address
+        Define(MCBVal, 230);            ! Multicast command value
+        Define(Tmp1, 231);
+        Define(Mine, 232);              ! = 0 iff this is a NEcho packet
+        Define(Tmp2, 233);
+        Define(MinDMA, 234);            ! minimum DMA address =  400000
+                                        ! this is higher than the display
+        Define(MaxDMA, 235);            ! maximum DMA address = 2000000
+                                        ! = 1 MByte
+        Define(RopRefs, 236);           ! do RasterOp style memory references
+        Define(Latency, 237);           ! interrupt latency
+        Define(LatCnt, 340);            ! interrupt latency counter
+        Define(Rop0, 341);              ! RopRef temp
+        Define(Rop1, 342);              ! RopRef temp
+        Define(Rop2, 343);              ! RopRef temp
+        Define(Rop3, 344);              ! RopRef temp
+        Define(MemSize, 345);           ! max address + 1
+        Define(RcvStatSize, 346);       ! show bits in receive status
+        Define(ReRdAddr, 347);          ! <>0 means reread address
+        Define(HalfMem, 350);           ! MemSize div 2
+
+
+        Define(VidTmp, 300);
+        Define(VidCnt, 301);
+        Define(Screen, 371);            ! screen address for video hardware
+
+
+
+! network constants
+
+        Constant(Start, 40);
+
+        Constant(NetCntl, 302);     ! EIO mod
+        Constant(NetEnb, 303);
+        Constant(PhysAdr0, 310);    ! The sixth byte of the ethernet address.
+        Constant(PhysAdr1, 311);    ! The fifth byte of the ethernet address.
+        Constant(MultCstByte, 312); ! The multi cast command byte.
+        Constant(MAB0, 313);        ! The multi cast bytes. 5 in all.
+        Constant(MAB1, 314);
+        Constant(MAB2, 315);
+        Constant(MAB3, 316);
+        Constant(MAB4, 317);
+        
+        
+        Constant(BCWtCntl, 330);     ! EIO mod
+        Constant(BCWtHB, 331);       ! EIO mod
+        Constant(BCWtLB, 332);       ! EIO mod
+! Constant(BCInLB, 217);
+! Constant(BCInHB, 5);
+        Constant(BCRdLB, 132);       ! EIO mod
+        Constant(BCRdHB, 133);       ! EIO mod
+        Constant(RdNetStat, 122);    ! EIO mod
+! Constant(WtPrAdr, 234);
+
+
+!       Define Multicast commands.
+
+        Constant(MltCstAll, 0);         ! receive all multicasts
+        Constant(MltCstNone, 377);      ! receive no multicasts
+        Constant(MltCstAddr, 376);      ! return my address
+        Constant(MltCstGrp, 1);         ! receive specified groups
+        
+!
+! Define the bits in the control register, NetCntl.
+!
+
+Constant(NetIntrEnable, 1);         ! Network interrupt enable - Bit 0.
+                                    ! On the EIO board this value is in the
+                                    ! NetIntEnable register.
+Constant(ClkIntrEnable, 2);         ! Clock interrupt enable - Bit 1.
+Constant(ClkEnable, 4);             ! Enable the clock - Bit 2.
+Constant(BitCntEnable, 10);         ! Enable the bit counter - Bit 3.
+Constant(Transmit,  20);            ! Transmit a packet - Bit 4.
+Constant(Reset, 40);                ! Reset the net interface - Bit 5.
+                                    ! CAUTION - This is assert LOW.
+Constant(ReceiveAll, 100);          ! Receive ALL packets on the net - Bit 6.
+Constant(Go, 400);                  ! DO IT - Bit 8.
+Constant(SendConst, BitCntEnable or
+                    Transmit or
+                    Reset or
+                    Go);            ! Standard NetCntl value for send.
+                         
+                         
+Constant(RecvConst, BitCntEnable or
+                    Reset or
+                    Go);            ! Standard NetCntl value for receive.
+                                    
+
+Constant(PromConst, BitCntEnable or
+                    ReceiveAll or
+                    Reset or
+                    Go);            ! Standard NetCntl value for Promiscous.                                    
+
+Constant(IdleNet, 40); 
+Constant(NoNetInterrupt, 0);        ! Value to turn off net interrupts.
+
+
+        
+! Net status bits.  Bits above 200 are special ones set by NEcho.
+
+        Constant(StCheckSum, 10000);
+        Constant(StSequence, 4000);
+        Constant(StByteCount, 2000);
+        Constant(StWrongCRC, 1000);
+        Constant(StFraming, 400);
+        Constant(StCS, 200);
+        Constant(StPIP, 100);
+        Constant(StOvfl, 40);
+        Constant(StUnused, 20);
+        Constant(StBusy, 10);
+        Constant(StXmit, 4);
+        Constant(StColl, 2);
+        Constant(StCRC, 1);
+
+! dma buffers
+
+        Constant(Hcnt, 320);      ! 2 quads * 16, inverted
+        Constant(XChan, 3);       ! Transmit channel
+        Constant(RChan, 6);       ! Receive channel
+        
+        Constant(RDHA, 0);
+        Constant(RDLA, 10000);
+        Constant(RLHA, 0);
+        Constant(RLLA, 4000);
+
+        Constant(XDHA, 0);
+        Constant(XDLA, 20000);
+        Constant(XLHA, 0);
+        Constant(XLLA, 14000);
+        
+        Constant(IoChan, 300);     ! EIO mod
+        Constant(IoLHA, 327);      ! EIO mod
+        Constant(IoLLA, 326);      ! EIO mod
+        Constant(IoDHA, 325);      ! EIO mod
+        Constant(IoDLA, 324);      ! EIO mod
+
+
+!        CntlRasterOp Functions
+!        Bit 0 = LtoR
+!        Bit 1 = RO/PS  (1 = RasterOp On)
+!        Bit 2:4 = RasterOp Functions
+!        Bit 5 = XtraSrcWord
+!        Bit 6 = disable processor shift
+
+constant(Off,200);          ! RasterOp Off
+constant(PauseLR,100);      ! RasterOp Pause
+constant(PauseRL,101);
+
+constant(Phase0LR,102);     ! Begin       - NoClear
+constant(Phase0XLR,142);    ! Begin       - NoClear - XtraSourceWord
+constant(Phase1LR,106);     ! Mid         - NoClear
+constant(Phase2LR,112);     ! End         - NoClear
+constant(Phase3LR,116);     ! Begin/End   - NoClear
+constant(Phase3XLR,156);    ! Begin/End   - NoClear - XtraSourceWord
+constant(Phase4LR,122);     ! XtraSource  - NoClear
+constant(Phase5LR,126);     ! FirstSource - Clear
+constant(Phase6LR,132);     ! End         - Clear
+constant(Phase7LR,136);     ! Begin/End   - Clear
+constant(Phase7XLR,176);    ! Begin/End   - Clear   - XtraSourceWord
+
+constant(Phase0RL,103);     ! Begin       - NoClear
+constant(Phase0XRL,143);    ! Begin       - NoClear - XtraSourceWord
+constant(Phase1RL,107);     ! Mid         - NoClear
+constant(Phase2RL,113);     ! End         - NoClear
+constant(Phase3RL,117);     ! Begin/End   - NoClear
+constant(Phase3XRL,157);    ! Begin/End   - NoClear - XtraSourceWord
+constant(Phase4RL,123);     ! XtraSource  - NoClear
+constant(Phase5RL,127);     ! FirstSource - Clear
+constant(Phase6RL,133);     ! End         - Clear
+constant(Phase7RL,137);     ! Begin/End   - Clear
+constant(Phase7XRL,177);    ! Begin/End   - Clear   - XtraSourceWord
+
+
+
+
+$Include NEcho.Dfs
+$Include IO.Dfs
+$Include CRC.Dfs
+
+
+
+
+        Place(2400, 6777);
+
+
+Loc(2400),
+        Call(Init);
+Main:   ReRdAddr := 0;                  ! don't reread address
+        Call(AdvanceY);
+        Call(Rcv);                      ! receive a packet
+        Call(ChkPacket);                ! check what you got
+        RcvStatSize := 10#13, Call(ShowRcv);  ! show 13 bits of receive status
+        Mine;
+        if Neq Goto(Main2);             ! if not NEcho packet
+        Status and not (StXMit or
+                        StBusy or
+                        StUnused or
+                        StOvfl or
+                        StPIP or
+                        StCS);
+        if Neq Goto(Main1);             ! if packet is pretty bad
+        Call(Cmd);                      ! execute command in packet
+Main1:  Call(Snd);                      ! retransmit it
+        Call(ShowSnd);                  ! display result
+Main2:  ReRdAddr;
+        if Eql Goto(Main3);             ! if shouldn't reread address
+        Call(RdAddr);
+Main3:  Goto(Main);
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! Init - Initialize NEcho.
+!
+!-----------------------------------------------------------------------------
+
+Init:   StackReset;                     ! OdtPrq: 12    Booted: 
+
+!       Get the video interrupt service going.
+
+        VidTmp := 101154;
+        VidCnt := 0;
+        Display := 3000;
+        Screen := 1400;                 ! assume 1/4 MByte
+        Call(VidInt);                   ! get video started
+
+!       Determine the memory size.
+
+        MemSize := 100000;              !  100000
+        MemSize := MemSize + MemSize;   !  200000
+Init0:  HalfMem := MemSize, if IntrPend Call(VecInt);
+        MemSize := MemSize + MemSize, Fetch;
+        Nop;
+        Nop;
+        0, Store;
+        Tmp := not Mdi;                 ! see if this changed Memory(MemSize)
+        Nop;
+        Nop;
+        Nop;
+        MemSize, Fetch;
+        Mdi xor Tmp;
+        if Eql Goto(Init1);             ! found MemSize
+        Screen := 140, Goto(Init0);     ! board is larger than 1/4 MByte
+Init1:
+
+!       Reset the net.
+
+        0, IOB(NetCntl);                ! shut off the net
+        0, IOB(NetEnb);                 ! shut off net interrupts
+Loc(2440), Reset, IOB(NetCntl);         ! reset the net
+Loc(2441), nop;                         ! three nops between reset and BCWtCntl
+Loc(2442), nop;                         ! three nops between reset and BCWtCntl
+Loc(2443), nop;                         ! three nops between reset and BCWtCntl
+Loc(2444), 3, IOB(BCWtCntl);            ! set the bit count control mode to 3
+        IOB(RdNetStat);                 ! clear any net interrupts
+        Status := IOD;
+        0, IOB(305);                    ! disable EIO
+
+!       Set DMA addresses:
+!
+!       Headers must precede data buffer, since the receive data buffer
+!       is used for sending the reply, but the addresses decrement.
+
+        if IntrPend Call(VecInt);
+        MinDMA := HalfMem;              ! MinDMA = MemSize div 2
+        MaxDMA := MemSize;
+        RHA := MaxDMA;
+        RHA := RHA + 0;                 ! receive header starts at 0
+        SHA := MaxDMA;
+        SHA := SHA + 14;                ! send header starts at 14
+        RDA := MaxDMA;
+        RDA := RDA + 30;                ! receive data starts at 30
+
+!       Move header to Display.
+
+        Tmp := (10#128 * 60 - 1);       ! size-1 of header in words
+        Tmp1 := 143000;                 ! address of screen in boot file
+Init2:  if IntrPend Call(VecInt);
+        Tmp1 + Tmp, Fetch;
+        Nop;
+        Nop;
+        Display + Tmp, Store;
+        Mdi;
+        Tmp := Tmp - 1;
+        if Geq Goto(Init2);
+
+!       Clear the screen.
+
+        Y := 10#128;
+Init3:  Tmp := Y;
+        Tmp := Tmp + Tmp;               ! * 2
+        Tmp := Tmp + Y;                 ! * 3
+        Tmp := Tmp + Tmp;               ! * 6
+        Tmp := Tmp + Tmp;               ! * 14
+        Tmp := Tmp + Tmp;               ! * 30
+        Tmp := Tmp + Tmp;               ! * 60
+        Tmp := Tmp + Display;
+        Cnt := 60;
+Init4:  if IntrPend Call(VecInt);
+        Tmp, Store4;
+        0;
+        0;
+        0;
+        0;
+        Tmp := Tmp + 4;
+        Cnt := Cnt - 4;
+        if Gtr Goto(Init4);
+        Y := Y + 1;
+        Y and 1777;
+        if Gtr Goto(Init3);
+        Y := 10#128;
+
+!       Set up options and state variables.
+
+        RopRefs := 0;                   ! no RasterOp refs
+        Latency := 0;                   ! small interrupt latency
+        Sequence := 0;
+
+!       Set up net variables and get my address.
+
+        RcvVal := RecvConst;            ! receive normally
+        Alien0 := not 0;
+        Alien1 := not 0;
+        Alien2 := not 0;
+        Call(RdAddr);
+        Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! LoadM - Load Multicast stuff.
+!
+!-----------------------------------------------------------------------------
+
+LoadM:  if IntrPend Call(VecInt);
+        0, Iob(NetCntl);                        ! disable the net
+        RightShift(10);
+        Me0 XOR 377,        iob(PhysAdr0);      ! store low byte of addr
+        Shift XOR 377,      iob(PhysAdr1);      ! store high byte of addr
+        MCBVal XOR 377,     iob(MultCstByte);   ! store Mult cast command
+        not 0,              iob(MAB0);          ! store MAB0
+        not 0,              iob(MAB1);          ! store MAB1
+        not 0,              iob(MAB2);          ! store MAB2
+        not 0,              iob(MAB3);          ! store MAB3, save MAB4
+        not 0,              iob(MAB4), Return;  ! store MAB4
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! Rcv - Receive a packet.
+!
+!-----------------------------------------------------------------------------
+
+Rcv:    if IntrPend Call(VecInt);
+        SDA := RDA;                        ! save receive address for Snd
+        Reset, IOB(NetCntl);
+        1, IOB(NetEnb);                    ! Enable net interrupts
+        WVal := 0, Call(SetBC);            ! to receive a packet
+        IOB(RdNetStat);                    ! clear out any pending ints
+
+! set up dma buffers
+
+        If IntrPend Call(VecInt);
+        Call(SetDmaR);
+        WVal := 0, Call(SetBC);
+        
+        RcvVal, IOB(NetCntl);
+        1, IOB(NetEnb);
+        
+        Call(WtInt);
+
+! packet received        
+
+        Reset, IOB(NetCntl);
+        0, IOB(NetEnb), Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! Cmd - Execute the command in the packet.
+!
+!-----------------------------------------------------------------------------
+
+Constant(CmdT, 2500);
+
+Cmd:    RDA + 2, Fetch;
+        Tmp1 := not 0;                  ! -1
+        Tmp := Mdi;
+Cmd1:   Tmp1 := Tmp1 + 1;
+        Tmp, RightShift(1);
+        Tmp xor 1, if Eql Return;       ! if no more commands
+        Tmp := Shift, if Odd Goto(Cmd1);! if command not selected
+        Call(Cmd2);
+        Goto(Cmd1);
+
+Cmd2:   Tmp1, Field(0,4);
+        Dispatch(CmdT);
+
+Case(CmdT, CmdBCast),                   ! please broadcast replies
+        Alien2 := not 0;
+        Alien1 := not 0;
+        Alien0 := not 0, Return;
+
+Case(CmdT, CmdMCast),                   ! please multicast replies
+        Alien2 := (377 lsh 10 or 1);
+        Alien1 := (2 lsh 10 or 3);
+        Alien0 := (4 lsh 10 or 5), Return;
+
+Case(CmdT, CmdSend),                    ! please send replies to me
+        RHA + 4, Fetch4;
+        Alien2 := Mdi;
+        Alien1 := Mdi;
+        Alien0 := Mdi, Return;
+
+Case(CmdT, CmdProm),                    ! receive promiscuously
+        RcvVal := PromConst, Return;
+
+Case(CmdT, CmdRecv),                    ! receive normally
+        RcvVal := RecvConst, Return;
+
+Case(CmdT, CmdBump),                    ! bump DMA addresses
+        RHA := RHA - 4;                 ! decrement receive header address
+        Tmp2 := RHA;
+        Tmp2 := Tmp2 - MinDMA;
+        Tmp2 - 1;
+        if C19 Goto(Bump1);             ! if RHA = MinDMA
+        RDA := RDA - 4;                 ! decrement receive data address
+        SHA := SHA - 4, Return;         ! decrement send header address
+
+!       DMA addresses wrap around.
+
+Bump1:  RHA := MaxDMA;
+        RHA := RHA + 0;                 ! receieve header starts at 0
+        SHA := MaxDMA;
+        SHA := SHA + 14;                ! send header starts at 14
+        RDA := MaxDMA;
+        RDA := RDA + 30, Return;        ! receive data starts at 30
+                                        ! DMA addresses will decrement
+
+Case(CmdT, CmdRopOn),                   ! do RasterOp style memory references
+        RopRefs := 1, Return;
+
+Case(CmdT, CmdRopOff),                  ! don't do RasterOp memory references
+        RopRefs := 0, Return;
+
+Case(CmdT, CmdLatOn),                   ! set interrupt latency very large
+        Latency := 1000, Return;
+
+Case(CmdT, CmdLatOff),                  ! set interrupt latency very small
+        Latency := 0, Return;
+
+Case(CmdT, CmdRdAddr),                  ! read EtherNet address
+        ReRdAddr := 1, Return;
+
+Case(CmdT, #13), Return;
+Case(CmdT, #14), Return;
+Case(CmdT, #15), Return;
+Case(CmdT, #16), Return;
+Case(CmdT, #17), Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! Snd - Send a packet.
+!
+!-----------------------------------------------------------------------------
+
+Snd:    if IntrPend Call(VecInt);
+        SHA, Store4;                    ! set up send header
+        0;                              ! don't care
+        Alien2;                         ! his address high
+        Alien1;                         ! his address mid
+        Alien0;                         ! his address low
+        SHA + 4, Store4;
+        Me2;                            ! my address high
+        Me1;                            ! my address mid
+        Me0;                            ! my address low
+        NEchoType;                      ! packet type
+        Call(Wait);                     ! wait a bit, don't send too fast
+        Reset, IOB(NetCntl);
+        1, IOB(NetEnb);                 ! Enable net interrupts
+        WVal := RVal;
+        WVal := WVal - (4 * 10#8);      ! subtract size of CRC
+        WVal := not WVal;               ! compute two's complement of bit count
+        WVal := WVal + 1, Call(SetBC);  ! transmit 1 packet
+        IOB(RdNetStat);                 ! clear out any pending ints
+
+! set up dma buffers
+
+        If IntrPend Call(VecInt);
+        Call(SetDmaX);
+        
+        Tmp := SendConst;
+        Tmp, IOB(NetCntl);              ! set transmit and go
+        
+        Call(WtInt);
+
+! packet transmitted        
+
+        Reset, IOB(NetCntl);
+        0, IOB(NetEnb), Return;         ! disable interrupts
+
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! RdAddr - Read the EtherNet address.
+!
+!-----------------------------------------------------------------------------
+
+RdAddr: Me0 := 0;
+        MCBVal := MltCstAddr;           ! set up to get my address
+RdA1:   if IntrPend Call(VecInt);
+        Call(LoadM);
+        Call(Rcv);                      ! receive my address
+        Call(AdvanceY);
+        RcvStatSize := 10#8, Call(ShowRcv);  ! show 8 bits of receive status
+        Status;
+        if Neq Goto(RdA1);              ! if couldn't get my address
+        if IntrPend Call(VecInt);
+        RHA, Fetch4;
+        Tmp1 := 2#111100001111;
+        Me2 := Mdi;
+        Me1 := Mdi;
+        Tmp := Mdi and Tmp1;                            ! 0A0B
+        Me0 := Mdi and Tmp1, RightShift(4);             ! 0C0D
+        Me0 := Shift or Me0;                            ! 0CCD
+        Me0 := Me0 and 377;                             ! 00CD
+        if IntrPend Call(VecInt);
+        Tmp;
+        Tmp := Shift or Tmp, LeftShift(10);             ! 0AAB
+        Me0 := Shift or Me0;                            ! ABCD
+        MCBVal := MltCstNone;
+        Me0, Rotate(10);
+        Me0 := Shift;
+        Me1;
+        Me1 := Shift;
+        Me2;
+        Me2 := Shift;
+        Call(LoadM);
+        Return;
+
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! ChkPacket - Check a received packet.
+!
+!-----------------------------------------------------------------------------
+
+ChkPacket:
+        if IntrPend Call(VecInt);
+        Mine := 1;                      ! assume this is not a NEcho packet
+
+!       Read the byte count and check framing.
+
+        Call (GetBC);
+        Rval and 7;
+        if Eql Goto(Chk1);              ! if framing is good
+        Status := Status or StFraming;  ! signal framing error
+
+!       Check the CRC to see if the hardware computed it correctly.
+
+Chk1:   if IntrPend Call(VecInt);
+        CRCAddr := RHA;                 ! CRCAddr=RHA+1 to skip one word of hdr
+        CRCAddr := CRCAddr + 1, Call(CRCInit);
+        BCnt := (10#14 * 10#8), Call(CRCBfr);
+        CRCAddr := RDA;
+        BCnt := RVal;
+        BCnt := BCnt - (10#14 * 10#8), Call(CRCBfr);
+        Tmp := 1;                       ! assume CRC error
+        LoCRC xor LoGood;
+        HiCRC xor HiGood, if Neq Goto(Chk2);    ! if CRC error
+        if Neq Goto(Chk2);              ! if CRC error
+        Tmp := 0;                       ! if CRC good
+Chk2:   Status xnor Tmp;                ! compare against CRC in Status
+        Tmp := 0,                       ! assume hardware was correct
+                 if Odd Goto(Chk3);     ! if Status agrees with manual CRC
+        Tmp := 1;                       ! I think hardware was wrong
+        Status := Status or StWrongCRC; ! signal wrong CRC
+
+!       Check Packet Type.
+
+Chk3:   if IntrPend Call(VecInt);
+        RHA + 7, Fetch;
+        Mine := Mdi - NEchoType;        ! see if this is a NEcho packet
+        if Neq Goto(Chk10);             ! not a NEcho packet
+
+!       NEcho packet, check Byte Count.
+
+        RDA, Fetch2;
+        Mdi - RVal;                     ! packet actually contains bit count
+        Tmp := Mdi,                     ! save the Sequence number
+                    if Eql Goto(Chk4);  ! if Byte Count is good
+        Status := Status or StByteCount;! signal Byte Count error
+
+!       Check the Sequence number.  The sequence number is good if
+!       it is equal to or one greater than the previous sequence number.
+!       The sequence number check is performed this way so that the
+!       repeat-on-error option will not show spurious Sequence errors.
+
+Chk4:   if IntrPend Call(VecInt);
+        Tmp - Sequence, RightShift(0);
+        Shift - 1, if Eql Goto(Chk5);  ! if previous Sequence number
+        Sequence := Tmp, if Eql Goto(Chk5);  ! if next Sequence number
+        Status := Status or StSequence; ! signal Sequence error
+
+!       Check the checksum.
+
+Chk5:   Tmp2 := 0;                      ! initialize checksum to 0
+
+!       Accumulate checksum for 14 bytes of header.
+
+        Cnt := 10#14;                   ! check 14 bytes of header
+        Tmp := RHA;
+        Tmp := Tmp + 1;                 ! skip 1 word of header
+Chk6:   Tmp, Fetch;
+        Tmp1 := Mdi, Field(0,10);
+        Tmp2 := Shift + Tmp2;
+        Cnt := Cnt - 1, Field(10,10);
+        Tmp1, if Leq Goto(Chk7);
+        Tmp2 := Shift + Tmp2, if IntrPend Call(VecInt);
+        Cnt := Cnt - 1;
+        Tmp := Tmp + 1, if Gtr Goto(Chk6);
+
+!       Accumulate checksum for data buffer.
+
+Chk7:   RVal, RightShift(3);
+        Cnt := Shift - 10#18;           ! byte count of data
+        Tmp := RDA;
+Chk8:   Tmp, Fetch;
+        Tmp1 := Mdi, Field(0,10);
+        Tmp2 := Shift + Tmp2;
+        Cnt := Cnt - 1, Field(10,10);
+        Tmp1, if Leq Goto(Chk9);
+        Tmp2 := Shift + Tmp2, if IntrPend Call(VecInt);
+        Cnt := Cnt - 1;
+        Tmp := Tmp + 1, if Gtr Goto(Chk8);
+
+!       See if the checksum is good.
+
+Chk9:   Tmp2 and 377;                   ! 8 bit checksum
+        if Eql Goto(Chk10);             ! checksum is good
+        Status := Status or StChecksum; ! signal checksum error
+
+!       If not Mine, check return address and packet type to see if
+!       we suspect this might be mine.
+
+Chk10:  Mine;
+        not Alien2, if Eql Goto(Chk12); ! already seems to be mine
+        if Eql Goto(Chk11);             ! if we don't known NTalk's address
+
+!       Check return address.
+
+        RHA + 4, Fetch4;                ! fetch return address
+        Mdi - Alien2;
+        Mdi - Alien1, if Neq Goto(Chk12); ! if not from NTalk
+        Mdi - Alien0, if Neq Goto(Chk12); ! if not from NTalk
+                      if Neq Goto(Chk12); ! if not from NTalk
+
+!       Check packet type.
+
+Chk11:  RHA + 7, Fetch;
+        Mdi - NEchoType;
+        if Neq Goto(Chk12);             ! not an NEcho packet
+        RDA + 2, Fetch;                 ! update sequence number
+        Mine := 0;                      ! believe it was from NTalk
+        Sequence := Tmp;
+
+!       Done checking, return.
+
+Chk12:  Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! ShowRcv - Show the status of a received packet.
+!
+!-----------------------------------------------------------------------------
+
+ShowRcv:Tmp := Y;
+        Tmp := Tmp + Tmp;               ! * 2
+        Tmp := Tmp + Y;                 ! * 3
+        Tmp := Tmp + Tmp;               ! * 6
+        Tmp := Tmp + Tmp;               ! * 14
+        Tmp := Tmp + Tmp;               ! * 30
+        Tmp := Tmp + Tmp;               ! * 60
+        Tmp := Tmp + Display;
+        Cnt := (5 * 10#12);             ! clear 5 scan lines
+        Tmp1 := Tmp;
+ShowR0: if IntrPend Call(VecInt);
+        Tmp1, Store4;
+        0;
+        0;
+        0;
+        0;
+        Cnt := Cnt - 1;
+        Tmp1 := Tmp1 + 4, if Gtr Goto(ShowR0);
+        Cnt := RcvStatSize;             ! number of bits to show
+        Tmp1 := Status;
+ShowR1: if IntrPend Call(VecInt);
+        Tmp1, Rotate(1);
+        Tmp1 := Shift;
+        Tmp + 1, Store, if Geq Goto(ShowR2);
+        not 0, Goto(ShowR3);
+
+ShowR2: 600;
+ShowR3: Cnt := Cnt - 1;
+        Tmp := Tmp + 2, if Gtr Goto(ShowR1);
+        Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! ShowSnd - Show the status of a transmitted packet.
+!
+!-----------------------------------------------------------------------------
+
+ShowSnd:Tmp := Y;
+        Tmp := Tmp + Tmp;               ! * 2
+        Tmp := Tmp + Y;                 ! * 3
+        Tmp := Tmp + Tmp;               ! * 6
+        Tmp := Tmp + Tmp;               ! * 14
+        Tmp := Tmp + Tmp;               ! * 30
+        Tmp := Tmp + Tmp;               ! * 60
+        Tmp := Tmp + Display;
+        Tmp := Tmp + (10#15 * 2);       ! skip receive stuff
+        Cnt := 10#8;                    ! show 8 bits
+        Tmp1 := Status;
+ShowS1: if IntrPend Call(VecInt);
+        Tmp1, Rotate(17);
+        Tmp1 := Shift;
+        Tmp + 1, Store, if Geq Goto(ShowS2);
+        not 0, Goto(ShowS3);
+
+ShowS2: 600;
+ShowS3: Cnt := Cnt - 1;
+        Tmp := Tmp + 2, if Gtr Goto(ShowS1);
+        Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! AdvanceY - Advance the Y coordinate of the display.
+!
+!-----------------------------------------------------------------------------
+
+AdvanceY:Y := Y + 2;
+        Y - 2000;
+        if Lss Return;
+        Y := 10#128, Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! SetBC - Set the bit counter to the value supplied in register Wval.
+!
+!-----------------------------------------------------------------------------
+
+SetBC:  WVal, RightShift(10);
+        Shift, IOB(BCWtHB);
+        WVal, IOB(BCWtLB), Return;
+        
+        
+
+
+!-----------------------------------------------------------------------------
+!
+! GetBC - Read the value from the bit counter into RVal
+!
+!-----------------------------------------------------------------------------
+
+GetBC:  Iob(BCRdHB);
+        Iod, LeftShift(10);
+        RVal := Shift, Iob(BCRdLB);
+        Iod, Field(0,10);
+        RVal := Shift or RVal, Return;
+       
+     
+
+
+!-----------------------------------------------------------------------------
+!
+! SetDmaR - Set DMA address for receive.
+!
+!       RHA - Header address.
+!       RDA - Data address.
+!
+!-----------------------------------------------------------------------------
+
+SetDmaR:RChan, IOB(IoChan);       ! Set channel register
+        not UState(RHA), RightShift(14);
+        Shift or HCnt, IOB(IoLHA);
+        RHA, IOB(IoLLA);
+        not UState(RDA), RightShift(14);
+        Shift, IOB(IoDHA);
+        RDA, IOB(IoDLA), Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! SetDmaX - Set DMA address for send.
+!
+!       SHA - Header address.
+!       SDA - Data address.
+!
+!-----------------------------------------------------------------------------
+
+SetDmaX:XChan, IOB(IoChan);       ! Set channel register
+        not UState(SHA), RightShift(14);
+        Shift or HCnt, IOB(IoLHA);
+        SHA, IOB(IoLLA);
+        not UState(SDA), RightShift(14);
+        Shift, IOB(IoDHA);
+        SDA, IOB(IoDLA), Return;
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! WtInt - Wait for network interrupt.
+!
+!-----------------------------------------------------------------------------
+
+WtInt:  RopRefs;
+        IntOccr := 0, if Neq Goto(Wt6);
+
+!       No RasterOp references.
+
+Wt1:    LatCnt := Latency, if IntrPend Goto(Wt2);  ! wait for interrupt
+        Goto(Wt1);
+
+Wt2:    if Leq Goto(Wt3);                       ! if latency expired
+        LatCnt := LatCnt - 5;                   ! count this loop
+        Iob(145);                               ! read video state
+        Iod and 20;                             ! pick video interrupt bit
+        LatCnt, if Eql Goto(Wt2);               ! if not a video interrupt
+        Call(VidInt);                           ! serve video immediately
+        Goto(Wt1);                              ! restart latency
+
+Wt3:    Call(VecInt);                           ! serve the interrupt
+        IntOccr;
+        if Neq Return;                          ! if video interrupt
+        Goto(Wt1);                              ! restart latency
+
+!       RasterOp references with address that is inverted from DMA address.
+!       This code stolen from RO.Micro, so obscurities are inherited.
+
+!       Set up RasterOp control registers.  The RasterOp will be LtoR,
+!       quad-aligned at both ends, neither XtraSrcWord nor XtraSrcQuad.
+
+Wt6:    SrcX    = 0;
+        DstX    = 0;
+        Width   = 100;
+        Wid     = Width - 1;
+        LastDst = (DstX + Wid) and 60;          ! last Dst word in quad
+        WidRasterOp := ((Wid and 17) or LastDst);
+        Func    = (not 0) or 10;                ! RRpl or NoPowerDown
+        SrcWinQ = SrcX and 60;                  ! first Src word in quad
+        LeftSrc = SrcX and 17;                  ! leftmost Src bit in word
+        SrcRasterOp := (((Func and 14) lsh 4) or SrcWinQ or LeftSrc);
+        DstWinQ = DstX and 60;                  ! first Dst word in quad
+        LeftDst = DstX and 17;                  ! leftmost Dst bit in word
+        DstRasterOp := (((Func and  3) lsh 6) or DstWinQ or LeftDst);
+
+!        Synchronize memory and code with a fetch.  For some obscure reason,
+!        memory cycles are numbered differently here:  T1 is the cycle a
+!        Fetch starts in.
+!
+!        The following memory cycles may be pre-empted by DMA requests:
+!           1. Destination fetches.
+!           2. Both memory cycles in a FirstSrc.
+!           2. Both memory cycles in a XtraSrc.
+!        The memory state machine locks out all DMA requests which
+!        immediately follow the special Fetch/Store combination.
+!
+!        We assert Hold in the RasterOp T0 (really T2) of all other
+!        memory cycles.  These are Q1T0 of Begin, Mid, End, and
+!        Begin/End cycles.
+!
+!        In other words, the memory cycles following destination
+!        fetches need to have Hold asserted.
+!
+!        Labels on micro-instructions indicate the action being performed:
+!
+!        Xsr - Extra source fetch cycle.
+!        Beg - Begin cycle.
+!        Mid - Middle cycle.
+!        End - End cycle.
+!        BgE - Begin/End cycle.
+!
+!        Qn - Quad timing cycle n.
+!        Tn - Micro timing cycle n.
+
+        not RDA, Fetch4;                        !    1 synchronize
+        Nop;                                    !    2
+        CntlRasterOp(Phase5LR);                 !    3 FirstSrc always first
+        Nop;                                    ! Q0 0
+        not RDA, Fetch4;                        !    1 Src Fetch
+        Nop;                                    !    2
+        Nop;                                    !    3
+Wt7:    Nop;                                    ! Q2 0
+        Nop;                                    !    1
+        LatCnt := Latency;                      !    2
+        CntlRasterOp(Phase7LR);                 !    3 Begin/End
+        if IntrPend Goto(Wt9);                  ! Q0 0
+        not RDA, Fetch4;                        !    1 Dst Fetch
+        Nop;                                    !    2
+        Nop;                                    !    3
+        Hold;                                   ! Q1 0
+        not RDA, Fetch4;                        !    1 Src Fetch
+        not RDA, Store4;                        !    2 Dst Store
+        Goto(Wt7);                              !    3
+
+Wt8:    Iob(145);                               ! Q2 0 read video state
+        Iod and 20;                             !    1 pick video interrupt bit
+        LatCnt := LatCnt - 14,                  !    2 count this loop
+                              if Neq Goto(Wt11);!      if video
+        LatCnt, CntlRasterOp(Phase7LR);         !    3 Begin/End
+        if Leq Goto(Wt10);                      ! Q0 0 if latency expired
+Wt9:    not RDA, Fetch4;                        !    1 Dst Fetch
+        Nop;                                    !    2
+        Nop;                                    !    3
+        Hold;                                   ! Q1 0
+        not RDA, Fetch4;                        !    1 Src Fetch
+        not RDA, Store4;                        !    2 Dst Store
+        Goto(Wt8);                              !    3
+
+Wt10:   CntlRasterOp(Off);                      ! Q0 1
+        Call(VecInt);
+        IntOccr;
+        if Neq Return;                          ! got a net interrupt
+        Goto(Wt6);                              ! continue
+
+Wt11:   CntlRasterOp(Phase7LR);                 ! Q2 3 Begin/End
+        Nop;                                    ! Q0 0
+        CntlRasterOp(Off);                      !    1
+        Call(VidInt);                           ! serve video interrupt
+        Goto(Wt6);                              ! continue
+
+
+
+
+!-----------------------------------------------------------------------------
+!
+! Wait - Wait awhile.
+!
+!-----------------------------------------------------------------------------
+
+Wait:   PushLoad(7777);
+        If IntrPend Call(VecInt);
+        Nop;
+        Nop;
+        RepeatLoop;
+        Return;
+
+
+
+
+
+VecInt: Vector(IntVec);
+        
+Loc(Z80IInt),
+        0, IOB(305), Return;
+
+Loc(BadInt1),
+        IOB(10), Return;                ! ** for Canon link board **
+
+Loc(DiskInt),
+        IOB(123), Return;
+
+Loc(NetInt),
+        IOB(RdNetStat);
+        Status := IOD and 377;
+        IntOccr := 1, Return;           ! ** FOR EIO **
+
+Loc(Z80OInt),
+        0, IOB(305), Return;
+
+Loc(VidInt),
+        VidTmp, IOB(343);               ! load VidState
+        VidTmp, IOB(340);               ! load line count
+        0, IOB(342);                    ! load cursor address
+        VidTmp and 200;
+        if Eql Goto(Vid1);              ! if we didn't load second retrace
+        Screen, Iob(341);               ! address of screen bit map div 2
+        0, Iob(344);                    ! load cursor X value
+        VidCnt := 11;
+Vid1:   VidCnt := VidCnt - 1;
+        VidTmp := 102000, if Gtr Return;! next command: display normal
+        VidCnt;
+        VidTmp := 101154, if Eql Return;! next command: first vertical retrace
+        VidTmp := 101351, Return;       ! next command: second vertical retrace
+
+        
+Loc(E3Int),
+        Return;
+
+Loc(ParInt),
+        Return;
+
+
+        end;

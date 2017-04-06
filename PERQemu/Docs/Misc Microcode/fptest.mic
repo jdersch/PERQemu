@@ -1,0 +1,245 @@
+$title FP EIO Test
+$perq1
+!
+!Test Program for Floating Point Unit on EIO Board
+!
+!Written by:  Steve Clark  10/11/82
+!
+!
+        define(nrep,0);              !number of times looped
+        define(nrec,1);              !number of words received
+        define(Fstat,2);             !FPU status after failing
+        define(RBuf,3);              !buffer
+        define(count,4);             !counter
+        define(flag,5);              !loop flag
+        define(RFail,370);           !reason for failing
+        
+        define(fst1,11);             !data from 8087
+        define(fst2,12);
+        define(fst3,13);
+        define(fst4,14);
+        define(fst5,15);
+        define(fst6,16);
+        define(fst7,17);
+        
+        constant(FPInst,301);        !write port.  gets load data
+        constant(FPResult,121);      !read port.  has store data
+        constant(FPStat,120);        !read status port
+        constant(IEnb,305);          !interrupt enable port
+
+        constant(fbusbit,100000);    !busy bit in status word
+        constant(fintbit,2);         !interrupt bit
+        constant(fsbit,200);         !FS
+        constant(frbit,1);           !FR
+
+        constant(allend,7401);       !normal return
+
+        constant(FSTSW,34335);       !store 8087 status word
+!
+! This program checks the floating point unit by exercising it
+! with typical data.  If a test fails, the program ends at a
+! breakpoint which indicates the error.
+! Four separate entry points are:
+!    0 - run tests once
+!   10 - run tests until first failure
+!   20 - run tests despite failures
+!   30 - read 8087 status to fst1
+!
+! After a breakpoint, the following registers will be set:
+!   R0 - number of test loops completed
+!   R1 - number of result words received
+!   R2 - FPU status
+! R11:17 - result words (if R1 > 0)
+! R370 - breakpoint
+!
+! Breakpoints are:
+!  100 - Tests executed correctly
+!  101 - Bad initialization, FPU status bit is set
+!  102 - Could not load first word
+!  103 - Could not load second word
+!  104 - Busy bit not set after ADD instruction
+!  105 - ADD instruction won't accept data
+!  106 - Could not load STORE instruction
+!  107 - Not BUSY after STORE instruction
+!  110 - Could not send STORE dummy address
+!  111 - Could not read 8087 status
+!  112 - Wrong number of words back
+!  113 - Incorrect result
+!  114 - Could not load FLDCW instruction
+!  115 - Could not load control word
+!  116 - Could not load FIDIV instruction
+!  117 - Could not load FIDIV data
+!  120 - INT bit not set after division by zero
+!  121 - Could not load FINIT instruction
+!  122 - Could not clear exception
+!
+        flag := 0, goto(enter), loc(0);
+        flag := 1, goto(enter), loc(10);
+        flag := 2, loc(20);
+Enter:  4,IOB(IEnb);                 !turn on 8087
+        IOB(FPResult);               !clear FR
+        Nrep := 0;
+
+! First check initialization
+
+Stat:   Nrec := 0;
+        IOB(FPStat);
+        IOD and 100203;              !all 4 status bits should be zero
+        RFail := 101, if neq goto(Fail);
+
+! Add two numbers
+
+        Rbuf := 165731;              !load PI
+        RFail := 102, call(FLoad);
+        RBuf := 336;                 !add 16-bit integer
+        RFail := 103, call(FLoad);
+        RFail := 104, IOB(FPStat);
+        IOD;
+        if geq goto (Fail);          !should be busy (negative)
+        RBuf := 3;                   !add PI + 3
+        RFail := 105, call(FLoad);
+        RBuf := 10335;               !store 64-bit real
+        RFail := 106, call(FLoad);
+        RFail := 107, IOB(FPStat);
+        IOD;
+        if geq goto(Fail);           !should be busy
+        RFail := 110, call(FLoad);   !send dummy address
+
+! Now receive the results
+        
+        count := 100;
+Rlp:    IOB(FPStat);                 !wait for result
+        FStat := IOD;
+        if odd call(Fstore);         !FR bit is bit 0
+        FStat;
+        if geq goto(Rend);           !exit if not busy
+        count := count-1;
+        if neq goto(Rlp);
+        
+Rend:   nrec-4;                      !did we get 4 words back?
+        RFail := 112, if neq goto(Fail);
+        RFail := 113;
+        Fst1-13214;                  !are the four words correct?
+        if neq goto(Fail);
+        Fst2-125042;
+        if neq goto(Fail);
+        Fst3-110375;
+        if neq goto(Fail);
+        Fst4-40030;
+        if neq goto(Fail);
+
+! Now test exceptions
+
+        RBuf := 24331;
+        RFail := 114, call(FLoad);   !load control word
+        RBuf := 1400;
+        RFail := 115, call(FLoad);   !allow interrupts, unmask exceptions
+        RBuf := 30336;
+        RFail := 116, call(FLoad);   !divide by zero
+        RBuf := 0;
+        RFail := 117, call(FLoad);
+        Pushload(30);
+        RepeatLoop;                  !wait for divide to fail
+        IOB(FPStat);
+        IOD and fintbit;             !int bit should be set
+        RFail := 120, if eql goto(Fail);
+        RBuf := 161733;              !init the 8087
+        RFail :=121, call(FLoad);
+        Pushload(30);
+        RepeatLoop;                  !wait for INT to clear
+        IOB(FPStat);
+        IOD and fintbit;
+        RFail := 122, if neq goto(Fail);
+        
+        Nrep := Nrep+1;
+        StackReset;
+        Flag-1;
+        if eql goto(stat);
+Exit:   RFail := 100;
+
+Fail:   IOB(FPStat);
+        FStat := IOD and 100203;
+        Flag-2;
+        if eql goto(stat);
+        5, IOB(IEnb);                !Trigger Biomation on bit 0
+        Goto(Allend);
+
+! Routine to send a word to the 8087
+
+Fload:  count := 100;
+ldlp:   iob(FPStat);                 !read status
+        iod and fsbit;
+        if eql goto(fxm);            !branch if clear
+        count := count-1;
+        if neq goto(ldlp);
+        JumpPop(Fail);
+        
+fxm:    RBuf,iob(FPInst);            !send data
+        return;
+
+! Routine to receive results
+
+Fstore: iob(FPResult);               !get data
+        Rbuf:=iod;
+        
+fs0:    Nrec;
+        if gtr goto(fs1);
+        fst1:=Rbuf;
+        goto(fstend);
+
+fs1:    Nrec-1;
+        if gtr goto(fs2);
+        fst2:=Rbuf;
+        goto(fstend);
+
+fs2:    Nrec-2;
+        if gtr goto(fs3);
+        fst3:=Rbuf;
+        goto(fstend);
+
+fs3:    Nrec-3;
+        if gtr goto(fs4);
+        fst4:=Rbuf;
+        goto(fstend);
+
+fs4:    Nrec-4;
+        if gtr goto(fstend);
+        fst5:=Rbuf;
+        goto(fstend);
+
+fs5:    Nrec-5;
+        if gtr goto(fs6);
+        fst6:=Rbuf;
+        goto(fstend);
+
+fs6:    Nrec-6;
+        if gtr goto(fstend);
+        fst7:=Rbuf;
+        goto(fstend);
+
+fstend: Nrec:=Nrec+1;
+        return;
+
+! Routine to read 8087 status
+
+f80sub: 4, IOB(IEnb), loc(30);
+        IOB(FPResult);               !clear FR
+        Flag := 0;
+        Nrep := 0;
+        Nrec := 0;
+        Rbuf:=FSTSW;
+        RFail := 102, call(fload);
+        Rbuf:=0;
+        RFail := 103, call(fload);
+        count:=50;                   !wait 50 cycles max
+f8:     iob(FPStat);
+        fstat:=iod;
+        if odd goto(f8fnd);          !test FR bit
+        count:=count-1;
+        if neq goto(f8);
+        RFail := 111, goto(Fail);
+
+f8fnd:  call(fstore);
+        goto(Exit);
+
+        end;

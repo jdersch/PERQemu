@@ -1,0 +1,20 @@
+$perq1a
+$nobase
+              
+              define(r370, 370);
+              
+              place(0000,3777);
+              
+              constant(adr10010, 10010);
+              constant(adr20200, 20020);
+
+$Include CheckSize.micro
+
+adr00500:     Return, loc(500);
+
+adr02400:     Call (CheckSize),  Loc (2400);
+              Call (adr10010);
+              Call (adr20200);
+              R370 := 100;
+              GoTo (7401);
+End;

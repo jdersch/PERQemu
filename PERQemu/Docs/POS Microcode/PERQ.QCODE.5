@@ -1,0 +1,1078 @@
+!-----------------------------------------------------------------------------
+!
+!  File : Perq.Qcode.5
+!
+!  Abstract:
+!     More qcode expansions
+!
+!-----------------------------------------------------------------------------
+
+!-----------------------------------------------------------------------------
+!
+!  Change Log:
+!
+!   3 Jan 82  Michael R. Kristofic
+!        Made qcodes 45 and 46 undefined
+!
+!-----------------------------------------------------------------------------
+
+$Title Expression stack and memory stack operators.
+
+! Opcode REPL.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       REPL is a one byte opcode that replicates the top word on the
+!       expression stack.
+!
+! Instruction:
+!       REPL
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Value.
+!       (Tos-1) = Value.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(REPL), Tos := Tos, Push, NextInst(0);
+
+! Opcode REPL2.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       REPL2 is a one byte opcode that replicates the top two words on the
+!       expression stack.
+!
+! Instruction:
+!       REPL2
+!
+! Environment:
+!       (Tos) = Value0.
+!       (Tos-1) = Value1.
+!
+! Result:
+!       Stack pushed twice.
+!       (Tos) = Value0.
+!       (Tos-1) = Value1.
+!       (Tos-2) = Value0.
+!       (Tos-3) = Value1.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(REPL2), tmp := Tos, Pop;
+        tmp1 := Tos;
+        Tos := tmp, Push;
+        Tos := tmp1, Push;
+        Tos := tmp, Push, NextInst(0);
+
+! Opcode MMS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MMS is a one byte opcode that moves a value from the expression
+!       stack to the memory stack.
+!
+! Instruction:
+!       MMS
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory stack pushed.
+!       Memory[TP] = Value.
+!
+! Calls:
+!       StkOv
+!
+!-----------------------------------------------------------------------------
+       
+Opcode(MMS), SL - TP;
+        tmp11 := 1, if C19 Goto(StkOv);      ! if not enough room on the stack
+        TP := TP + 1, Store;
+        Tos, Pop, NextInst(0);               ! move the value
+
+! Opcode MMS2.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MMS2 is a one byte opcode that moves two values from the expression
+!       stack to the memory stack.
+!
+! Instruction:
+!       MMS2
+!
+! Environment:
+!       (Tos) = Value0.
+!       (Tos-1) = Value1.
+!
+! Result:
+!       Stack popped twice.
+!       Memory stack pushed twice.
+!       Memory[TP] = Value1.
+!       Memory[TP-1] = Value0.
+!
+! Calls:
+!       StkOv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(MMS2), SL - TP;
+        tmp11 := 1, if C19 Goto(StkOv);      ! if not enough room
+        TP := TP + 1, Store;
+        Tos, Pop;                            ! move Value 0
+        TP := TP + 1, Store;
+        Tos, Pop, NextInst(0);               ! move Value 1
+
+! Opcode MES.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MES is a one byte opcode that moves a value from the memory
+!       stack to the expression stack.
+!
+! Instruction:
+!       MES
+!
+! Environment:
+!       Memory[TP] = Value.
+!
+! Result:
+!       Memory stack popped.
+!       Stack pushed.
+!       (Tos) = Value.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(MES), TP, Fetch;
+        TP := TP - 1;
+        Tos := Mdi, Push, NextInst(0);       ! move the value
+
+! Opcode MES2.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MES2 is a one byte opcode that moves two values from the memory
+!       stack to the expression stack.
+!
+! Instruction:
+!       MES2
+!
+! Environment:
+!       Memory[TP] = Value0.
+!       Memory[TP-1] = Value1.
+!
+! Result:
+!       Memory stack popped twice.
+!       Stack pushed twice.
+!       (Tos) = Value1.
+!       (Tos-1) = Value0.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(MES2), TP, Fetch;
+        TP := TP - 1;
+        Tos := Mdi, Push;                    ! move Value 0
+        TP, Fetch;
+        TP := TP - 1;
+        Tos := Mdi, Push, NextInst(0);       ! move Value 1
+
+! Opcode EXCH.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       EXCH is a one byte instruction that exchanges the top two values on
+!       the expression stack.
+!
+! Instruction:
+!       EXCH
+!
+! Environment:
+!       (Tos) = Word 0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       (Tos) = Word1.
+!       (Tos-1) = Word0.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode EXCH2.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       EXCH2 is a one byte instruction that exchanges the top two pairs
+!       of values on the expression stack.
+!
+! Instruction:
+!       EXCH2
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!       (Tos-2) = Word2.
+!       (Tos-3) = Word3.
+!
+! Result:
+!       (Tos) = Word2.
+!       (Tos-1) = Word3.
+!       (Tos-2) = Word1.
+!       (Tos-3) = Word2.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EXCH), tmp := Tos, Pop;
+        tmp1 := Tos, if IntrPend Call(VectSrv);
+        Tos := tmp;
+        Tos := tmp1, Push, NextInst(0);
+
+Opcode(EXCH2), tmp := Tos, Pop;
+        tmp1 := Tos, Pop;
+        tmp2 := Tos, Pop;
+        tmp3 := Tos, if IntrPend Call(VectSrv);
+        Tos := tmp1;
+        Tos := tmp, Push;
+        Tos := tmp3, Push;
+        Tos := tmp2, Push, NextInst(0);
+
+! Opcode LDTP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDTP is a one byte instruction that loads the memory stack top
+!       pointer onto the expression stack.  The pointer that is loaded is
+!       actually a pointer to the next free word of the memory stack.
+!
+! Instruction:
+!       LDTP
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = TP - SB + 1 = Memory stack top pointer as offset from
+!                             stack base.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDTP), Tos := TP - SB, Push;
+        Nop;                                 !***** MAB
+        Tos := Tos + 1, NextInst(0);
+
+! Opcode ATPB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ATPB is a two byte instruction that adds a value in the range
+!       -128..127 to the memory stack top pointer.
+!
+! Instruction:
+!       ATPB    <N>
+!
+! Result:
+!       N words pushed on the memory stack (TP = old TP + N).
+!
+! Calls:
+!       VectSrv, StkOv.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode ATPW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ATPW is a two byte instruction that adds a value in the range
+!       -32768..32767 to the memory stack top pointer.
+!
+! Instruction:
+!       ATPW
+!
+! Enivronment:
+!       (Tos) = N.
+!
+! Result:
+!       Stack popped.
+!       N words pushed on the memory stack (TP = old TP + N).
+!
+! Calls:
+!       VectSrv, StkOv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(ATPB), tmp := NextOp;                 ! N
+        tmp11 := 2,                          ! instruction is two bytes long
+                    if ByteSign goto(ATPB2);
+ATPB1:  TP := TP + tmp, if IntrPend Call(VectSrv);
+        SL - TP;
+        if C19 Goto(ATPErr);
+        NextInst(0);
+
+!       Sign-extend a byte.
+
+ATPB2:  tmp := tmp or not 377, Goto(ATPB1);
+
+Opcode(ATPW), tmp := Tos and AllOnes;
+        tmp11 := 1,                          ! instruction is one byte long
+                    if Lss goto(ATPW2);
+ATPW1:  TP := TP + tmp, if IntrPend Call(VectSrv);
+        SL - TP;
+        if C19 Goto(ATPErr);
+        Pop, NextInst(0);
+
+!       Sign-extend a word.
+
+ATPW2:  tmp := tmp or SignXtnd, Goto(ATPW1);
+
+!       Stack overflow, undo the ATPx.
+
+ATPErr: TP := TP - tmp, goto(StkOv);
+
+
+
+
+
+$Title TLATEx, STLATE - Virtual address translation.
+
+! Opcode TLATE0.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       TLATE0 is a one byte instruction that translates a virtual
+!       address to a physical address.  If the segment is not resident,
+!       a segment fault is signalled.  A TLATE0 instruction that succeeds
+!       is indivisible from the instruction that immediately follows it.
+!
+! Instruction:
+!       TLATE0
+!
+! Environment:
+!       (Tos) = Offset part of virtual address.
+!       (Tos-1) = Segment part of virtual address.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Physical address corresponding to the virtual address
+!               (Segment,Offset).  This physical address is represented
+!               as an offset from stack base.
+!
+! Calls:
+!       VectSrv, SegFault, RefillIndivisible.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode TLATE1.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       TLATE1 is a one byte instruction that translates a virtual
+!       address to a physical address.  If the segment is not resident,
+!       a segment fault is signalled.  A TLATE1 instruction that succeeds
+!       is indivisible from the instruction that immediately follows it.
+!
+! Instruction:
+!       TLATE1
+!
+! Environment:
+!       (Tos) = Word.
+!       (Tos-1) = Offset part of virtual address.
+!       (Tos-2) = Segment part of virtual address.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word.
+!       (Tos-1) = Physical address corresponding to the virtual address
+!                 (Segment,Offset).  This physical address is represented
+!                 as an offset from stack base.
+!
+! Calls:
+!       VectSrv, SegFault, RefillIndivisible.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode TLATE2.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       TLATE2 is a one byte instruction that translates a virtual
+!       address to a physical address.  If the segment is not resident,
+!       a segment fault is signalled.  A TLATE2 instruction that succeeds
+!       is indivisible from the instruction that immediately follows it.
+!
+! Instruction:
+!       TLATE2
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!       (Tos-2) = Offset part of virtual address.
+!       (Tos-3) = Segment part of virtual address.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!       (Tos-2) = Physical address corresponding to the virtual address
+!                 (Segment,Offset).  This physical address is represented
+!                 as an offset from stack base.
+!
+! Calls:
+!       VectSrv, SegFault, RefillIndivisible.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STLATE.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STLATE is a two byte instruction that translates one or two
+!       virtual addresses to physical addresses.  If either segment
+!       is not resident, a segment fault is signalled.  An STLATE
+!       instruction that succeeds is indivisible from the instruction
+!       that immediately follows it.
+!
+!       The depth of the virtual addresses in the expression stack
+!       is represented by two four-bit fields in the operand byte.
+!       The lower four bits of the operand byte specifies the depth
+!       of the Segment part of the virtual address which is closest
+!       to the top of the expression stack (call this one the first
+!       virtual address).  The upper four bits of the operand byte
+!       specifies the depth of the Segment part of the second virtual
+!       address prior to any stack alteration.  A depth of 0 indicates
+!       that no translation is to be done, and the maximum depth allowed
+!       is 7.  This allows translation of one or two virtual addresses
+!       which may be deeper in the stack than those translated by
+!       TLATE0, TLATE1, and TLATE2.
+!
+! Instruction:
+!       STLATE  Lower,,Upper
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!          ...
+!       (Tos-Upper+2) = WordUpper-2.
+!       (Tos-Upper+1) = UpperOffset.
+!       (Tos-Upper) = UpperSegment.
+!       (Tos-Upper-1) = WordUpper+1.
+!       (Tos-Upper-2) = WordUpper+2.
+!          ...
+!       (Tos-Lower+2) = WordLower-2.
+!       (Tos-Lower+1) = LowerOffset.
+!       (Tos-Lower) = LowerSegment.
+!
+! Result:
+!       stack popped twice.
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!          ...
+!       (Tos-Upper+2) = WordUpper-2.
+!       (Tos-Upper+1) = Physical address corresponding to the virtual address
+!                       (UpperSegment,UpperOffset).  This physical address
+!                       is represented as an offset from stack base.
+!       (Tos-Upper) = WordUpper+1.
+!       (Tos-Upper-1) = WordUpper+2.
+!          ...
+!       (Tos-Lower+3) = WordLower-2.
+!       (Tos-Lower+2) = Physical address corresponding to the virtual address
+!                       (LowerSegment,LowerOffset).  This physical address
+!                       is represented as an offset from stack base.
+!
+! Calls:
+!       VectSrv, SegFault, RefillIndivisible.
+!
+!-----------------------------------------------------------------------------
+
+!       tmp1 = depth of deeper segment number (left nibble).
+!       tmp2 = depth of shallower segment number (right nibble)--tmp1=tmp2
+!              if only one.
+!       tmp3 = base address of deeper segment.
+!       tmp4 = base address of shallower segment.
+!       tmp5 = segment number.
+!       tmp6 = error flag.
+!       tmp7 = save BPC.
+!       tmp10 = offset.
+!       tmp11 = PC backup count.
+!       tmp12 = difference of tmp1 and tmp2.
+
+        Constant(TltPop,2200);
+        Constant(TltSeg,2202);
+
+Opcode(TLATE0), tmp1 := 1, Goto(TltStart);   ! depth = 1
+
+Opcode(TLATE1), tmp1 := 2, Goto(TltStart);   ! depth = 2
+
+Opcode(TLATE2), tmp1 := 3, Goto(TltStart);   ! depth = 3
+
+TltStart: tmp11 := 1, if IntrPend Call(VectSrv);  ! one byte instruction
+        tmp7 := UState and 17;               ! save BPC
+        BPC := 10, Call(MakeVictim);         ! make a victim
+        tmp2 := tmp1, Field(0,4);            ! set equal depths
+        tmp6 := 0, Dispatch(TltPop);         ! no errors yet
+
+Opcode(STLATE), tmp2 := NextOp;              ! get STLATE parameter
+        tmp11 := 2;                          ! two byte instruction
+        tmp7 := UState and 17;               ! save BPC
+        BPC := 10, Call(MakeVictim);         ! make a victim
+        tmp2 and 360, Field(4,4);            ! select left nibble
+        tmp1 := Shift,                       ! depth of deeper segment
+                       if Neq Goto(STLATE1); ! if left nibble is non-zero
+        tmp1 := tmp2, Goto(STLATE2);         ! set equal depths
+
+STLATE1:tmp2 := tmp2 and 17;                 ! depth of shallower segment
+        if Neq Goto(STLATE2);                ! if right nibble is non-zero
+        tmp2 := tmp1;                        ! set equal depths
+STLATE2:tmp1, Field(0,4);
+        tmp6 := 0, Dispatch(TltPop);         ! no errors yet
+
+!       Pop down to deeper segment number.
+
+Case(TltPop,7), tmpstk7 := Tos, Pop;
+Case(TltPop,6), tmpstk6 := Tos, Pop;
+Case(TltPop,5), tmpstk5 := Tos, Pop;
+Case(TltPop,4), tmpstk4 := Tos, Pop;
+Case(TltPop,3), tmpstk3 := Tos, Pop;
+Case(TltPop,2), tmpstk2 := Tos, Pop;
+Case(TltPop,1), tmpstk1 := Tos and AllOnes, Pop;  ! deeper offset
+        tmpstk0 := Tos and AllOnes,          ! deeper segment number
+                                    if IntrPend Call(VectSrv);
+        tmp := 11;
+        tmpstk0 + tmpstk0, Fetch2;           ! fetch segment table entry
+        tmp5 := tmpstk0;                     ! save segment number
+        tmp12 := tmp1,  Call(TltTrans);      ! translate deeper address
+        tmp3 := tmp4,                        ! deeper base address
+                      if IntrPend Call(VectSrv);
+        tmp12 := tmp12 - tmp2, Field(0,4);   ! difference in depths
+        BPC := tmp - tmp12, Dispatch(TltSeg);  ! BPC is counter for depth diff.
+
+!       Select shallower segment number.
+
+Case(TltSeg,6), tmp5 := tmpstk6, Goto(TltShallow);
+Case(TltSeg,5), tmp5 := tmpstk5, Goto(TltShallow);
+Case(TltSeg,4), tmp5 := tmpstk4, Goto(TltShallow);
+Case(TltSeg,3), tmp5 := tmpstk3, Goto(TltShallow);
+Case(TltSeg,2), tmp5 := tmpstk2, Goto(TltShallow);
+Case(TltSeg,0), BPC := tmp - tmp1, Goto(TltEnd);  ! only one virtual address
+
+TltShallow: tmp5 := tmp5 and AllOnes;
+        tmp5 + tmp5, Fetch2, Call(TltTrans);  ! fetch segment table entry
+TltEnd: tmp6;                                ! check error count
+        if Eql Goto(TltContinue);            ! if no segment faults
+        Tos := tmpstk1, Push,                ! restore E-stack on error
+                              if IntrPend Call(VectSrv);
+        tmp12 := 0;                          ! turn off translation
+        BPC := tmp - tmp1, Goto(TltPush);    ! BPC is counter for restoration
+
+TltContinue:Tos := tmpstk1 + tmp3,           ! translate deeper address
+                                   ;!**** if IntrPend Call(VectSrv);
+
+!       Push until BPC[3].
+
+TltPush:Tos := NextOp BMux tmpstk2, Push, if BPC[3] Call(TltAdd);
+        Tos := NextOp BMux tmpstk3, Push, if BPC[3] Call(TltAdd);
+        Tos := NextOp BMux tmpstk4, Push, if BPC[3] Call(TltAdd);
+        Tos := NextOp BMux tmpstk5, Push, if BPC[3] Call(TltAdd);
+        Tos := NextOp BMux tmpstk6, Push, if BPC[3] Call(TltAdd);
+        Tos := NextOp BMux tmpstk7, Push, if BPC[3] Call(TltAdd);
+        Push;                                ! make an extra push to undo later
+                                             ! (is this right?)
+TltDone:BPC := 0, ReviveVictim;              ! undo victim, this transfers to
+                                             ! MakeVictim
+MakeVictim: NextOp, if BPC[3] Return;        ! make or undo the victim, Return
+                                             ! if we're making the victim
+        BPC := tmp7,                         ! restore BPC
+                     ;!**** if IntrPend Call(VectSrv);
+        tmp6, Pop;                           ! get rid of extra push
+        if Neq Goto(SegFault);               ! if segment fault
+        if BPC[3] Goto(RefillIndivisible);   ! if we need a refill
+        NextInst(0);                         ! continue at next Q-code
+
+
+!       Find the base address of a segment.
+!
+!       Environment:
+!            Fetch2 of segment table entry in the recent past.
+!            tmp5 = segment number.
+!
+!       Result:
+!            tmp4 = base address if the segment is resident.
+!            tmp6 = 1 if the segment is not resident.
+
+TltTrans: Tos := tmp4 := Mdi, Push;          ! lower part of base address
+        tmp4 := Mdx or tmp4,                 ! full base address
+                             if Odd Goto(TltTrans1);  ! if segment not resident
+        tmp4 := tmp4 and not 377;            ! clear the flags byte
+        tmp4 := tmp4 - SB;                   ! bias base address by SB
+        tmp5 + tmp5, Store;
+        Tos or 4, Pop, Return;               ! set RecentlyUsed in SAT
+
+TltTrans1: tmp6 := 1, Pop, Return;           ! indicate segment fault
+(*****
+TltTrans: tmp4 := Mdi and not 376;           ! lower part of base address
+        tmp4 := Mdx or tmp4,                 ! full base address
+                             if Odd Goto(TltTrans1);  ! if segment not resident
+        tmp4 := tmp4 - SB, Return;           ! bias base address by SB
+
+TltTrans1: tmp6 := 1, Return;                ! indicate segment fault
+*****)
+
+
+!       Add base address and offset of shallower virtual address.
+!
+!       Environment:
+!            tmp12 = 0 if no shallower virtual address to translate.
+!            if there is a virtual address to translate:
+!                tmp4 = base address.
+!                (Tos) = offset.
+!                (Tos-1) = segment number.
+!       Result:
+!            if no virtual address to translate, exit to TltDone.
+!            otherwise:
+!                Expression stack popped.
+!                (Tos) = base address + offset.
+!                BPC is counter to push the rest of the stack.
+
+TltAdd: tmp12;
+        tmp12 := 0, if Eql JumpPop(TltDone);  ! if no shallower virtual address
+        tmp10 := Tos and AllOnes, Pop,       ! offset
+                                       if IntrPend Call(VectSrv);
+        BPC := tmp - tmp2;                   ! counter to push remainder of stk
+        Tos := tmp4 + tmp10, Return;         ! base + offset
+
+
+
+
+$Title WCS, JCS - Control store operators.
+
+! Opcode WCS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       WCS is a one byte instruction that writes a single instruction
+!       in the control store.
+!
+! Instruction:
+!       WCS
+!
+! Environment:
+!       (Tos) = Address with bytes swapped.
+!       (Tos-1) = High order microstore.
+!       (Tos-2) = Middle order microstore.
+!       (Tos-3) = Low order microstore.
+!
+! Result:
+!       Stack popped four times.
+!       Controlstore instruction written.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(WCS), Call(LCA);                      ! load control store address
+        not Tos, Pop;
+        WcsHi, if true GotoS(WCS1);          ! write high third
+WCS1:   not Tos, Pop;
+        WcsMid, if true GotoS(WCS2);         ! write middle third
+WCS2:   not Tos, Pop;
+        WcsLow, if true GotoS(WCS3);         ! write low third
+WCS3:   NextInst(0);
+
+! Opcode JCS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JCS is a one byte instruction that jumps to some location in the
+!       controlstore.  A routine called with JCS should exit via a
+!       NextInst jump.
+!
+! Instruction:
+!       JCS
+!
+! Environment:
+!       (Tos) = Address with bytes swapped.
+!
+! Result:
+!       Stack popped.
+!
+! Calls:
+!       Specified address.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(JCS), Call(LCA);                      ! load control store address
+        GotoS;                               ! enter control store
+
+
+
+
+$Title ENABLE, QRAISE - Exception handling and raising.
+
+! Opcode ENABLE.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ENABLE is a six byte instruction which enables an exception handler.
+!       The exception is identified by an internal segment number and a
+!       routine number.  A negative segment number indicates a handler of
+!       all exceptions.  The handler is identified by a routine number.
+!       The handler must be nested immediately inside the current routine,
+!       must be in the same code segment as the current routine, and may not
+!       be a function.  None of these is checked by the ENABLE instruction.
+!
+! Instruction:
+!       ENABLE LowByteExceptionISN HighByteExceptionISN ExceptionRN
+!              HandlerRN.
+!
+! Environment:
+!       Memory[AP + ACBEP] = OldEP.
+!
+! Result:
+!       Four words pushed, quad-aligned, onto the memory stack.
+!       Memory[TP - 3 + EEBES] = ExceptionSSN.
+!       Memory[TP - 3 + EEBER] = ExceptionRN.
+!       Memory[TP - 3 + EEBHR] = HandlerRN.
+!       Memory[TP - 3 + EEBNE] = OldEP.
+!       Memory[AP + ACBEP]  = NewEP = TP - 3.
+!
+! Calls:
+!       WordParm, XSTMap, StkOv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(ENABLE), tmp4 := TP, Call(WordParm);
+        tmp := Shift + tmp;                  ! ExceptionISN
+        TP := TP + 4, if Geq Call(XSTMap);   ! if not "ALL"
+        TP := TP and not 3;
+        tmp1 := NextOp;                      ! ExceptionRN
+        tmp2 := NextOp;                      ! HandlerRN
+        AP + ACBEP, Fetch;
+        Tos := TP := TP + 3, Push;           ! push 4 and quad-align
+        SL - TP;
+        tmp3 := Mdi, if C19 Goto(ENABLE1);   ! OldEP
+        TP - 3, Store4;
+        tmp;                                 ! ExceptionISN
+        tmp1;                                ! ExceptionRN
+        tmp2;                                ! HandlerRN
+        tmp3;                                ! OldEP
+        Tos := Tos - SB;
+        AP + ACBEP, Store;
+        Tos - 3, Pop, NextInst(0);           ! NewEP
+
+!       Stack overflow.
+
+ENABLE1: tmp11 := 5, Pop;                    ! instruction is 5 bytes
+        TP := tmp4, Goto(StkOv);
+
+! Opcode QRAISE.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       QRAISE is a six byte instruction which raises an exception.
+!
+! Instruction:
+!       QRAISE  LowByteExceptionISN HighByteExceptionISN ExceptionRN
+!               LowByteParameterSize HighByteParameterSize
+!
+! Calls:
+!       ErrCall, WordParm, XSTMap.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(QRAISE), Call(WordParm);
+        tmp := Shift + tmp;                  ! ExceptionISN
+        if Geq Call(XSTMap);                 ! if not "ALL"
+        tmp2 := NextOp;                      ! ExceptionRN
+        tmp4 := tmp, Call(WordParm);         ! ExceptionSSN
+        tmp3 := Shift + tmp;                 ! ParameterSize
+        tmp1 := tmp4, Goto(ErrCall);         ! ExceptionSSN
+
+
+
+
+$Title INTON, INTOFF, STRTIO - Input/output and interrupts.
+
+! Opcode INTON.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INTON is a one byte instruction that turns on Pascal level
+!       interrupts.
+!
+! Instruction:
+!       INTON
+!
+! Result:
+!       Interrupts-off bit (bit 15) cleared in UserIntr.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(INTON), UserIntr := UserIntr and 77777;
+        NextInst(0);
+
+! Opcode INTOFF.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INTOFF is a one byte instruction that turns off Pascal level
+!       interrupts.
+!
+! Instruction:
+!       INTOFF
+!
+! Result:
+!       Interrupts-off bit (bit 15) set in UserIntr.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(INTOFF), UserIntr := UserIntr or 100000;
+        NextInst(0);
+
+! Opcode STRTIO.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STRTIO is a one-byte instruction that is used to initiate some I/O
+!       operation.  A device number is on the top of the expression stack,
+!       and the action is device dependant.  Device numbers of the form
+!       x * 40 + 20 are reserved for Pascal programs to request special
+!       actions of the Perq interpreter microcode.  For more documentation,!
+!       see the IO microcode and the SSLR routine.
+!
+! Instruction:
+!       STARTIO
+!
+! Environment:
+!       (Tos) = Device number.
+!
+! Result:
+!       Stack popped.
+!       Device dependant action performed.
+!
+! Calls:
+!       IO microcode.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STRTIO), tmp := Tos, Pop;
+        tmp, Field(0,4);
+        Dispatch(StartIO);
+
+
+
+
+$Title RASTOP, LINE - Raster-op and line-draw.
+
+! Opcode RASTOP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RASTOP is a one byte instruction that performs a Raster-Op memory
+!       operation.  See the RO microcode for complete documentation.
+!
+! Instruction:
+!       RASTOP
+!
+! Calls:
+!       RO microcode.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(RASTOP), Goto(RasterOp);
+
+! Opcode LINE.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LINE is a one byte instruction that draws lines.  See the Line
+!       microcode for complete documentation.
+!
+! Instruction:
+!       LINE
+!
+! Calls:
+!       Line microcode.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LINE), Goto(DrawLine);
+
+
+
+
+$Title PSW, PBLK - Process management.
+
+! Opcode PSW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       PSW is the unimplemented process swap instruction.
+!
+! Instruction:
+!       PSW
+!
+! Calls:
+!       UOP.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(PSW), Goto(UOP);
+
+! Opcode PBLK.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       PBLK is the unimplemented process block instruction.
+!
+! Instruction:
+!       PBLK
+!
+! Calls:
+!       UOP.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(PBLK), Goto(UOP);
+
+
+
+
+$Title NOOP, LSSN, LDAP, INCDDS, BREAK - Miscellaneous.
+
+! Opcode NOOP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       NOOP is a one byte no-operation instruction.
+!
+! Instruction:
+!       NOOP
+!
+!-----------------------------------------------------------------------------
+       
+Opcode(NOOP), NextInst(0);
+
+! Opcode LSSN.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LSSN is a one byte instruction that loads the segment number of the
+!       memory stack onto the expression stack.
+!
+! Instruction:
+!       LSSN
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = SS.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LSSN), Tos := SS, Push, NextInst(0);
+
+! Opcode LDAP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDAP is a one byte instruction that loads the current activation
+!       pointer.
+!
+! Instruction:
+!       LDAP
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = AP - SB.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDAP), Tos := AP - SB, Push, NextInst(0);
+
+! Opcode INCDDS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INCDDS is a one byte instruction that increments the diagnostic
+!       display (DDS).  Since incrementing the diagnostic display has the
+!       size effect of resetting the E-stack, the E-stack is checked to be
+!       sure it is already empty.  If it isn't, an ErrEStk is generated.
+!
+! Instruction:
+!       INCDDS
+!
+! Result:
+!       Diagnostic display incremented.
+!
+! Calls:
+!       RunError0.
+!
+! Side affects:
+!       The expression stack is cleared.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(INCDDS), UState and 1000;
+        if Neq Goto(INCDDS1);                ! if E-stack not empty
+        StackReset, Nextinst(0);             ! increment the DDS
+
+INCDDS1: tmp2 := ErrEStk, Goto(RunError0);
+
+! Opcode BREAK.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       BREAK is a one byte instruction that is used for a Q-code level
+!       breakpoint to the Krnl.
+!
+! Instruction:
+!       BREAK
+!
+! Result:
+!       BrkReg = UPC.
+!
+! Calls:
+!       Krnl.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(BREAK), BrkReg := UPC, Goto(7401);    ! cause a breakpoint
+$Title UNDFxxx - Undefined Q-Codes.
+
+! Opcode Undefined.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       These are the undefined Q-codes.  They cause an ErrUndfQcd error.
+!
+! Calls:
+!       UOP.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(UNDF198), Goto(UOP);
+Opcode(UNDF199), Goto(UOP);
+Opcode(UNDF245), Goto(UOP);
+Opcode(UNDF246), Goto(UOP);
+Opcode(UNDF247), Goto(UOP);
+Opcode(UNDF248), Goto(UOP);
+Opcode(UNDF249), Goto(UOP);
+Opcode(UNDF45), Goto(UOP);
+Opcode(UNDF46), Goto(UOP);
+Opcode(UNDF47), Goto(UOP);
+Opcode(UNDF48), Goto(UOP);
+Opcode(UNDF49), Goto(UOP);
+Opcode(UNDF50), Goto(UOP);
+Opcode(UNDF79), Goto(UOP);
+Opcode(UNDF80), Goto(UOP);
+Opcode(UNDF81), Goto(UOP);
+Opcode(UNDF82), Goto(UOP);
+Opcode(UNDF83), Goto(UOP);
+Opcode(UNDF84), Goto(UOP);
+Opcode(UNDF85), Goto(UOP);
+Opcode(UNDF86), Goto(UOP);
+Opcode(UNDF87), Goto(UOP);

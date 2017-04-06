@@ -1,0 +1,50 @@
+! Dispatch - PERQ Dispatch Diagnostic.
+! Copyright (C) Three Rivers Computer Corporation, 1981.
+
+! 21 Aug 81  JPS  V1.1  Add copyright notice and change history.
+
+
+        Define(Pat,100);
+        Define(Got,101);
+        Define(error, 370);
+        
+        
+Main:   Pat := 0, Loc(2400);
+        
+
+Lp:     Pat, LeftShift(0);          ! set up for dispatch
+        Dispatch(First);
+        
+Test:   Got AND Pat;
+        Error := 101, If NEQ GoTo(7401);
+        
+        Pat := PAt + 1;
+        Pat - 20;
+        If NEQ GoTo(Lp);
+        
+        Error := 100, GoTo(7401);
+        
+        
+        Pat := Pat + 1, GoTo(Lp), Loc(2500);
+        
+        
+        
+First:  Got := 0, GoTo(Test), Loc(100);
+        Got := 1, GoTo(Test), Loc(104);
+        Got := 2, GoTo(Test), Loc(110);
+        Got := 3, GoTo(Test), Loc(114);
+        Got := 4, GoTo(Test), Loc(120);
+        Got := 5, GoTo(Test), Loc(124);
+        Got := 6, GoTo(Test), Loc(130);
+        Got := 7, GoTo(Test), Loc(134);
+        Got := 10, GoTo(Test), Loc(140);
+        Got := 11, GoTo(Test), Loc(144);
+        Got := 12, GoTo(Test), Loc(150);
+        Got := 13, GoTo(Test), Loc(154);
+        Got := 14, GoTo(Test), Loc(160);
+        Got := 15, GoTo(Test), Loc(164);
+        Got := 16, GoTo(Test), Loc(170);
+        Got := 17, GoTo(Test), Loc(174);
+
+
+END;

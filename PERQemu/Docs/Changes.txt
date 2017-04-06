@@ -1,0 +1,1075 @@
+﻿
+    Change Log since PERQemu-source initial release
+    -----------------------------------------------
+
+                         or
+
+       "What has that madman done to my code!?"
+
+
+Here's a fairly thorough accounting of the changes I've made since the first
+source release of 22-Jun-2013.  Maybe too thorough. :)
+
+A few notes about the latest RasterOp are waaaay down at the end (Mar-2017).
+
+EntryPoint.cs:
+    Updated the copyright notice and banner.  Changed 'Unconventional and
+    subtle.' to 'As the sparks fly upwards.'  (Another quote from the ucode
+    source. :-)
+
+PERQsystem.cs:
+    Reset _debugMessage when the 'reset' command is issued (so it doesn't
+    keep saying that the PERQ powered itself off).  "Hallo!  My name is
+    Inigo Montoya..."
+
+PlatformSpecific/
+    Removed the old keyboard implementation and renamed the directory
+    "HostInterface", perhaps ill-advisedly so.  The idea was to put things
+    that touch the host OS (like the keyboard driver, Ethernet... er,
+    serial port... uh...)  Anyway, as the first thing I tackled (getting
+    the Mac/Linux keyboard stuff working) I thought it best to create a new
+    mess somewhere else, so I could put the old mess back if necessary!
+
+Readme.txt:
+    Updated to reflect lots of this stuff, but in less detail (if you can
+    believe that).
+
+Trace.cs:
+    Expanded the trace settings to add Keyboard and MulDiv for debugging.
+    (The MulDiv could be removed/reused at some point.)  Renamed Memory
+    Read/Write to Fetch/Store, and have tried to be consistent with that
+    throughout, since it matches up with the PERQ terminology.  Bit
+    pedantic there, admittedly.
+
+    Tweaked the colors to group things differently, mostly because I can't
+    bloody read the darker colors against the black console background
+    (too proud/poor to go get eyeglasses...) and added a padding function
+    to Log().  (For debugging the Cstack?)
+
+CPU/ALU.cs:
+    A few cosmetic tweaks to the logging output.  Decided against mucking
+    with the PAL equations to hack in MulDiv...
+
+CPU/CPU.cs:
+    The fun begins!  First a list of the changes; later on the rationale.
+
+    _shifter now instantiates its own instance; _mqShifter is a separate
+    instance for doing MulDiv.  _ropShifter is yet another.  Part of
+    SIXTEEN_K/RasterOp changes.
+
+    Added _mqEnabled, _lateWriteback, and _wcsHold flags, all init to
+    false in Reset().
+
+    Reorganized code at top of Execute() for the Memory changes.  Now
+    tests for several other conditions to decide if the cycle should be
+    aborted (doc in source).  Was/am sorely tempted to just have an
+    "abort" return, rather than loop; see below.  This change to support
+    RasterOp and Memory changes.
+
+    Call to _alu.DoALUOp() changed to test _mqEnabled; if true, call
+    DoMulDivALUOp().  This new method does the first part of the
+    Multiply/DivideStep instruction, which includes potentially modifying
+    the ALU op on-the-fly.  Calls DoALUOp() directly rather than change
+    uOp.  Full details and rationale below.
+
+    Added DoWriteback(), called once after ALU op (as before, if W==1) but
+    potentially a second time late in the cycle if _lateWriteback is set.
+    Part of MulDiv/SIXTEEN_K changes.
+
+    Split _memory.Clock() into _memory.Tick() and _memory.Tock() to
+    support overlapped fetch/store cycles for RasterOp.  Tick() handles
+    the fetch/MDI part early in the cycle (part of the "abort" loop, prior
+    to the Raster- or ALU op) while Tock() is used to store any pending
+    RasterOp or ALU result late in the cycle.  When Rop is enabled, calls
+    to _rasterOp.Clock() and Result() take precedence over results on R
+    (having RasterOp SetR() seemed pointless and silly).  Exhaustively
+    described below.
+
+    Small change to GetAmuxInput() -- according to VFY 2.x, all 14 bits of
+    the Victim latch are restored on the 16K CPU when reviving after a
+    refill (in NextOp).
+
+    Extended DispatchFunction() to handle the Multiply/DivideStep, R :=
+    Victim, and push LongConstant functions.  Fixed LoadOp to only
+    invalidate the cache if the _romEnabled flag was actually reset, not,
+    er, every time LoadOp was executed! :-) Tweak to WidRasterOp := R to
+    set the _mqEnabled flag.  All this part of the MulDiv/SIXTEEN_K
+    enhancments.
+
+    Small tweak to WriteControlStore() to set _wcsHold. Part of the Memory
+    changes and a slight performance enhancement (see below).
+
+    Debugging functions: made some of the descriptions more helpful,
+    replaced loop to dump 2910 call stack with _callStack.DumpContents(),
+    added a bunch of RasterOp debugging helpers.
+
+CPU/CallStack.cs:
+    Cosmetic changes to make debugging a little clearer. Changed our
+    implementation to fix a case where a we'd barf reading off the end of
+    the stack (triggered by the original RasterOp, actually). The 2910
+    stack now has a zeroth element that indicates "stack empty" -- but in
+    the PERQ, they never actually hooked up that pin on the chip. Uh... so
+    I kept the "wraparound" behavior although I don't think we need it; a
+    sixth call() really should overwrite the top of the stack, and
+    _cStackPointer == 0 really should mean stack empty.  Anyway, it
+    works...
+
+CPU/Instruction.cs:
+    Added the precomputed/cached "WantMDI" flag; set the MemoryRequest
+    type as a field here too.  Moved the MemoryCycle enum from Memory.cs
+    here (don't hit me!) and added a MulDivCommand enum as well.  It kinda
+    seemed like all those bits wanted to be together... part of the MulDiv
+    and Memory changes.
+
+CPU/Shifter.cs:
+    Changed to allow multiple instances.  In addition to the CPU's
+    shifter, I now create _mqShifter and _ropShifter, which makes some
+    things a whole lot cleaner.
+
+    Badly mangled the thing so I could set the ShifterCommand without
+    having to figure out the convoluted bit fiddling for MQ or RasterOp.
+    Also allowed the specification of two 16-bit input words as part of
+    the Rop "half pipeline" operation.  I'm _sure_ there are
+    better/cleaner/more correct ways to do this, but it works... would be
+    happy to learn how to do it The Right Way... :-)
+
+Display/Display.cs:
+    Attempted to avoid a "cross-thread exception" blah blah when Close()
+    is called before things have inited (like, if you just type "exit"
+    without "go").  But it still gets thrown in some cases where
+    Display.Close() is called from the wrong thread.  Which shouldn'nt
+    happen on my single-core Dell, should it?  Minor...
+
+    The main change, as mentioned above, was to pull out the
+    KeyboardInterop stuff.  You left a comment in the file that the key
+    translation "should probably live elsewhere."  For now it's still in
+    here, and I extended it to include a few extras, like allowing
+    PgUp/PgDn keys to scroll the display (didn't have a wheel mouse on the
+    old laptop) or having the Pause key break to the debugger without
+    having to move the mouse to type ^C on the console.  Thought about
+    trying to trap PrintScreen too, but Linux (at least) seems to grab
+    that one for its own nefarious use.  Needs more work, but no more
+    PInvokes!
+
+Docs/
+    No changes, but suggest maybe we split this big chunk of stuff into a
+    separate, supplemental zip file.  Maybe curate a set of sources and
+    docs that are more relevant?  Separate project...
+
+HostInterface/KeyboardMap.cs:
+    New mapping function for translating KeyEvents to PERQ keycodes.  It
+    should be easily extended to support both the PERQ1 and PERQ2
+    keyboards, as well as handle any minor .NET/Mono integration in
+    managed code (or potentially even limited internationalization? Lots
+    of PERQs in the UK :-).
+
+IO/
+    No substantive changes anywhere in the IO tree, just a few cosmetic
+    tweaks.
+    [Revised in source release 1.2: "corrected" the IO address so that 
+    only the lower 7 bits are inverted, while the 8th bit is the correct
+    polarity (R/W flag).  So all the _handlesPort arrays now use the
+    actual IOB values from the microcode source.  An extensive survey of
+    the IOB space is included in a NewIOPorts.txt in the Docs directory]
+
+Memory/Memory.cs:
+    Big Fun.  Basically a rewrite, creating two memory queues for fetches
+    and stores to support the overlapped RasterOp cycles.  Split the
+    Clock() as mentioned above.  Complete details of the new design
+    below.
+
+    Probably complete broke the serialization stuff.
+
+    Added the TWO_MEG conditional and support for 2MB of memory.  Would
+    love to make this a configurable option at runtime.
+
+Memory/QueueController.cs:
+    New.  Implements a pipeline of memory "instructions" which are
+    executed each cycle to fetch or store a single word.  Memory requests
+    are queued up and "recognized" (PERQ terminology) during the correct
+    cycle; four instructions are then queued up to deliver or accept data
+    in the cycles that follow.  Has lots of useful debugging support,
+    which, er, slows it down quite a bit...
+
+Memory/FakeRasterOp.cs:
+    Still there, but probably broken.  I suppose I can always pull up
+    v0.25 to do POS development on my ancient, slow laptop... this file
+    and all the FAKE_RASTEROP conditional code can be removed.
+    [Removed in source release 1.2]
+
+Memory/RasterOp.cs:
+    The whizzy new all-singing, all-dancing, all-brain-sucking
+    cycle-accurate simulation!  Operates more like the hardware pipeline
+    (in theory), as it no longer touches memory directly.  Lets the
+    CPU/microcode drive the bus, and trusts the state machine/ucode will
+    feed it data (SrcFetch, DestFetch) and request output (Result()) at
+    the right times.
+
+    This "snapshot" release seems to work for all tested cases: LtoR and
+    RtoL, transfers of all alignments.  The code is theoretically clean
+    and simple, but implementation issues and the secret use of magic and
+    quantum physics (and possibly hard drugs) by the PERQ designers means
+    there are still some nasty surprises.  This may be the penultimate
+    solution... maybe it'll inspire YOGURT.  (Your Own Grand Unified
+    Rasterop Theory?)  All the gory details below.
+    [Notes at bottom re: reimplementation for source release 1.2]
+
+QCode/
+    No changes, although it might be interesting/difficult/valuable to try
+    to accommodate PNX C-codes, or the various interim phases of the
+    Q-codes revamp for Accent S5/S6 and beyonnd... Lisp is a complete
+    mystery...
+
+Other:
+    I finally bumped the AssemblyVersion to 0.4, after something like 927
+    interim builds... I figure we won't hit 1.0 until we have Ethernet,
+    Canon, Streamer... I guess EIO, landscape, 24-bit/4MB, Multibus, and
+    color would get us to 2.0. :-)
+
+    Oh, and I created a program icon. :-)
+
+
+"Details below"
+---------------
+
+[Josh -- for some reason I got it in my head that some of this might need to
+be documented for others besides us.  That may be wishful thinking. :-)  So
+it probably covers a lot of unnecessary background that you can gloss over;
+the code itself ought to be fairly self-explanatory and well commented.]
+
+
+All the changes outlined above fall into a few broad categories:
+    1.  finishing 16K support (MulDiv, missing functions),
+    2.  better Mono support (keyboard),
+    3.  "real" RasterOp (Memory changes, and RasterOp itself).
+
+
+MulDiv and 16K support
+----------------------
+
+Part of what prevented PNX and POS G from working were a few unimplemented
+extended special functions.  The hardest of these was the Multiply/Divide
+unit, and the solution is (unavoidably) a bit ugly.
+
+There's no "clean" way to separate this glommed-on functionality; it uses two
+bits of the RasterOp Width register for control, changes the current
+instruction's ALU op in-flight, pulls bits from the previous cycle's R and
+feeds bits into the Shifter, and reading MQ when done modifies R after the
+"write back" phase normally takes place, necessitating the "late writeback"
+hack.
+    [The _lateWriteback boolean could be removed and the call DoWriteBack
+    simply inlined in the two places it's needed; R := MQ, and R :=
+    Victim.  Removes one extraneous variable]
+
+In short, it's a kludge, and one I thought might be of dubious usefulness...
+but it DOES appear that later versions of POS/Accent actually incorporate use
+of hardware multiply/divide into their Qcode interpreter microcode, once 3RCC
+dropped support for the 4K CPU.  So what I once thought might just be an
+academic exercise (and a way to make VFY 2.x not crash) does have some
+purpose!
+
+I tried to keep the changes contained to CPU.cs, so the ALU was not changed.
+Instead, when _mqEnabled is true, a wrapper function computes the first part
+of the multiply or divide step, then feeds the potentially changed op to the
+ALU.  RasterOp has a small bit of code to set the MulDivCommand and provides
+an accessor, so it's not too intrusive.
+
+The mul/div step actually happens in two parts -- one early, during the ALU
+op, and one late, as part of DispatchFunction().  There are comments in the
+code that should make it clear, as it's gleaned from the POS docs and example
+code as well as Tony's description.  Note that their example code actually has
+a subtle bug in it... testing has not been exhaustive, but I have run many
+thousands of random operations to compare the results of the standard
+microcode and the hardware implementation.  Oddly enough performance is about
+the same?  A fully exhaustive run of every possible 16-bit permutation would
+probably take 4 days on my laptop.  Might need to extend the test program to
+make sure the extreme edge cases are checked (and, right now, no overflow or
+error checking is done).
+
+I'm 99.99% satisfied that MulDiv and 16K emulation is complete, and every
+version of VFY I've run seems to agree... the only thing left is to add 24-bit
+support, which honestly doesn't seem too hard!  (Changes to Ustate and some
+masks here and there, a few throw pillows...)  Famous last words.
+
+
+Mono support
+------------
+
+The keyboard hackery is probably all wrong, if you're a C#/OOP purist.  I'm
+not at all wedded to the arrangement; if there's a more elegant way to
+organize that code, I'm all for it.  I was mostly excited to find a way to
+eliminate the PInvokes that caused me grief on Mono.  The Mac Mono port,
+however, was a lost cause; their keyboard driver was utterly and completely
+brain dead, for our purposes anyway.  So I rewrote it.  I seriously doubt
+anyone cares to patch Mono 2.x for PowerPC/OSX 10.5.8, so I figured I'd bundle
+the patch and a Readme for applying it for any PPC Mac diehards who want to
+run PERQemu.  (On the last-generation G5 dual-core or quad-core models, it
+should run quite nicely...)  If I ever get a more current Intel-based Mac,
+running a much newer Mono, I will consider sending Ximian a patch if the
+latest version is still so badly broken.
+
+As noted above, on the PERQemu side I added a KeyboardMap that does the
+translation of Win32 key events to PERQ keycodes; all of it should be
+intuitively obvious and documented in the source.  That was a year ago, now?
+My first C# hack?  I've moved on.  RasterOp ate my brain.  Still do need to go
+back and make Caps Lock work right, however.  Sigh.
+
+I might have broken the "off-tablet" Alt thing, inadvertently?  Damn.
+
+My old laptop, even with a new mouse, sometimes just goes crazy -- will
+randomly send the cursor to the bottom of the screen, or even simulate mouse
+clicks when I didn't touch the buttons!  I'm wondering if this is somehow
+weirdly related to the new RasterOp, or just coincidental?
+
+When it isn't just acting strangely, mouse response is a little slow, as well;
+wonder if we need to clock IO even during CPU "aborts" (so we don't go 31
+cycles, instead of 16)?  A true Z80 emu running in its own thread to handle
+key/mouse events and really raising interrupts to the virtual PERQ would be
+cool as heck, although I'd need a quad-core machine to run that... :-)
+
+I think I renamed the HostInterface/ directory because keyboard events are no
+longer strictly "platform specific." Even while writing this tome it seems
+more sensible to put that in the IO/Z80 space... Preliminary reading gave me
+hope that there's native .NET/C# support for getting at the raw Ethernet layer
+too, but now I wonder if that ought to be under a top-level Network/ dir
+instead of "HostInterface" (or a restored "PlatformSpecific") (because it
+doesn't use the Z80 at all).  But "Speech" is Z80 driven, and is potentially
+platform specific... Uh, this is getting more muddled, not less.
+
+Blargh.  Rearrange at will, commander!  My bleary eyes and tired brains need
+coffee...
+
+
+Memory
+------
+
+Coffee achieved!  Since Memory, CPU and RasterOp are all so dependent on each
+other, the changes made to support "real" RasterOp all sort of hang together.
+First, the Memory changes.  Most of this should be obvious if my code is
+legible, but I'll be thorough for posterity.  Because I'm sure future
+generations will be utterly enthralled by this feat of software engineering...
+running a 100 year old "PERQ" emulator on a 70 year old "Windows" emulator on
+their optical quantum bioimplants.  :-)
+
+The high-level view is that Memory is a black box; both the CPU and the IO can
+use the same interface to fetch and store data.  Currently the Hold bit
+semantics are ignored, and the IO and video code grabs data from memory
+whenever it needs to.  For historical accuracy, or for synchronization when
+the Z80 thread is running and our emulated EIO board needs to DMA something,
+we could have the IO memory requests go through the same interface.  But for
+performance reasons and simplicity's sake, IO, Video and the CPU each have
+unfettered access to memory.
+
+As mentioned above, the Memory Clock() is now broken into two parts, a Tick()
+and a Tock().  These are called by CPU.Execute().
+
+Tick() is called early in the microcycle to:
+    bump the Tstate counter,
+    clock the input and output queues,
+    execute the current fetch request (if active),
+    set a bunch of flags (MDIValid, MDONeeded, Wait, and Hold).
+
+    Wait means the cycle should abort (wrong Tstate, or IO in progress).
+    Hold means the IO subsystem is locked out (currently unused).
+
+If a fetch is in progress, that means:
+    Wait == false,
+    MDIValid == false (in t0/t1) or true (t2..next t1)
+    MDI == current incoming data word,
+    MADR == current word's address,
+    MIndex == which word in the quad.
+
+Tock() is called late in the microcycle to:
+    write back the current output word, if MDONeeded == true.
+
+RequestMemoryCycle() is called by CPU.DispatchFunction() to initiate a new
+request.  This would also be the API for the IO/Z80/DMA interface, but for now
+FetchWord() and StoreWord() are still exposed so that IO can touch memory
+directly.
+
+LoadOpFile() is also still present, as before.
+
+
+Memory internally manages two instances of the (perhaps poorly named)
+QueueController: _mdiQueue (for fetches) and _mdoQueue (for stores).  The old
+Memory state machine is now part of the queue object, so the rest of Memory.cs
+is pretty straightforward.
+
+
+Here's how a memory request flows:
+
+CPU.DispatchFunction():
+    sees that SF contains a memory request, so passes the type
+    (uOp.MemoryRequest field, cached when decoded) and starting address
+    (R) along with a unique "transaction ID" (current master clock cycle)
+    to RequestMemoryCycle().
+
+Memory.RequestMemoryCycle():
+    looks at the request and decides if it should be accepted, or if the
+    arcane rites and phase of moon indicate otherwise, ignored. Because
+    this seemed to mostly break things, in no small part because the
+    documentation is utterly obtuse, or I have failed to grasp its
+    intricate beauty, the "ignored" tests are removed.  All memory
+    requests are happily accepted in whatever cycle they're initiated in;
+    we get away with this because buggy microcode (that breaks the weird
+    timing rules) wouldn't work properly on the real hardware, presumably,
+    so I didn't see much point in trying to accommodate it here. :-)
+
+    So essentially all this does is pass the request on to the appropriate
+    queue -- _mdiQueue for fetches, _mdoQueue for stores.
+
+QueueController.Request():
+    this method creates a new MemoryRequest instance and sets up the
+    appropriate next state (WaitForT2 or WaitForT3) for that queue.
+    Hiding the state machine inside the individual queues untangles a lot
+    of complexity, and eliminates all the special handling of overlapped
+    requests.  Finally, because the memory request might need to start
+    right away, we call...
+
+QueueController.Recognize():
+    checks the request type against the current T-state.  If it's time to
+    service the request, Recognize() "programs" four MemoryInstruction
+    instances with the address and cycle in which to execute.  This is how
+    we cope with the two cycle gap between Fetches and MDIValid, the
+    "single word Stores in T2 but the rest in T3" issue, and the annoying
+    "single word Fetch is valid for four cycles" problem.  It also allows
+    for multiple requests "in flight" without the complexity of the old
+    state machine.
+
+At this point, let's say the new request is issued in the wrong cycle.  Since
+we're in a WaitForT2/3, the Tick/Tock cycles happen until the right one comes
+around on the geetar.  During this time the CPU may be spinning in
+Memory.Wait(), depending on the request type.  When the correct cycle finally
+comes around, Clock() calls Recognize(), and we're walkies!
+
+Here's QueueController.Clock() in a bit more detail:
+    check for completed requests, and "retire" them, update the state
+    machine (and our wait flag), recognize any pending requests if it's
+    time, run the instruction queue if any are currently active.
+
+    The state machine has just four states now; Idle, WaitForT2/3, and
+    Running.
+
+Retire() cleans up the request queue so it doesn't grow without bound.
+
+RunInstQueue() simply checks the current T-state against the next
+MemoryInstruction, and if a match dequeues it and sets the address, index, and
+valid flags.  Note that Memory does the actual Fetch or Store -- the
+QueueController just says where and when!
+
+So to get back to our example:  Recognize() has fired in T3 and set up four
+instructions; for the sake of argument, a Store4.  In the next four CPU
+cycles, Memory.Tick() calls _mdoQueue.Clock(), which calls RunInstQueue().
+As all four cycles in a Store4 require data, the instructions are:
+
+    ExecuteTime 0, Address 0xnnnn,   Index 0, Valid = True
+    ExecuteTime 1, Address 0xnnnn+1, Index 1, Valid = True
+    ExecuteTime 2, Address 0xnnnn+2, Index 2, Valid = True
+    ExecuteTime 3, Address 0xnnnn+3, Index 3, Valid = True
+
+[Note: when any Store is pending, Memory.Wait is overridden by MDONeeded.  I
+assume this is partly why the hardware has all those crazy "ignore" rules, so
+that a Fetch of any flavor can't abort the CPU through a pending Store.  So
+far this strategy has worked, even without those rules, but I'm sure that
+someday we'll find some really obscure case...]
+
+The return part then becomes obvious.  When Tock() is called with the ALU
+result (or a RasterOp result),
+
+    Memory.MDONeeded == _mdoQueue.Valid
+    Memory.MADR == _mdoQueue.Address
+    Memory.MIndex == _mdoQueue.Index
+
+so Memory updates the correct word via ExecuteStore().
+
+In a Fetch example, the same values from the MemoryInstruction are interpreted
+as you might expect: 
+
+    Memory.MDIValid == _mdiQueue.Valid
+    Memory.MADR == _mdiQueue.Address
+    Memory.MIndex == _mdiQueue.Index
+
+and Memory.ExecuteFetch() then fills in MDI for consumption by CPU or RasterOp.
+
+Recognize() is the only hairy bit, largely due to one particularly annoying
+"feature": overlapping Fetch requests, and the two-cycle lag from Recognize()
+to MDIValid.  The problem arises when two Fetches are issued back-to-back
+(example below from Perq.Init):
+
+    SB + StkTP, Fetch;
+    TP := MDI + SB;                      ! initial top pointer
+    SB + StkGP, Fetch;
+    GP := MDI + SB, LoadS(Busted);       ! initial global pointer
+
+The first Fetch is held until T3, then Instructions are issued:
+
+    ID 1, ExecuteTime 2, Address 0xnnnn, Index 0, Valid = True
+    ID 1, ExecuteTime 3, Address 0xnnnn, Index 0, Valid = True
+    ID 1, ExecuteTime 0, Address 0xnnnn, Index 0, Valid = True
+    ID 1, ExecuteTime 1, Address 0xnnnn, Index 0, Valid = True
+
+and Wait is released.  Because the next instruction (in T0) references MDI,
+the CPU aborts until T2, when the first instruction in the queue signals
+MDIValid.  The Fetch in the next cycle starts immediately (T3): 
+
+    ID 2, ExecuteTime 2, Address 0xnnnn, Index 0, Valid = True
+    ID 2, ExecuteTime 3, Address 0xnnnn, Index 0, Valid = True
+    ID 2, ExecuteTime 0, Address 0xnnnn, Index 0, Valid = True
+    ID 2, ExecuteTime 1, Address 0xnnnn, Index 0, Valid = True
+
+and again the memory releases Wait so that the next uOp can run.  Because the
+GP := MDI in T0 is a memory reference, the CPU should wait -- but MDIValid is
+still true (from the first Fetch) so we have to release... which means the
+previous value (valid for four cycles) is returned.  Doh.
+
+[** Warning: gonna get a little esoteric, here... **]
+Now that I look at this, I'm wondering if this could be simplified, as my
+notes are vague and my memory hazy.  The solution was to hack the instruction
+stream so that if a second Fetch of any type is issued while the single-word
+Fetch is still in flight, the T0/T1 words are invalidated by, aptly,
+InvalidatePreviousFetch().  In sum, we have to release Wait in T0 because
+Memory can't know what the next uOp will be; it's up to CPU to decide if it
+should stall until T2.  But we can't stall in T0/T1 if WantMDI is true and
+MDIValid is true, because we might legitimately be reading MDI in a T0/T1.
+
+That's the gist of it; CPU can't/shouldn't peek into the memory request queue
+(and doesn't "remember" if it issued back-to-back Fetches) and Memory can't
+know what the CPU/programmer's "intention" is by peeking forward in the
+instruction stream to see if it should assert Wait.  MDI is not, to my
+knowledge, a latch that's cleared on the first read after a Fetch -- the docs
+say "valid from T2 until the following T1," which strongly implies you could
+read the same word more than once if you had some reason to... SO, what this
+all means is that the Memory Recognize() method has to assume that if you're
+issuing another single-word Fetch while a previous one is outstanding, you
+must be done with the previous MDI.  [In the hardware, they must just "blow a
+rev" and let an entire four cycles go by to deal with this condition, only
+recognizing the next Fetch after the first one has cycled out.  All of that
+crazy logic was commented out in my build, but the comments are still there
+if you want a mildly entertaining bit of reading.]
+
+The QueueController.InvalidatePreviousFetch() logic takes care to simply clear
+the Valid flag only for any T0/T1 cycles if the ID tag matches the current
+Fetch request; that means the CPU will abort in the the example above, as the
+code clearly expects, until the next T2 when the second Fetch (ID 2) sets
+MDIValid true again.  This situation also comes up when RasterOp "pauses" to
+handle an interrupt, then issues a single-word Fetch to resynchronize.  [[
+Enough of that.  My head hurts. ]]
+
+In short, the special cases gum things up a bit, as always.  But this
+approach, while a bit funky and probably not nearly as fast as it could and
+should be, passes all the tests that VFY and RasterOp and all three OSes can
+throw at it, so I'm happy that it's at least correct.  Would be thrilled if we
+could streamline and simplify it even further...
+
+
+As Bill Cosby would say, "Now, I told you that story so I can tell you another
+one..."
+
+
+RasterOp
+--------
+
+Let's start with where we are, then explain a little about how we got here and
+where we might go next.  If you haven't studied the Gospels (Tony's CPU Tech
+Ref and RasterOpMicrocode.txt) go do so now.  I'll wait.  You'll need at least
+passing familiarity with the PERQ RasterOp design for any of the following to
+make sense. :-)
+
+This implementation attempts to mimic the actual hardware pipeline.  It relies
+on the microcode to generate addresses and initiate Fetch/Store cycles and set
+up each execution Phase.  The idea is that when the RasterOp "datapath" is
+enabled, incoming words are plucked from MDI, updated, and returned for
+writeback to memory via MDO.  CPU.Execute() calls:
+
+    Memory.Tick()        // once per CPU cycle, per usual
+    RasterOp.Clock()     // to update the state machine
+    RasterOp.Result()    // to produce an output word
+    Memory.Tock()        // to write it out
+
+All of that, of course, depending on which step in the 12-instruction cycle
+(DestFetch, SrcFetch, Idle) is executing.  RasterOp does not do ANY address
+calculations or touch the memory array itself.  It doesn't know or care what
+the Estack looks like, tempting as that may be. :-) The only data it has to go
+on is the current state, phase, and the values of the control registers.
+
+The operation of CntlRasterOp(), DstRasterOp(), SrcRasterOp() and
+WidRasterOp() is very straightforward and easy to grok; here are the
+oddities:
+
+CntlRasterOp():
+    some ugliness to deal with the case where the microcode comes to the
+    end of a transfer and bails out early, even though there are still
+    words in the destination queue.  This issue receives some special
+    discussion below.
+
+WidRasterOp():
+    in the SIXTEEN_K CPU, upper two bits of the register used to set the
+    Multiply/Divide "instruction".  Code to set that and an accessor
+    MulDivInst to retrieve it.
+
+DstRasterOp():
+    because the PERQ microengine doesn't have a true NOOP, for some nutty
+    reason the assembler often (but not always?) generates a uOp that
+    assigns whatever's on R at the moment to the DstRasterOp register.
+    Which means, unfortunately, that enabling the RasterOp trace log
+    creates an endless spew of bogus messages.  I think I finally
+    commented that out and just use "show rasterop registers" to examine
+    things, rather than jot them down as they go by... minor annoyance.
+
+Let's zip through the state machine and setup for a new transfer:
+
+Setup():
+    called by CntlRasterOp() at the start of a new transfer.  This is
+    where we do a bunch of computation once, rather than (in some cases)
+    for every word.  The X bit offset is computed and the separate Shifter
+    instance (_ropShifter) is programmed here so that we don't worry about
+    reprogramming the CPU shifter for each quad word.  (Shifter control is
+    done by magic in the HW, not by the microcode.  Muuuuuch easier this
+    way.)  The left, right and both-edges masks are computed here once, as
+    well.  And the "figure out the true width" and compute the position of
+    the last Src word mess happens here too.  Discussion below.
+
+Clock():
+    very simple.  Calls NextState() to switch state -- in T2. It's much
+    easier to coordinate the SrcFetch/DestFetch states with the actual
+    arrival of the words on MDI, although it means I'm off or Tony's
+    document is off -- Idle comes at the beginning, not at the end.  Six
+    of one... Anyway, this is what worked for me.
+
+    This means that during a transfer, the four cycles of the SrcFetch
+    state align with the memory cycles where we pull Src words off MDI;
+    ditto for DstFetch.  In Idle we check _leftOver to clear extra words
+    off the end of a completed scanline.  And in Off we actually still
+    queue up incoming words, because of the "microcode bailed early"
+    problem (seeing a theme develop?)
+
+So, during Clock() when we're in the DestFetch state, it's very easy to grab
+the next MDI word (FetchNextWord() - wrapper with some logging and error
+checking), then compute its mask and queue it up.  The "mask" is a tag that
+identifies what part of the scan line the word is; the DestWordMask() method
+figures that out based on Phase and the index of the current word.  It uses
+the control register values to accurately assign the tag.  The CombinerFlags
+enum gives us our "mask":
+
+    Invalid = 0x00,     // word not properly initialized (debugging)
+    DontMask = 0x01,    // pass word unmodified; beginning of scanline
+    LeftEdge = 0x02,    // word contains a left edge
+    RightEdge = 0x04,   // word contains a right edge
+    Both = 0x06,        // word contains both edges (shortcut)
+    FullWord = 0x08,    // use all 16 bits
+    Leftover = 0x10,    // pass word unmodified; clear end of scanline
+
+[Source release 1.2: these CombinerFlags now are read in from the RSC00emu.rom
+file at startup and a table lookup]
+
+The data word itself is stored as a ROpWord.  ROpWords are like the
+MemoryInstruction words, storing extra info to assist in debugging, as well as
+the CombinerFlags value.
+
+Now it gets ugly.
+ 
+The HW RasterOp microcode breaks down an operation (sequence of Phases) using
+just six unique patterns, rendered crudely here in ASCII art:
+
+    1stSrc  ->  Begin       ->  Mid (x N)   ->  EndClr
+    1stSrc  ->  Begin       ->  EndClr
+    1stSrc  ->  BegEndClr
+    1stSrc  ->  XtraSrc     ->  Begin       ->  Mid (x N)   ->  EndClr
+    1stSrc  ->  XtraSrc     ->  Begin       ->  EndClr
+    1stSrc  ->  XtraSrc     ->  BegEndClr
+
+At the end of each scanline, EndClear loops back to Begin for the next line;
+BeginEndClear loops back to itself.
+
+    [Note that although they're defined in the microcode, Phases 2, 3, and
+    3X are never used!  The code may need a few tweaks if some nut tries
+    to invoke an "End" (no Clear) or a "BeginEnd" (no Clear, or no
+    Clear/XtraSrcWord).]
+
+What becomes apparently is that the "rules" for determining where the edges
+are on the Destination side are easy, clear and consistent -- because
+FirstSource or XtraSource don't affect the Destination FIFO, a Begin means
+"look for the left edge," EndClear means "look for the right edge".  On the
+Source side, however, those extra phases throw everything off.
+
+The equivalent SrcWordMask() routine has been bashed, buggered, beaten and
+RageDeleted(tm) more times than I can count, because there is no way to "know"
+how XtraSrc is supposed to behave.  FirstSource always behaves like a Begin or
+a BeginEndClear -- it always contains a 1st edge word.  We can _usually_ guess
+this based on the width -- but the abs(_widthExtraWords - _destWordPosition)
+== 0 formula does NOT work; consider a transfer at bit offset 0 that's 75 bits
+wide...
+
+Worse, the XtraSource can be any of *three* different phases, depending on
+circumstance -- a Mid, EndClr or BeginEndClr!  Impossible.  So the original
+approach, to "tag" every incoming word with its appropriate CombinerFlag,
+dispatch it to Src or Dst FIFO, then let Result() line them up didn't work at
+all.
+
+Instead, we just queue up everything during SrcFetch.  With one obvious
+exception -- FirstSource always acts like a Begin.  That's the only time we
+can confidently drop a few words off the beginning of the first scanline of
+the transfer.  We call SrcWordInRegion() to determine if a given Src word
+should be dropped during SrcFetch, but it doesn't really do much more than
+that now... After that, we have to look at the Phase during Result() as words
+are being shifted out in order to have some hope of computing the mask
+correctly.
+
+[Note that the Src masks are entirely advisory/informational only -- in
+release builds with DEBUG undefined, they aren't even assigned.]
+
+So the strategy now is:
+
+    Queue up Src words as they come in (all of 'em, after 1stSrc);
+    Queue up Dst words as they come in;
+    Let Result() figure out which ones to drop at the beginning and end
+    of each scanline.
+
+In short, "Queue 'em all, and let God sort 'em out!"
+
+Result() is the giant hairball that makes this work.  If MDONeeded is true, it
+starts by grabbing the first Dest word and looking at its mask value, in the
+"word alignment" phase:
+
+    DontMask:
+        exactly that; return Dest unmodified, leave Src queue alone;
+
+    LeftOver:
+        same as DontMask - return Dest unmodified - but pop one word off
+        the Src queue;
+
+    Fullword:
+        pop the next src word and fall through;
+
+    LeftEdge, RightEdge:
+        based on _direction this is a leading (1st) or trailing (2nd)
+        edge.  If it's a 1st edge, scan the Src queue looking for the
+        first word that matches _srcWordPosition (since we can't trust
+        or don't assign a mask to Src words).  We initialize the half
+        pipeline register to this first word.  For 2nd edge, we set
+        the _leftOver flag to signal that the remaining Src words in
+        this same quad are extraneous.  Fall through;
+
+    Both:
+        do the same scan as a 1st edge word above, but always match
+        _srcWordPosition (regardless of _direction).  Also sets the
+        _leftOver flag, since both edges are contained in one word.
+        Falls through.
+
+Next is "bit alignment," where we look at the _xOffset to see if the Src word
+needs to be shifted to line up with Dest.  And here's where minds get blown,
+keyboards get pounded, space gets stared into, shoulders get cried on, coffee
+gets consumed in dangerous quantities, and eyesight is strained (along with
+patience, and sanity).  The "half pipeline" reg basically holds the 5th word
+in the quad either at the beginning or the end, to allow for any 64-bit
+destination alignment from an 80-bit region.
+
+The documentation makes it sound so easy.  "The half pipeline register
+contains the previous result word."  It, along with the current source word,
+are fed into the _ropShifter which right rotates it _xOffset bits, producing a
+16-bit result all ready for combining and masking!  Easy!
+
+So that's what we do. <handwave furiously>
+
+The last part of Result() is the "combine 'em" phase.  The aligned Src and
+Dest words are then fed to Combine() which applies the RasterOp function, and
+the final result is returned to be written to memory by CPU.Tock().
+
+Finally, there's the issue of extra words in the Src FIFO when we finish with
+the last quad word on a scanline.  Since there is no easy or obvious way to
+drop those words during SrcFetch (so that the last Src and Dst words are
+aligned and dropped in perfect synchrony), I made many attempts to have
+Result() detect the 2nd edge (_leftOver) and clear the line right away.  For
+various reasons that are too exhausting to recount now, suffice it to say that
+those didn't work out.
+
+Instead, Clock() uses the Idle cycle to check the _leftOver flag.  If set it
+means we've completed a scanline and are ready to start the next, so it calls
+ClearExtraSrcWords() to drop the remaining words of the current Src quad.  The
+next call to Result() will then re-align our leading edge if necessary. This
+is another somewhat expensive and fragile bit that could ideally be avoided if
+a better scheme for managing the Src FIFO were found.  But, again, it seems to
+do the trick.  Correct first, optimize second...
+
+That's all there is to it!  What was the big deal?  <sardonic grin>
+
+
+The <handwave furiously> part
+-----------------------------
+
+The "half pipeline" is fraught with difficulty in the current scheme.  It is
+only used when there is an horizontal offset between the Src and Dest words
+(i.e., _xOffset), and we have to feed two consecutive words into the shifter
+to get a one word result.  At the beginning of a scan line, where's the
+"previous word"?  There isn't one -- the first edge word is initialized to be
+the "previous" result, and we "peek" at the next word to satisfy the Shifter.
+As we reach the end of the scanline and process the 2nd edge word, it's
+entirely possible that we'll run off the end of the Src queue.  Then what?
+
+Moreover, the behavior of RtoL transfers is slightly different, because we
+always use the Rotate() (rightward) shifter function.  The two words must be
+consecutive on screen, with the MSB of the leftmost word in the upper half of
+the shifter input.  But sometimes -- given the way the offset is computed by
+the microcode -- we are essentially doing a left shift (meaning, "don't peek")
+and other times we're doing the normal rightward shift (meaning "do peek").
+
+Finally, because of the way the microcode uses the "XtraSrcWord" flag (in the
+Cntl register) only in certain cycles, we have to hack up an extra test for
+the case where we have to continue peeking forward even when the flag isn't
+set.  All of this is fairly ridiculous, probably very expensive
+computationally (has to be done for every word when bit alignment is needed)
+and extremely difficult to parse (when it comes to understanding or
+maintaining this bloody code).  For now, I've arrived (through trial and error
+as much as careful observation, study, and deep thought) at the set of
+conditions that works.  Below I'll discuss the way to possibly fix the problem
+the right way.
+
+
+The "microcode bailed early!" conundrum
+---------------------------------------
+
+In Tony Duell's excellent CPU Tech Reference, the 12-cycle timing for a single
+spin 'round the RasterOp state machine has a curious and seemingly erroneous
+assertion:  that after the Fetch4/4R is initiated for the DestFetch (T3), and
+the subsequent Fetch4/4R is initiated in the next T3 for the following
+SrcFetch, the first destination word is already being written back in the very
+next T0.  In actuality, that T0 is where the Store4/4R is being issued!  So
+the first word doesn't actually get written back until the next T1 at the
+earliest.  In my pipeline, with a "real" Dest FIFO (and not the single
+Combiner latch alluded to in the ref doc) we have the luxury of letting those
+dest words queue up, so the read-modify-write cycle does not have to be so
+precise.  But it still puzzles me how the hardware executes the Store4 _in_ T0
+while the first output word from the Combiner latch is supposed to be written
+to MDO in that same cycle.
+
+Whether the doc is off, or if that really is how the hardware works, the
+fallout for PERQemu is that we end up in a situation where often the microcode
+will reach the end of the last scanline, see that it has done so, and
+immediately jump to ExitRO -- while there are still Dest words in the FIFO!
+Because assignment to CntlRasterOp() _immediately_ clears the _enabled flag,
+we're hosed.  The last 1-2 words of the last quad are not processed.
+
+There is only one obvious solution, given the constraints of the CPU and
+Memory implementation: check the state of the Dest FIFO when the _enabled bit
+is cleared, and if there are still words to process set the bit.  The method
+is a little kludgy, born of expedience: introduce a "Done" Phase, and use the
+"Off" state so that we know we're in the Twilight Zone.  That is, on each
+subsequent Clock() check to see if the FIFO has drained, and when it finally
+does, clear the _enabled bit to signal that we're really done (at most, 1 or 2
+cycles).  (Typically those two cycles are a Return and NextInst, so no penalty
+or conflict leaving _rasterOp.Enabled).
+
+Since CPU.DispatchFunction() and the subsequent Memory request and processing
+apparatus all happens at the end of a cycle, trying to add a special case for
+this overlapped Store4/4R so that it can accept an output word _in the same
+cycle as the request_ would basically blow it all up.  Not deemed worth the
+effort.  So the hack, gross as it is, does the job.  But it isn't pretty...
+[SR1.2 note: it is possible this "bailed early" hack could be removed or made
+a little less ugly due to the latest changes; no testing has been done yet...]
+
+
+-----------------------------------------
+Additional thoughts, questions, and ideas
+-----------------------------------------
+
+I was strongly tempted to change the CPU Execute() method to "really" abort;
+that is, figure out a cleaner way to execute only the parts that need to run
+_every_ cycle (master clock, video, memory, io?) and then return if the cycle
+was to be aborted.  This would solve two fairly serious quirks:  first,
+debugging that code often ended up infinitely looping, which was quite
+frustrating (wasn't processing the keyboard, so I'd have to hit stop and start
+the session over).
+
+Second, it is very confusing at first to keep in mind that the uOp that is
+being held is the one _after_ the mem request, and NOT the request itself (as
+I think is the case on the hardware).  All of the memory state transition
+stuff is off by one cycle, because we've already run the instruction that
+should be held!
+
+Conceptually, having Execute() return rather than loop through abort cycles is
+a little cleaner -- it means that single stepping really does _single_ step
+the processor.  The second issue, where memory requests are queued up near the
+end of the cycle, might be unavoidable given that this is a single software
+thread doing what the hardware does (essentially) concurrently.  I backed away
+from trying out that change because it was becoming a distraction... I must
+have ultimately decided that the only benefit to holding the request until the
+proper cycle would be that the "recognize" step would execute immediately.
+But that just shifts the complexity from Memory to CPU.
+
+Did you wrestle with this in the initial implementation?  I didn't think a
+giant "if (!abort) { amux(), bmux(), alu(), etc }" around the bulk of
+Execute() was very elegant, nor did I see a nice way to say "if (abort) {
+just_do_these_things(); return _debugState; }" and put the rest in an "else"
+without a bunch of duplication.  But I suppose offending aesthetic
+sensibilities is a silly concern if it makes the code a little cleaner and/or
+faster?
+
+
+The Memory stuff seems pretty solid, but it comes at a bit of a cost in
+performance.  As with RasterOp, I assume the provided Queue<T> stuff is well
+tested, optimized, faster, and more full-featured than a home-grown array
+implementation might be.  Or is it?  I haven't done _any_ kind of
+benchmarking; the "eye test" tells me that VFY runs more slowly.
+
+I also haven't paid much attention to thinngs like memory leaks, botched the
+use of references, or code that might lead to poor GC performance...  (In
+RasterOp.Result() I was concerned that the local "src" might still be
+referenced by _halfPipe even when it went out of scope, so I wrote a
+CopyFrom() that may not do what I think it should, or even be necessary --
+would going back to "_halfPipe = src;" fine in that case?  Bluh.  More to
+learn about C#.)
+
+The benefit of the "instruction queue" approach, as I see it, is that it
+meshes well with RasterOp, which you can see if you enable debugging and
+single step through a transfer.  RasterOp doesn't know or care about
+calculating addresses; the CPU doesn't either when it issues a request (just
+hands off "R" and lets the memory "box" mask off the bits for 2- or 4-word
+transfers).  And if we do integrate IO/DMA memory access so that the Wait/Hold
+stuff is used to synchronize the CPU and Z80, it might make for a more
+historically accurate emulation, but at an even greater performance cost...
+
+But that's down the road.  In the current scheme, do you see areas for
+improvement?  I haven't yet studied enough C# to know what language or runtime
+features are expensive and should be avoided, or what kinds of tuning tricks
+can boost performance without obfuscating the code.
+
+
+n00b question:  Lots of places in QueueController and RasterOp need to
+reference TState or other Memory bits.  Do I really have to type
+MemoryBoard.Instance.Whatever to access them every where, or is there a
+shorter/simpler way?  There's some embarassing duplication of code in Qctrlr
+(NextTstate()?) where I glossed over this -- not sure about the "best" way to
+deal with namespaces, not wanting to end up entangling a bunch of things
+together... especially when it's mostly a matter of aesthetics.  Or is there a
+performance +/- to creating a reference, say, to Memory.Instance, then using
+_mem.NextTState(t)?  Is a little accessor method ("setters and getters") the
+same expense as a regular function call (er, method invocation)?  Is that a
+fairly expensive operation (as in most languages) or is it lightweight enough
+to not worry too much about it?
+
+I know can only play the C# neophyte card for so long, eh? :-)  Perhaps it
+would be simpler for you to just look at the code and make whatever
+corrections and changes are best, then drop me a note or comment with the
+reason why, rather than try to field a bunch of abstract C#/.NET questions.
+:-)
+
+
+RasterOp went through many iterations before it arrived at this one, and I
+think there might be one more to try.  It seems to me now that the magic
+contained within RSC03 is the key to making the thing more efficient and more
+accurate -- that is, manage the source pipeline more deliberately than "queue
+everything up just to throw away the leading and trailing words, based on
+empirical study and outright guesswork".  I looked at various approaches to
+the thorny problem of constructing a state machine for the source queue; they
+all require a series of complicated tests and conditions to make educated
+guesses about which path through the state machine a given transfer will
+take.  The hardware, on the other hand, either accepts or drops words from the
+queue with precision.
+
+The key is that the values computed by the microcode and stuffed into the
+control registers are all geared toward the _destination_ pipe, not the
+source.  (The 40-watt bulb was aglow that day!)  FirstSource/ XtraSource
+complicate the hell out of everything, until you realize that RSC03 clocks
+those words through the Source FIFO based on the current "phase", including (I
+assume) taking advantage of the four intervening Idle cycles where necessary.
+That way the first edge alignment is already done and the half pipe primed by
+the time the first destination word is flowing through from DestFetch to
+Result().  It seems an obvious performance win, too, only queueing up the
+actual source words we need rather than looping over the beginning and end of
+every scanline trying to throw out the extra source words after the fact; all
+of that fiddling about with object references and the Queue<> fiddling isn't
+free, even if it's relatively cheap.
+
+I've considered a "cheat" that might work -- preserving the external
+appearance of a cycle-by-cycle operation but eliminating a bunch of overhead
+behind the scenes.  Essentially, a new "fake" RasterOp that does _not_ peek at
+the Estack (whose contents are unknown to the HW) or manipulate memory[]
+directly -- but basically operates on whole quadwords at a time, but queues up
+individual 16-bit result words so that Result() just doles them out one at a
+time...
+
+I know at this still relatively early phase where we're adding lots of new
+features I should try not to worry about premature optimization. <blush>  But
+I'm also in the "my old hardware is slow as hell, and I'd really like the
+emulator to be fast enough to use" camp.  Maybe after a nice stable
+full-featured release, you can fill me in on some of the optimizations and
+performance enhancements you mentioned...
+
+
+--------------------------------
+Latest RasterOp Reimplementation
+--------------------------------
+
+Okay, forget all that about the RasterOp rewrite above.  It's now driven by
+two table lookups, roughly akin to the RDS00 and RSC03 PROMs in the hardware.
+Very roughly.
+
+In short, the "mask table" (RDS) returns a CombinerMask for each word in the
+pipeline during the destination fetch part of the cycle; it actually provides
+masks for both the destination _and_ source sides of the pipeline!  The second
+is the "edge condition table" (RSC) which is used to drop or retain extra
+words when edge alignment is needed at the beginning or end of a scan line.
+These are used in the ComputeResult() method, which only looks at the current
+destination word as it comes in; all of the tinkering with the source FIFO
+in the previous hack was removed.
+
+So, more work happens in Clock() than in the last go 'round:
+
+    Idle state: calls ClearLeadingSrcWords() if first edge alignment
+                is needed;
+    Dest fetch: calls ComputeResult() for the current word in the dest
+                pipe, and stores the result in the dest fifo;
+    Src fetch:  calls ClearExtraSrcWords() to drop extra words off
+                the end of a completed scanline.
+
+Thus, the Result() method called by CPU to store the result words just pops
+the destination FIFO and returns.
+
+Having mostly worked out all the conditions needed to get the RasterOp unit
+working (that very ugly and convoluted series of conditionals), I realized I
+could instrument the code to generate the tables for me, rather than sit and
+try to work out the actual PERQ ROM dumps (and that insane EVEN/ODD stuff).
+
+The "edge table" deals with the complex set of alignment conditions by
+returning a flag that can specify zero, one or two words be removed from
+the source fifo.  This is the distillation of the set of rules which were
+such a tangled mess before; in fact, it could potentially be slimmed down
+even more.  The most complicated case is when the update region spans two
+words on one side of the pipeline, but is a single word on the other.  All
+of the crazy "peek ahead" and half pipeline register stuff is now pretty
+dramatically simplified by one lookup and two short if() blocks.
+
+So with DEBUG and MAKE_EDGES conditionals enabled, I ran an extensive suite
+of RasterOp-intensive demos and diagnostics to thoroughly exercise the code
+and fully populate the table.  Code was included that would flag conficting
+assignments, to make sure that there was only one unique result for each
+set of input conditions.  Finally, an extra debugger command was added
+("save rasterop tables") that would write out the computed values to text
+files.  These could then be fine-tuned and edited in human-readable form.
+
+A crude and very simple Perl script (makerom.pl, included) converts them
+into two small binary images that are read at startup to initialize the two
+tables.  At that point, the entire tangled wad of complicated conditionals
+was removed, replaced by the table lookups.  This should make performance a
+little more predictable since it's essentially the same cost to produce two
+table indices each trip through the RasterOp pipeline than chase a long
+chain of if()'s and booleans.  In any case, the code is quite a bit smaller;
+I pulled out much of the debugging stuff and left it in a separate file
+(RasterOp.cs.FullDebug for the morbidly curious).
+
+One last thing would be to streamline the destination side even further --
+reducing it to a small array of ushort, because it literally only needs to
+buffer the current quad-word's computed results for a couple of cycles.
+None of the debug features of the RopWord structure are needed on the dest
+side beyond the actual ComputeResult() function.  That might reduce some
+overhead as well.  And the one obscure graphical glitch should hopefully
+just require a small tweak to the tables, and no further code changes.
+
+This is a pretty cursory (:-) explanation; the code is hopefully fairly
+self-explanatory.  It is to me, anyway, though after this arduous process
+I may have become dangerously insane.
+
+Cheers!
+
+-- Chris
+

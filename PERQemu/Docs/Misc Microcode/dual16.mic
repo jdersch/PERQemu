@@ -1,0 +1,260 @@
+!!     Dual16 - Controlstore dual address test for 16K.
+!       H. Conkey         29 Jul 83
+!       Copyright (C) ICL Plc, 1983
+!
+!!      Modification history.
+!       29 Jul 83  V1.0  HC   Start Program
+!
+!
+!!!     Dual16 performs a dual address test on the top 12K of Perq writable 
+!       control-store. ( On 16K CPUs only of course ) This test is loosely
+!       based on the program Dual by J.P. Strait of 3RCC but the routines
+!       for writing WCS have been speeded up considerably and 16K CPU 
+!       facilities have been used where appropriate.
+!
+!       Dual16 tests for dual address errors by being suspicious of each
+!       controlstore location in the range 00000..37777 except the 
+!       areas required for KRNL and the test. To test a particular
+!       location, Dual16 writes an interesting instruction into that location
+!       and then fills up the rest of the controlstore (0..37777), except the 
+!       areas required for KRNL and the test, with an uninteresting instruction
+!       which is the complement of the interesting one.  This way, if there is
+!       an addressing problem in any part of the controlstore, some bit in the
+!       interesting instruction will be changed.  Dual16 attempts to execute 
+!       the interesting instruction and then determines what happened.  If an 
+!       error is detected, Dual16 either gives a breakpoint or goes off the 
+!       deep end.
+!
+!       The interesting instruction: This should not use register 377 which
+!       is corrupted by KRNL
+!
+!
+!            R177 := Tos := 0, Push, Return;   
+!
+!
+!       The uninteresting instruction: The complement of the interesting
+!       instruction.
+!
+!            Tos - R377, Hold, if Geq CallS(2000); 
+!
+!       Timing Note:- Instructions containing WCSHi, WCSMid or WCSLow are
+!                     executed twice on each occurence
+!
+!
+!!!     Breakpoints 
+! 
+!           100         Test Successful
+!           101          Error: Interesting instruction did not work properly
+!                               ( but it did come back to the correct place )
+!           102          Error: Jump part of uninteresting instruction executed
+!
+
+
+
+
+$PERQ1A
+$NOBASE
+
+
+        Define(RHi,200);
+        Define(RMid,201);
+        Define(RLow,202);
+        Define(Bank,203);                ! Bank No for loop control
+        Define(Bottom,204);
+        Define(TestBank,205);            ! Bank containing location under test
+        Define(TestLoc,210);             ! Address of location under test
+        Define(CurrLoc,211);             ! Address of current location
+
+        
+        Define(R177,177);
+        Define(R370,370);            ! Breakpoint register 
+        Define(R377,377);
+        
+        
+                                     ! The interesting instruction
+        Constant(Hi,  077400);       ! Y=0, X=177
+        Constant(Mid, 005204);       ! SF=4, F=0, H=0, B=1, Jmp=12, Cnd=0
+        Constant(Low, 000014);       ! Alu=1, W=1, A=0, Z=0
+        
+        Constant(First,0000);        ! First location used by TopDual
+        Constant(Last,130);          ! Last location useable by TopDual
+                                     !     ( This is quite tight placing )
+        Constant(TestFirst,37777);   ! First Location to test
+        Constant(TestLast,Last+1);   ! Last location to test
+        Constant(TopWCS,37777);      ! Top of microcode store
+        Constant(KRNLBottom,7377);   ! Bottom of Krnl - 1
+
+        Constant(CallLoc,40);        ! Location of the test Call
+
+        Constant(Breakpoint,7401);   ! BreakPoint address in KRNL
+                
+        
+        Place(First,Last);
+
+
+
+!       First, Initialise  various registers
+
+TopDual:  RHi := Hi, Loc(First);     ! Put constants in registers for speed
+          RMid := Mid;
+          RLow := Low;
+          TestLoc := TestFirst;
+          Bottom := Last;
+
+          
+!       Then, write the interesting instruction
+
+TD1:     StackReset;               ! Tidy up stack
+         CurrLoc := TopWCS;        ! Initialise Currloc
+         TestLoc, Field(14,2);     ! Extract bank bits right aligned
+         TestBank := Shift;
+         TestLoc,RightShift(0);
+         LoadS(Shift);             ! S := Location under test
+           
+         NOT RHi;                  ! Microcode store gets inverse of R
+         NOT RMid,WCSHi,
+              If True GoToS(TD2);
+TD2:     NOT RLow, WCSMid,
+              If True GoToS(TD3);
+TD3:     WCSLow, If True GoToS(TD4);
+
+                   
+         
+!       Next, write the uninteresting instructions to fill up rest of Locs..
+
+TD4:     Bank := 3;
+
+TD5:     CurrLoc,RightShift(0);
+         LoadS(Shift);               ! S Gets Address to Start Writing at
+         TestBank - Bank;            ! TestLoc In Current Bank ?
+         If EQL GoTo(SemiFast);      ! If so jump,
+         CurrLoc := CurrLoc - 10000; ! ( Fast doesnt use CurrLoc )
+         GoTo(Fast);                 ! otherwise write faster.
+         
+TD6:     Bank := Bank - 1;           ! Top 3 Banks Done ?
+         If NEQ GoTo(TD5);           ! Jump if not.
+         CurrLoc := KRNLBottom;      ! Set up CurrLoc 
+         TestBank, LoadS(Shift);     ! Set S = KRNLBottom
+         If EQL GoTo(SemiFast0);     ! TestLoc in Bank0 ?  Jump if so.
+         GoTo(Fast0);                ! Otherwise write faster
+
+
+       
+
+!       Now try executing the interesting instruction.
+
+TD7:    LoadS(Error);                ! Set S to a known value in case we
+                                     ! execute Uninteresting instruction
+        R177 := Tos := not 0;        ! set these for testing
+        TestLoc, RightShift(0);      ! Get address of location under test
+        R177, Call(Shift), Loc(CallLoc);  !Executes the Interesting instruction
+                                     ! if failed may go off the deep end here.
+                                     ! ( Ensure GEQ fails if executed )
+
+
+!       Penultimately, check all went well
+
+        R177;
+        if Neq Goto(Wrong);          !check R177=0 after execution 
+        Tos;
+        Pop, If Neq Goto(Wrong);     !check Tos=0 after execution 
+        not Tos;
+        if Neq Goto(Wrong);          !check Tos=Not 0 the Tos before execution
+
+
+!       Advance to next interesting location or end successful test.
+
+        TestLoc - 10000;                           ! Bottom of bank1 ?
+        If NEQ GoTo(TD10);
+        TestLoc := KRNLBottom;                 ! first address to test in bank0
+        GoTo(TD1);                                 ! Cant be finished yet 
+
+TD10:   TestLoc - TestLast;                        ! Check end of TopDual test
+        TestLoc := TestLoc - 1, If GTR GoTo(TD1);
+
+        R370 := 100, Goto(BreakPoint);     ! Success !    Return to krnl 
+
+
+
+! *****************************************************************************
+
+
+!               ******  Subroutines  ******
+
+
+! Fast writes the uninteresting instruction to every location in a
+! bank of control store. On entry  S = Highest address in bank
+
+Fast:   RHi;
+TD20:   RMid, WCSHi, If True GoToS(TD21);
+TD21:   RLow, WCSMid, If True GoToS(TD22);
+TD22:   WCSLow, If True GoToS(TD23);
+TD23:   RHi, Repeat(TD20);                      ! Stop when S = 12 bit zero
+        GoTo(TD6);                              ! Return to main loop
+        
+
+! SemiFast writes the uninteresting instruction to every location in a
+! bank of control store except the location under test, the address of which 
+! is in TestLoc. On entry S = CurrLoc = Highest address in bank
+
+SemiFast: TestLoc XOR CurrLoc;                  ! Check for location under test
+TD30:     RHi, If EQL GoTo(TD33);               ! If found do a fiddle
+          RMid, WCSHi, If True GoToS(TD31);
+TD31:     RLow, WCSMid, If True GoToS(TD32);
+TD32:     WCSLow, If True GoToS(TD33);          ! NB executes twice!!!
+TD33:     CurrLoc := CurrLoc - 1;
+          TestLoc XOR CurrLoc, Repeat(TD30);    ! Stop when S = 12 bit zero
+          GoTo(TD6);                            ! Return to main loop
+
+
+
+! Fast0 writes the uninteresting instruction into all permitted locations
+! in bank zero ( ie leaving holes for KRNL and this test ).
+! On entry  S = KRNLBottom,  Bottom = Last address in test, ( S > Bottom > 0 )
+
+Fast0:    Bottom XOR CurrLoc;                  ! Check for last location 
+TD40:     RHi, If EQL GoTo(TD7);               ! If found return to main loop
+          RMid, WCSHi, If True GoToS(TD41);
+TD41:     RLow, WCSMid, If True GoToS(TD42);
+TD42:     WCSLow, If True GoToS(TD43);         ! NB executes twice!!!
+TD43:     CurrLoc := CurrLoc - 1;
+          Bottom XOR CurrLoc, Repeat(TD40);    
+          GoTo(Wrong);                            ! S should never exhaust
+
+
+
+! SemiFast0 writes the uninteresting instruction into all permitted locations
+! in bank zero ( ie leaving holes for KRNL and this test ) except the location 
+! under test, the address of which is in TestLoc. 
+! On entry  S = Currloc = KRNLBottom,  Bottom = Last address in test,
+!           ( S > Bottom > 0 ), Bottom < TestLoc =< KRNLBottom
+
+SemiFast0: TestLoc XOR CurrLoc;                 ! Check for location under test
+TD50:      RHi, If Eql GoTo(TD53);              ! If found do a fiddle
+           RMid, WCSHi, If True GoToS(TD51);
+TD51:      RLow, WCSMid, If True GoToS(TD52);
+TD52:      WCSLow, If True GoToS(TD53);         ! NB executes twice!!!
+TD53:      CurrLoc := CurrLoc - 1;
+           CurrLoc XOR Bottom, Repeat(TD54);        ! Check for end
+TD54:      TestLoc XOR CurrLoc, If NEQ GoTo(TD50);  
+           GoTo(TD7);                              ! Return to main loop
+           
+ 
+
+
+!!      Come here when something goes wrong. Error exits
+
+Wrong:  R370 := 101, Goto(BreakPoint);       ! Sth went wrong ! 
+
+Error:  R370 := 102, GoTo(BreakPoint);       ! Executed Jump part of 
+                                             ! Uninteresting instruction
+                                          
+
+
+!!      These are repeated here in order to facilitate verification of the
+!       Hi, Mid, and Low constants. NOT to be executed here.
+
+        Tos - R377, Hold, if Geq CallS(2000);
+        Tos := R177 := 0, Push, Return;   
+
+        end;

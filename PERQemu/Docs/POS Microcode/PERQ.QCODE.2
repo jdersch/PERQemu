@@ -1,0 +1,1000 @@
+$Title LDIND, STIND - Indirect one word loads and stores.
+! Change Log:
+!     20 Nov 81 WJH    added change log
+!                      fixed LSA for string length 255
+
+! Opcode LDIND.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDIND is a one byte instruction that loads a word onto the
+!       expression stack.
+!
+! Instruction:
+!       LDIND
+!
+! Environment:
+!       (Tos) = Address of the word as an offset from stack base.
+!
+! Result:
+!       (Tos) = Memory[Address].
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDIND), Nop;                          !***** BR
+        Tos + SB, Fetch;                     !***** BR
+        Tos := Mdi, NextInst(0);
+
+! Opcode STIND.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STIND is a one byte instruction that stores a word from the
+!       expression stack.
+!
+! Instruction:
+!       STIND
+!
+! Environment:
+!       (Tos) = Word.
+!       (Tos-1) = Address of the word as an offset from stack base.
+!
+! Result:
+!       Memory[Address] = Word.
+!       Stack popped twice.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STIND), tmp := Tos, Pop;
+        Nop;                                 !***** MAB
+        Tos + SB, Store;
+        tmp, Pop, NextInst(0);
+
+
+
+
+$Title LDDC, LDDW, STDW - Double word loads and stores.
+
+! Opcode LDDC.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDDC is a five byte instruction that loads a double word onto the
+!       expression stack.
+!
+! Instruction:
+!       LDDC    HighByteWord0 HighByteWord0
+!               HighByteWord1 HighByteWord1
+!
+! Result:
+!       Push stack twice.
+!       (Tos-0) = Word1.
+!       (Tos-1) = Word0.
+!
+! Calls:
+!       WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDDC), Call(WordParm);
+        Tos := Shift + tmp, Push;
+        Call(WordParm);
+        Tos := Shift + tmp, Push, NextInst(0);
+
+! Opcode LDDW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDDW is a one byte instruction that loads a double word onto the
+!       expression stack.
+!
+! Instruction:
+!       LDDW
+!
+! Environment:
+!       (Tos) = Address of the double word as an offset from stack base.
+!
+! Result:
+!       Push stack once.
+!       (Tos-0) = Memory[Address + 0].
+!       (Tos-1) = Memory[Address + 1].
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDDW), tmp := Tos;
+        tmp := tmp + SB, Fetch;        !***** BR
+        tmp1 := Mdi;
+        tmp + 1, Fetch;
+        Tos := Mdi, if IntrPend Call(VectSrv);
+        Tos := tmp1, Push, NextInst(0);
+
+! Opcode STDW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STDW is a one byte instruction that stores a double word from the
+!       expression stack.
+!
+! Instruction:
+!       STDW
+!
+! Environment:
+!       (Tos-0) = Word0.
+!       (Tos-1) = Word1.
+!       (Tos-2) = Address of the double word as an offset from stack base.
+!
+! Result:
+!       Memory[Address + 0] = Word0.
+!       Memory[Address + 1] = Word1.
+!       Stack popped three times.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STDW), tmp := Tos, Pop;
+        tmp1 := Tos, Pop;
+        Nop;                           !***** MAB
+        tmp2 := Tos + SB, Store;
+        tmp, Pop, if IntrPend Goto(STDW2);
+STDW1:  tmp2 + 1, Store;
+        tmp1, NextInst(0);
+        
+STDW2:  Call(VectSrv);
+        Goto(STDW1);
+
+
+
+
+$Title LDMC, LDMW, STMW - Multiple word loads and stores.
+
+! Opcode LDMC.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDMC is a variable length instruction that loads a multiple word
+!       constant onto the memory stack.
+!
+! Instruction:
+!       LDMC    N
+!               LowByteWord0 HighByteWord
+!               LowByteWord1 HighByteWord1
+!                  ...
+!               LowByteWordN-2 HighByteWordN-2
+!               LowByteWordN-1 HighByteWordN-1
+!
+! Result:
+!       Push N words onto the memory stack.
+!       Memory[TP-N+1] = Word.
+!       Memory[TP-N+2] = Word1.
+!          ...
+!       Memory[TP-1]   = WordN-2.
+!       Memory[TP-0]   = WordN-1.
+!
+! Calls:
+!       ChkStk, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDMC), tmp2 := NextOp;               ! number of words
+        Nop;                                ! let placer do a page escape
+        tmp11 := 2, LoadS(StkOv);
+        tmp10 := tmp2, Call(ChkStk);        ! make sure there's room
+LDMC1:  Call(WordParm);                     ! get next word
+        tmp := Shift + tmp;
+        TP := TP + 1, Store;
+        tmp, if IntrPend Call(VectSrv);     ! push it onto memory stack
+        tmp2 := tmp2 - 1;
+        if Gtr Goto(LDMC1);                 ! if not done yet
+        NextInst(0);
+
+! Opcode LDMW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDMW is a one byte instruction that loads multiple words onto the
+!       memory stack.
+!
+! Instruction:
+!       LDMW
+!
+! Environment:
+!       (Tos) = N.
+!       (Tos-1) = Address of the words as an offset from stack base.
+!
+! Result:
+!       Push N words onto the memory stack.
+!       Memory[TP-N+1] = Memory[Address+n-1].
+!       Memory[TP-N+2] = Memory[Address+n-2].
+!          ...
+!       Memory[TP-1]   = Memory[Address+1].
+!       Memory[TP-0]   = Memory[Address+0].
+!       Stack popped twice.
+!
+! Calls:
+!       ChkStk, MoveMem, StkOv, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDMW), tmp := Tos, Pop;
+        tmp10 := tmp, LoadS(LDMW1);        !***** BR
+        Tos := Tos + SB, Call(ChkStk);
+        TP := TP + tmp;
+        dst := TP, Call(MoveMem);
+        Pop, NextInst(0);
+
+!       Here on stack overflow.
+
+LDMW1:  Tos := Tos - SB;
+        Tos := tmp, Push;
+        tmp11 := 1, Goto(StkOv);
+
+! Opcode STMW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STMW is a one byte instruction that stores multiple words from the
+!       memory stack.
+!
+! Instruction:
+!       STMW
+!
+! Environment:
+!       (Tos) = N.
+!       (Tos-1) = Address of the words as an offset from stack base.
+!       Memory[TP-0] = Word0.
+!       Memory[TP-1] = Word1.
+!          ...
+!       Memory[TP-N+1] = WordN-1.
+!
+! Result:
+!       Memory[Address+0] = Word0.
+!       Memory[Address+1] = Word1.
+!          ...
+!       Memory[Address+N-1] = WordN-1.
+!       Stack popped twice.
+!       Pop N words from the memory stack.
+!
+! Calls:
+!       VectSrv, MoveMem.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STMW), tmp := Tos, Pop;
+        tmp := tmp - 1;                      !***** BR
+        dst := Tos + SB, if Lss Goto(STMW1); ! if no words to store
+        dst := dst + tmp;
+        Tos := TP := TP - tmp;
+        tmp := tmp + 1, Call(MoveMem);
+        TP := TP - 1, Pop, NextInst(0);
+
+STMW1:  Pop, NextInst(0);
+
+
+
+
+$Title LDB, STB, LDCH, STCH - Byte and Char loads and stores.
+
+! Opcode LDB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDB is a one byte instruction that loads a byte onto the expression
+!       stack.
+!
+! Instruction:
+!       LDB
+!
+! Environment:
+!       (Tos) = ByteOffset.
+!       (Tos-1) = WordAddress as an offset from stack base.
+!
+! Result:
+!       Push stack.
+!       (Tos) = Memory[WordAddress].Byte[ByteOffset].
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDB), tmp := Tos and AllOnes, Pop, RightShift(1);
+        tmp1 := Shift + SB, if IntrPend Call(VectSrv);  ! word offset
+        Tos + tmp1, Fetch;
+        tmp;
+        if Odd Goto(LDB1);                   ! if loading high byte
+        Tos := Mdi AND 377,NextInst(0);      ! load low byte
+
+LDB1:   Mdi, Field(10,10);
+        Tos := Shift, NextInst(0);           ! load high byte
+
+! Opcode STB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STB is a one byte instruction that stores a byte from the expression
+!       stack.
+!
+! Instruction:
+!       STB
+!
+! Environment:
+!       (Tos) = Byte.
+!       (Tos-1) = ByteOffset.
+!       (Tos-2) = WordAddress as an offset from stack base.
+!
+! Result:
+!       Stack popped three times.
+!       Memory[Address].Byte[ByteOffset] = Byte.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STB), tmp2 := Tos and 377, Pop;
+        tmp := Tos and AllOnes, Pop, RightShift(1);   ! byte offset
+        tmp1 := Shift + SB;
+        tmp1 := Tos + tmp1, Fetch;           ! fetch the target word
+        tmp, Pop;
+        if Odd Goto(STB2);                   ! if storing high byte
+        
+!       Store the low byte.
+
+        tmp := Mdi and not 377, if IntrPend Call(VectSrv);
+
+!       Store the target word back.
+
+STB1:   tmp1, Store;
+        tmp or tmp2, NextInst(0);            ! combine bytes and store
+        
+!       Store the high byte.
+
+STB2:   tmp := Mdi and 377, if IntrPend Call(VectSrv);
+        tmp2, LeftShift(10);
+        tmp2 := Shift, Goto(STB1);
+
+! Opcode LDCH.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDCH is a one byte instruction that loads a character from a string
+!       onto the expression stack.
+!
+! Instruction:
+!       LDCH
+!
+! Environment:
+!       (Tos) = CharacterIndex.
+!       (Tos-1) = Address of the string as an offset from stack base.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Memory[Address].Byte[CharacterIndex+1].
+!
+! Calls:
+!       GetStringIndex.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDCH), Call(GetStringIndex);
+        tmp;
+        if Odd Goto(LDCH1);                  ! if the character is in high byte
+
+!       Character is in a low byte.
+
+        Tos := Mdi and 377, NextInst(0);     ! get low byte
+
+!       Character is in a high byte.
+
+LDCH1:  Mdi, field(10,10);                   ! get high byte
+        Tos := Shift, NextInst(0);
+
+! Opcode STCH.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STCH is a one byte instruction that stores a byte from the expression
+!       stack.
+!
+! Instruction:
+!       STCH
+!
+! Environment:
+!       (Tos) = Character.
+!       (Tos-1) = CharacterIndex.
+!       (Tos-2) = Address of the string as an offset from stack base.
+!
+! Result:
+!       Stack popped three times.
+!       Memory[Address].Byte[CharacterIndex] = Character.
+!
+! Calls:
+!       GetStringIndex.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STCH), tmp2 := Tos, Pop, Call(GetStringIndex);
+        tmp;
+        if Odd Goto(STCH2);                  ! if storing a high byte
+
+!       Store a low byte.
+
+        tmp3 := Mdi and not 377;
+STCH1:  tmp4 + tmp1, Store;
+        tmp3 or tmp2, Pop;                   ! combine bytes and store
+        NextInst(0);
+
+!       Store a high byte.
+
+STCH2:  tmp2, LeftShift(10);
+        tmp2 := Shift;
+        tmp3 := Mdi and 377, Goto(STCH1);    ! go store the byte
+
+
+
+
+$Title MVBB, MVBW, LSA, SAS - Byte array and string moves.
+
+! Opcode MVBB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MVBB is a two byte instruction that moves bytes from one area of
+!       memory to another.  The number of bytes must be in the range 1..255.
+!       Specifying a length of zero moves one byte.
+!
+! Instruction:
+!       MVBB    N
+!
+! Environment:
+!       (Tos) = SrcByte = Source byte offset.
+!       (Tos-1) = SrcWord = Source word address as offset from stack base.
+!       (Tos-2) = DstByte = Destination byte offset.
+!       (Tos-3) = DstWord = Destination word address as offset from stack base.
+!
+! Result:
+!       Stack popped four times.
+!       Memory[DstWord].Byte[DstByte+0] = Memory[SrcWord].Byte[SrcByte+0].
+!       Memory[DstWord].Byte[DstByte+1] = Memory[SrcWord].Byte[SrcByte+1].
+!          ...
+!       Memory[DstWord].Byte[DstByte+N-1] = Memory[SrcWord].Byte[SrcByte+N-1].
+!
+! Calls:
+!       GetSrcDst, GetSrc, GetDst, PutDst.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode MVBW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MVBW is a one byte instruction that moves bytes from one area of
+!       memory to another.  The number of bytes must be in the range
+!       1..32767. Specifying a length of zero moves one byte.
+!
+! Instruction:
+!       MVBW
+!
+! Environment:
+!       (Tos) = N.
+!       (Tos-1) = SrcByte = Source byte offset.
+!       (Tos-2) = SrcWord = Source word address as offset from stack base.
+!       (Tos-3) = DstByte = Destination byte offset.
+!       (Tos-4) = DstWord = Destination word address as offset from stack base.
+!
+! Result:
+!       Stack popped five times.
+!       Memory[DstWord].Byte[DstByte+0] = Memory[SrcWord].Byte[SrcByte+0].
+!       Memory[DstWord].Byte[DstByte+1] = Memory[SrcWord].Byte[SrcByte+1].
+!          ...
+!       Memory[DstWord].Byte[DstByte+N-1] = Memory[SrcWord].Byte[SrcByte+N-1].
+!
+! Calls:
+!       GetSrcDst, GetSrc, GetDst, PutDst.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode SAS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SAS is a one byte instruction that assigns one string to another.
+!
+! Instruction:
+!       SAS
+!
+! Environment:
+!       (Tos) = Maximum length of the destination string.
+!       (Tos-1) = SrcByte = Source byte offset.
+!       (Tos-2) = SrcWord = Source word address as offset from stack base.
+!       (Tos-3) = DstByte = Destination byte offset.
+!       (Tos-4) = DstWord = Destination word address as offset from stack base.
+!       Memory[SrcAddr].Byte[SrcByte] = N.
+!
+! Result:
+!       Stack popped five times.
+!       Memory[DstWord].Byte[DstByte+0] = Memory[SrcWord].Byte[SrcByte+0].
+!       Memory[DstWord].Byte[DstByte+1] = Memory[SrcWord].Byte[SrcByte+1].
+!          ...
+!       Memory[DstWord].Byte[DstByte+N] = Memory[SrcWord].Byte[SrcByte+N].
+!
+! Calls:
+!       GetSrcDst, GetSrc, GetDst, PutDst, SASErr.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(MVBB), tmp := NextOp;
+AssignBytes: Call(GetSrcDst);                ! get addresses from stack
+        Nop;                                 ! let placer do a page escape
+MoveBytes: Call(GetSrc);                     ! get source byte
+        Call(GetDst);                        ! get destination byte
+        Call(PutDst);                        ! put destination byte
+        tmp := tmp - 1;
+        DstLsb, if Gtr Goto(MoveBytes);          ! if not done
+        if Odd Goto(MVBB1);
+        NextInst(0);
+
+!       Here if last byte is a low-order byte.
+
+MVBB1:  Dst, Store;                          ! store last byte (low order byte)
+        DstWord, NextInst(0);
+
+Opcode(MVBW), tmp := Tos, Pop, Goto(AssignBytes);
+
+Opcode(SAS), tmp2 := Tos and AllOnes, Pop;
+        Call(GetSrcDst);
+        SrcByte - tmp2;
+        SrcByte := SrcByte + 1, if Gtr Goto(SASErr);
+        tmp := SrcByte, Goto(MoveBytes);
+
+! Opcode LSA.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LSA is a variable length instruction that loads the virtual address
+!       of a constant string onto the expression stack.  The string follows
+!       the LSA in the code stream, but it must be word aligned.  A noise
+!       byte is added when the LSA opcode is in a low order byte.  The end
+!       of the string need not be word aligned.
+!
+! Instruction:
+!       LSA     N Char0 Char1 ... CharN-1
+!
+! Result:
+!       Push stack twice.
+!       (Tos) = Word address within code segment.
+!       (Tos-1) = Code segment number.
+!
+! Calls:
+!       AdjustPC.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LSA), Tos := CS, Push;
+        UState + 1, Push, Field(1,3);        ! round byte PC up to next word
+        tmp := Shift + UPC, Fetch;           ! fetch string length
+        Tos := tmp - CB;                     ! offset within code segment
+        tmp1 := UState and 1;                ! number of noise bytes (0 or 1)
+        Mdi, Field(0,10);                    ! set mask to get length byte
+        JmpOffset := Shift + tmp1;           ! length of string + # noise
+        JmpOffset := JmpOffset+1,            ! add 1 to count length byte
+              Goto(AdjustPC);                ! go move PC past string
+
+
+
+$Title MOVB, MOVW - Word array moves.
+
+! Opcode MOVB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MOVB is a two byte instruction that moves words from one area of
+!       memory to another.  The number of words must be in the range 1..255.
+!
+! Instruction:
+!       MOVB    N
+!
+! Environment:
+!       (Tos) = SrcAddr = Source address as an offset from stack base.
+!       (Tos-1) = DstAddr = Destination address as an offset from stack base.
+!
+! Result:
+!       Stack popped twice.
+!       Memory[DstAddr+0] = Memory[SrcAddr+0].
+!       Memory[DstAddr+1] = Memory[SrcAddr+1].
+!          ...
+!       Memory[DstAddr+N-1] = Memory[SrcAddr+N-1].
+!
+! Calls:
+!       SetMovUp.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode MOVW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MOVW is a one byte instruction that moves words from one area of
+!       memory to another.  The number of words comes from the expression
+!       stack and must be in the range 1..32767.
+!
+! Instruction:
+!       MOVW
+!
+! Environment:
+!       (Tos) = N.
+!       (Tos-1) = SrcAddr = Source address as an offset from stack base.
+!       (Tos-2) = DstAddr = Destination address as an offset from stack base.
+!
+! Result:
+!       Stack popped three times.
+!       Memory[DstAddr+0] = Memory[SrcAddr+0].
+!       Memory[DstAddr+1] = Memory[SrcAddr+1].
+!          ...
+!       Memory[DstAddr+N-1] = Memory[SrcAddr+N-1].
+!
+! Calls:
+!       SetMovUp.
+!
+!-----------------------------------------------------------------------------
+
+OpCode(MOVB), tmp := NextOp;
+MoveWords: src  := Tos, Pop, if Eql Goto(MOV1);
+        src := src - 1;                      !***** BR
+        dst  := Tos - 1, if IntrPend Call(VectSrv);
+        dst := dst + SB;
+        Tos := src + SB, Call(SetMovUp);
+MOV1:   Pop, NextInst(0);
+
+Opcode(MOVW), tmp := Tos, Pop, Goto(MoveWords);
+
+
+
+
+$Title INDx - Index address and load indirect.
+
+! Opcode IND1, IND2, ..., IND7.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The INDx opcodes are single byte instructions that load indirect
+!       with an index of x.
+!
+! Instruction:
+!       INDx
+!
+! Environment:
+!       (Tos) = Address as an offset from stack base.
+!
+! Result:
+!       (Tos) = Memory[Address + x].
+!
+!-----------------------------------------------------------------------------
+
+! Opcode INDB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INDB is a two byte instruction that loads indirect with an index
+!       in the range 0..255.
+!
+! Instruction:
+!       INDB    Index
+!
+! Environment:
+!       (Tos) = Address as an offset from stack base.
+!
+! Result:
+!       (Tos) = Memory[Address + Index].
+!
+!-----------------------------------------------------------------------------
+
+! Opcode INDW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INDW is a two byte instruction that loads indirect with an index
+!       in the range 0..65535.
+!
+! Instruction:
+!       INDW    LowByteIndex HighByteIndex
+!
+! Environment:
+!       (Tos) = Address as an offset from stack base.
+!
+! Result:
+!       (Tos) = Memory[Address + Index].
+!
+!-----------------------------------------------------------------------------
+
+Opcode(IND1), tmp := 1, Goto(IndexAndLoad);
+
+Opcode(IND2), tmp := 2, Goto(IndexAndLoad);
+
+Opcode(IND3), tmp := 3, Goto(IndexAndLoad);
+
+Opcode(IND4), tmp := 4, Goto(IndexAndLoad);
+
+Opcode(IND5), tmp := 5, Goto(IndexAndLoad);
+
+Opcode(IND6), tmp := 6, Goto(IndexAndLoad);
+
+Opcode(IND7), tmp := 7, Goto(IndexAndLoad);
+
+Opcode(INDB), tmp := NextOp + SB;
+IndexedLoad: Tos + tmp, Fetch;
+        Tos := Mdi, NextInst(0);
+
+Opcode(INDW), Call(WordParm);
+        tmp := Shift + tmp, if IntrPend Call(VectSrv);
+IndexAndLoad: tmp := tmp + SB, Goto(IndexedLoad);
+
+
+
+
+$Title INCx - Increment.
+
+! Opcode INCB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INCB is a two byte instruction that increases the value on the top
+!       of the stack by a constant amount in the range 0..255.
+!
+! Instruction:
+!       INCB    Amount
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       (Tos) = Value + Amount.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode INCW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INCW is a three byte instruction that increases the value on the top
+!       of the stack by a constant amount in the range 0..65535.
+!
+! Instruction:
+!       INCW    LowByteAmount HighByteAmount
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       (Tos) = Value + Amount.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(INCB), tmp := NextOp;
+Increment:   Tos := Tos + tmp, NextInst(0);
+
+Opcode(INCW), Call(WordParm);
+        tmp := Shift + tmp, Goto(Increment);
+
+
+
+
+$Title IXAx, IXP - Index array.
+
+! Opcode IXA1, IXA2, IXA3, IXA4.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The IXAx opcodes are single byte instructions that index into arrays
+!       with x words per element.
+!
+! Instruction:
+!       IXAx
+!
+! Environment:
+!       (Tos) = Index.
+!       (Tos-1) = Address of array.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Address + x * Index.
+!
+! Calls:
+!       Multiply, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode IXAB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       IXAB is a two byte instruction that indexes arrays with 0..255 words
+!       per element.
+!
+! Instruction:
+!       IXAB    Size
+!
+! Environment:
+!       (Tos) = Index.
+!       (Tos-1) = Address of array.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Address + Size * Index.
+!
+! Calls:
+!       Multiply, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode IXAW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       IXAW is a three byte instruction that indexes arrays with 0..32767
+!       words per element.
+!
+! Instruction:
+!       IXAW    LowByteSize HighByteSize
+!
+! Environment:
+!       (Tos) = Index.
+!       (Tos-1) = Address of array.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Address + Size * Index.
+!
+! Calls:
+!       Multiply, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(IXA1), tmp := Tos and AllOnes, Pop, Goto(IXArray2);
+
+Opcode(IXA2), tmp := Tos and AllOnes, Pop, Goto(IXArray5);
+
+Opcode(IXA3), tmp := Tos and AllOnes;
+        tmp := tmp + tmp, if IntrPend Call(VectSrv);
+        tmp := Tos + tmp, Pop, Goto(IXArray2);
+
+Opcode(IXA4), tmp := Tos and AllOnes, Pop, Goto(IXArray4);
+
+Opcode(IXAW), tmp := Tos, Pop, Goto(IXArray1);
+
+Opcode(IXAB), tmp := NextOp;
+IXArray1: tmp1 := Tos and AllOnes, Pop, Call(Multiply); !***** Multiply pops
+IXArray2: Goto(IXArray3);                    !***** burn a cycle after a pop
+
+IXArray3: Tos := Tos + tmp, NextInst(0);
+
+IXArray4: tmp := tmp + tmp, if IntrPend Call(VectSrv);
+IXArray5: tmp := tmp + tmp, Goto(IXArray3);
+
+! Opcode IXP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       IXP is a two byte instruction that indexes into packed arrays.
+!       The inputs are
+!          1) information about the size of an element represented as a byte
+!             where the upper 4 bits contain one less than the number of
+!             elements per word and the lower 4 bits contain one less than
+!             the number of bits per element.
+!          2) the index.
+!          3) the address of the array.
+!       The output is a packed field pointer--a word address and
+!       a field descriptor.
+!
+! Instruction:
+!       IXP     SizeInformation
+!
+! Environment:
+!       (Tos) = Index.
+!       (Tos-1) = Address of array.
+!
+! Result:
+!       (Tos) = Field descriptor.
+!       (Tos-1) = Word address of element.
+!
+! Calls:
+!       Multiply, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(IXP), tmp3 := NextOp;                 ! get size information
+        tmp3, RightShift(4);
+        tmp1 := Shift + 1,                   ! elements per word = EPW
+                           if IntrPend Call(VectSrv);
+        tmp := Tos and AllOnes, Pop;
+        Call(Divide);                        ! word offset = index div EPW
+                                             ! element offset = index mod EPW
+        Tos := Tos + tmp;                    ! add word offset to address
+        tmp3 := tmp3 and 17;                 ! bits per element - 1
+        tmp := tmp3, if IntrPend Call(VectSrv);
+        tmp := tmp + 1,                      ! bits per element = BPE
+                        Call(Multiply);      ! bit offset=element offset * BPE
+
+        tmp, LeftShift(4), Push;
+        Tos := Shift or tmp3, NextInst(0);   ! form field descriptor
+
+
+
+
+$Title LDP, STPF - Load and store packed field.
+
+! Opcode LDP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDP is a one byte instruction that loads a packed field.  Its
+!       input is the same as the output of an IXP instruction--a packed
+!       field pointer which consists of a word address and a field descriptor.
+!
+! Instruction:
+!       LDP
+!
+! Environment:
+!       (Tos) = FieldDescriptor.
+!       (Tos-1) = Address as an offset from stack base.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Memory[Address].Field(FieldDescriptor).
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDP), tmp := Tos, Pop;                ! field descriptor
+        tmp1 := Tos, if IntrPend Call(VectSrv);  ! word address
+        tmp1 + SB, Fetch;                    ! fetch the word
+        tmp, ShiftOnR;                       ! set up shifter with field desc.
+        Mdi;                                 ! push Mdi at the shifter
+        Tos := Shift, NextInst(0);           ! read the field
+
+! Opcode STPF.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STPF is a one byte instruction that stores a packed field.  Its
+!       input is the same as the output of an IXP instruction--a packed
+!       field pointer which consists of a word address and a field descriptor.
+!
+! Instruction:
+!       STPF
+!
+! Environment:
+!       (Tos) = Value.
+!       (Tos-1) = FieldDescriptor.
+!       (Tos-2) = Address as an offset from stack base.
+!
+! Result:
+!       Stack popped three times.
+!       Memory[Address].Field(FieldDescriptor) = Value.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STPF), tmp := Tos, Pop;                ! value to be stored
+        tmp1 := Tos, ShiftOnR;               ! set up shifter with field desc.
+        AllOnes, Pop;
+        tmp2 := Shift;                       ! right mask as wide as field
+        tmp := tmp and tmp2, if IntrPend Call(VectSrv);  ! mask off value
+        tmp3 := Tos + SB, Fetch;             ! fetch destination
+        tmp1 := tmp1 or 17, ShiftOnR;        ! LeftShift(FirstBit)
+        tmp2, Pop;
+        tmp2 := Shift;                       ! position mask to make hole
+        tmp1 := Mdi and not tmp2;            ! form hole
+        tmp;
+        tmp := Shift, if IntrPend Call(VectSrv); ! position value
+        tmp3, Store;
+        tmp1 or tmp, NextInst(0);            ! combine and store

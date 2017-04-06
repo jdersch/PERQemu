@@ -1,0 +1,714 @@
+!!  Mem - Dual addressing test of the memory
+!
+!  Copyright (C) Three Rivers Computer Corp. 1981, 1982, 1983
+!
+! MEM - change log.
+!
+! V1.0   JR      SEP 81  First copy.
+!
+! V2.0   EHL  17 DEC 81  Made sweeping changes. Added comments.
+!
+!
+!       OVERVIEW
+!
+!   MEM is a dual addressing test of the memory. It depends on a test between
+! a mask bit and the memory address to store a pattern or the complement of 
+! the pattern in memory. The mask bit selects the memory addressing bit to be
+! tested. The test checks for the bit to be equal to a one or a zero. When the
+! bit is a one, the pattern is stored at that memory location. When the bit is
+! a zero, then the complememt is stored at that memory location. A read is 
+! then performed to check that both the data and the proper address in the 
+! memory are correct. The test uses simple fetches and stores for all memory 
+! references.  The test has several starting locations to test the three 
+! different memories, Three Rivers Computer, makes. The test also has several 
+! switch options to control the error reporting when needed.
+!
+!
+!
+!
+!       OPERATING PROCEDURE
+!
+!   The running of this diagnostic is very flexible. To begin with, it has
+! three differnt starting locations. The differences in the starting locations,
+! give the diagnostic the ablity to test the three different types of memories.
+! The three types of memories are the quarter meg, the half meg and the one
+! meg memories. It is required of the operator to know what type of memory is
+! to be tested,and to use the correct starting location in the test. The 
+! procedure for starting the diagnostic is to type a "GO (Address)" command
+! to the ODTPRQ/KERNAL programs. The format is as follows.
+!
+!     "GO 2400"    This will test the quarter meg memory.
+!     "GO 2500"    This will test the half meg memory.
+!     "GO 2600"    This will test the one meg memory.
+!
+!   Before the test is started the diagnostic's switch register "R0", can be 
+! loaded with one or a combination of switch options to control the test. 
+! These switch options give the operator control over the error reporting.
+! More information about switch options can be found under the switch option
+! heading.
+!
+!   Once the switch options are selected and the test is started,the test will
+! run independently. A description of the test procedure can be found under 
+! the test description heading.
+!
+!   If the test runs through to completion, it will return to ODTPRQ/KERNAL
+! with a "BREAKPOINT 100". This is the successful completion breakpoint of the
+! diagnostic. If the test finds an error, it will return to 
+! ODTPRQ/KERNAL, with a error breakpoint. This return of an error breakpoint
+! depends on the switch option settings. More information about the error
+! breakpoints can be found under the error description heading.
+!
+!   When a error breakpoint does occur the operator can elect to change the
+! switch option register or restart the test without changing a thing. The
+! method for restarting the test is by typing to ODTPRQ/KERNAL "PROCEED 100".
+! This will continue from the error breakpoint that caused the halt.
+!
+!
+!       SPECIAL FUNCTION
+!
+!   A special function has been incorporated into this diagnostic. The special
+! function is a search for bad memory address bits. This function will store
+! in register "Bits" all the address bits that fail tests. The procedure uses
+! the existing structure of the diagnostic. However it ignors all data errors
+! and bypasses all the switch functions. With this function the operator can
+! quickly tell by examining register "Bits", which address bits are faulty.
+! The method for operating this function is as follows:
+!
+!   The diagnostic must have been started and have already found an error.
+! The function depends on operating parameters setup at start time.
+!
+!   The operator can then at this time type to ODTPRQ/KERNAL "Proceed 1000".
+! This will cause the diagnostic to search for the bad address bits and store
+! them in register "Bits". 
+!
+!   Once the function is started it will run to completion. There are no switch
+! options for it. When it is completed it will return a "BREAKPOINT 111" to
+! ODTPRQ/KERNAL. The operator is free at this time to examine register "Bits".
+! The diagnostic can not be continued from this point. Typing "Proceed 100"
+! will not work. The hold diagnostic must be restarted to continue error
+! analysis.
+!
+!
+!
+!       SWITCH OPTIONS
+!
+!   The switch register in this diagnostic is "R0". Only the lower three bits
+! are used for controlling the diagnostic. The remaining bits are not used.
+! A description of the switch functions is as follows.
+!
+!   BIT POSITION       STATE            FUNCTION
+!
+!        0               0              STOP-ON-ERROR
+!                        1              LOOP-ON-ERROR
+!                        
+!        1               0              STOP ON PARTIY ERRORS
+!                        1              IGNOR PARITY ERRORS
+!                       
+!        2               0              STOP ON DATA CHANGED ERRORS
+!                        1              IGNOR DATA CHANGED ERRORS
+!                        
+!   The various options can be set at the starting of the diagnostic, or after
+! a error has occured and before restarting the diagnostic. Also the various 
+! options can be used as standalone functions or together. An example of this
+! is a loop-on-error can be selected as well as ignore data changed errors. 
+! This will give the operator the freedom to diagnose a memory addressing
+! problem, without having the test stop everytime the data pattern from memory
+! changes. Likewise the same option can be used while looping on a parity
+! error. If the parity error is intermittent, the switch will discard the fact
+! that the data changed and continue to loop-no-error.
+!
+!
+!
+!
+!       TEST DESCRIPTION
+!
+!   The diagnostic has two sections of tests. The first is a read after write
+! of one memory location, then the address is incremented and the read after
+! write repeated. The second is a read of all of memory after a write to all of
+! memory. Each section uses the same method of testing, and looks for the same
+! type of errors. Each section identifies its own errors so as not to confuse
+! the operator. Currently, there are no differences in the method of testing
+! between the the quarter meg, half meg, and the one meg memories. The only
+! differences is in the starting location of the diagnostic for each type of
+! memory.
+!
+!   The procedure of testing is as follows: The maximum address is developed 
+! for the type of memory being tested. A mask register is loaded with single
+! bit.A comparison is made between the address bit and the mask bit.This check 
+! determines if the address bit is equal to a one or a zero. If the address bit
+! bit equals a one, then a pattern is stored at all memory locations where that
+! address bit equals a one. If the address bit equals a zero, then the 
+! complement of the pattern is stored at all memory locations where that
+! address bit equals a zero. The test then reads the memory to check the data.
+! The check is made in the same manner as was when the data was written. The 
+! address bit is checked against the mask bit to determine whether the 
+! pattern or the complement will be used to check the data.
+! If the check is good, the address is decremented, and the process
+! is repeated for the next memory address. When all addresses are checked, the
+! mask bit is shifted and the process is repeated. If the check is bad, then an
+! error is flagged. A check is then made for looping-on-error, and for a
+! parity error. The test then takes the appropriate action for looping-on-error
+! or parity error. If no controls are true, then the test exits to the Kernal.
+! It is at this time the operator can set the various switch options. The test
+! can be restarted by typing "Proceed 100".
+!
+! 
+!
+!       ERROR DESCRIPTION
+!
+!
+!   *** BREAKPOINT 101 ***
+!
+!  A data or a memory addressing error occured during the read after write
+! routine. There is a possibilty of two differnt errors occuring here.The 
+! data was bad when it was checked with the pattern, or the memory adddress
+! picked or dropped a addressing bit. To determine if the data was bad,
+! compare the data in register "Data" to the data in register "Notpat".
+! Register "Data" holds the data read from memory, register "Notpat" holds
+! the data pattern the test will use for the check. If the comparison between
+! the two registers shows data to be similar, then the data path between memory
+! and cpu is at fault. If the comparison between the two registers shows data
+! to be complemented, then a memory addressing bit picked or dropped somewhere.
+! The memory address being used is in register "Address". Register "Mask" will
+! show the memory addressing bit being tested. Bit # 0 in register "Switch"
+! can be set to a one for loop-on-error. To continue after error or loop-on-
+! error type "Proceed 100".
+!
+!
+!   *** BREAKPOINT 102 ***
+!
+!  A data or a memory addressing error occured during the read after write
+! routine. There is a possibilty of two different errors occuring here. The 
+! data was bad when it was checked with the pattern, or the memory address
+! picked or dropped a bit. To determine if the data was bad, examine the 
+! data in register "Data" to the data in register "Pattern". Register "Data"
+! holds the data read from memory, register "Pattern" holds the data pattern
+! the test will use for the check. If the comparison between the two registers
+! are similar, then the data path between the memory and the cpu is at fault.
+! If the comparison between the two registers shows the data to be 
+! complemented, then a memory addressing bit picked or dropped somewhere. The
+! memory address being used is in register "Address". Register "Mask" will show
+! the memory addressing bit being tested. Setting bit # 0 in register 
+! "Switch", causes the test to loop-on error when restarted. To continue
+! from the error or loop-on-error type "Proceed 100".
+!
+!
+!   *** BREAKPOINT 103 ***
+!
+!  A parity error occured during the read after write routine. The parity
+! error is generated in the interrupt service routines. The parity error
+! interrupt routine sets a parity error flag, which the test checks for.
+! The routine also stores the memory address at which the parity error
+! occured. The address is only a sixteen bit address, and is stored in 
+! register "PEAddr". The value in register "Address" has the full twenty-
+! bit memory address which can be examined. Bit # 1 of register "Switch"
+! can be set to ignore the parity check. When this option is selected the 
+! check is by-passed. The loop-on-error option will not work because parity
+! is checked before loop-on-error. The test can be restarted for either
+! continue after error or for looping-on-error,(if bit # 0 is set in register
+! "Switch") by typing "Proceed 100".
+!
+!
+!   *** BREAKPOINT 104 ***
+!
+!  A data or a memory addressing error occured during the read  
+! only routine. There is a possibilty of two different errors occuring here.
+! The data was bad when it was checked with the pattern, or the memory address
+! picked or dropped a bit. To determine if the data was bad, examine the 
+! data in register "Data" to the data in register "Notpat". Register "Data"
+! holds the data read from memory, register "Notpat" holds the data pattern
+! the test will use for the check. If the comparison between the two registers
+! shows data to be similar, then the data path between memory and cpu is at
+! fault. If the comparison between the two registers shows the data to be 
+! complemented, then a memory addressing bit picked or dropped somewhere. The
+! memory address being used is in register "Address". Register "Mask" will show
+! the memory addressing bit being tested. Setting bit # 0 of register
+! "Switch", causes the test to loop-on-error when restarted. To
+! continue from the error or loop-on-error, type "Proceed 100".
+!
+!
+!   *** BREAKPOINT 105 ***
+!
+!  A data or a memory addressing error occured, during a read  
+! only routine. There is a possibility of two different errors occuring here.
+! the data was bad when it was checked with the pattern, or the memory address
+! picked or dropped a bit. To determine if the data was bad, examine the data
+! in register "Data" to the data in register "Pattern". Register "Data" holds
+! the data read from memory, register "Pattern" holds the data pattern the 
+! test will use for the check.If the data is similar, then the data path 
+! between the memory and cpu is at fault. If the comparison between the two
+! registers shows the data to be complemented, then a memory addressing bit
+! picked or dropped somewhere. The memory address being used is in register 
+! "Address". Register "Mask" will show the memory addressing bit being tested.
+! Setting bit # 0 in register "Switch", causes the test to loop-no-error
+! when restarted. To continue from error or loop-on-error, type "Proceed 100".
+!
+!
+!   *** BREAKPOINT 106 ***
+!
+!  A parity error occured during the read from memory only routine. The 
+! parity error is generated in the interrupt service routines. The parity
+! error interrupt routine sets a parity error flag, which the test checks for.
+! The routine also stores the memory address at which the parity error 
+! occurred.  This address is only a sixteen bit address, and is stored in 
+! register "PEAddr". The value in register "Address" has the full twenty bit 
+! memory  address which can be examined. Bit # 1 of register "Switch" can be  
+! set to ignore the parity check. When this option is selected, the check is 
+! bypassed. The loop-on-error option will not work because parity is checked 
+! before loop-on-error. The test can be restarted for either continue after 
+! error or for looping-on-error,(if bit # 0 is set in register "Switch") by
+! typing "Proceed 100".
+!
+!
+!   *** BREAKPOINT 107 ***
+!
+!  A intermittent data error occured while looping-on-error. This is a
+! secondary error that occurres only when the loop-on-error bit is set in
+! register "Switch" (bit # 0). The method of this check is as follows: At
+! the first pass of the loop, register "Firsterror" is loaded with the 
+! failing data from register "Data". On each succeeding pass of the loop,
+! register "Data" is compared to register "Firsterror". Register "Data" is
+! loaded by the failing routine in the program and is not expected to change.
+! If it does change then an error has occured. Bit # 2 of register "Switch"
+! can be set at this time to allow a by-pass of this test. The test can be
+! restarted by typing "Proceed 100".
+!
+!
+!   *** BREAKPOINT 110 ***
+!
+!  A intermittent parity error occured while looping-on-error. This is a
+! secondary error that occurres only when the loop-on-error bit is set in
+! register "Switch" ( bit # 0). The method of this check is as follows: At
+! the first pass of the loop, register "FirstPE" is loaded with the sixteen
+! bit address of the failing memory location from register "PEaddr". On each
+! succeeding pass of the loop, register "PEAddr" is compared to register 
+! "FirstPE". Register "PEAddr" is loaded by the failing routine in the program
+! and is not expected to change. If it does change then an error has occured.
+! Bit # 2 of register "Switch" can be set at this time to allow a by-pass
+! of this test. The test can be restarted by typing "Proceed 100".
+!
+!
+!   *** BREAKPOINT 111 ***
+!
+!  This is a secondary error that is caused by the operator indirectly. The
+! operator prior to this elected to look for bad memory address bits, and
+! restarted the diagnostic by typing "Proceed 1000". This caused the 
+! diagnostic to ignore all data errors and test the memory address bits. The
+! address bits that failed the tests are stored in register "Bits". The
+! operator can quickly tell by examining this register, which address bits
+! are faulty. Once this breakpoint occurs, the diagnostic can not continue
+! from this error.
+!
+!
+
+
+Define(Switch,0);        ! Holds the switch options
+Define(Mask,1);          ! Holds the Mask bit
+Define(Address,2);       ! Holds all addresses for memory references
+Define(Data,3);          ! Holds the data for all memory references
+Define(Pattern,4);       ! Holds the test pattern
+Define(Notpat,5);        ! Holds the compliment of the test pattern
+Define(PE,6);            ! Holds the Parity Error flag
+Define(PEAddr,7);        ! Holds the address of the Parity Error
+Define(Firsterror,10);   ! Holds the data of the first error
+Define(FirstPE,11);      ! Holds the address of the first Parity Error
+Define(Work,12);         ! General work registor
+Define(Maxaddr,13);      ! Holds the maxiumn address for the memory under test
+Define(Maskbit,14);      ! Holds the number of address bits to test
+Define(Vidtmp,15);       ! Command Registor for the memory state machine
+Define(Vcount,16);       ! Working Registor for the memory state machine
+Define(Screen,17);       ! Holds the screen address
+Define(Firstpass,20);    ! Holds a flag for loop control
+Define(SwitchA,21);      ! Holds the switch options for changing
+Define(MaskbitA,22);     ! Holds the number of mask bits for changing
+Define(Bits,23);         ! Holds the bad address bits
+Define(Count,24);        ! Control counter for the force routine
+Define(Manual,25);       ! Manual intervention flag
+Define(Error,370);       ! Error breakpiont registor
+
+
+
+
+
+!  This routine will establish how much memory there is in the system
+! A "GO 2400" will test the quarter megabyte memory, a "GO 2500" will test
+! the half megabyte memory, and a "GO 2600" will test the one megabyte
+! memory.
+ 
+MA1:   Address:= 100000,Loc(2400);   !
+       Address:= Address + Address;  ! Equals 200000
+       Address:= Address + Address;  ! Equals 400000
+       Maxaddr:= Address;            ! Address for quarter meg memory
+       Maskbit:= 22;                 ! Load octal number of address bits
+       goto(Patsel);                 !
+       
+MA2:   Address:= 100000,Loc(2500);   !
+       Address:= Address + Address;  ! Equals 200000
+       Address:= Address + Address;  ! Equals 400000
+       Address:= Address + Address;  ! Equals 1000000
+       Maxaddr:= Address;            ! Address for half mag memory
+       Maskbit:= 23;                 ! Load octal number of address bits
+       goto(Patsel);                 ! 
+       
+       
+MA3:   Address:= 100000,Loc(2600);   ! 
+       Address:= Address + Address;  ! Equals 200000
+       Address:= Address + Address;  ! Equals 400000
+       Address:= Address + Address;  ! Equals 1000000
+       Address:= Address + Address;  ! Equals 2000000
+       Maxaddr:= Address;            ! Address for one meg memory
+       Maskbit:= 24;                 ! Load octal number of address bits
+       goto(Patsel);                 !
+       
+       
+!  This is the force routine. When the operator elects to look for bad
+! address bits, this is the routine that will initialize the diagnostic to
+! do so. It will force the "Mask" registor to shift after every error. When
+! an error does occur it will load the address bit being tested into
+! register "Bits". After all address bits are tested it will exit to the 
+! Kernal.
+
+
+Force:   jumppop(Force1),loc(1000);  ! Kick off a return address
+Force1:  Manual:= 177777;            ! Set the manual intervention flag
+Force2:  Bits:= Bits or Mask;        ! Save the mask bit
+Force3:  Count - Maskbit;            ! Tested all the address bits ?
+         if eql goto(Force4);        ! Yes, leave
+         goto(Mask1);                ! No, go test some more
+Force4:  Error:= 111,goto(7401);     ! Exit to the Kernal 
+       
+       
+!  This routine is the mask handler. It will set a single bit in the
+! "Mask" register, which will be the address bit to be tested. The routine
+! will keep track of how many address bits are tested. When all the bits are
+! tested the job will be done. The routine then will exit to select another
+! pattern.
+
+MaskB: Manual;                       ! Pass the manual intervention flag
+       if neq goto(Force3);          ! Is their intervention ?
+       Count:= 0;                    ! No, clear the intervention counter
+       Mask:= 1;                     ! Load the Mask register with a one bit
+       MaskbitA:= Maskbit;           ! Load the number count of address bits
+       goto(Test);                   ! Go to the Test routines
+Mask1: Count := Count + 1;           ! Add one to the intervention counter
+       MaskbitA:= MaskbitA - 1;      ! Subtract one from address mask bit count
+       if eql return;                ! All address bits tested ?
+       Mask:= Mask + Mask;           ! No, shift the mask bit
+       goto(Test);                   ! Go to the Test routines
+       
+       
+!  This is the pattern select routine. The pattern is loaded into register
+! "Pattern". When this is done the Mask routine is then called. The patterns
+! are all zeros, all ones, altones & zeros (two patterns), sliding ones and
+! random byte patterns. The total number of patterns used is thirty-one 
+! patterns.
+Patsel: call(Init);                  ! Go set up
+        Pattern:= 177777;            ! Load all ones
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 0;                 ! Load all zeros
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 052525;            ! Load alt ones & zeros
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 125252;            ! Load alt ones & zeros complemted
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 1;                 ! Load bit # 0
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 2;                 ! Load bit # 1
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 4;                 ! Load bit # 2
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 10;                ! Load bit # 3
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 20;                ! Load bit # 4
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 40;                ! Load bit # 5
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 100;               ! Load bit # 6
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 200;               ! Load bit # 7
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 400;               ! Load bit # 8
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 1000;              ! Load bit # 9
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 2000;              ! Load bit # 10
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 4000;              ! Load bit # 11
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 10000;             ! Load bit # 12
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 20000;             ! Load bit # 13
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 40000;             ! Load bit # 14
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 100000;            ! Load bit # 15
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 377;               ! Load a pattern   
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 177400;            ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 7417;              ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 17036;             ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 31463;             ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 146314;            ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 170000;            ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 7400;              ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 360;               ! Load a pattern
+        call(MaskB);                 ! Call the test routines
+        Pattern:= 17;                ! Load a pattern
+        call(MaskB);                 ! Call the test ruotine
+        Pattern:= 161707;            ! Load a pattern
+        call(MaskB);                 ! Call the test routine
+        Pattern:= 16070;             ! Load a pattern
+        call(MaskB);                 ! Call the test routine
+        Error:= 100,goto(7401);      ! Done with the patterns. Return to the
+                                     ! Kernal. All done.
+                                     
+!  This is the read after write routine. The method of testing is as follows.
+! A test is made on the memory address, the data in register "Address", with
+! the data in register "Mask". The "Mask" register has a single bit set in it.
+! The test that is made is such that a single address bit is tested to be
+! equal to a one or a zero. If the address bit is equal to a one, then a 
+! pattern is stored in memory at every location that has that address bit equal
+! to a one. If the address bit is equal to a zero, then the complement of the 
+! pattern is stored in at every location that has that address bit equal to a
+! zero. A read is then performed and the data is stored in register "Data".
+! The value in register "Data" is then checked againest the appropriate pattern
+! in register "Pattern" to be equal. If the data is correct throughout memory,
+! the routine exits to select another pattern and or shift the mask bit. If the
+! data is not correct, it will load register "Error" with a error number and
+! exit to the error routine.
+
+
+Test:   Notpat:= not Pattern;        ! Complement the pattern
+        Notpat:= Notpat and 177777;  ! Clear the upper four bits
+        PE:= 0;                      ! Clear the parity error register
+        Address:= Maxaddr;           ! Load the 20 bit memory address
+Test1:  Address:= Address - 1;       ! Decrement the address
+        if C19 goto(Write);          ! Alldone, go to the write routine
+Test2:  Work:= Address;              ! Load the 20 bit address
+        Work:= Work AND Mask;        ! Mask out the address bit
+        Work:= Work - Mask;          ! Subtrack the mask bit
+        Work - 1;                    ! Check  Address bit = Mask bit
+        if C19 goto(Test3);          ! Address & Mask are equal?
+        Data:= Notpat,goto(Test4);   ! Address bit does not equal Mask bit
+Test3:  Data:= Pattern;              ! Address bit does equal Mask bit
+Test4:  Address,Store;               ! Send the address and store
+        Data;                        ! Send the data
+        if intrpend call(Vecint);    ! Check for interrupts
+        Address,Fetch;               ! Send the address and fetch
+        Data:= MDI;                  ! Get the data
+        if intrpend call(Vecint);    ! Check for interrupts
+        Work - 1;                    ! Check Address bit = Mask bit again
+        if C19 goto(Test5);          ! Address bit and Mask bit are equal?
+        Data XOR Notpat;             ! Check data is equal to not pattern
+        if eql goto(Test6);          ! Data and Not Pattern are equal
+        Error:= 101;                 ! Load the error register                          call(Err);                   ! Data and Not Pattern are not equal
+        SwitchA:= SwitchA and 1;     ! Return here after proceeding
+        SwitchA - 1;                 !
+        if neq goto(Test6);          ! Check for continue after error
+        goto(Test2);                 ! Loop-on-error
+Test5:  Data XOR Pattern;            ! Check data is equal to pattern
+        if eql goto(Test6);          ! Data and Pattern are equal
+        Error:= 102;                 ! Load the error register
+        call(Err);                   ! Data and Pattern are not equal
+        SwitchA:= SwitchA and 1;     ! Return here after proceeding
+        SwitchA - 1;                 !
+        if neq goto(Test6);          ! Check for continue after error
+        goto(Test2);                 ! Loop-on-error
+Test6:  PE;                          ! Check for parity errors
+        if eql goto(Test1);          ! No parity errors, repeat the test
+        Error:= 103;                 ! Load the error register
+        SwitchA:= Switch;            ! Check for ignore PE test
+        SwitchA:= SwitchA and 2;     !
+        SwitchA - 2;                 !
+        if eql goto(Test1);          ! Ignore PE test, continue testing
+        call(Err);                   ! Parity error
+        SwitchA:= SwitchA and 1;     ! Return here after proceeding
+        SwitchA - 1;                 !
+        if neq goto(Test1);          ! Check for continue after error
+        goto(Test2);                 ! Loop-on-error
+        
+!  This is the write routine. The method of operation is as follows. A test
+! made on the memory address, the data in register "Address", with the data in
+! register "Mask". The "Mask" register has a single bit set in it. The test 
+! that is made is such that a single address bit is tested to be equal to a  
+! one or a zero. If the address bit is equal to a one, then a pattern is stored
+! in memory at every location that has that address bit equal to a one. If the 
+! address bit is equal to a zero, then complement of the pattern is stored in
+! memory at every location that address bit is equal to a zero. When all of
+! memory is written, the routine then exits to the read routine.
+
+
+Write:  Notpat:= Not Pattern;        ! Complement the pattern
+        Notpat:= Notpat and 177777;  ! Clear the upper four bits
+        Address:= Maxaddr;           ! Load the 20 bit memory address
+Write1: Address:= Address - 1;       ! Decrement the address
+        if C19 goto(Read);           ! All done, go to the read routine
+        Work:= Address;              ! Load the 20 bit memory address
+        Work:= Work AND Mask;        ! Mask out the address bit
+        Work:= Work - Mask;          ! Subtrack the mask bit
+        Work - 1;                    ! Check Address bit = Mask bit
+        if C19 goto(Write2);         ! Address bit & mask bit are equal?
+        Data:= Notpat, goto(Write3); ! Address bit does not equal mask bit
+Write2: Data:= Pattern;              ! Data gets pattern
+Write3: Address,Store;               ! Send the address and store
+        Data;                        ! Send the data
+        if intrpend call(Vecint);    ! Check for interrupts
+        goto(Write1);                ! Go to fill up the memory
+        
+!  This is the read routine. The method of testing is as follows. Data is
+! read from memory and placed in register "Data". A test is made on the 
+! memory address, the data in register "Address", with the data in register
+! mask. The "Mask" register has a single bit set in it. The test that is made
+! is such that a single address bit is tested to be equal to a one or a zero.
+! If the address bit is equal to a one then the data in register "Data", is
+! checked against the data in register "Pattern". If the address bit is equal
+! to a zero, then the data in register "Data" is checked against register
+! "Notpat". All of memory is checked in this manner. If the data is correct,
+! the routine then exits to select another pattern and/or shift the mask
+! bit. If the data is not correct, then an error is flagged and register 
+! "Error"  is loaded with a error number. The routine then exit, to the error
+! routine. 
+
+
+Read:   Notpat:= not Pattern;        ! Complement the pattern
+        Notpat:= Notpat and 177777;  ! Clear the upper four bits
+        PE:= 0;                      ! Clear the parity error register
+        Address:= Maxaddr;           ! Load the 20 bit memory address
+Read1:  Address:= Address - 1;       ! Decrement the address
+        if C19 goto(Mask1);          ! All done, go shift the mask bit
+Read2:  Address,Fetch;               ! Send the address and fetch
+        Data:= MDI;                  ! Get the data
+        if intrpend call(Vecint);    ! Check for interrupts
+        Work:= Address;              ! Load the 20 bit memory address
+        Work:= Work AND Mask;        ! Mask out the address bit
+        Work:= Work - Mask;          ! Subtrack the mask bit
+        Work - 1;                    ! Check Address bit = Mask bit
+        if C19 goto(Read4);          ! Address & Mask are equal
+Read3:  Data XOR Notpat;             ! Check data is equal to not pattern
+        if eql goto(Read5);          ! Data and Pattern are equal
+        Error:= 104;                 ! Load the error register
+        call(Err);                   ! Data and Pattern are not equal
+        SwitchA:= SwitchA and 1;     ! Return here after proceeding
+        SwitchA - 1;                 !
+        if neq goto(Read5);          ! Check for continue after error
+        goto(Read2);                 ! Loop-on-error
+Read4:  Data XOR Pattern;            ! Check Data and Pattern are equal
+        if eql goto(Read5);          ! Data and Pattern are equal
+        Error:= 105;                 ! Load the error register
+        call(Err);                   ! Data and Pattern are not equal
+        SwitchA:= SWitchA and 1;     ! Return here after proceeding
+        SwitchA - 1;                 !
+        if neq goto(Read5);          ! Check for continue after error
+        goto(Read2);                 ! Loop-on-error
+Read5:  PE;                          ! Check for parity errors
+        if eql goto(Read1);          ! No parity errors, repeat the test
+        Error:= 106;                 ! Load the error register
+        SwitchA:= Switch;            ! Check for ignore PE test
+        SwitchA:= SwitchA and 2;     !
+        SwitchA - 2;                 !
+        if eql goto(Read1);          ! Ignore PE test, continue testing
+        call(Err);                   ! Parity errors
+        SwitchA:= SwitchA and 1;     ! Return here after proceeding
+        SwitchA - 1;                 ! 
+        if neq goto(Read1);          ! Check for continue after error
+        goto(Read2);                 ! Loop-on-error
+        
+        
+!  This is the loop control routine. Its purpose is to control the various
+! loops in the test routines. This routine makes the check for loop-on-error
+! stop-on-error, data changed error, and proceed from error. When the manual
+! intervention flag is set, this routine is by-passed all together. In the
+! manual intervention mode the operator is only interested in looking for bad
+! address bits.
+
+Err:    Manual;                      ! Pass the manual intervention flag
+        if neq goto(Force2);         ! Is their intervention ?
+        Switch and 1;                ! Check for loop-on-error
+        if eql goto(Exit);           ! Do not loop, exit to the Kernal
+        Firstpass;                   ! Looping, check for first loop pass
+        if eql goto(Err1);           ! First time through, setup
+        goto(Err2);                  ! Continue looping
+Err1:   Firstpass:= 177777;          ! Firstpass gets loop flag
+        Firsterror:= Data;           ! Store the first error
+        FirstPE:= PEAddr;            ! Store the first PE address
+Err2:   Data XOR Firsterror;         ! Check the second error with the 
+                                     ! first error.
+        if eql goto(Err3);           ! Data OK, check PE address
+        Error:= 107;                 ! The first and second error did not
+                                     ! match.
+        Switch and 4;                ! Check, Ignore data change test.
+        if neq goto(LopRet);         ! Ignore data change test,
+                                     ! continue testing.
+        goto(Exit);                  ! Exit to the Kernal
+Err3:   FirstPE XOR PEAddr;          ! Check PE address
+        if eql goto(LopRet);         ! PE address OK, continue looping.
+        Error:= 110;                 ! The first and second PE address did
+                                     ! not match.
+        Switch and 4;                ! Check, Ignore PE address change test.
+        if neq goto(LopRet);         ! Ignore PE address change test,
+                                     ! continue looping.
+Exit:   goto(7401);                  ! Exit to the Kernal
+LopRet: SwitchA:= Switch,return,loc(100);! Proceed from error,return to program
+
+
+!  This is the Init routine. It will load all the registers with the correct
+! values to operate the test.
+
+
+Init:   if intrpend call(Vecint);    ! Go service interrupts
+        Firstpass:= 0;               ! Clear the pass register
+        PE:= 0;                      ! Clear the PE register
+        PEAddr:= 0;                  ! Clear the PE Address register
+        Screen:= 0;                  ! Clear the screen register
+        Vcount:= 0;                  ! Clear vidio count register
+        Bits:= 0;                    ! Clear the bad address bits register
+        Manual:= 0;                  ! Clear the manual intervention flag
+        Vidtmp:= 101154;             ! Next command is first vertical retrace
+        return;                      ! return to the porgram
+        
+        
+!  This is the Vector service routine.
+
+Vecint: Vector(z80int);
+Z80int: return,loc(200);
+Badint1: return,loc(204);
+Badint2: return,loc(210);
+Badint3: return,loc(214);
+Badint4: return,loc(220);
+
+Vid:     Vidtmp,iob(343),loc(224);    ! Load vidio state
+         Vidtmp,iob(340);             ! Load line count
+Vid1:    0,iob(342);                  ! Load cursor address
+         Vidtmp and 200;              ! Mask out the second retract condition
+         if eql goto(Vid2);           ! If not at the second retract condition,
+                                      ! load the normal display command
+         Screen, iob(341);            ! Load the screen address
+         0, iob(344);                 ! Load the curser X value
+         Vcount:= 11;                 ! Load the vidio counter
+Vid2:    Vidtmp:= 102000;             ! Load the normal display command
+         Vcount:= Vcount - 1;         ! Subtract one from the vidio counter
+         if gtr return;               ! If not at end of screen, exit.
+         Vidtmp:= 101154;             ! Load the first vertical retract command
+         Vcount;                      ! Pass the vidio counter
+         if eql return;               ! If not at the end of the screen, exit.
+         Vidtmp:= 101351;             ! Load the second veritical retrace 
+                                      ! command.
+         return;                      ! Return tothe program
+         
+                  
+badint5: return,loc(230);
+
+Parint:  PE:= 1,loc(234);             ! Parity error,load the PE flag
+         iob(147);                    ! Read the Parity address register
+         PEAddr:= iod;                ! Get the Parity address data
+         return;                      ! Return to the program
+         
+        end;        

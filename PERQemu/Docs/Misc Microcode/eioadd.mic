@@ -1,0 +1,513 @@
+! Program to echo packets on the ether
+! Seven entry points:
+!         0 initializes the net
+!       100 returns bit count in R22
+!       200 returns physical address in receive header buffer
+!      2400 starts transmission     ie primes the pump
+!      2401 starts transmit only loop
+!      2500 starts loop on receive end
+!      2501 does one receive
+!
+! Start one perq up receiving and the other transmitting.
+! The receiving perq will echo packets and the transmitting perq will
+! create new packets and check the packets that have been echoed
+!
+! Written      ??      PR
+! Modified  8-Jul-82   SDC       Changed for EIO DMA & Net addresses
+!
+
+        Define(R0, 0);
+        Define(R1, 1);
+        Define(R2, 2);
+        Define(R3, 3);
+        Define(R4, 4);
+        Define(R5, 5);
+        Define(Looper,7);
+        Define(MemAddr, 10);
+        Define(PA, 11);
+        Define(W0, 12);
+        Define(W1, 13);
+        Define(Seed, 14);
+        Define(CurPat, 15);
+        Define(RcvAd, 16);
+        Define(XMitAd, 17);
+        Define(Tmp, 20);
+        Define(WVal, 21);
+        Define(RVal, 22);
+        Define(IntOccr, 23);
+        Define(Master, 24);
+        Define(NRcved, 300);
+        Define(NXMited, 301);
+
+        Define(DpyTmp,200);
+        Define(DpyCnt,201);
+
+        Define(BrkPntNum, 370);
+! Breakpoints:
+!   100 - Initialized
+!   101 - Bad load
+!   105 - Someone else transmitting
+!   201 - CRC error (Returns with BC in R0)
+!   300 - check data OK
+!   301 - data error
+!
+
+        Constant(MaxAddr, 1777);
+        Constant(BreakPoint, 7401);
+
+
+! Prom simulator constants
+
+        Constant(AdrReg, 234);
+        Constant(WrtRam, 235);
+        Constant(AdrEn, 2000);
+        Constant(WtW0, 10000);
+        Constant(WtW1, 4000);
+
+! network constants
+
+        Constant(Start, 40);
+
+        Constant(NetCntl, 302);     ! EIO mod
+        Constant(NetEnb, 303);
+        Constant(RegFil0, 310);     ! EIO mod
+        Constant(RegFil1, 311);     ! EIO mod
+        Constant(RegFil2, 312);     ! EIO mod
+        Constant(RegFil3, 313);     ! EIO mod
+        
+        
+        Constant(BCWtCntl, 330);     ! EIO mod
+        Constant(BCWtHB, 331);       ! EIO mod
+        Constant(BCWtLB, 332);       ! EIO mod
+ ! Constant(BCInLB, 217);
+ ! Constant(BCInHB, 5);
+        Constant(BCRdLB, 132);       ! EIO mod
+        Constant(BCRdHB, 133);       ! EIO mod
+        Constant(RdNetStat, 122);    ! EIO mod
+ ! Constant(WtPrAdr, 234);
+        
+        
+        Constant(EnBCCnt, 10);
+        
+! dma buffers
+
+        Constant(Hcnt, 320);      ! 2 quads * 16, inverted
+        Constant(XChan, 3);       ! Transmit channel
+        Constant(RChan, 6);       ! Receive channel
+        
+        Constant(RDHA, 0);
+        Constant(RDLA, 10000);
+        Constant(RLHA, 0);
+        Constant(RLLA, 4000);
+
+        Constant(XDHA, 0);
+        Constant(XDLA, 20000);
+        Constant(XLHA, 0);
+        Constant(XLLA, 14000);
+        
+        Constant(IoChan, 300);     ! EIO mod
+        Constant(IoLHA, 327);      ! EIO mod
+        Constant(IoLLA, 326);      ! EIO mod
+        Constant(IoDHA, 325);      ! EIO mod
+        Constant(IoDLA, 324);      ! EIO mod
+       
+     
+! routine to set dma addresses
+
+SetDmaR: RChan, IOB(IoChan);       ! Set channel register
+        Tmp := RLHA;
+        Tmp := Tmp + HCnt;
+        Tmp, IOB(IoLHA);
+
+        Tmp := RLLA;
+        Tmp, IOB(IoLLA);
+
+        Tmp := RDHA;
+        Tmp, IOB(IoDHA);
+
+        Tmp := RDLA;
+        Tmp, IOB(IoDLA), Return;
+
+SetDmaX: XChan, IOB(IoChan);       ! Set channel register
+        Tmp := XLHA;
+        Tmp := Tmp + HCnt;
+        Tmp, IOB(IoLHA);
+
+        Tmp := XLLA;
+        Tmp, IOB(IoLLA);
+
+        Tmp := XDHA;
+        Tmp, IOB(IoDHA);
+
+        Tmp := XDLA;
+        Tmp, IOB(IoDLA), Return;
+
+! routine to set up buffers
+
+MakData: XMitAd := XLLA;
+        XMitAd, Store4;         ! logical header
+            0;
+        16002;                  !  1C  02
+          174;                  !  01  7C
+           10;                  ! PA1 PA0
+        XMitAd + 4, Store4;
+        16002;
+          174;
+           12;
+            0;
+
+        XMitAd := XDLA;          ! data buffer
+        PushLoad(377);
+        Call(Random), Loc(2100);
+        XMitAd, store;
+        CurPat;
+        XMitAd := XMitAd + 1, RepeatLoop;
+        Return;
+
+! routine to set up buffers
+
+MakData1: XMitAd := XLLA;
+        XMitAd, Store4;         ! logical header
+            0;
+        16002;                  !  1C  02    *** 540   ***
+          174;                  !  01  7C    *** 31744 ***
+            0;                  ! PA1 PA0    *** 0     ***
+        XMitAd + 4, Store4;
+        16002;                    !          *** 540   ***
+          174;                    !          *** 31744 ***
+            1;                    !          *** 1     ***
+            0;
+
+        XMitAd := XDLA;          ! data buffer
+        PushLoad(177);
+        XMitAd, store2;
+        0;
+        177777;
+        XMitAd := XMitAd + 2, RepeatLoop;
+        Return;
+        
+! check data compares what was received and what was expected
+
+
+ChkData: RcvAd := RLLA;
+        XMitAd := XLLA;
+
+        PushLoad(7);              ! check the logical header
+        If IntrPend Call(VecInt);
+        RcvAd, Fetch;
+        Tmp := MDI;
+        XMitAd, Fetch;
+        MDI - Tmp;
+        IF NEQ GoTo(DatErr);
+        RcvAd := RcvAd + 1;
+        XMitAd := XMitAd + 1;
+        RepeatLoop;
+
+        RcvAd := RDLA;
+        XMitAd := XDLA;
+        PushLoad(366);              ! check the data 
+        If IntrPend Call(VecInt);
+        RcvAd, Fetch;
+        Tmp := MDI;
+        XMitAd, Fetch;
+        MDI - Tmp;
+        IF NEQ GoTo(DatErr);
+        RcvAd := RcvAd + 1;
+        XMitAd := XMitAd + 1;
+        RepeatLoop;
+
+        BrkPntNum := 300;
+        Return;
+        
+DatErr: BrkPntNum := 301;           ! wrong data
+        JumpPop(BreakPoint);
+          
+
+! Set the counter to the value supplied in register Wval.
+
+SetBC:  WVal, RightShift(10);
+        Shift, IOB(BCWtHB);
+        WVal, IOB(BCWtLB), Return;
+        
+        
+! Read the value from the bit counter into RVal
+
+GBC:    call(RdBC),loc(100);
+        BrkPntNum := 100, goto(BreakPoint);
+
+RdBC:   IOB(BCRdHB);
+        IOD, LeftShift(10);
+        RVal := Shift and 177400;
+        IOB(BCRdLB);
+        Tmp := IOD AND 377;
+        RVal := RVal OR Tmp, Return;
+        
+
+! Read the board's physical address
+
+RdPA:   Call(SetDmaR),loc(200);   ! set up DMA
+        1,IOB(RegFil2);           ! Put hex FE in MCB
+        WVal := 0;
+        Call(SetBC);              ! clear bit counter
+        IOB(RdNetStat);           ! clear ints
+        R0 := 450;
+        R0, IOB(NetCntl);         ! do receive
+        BrkPntNum := 100;
+        goto(BreakPoint);
+
+(*
+! load bin file 
+
+Load:   40, IOB(NetCntl);
+        0, IOB(AdrReg);           ! disable the net address pipe
+        MemAddr := 0;
+
+! Load the file
+
+LdLp:   MemAddr, Fetch;
+        MemAddr := MemAddr + 1;
+        PA := MDI;
+        IF LSS GoTo(Done);
+        PA - MaxAddr;
+        IF GTR GoTo(BadLd);
+
+        MemAddr, Fetch;
+        MemAddr := MemAddr + 1;
+        W0 := MDI;
+        R1 := PA;
+        R1 := R1 OR WtW0;         ! write word 0
+        R1, IOB(AdrReg);
+        W0, IOB(WrtRam);
+
+        MemAddr, Fetch;
+        MemAddr := MemAddr + 1;
+        W1 := MDI;
+        R1 := PA;
+        R1 := R1 OR WtW1;         ! write word 1
+        R1, IOB(AdrReg);
+        W1, IOB(WrtRam);
+        0, IOB(AdrReg);
+        
+        Tmp := Tmp - 1;
+        IF NEQ GoTo(LdLp);
+        
+! If we get  here then bad load
+
+BadLd:  BrkPntNum := 101;
+        GoTo(BreakPoint);
+        
+Done:   PA - 177777;
+        IF NEQ GoTo(BadLd);       ! did we terminate right
+        R1 := AdrEn;
+        R1, IOB(AdrReg);          ! enable state machine address register
+        0, IOB(NetCntl);
+        NOP;
+        Start, IOB(NetCntl);      ! now let her go
+        BrkPntNum := 100, Return;
+
+*)
+        
+! Load stuff into the register file
+
+RFill:  not 0, IOB(RegFil0);            ! PA0
+        
+        not 0, IOB(RegFil1);            ! PA1
+        
+        not 0, IOB(RegFil2);            ! MCB
+        
+        not 0, IOB(RegFil3), Return;    ! MAB0
+        
+        
+
+        
+! Random number generator.
+
+Random: If IntrPend Call(VecInt);
+        CurPat;
+        CurPat, If NEQ GoTo(GenA);
+        CurPat := Seed;
+GenA:   Tmp := 1, If LSS GoTo(Genb);
+        Tmp := 0;
+GenB:   CurPat AND 100;
+        If  EQL GoTo(GenC);
+        Tmp := Tmp XOR 1;
+        
+GenC:   CurPat := CurPat + CurPat;
+        CurPat := CurPat OR Tmp, Return;
+        
+
+Init:   0, IOB(305);               ! Disable EIO
+        Seed := 12345;
+        CurPat := 0;
+        DpyTmp := 101154;
+        DpyCnt := 0;
+        NRcved := 0;
+        NXMited := 0;
+        Return;
+! 
+! **** main program ****
+!
+
+!        Call(Load), Loc(0);                ! load the prom simulator
+        Start, IOB(NetCntl), Loc(0);
+        0, IOB(NetEnb);
+        Looper := 1;
+        BrkPntNum := 100, GoTo(BreakPoint);
+        
+        Looper := 0, Loc(2400);             ! xmit entry
+        Call(Init), loc(2401);
+        Master := 1;
+        Call(MakData1);        !**** For XMIT test ****
+        GoTo(IdleX);
+
+        Looper := 0, Loc(2500);            ! Receive entry point
+        Call(Init), loc(2501);
+        Master := 0;
+        Call(MakData1);        !**** For XMIT test ****
+        GoTo(IdleR);
+        
+        
+! Idle loop
+
+IdleX:  IOB(RdNetStat), Loc(2600);
+        IOD and 200;            ! Check carrier sense
+        if eql goto(x);
+        BrkPntNum := 105, goto(BreakPoint);
+x:      Call(XMit);
+        Looper;
+        if neq goto(IdleX);            !!!!!!! For Xmit test !!!!!!!!!
+
+IdleR:  Call(Rcv);
+        Call(ChkData);                     ! check what you got
+        Looper;
+        if eql goto(IdleX);
+        
+        Call(RDBC);
+        R0 := RVal, goto (breakpoint);
+        
+        Master;
+        If Eql Call(MakData);
+        Call(ChkData);                     ! check what you got
+        Master;
+        If NEQ Call(MakData1);
+        GoTo(IdleX);
+        
+
+! Transmit routine.
+
+        
+XMit:   Call(Wait), Loc(2700);
+        40, IOB(NetCntl);
+        1, IOB(NetEnb);                    ! Enable net interrupts
+        3, IOB(BCWtCntl);                  ! set the control mode to 0
+        WVal := 7777;                      ! one less than number bits
+        WVal := NOT WVal, Call(SetBC);     ! transmit 1 packet
+        IOB(RdNetStat);                    ! clear out any pending ints
+
+! set up dma buffers
+
+        If IntrPend Call(VecInt);
+        Call(SetDmaX);
+        
+        Tmp := 470;
+        Tmp, IOB(NetCntl);                 ! set transmit and go
+        
+        Call(WtInt);
+
+! packet transmitted        
+
+        NXMited := NXMited + 1;
+        IOB(RdNetStat);
+        40, IOB(NetCntl);
+        0, IOB(NetEnb), Return;
+
+
+! receive loop
+
+Rcv:    40, IOB(NetCntl);
+        1, IOB(NetEnb);                    ! Enable net interrupts
+        3, IOB(BCWtCntl);                  ! set the control mode to 3
+        WVal := 0;
+        WVal := NOT WVal, Call(SetBC);     ! to receive a packet
+        IOB(RdNetStat);                    ! clear out any pending ints
+
+! set up dma buffers
+
+        If IntrPend Call(VecInt);
+        Call(SetDmaR);
+        WVal := 0;
+        Call(SetBc);
+        Call(RFill);
+        
+        Tmp := 550;
+        Tmp, IOB(NetCntl);       !set en bit count, rcvall and go
+        1, IOB(NetEnb);          !enable interrupts
+        
+        Call(WtInt);
+
+! packet received        
+
+        40, IOB(NetCntl);
+        0, IOB(NetEnb);
+        IOB(RdNetStat);
+        R0 := IOD;
+        R0 AND 1;
+        IF NEQ GoTo(CrcError);
+        NRcved := NRcved + 1, StackReset;
+        Return;
+
+CrcError:BrkPntNum := 201;
+         Call (RdBC);
+         R0 := Rval, JumpPop(BreakPoint);
+
+
+WtInt:  IntOccr := 0;
+
+WtLp:   IF IntrPend Call(VecInt);
+        IntOccr;
+        IF EQL GoTo(WtLp);
+        
+GotIt:  Return;
+        
+Wait:   PushLoad(7777);
+        If IntrPend Call(VecInt);
+        Nop;
+        Nop;
+        RepeatLoop;
+        Return;
+        
+
+VecInt: Vector(Z80Int);
+        
+Z80Int: 0,IOB(305),Return, Loc(300);
+
+YInt:   IOB(10), Loc(304);               !** for Canon link board **
+        Return;
+
+DskInt: IOB(123), Return, Loc(310);
+
+NetInt: IntOccr := 1, Return, Loc(314);  !** FOR EIO **
+
+Z80RInt:0,IOB(305),Return, Loc(320);
+
+DpyInt: DpyTmp, IOB(343), Loc(324);
+        DpyTmp, IOB(340);
+Dpy1:   0, IOB(342);
+        DpyCnt := DpyCnt - 1;
+        DpyTmp := 102000, If GTR Return;
+        DpyCnt;
+        DpyTmp := 101154, If EQL Return;
+        DpyTmp := 101351;
+        0, IOB(341);
+        0, IOB(344);
+        DpyCnt := 11, GoTo(Dpy1);
+        
+XInt:   Return, Loc(330);
+
+ParInt: Return, Loc(334);
+END;
+
+
+
+        
+   

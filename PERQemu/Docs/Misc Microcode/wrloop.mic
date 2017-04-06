@@ -1,0 +1,20 @@
+! Tight memory write loops for Store, Store2, Store4
+! 6 Feb 84
+! WC Hulley
+
+           define(r0,0);
+           define(R1,1);
+  
+WrOne:    R0, Store, loc(2400);
+           MDO := R1, goto(WrOne);
+WrTwo:    R0, Store2, loc(2500);
+           MDO := R1;
+           MDO := R1+1, goto(WrTwo);
+WrFour:   R0, Store4, loc(2600);
+           MDO := R1;
+           MDO := R1+1;
+           MDO := R1+2;
+           MDO := R1+3, goto(WrFour);
+           goto(7401);
+           
+         END;

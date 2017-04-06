@@ -1,0 +1,244 @@
+
+
+!              ATTEMPTING TO PUSH AND POP ESTACK
+$perq1a
+$base
+DEFINE(%R0,0);
+DEFINE(%R1,1);
+DEFINE(%R2,2);
+DEFINE(%R3,3);
+$nobase
+DEFINE(R10,10);
+DEFINE(R20,20);
+DEFINE(R30,30);
+DEFINE(R40,40);
+DEFINE(R5,5);
+DEFINE(R6,6);
+DEFINE(R7,7);
+DEFINE(R50,50);
+DEFINE(R60,60);
+DEFINE(R70,70);
+DEFINE(R100,100);
+DEFINE(BREAKPOINT,370);
+define(r200,200);              
+define(R377,377);      ! krnl registers      
+define(R374,374);      ! to be saved on the users stack
+define(R373,373);      
+define(R372,372);      
+define(R370,370);      
+define(R365,365);      
+define(R364,364);      
+define(R363,363);      
+define(R360,360);      
+define(R357,357);      
+              
+constant(MaxReg,377);           ! Maximum register address 
+CONSTANT(TEN,10);
+CONSTANT(TWENTY,20);
+CONSTANT(THIRTY,30);
+CONSTANT(FOURTY,40);
+CONSTANT(DONE,7401);
+
+
+
+
+START:     LOC(2400);          ! TEST ESTACK TO REGISTERS AND VICE VERSA
+           STACKRESET;
+           R10:=TEN;
+           TOS:=R10,PUSH;       !PUSH 1 ON STACK
+           R20:=TWENTY;
+           TOS:=R20,PUSH;       !PUSH 2 ON STACK
+           R30:=THIRTY;
+           TOS:=R30,PUSH;
+           R40:=FOURTY;
+           TOS:=R40,PUSH;
+           R50:=TOS,POP;
+           R60:=TOS,POP;
+           R70:=TOS,POP;
+           R100:=TOS,POP;
+           GOTO(NOERROR);       !R10 SHOULD = R30, R20 SHOULD = R40
+
+
+TOMEM:     LOC(2500);          ! TEST X REGISTERS TO MEMORY AND VICE VERSA
+           R10:=TEN;
+           R20:=TWENTY;
+           R30:=THIRTY;
+           R40:=FOURTY;
+           TOS:=R10,PUSH;       !PUSH 1 ON STACK
+           TOS:=R20,PUSH;       !PUSH 2 ON STACK
+           TOS:=R30,PUSH;
+           TOS:=R40,PUSH;
+           R30:=TOS,POP;
+           R40:=TOS,POP;
+           MA:=0,STORE2;       !T2 - STORES DATA IN MEMORY
+           MDO:=R30;
+           MDO:=R40;
+           NOP;
+           NOP;
+           MA:=0,FETCH2;
+           NOP;                !MEMORY 0 SHOULD = 10
+           NOP;                !MEMORY 1 SHOULD = 20
+           R5:=MDI;            !R5 SHOULD = R30 = R10=10
+           R6:=MDI;            !R6 SHOULD = R40 = R20=20
+           GOTO(NOERROR);
+
+FILLSTACK: TOS := R374,PUSH;
+           TOS := R373,PUSH;
+           TOS := R372,PUSH;
+           TOS := R365,PUSH;
+           TOS := R364,PUSH;
+           TOS := R363,PUSH;
+           TOS := R360,PUSH;
+           TOS := R357,PUSH;
+           PUSH;
+           RETURN;
+$base           
+           
+REGTEST:   CALL(FILLSTACK),LOC(2600);
+           TOS:=MAXREG;
+           TOS:=TOS+1;
+RGTSTLP:   TOS:=TOS-1;
+           IF LSS GOTO(REGTOMEM);
+           RBASE := NOT TOS;
+           %R0 := TOS;
+           GOTO(RGTSTLP);
+
+! Now try to write each register to memory locations 0 to 377. 
+
+RegToMem:     Tos := MaxReg;           ! initialize
+              tos := Tos + 1;
+RegMemLp:     tos := tos - 4;        ! decrement tos by four registers
+              if LSS goto(MEMREAD);  ! all registers stored ?
+              RBase := not tos;      ! load base with new index
+              tos, Store4;           ! write register contents to mem<0-377>
+              MDO := %R0;
+              MDO := %R1;
+              MDO := %R2;
+              MDO := %R3, goto(RegMemLp);
+
+! compare memory location<n> and register<n> for equal contents.
+
+MemRead:      Tos := MaxReg;
+              tos := Tos + 1;
+AddrDec:      tos := tos - 1;
+              if LSS goto(NOERROR);
+              RBase := not tos;      ! load new base address offset
+              tos, fetch;            ! fetch contents of MAddr<tos>
+              nop;                   ! wait for data from memory
+              nop;
+              MDI - %R0;             ! compare Maddr<tos> and RegAddr<tos>
+              if NEQ goto(Error1);   ! wrong, goto error routine
+              goto(AddrDec);
+
+! try writing a block of memory to registers
+
+MemToReg:     CALL(FILLSTACK),LOC(2700);
+              Tos := MaxReg;           ! base memory address
+              tos := Tos + 1;
+MemWrLp:      tos := tos - 1;
+              if LSS goto(MemTLp);   ! whole block written ?
+              tos, store;            ! store a word
+              MDO := not tos;
+              goto(MemWrLp);
+MemTLp:       Tos := MaxReg;           ! write block from memory to registers
+              tos := Tos + 1;
+MemToRegLp:   tos := tos - 1;
+              if LSS goto(Compare);  ! whole block transferred ?
+              RBase := not tos;      ! load new base address offset
+              MA := tos, fetch;
+              nop;
+              nop;
+              %R0 := MDI;            ! Reg<n> gets Mem<n>  
+              goto(MemToRegLp);
+
+! compare Reg<n> and Mem<n> contents
+
+Compare:      Tos := MaxReg;
+              tos := Tos + 1;
+CompareLp:    tos := tos - 1;
+              if LSS goto(NOERROR);   ! all addresses checked ?
+              RBase := not tos;      ! load new base address offset
+              MA := tos, fetch;      ! fetch contents of MAddr<tos>
+              nop;                   ! wait for data from memory
+              nop;
+              MDI - %R0;             ! compare Maddr<tos> and RegAddr<tos>
+              if NEQ goto(Error2);   ! wrong, goto error routine
+              goto(CompareLp);
+
+! force X and Y indexing for registers 0 to 377
+
+XYTest:       CALL(FILLSTACK),LOC(2750);
+              Tos := MaxReg;
+              tos := Tos + 1;           
+XYLp:         tos := tos - 1;
+              if LSS goto(DualTest);
+              RBase := not tos;      ! load new base address offset
+              %R0 - %R0;             ! XRegAddr<tos> - YRegAddr<tos>
+              if NEQ goto(error3);
+              goto(XYLp);
+
+! now do some indexed/nonindexed arithmetic operations 
+
+                 
+DualTest:     CALL(FILLSTACK),LOC(3000);
+              Tos := MaxReg;           ! test indexed and non indexed registers
+              tos := Tos + 1;
+              R377 := not Tos;       ! make (R377) match previously assigned
+                                     ! register contents after instruction *
+DualLp:       tos := tos - 1;
+              if LSS goto(NoError);  ! loop until all registers are tested
+              R377 := R377 + 1;      ! *
+              Rbase := not tos;      ! load new base address offset      
+              %R0 - R377;
+              if NEQ goto(error4);   ! XAddr<indexed n> - YAddr<n>
+              R377 - %R0;            
+              if NEQ goto(error5);   ! XAddr<n> - YAddr<indexed n>
+              goto(DualLp);
+
+NOERROR:   R370 := 0,
+                     goto(krnlreturn);
+ERROR1:    R370 := 1,
+                     goto(krnlreturn);
+ERROR2:    R370 := 2,
+                     goto(krnlreturn);
+ERROR3:    R370 := 3,
+                     goto(krnlreturn);
+ERROR4:    R370 := 4,
+                     goto(krnlreturn);
+ERROR5:    R370 := 5,
+                     goto(krnlreturn);
+
+KrnlReturn:   RBase := 377;          ! clear indexing register
+
+              R200 := tos, pop;      ! save error register address
+              R357 := tos, pop;      ! return video counter
+              R360 := tos, pop;      ! return disable register
+              R363 := tos, pop;      ! return trap register
+              R364 := tos, pop;      ! return uState register
+              R365 := tos, pop;      ! return S register
+              R372 := tos, pop;      ! return video command
+              R373 := tos, pop;      ! return cursor addr
+              R374 := tos, pop;      ! return video
+              BREAKPOINT:=R370 + 100;
+              GOTO(DONE);
+              RETURN;
+
+
+END;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,318 @@
+! DIVIDE.MICRO
+! Ben Cheung - 1 June 1983
+! Copyright 1983 International Computers Ltd.
+
+! Version   1.0  Ben Cheung  1 Jun 83 basic test of signed and unsigned divide
+
+
+$perq1a
+$nobase
+
+                    
+! common registers
+
+          define(MultDiv,0);        ! 1=divide, 0=multiply  
+          define(All,1);            ! set to perform all automatically 
+          define(DefaultParams,2);  ! set default parameters
+           
+! multiply shifter test registers
+
+          define(ShGets,100);       ! loaded into shifter
+          define(SReally,101);      ! read out of shifter
+          define(C177777,102);      ! constant
+          define(Count,103);
+          define(R370,370);         ! breakpoint register
+          
+! multiply test registers
+          
+          define(Multiplier,200);
+          define(Multiplicand, 201);
+          define(ProductLow,202);
+          define(ProductHigh,203);
+          define(R204,204);         ! 0 for signed, 1 for unsigned multiply
+          define(tmp, 205);
+          
+! multiply test constants
+          
+          constant(OffMult,0);
+          constant(UNSMultiply,200);
+          constant(SGNMultiply,300);
+
+! The first group of tests contain single multiply routines. The user loads
+! a multiplier, multiplicand, and constant for the type of execution
+! The signed and unsigned routine return the answer before breaking to the 
+! krnl, while the signed debug show partial products after each multiply cycle
+
+! The register setup is:
+! R200 - multiplier
+! R201 - Multiplicand
+! R202 - low order product
+! R203 - high order product
+! R204 - multiply type (0 for signed, 1 for unsigned, 2 for signed single step)
+
+
+          
+!   error list
+!     breakpoint       error
+!       100             signed or unsigned multiply complete
+!       101             failed during load and read MQ register test
+!       111             execute conditional add cycle (pr 100)
+!       121             execute conditional subtract cycle (pr 200)
+!       
+! start of 2400 tests the MQ register and performs a multiply
+! start of 2500 justs trys to perform multiply
+
+! this section trys to load and then read the multiply shift register
+! a count pattern is used to test all the bit positions
+
+$Include CheckSize.micro
+
+ChKSze:     Call (CheckSize),  Loc (2400);
+            ShGets := 0;
+            Count := 0;                      ! loop counter (debug)
+            C177777 := 177777;
+Load:       Count := Count + 1;
+            SReally := 0;
+            MQ := ShGets;                    ! load the shift register
+            SReally := MQ;                   ! read the shift register back
+            ShGets - SReally;                ! should get the same number
+            if NEQ goto(Error1);
+            ShGets := ShGets + 1;
+            ShGets - C177777;
+            if NEQ goto(Load);               ! all the positions tested ?
+            All - 1;
+            if Eql GoTo (MultTest);
+            MultDiv - 1;
+            if Eql GoTo (DivideTest);
+                   
+! this section does signed multiply or unsigned multiply. The register setup
+! is:
+! R200 - multiplier
+! R201 - Multiplicand
+! R202 - low order product
+! R203 - high order product
+! R204 - multiply type (0 for signed, 1 for unsigned, 2 for signed debug)
+
+
+MultTest:   Call (CheckSize),  Loc (2500);
+            All - 1;
+            if Eql Call (SetAll);
+            DefaultParams - 1;
+            If Eql Call (SetDefault);
+            ProductHigh := 0;                ! clear product registers
+            ProductLow := 0;
+            Count := 0;
+            C177777 := 177777;
+            MQ := 0;
+            R204 - 2;                        ! check signed, unsigned or debug?
+            if EQL goto(Debug);
+            R204 - 1;
+            if EQL goto(Unsigned);
+            
+
+Signed:     ProductHigh := 0, Rotate(1);
+            MQ := Multiplier;                ! load the shifter
+            WidRasterOp := SGNMultiply;      ! set up signed multiply
+            ProductHigh,
+                  PushLoad(16);              ! set up repeat loop
+            Shift + Multiplicand,
+                  MultiplyStep, RepeatLoop;  ! do 10#15 conditional adds
+            Shift - Multiplicand,
+                  MultiplyStep;              ! do 1 conditional subtract
+            ProductHigh := Shift;
+            ProductLow := MQ;                ! save lower precision product
+            WidRasterOp := OffMult;          ! turn off multiply
+            MQ := 0;                         ! clear multipler shifter
+            All - 1;
+            If Neq GoTo (MultDone);
+            ProductHigh - 0;
+            if Neq GoTo (Error2);
+            ProductLow - 444;
+            if Neq GoTo (Error3);
+                                    
+Unsigned:   ProductHigh := 0, Rotate(1);     ! turn on shifter
+            MQ := Multiplier;                ! load multiplier
+            WidRasterOp := UNSMultiply;      ! set up unsigned multiply
+            ProductHigh,
+                  PushLoad(17);             ! set up repeat loop             
+            Shift + Multiplicand,
+                    MultiplyStep, RepeatLoop;! do 10#16 conditional adds
+            ProductHigh := Shift;            ! save upper precision product
+            ProductLow := MQ;                ! save lower precision product
+            WidRasterOp := OffMult;          ! turn off multiply
+            MQ := 0;                         ! clear multipler shifter
+            All - 1;
+            if Neq GoTo (MultDone);
+            ProductHigh - 0;
+            if Neq GoTo (Error4);
+            ProductLow - 444;
+            if Neq GoTo (Error5);
+            GoTo (DivideTest);
+                        
+                        
+! This routine stops after each multiply cycle to allow the user to 
+! check partial products for signed multiply.
+! A breakpoint of - 111 means "do an add cycle"
+!                   121 means "do a subtract cycle"
+! After a break of 111 type 'proceed 100'
+! After a break of 121 type 'proceed 200'
+
+Debug:      Call (CheckSize),  Loc (2600);
+            ProductHigh := 0, Rotate(1);
+            MQ := Multiplier;                ! load multiplier            
+            Count := 0;                      ! clear conditional add counter
+
+DeBugLp:    Count := Count + 1, Loc(100);
+            WidRasterOp := SGNMultiply;      ! turn on signed multiply
+            ProductHigh :=                   ! do one conditional add
+                           ProductHigh + Multiplicand, MultiplyStep; 
+            ProductHigh := Shift;            ! save upper partial product
+            ProductLow := MQ;                ! save lower partial product
+            WidRasterOp := OffMult;          ! turn off multiply
+            Count - 17;
+            IF EQL goto(DebugSub);           ! all add cycles finished ?
+
+            R370 := 111, goto(7401);         ! no, break with "add" flag
+
+DebugSub:   R370 := 121, goto(7401);         ! yes, break with "sub" flag
+
+            WidRasterOp := SGNMultiply, loc(200);
+            ProductHigh :=                   ! do one conditional subtract
+                           ProductHigh - Multiplicand, MultiplyStep;
+            ProductHigh := Shift;            ! save upper precision product
+            ProductLow := MQ;                ! save lower precision product
+            WidRasterOp := OffMult;          ! turn off multiplier
+            All - 1;
+            if Neq GoTo (MultDone);
+            GoTo (DivideTest);
+            
+
+MultDone:   MultDiv - 2;
+            if Eql GoTo (DivideTest);
+            
+! exit routines
+
+Done:       R370 := 100, goto(7401);         ! good run, return to krnl
+Error1:     R370 := 101, goto(7401);         ! Bad MQ register
+Error2:     R370 := 102, goto(7401);
+Error3:     R370 := 103, goto(7401);
+Error4:     R370 := 104, goto(7401);
+Error5:     R370 := 105, goto(7401);
+Error6:     R370 := 106, goto(7401);
+Error7:     R370 := 107, goto(7401);
+
+            
+
+
+
+
+! divide test registers
+          
+          define(DividendLow,250);
+          define(DividendHigh, 251);
+          define(Divisor,252);
+          define(QuotientLow,253);
+          define(QuotientHigh,254);
+          define(QuotientSign,255);
+          define(RemainderSign,256);
+          define(R257,257);
+          define(Remainder,260);
+          
+! Divide test constants
+          
+          constant(OffDivide,0);
+          constant(UNSDivide,100);
+
+
+! The register set up is:
+! R250 - DividendLow
+! R251 - DividendHigh
+! R252 - Divisor  
+! R253 - low order quotient
+! R254 - high order quotient
+! R255 - Sign of the quotient
+! R256 - Sign of the Remainder
+! R257 - Single or Double precision Divide (0 for single, 1 for double)
+!
+! start of 2400 tests the MQ register and performs a divide
+! start of 2700 justs trys to perform divide
+
+
+
+
+DivideTest: Call (CheckSize),  Loc (2700);
+            DefaultParams - 1;
+            if Eql Call (SetDefault);
+            QuotientHigh := 0;               ! clear product registers
+            QuotientLow := 0;
+            MQ := 0;
+            R257 - 1;                        ! check double or single precision
+            if EQL GoTo (Double);
+            DividendHigh := 0;               ! Set DividendHigh to 0 for single            
+Double:     Tos := 0, Push;                  ! 0 for 2's complementing
+            RemainderSign := DividendHigh,
+              RightShift(0);                 ! Set Sign of remainder
+            if Geq GoTo (Double1),
+              QuotientSign := Shift Xor
+                              Divisor;       !Set Sign of quotient
+            DividendLow := Tos - DividendLow;!Abs value of dividend
+            DividendHigh := Tos-DividendHigh
+                               -OldCarry;
+            Divisor;
+Double1:    if Geq GoTo (Double2);           ! divisor>=0
+            Divisor := Tos - Divisor;        ! Abs value of divisor
+Double2:    Rotate (10#15);                  ! Shifter must rotate left 1
+            MQ := DividendHigh;              ! load upper dividend 
+            WidRasterOp := UNSDivide;        ! set up unsigned divide
+            LoadS (10#15);                   ! S register=15 (decimal)
+            Remainder := 0,                  !Init partial remainder
+              DivideStep;                    !  get started
+Double3:    Remainder := Shift - Divisor,
+              DivideStep,
+                Repeat (Double3);            ! 16 (Decimal) steps
+            QuotientHigh := MQ;              !  Upper Quotient
+            MQ := DividendLow;               ! Load Lower Dividend
+            LoadS (10#15);
+            Remainder,                       ! Send Remainder cond. subtract
+              DivideStep;                    !   get started
+Double4:    Remainder := Shift - Divisor,
+              DivideStep,
+                Repeat (Double4);            ! 16 (dec) times
+            WidRasterOp := OffDivide,        ! Turn off divide h/w
+              if Geq GoTo (Double5);         ! If Remainder >=0
+            Remainder := Remainder + Divisor;! Correct remainder
+  
+Double5:    QuotientLow := MQ;               ! Read lower quotient
+            QuotientSign;
+            if Geq GoTo (Double6),           ! Quotient should >=0
+              RemainderSign;
+            QuotientLow := Tos - QuotientLow;! set negative quotient
+            QuotientHigh := Tos-QuotientHigh
+                               -OldCarry;
+            RemainderSign;
+Double6:    if Geq GoTo (DivideDone);
+            Remainder := Tos - Remainder;    ! set negative remainder
+DivideDone: Pop;                             ! Restore Stack
+            All - 1;
+            if Neq GoTo (Done);
+            QuotientHigh - 0;
+            if Neq GoTo (Error6);
+            QuotientLow - 222;
+            if Neq GoTo (Error7);
+            GoTo (Done);
+
+SetAll:     DefaultParams := 1;
+            R204 := 0;
+            R257 := 0;
+            Return;
+            
+
+SetDefault: Multiplier := 222;
+            Multiplicand := 2;
+            DividendLow := 444;
+            DividendHigh := 0;
+            Divisor := 2;
+            Return;
+                        
+            end;
+       

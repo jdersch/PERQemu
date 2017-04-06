@@ -1,0 +1,32 @@
+
+! Set R0  to starting address of pattern
+
+
+         Define(r0,0);
+         Define(r1,1);
+         Define(r2,2);
+         Define(r3,3);
+         Define(r370,370);
+                                             
+
+
+
+Start:   R2 := 40, loc(2400);
+           Rightshift(1);
+           R1 := 100000;
+           
+Lp1:     R0, Store;
+           R1;
+           R0 := R0 + 120;
+           R2 := R2 - 1;
+           if NEQ goto(Lp1);
+           
+Lp2:     R2 := 40;
+           R1;
+           R1 := Shift;
+           R1;
+           if GTR goto(Lp1);
+           
+         R370 := 100, goto(7401);
+         
+         END;

@@ -1,0 +1,645 @@
+        TITLE    "EIO SPEECH DMA TEST  VERSION 1.0"
+
+
+
+;------------------------------------------------------------------------------
+;
+;  EIO Speech DMA Test
+;  Copyright (C) 1983 Three Rivers Computer Corporation
+;  11 Jan 82
+;  Dirk Kalp
+;
+;  Abstract:
+;     This program tests the operation of speech data transfers on A_SIO
+;     Channel B using the DMA. The program repeated sets up the DMA to
+;     transmit the 256-byte DMABUF in an endless loop. The DMABUF is 
+;     initialized with the pattern in the SpkPattern buffer. All other Z80
+;     devices are disabled with their interrupts and DMA requests masked out.
+;     This program runs in a stand alone mode on the EIO board and its data
+;     and code segments are entirely in RAM. 
+;
+;------------------------------------------------------------------------------
+
+
+
+
+
+
+;------------------------------------------------------------------------------
+; Change Log:
+;
+;   11 JAN 83  V1.0  Dirk Kalp
+;                    1. Created. 
+;
+;------------------------------------------------------------------------------
+
+
+
+ Page
+;
+
+;Bit definitions.
+Bit0    Equ    0
+Bit1    Equ    1
+Bit2    Equ    2
+Bit3    Equ    3
+Bit4    Equ    4
+Bit5    Equ    5
+Bit6    Equ    6
+Bit7    Equ    7
+
+
+ Page
+;;
+;I/O Addresses.
+;
+
+A_SIODA   EQU     020Q                  ;A SIO DATA CHANNEL A
+A_SIOCA   EQU     022Q                  ;A SIO CONTROL CHANNEL A
+A_SIODB   EQU     021Q                  ;A SIO DATA CHANNEL B
+A_SIOCB   EQU     023Q                  ;A SIO CONTROL CHANNEL B
+A_ZDMA    EQU     171Q                  ;A SIO DMA. (0->Speech, 1->RS232)
+
+B_SIODA   EQU     100Q                  ;B SIO DATA CHANNEL A
+B_SIOCA   EQU     102Q                  ;B SIO CONTROL CHANNEL A
+B_SIODB   EQU     101Q                  ;B SIO DATA CHANNEL B
+B_SIOCB   EQU     103Q                  ;B SIO CONTROL CHANNEL B
+
+
+A_CTC0    EQU     120Q                  ;A_CTC CHANNEL 0 (RS-232 Rx)
+A_CTC1    EQU     121Q                  ;A_CTC CHANNEL 1 (Speech/Tablet)
+A_CTC2    EQU     122Q                  ;A_CTC CHANNEL 2 (RS-232 Tx)
+A_CMDR    EQU     123Q                  ;A_CTC Command Reg
+
+B_CTC0    EQU     124Q                  ;B_CTC CHANNEL 0
+B_CTC1    EQU     125Q                  ;B_CTC CHANNEL 1
+B_CTC2    EQU     126Q                  ;B_CTC CHANNEL 2 (KeyBoard)
+B_CMDR    EQU     127Q                  ;B_CTC Command Reg
+
+
+
+;DMA Base addr and count registers (Write Only).
+DMA0_BADDR      EQU      60Q            ;Base Addr Reg for DMA Channel 0.
+DMA0_BCNT       EQU      61Q            ;Base Count Reg for DMA Channel 0.
+
+DMA1_BADDR      EQU      62Q            ;Base Addr Reg for DMA Channel 1.
+DMA1_BCNT       EQU      63Q            ;Base Count Reg for DMA Channel 1.
+
+DMA2_BADDR      EQU      64Q            ;Base Addr Reg for DMA Channel 2.
+DMA2_BCNT       EQU      65Q            ;Base Count Reg for DMA Channel 2.
+
+DMA3_BADDR      EQU      66Q            ;Base Addr Reg for DMA Channel 3.
+DMA3_BCNT       EQU      67Q            ;Base Count Reg for DMA Channel 3.
+
+
+;DMA Current addr and count registers (Read Only).
+DMA0_CADDR      EQU      60Q            ;Current Addr Reg for DMA Channel 0.
+DMA0_CCNT       EQU      61Q            ;Current Count Reg for DMA Channel 0.
+
+DMA1_CADDR      EQU      62Q            ;Current Addr Reg for DMA Channel 1.
+DMA1_CCNT       EQU      63Q            ;Current Count Reg for DMA Channel 1.
+
+DMA2_CADDR      EQU      64Q            ;Current Addr Reg for DMA Channel 2.
+DMA2_CCNT       EQU      65Q            ;Current Count Reg for DMA Channel 2.
+
+DMA3_CADDR      EQU      66Q            ;Current Addr Reg for DMA Channel 3.
+DMA3_CCNT       EQU      67Q            ;Current Count Reg for DMA Channel 3.
+
+
+;DMA Registers.
+DMA_CMDREG      EQU      70Q            ;Write reg.
+DMA_STATUS      EQU      70Q            ;Read reg.
+DMA_REQREG      EQU      71Q            ;Write reg.
+DMA_MASKREG     EQU      72Q            ;Write reg.
+DMA_MODEREG     EQU      73Q            ;Write reg.
+DMA_TMPREG      EQU      75Q            ;Read reg.
+DMA_SETMASK     EQU      77Q            ;Write reg.
+
+;DMA Software Cmds. Value written is insignificant.
+DMA_FLOPCLR     EQU      74Q            ;Write reg.
+DMA_MASTERCLR   EQU      75Q            ;Write reg.
+DMA_CLRMASK     EQU      76Q            ;Write reg.
+
+
+
+;Interrupt Controller Registers.
+INTCMD          EQU     141Q
+INTDATA         EQU     140Q
+
+ Page
+;;
+;
+;Cmds for the CTC.
+CCMD0   Equ   066Q             ;Select CTC0, Mode 3, LSB-MSB, Binary Cnt.
+CCMD1   Equ   166Q             ;Select CTC1, Mode 3, LSB-MSB, Binary Cnt.
+CCMD2   Equ   266Q             ;Select CTC2, Mode 3, LSB-MSB, Binary Cnt.
+
+
+;CTC constants for clock frequencies (4MHz/freq).
+FREQ300   Equ    13333
+FREQ4800  Equ    833
+FREQ16K   Equ    250
+FREQ32K   Equ    125               ;Default rate for Speech/Tablet on A_SIO B.
+
+TIMES16   Equ    16                ;Clock divider for Async Serial IO.
+KEYBAUD   Equ    FREQ300/TIMES16   ;Baud rate for Keyboard Rx on B_SIO B.
+RS4800    Equ    FREQ4800/TIMES16  ;Default baud rate for RS232.
+
+
+
+
+ Page
+;;
+;RAM ADDRESSES
+;
+
+         ORG     4000H           ;Start of RAM.
+
+
+
+         ORG     4200H           ;Interrupt vector page.
+INT_TABLE  EQU  $
+
+         ORG     /20Q            ;SIO VECTOR MUST BE ON A MULTIPLE OF 20Q
+A_SIOVEC WORD    A_SIOBTR        ;CHANNEL B TRANSMIT          (Speech)
+         WORD    A_SIOBST        ;CHANNEL B STATUS CHANGE     (Speech/Tablet)
+         WORD    A_SIOBRC        ;CHANNEL B RECEIVE CHAR      (Tablet)
+         WORD    A_SIOBSP        ;CHANNEL B SPECIAL           (Tablet)
+         WORD    A_SIOATR        ;CHANNEL A TRANSMIT          (RS232 Port I)
+         WORD    A_SIOAST        ;CHANNEL A STATUS CHANGE     (RS232 Port I)
+         WORD    A_SIOARC        ;CHANNEL A RECEIVE CHARACTER (RS232 Port I)
+         WORD    A_SIOASP        ;CHANNEL A SPECIAL           (RS232 Port I)
+
+DMAVEC   WORD    DMASRV          ;DMA EOP
+
+BADVEC   WORD    WRONG
+
+
+         ORG     4300H           ;Stacklimit.
+         BLOCK   256             ;THE STACK AREA
+STACK  EQU  $
+
+
+
+
+         ORG     4400H           ;Data area.
+DMABUF   BLOCK   256             ;DMA BUFFER 
+
+SpkPattern  EQU  $
+         Word    0FFFFH
+         Word     0000H
+         Word    0FFFFH
+         Word     0000H
+         Word    0FFFFH
+         Word     0000H
+         Word    0FFFFH
+         Word     0000H
+
+ExtStatCnt Block   1            ;Count number of Ext/Stat Ints.
+
+TxUndCnt   Block   1            ;Count number of Tx underruns.
+
+DMASTScnt  Block    1           ;Count how many times DMA interrupts.
+DMASTATUS  Block    1           ;Record DMA status from DMASRV.
+
+
+
+
+ Page
+;;
+;Start of code segment.
+;
+        ORG     5000H
+;Begin()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Initialize the system and start a speech transmission that repeats
+;     forever. DMA is used to supply data to the SIO.
+;
+;------------------------------------------------------------------------------
+Begin   EQU   $
+        DI
+        Ld      SP,STACK        ;Set up the stack.
+        IM      2               ;Set interrupt mode 2.
+        Ld      A, Hi(INT_TABLE)
+        Ld      I,A             ;Load I register.
+
+        Call    CTCInit         ;Init both CTC chips.
+        Call    A_SIOInit       ;Init A_SIO. 
+        Call    B_SIOInit       ;Init B_SIO. 
+        Call    DMAInit         ;Init DMA.
+        Call    INTInit         ;Init Interrupt Controller.
+
+        EI                      ;OK for interrupts now.
+
+        Call    SpkStart        ;Start up speech.
+
+Loop    Jr      Loop            ;Loop forever.
+
+
+
+
+ Page
+;
+;CTCInit()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Set up the mode for both CTC chips.
+;
+;  Note:
+;     We load counter values in the device init routines.
+;
+;------------------------------------------------------------------------------
+CTCInit  Equ  $
+        Push AF
+
+        Ld   A, CCMD0           ;Control word for CTC0.
+        Out  (A_CMDR), A        ;  RS232 Port I Rx.
+        Out  (B_CMDR), A        ;  RS232 Port II Rx.
+    
+        Ld   A, CCMD1           ;Control word for CTC1.
+        Out  (A_CMDR), A        ;  Speech/Tablet.
+        Out  (B_CMDR), A        ;  RS232 Port II Tx.
+    
+        Ld   A, CCMD2           ;Control word for CTC2.
+        Out  (A_CMDR), A        ;  RS232 Port I Tx.
+        Out  (B_CMDR), A        ;  Keyboard.
+
+        Pop  AF
+        Ret
+        
+
+
+
+ Page
+;;
+;A_SIOInit()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Initialize the A SIO. Disable Channel A. Program Channel B for speech
+;     Tx. Set A_CTC1 counter.
+;
+;------------------------------------------------------------------------------
+A_SIOInit  EQU  $
+        Push AF
+        Push BC
+        Push DE
+        Push HL
+        
+        ;Zero counters.
+        Xor  A
+        Ld   (ExtStatCnt), A
+        Ld   (TxUndCnt), A
+        
+        ;Set up Baud rate generation for Speech (and Kriz Tablet).
+        Ld  DE, FREQ32K
+        Ld  C, A_CTC1
+        Out (C), E
+        Out (C), D
+        
+        ;Set up the SIO Ch A.
+        Ld  A, 18H             ;Channel Reset
+        Out (A_SIOCA), A
+        
+        ;Set up the SIO Ch B.
+        Ld  HL, STableB
+        Ld  C, A_SIOCB
+        Ld  B, STableE-STableB
+        Otir
+        
+        Pop  HL
+        Pop  DE
+        Pop  BC
+        Pop  AF
+        Ret
+        
+STableB EQU $
+        Byte    18H             ;Channel Reset
+        Byte    2,Lo(A_SIOVEC)  ;Set Interrupt Vector
+        Byte    10H             ;Reset Ext/Stat Interrupts
+        Byte    4,0             ;X1 Clock, Mono Sync
+        Byte    6, 55H          ;Tx sync char
+        Byte    7, 7EH          ;Rx sync char
+        Byte    3,0C0H          ;8-bit char, Rx comes up Disabled, no Sync Hunt
+        Byte    5,0E2H          ;8-bit char, DTR, RTS, Tx comes up Disabled
+        Byte    10H             ;Reset Ext/Stat Interrupts
+        Byte    1,0C5H          ;RDY func with Tx, Status Affects,
+                                ;  No Rx Interrupts, Ext/Stat Interrupts,
+                                ;  No Tx Interrupts
+STableE EQU $
+
+
+ Page
+;;
+;B_SIOInit()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Initialize the B SIO. Disable it all.
+;
+;------------------------------------------------------------------------------
+B_SIOInit  EQU  $
+        Push AF
+        
+        Ld  A, 18H             ;Channel Reset
+        Out (B_SIOCA), A
+        Out (B_SIOCB), A
+        
+        Pop  AF
+        Ret
+        
+       
+ Page
+;;
+;DMAInit()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Initialize the DMA.
+;
+;------------------------------------------------------------------------------
+DMAInit  EQU  $
+        Push AF
+        Push BC
+        Push HL
+
+        Xor  A
+        Ld   (DMASTScnt), A           ;0
+
+        Out  (DMA_MASTERCLR), A       ;Reset DMA.
+        
+        Ld   A, 144Q
+        Out  (DMA_CMDREG), A          ;Disable DMA.
+        
+        ;Init mode for each channel.
+        Ld   HL,MTableB
+        Ld   C,DMA_MODEREG            ;The I/O address.
+        Ld   B,MTableE-MTableB        ;Number of bytes to send.
+        Otir                          ;Ship it.
+
+        Xor  A
+        Out  (A_ZDMA), A              ;Connect DMA2 to Speech.
+        
+        Pop  HL
+        Pop  BC
+        Pop  AF
+        Ret
+        
+        ;Mode control.
+MTableB Byte   100Q        ;Floppy
+        Byte   101Q        ;GPIB
+        Byte   112Q        ;Speech: Single Mode, Addr Inc, No AutoInit, Read 
+        Byte   103Q        ;PERQ
+MTableE EQU $  
+        
+
+ Page
+;
+;INTInit()
+;------------------------------------------------------------------------------
+;  Abstract:
+;     Initialize the Interrupt Controller chip.
+;
+;------------------------------------------------------------------------------
+INTInit Equ $
+        Push   AF
+        Push   BC
+        Push   HL
+
+        Xor    A
+        Out    (INTCMD), A      ;Reset -> clear all regs except set IMR, 
+                                ;         BCR and Response Mem unaffected.
+        ;Load BCR and Response Mem.
+        Ld     B, (ITableE-ItableB)/2
+        Ld     HL, ITableB
+I1      Ld     A, (hl)
+        Out    (INTCMD), A
+        Inc    HL
+        Ld     A, (hl)
+        Out    (INTDATA), A
+        Inc    HL
+        Djnz   I1
+        
+        ;Set up internal regs of chip for operating mode.
+        
+        Ld     A, 220Q          ;Set up MR<4:0> mode bits.
+        Out    (INTCMD), A
+        
+        Ld     A, 300Q          ;Preselect ACR.
+        Out    (INTCMD), A
+        Ld     A, 377Q          ;Use Auto Clear for all.
+        Out    (INTDATA), A
+        
+        Ld     A, 260Q          ;Preselect IMR.
+        Out    (INTCMD), A
+        Ld     A, 377Q          ;Mask IMR<7,6,4,3,2,1,0>
+        Out    (INTDATA), A     ;  Only ZDMA interrupt will be used.
+
+        Ld     A, 251Q          ;Set up MR<7:5> mode bits. Arm controller,
+        Out    (INTCMD), A      ;   preselect IRR for CPU read of INTDAT.
+        
+        Pop    HL
+        Pop    BC
+        Pop    AF
+        Ret
+        
+ITableB  Byte  340Q, Lo(BADVEC)      ;PDMA will not be used.
+         Byte  341Q, Lo(BADVEC)      ;PERQR FIFO will not be used.
+         Byte  342Q, Lo(BADVEC)      ;PERQW FIFO will not be used.
+         Byte  343Q, Lo(BADVEC)      ;Floppy will not be used.
+         Byte  344Q, Lo(BADVEC)      ;GPIB will not be used.
+         Byte  345Q, Lo(DMAVEC)      ;ZDMA EOP.
+         Byte  346Q, Lo(BADVEC)      ;Unused.
+         Byte  347Q, Lo(BADVEC)      ;Unused.
+ITableE  Equ  $
+
+
+
+ Page
+;
+;SpkStart()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Start up the speech transmission. 
+;
+;------------------------------------------------------------------------------
+SpkStart EQU $
+        Push AF
+        Push BC
+        Push DE
+        Push HL
+
+        ;Put the pattern into the DMABUF.
+        Ld   HL, SpkPattern       ;Load first 16 bytes.
+        Ld   DE, DMABUF
+        Ld   BC, 16
+        Ldir
+        
+        Ld   HL, DMABUF           ;Fill rest of DMABUF.
+        Ld   BC, 240
+        Ldir
+        
+        Call SpeechDMA            ;Set up the DMA transfer.
+        
+        ;Turn on SIO B Tx.
+        Ld   A, 5
+        Out  (A_SIOCB), A
+        Ld   A, 0EAH
+        Out  (A_SIOCB), A         ;Enable SIO B Tx.
+        
+        ;Do Reset Ext/Stat Int.
+        Ld   A, 10H
+        Out  (A_SIOCB), A
+        
+        ;Do we need to kick the transmitter???????
+        Ld   A, 55H               ;Sync char.
+        Out  (A_SIODB), A
+        
+        Pop  HL
+        Pop  DE
+        Pop  BC
+        Pop  AF
+        Ret
+        
+        
+        
+ Page
+;
+;SpeechDMA()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Configure the DMA chip for Speech transfers on DMA2.
+;
+;------------------------------------------------------------------------------
+SpeechDMA  Equ  $
+        Push AF
+        
+        ;Mask DMA2 while we program it (just a precaution).
+        Ld   A, 6
+        Out  (DMA_MASKREG), A
+        
+        ;Reset the LSB/MSB pointer.
+        Out  (DMA_FLOPCLR), A      ;Load any value.
+        
+        ;Load the memory address.
+        Ld   A, Lo(DMABUF)
+        Out  (DMA2_BADDR), A
+        Ld   A, Hi(DMABUF)
+        Out  (DMA2_BADDR), A
+
+        ;Set up bytecnt for 256 bytes.
+        Ld   A, 256-1
+        Out  (DMA2_BCNT), A
+        Sub  A
+        Out  (DMA2_BCNT), A
+
+        ;Clear the DMA2 mask bit to permit requests.
+        Ld   A, 2
+        Out  (DMA_MASKREG), A
+        
+        ;Finally enable the DMA chip.
+        Ld   A, 140Q
+        Out  (DMA_CMDREG), A
+        
+        Pop  AF
+        Ret
+          
+
+   
+ Page
+;
+;DMASRV()
+;------------------------------------------------------------------------------
+;  Abstract:
+;     Handle DMA EOP interrupt for speech.
+;
+;------------------------------------------------------------------------------
+DMASRV Equ $
+        Push AF
+        Push HL
+
+        Ld   HL, DMASTScnt
+        Inc  (HL)               ;Count another DMA Interrupt.
+        
+        ;Get the chip status before reset.
+        In   A, (DMA_STATUS)
+        Ld   (DMASTATUS), A
+        
+        Call SpeechDMA          ;Set up another DMA transfer.
+        
+DMAEXIT Pop  HL
+        Pop  AF
+        EI
+        Reti
+        
+        
+        
+ Page
+;
+;A_SIOBST()
+;------------------------------------------------------------------------------
+;  Abstract:
+;     Handle A_SIO Ch B Ext/Stat Cnange interrupt (Tx underrun).
+;
+;  Question:
+;     Are Tx underruns being handled properly for DMA usage?
+;
+;------------------------------------------------------------------------------
+A_SIOBST Equ $
+        Push    AF            
+        Push    HL            
+
+        Ld      HL, ExtStatCnt  ;Count another interrupt.
+        Inc     (HL)
+
+        In      A,(A_SIOCB)     ;Get RR0;
+        And     100Q            ;Any Tx Underrun?
+        Jr      Z,EXTSTAT       ;If not, prepare to leave.  
+        Ld      A,300Q          ;Else prepare RESET Tx Underrun/EOM.
+        Out     (A_SIOCB),A     ;Do it.
+
+        Ld      HL, TxUndCnt    ;Count another Tx underrun.
+        Inc     (HL)
+        
+EXTSTAT Ld      A, 20Q          ;Prepare the RESET EXT/STAT INT cmd.
+        Out     (A_SIOCB),A     ;Do it.
+
+        Pop     HL
+        Pop     AF
+        EI
+        Reti
+            
+        
+ Page
+;
+;WRONG()
+;------------------------------------------------------------------------------
+;
+;  Abstract:
+;     Unused interrupts should not occur. If they do, We come here and 
+;     never return. 
+;
+;------------------------------------------------------------------------------
+A_SIOBTR  Equ  $    ;Speech does not use Tx interrupts. We use DMA instead!
+A_SIOBRC  Equ  $
+A_SIOBSP  Equ  $
+A_SIOATR  Equ  $
+A_SIOAST  Equ  $
+A_SIOARC  Equ  $
+A_SIOASP  Equ  $
+WRONG     Jr   WRONG      ;Loop forever.
+        
+        
+ 
+
+        IF      $>=8000H
+        WARNING RAM AREA TOO BIG
+        ENDIF
+
+        END
+

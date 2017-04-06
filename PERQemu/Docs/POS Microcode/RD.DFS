@@ -1,0 +1,29 @@
+{ RD Definitions.
+{-----------------------------------------------------------------------------
+{
+{       RD.Dfs - Routine dictionary definitions.
+{       Horst Mauersberg, Brian Rosen, Miles Barel     ca. 1 Jan 80.
+{       J. P. Strait                     rewritten        21 Nov 80.
+{       Copyright (c) Three Rivers Computer Corporation, 1980.
+{
+{ Abstract:
+{       This file defines offsets within routine dictionary entries.
+{
+{-----------------------------------------------------------------------------}
+
+{  6 Jun 80  1.1  Brad Myers
+{ Corrected errors in comments:  RDPS is the parameter size.
+{ }
+
+{ 21 Nov 80  1.0  John Strait
+{ Start file.
+{ }
+
+      RDPS       = 0;  { Parameter Size - number of words of parameters }
+      RDRPS      = 1;  { Result + Parameter Size - RDPS + words of result }
+      RDLTS      = 2;  { Local + Temporary Size - total words of locals }
+      RDEntry    = 3;  { Entry point address - byte offset from code base }
+      RDExit     = 4;  { Exit point address - byte offset from code base }
+      RDLL       = 5;  { Lexical Level }
+      RDFree6    = 6;  { unused }
+      RDFree7    = 7;  { unused }

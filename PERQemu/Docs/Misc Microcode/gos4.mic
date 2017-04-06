@@ -1,0 +1,10 @@
+$perq1a
+$nobase
+
+              place(30000, 33777);
+              
+              constant(adr20300, 20300);
+              
+adr30310:     if TRUE gotoS(adr20300), loc(30310);
+
+END;

@@ -1,0 +1,335 @@
+        TITLE    "SPEECH IN Version 1.0"
+
+ 
+
+;********* Company Confidential
+;********* Not for public release
+;********* 
+;********* Copyright (C) 1981
+;********* Three Rivers Computer Corporation
+;********* 720 Gross Street
+;********* Pittsburgh, PA  15224
+;********* (412) 621-6250
+
+
+
+;
+;
+;INPUT/OUTPUT DEVICES
+;
+
+
+SIODA   EQU     00H                    ;SIO DATA CHANNEL A
+SIOCA   EQU     01H                    ;SIO CONTROL CHANNEL A
+SIODB   EQU     02H                    ;SIO DATA CHANNEL B
+SIOCB   EQU     03H                    ;SIO CONTROL CHANNEL B
+
+
+CTC0    EQU     20H                    ;CTC CHANNEL 0
+CTC1    EQU     21H                    ;CTC CHANNEL 1
+CTC2    EQU     22H                    ;CTC CHANNEL 2
+CTC3    EQU     23H                    ;CTC CHANNEL 3
+
+
+
+
+;
+;
+;RAM ADDRESSES
+;
+
+
+
+        org  200H
+        
+        
+
+        BLOCK   40H            ;THE STACK AREA
+STACK   BLOCK    0
+
+
+ 
+gpicnt   byte 0
+dmacntt  byte 0
+ctc0cnt  byte 0
+bstcnt   byte 0
+
+RCVOVRUN   byte 0
+
+BufPtr  word Buffer
+
+
+
+        ORG 400H
+Buffer  BYTE 0           ;Start of 31K buffer in Tektronix memory.
+ 
+ 
+;
+;
+;THE STARTING ADDRESS 
+;
+        ORG     0
+        DI                      ;ENSURE THAT INTERRUPTS ARE OFF
+        JP      BEGIN           ;AND GO TO THE REAL BEGINNING
+
+;
+;THE INTERRUPT VECTORS
+;
+
+GPIVEC  EQU  10Q
+        ORG     GPIVEC          ;GPIB
+        WORD    GPISRV
+
+
+        ORG     /20Q            ;SIO VECTOR MUST BE ON A MULTIPLE OF 20Q
+SIOVEC  WORD    SIOBTR          ;CHANNEL B TRANSMIT
+        WORD    SIOBST          ;CHANNEL B STATUS CHANGE (60HZ CLOCK)
+        WORD    SIOBRC          ;CHANNEL B RECEIVE CHARACTER (NOT USED)
+        WORD    SIOBSP          ;CHANNEL B SPECIAL (NOT USED)
+        WORD    SIOATR          ;CHANNEL A TRANSMIT
+        WORD    SIOAST          ;CHANNEL A STATUS CHANGE
+        WORD    SIOARC          ;CHANNEL A RECEIVE CHARACTER
+        WORD    SIOASP          ;CHANNEL A SPECIAL
+
+        ORG     /10Q            ;CTC VECTOR MUST BE ON A MULTIPLE OF 10Q
+CTCVEC  WORD    CTC0SR          ;CTC 0 (NOT USED)
+        WORD    CTC1SR          ;CTC 1 (NOT USED)
+        WORD    CTC2SR          ;CTC 2 (NOT USED)
+        WORD    CTC3SR          ;CTC 3 (TABLET/VOLTAGE/TEMPERATURE)
+
+DMAVEC  WORD    DMASRV          ;DMA
+
+
+ 
+
+;
+;
+;
+;POWER UP SEQUENCE
+;
+        ORG     40H
+BEGIN   LD      SP,STACK        ;SET UP THE STACK
+        IM      2               ;SET INTERRUPT MODE 2
+        SUB     A               ;GET A ZERO
+        LD      I, A            ;LOAD I REGISTER
+        Call CTCInit
+        CALL SIOBIN             ;INITIALIZE SIO CHANNEL B
+
+        EI                      ;OK FOR INTERRUPTS NOW
+;
+;
+;THE MAIN LOOP OF THE PROGRAM
+;
+
+
+
+idleloop jp idleloop
+
+Stop    jp Stop          ;Come here when Buffer is filled.
+
+
+
+;
+CTCInit push af
+        
+        ld a, lo(CTCVEC)
+        out (CTC0), a
+        
+        ld a, 3       ;will do reset + disable
+        out (CTC1), a
+        out (CTC2), a
+        out (CTC3), a
+
+        ld a, 17H       ;16 Khz for SIO
+        out (CTC0), a
+        ld a, 9
+        out (CTC0), a
+        
+        pop af
+        ret
+                        
+
+;
+;
+;SIO CHANNEL B INITIALIZATION
+;
+SIOBIN  SUB     A               ;Get a zero.
+        LD      (RCVOVRUN),A    ;No receive overrun.
+ 
+        ld  hl, Buffer
+        ld  (BufPtr), hl        ;Point to beginning of Buffer
+         
+
+        LD      HL,SIOBIN2      ;Set up block move to SIO B Control.
+        LD      C,SIOCB
+        LD      B,SIOBIN3-SIOBIN2
+        OTIR
+ 
+
+
+        ld a, 18H
+        out  (SIOCA), a   ;Ch A Reset
+
+
+        
+        RET
+        
+SIOBIN2 BYTE    18H             ;CHANNEL RESET
+        BYTE    2,LO(SIOVEC)    ;SET INTERRUPT VECTOR
+        byte    10H             ;Reset Ext/Stat Ints
+        BYTE    4,30H           ;X1 CLOCK, EXT SYNC
+        BYTE    6,55H           ;Tx sync char
+        BYTE    7,55H           ;Rx sync char
+        BYTE    3,0C1H          ;Rx 8 bit chars, Rx Enable
+        BYTE    5,0E2H          ;TX 8 BIT CHARS, Tx Disable, DTR, RTS
+        byte    10H             ;Reset Ext/Stat Ints
+        BYTE    1,1DH           ;Rx INTERRUPTS, STATUS AFFECTS VECTOR, EXT INT ENB
+SIOBIN3 BLOCK   0
+
+
+
+       
+                     
+       
+       
+
+;
+;
+;SIO CHANNEL B RECEIVER INTERRUPT 
+;
+SIOBRC  PUSH    AF
+
+        IN      A,(SIODB)       ;Get the char.
+        Call    DUMPIT          ;Store it in Buffer.
+                
+        POP     AF
+        EI
+        RETI
+
+
+        
+
+
+;
+;
+;SIO Channel B Special Receive Interrupt
+;
+SIOBSP  PUSH    AF
+        PUSH    HL
+        
+        LD      HL,RCVOVRUN     ;Point to the flag.
+        INC     (HL)            ;Count another Rx overrun!
+
+        IN      A,(SIODB)       ;Get the bad char.
+        Call    DUMPIT          ;Store it anyway.
+        
+        LD      A,60Q           ;Error Reset to SIO B.
+        OUT     (SIOCB),A
+        POP     HL
+        POP     AF
+        EI
+        RETI
+        
+        
+       
+        
+        
+                
+;
+;
+ 
+DUMPIT push hl
+       LD HL, (BufPtr)
+       ld (hl), a        ;Put the char in the buffer.
+ 
+       INC hl            
+       ld (BufPtr), hl    ;Point to next element of buffer.
+ 
+       LD A, 80H
+       CP h               ;Check for full buffer (32K addr space)
+       JP NZ, OUTT
+       Call Stop          ;We have filled Tektronix memory.
+ 
+OUTT   pop hl
+       RET
+ 
+ 
+ 
+;
+;
+;SIO CHANNEL B STATUS CHANGE INTERRUPT SERVICE 
+;
+SIOBST  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    HL
+
+        ld   hl, bstcnt
+        inc (hl)
+        
+        ld      A, 20Q             ;RESET EXT/STAT INT.
+        OUT     (SIOCB),A       ;Do it.
+
+        POP     HL              ;RESTORE
+        POP     AF
+        EI
+        RETI
+ 
+ 
+ 
+
+SIOBTR          nop              ;CHANNEL B TRANSMIT
+SIOATR          nop              ;CHANNEL A TRANSMIT
+SIOAST          nop              ;CHANNEL A STATUS CHANGE
+SIOARC          nop              ;CHANNEL A RECEIVE CHARACTER
+SIOASP          nop              ;CHANNEL A SPECIAL
+wrong       jp wrong         ;loop and do not return
+            ;EI
+            ;RETI
+            
+             
+ 
+       
+gpisrv push hl
+       ld hl, gpicnt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+       
+dmasrv push hl
+       ld hl, dmacntt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+       
+       
+ctc1sr block 0 
+ctc2sr block 0 
+ctc3sr ei 
+       reti
+       
+       
+       
+       
+ctc0sr push hl
+       push af
+       ld hl, ctc0cnt
+       inc (hl)
+       ld a, 17H
+       out (CTC0), a
+       ld a, 9
+       out (CTC0), a
+       pop af
+       pop hl
+       ei 
+       reti
+       
+       
+       
+       
+       
+
+        END
+

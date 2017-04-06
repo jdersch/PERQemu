@@ -1,0 +1,222 @@
+! NextOp - PERQ NextOp Diagnostic.
+! Copyright (C) Three Rivers Computer Corporation, 1981.
+
+! 21 Aug 81  JPS  V1.1  Add copyright notice and change history.
+
+
+!            Test comprises of the following.
+!
+!              a) Test if the BPC counter can be incremented correctly
+!              b) Test if the BPC counter can be set to the right values
+!              c) For all positions in the file
+!                     For all patterns
+!                         All locations in the op file := pattern
+!                         Loc I+1 of Opfile := Not Pattern
+!                         BPC := I
+!                         RA := NextOp;
+!                         RB := NextOp;
+!                         RA - RB;
+!                         IF NEQ Error;
+!                     END;
+!                 END;
+!
+! Set up R0 := 1 for loop on error
+
+
+! Some register definitions.
+
+          Define(Pat,100);
+          Define(Tmp1,101);
+          Define(Tmp2,102);
+          Define(Tmp3,111);
+          Define(BPCVal,103);
+          Define(OpLoc,104);
+          Define(Expect,105);
+          Define(Got,106);
+          Define(RPat,107);
+          Define(RComp,110);
+          Define(OpData,112);
+          Define(Switch,0);
+          Define(Error,370);
+          
+! some constants
+
+          Constant(Breakpoint,7401);
+          Constant(LoopOnErr,1);
+          Constant(MemBuf,100);
+          
+! Error routine
+
+ErrRout:  Switch AND LoopOnErr;
+          If NEQ Return;
+          GoTo(BreakPoint);
+
+!  Refill routine never used.
+
+Refill:   Error := 200, GoTo(ErrRout);
+
+! Routine to fill memory buffer with Pattern except at OpLoc + 1 where we
+! put in the complement of the pattern.
+
+Memfill:Pat, LeftShift(10);
+        Tmp1 := Shift AND 177400;          ! throw out bottom bits
+        Tmp1 := Tmp1 OR Pat;               ! or the pattern into bottom byte
+
+! Now pattern is in both the top and the bottom byte of Tmp1
+        
+        MA := MemBuf, Store4;
+        Tmp1;
+        Tmp1;
+        Tmp1;
+        Tmp1;                              ! Fill memory with pattern
+        
+! Now the byte at OpLoc + 1 has to be Complemented.
+
+        Tmp2 := OpLoc;
+        Tmp2 := Tmp2  AND 7;               ! knock out bogus bits
+        Tmp3 := 177400;
+        Tmp2 := Tmp2 + 1;
+        If Odd GoTo(HiByte);
+        Tmp3 := 377;
+HiByte: Tmp3 := Tmp3 XOR Tmp1;             ! Flip the correct byte
+        Tmp2, RightShift(1);               ! shift to get the word to changed
+        MA := Shift + MemBuf,Store;
+        MDO := Tmp3;
+        Return;
+        
+! Main routine.
+! First see if BPC can be loaded from the ALU. Verify this from UState and
+! also Checking the OpFile.
+
+Main:   MA := MemBuf,Store4, Loc(2400);    ! set up 8 bytes with 0:7
+        MDO := 400;
+        MDO := 1402;
+        MDO := 2404;
+        MDO := 3406;
+        0;
+        MA := MemBuf, Fetch4;              ! T0
+        BPC := 0;
+        LoadOp;                            ! T2
+        
+        Expect := 0;
+BPCT1:  BPC := Expect;
+        Got := UState AND 17;              ! Check UState for BPC
+        Expect - Got;
+        If EQL GoTo(Cont1);
+        
+! BPC could not be loaded correctly from the ALU.
+
+        Error := 101, Call(ErrRout);
+        GoTo(BPCT1);                       ! Will return here if loop on error
+
+Cont1:  OpData := NextOp;                  ! see if we get the opfile is OK
+        OpData - Expect;
+        IF EQL GoTo(Cont2);
+        
+! Data error or address bits did not get to the Op File.
+
+        Error := 102, Call(ErrRout);
+        GoTo(BPCT1);                       ! Will return here if loop on error
+   
+Cont2:  Expect := Expect + 1;
+        Expect - 10;
+        If EQL GoTo(BPCT1);
+        
+! Now see if BPC can be incremented correctly.
+
+Cnt100: BPC := 0;
+        Expect := 0;
+BPCT2:  Got := NextOp;
+        Expect - Got;
+        If EQL GoTo(Cont3);
+        
+! If we have no match either BPC did not get incremented correclty or
+! there is a data error
+        
+        Error := 103,Call(ErrRout);
+        GoTo(Cnt100);                     ! for looping on error
+        
+Cont3:  Expect := Expect + 1;
+        Expect - 10;
+        If NEQ GoTo(BPCT2);
+        
+! Check if BPC[3] gets to the condition code.
+
+Cnt101: BPC := 7;
+        IF BPC[3] GoTo(Err1);
+        GoTo(Cont4);
+Err1:   Error := 104, Call(ErrRout);      ! BPC[3] set unexpectedly
+        GoTo(Cnt101);                     ! For looping on error
+
+Cont4:  Nextop;
+        If BPC[3] GoTo(Cont5);
+        
+! BPC[3] should have been set
+        Error := 105, Call(ErrRout);
+        GoTo(Cnt101);                     ! for looping on error
+        
+! Now get serious. Try passing all patterns through all the locations in
+! the op file.
+
+Cont5:  OpLoc := 0;
+BPCT3:  Pat := 0;
+BPCT4:  Call(MemFill);              ! Go set up memory buffer
+        MA := MemBuf, Fetch4;
+        BPC := 0;
+        LoadOp;
+        Nop;
+        Nop;
+        Nop;                        ! allow op fifo to fill
+Cnt102: BPC := OpLoc;               ! Set BPC up
+        RPat := NextOp;
+        RComp := NextOp;
+        
+! RPat should contain the pattern and RComp should contain the complement of 
+! the pattern.
+   
+        RPat - Pat;
+        If EQL GoTo(Cont6);
+        
+! Data error.
+        Error := 106, Call(ErrRout);
+        GoTo(Cnt102);               ! for looping on error
+        
+Cont6:  RComp AND Pat;
+        If EQL GoTo(Cont7);
+        
+! Data Error or speed problems.
+
+        Error := 107, Call(ErrRout);
+        GoTo(Cnt102);               ! for looping on error
+        
+! Now do the samething but use the ALU to do a subtract.
+
+Cont7:  BPC := OpLoc;
+        RPat := NextOp;
+        Got := NextOp - RPat;
+        
+! ALU has done a ( Not Pat - Pat) 
+
+        Expect := Not Pat;
+        Expect := Expect AND 377;    ! Throw out top byte
+        Expect := Expect - Pat;         
+        Expect - Got;
+        If EQL GoTo(Cont8);
+        
+! Probable speed troubles
+        Error := 110, Call(ErrRout);
+        GoTo(Cont7);                 ! For looping on error
+        
+Cont8:  Pat := Pat + 1;
+        Pat := Pat AND 377;
+        If NEQ GoTo(BPCT4);
+        
+        OpLoc := OpLoc + 1;
+        OpLoc - 7;
+        IF NEQ GoTo(BPCT3);
+        
+! All done. Return
+
+        Error := 100, GoTo(7401);
+        
+END;

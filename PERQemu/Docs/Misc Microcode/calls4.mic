@@ -1,0 +1,11 @@
+$perq1a
+$nobase
+
+              place(30000, 33777);
+              
+              constant(adr10040, 10040);
+              
+adr30030:     if TRUE CallS(adr10040), loc(30030);
+              Return;
+              
+END;

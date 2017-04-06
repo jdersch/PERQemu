@@ -1,0 +1,952 @@
+
+
+
+
+$Title Integer routines.
+
+! Routine Divide.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Divide forms the quotient of two integers.  A zero divisor causes
+!       the ErrDivZero error.
+!
+! Environment:
+!       tmp = Dividend.
+!       tmp1 = Divisor.
+!
+! Result:
+!       tmp = Quotient.
+!       tmp1 = Dividend modulo Divisor.
+!
+! Calls:
+!       RunError0, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+DIVIDE: tmp1;
+        tmp5:=0, push, if lss Goto (DIVNEG1);   ! sign indicator
+        tmp1;
+DIV0:   tmp10 := tmp, if eql Goto (DIVZERO);
+        tmp, if lss Goto (DIVNEG0);
+        if neq Goto (DIVDO);
+        tmp1:=0,pop;                    ! MAB
+        Return;     ! clear remainder, clear stack      MAB
+DIVDO:  tmp6:=0,leftShift(10);
+        tmp and not 377;
+        if neq Goto (DIV16),tmp;
+        tmp:=Shift and not 377;        !swap bytes
+        Tos:=10,push, Goto(DIVD);
+DIV16:  Tos:=20,push;
+DIVD:   tmp:=tmp + tmp;
+        tmp6 := tmp6 + tmp6, if carry Goto (DIVINC);
+DIVTST: tmp6-tmp1, if IntrPend Goto(DIVINT);
+DIVI:   if lss Goto (DIVT);
+        tmp6:=tmp6-tmp1;
+        tmp:=tmp + 1, if IntrPend Call(VECTSRV);
+DIVT:   Tos:=Tos-1;
+        !Tos;                            ! MAB
+        tmp10, if gtr Goto (DIVD);
+        pop, if lss Goto(DIVNEG3);
+        tmp1:=tmp6, if IntrPend Call(VECTSRV);! remainder
+DIVX:   tmp5;
+        if odd Goto (DIVNEG2);
+        tmp := tmp and AllOnes, pop, Return; ! MAB
+DIVINT: Call(VECTSRV);
+        tmp6 - tmp1, Goto(DIVI);
+DIVNEG0: tmp:=Tos-tmp, if IntrPend Call(VECTSRV);
+DIVNEG: tmp5:=tmp5 + 1, Goto (DIVDO);
+DIVNEG1: tmp1:=Tos-tmp1, if IntrPend Call(VECTSRV);
+        tmp5 := 1,Goto (DIV0);
+DIVNEG2: tmp:=Tos-tmp,pop;              ! MAB
+        tmp := tmp and AllOnes, Return;
+DIVINC: tmp6:=tmp6 + 1,Goto (DIVTST);
+DIVZERO: tmp2 := ErrDivZero, pop, Goto(RunError0);
+DIVNEG3:noop;                           ! MAB
+        tmp1 := Tos - tmp6, Goto(DIVX); ! negate remainder
+
+! routine ExtendByte.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Sign-extend a byte that is known to be negative.  ExtendByte is
+!       not called--it is jumped to.  ExtendByte exits via a NextInst.
+!
+! Environment:
+!       tmp = A byte whose byte-sign is set.
+!
+! Result:
+!       (Tos) = tmp = Input value with upper 8 bits set.
+!
+!-----------------------------------------------------------------------------
+
+ExtendByte: tmp := tmp or 177400;
+        Tos := tmp, NextInst(0);
+
+! Routine MakeBit.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MakeBit makes a word in which a specific bit is set and returns the
+!       bit number.
+!
+! Environment:
+!       (Tos) = x.
+!
+! Result:
+!       Stack popped.
+!       tmp = x.
+!       tmp5 = Word with bit (x mod 16) set.
+!
+!-----------------------------------------------------------------------------
+
+MakeBit: tmp := Tos, Pop, LeftShift(4);      ! x
+        tmp5 := Shift and 360;
+        tmp5 or 17, ShiftOnR;
+        1;                                   ! form word bit (x mod 16)
+        tmp5 := Shift, Return;
+
+! Routine MakeMask.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MakeMask makes a right mask of a certain number of bits set.  The
+!       number of bits is in the range 0..15.  If a 16 bit mask is requested,
+!       MakeMask returns a zero word instead.  The Set opcodes depend on this
+!       routine doing this bizarre thing.
+!
+! Environment:
+!       tmp and 17 = One less than the number of bits desired.
+!
+! Result:
+!       tmp unchanged.
+!       tmp2 = Right mask.
+!       tmp2 on R bus.
+!
+!-----------------------------------------------------------------------------
+
+! make a right mask of tmp+1 bits in tmp2 unless tmp=15 in which case make
+! a mask of zero bits.
+MakeMask: tmp + 1, LeftShift(4);             ! number of bits
+        Shift + 17, ShiftOnR;                ! form a LeftShift(n)
+        AllOnes;
+        tmp2 := not Shift, Return;           ! make the mask
+
+! Routine Multiply (Mult).
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Multiply forms the lower 16 bits of the product of two integers.
+!
+! Environment:
+!       tmp = Multiplier.
+!       tmp1 = Multiplicand.
+!
+! Result:
+!       tmp = Product.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Multiply: Tos := 0, Push, Loc(Mult);
+        Nop;                                 ! placer, allow page escape
+!       tmp6 := tmp, LeftShift(0);
+        tmp, LeftShift(0);
+        tmp5 := Shift xor tmp1,              ! tmp5 has sign bit of result
+                                if Geq Goto(Mul1);  ! if tmp >= 0
+!       tmp6 := Tos - tmp, if IntrPend Call(VectSrv);  ! absolute value of tmp
+        tmp := Tos - tmp, if IntrPend Call(VectSrv);  ! absolute value of tmp
+Mul1:   tmp1;
+Mul2:   tmp - tmp1, if Geq Goto(Mul3);       ! if tmp1 >= 0
+        tmp1 := Tos - tmp1, Goto(Mul2);      ! absolute value of tmp1
+
+!       tmp6 = smaller of tmp and tmp1.
+!       arrange tmp and tmp1 so than tmp <= tmp1.
+
+!Mul3:  if Leq Goto(Mul4), tmp := 0;
+Mul3:   if Leq Goto(Mul4), tmp6 := tmp;
+
+!       Exchange tmp and tmp1.
+
+!       tmp6 := tmp6 xor tmp1;
+!       tmp1 := tmp1 xor tmp6;
+!       tmp6 := tmp6 xor tmp1;
+        tmp := tmp1;
+        tmp1 := tmp6;
+        tmp6 := tmp;
+!remove this later
+Mul4:   tmp := 0;                            ! initialize product = 0
+        tmp6, RightShift(1);                 ! shift multiplier right
+Mul5:   tmp6 := Shift, if Odd Goto(Mul6);    ! if bit set in multiplier
+        tmp1 := tmp1 + tmp1,                 ! shift multiplicand left
+                             if eql Goto(Mul9);  ! if multiplier is zero
+        tmp6, Goto(Mul5);                  ! shift multiplier right
+
+!       Accumulate partial product.
+
+Mul6:   tmp := tmp + tmp1, if IntrPend Goto(Mul8);  ! accumulate product
+Mul7:   tmp1 := tmp1 + tmp1;                 ! shift multiplicand left
+        !*****, if lss Goto(Mul11);
+        tmp6, Goto(Mul5);
+
+!       Serve an interrupt.
+
+Mul8:   Call(VectSrv);
+        RightShift(1);
+        tmp, Goto(Mul7);
+
+!       Return the result.
+
+Mul9:   tmp5;                                ! check sign of result
+        tmp := tmp and AllOnes, if Lss Goto(Mul10);  ! if result is negative
+
+!       Set a positive result.
+
+        Pop, Return;
+
+!       Set a negative result.
+
+Mul10:  tmp := tos - tmp, Pop;               ! negate result
+        tmp := tmp and AllOnes, Return;
+
+!       Signal integer multiply overflow.
+
+! ***** Mul11:  tmp2 := ErrMulOvfl, Goto(RunError0);   ! multiply overflow
+
+
+
+
+$Title Multiple word routines.
+
+! Routine CmpMW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CmpMW compares two word arrays.  After the call to CmpMW, the
+!       value on the top of the stack is true iff the arrays are equal.
+!
+! Environment:
+!       Next byte in the opcode/operand stream = Length.
+!       If Length <> 0:
+!            (Tos) = Word address of WordArray0.
+!            (Tos-1) = Word address of WordArray1.
+!       If Length = 0:
+!            (Tos) = Length of word arrays.
+!            (Tos-1) = Word address of WordArray0.
+!            (Tos-2) = Word address of WordArray1.
+!
+! Result:
+!       Length removed from opcode/operand stream.
+!       If Length <> 0:
+!            Stack popped once.
+!       If Length = 0:
+!            Stack popped twice.
+!       (Tos) = WordArray0 = WordArray1.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+CmpMW:  tmp := NextOp;                      ! get length
+        if Neq Goto(CmpMW1);                ! if non-zero length byte
+        tmp := Tos, Pop;                    ! get length from expression stack
+CmpMW1: tmp1 := Tos + SB, Fetch;            ! pre-fetch word from array 0 
+        Pop;
+        Nop;                                !***** MAB
+        Tos := Tos + SB, Goto(CmpMW3);      ! bias address of array 1
+
+CmpMW2: If Leq Goto(CmpMW5);                ! if done
+        tmp1 := tmp1 + 1, Fetch;            ! fetch next word of array 0
+CmpMW3: tmp2 := Mdi;                        ! save word from array 0
+        MA := Tos, Fetch;                   ! fetch next word of array 1
+        Tos := Tos + 1;
+        tmp10 := Mdi xor tmp2, if IntrPend Goto(CmpMW6);  ! compare
+CmpMW4: If Eql Goto(CmpMW2), tmp := tmp - 1;  ! if equal, keep going
+        Tos := 0, Return;                   ! not equal, set false
+
+CmpMW5: Tos := 1, Return;                   ! equal, set true
+
+!       Serve an interrupt.
+
+CmpMW6: Call(VectSrv);
+        tmp10, Goto(CmpMW4);
+
+! Routine MoveMem.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MoveMem is used to move blocks of non-overlapping words.
+!
+! Environment:
+!       (Tos) = SrcAddr = First address of source block.
+!       dst = DstAddr = Last address of destination block.
+!       tmp = N.
+!
+! Result:
+!       tmp = -1.
+!       Memory[DstAddr-N+1] = Memory[SrcAddr+0].
+!       Memory[DstAddr-N+2] = Memory[SrcAddr+1].
+!          ...
+!       Memory[DstAddr-1]   = Memory[SrcAddr+N-2].
+!       Memory[DstAddr-0]   = Memory[SrcAddr+N-1].
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+MoveMem: tmp := tmp - 1, if IntrPend Goto(MoveMem2);
+MoveMem1: if Lss Return;
+        Tos + tmp, Fetch;                    ! t3
+        Nop;                                 ! t0
+        Nop;                                 ! t1
+        dst - tmp, Store;                    ! t2
+        Mdi, Goto(MoveMem);                  ! t3
+
+MoveMem2: Call(VectSrv);
+        tmp, Goto(MoveMem1);
+
+
+
+
+$Title Opcode/operand file routines.
+
+! Routine AdjustPC.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       AdjustPC finishes the execution of most jump instructions.  It is
+!       not called, rather it is jumped to.  When AdjustPC finishes it
+!       exits to RefillJmp.
+!
+! Environment:
+!       JmpOffset = Signed offset to add to the PC.
+!
+! Result:
+!       PC updated.
+!
+! Calls:
+!       VectSrv, RefillJmp.
+!
+!-----------------------------------------------------------------------------
+
+AdjustPC: tmp := UState and 17, if intrpend Call(VectSrv);  ! get BPC
+        tmp := tmp + JmpOffset, Field(0,3);  ! form byte offset from UPC
+        BPC := Shift,                        ! low three bits of byte address
+                      if Lss Goto(Adjust1);  ! if byte offset < 0
+        tmp and not 7, RightShift(1);
+        UPC := shift + UPC, Goto(RefillJmp); ! update quad address
+
+!       Jumping backward.
+
+Adjust1: tmp and not 7, RightShift(1);
+        tmp := Shift or SignXtnd;            ! quad offset sign extended
+        UPC := UPC + tmp, Goto(RefillJmp);   ! update quad address
+
+! Routine Refill.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Refill refills the opcode/operand file when a NextOp is done and
+!       file is empty.  Refill is jumped to and returns via a ReviveVictim.
+!
+! Environment:
+!       BPC[3] true.
+!
+! Result:
+!       UPC advanced by 4.
+!       Opcode/operand file filled.
+!       BPC = 0.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Routine RefillOp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RefillOp refills the opcode/operand file when a NextInst is done and
+!       the file is empty.  RefillOp corresponds to Opcode(377).  RefillOp
+!       exits via a NextInst.
+!
+!       RefillOp checks for Pascal level interrupts and serves the one with
+!       the highest priority.
+!
+! Environment:
+!       BPC[3] true.
+!
+! Result:
+!       UPC advanced by 4.
+!       Opcode/operand file filled.
+!       BPC = 0.
+!
+! Calls:
+!       UserSrv, VectSrv.
+!
+! Design:
+!       We don't increment UPC at location 0 (Opcode 377) because location
+!       0 is executed repeatedly when the boot button is pressed, and we
+!       don't want to destroy UPC.
+!
+!-----------------------------------------------------------------------------
+
+! Routine RefillJmp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RefillJmp refills the opcode/operand file to complete a jump
+!       instruction.  It is assumed that UPC and BPC are set to the
+!       desired values.  RefillJmp exits via a NextInst.
+!
+!       RefillJmp checks for Pascal level interrupts and serves the one with
+!       the highest priority.
+!
+! Environment:
+!       UPC and BPC set to target address.
+!
+! Result:
+!       Opcode/operand file filled.
+!
+! Calls:
+!       UserSrv, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Routine RefillIndivisible.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RefillIndivisible is used to refill the opcode/operand file when it
+!       it is empty and it is necessary to have the next Q-code be indivisible
+!       from the current one.  RefillIndivisible exits via a NextInst.
+!
+!       RefillIndivisible differs from RefillOp in that it does not check
+!       for Pascal level interrupts.
+!
+!       RefillIndivisible is called in the following way.
+!
+!           if BPC[3] Goto(RefillIndivisible);
+!           NextInst(0);
+!
+! Environment:
+!       BPC[3] true.
+!
+! Result:
+!       UPC advanced by 4.
+!       Opcode/operand file filled.
+!       BPC = 0.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Refill: UPC := UPC + 4, Fetch4;              ! t3  advance UPC and fetch
+        BPC := 0;                            ! t0  reset BPC
+        LoadOp, if IntrPend Call(VectSrv);   ! t1  fill the opcode/operand file
+!       Where := Where or 3, Call(5000);     !!!! use with CheckPC !!!!
+        ReviveVictim;                        ! return to caller
+
+Opcode(REFILLOP), UPC + 4, Fetch4;           ! t3  fetch next quad
+        BPC := 0;                            ! t0
+        UPC := UPC + 4, LoadOp,              ! t1  advance UPC and fill
+                                if IntrPend Call(VectSrv);
+        UserIntr;                            ! t2
+        if Gtr Goto(UserSrv);                ! t3  if Pascal level interrupts
+Refill1:
+!       Where := Where or  2, call(5000);    !!!! use with CheckPC !!!!
+        NextInst(0);                         ! t0 (RefillOp), first data ready
+                                             ! t2 (RefillJmp), all data ready
+
+RefillJmp: UPC, Fetch4;                      ! t3
+        UserIntr;                            ! t0
+        LoadOp, if Gtr Goto(UserSrv);        ! t1
+        Nop, if IntrPend Call(VectSrv);      ! t2, data starts here
+        Nop;                                 ! t3, 2nd word in opfile
+        Nop;                                 ! t0, 3rd word in opfile
+        Goto(Refill1);                       ! t1, 4rd word in opfile
+
+
+RefillIndivisible: UPC := UPC + 4, Fetch4;   ! t3  advance UPC and fetch
+        BPC := 0;                            ! t0
+        LoadOp, if IntrPend Call(VectSrv);   ! t1  fill opcode/operand file
+        Nop;                                 ! t2
+!       Where := Where or 4, call(5000);     !!!! use with CheckPC !!!!
+        NextInst(0);                         ! t0  first data ready
+
+! Routine WordParm.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       WordParm gets a one word (two byte) parameter from the operand
+!       stream for the interpreter of a Q-code.  The high byte is left on
+!       the shifter output, so the normal calling sequence is
+!
+!            Call(WordParm);
+!            tmp := tmp + Shift;             ! form word parameter
+!
+! Environment:
+!       Two bytes in the operand stream.
+!
+! Result:
+!       tmp = Low byte.
+!       tmp1 = High byte.
+!       R = High byte shifted up into the high byte.
+!
+!-----------------------------------------------------------------------------
+
+WordParm: tmp := NextOp;                     ! get the low byte
+        tmp1 := NextOp;                      ! get the high byte
+        tmp1, LeftShift(10), Return;         ! shift the high byte
+
+
+
+
+$Title Real number routines.
+
+! Routine RealCmp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RealCmp does a portion of a comparison of two real numbers (two
+!       double words) for exact equality.
+!
+! Environment:
+!       tmp = High order word of first real number.
+!       (Tos) = Low order word of first real number.
+!       (Tos-1) = High order word of second real number.
+!       (Tos-2) = Low order word of second real number.
+!
+! Result:
+!       Stack popped twice.
+!       tmp = High order word of first real number.
+!       tmp1 = Low order word of first real number.
+!       (Tos) = Low order word of second real number.
+!       The Xor of the two high order words is left on the R bus.
+!
+!-----------------------------------------------------------------------------
+
+RealCmp:tmp1 := Tos, Pop;
+        Tos xor tmp, Pop, Return;
+
+
+
+
+$Title Set routines.
+
+! Routine SetAdj.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetAdj adjusts two sets on the top of the stacks so that the lower
+!       set has a length that is greater than or equal to the length of the
+!       upper set.  It does this by inserting zero words into the lower
+!       set if it is shorter.
+!
+! Environment:
+!       (Tos) = L0 = Length of Set0.
+!       (Tos-1) = L1 = Length of Set1.
+!       Top L0 words on the memory stack = Set0.
+!       Next L1 words on the memory stack = Set1.
+!
+! Result:
+!       stack popped.
+!       tmp3 = nL0 = New length of Set0.
+!       tmp2 = (Tos) = nL1 = New length of Set1.
+!       nL0 >= nL1.
+!       Top nL0 words on the memory stack = Set0.
+!       Next nL1 words on the memory stack = Set1.
+!       tmp4 = Address of Set1 in memory stack.
+!       nL0 is on the R bus.
+!
+! Calls:
+!       VectSrv, ChkStk, SetMovUp, SetZero, StkOv.
+!
+!-----------------------------------------------------------------------------
+
+SetAdj: tmp3 := Tos and AllOnes, Pop;        ! L0=nL0
+        Tos := tmp1 := Tos and AllOnes;      ! L1  !***** BR
+        tmp1 := tmp1 - tmp3, LoadS(SetAdj2); ! difference  !***** BR
+        tmp2 := Tos, if Geq Goto(SetAdj1);   ! L1=nL1 if Set1 >= Set0
+        tmp := Tos + tmp3;                   ! amount to copy
+        Tos := zero - tmp1, Push;            ! make difference positive
+        tmp1 := Tos, if IntrPend Call(VectSrv);  ! difference
+        tmp10 := Tos, Call(ChkStk);          ! be sure there's enough room
+        Tos := TP - tmp;                     ! smallest source address
+        TP := TP + tmp1;                     ! new top of memory stack
+        dst := Tos + tmp1, Call(SetMovUp);   ! largest destination address
+        tmp2 := tmp3, Pop;                   ! nL1=nL0
+        Tos := tmp2, Call(SetZero);          ! zero words to adjust set size
+SetAdj1: tmp4 := TP, if IntrPend Call(VectSrv);
+        tmp4 := tmp4 - tmp3;                 ! address of Set1
+        tmp3, Return;                        ! put nL0 on result
+
+!       There's not enough room on the stack.
+
+SetAdj2: Tos := tmp3;
+        tmp11 := 1, Goto(StkOv);             ! make a stack overflow
+
+! Routine SetComp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetComp is used to compare two sets in the stack.  The set which
+!       is deeper in the stack must have a length which is greater than
+!       or equal to the length of the upper set.  If the sets have different
+!       sizes, the unmatched words of the longer set are not compared.
+!       SetZChk should be called after SetComp if these words are significant.
+!
+!       For each pair of words in the sets, SetComp gets a word of the upper
+!       set (right operand) into tmp, fetches the corresponding word of the
+!       lower set (left operand), and jumps to a comparison routine which
+!       is specified by the 2910 S register.  Thus the normal calling
+!       sequence is:
+!
+!                Tos := 1, LoadS(Tag);    ! assume true
+!                Call(SetComp);
+!                if <remaining non-zero words change the result> Call(SetZChk);
+!
+!           Tag: Mdi <op> tmp;            ! compare a pair of words
+!                if <cnd> Goto(SetComp);  ! if condition satisfied
+!                Tos := 0, Return;        ! set false and quit
+!
+!    or:
+!
+!                Tos := 0, LoadS(Tag);    ! assume false
+!                Call(SetComp);
+!                if <remaining non-zero words change the result> Call(SetZChk);
+!
+!           Tag: Mdi <op> tmp;            ! compare a pair of words
+!                if <cnd> Goto(SetComp);  ! if condition not yet satisfied
+!                Tos := 1, Return;        ! set true and quit
+!
+! Environment:
+!       tmp3 = Length of upper set.
+!       tmp2 = Length of lower set.
+!       TP = Highest address of upper set.
+!       tmp4 = Highest address of lower set.
+!       S = Address of routine to compare one word of the set.
+!       (Tos) = Assumed truth value.
+!
+! Result:
+!       (Tos) = 0 or 1.
+!       (Tos) on the R bus.
+!       TP = Undefined (trashed).
+!       tmp3 = Undefined (trashed).
+!       tmp4 = Address of unchecked words in lower (longer) set.
+!       tmp2 = Number of unchecked words in lower (longer) set.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+SetComp: TP, Fetch;                          ! t3
+        tmp3 := tmp3 - 1, if IntrPend Goto(SetComp1);  ! t0
+        Tos, if Lss Return;                  ! t1
+        tmp := Mdi;                          ! t2
+        tmp4, Fetch;                         ! t3
+        tmp4 := tmp4 - 1;                    ! t0
+        TP := TP - 1;                        ! t1
+        tmp2 := tmp2 - 1, GotoS;             ! t2
+!       Mdi <op> tmp;                        ! t3  compare a pair of words
+!       if <cnd> Goto(SetComp);              ! t0  condition not yet satisfied
+!       Tos := 1, Return;                    ! t1  set true and quit
+
+!       Serve an interrupt.
+
+SetComp1: Call(VectSrv);
+        tmp3 := tmp3 + 1, Goto(SetComp);
+
+! Routine SetMovUp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetMovUp moves a block of words toward a higher address.  The source
+!       and destination are allowed to overlap.
+!
+! Environment:
+!       (Tos) = Smallest source address - 1.
+!       dst = Smallest destination address - 1.
+!       tmp = Number of words to move.
+!
+! Result:
+!       Memory[(Tos)+1..(Tos)+tmp] moved to Memory[dst+1..dst+tmp].
+!       tmp = 0.
+!       (Tos) unchanged.
+!       dst unchanged.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Routine SetMovDown.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetMovDown moves a block of words toward a lower address.  The source
+!       and destination are allowed to overlap.
+!
+! Environment:
+!       (Tos) = Largest source address + 1.
+!       dst = Largest destination address + 1.
+!       tmp = Negative of the number of words to move.
+!
+! Result:
+!       Memory[(Tos)-1..(Tos)+tmp] moved to Memory[dst-1..dst+tmp].
+!       tmp = 0.
+!       (Tos) unchanged.
+!       dst unchanged.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+SetMovUp:tmp10 := 1, Goto(SetMov1);          ! increment = 1
+
+SetMovDown:tmp10 := not 0;                   ! increment = -11
+SetMov1: Tos + tmp, Fetch;                   ! t3
+        Nop;                                 ! t0
+        Nop;                                 ! t1
+        dst + tmp, Store;                    ! t2
+        Mdo := Mdi, if IntrPend Goto(SetMov3);  ! t3
+SetMov2:tmp := tmp - tmp10;
+        if Eql Return; 
+        Goto(SetMov1);
+
+!       Serve an interrupt.
+
+SetMov3: Call(VectSrv);                      ! t0 - makes fetch safe in VECTSRV
+        Goto(SetMov2);
+
+! Routine SetOp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetOp is used to perform an operation on two sets in the stack.
+!       The set which is deeper in the stack must have a length which
+!       is greater than or equal to the length of the upper set.  The
+!       result is stored back into the lower set, and the upper set is
+!       popped from the memory stack.  If the sets have different sizes,
+!       the unmatched words of the longer set are not modified.
+!
+!       For each pair of words in the sets, SetOp gets a word of the
+!       upper set (right operand) into tmp, fetches the corresponding
+!       word of the lower set (left operand), issues a Store command to
+!       the memory controller, and jumps to a routine which computes the
+!       operation for those words.  The routine is specified by the 2910
+!       S register.  Thus the normal calling sequence is:
+!
+!                LoadS(Tag);
+!                Call(SetOp);
+!           ! if remaining, unmatched words change the result, set them to
+!           ! an appropriate value.
+!
+!
+!           Tag: Mdi <op> tmp, Goto(SetOp);  ! compute the operation
+!
+! Environment:
+!       tmp3 = Length of upper set.
+!       tmp2 = Length of lower set.
+!       TP = Highest address of upper set.
+!       tmp4 = Highest address of lower set.
+!       S = Address of routine to compare one word of the set.
+!
+! Result:
+!       Upper set popped from memory stack.
+!       tmp3 = -1.
+!       tmp4 = Address of unmatched words in lower (longer) set.
+!       tmp2 = Number of unmatched words in lower (longer) set.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+SetOp:  TP, Fetch;                           ! t3
+        tmp3 := tmp3 - 1, if IntrPend Goto(SetOp1);! t0
+        tmp := Mdi, if Lss Return;           ! t1
+        tmp4, Fetch;                         ! t2
+        TP := TP - 1;                        ! t3
+        tmp4 := tmp4 - 1;                    ! t0
+        tmp4 + 1, Store, GotoS;              ! t1
+!       Mdi <op> tmp, Goto(SetOp);           ! t2
+
+!       Serve an interrupt.
+
+SetOp1:Call(VectSrv);
+        tmp3 := tmp3 + 1, Goto(SetOp);
+
+! Routine SetSizes.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetSizes subtracts the sizes of two sets from TP in order to compute
+!       the new TP after a set compare instruction.
+!
+! Environment:
+!       tmp3 = Length of one set.
+!       tmp2 = Length of the other set.
+!
+! Result:
+!       tmp6 = TP - tmp3 - tmp2.
+!
+!-----------------------------------------------------------------------------
+
+SetSizes:  tmp6 := TP;
+        tmp6 := tmp6 - tmp3;
+        tmp6 := tmp6 - tmp2, Return;
+
+! Routine SetZChk.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetZChk is used after a set comparison if the presence of non-zero
+!       words remaining in the larger set will alter the result of the
+!       comparison.
+!
+! Environment:
+!       tmp4 = Address of remaining words in longer set.
+!       tmp2 = Number of remaining words in longer set.
+!       (Tos) = Assumed truth value.
+!
+! Result:
+!       (Tos) = Assumed truth value if all words are zero.
+!       (Tos) = Complement of assumed truth value if any words are non-zero.
+!       tmp4 decremented by one more than the number of words remaining.
+!       tmp2 = -1.
+!
+!-----------------------------------------------------------------------------
+
+SetZChk: tmp4, Fetch;
+        tmp4 := tmp4 - 1;
+        tmp2 := tmp2 - 1;
+        Mdi, if Lss Return;
+        if Eql Goto(SetZChk);
+        Tos := Tos xor 1, Return;            ! complement assumed truth value
+
+! Routine SetZero.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetZero inserts zero words into a set.
+!
+! Environment:
+!       tmp1 = N.
+!       dst = Largest address to set zero.
+!
+! Result:
+!       Memory[Dst-0] = 0.
+!       Memory[Dst-1] = 0.
+!          ...
+!       Memory[Dst-N+1] = 0.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+SetZero: tmp1 := tmp1 - 1, if IntrPend Goto(SetZero2);
+SetZero1: if Lss Return;                     ! if done
+        dst - tmp1, Store;                   ! store a zero
+        zero, Goto(SetZero);
+
+!       Serve an interrupt.
+
+SetZero2: Call(VectSrv);
+        tmp1, Goto(SetZero1);
+
+
+
+
+$Title Miscellaneous.
+
+! Routine SetQState.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetQState is used to set internal state of the Q-interpreter.
+!
+! Environment:
+!       tmp and 40 <> 0 if setting SB is desired.
+!       tmp and 100 <> 0 if setting SL is desired.
+!       tmp and 200 <> 0 if setting ExcCS and ExcGP is desired.
+!
+! Result:
+!       One or more of the following:
+!         1. SB reloaded from segment table.
+!         2. SL reloaded from segment table.
+!         3. ExcCS = CS.
+!            ExcGP = GP - SB.
+!            Stack pushed.
+!            (Tos) = ExcCS.
+!
+! Calls:
+!       VectSrv.
+!
+! Design:
+!       It is assumed that the stack segment is resident.
+!
+!-----------------------------------------------------------------------------
+
+Loc(SetQState), src := SS;                   ! stack segment number
+        tmp1 := SB;                          ! save old stack base
+        tmp and 40;
+        src := src + src, if Eql Goto(SetQS1);  ! if not set SB
+        src, Fetch2;                         ! get segment table entry
+        SB := Mdi and not 377;
+        SB := Mdx or SB, if IntrPend Call(VectSrv);  ! new SB
+        tmp1 := tmp1 - SB;                   ! amount SB has moved
+        TP := TP - tmp1;                     ! adjust interesting pointers
+        AP := AP - tmp1;
+        GP := GP - tmp1;
+        LP := LP - tmp1;
+        SL := SL - tmp1;
+SetQS1: tmp and 100;
+        if Eql Goto(SetQS2);                 ! if not set SL
+        src + 1, Fetch;                      ! get segment size
+        Mdi and not 17, LeftShift(4);
+        SL := Shift + 400;                   ! size field in SAT is off by one
+        SL := SL + SB;
+        SL := SL - StackLSlop;               ! new SL
+SetQS2: tmp and 200;
+        if Eql Return;                       ! if not set ExcCS and ExcGP
+        Tos := ExcCS := CS, Push;            ! new ExcCS
+        ExcGP := GP;
+        ExcGP := ExcGP - SB, Return;         ! new ExcGP
+
+! Routine LCA.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LCA loads a controlstore address into the 2910 S register.
+!
+! Environment:
+!       (Tos) = Address with bytes swapped.
+!
+! Result:
+!       Stack popped.
+!       S = Address.
+!
+! Design:
+!       A LoadS(address) instruction is built and written into a location
+!       in this routine.  The LoadS instruction is then executed.  Note that
+!       the High order third of the LoadS instruction is not written because
+!       the address portion of the instruction doesn't touch the High order
+!       third.
+!
+!-----------------------------------------------------------------------------
+
+LCA:    tmp := Tos or not 17, LoadS(LCA2);   ! get ready to write LCA2
+        tmp and not 6060;
+        Tos or 377, WcsMid, if True GotoS(LCA1);  ! write Mid third
+LCA1:   WcsLow, if True GotoS(LCA2);         ! write Low third
+LCA2:   LoadS(0);                            ! *** modified ***
+        Pop, Return;

@@ -1,0 +1,138 @@
+! SHIFTJUMP
+! William C. Hulley - 1 November 1981
+! Copyright 1981
+! Three Rivers Computer Corp.
+! Pittsburgh, Pa.
+
+! Version 1.0  WCH   1 Nov 81 first attempt
+!         1.1  WCH  17 Nov 81 added more tests and error routine
+!         1.2   HC  14 Jul 83 Correct initialisation error 
+!                             Make R0 explicit in GoTo(shift) instructions
+!                             in RightShift section for greater maintainability
+
+! SHIFTJUMP tests the Jump on Shift Output commands by first
+! testing all of the bits in the shifter and then by testing various types
+! of jumps using the shifter output. It does not test of of the jump 
+! types but exercises enough of them to find any gross problems.
+
+! The only return from the program is for a good run on the assumption
+! that is an instruction fails it is most likely to jump to some unused
+! controlstore space.
+
+! The program assumes that both the SHIFT and JUMP diagnostics have 
+! been run and any problems that have occurred are corrected.
+
+! NOTE: it is possible (but not likely) that the program 
+!       could misjump, land up in another part of the program  
+!       and continue on its merry way. For that reason the user should  
+!       place a logic analyzer onto the address bus and watch the 
+!       instruction flow for wrong jumps.
+
+$perq1a
+$nobase
+               define(r0,0);
+               define(r370,370);
+
+$Include CheckSize.micro
+       
+! first routine walks bits through shift output with leftshifts, but doesn't
+! use the shifter for the actual shifting
+       
+Start:         Call (CheckSize),  Loc (2400);
+               R0 := 1;                        ! V1.2   '1' replaces '2'       
+               R0, LeftShift(1);               ! V1.2   '1' replaces '0' 
+               goto(Shift);
+               R0 := R0 + R0, loc(2);        
+               R0, LeftShift(1);            
+               goto(Shift);
+               R0 := R0 + R0, loc(4);          ! * V1.2  These 3 instructions 
+               R0, LeftShift(1);               ! *       never executed in 
+               goto(Shift);                    ! *       V1.1
+               R0 := R0 + R0, loc(10);       
+               R0, LeftShift(1);
+               goto(Shift);
+               R0 := R0 + R0, loc(20);       
+               R0, LeftShift(1);
+               goto(Shift);
+               R0 := R0 + R0, loc(40);       
+               R0, LeftShift(1);
+               goto(Shift);
+               R0 := R0 + R0, loc(100);      
+               R0, LeftShift(1);
+               goto(Shift);
+               R0 := R0 + R0, loc(200);      
+               R0, LeftShift(1);
+               goto(Shift);
+               R0 := R0 + R0, loc(400);      
+               R0, LeftShift(1);
+               goto(Shift);
+
+! now try the same thing walking a bit through using right shifts, but 
+! allow the shifter to do the actual shifting. If SHIFT worked then this
+! should be no problem
+! V1.2  'R0, GoTo(Shift)' replaces 'GoTo(Shift)', making the use of R0 explicit
+!       in cases where the next instruction requires the shifted value of R0
+!       throughout this section.
+
+               R0 := 7000, loc(1000);      
+               R0, RightShift(0);             
+               R0, GoTo(Shift);              
+               R0 := Shift, loc(7000);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(3400);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(1600);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(700);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(340);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(160);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(70);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(34);
+               R0, RightShift(1);
+               R0, GoTo(Shift);
+               R0 := Shift, loc(16);
+               R0, RightShift(1);
+               goto(Shift);
+
+! try to do some calls with shift output as address
+
+               R0 := 51, loc(7);             
+               R0, LeftShift(0);
+               Call(Shift);
+               R0, LeftShift(6), loc(51);
+               Call(Shift);
+               NOP;
+               NOP;
+               R0 := 6100, loc(5100);
+               R0, RightShift(1);
+               Call(Shift);
+
+! for good measure try some conditional jumps 
+               
+               NOP;
+               NOP;
+               R0 := 2347, loc(3040);        ! should get here from last call
+               R0, LeftShift(0);
+NeqLp:         if NEQ goto(Shift);
+               goto(NeqLp);                  ! loop NEQ error
+               R0 := 147, loc(2347);
+               R0, RightShift(1);
+               if EQL goto(Shift);
+               goto(Done);
+               
+EqlLp:         goto(EqlLp), loc(63);         ! loop here for a EQL error
+               
+Done:          R370 := 100;                  ! return to the krnl
+               goto(7401);
+             end;

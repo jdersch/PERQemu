@@ -1,0 +1,11 @@
+
+
+  define(r0,0);
+  define(R1,1);
+  define(R2,2);
+  
+
+Start:     R0,store,loc(4001);
+           goto(start);
+           
+           END;

@@ -1,0 +1,92 @@
+! Tst1.micro
+! written by R. Bishop
+
+
+Place(4000,6000);
+
+define(tmp,0);
+define(tloop,1);
+define(tloop1,2);
+define(adr,3);
+define(data,4);
+define(error,5);
+define(BLoop,6);
+define(Parityhit,7);
+define(parityerr,10);
+define(count,11);
+
+
+
+TallyHo: IOB(147), loc(4000);
+         0, IOB(343);              !disable video interrupts
+         Count := 0;               !services parity interrupts
+        
+        
+Start1: Error := 0;
+        ParityHit := 0;
+        ParityErr := 0;
+        ma := adr, Store;
+        MDO := data;
+        nop;
+        nop;
+        tloop;
+        if neq goto(start1);
+        
+        
+Read:   ma := adr, Fetch, loc(4020);
+        nop;
+        nop;
+        tmp := MDI;
+        Call(ChkParity);
+        if neq goto(Perr);
+        tloop1;
+        if neq goto(Read);
+        tmp - data;
+        if eql goto(Pass);
+        goto(Fail);
+        
+        
+Pass:   Error := 0;
+        BLoop;
+        if neq goto(start1);
+        goto(7401);
+        
+        
+Fail:   Error := 1;
+        goto(7401);
+
+
+         
+ChkParity: if IntrPend Call(VecInt);
+           if IntrPend Call(VecInt);
+           if IntrPend Call(VecInt);
+           if IntrPend Call(VecInt);
+           Count := Count + 1;
+           ParityHit, Return;
+         
+Perr:    Error := 5;
+         goto(7401);         
+
+VecInt: Vector(Z80Int);
+
+Z80Int: IOB(106),return, LOC(5300);
+        
+        return, loc(5304);
+        return, loc(5310);
+        return, loc(5314);
+        return, loc(5320);
+
+        call(7624), loc(5324);
+        return;
+        
+        
+        return, loc(5330);
+        
+
+
+
+ParInt: Parityhit := 1, loc(5334);
+        IOB(147);
+        ParityErr := IOD, Return;
+        
+End;

@@ -1,0 +1,55 @@
+!
+!   BPCTest.Micro
+!
+!   27 Jun 83   V2.0    Hugh Conkey  ICL
+!                       Complete rewrite. Former version odd.
+!
+!   XX YYY 82 ? V1.0    Bill Hulley ?    3RCC
+!
+!
+!   A program to test that BPC works properly in the higher banks of
+!   microcode store. The readable victim latch is also tested
+!
+
+
+
+$perq1a
+$nobase
+
+define(R200,200);
+define(R201,201);
+define(r370,370);
+
+Constant(Breakpoint,7401);
+Constant(VictimAdr,11000);
+
+
+place(11000, 14000);
+
+
+Start:     BPC := 10, loc(12400);         ! Arrange to go to Refill on NextOp
+           R201 := 0;
+           Call(DoIt);
+           R201 := R201 AND 37777;        ! Only bottom 14 bits of the Victim
+                                          ! Latch are valid
+           R201 - VictimAdr;              ! Test for correct value
+           If NEQ goto(Bad);
+           R370 := 100;                   ! Good Result
+           goto(Breakpoint);
+
+
+DoIt:     R200 := NextOp, loc(VictimAdr);  ! Set up the victim latch
+          R201 := 123, Return;             ! Should never execute this
+            
+
+refill:   BPC := 0;                       ! Reset BPC[3]
+          R201 := Victim;                 ! Read the Victim Latch
+          Return;                 ! Reading the latch destroys the value so
+                                  ! we cannot do a ReviveVictim to get back
+
+   
+
+bad:      R370 := 200;
+          goto(Breakpoint);
+
+end;

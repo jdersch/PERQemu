@@ -1,0 +1,91 @@
+$Title Perq.Micro - Perq Q-Code interpreter microcode.
+$NoList
+! Perq Microcode.
+!-----------------------------------------------------------------------------
+!
+!       Perq.Micro - Perq Q-code interpreter microcode.
+!       Horst Mauersberg, Brian Rosen, Miles Barel     ca. 1 Jan 80.
+!       J. P. Strait                     rewritten        21 Nov 80.
+!       Copyright (c) Three Rivers Computer Corporation, 1980.
+!
+! Abstract:
+!
+!-----------------------------------------------------------------------------
+
+! 13 Jan 82   V2.5   WJHansen
+! change , to ; in StkOv (in Perq.Routine.1) to help PrqPlace
+
+! 31 Dec 81   V2.4   M. Kristofic
+! Added floating point.
+
+!  9 Sep 81   V2.3   J. Strait
+! Fix bugs in double precision--see change history in double precision section.
+
+! 14 May 81   V2.2   G. Robertson.
+! 1. Moved IO up to 4400, expanded space for Perq to 2.25K.
+! 2. Added double precision arithmetic operations.
+! 3. Added Spice kernal operations.
+! 4. Added RO and Line as part of interpreter.
+
+
+! 14 Mar 81   V2.1   J. Strait.
+! 1. Begin installing exception handling microcode.
+! 2. Make sure that the SL and RA from the main program are zero, and that the
+!    SL of procedures inside the main program are also zero.  This is needed
+!    for stack searches for exceptions.
+! 3. Minor bug corrections to stack overflow processing.
+! 4. Bug correction to external calls.
+
+! 21 Nov 80   V2.0   J. Strait.
+! Start file.
+
+$Include Perq.Dfs
+$Include IO.Dfs
+
+
+
+
+        Decimal;
+
+
+
+
+$Include Acb.Dfs
+$Include EEB.Dfs
+$Include Except.Dfs
+$Include Perq.QCodes.Dfs
+$Include Rd.Dfs
+$Include VRD.Dfs
+
+
+
+
+        Octal;
+
+
+
+
+        Place(0,4377);
+        Place(6000,6777);
+
+
+$Include Perq.QCode.1
+$Include Perq.QCode.2
+$Include Perq.QCode.3
+$Include Perq.QCode.4
+$Include Perq.QCode.5
+$Include Perq.QCode.6
+$Include Perq.float.mul  ! multiplication routines necessary for floating point
+$Include Perq.QCode.7    ! floating point
+$Include Perq.Routine.1
+$Include Perq.Routine.2
+$Include Perq.Init
+
+
+$Include RO.Micro
+$Include Line.Micro
+
+
+
+
+        end;

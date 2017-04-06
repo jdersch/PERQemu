@@ -1,0 +1,551 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.21022</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{B3DB709C-05FE-4F47-B713-DCD90866221F}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>PERQemu</RootNamespace>
+    <AssemblyName>PERQemu</AssemblyName>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <UpgradeBackupLocation>
+    </UpgradeBackupLocation>
+    <OldToolsVersion>3.5</OldToolsVersion>
+    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;TRACING_ENABLED;SIXTEEN_K</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseVSHostingProcess>true</UseVSHostingProcess>
+    <DocumentationFile>
+    </DocumentationFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType></DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>SIXTEEN_K</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <CodeAnalysisIgnoreGeneratedCode>true</CodeAnalysisIgnoreGeneratedCode>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;TRACING_ENABLED</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>SIXTEEN_K TWO_MEG</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup />
+  <PropertyGroup />
+  <PropertyGroup>
+    <ApplicationIcon>PERQemu.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject>PERQemu.EntryPoint</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="HostInterface\KeyboardMap.cs" />
+    <Compile Include="CPU\ALU.cs" />
+    <Compile Include="CPU\CallStack.cs" />
+    <Compile Include="CPU\CPU.cs" />
+    <Compile Include="CPU\ExtendedRegister.cs" />
+    <Compile Include="CPU\Instruction.cs" />
+    <Compile Include="Debugger\Debugger.cs" />
+    <Compile Include="Debugger\DebuggerPrompt.cs" />
+    <Compile Include="Debugger\DebugAttributes.cs" />
+    <Compile Include="Debugger\Disassembler.cs" />
+    <Compile Include="CPU\Shifter.cs" />
+    <Compile Include="Display\Display.cs" />
+    <Compile Include="Display\VideoController.cs" />
+    <Compile Include="IO\GPIB\BitPadOne.cs" />
+    <Compile Include="IO\GPIB\GPIBBus.cs" />
+    <Compile Include="IO\GPIB\IGPIBDevice.cs" />
+    <Compile Include="IO\PERQLink.cs" />
+    <Compile Include="IO\SerialDevices\RSXFilePort.cs" />
+    <Compile Include="IO\SerialDevices\ISerialDevice.cs" />
+    <Compile Include="IO\SerialDevices\RealPort.cs" />
+    <Compile Include="IO\Z80\IOB\Clock.cs" />
+    <Compile Include="IO\Z80\IOB\Speech.cs" />
+    <Compile Include="IO\Z80\IOB\IZ80Device.cs" />
+    <Compile Include="IO\Z80\IOB\Tablet.cs" />
+    <Compile Include="IO\Z80\IOB\GPIB.cs" />
+    <Compile Include="IO\Z80\IOB\Keyboard.cs" />
+    <Compile Include="IO\Z80\IOB\RS232.cs" />
+    <Compile Include="Memory\RasterOp.cs" />
+    <Compile Include="EntryPoint.cs" />
+    <Compile Include="IO\Z80\IOB\FloppyController.cs" />
+    <Compile Include="IO\HardDisk\ShugartController.cs" />
+    <Compile Include="IO\OIO.cs" />
+    <Compile Include="IO\IOB.cs" />
+    <Compile Include="IO\IIODevice.cs" />
+    <Compile Include="IO\IOBus.cs" />
+    <Compile Include="IO\Z80\IOB\Z80System.cs" />
+    <Compile Include="Memory\Memory.cs" />
+    <Compile Include="Paths.cs" />
+    <Compile Include="PERQSystem.cs" />
+    <Compile Include="PhysicalDisk\RawFloppyDisk.cs" />
+    <Compile Include="PhysicalDisk\PhysicalDisk.cs" />
+    <Compile Include="PhysicalDisk\Sector.cs" />
+    <Compile Include="PhysicalDisk\ShugartDisk.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="QCode\QCode.cs" />
+    <Compile Include="Settings.cs" />
+    <Compile Include="Trace.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="COPYING.txt" />
+    <Content Include="Docs\Changes.txt" />
+    <Content Include="Docs\PNX-SysB.txt" />
+    <None Include="Docs\Misc Microcode\block.mic" />
+    <None Include="Docs\Misc Microcode\bock.mic" />
+    <None Include="Docs\Misc Microcode\boot.mic" />
+    <None Include="Docs\Misc Microcode\bpctes.mic" />
+    <None Include="Docs\Misc Microcode\call1.mic" />
+    <None Include="Docs\Misc Microcode\call2.mic" />
+    <None Include="Docs\Misc Microcode\call3.mic" />
+    <None Include="Docs\Misc Microcode\call4.mic" />
+    <None Include="Docs\Misc Microcode\calls1.mic" />
+    <None Include="Docs\Misc Microcode\calls2.mic" />
+    <None Include="Docs\Misc Microcode\calls3.mic" />
+    <None Include="Docs\Misc Microcode\calls4.mic" />
+    <None Include="Docs\Misc Microcode\callsl.mic" />
+    <None Include="Docs\Misc Microcode\checks.mic" />
+    <None Include="Docs\Misc Microcode\ciosys.mic" />
+    <None Include="Docs\Misc Microcode\ciovfy.mic" />
+    <None Include="Docs\Misc Microcode\circle.mic" />
+    <None Include="Docs\Misc Microcode\clr.mic" />
+    <None Include="Docs\Misc Microcode\cpusiz.mic" />
+    <None Include="Docs\Misc Microcode\crc.mic" />
+    <None Include="Docs\Misc Microcode\csl2.mic" />
+    <None Include="Docs\Misc Microcode\csl3.mic" />
+    <None Include="Docs\Misc Microcode\csl4.mic" />
+    <None Include="Docs\Misc Microcode\cursor.mic" />
+    <None Include="Docs\Misc Microcode\disk5.mic" />
+    <None Include="Docs\Misc Microcode\dispat %282%29.mic" />
+    <None Include="Docs\Misc Microcode\dispat.mic" />
+    <None Include="Docs\Misc Microcode\dmab.mic" />
+    <None Include="Docs\Misc Microcode\dmabte.mic" />
+    <None Include="Docs\Misc Microcode\dmac.mic" />
+    <None Include="Docs\Misc Microcode\dmat.mic" />
+    <None Include="Docs\Misc Microcode\dmates.mic" />
+    <None Include="Docs\Misc Microcode\dmax.mic" />
+    <None Include="Docs\Misc Microcode\dtst.mic" />
+    <None Include="Docs\Misc Microcode\dtstpa.mic" />
+    <None Include="Docs\Misc Microcode\dual.mic" />
+    <None Include="Docs\Misc Microcode\dual16.mic" />
+    <None Include="Docs\Misc Microcode\eecho.mic" />
+    <None Include="Docs\Misc Microcode\eioadd.mic" />
+    <None Include="Docs\Misc Microcode\eioech.mic" />
+    <None Include="Docs\Misc Microcode\eiosys.mic" />
+    <None Include="Docs\Misc Microcode\estack.mic" />
+    <None Include="Docs\Misc Microcode\felix.mic" />
+    <None Include="Docs\Misc Microcode\fill.mic" />
+    <None Include="Docs\Misc Microcode\fill1.mic" />
+    <None Include="Docs\Misc Microcode\fix.mic" />
+    <None Include="Docs\Misc Microcode\flop.mic" />
+    <None Include="Docs\Misc Microcode\fptest.mic" />
+    <None Include="Docs\Misc Microcode\go1.mic" />
+    <None Include="Docs\Misc Microcode\go2.mic" />
+    <None Include="Docs\Misc Microcode\go3.mic" />
+    <None Include="Docs\Misc Microcode\go4.mic" />
+    <None Include="Docs\Misc Microcode\goodby.mic" />
+    <None Include="Docs\Misc Microcode\gos1.mic" />
+    <None Include="Docs\Misc Microcode\gos2.mic" />
+    <None Include="Docs\Misc Microcode\gos3.mic" />
+    <None Include="Docs\Misc Microcode\gos4.mic" />
+    <None Include="Docs\Misc Microcode\gosl1.mic" />
+    <None Include="Docs\Misc Microcode\gosl2.mic" />
+    <None Include="Docs\Misc Microcode\gosl3.mic" />
+    <None Include="Docs\Misc Microcode\gosl4.mic" />
+    <None Include="Docs\Misc Microcode\high %282%29.mic" />
+    <None Include="Docs\Misc Microcode\high.mic" />
+    <None Include="Docs\Misc Microcode\high16.mic" />
+    <None Include="Docs\Misc Microcode\incvme.mic" />
+    <None Include="Docs\Misc Microcode\index.mic" />
+    <None Include="Docs\Misc Microcode\ioa.mic" />
+    <None Include="Docs\Misc Microcode\jump %282%29.mic" />
+    <None Include="Docs\Misc Microcode\jump.mic" />
+    <None Include="Docs\Misc Microcode\jumpsh.mic" />
+    <None Include="Docs\Misc Microcode\krnl.mic" />
+    <None Include="Docs\Misc Microcode\link.mic" />
+    <None Include="Docs\Misc Microcode\loop %282%29.mic" />
+    <None Include="Docs\Misc Microcode\loop.mic" />
+    <None Include="Docs\Misc Microcode\low %282%29.mic" />
+    <None Include="Docs\Misc Microcode\low.mic" />
+    <None Include="Docs\Misc Microcode\m1303.mic" />
+    <None Include="Docs\Misc Microcode\mem.mic" />
+    <None Include="Docs\Misc Microcode\memadd.mic" />
+    <None Include="Docs\Misc Microcode\memtim.mic" />
+    <None Include="Docs\Misc Microcode\memvid.mic" />
+    <None Include="Docs\Misc Microcode\metime.mic" />
+    <None Include="Docs\Misc Microcode\multdi.mic" />
+    <None Include="Docs\Misc Microcode\ndt.mic" />
+    <None Include="Docs\Misc Microcode\necho.mic" />
+    <None Include="Docs\Misc Microcode\nextop.mic" />
+    <None Include="Docs\Misc Microcode\nxti.mic" />
+    <None Include="Docs\Misc Microcode\part.mic" />
+    <None Include="Docs\Misc Microcode\pbt.mic" />
+    <None Include="Docs\Misc Microcode\pdm.mic" />
+    <None Include="Docs\Misc Microcode\pdmvfy.mic" />
+    <None Include="Docs\Misc Microcode\rat %282%29.mic" />
+    <None Include="Docs\Misc Microcode\rat.mic" />
+    <None Include="Docs\Misc Microcode\regt %282%29.mic" />
+    <None Include="Docs\Misc Microcode\regt.mic" />
+    <None Include="Docs\Misc Microcode\relie.mic" />
+    <None Include="Docs\Misc Microcode\relite.mic" />
+    <None Include="Docs\Misc Microcode\reset.mic" />
+    <None Include="Docs\Misc Microcode\ro.mic" />
+    <None Include="Docs\Misc Microcode\sd.mic" />
+    <None Include="Docs\Misc Microcode\se.mic" />
+    <None Include="Docs\Misc Microcode\shift %282%29.mic" />
+    <None Include="Docs\Misc Microcode\shift.mic" />
+    <None Include="Docs\Misc Microcode\srat.mic" />
+    <None Include="Docs\Misc Microcode\stack %282%29.mic" />
+    <None Include="Docs\Misc Microcode\stack.mic" />
+    <None Include="Docs\Misc Microcode\start.mic" />
+    <None Include="Docs\Misc Microcode\test5b.mic" />
+    <None Include="Docs\Misc Microcode\tst %282%29.mic" />
+    <None Include="Docs\Misc Microcode\tst.mic" />
+    <None Include="Docs\Misc Microcode\tst1.mic" />
+    <None Include="Docs\Misc Microcode\twinkl.mic" />
+    <None Include="Docs\Misc Microcode\usec.mic" />
+    <None Include="Docs\Misc Microcode\vfe.mic" />
+    <None Include="Docs\Misc Microcode\vft.mic" />
+    <None Include="Docs\Misc Microcode\vfy.mic" />
+    <None Include="Docs\Misc Microcode\wrloop.mic" />
+    <None Include="Docs\Misc Microcode\wrone.mic" />
+    <None Include="Docs\Misc Microcode\z80res.mic" />
+    <None Include="Docs\POS Microcode\ACB.DFS" />
+    <None Include="Docs\POS Microcode\BOOT.MICRO" />
+    <None Include="Docs\POS Microcode\EEB.DFS" />
+    <None Include="Docs\POS Microcode\EXCEPT.DFS" />
+    <None Include="Docs\POS Microcode\IO.DFS" />
+    <None Include="Docs\POS Microcode\IO.MICRO" />
+    <None Include="Docs\POS Microcode\IOE3.MICRO" />
+    <None Include="Docs\POS Microcode\KRNL.MICRO" />
+    <None Include="Docs\POS Microcode\LINE.MICRO" />
+    <None Include="Docs\POS Microcode\LINK.MICRO" />
+    <None Include="Docs\POS Microcode\PERQ.DFS" />
+    <None Include="Docs\POS Microcode\PERQ.FLOAT.MUL" />
+    <None Include="Docs\POS Microcode\PERQ.INIT" />
+    <None Include="Docs\POS Microcode\PERQ.MICRO" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.1" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.2" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.3" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.4" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.5" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.6" />
+    <None Include="Docs\POS Microcode\PERQ.QCODE.7" />
+    <None Include="Docs\POS Microcode\PERQ.QCODES.DFS" />
+    <None Include="Docs\POS Microcode\PERQ.ROUTINE.1" />
+    <None Include="Docs\POS Microcode\PERQ.ROUTINE.2" />
+    <None Include="Docs\POS Microcode\QCODES" />
+    <None Include="Docs\POS Microcode\RD.DFS" />
+    <None Include="Docs\POS Microcode\RO.MICRO" />
+    <None Include="Docs\POS Microcode\SYSB.MICRO" />
+    <None Include="Docs\POS Microcode\VFY.MICRO" />
+    <None Include="Docs\POS Microcode\VRD.DFS" />
+    <None Include="Docs\POS Pascal Source\alignm.pas" />
+    <None Include="Docs\POS Pascal Source\allocd.pas" />
+    <None Include="Docs\POS Pascal Source\append.pas" />
+    <None Include="Docs\POS Pascal Source\arith.pas" />
+    <None Include="Docs\POS Pascal Source\asyncg.pas" />
+    <None Include="Docs\POS Pascal Source\bigare.pas" />
+    <None Include="Docs\POS Pascal Source\bye.pas" />
+    <None Include="Docs\POS Pascal Source\chars.pas" />
+    <None Include="Docs\POS Pascal Source\chatte.pas" />
+    <None Include="Docs\POS Pascal Source\clock.pas" />
+    <None Include="Docs\POS Pascal Source\cmdpar.pas" />
+    <None Include="Docs\POS Pascal Source\code.pas" />
+    <None Include="Docs\POS Pascal Source\comple.pas" />
+    <None Include="Docs\POS Pascal Source\config.pas" />
+    <None Include="Docs\POS Pascal Source\contro.pas" />
+    <None Include="Docs\POS Pascal Source\conver.pas" />
+    <None Include="Docs\POS Pascal Source\copy.pas" />
+    <None Include="Docs\POS Pascal Source\crossh.pas" />
+    <None Include="Docs\POS Pascal Source\delete.pas" />
+    <None Include="Docs\POS Pascal Source\direct.pas" />
+    <None Include="Docs\POS Pascal Source\dirsca.pas" />
+    <None Include="Docs\POS Pascal Source\dirtre.pas" />
+    <None Include="Docs\POS Pascal Source\diskde.pas" />
+    <None Include="Docs\POS Pascal Source\diskio.pas" />
+    <None Include="Docs\POS Pascal Source\diskpa.pas" />
+    <None Include="Docs\POS Pascal Source\diskut.pas" />
+    <None Include="Docs\POS Pascal Source\doswap.pas" />
+    <None Include="Docs\POS Pascal Source\dynami.pas" />
+    <None Include="Docs\POS Pascal Source\e10typ.pas" />
+    <None Include="Docs\POS Pascal Source\editor.pas" />
+    <None Include="Docs\POS Pascal Source\edti.pas" />
+    <None Include="Docs\POS Pascal Source\edtk.pas" />
+    <None Include="Docs\POS Pascal Source\edtt.pas" />
+    <None Include="Docs\POS Pascal Source\edtu.pas" />
+    <None Include="Docs\POS Pascal Source\ether1.pas" />
+    <None Include="Docs\POS Pascal Source\etherh.pas" />
+    <None Include="Docs\POS Pascal Source\etheri.pas" />
+    <None Include="Docs\POS Pascal Source\ethert.pas" />
+    <None Include="Docs\POS Pascal Source\except.pas" />
+    <None Include="Docs\POS Pascal Source\expand.pas" />
+    <None Include="Docs\POS Pascal Source\fileac.pas" />
+    <None Include="Docs\POS Pascal Source\filede.pas" />
+    <None Include="Docs\POS Pascal Source\filedi.pas" />
+    <None Include="Docs\POS Pascal Source\filesy.pas" />
+    <None Include="Docs\POS Pascal Source\filety.pas" />
+    <None Include="Docs\POS Pascal Source\fileut.pas" />
+    <None Include="Docs\POS Pascal Source\findst.pas" />
+    <None Include="Docs\POS Pascal Source\fixpar.pas" />
+    <None Include="Docs\POS Pascal Source\flcopy.pas" />
+    <None Include="Docs\POS Pascal Source\fldefs.pas" />
+    <None Include="Docs\POS Pascal Source\flfmt.pas" />
+    <None Include="Docs\POS Pascal Source\floppy.pas" />
+    <None Include="Docs\POS Pascal Source\fltran.pas" />
+    <None Include="Docs\POS Pascal Source\flutil.pas" />
+    <None Include="Docs\POS Pascal Source\ftp.pas" />
+    <None Include="Docs\POS Pascal Source\ftpuse.pas" />
+    <None Include="Docs\POS Pascal Source\ftputi.pas" />
+    <None Include="Docs\POS Pascal Source\ftpver.pas" />
+    <None Include="Docs\POS Pascal Source\getnet.pas" />
+    <None Include="Docs\POS Pascal Source\gettim.pas" />
+    <None Include="Docs\POS Pascal Source\gpib.pas" />
+    <None Include="Docs\POS Pascal Source\helper.pas" />
+    <None Include="Docs\POS Pascal Source\helpge.pas" />
+    <None Include="Docs\POS Pascal Source\initsh.pas" />
+    <None Include="Docs\POS Pascal Source\io.pas" />
+    <None Include="Docs\POS Pascal Source\iocloc.pas" />
+    <None Include="Docs\POS Pascal Source\iodisk.pas" />
+    <None Include="Docs\POS Pascal Source\ioerrm.pas" />
+    <None Include="Docs\POS Pascal Source\ioerro.pas" />
+    <None Include="Docs\POS Pascal Source\ioflop.pas" />
+    <None Include="Docs\POS Pascal Source\iogpib.pas" />
+    <None Include="Docs\POS Pascal Source\ioinit.pas" />
+    <None Include="Docs\POS Pascal Source\iokeyb.pas" />
+    <None Include="Docs\POS Pascal Source\ioothe.pas" />
+    <None Include="Docs\POS Pascal Source\iopoin.pas" />
+    <None Include="Docs\POS Pascal Source\iopriv.pas" />
+    <None Include="Docs\POS Pascal Source\iors.pas" />
+    <None Include="Docs\POS Pascal Source\iounit.pas" />
+    <None Include="Docs\POS Pascal Source\iovide.pas" />
+    <None Include="Docs\POS Pascal Source\ioz80.pas" />
+    <None Include="Docs\POS Pascal Source\keytes.pas" />
+    <None Include="Docs\POS Pascal Source\lights.pas" />
+    <None Include="Docs\POS Pascal Source\link.pas" />
+    <None Include="Docs\POS Pascal Source\loader.pas" />
+    <None Include="Docs\POS Pascal Source\loadz8.pas" />
+    <None Include="Docs\POS Pascal Source\login.pas" />
+    <None Include="Docs\POS Pascal Source\makebo.pas" />
+    <None Include="Docs\POS Pascal Source\makedi.pas" />
+    <None Include="Docs\POS Pascal Source\memory.pas" />
+    <None Include="Docs\POS Pascal Source\microo.pas" />
+    <None Include="Docs\POS Pascal Source\moveme.pas" />
+    <None Include="Docs\POS Pascal Source\multir.pas" />
+    <None Include="Docs\POS Pascal Source\odtdum.pas" />
+    <None Include="Docs\POS Pascal Source\odtprq.pas" />
+    <None Include="Docs\POS Pascal Source\odtuti.pas" />
+    <None Include="Docs\POS Pascal Source\partit.pas" />
+    <None Include="Docs\POS Pascal Source\paslon.pas" />
+    <None Include="Docs\POS Pascal Source\pasrea.pas" />
+    <None Include="Docs\POS Pascal Source\patch.pas" />
+    <None Include="Docs\POS Pascal Source\pdcomm.pas" />
+    <None Include="Docs\POS Pascal Source\pdm.pas" />
+    <None Include="Docs\POS Pascal Source\pdm2.pas" />
+    <None Include="Docs\POS Pascal Source\pdmloa.pas" />
+    <None Include="Docs\POS Pascal Source\pdmuti.pas" />
+    <None Include="Docs\POS Pascal Source\perq1k.pas" />
+    <None Include="Docs\POS Pascal Source\perq2k.pas" />
+    <None Include="Docs\POS Pascal Source\perqfi.pas" />
+    <None Include="Docs\POS Pascal Source\perqst.pas" />
+    <None Include="Docs\POS Pascal Source\pmatch.pas" />
+    <None Include="Docs\POS Pascal Source\pmegen.pas" />
+    <None Include="Docs\POS Pascal Source\popcmd.pas" />
+    <None Include="Docs\POS Pascal Source\popup.pas" />
+    <None Include="Docs\POS Pascal Source\popupc.pas" />
+    <None Include="Docs\POS Pascal Source\print.pas" />
+    <None Include="Docs\POS Pascal Source\printu.pas" />
+    <None Include="Docs\POS Pascal Source\profil.pas" />
+    <None Include="Docs\POS Pascal Source\prothe.pas" />
+    <None Include="Docs\POS Pascal Source\prqdis.pas" />
+    <None Include="Docs\POS Pascal Source\prqmic.pas" />
+    <None Include="Docs\POS Pascal Source\prqpla.pas" />
+    <None Include="Docs\POS Pascal Source\prqpls.pas" />
+    <None Include="Docs\POS Pascal Source\quicks.pas" />
+    <None Include="Docs\POS Pascal Source\random.pas" />
+    <None Include="Docs\POS Pascal Source\raster.pas" />
+    <None Include="Docs\POS Pascal Source\readdi.pas" />
+    <None Include="Docs\POS Pascal Source\reader.pas" />
+    <None Include="Docs\POS Pascal Source\realfu.pas" />
+    <None Include="Docs\POS Pascal Source\rename.pas" />
+    <None Include="Docs\POS Pascal Source\rs232b.pas" />
+    <None Include="Docs\POS Pascal Source\runrea.pas" />
+    <None Include="Docs\POS Pascal Source\runwri.pas" />
+    <None Include="Docs\POS Pascal Source\sailst.pas" />
+    <None Include="Docs\POS Pascal Source\scaven.pas" />
+    <None Include="Docs\POS Pascal Source\screen.pas" />
+    <None Include="Docs\POS Pascal Source\scroun.pas" />
+    <None Include="Docs\POS Pascal Source\setbau.pas" />
+    <None Include="Docs\POS Pascal Source\setsea.pas" />
+    <None Include="Docs\POS Pascal Source\settim.pas" />
+    <None Include="Docs\POS Pascal Source\shell.pas" />
+    <None Include="Docs\POS Pascal Source\shelld.pas" />
+    <None Include="Docs\POS Pascal Source\sid.pas" />
+    <None Include="Docs\POS Pascal Source\stream.pas" />
+    <None Include="Docs\POS Pascal Source\sysdef.pas" />
+    <None Include="Docs\POS Pascal Source\system.pas" />
+    <None Include="Docs\POS Pascal Source\testet.pas" />
+    <None Include="Docs\POS Pascal Source\testfl.pas" />
+    <None Include="Docs\POS Pascal Source\typefi.pas" />
+    <None Include="Docs\POS Pascal Source\userco.pas" />
+    <None Include="Docs\POS Pascal Source\userpa.pas" />
+    <None Include="Docs\POS Pascal Source\utilpr.pas" />
+    <None Include="Docs\POS Pascal Source\virtua.pas" />
+    <None Include="Docs\POS Pascal Source\volume.pas" />
+    <None Include="Docs\POS Pascal Source\writer.pas" />
+    <None Include="Docs\z80 docs\newsio.z80" />
+    <None Include="Docs\z80 docs\perqz80.doc" />
+    <None Include="Docs\z80 docs\perqz80.prose" />
+    <None Include="Docs\z80 docs\spctst.z80" />
+    <None Include="Docs\z80 docs\spkin.z80" />
+    <None Include="Docs\z80 docs\v87.z80" />
+    <None Include="Docs\z80 docs\vspk.z80" />
+    <None Include="Docs\z80 docs\z80.007" />
+    <None Include="Docs\z80 docs\z80.010" />
+    <None Include="Docs\z80 docs\z80.012" />
+    <None Include="Docs\z80 docs\z80.014" />
+    <None Include="Docs\z80 docs\z80concept.doc" />
+    <None Include="Docs\z80 docs\z80concept.prose" />
+    <None Include="Docs\z80 docs\z80des.doc" />
+    <None Include="Docs\z80 docs\z80des.prose" />
+    <None Include="Docs\z80 docs\z80iof.pas" />
+    <None Include="Docs\z80 docs\z80link.pas" />
+    <None Include="Docs\z80 docs\z80script.pas" />
+    <None Include="Docs\z80 docs\z80talker.pas" />
+    <Compile Include="Memory\QueueController.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <None Include="PROM\boot.bin">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\rds00.rom" />
+    <None Include="PROM\rsc03emu.rom">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\rsc03.rom">
+    </None>
+    <None Include="PROM\rds00emu.rom">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\rsh00.rom">
+    </None>
+    <None Include="PROM\rti02.rom" />
+    <None Include="PROM\t1bootrom.rom" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Docs\pz80.asm" />
+    <Content Include="Docs\IOPorts.txt" />
+    <Content Include="Docs\RasterOpMicrocode.txt" />
+    <Content Include="Docs\z80 docs\z80ram_addr.txt" />
+    <Content Include="Docs\z80 docs\z80rom_addr.txt" />
+    <Content Include="PERQemu.ico" />
+    <Content Include="Readme.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
+      <Visible>False</Visible>
+      <ProductName>Windows Installer 3.1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Disks\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

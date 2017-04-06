@@ -1,0 +1,23 @@
+$perq1a
+$nobase
+
+              
+              place(20000,23777);
+
+              define(r370,370);
+              
+              constant(adr10400, 10400);
+              constant(adr30310, 30310);
+              
+   
+
+adr20200:     LoadS(adr30310), loc(20200);
+              if FALSE gotoS(error);
+
+adr20300:     LoadS(adr10400), loc(20300);
+              if FALSE gotoS(error);
+
+error:        R370 := 101;
+              goto(7401);
+              
+END;

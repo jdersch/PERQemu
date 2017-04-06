@@ -1,0 +1,484 @@
+!!!     KRNL - Microcode for use with the PDP-11 link and ODTPRQ
+!              to Examine/Deposit MicroInstructions, Registers,
+!              and Memory Locations.
+!
+!       Brian Rosen     27-Dec-79
+!       John P. Strait  27-Feb-80   rewritten
+!       Copyright (C) 1979 Three Rivers Computer Corporation
+!
+!
+!       Change history
+!
+!        5 Oct 81  V1.2  JPS  Change to be able to access 16K controlstore and
+!                             full memory complement.
+!
+!       13 Jan 81  V1.1  JPS  Don't use memory for the display list, ala Vfy.
+!
+!
+!       This code is loaded by boot rom microcode, fed by ODTPRQ.  The Krnl
+!       is a special piece of microcode.  It is used to debug other micro-
+!       code and thus must coexist with that program.  The Krnl should use
+!       as little of the Perq as possible.  When a breakpoint is set in a
+!       program, the Krnl must try not to destroy the state of that program.
+!       The following list describes what parts of the Perq the Krnl uses.
+!
+!       1. A piece of micro-code may use the Krnl's screen interrupt
+!          handler only if it wishes to ignore all other interrupts. The
+!          interrupt service sequence is:
+!               if IntrPend, Call(tag);
+!                       ...
+!          tag: Vector(7600);
+!
+!       2. The Krnl uses registers 357-377 inclusive.
+!
+!       3. The Krnl uses one level of the call stack.  Thus the user program
+!          should not use more than 4 levels of calls.
+!
+!       4. The Krnl cannot preserve all of the state of the micro engine.
+!          Breakpoints should not be set in the following places:
+!          - in the middle of a shift sequence.
+!          - in the middle of a memory sequence.
+!          - in the middle of an I/O sequence.
+!          - instructions which test C19, Eql, Neq, Gtr, Geq, Lss, Leq,
+!            Carry, or OverFlow.
+!          - instructions which read the uState.
+!          - instructions which use OldCarry.
+!          - where S has a value greater than 7777
+
+
+
+!!      registers:
+
+        constant(DataReg,377);
+        define(Data,DataReg);   ! the working register
+        define(IntRtn,376);     ! return number for interrupt service
+        define(mAddr,375);      ! memory address
+        define(VR,374);         ! video refresh temp
+        define(Unused373,373);  ! cursor address in IO.Micro
+        define(Unused372,372);  ! address of video command in IO.Micro
+        define(Screen,371);     ! screen base div 2
+        define(BreakPnt,370);   ! break point number
+        define(tmp,367);        ! temporary register
+        define(Command,366);    ! command number
+        define(SSv,365);        ! save S register
+        define(uStateSv,364);   ! save uState register
+        define(Trap,363);       ! =1 to trap bad interrupts, =0 to ignore them
+        define(BadCmd,362);     ! latest bad command
+        define(BadInt,361);     ! latest bad interrupt
+        define(Disable,360);    ! =1 to disable interrupts, =0 to enable
+        define(VCount,357);     ! video counter
+        define(tmp1,356);       ! temporary
+        
+        define(R0,0);           ! defined for some dummy locations
+
+
+!!!     commands:
+
+        constant(FirstCmd,1630);        ! first command number 
+!!!     1630: LuA    - load microstore address
+!       1631: WuWa   - write microstore word a (low third)
+!       1632: WuWb   - write microstore word b (mid third)
+!       1633: WuWc   - write microstore word c (high third)
+!       1634: LrA    - load register address
+!       1635: Wr     - write register
+!       1636: Rr     - read register
+!       1637: LmA    - load memory address
+!       1640: WmW    - write memory word
+!       1641: RmW    - read memory word
+!       1642: SuP    - start microprogram
+!       1643:        - unused
+!       1644: Clr    - clear memory
+!       1645: WmB    - write memory block
+!       1646: WuB    - write microstore block
+!       1647: RuS    - reset microprocessor state
+        constant(LastCmd,1647);         ! last command number
+        
+
+!!      miscellaneous constants:
+
+        constant(Hello,12345);          ! message to confirm the boot
+        constant(Hey,54321);            ! message to get ODTPRQ's attention
+        constant(ReadCsr,40);           ! IO addr: link input Command/Status
+        constant(WriteCsr,241);         ! IO addr: link output Command/Status
+        constant(ReadData,42);          ! IO addr: link read data
+        constant(WriteData,243);        ! IO addr: link write data
+        constant(XbufCyc,2);            ! Bit for "He wrote to me"
+        constant(IntVec,7600);          ! address of interrupt vector
+        
+
+
+        Place(7400,7777);
+        
+        
+!!!     bootstrap entry.
+
+Boot:   LoadOp, Loc(7400);              ! clear boot
+        Data := Hello;
+        BadInt := not 0;
+        Trap := 1;                      ! trap bad interrupts
+        Screen := 1400;                 ! screen address = 3000
+        Disable := 1, Call(Snd);        ! disable interrupts and send greeting
+        Goto(RuS);                      ! enter command loop via RuS
+        
+        
+!!!     breakpoint entry.
+
+Break:  uStateSv := uState, Loc(7401);  ! save uState
+        SSv := not 0;                   ! save S register 
+Brk1:   IntRtn := 3, Goto(ChkInt);      ! check for interrupts
+Int3:   SSv := SSv + 1, Repeat(Brk1);
+        Data := Hey;
+        Call(Snd);                      ! send the breakpoint message
+                                        ! fall into command loop
+        
+        
+!!!     Cmd - main command loop.
+
+Cmd:    Call(Rcv);                      ! get the command number
+        Command := Data;
+uA1:    LoadS(0);                       ! *** this instruction is modified ***
+        Command := Command - FirstCmd;
+        Command := Command - 1, if Eql Goto(LuA);
+        Command := Command - 1, if Eql Goto(WuWa);
+        Command := Command - 1, if Eql Goto(WuWb);
+        Command := Command - 1, if Eql Goto(WuWc);
+        Command := Command - 1, if Eql Goto(LrA);
+        Command := Command - 1, if Eql Goto(Wr);
+        Command := Command - 1, if Eql Goto(Rr);
+        Command := Command - 1, if Eql Goto(LmA);
+        Command := Command - 1, if Eql Goto(WmW);
+        Command := Command - 1, if Eql Goto(RmW);
+        Command := Command - 1, if Eql Goto(SuP);
+        Command := Command - 1, if Eql Goto(Cmd1);
+        Command := Command - 1, if Eql Goto(Clr);
+        Command := Command - 1, if Eql Goto(WmB);
+        Command := Command - 1, if Eql Goto(WuB);
+Cmd1:   BadCmd := Data,         if Eql Goto(RuS);
+        BreakPnt := 10#30, Goto(7401);  ! mark bad command and issue breakpoint
+        
+        
+        
+        
+!!      command routines.
+        
+
+
+
+!!!     LuA - load microstore address.
+
+LuA:    Call(Rcv);                      ! get address with bytes swapped
+        Data and 360;
+        tmp := Data, if Eql Goto(LuA1); ! if in lower bank
+
+!       For upper banks:
+!         X   = 0.
+!         Y   = Address rsh 10#8.
+!         A   = 0.
+!         B   = 0.
+!         Alu = 0.
+!         W   = 0.
+!         H   = 0.
+!         F   = 1.
+!         SF  = 7.    (Leap)
+!         Z   = Address and 377.
+!         Cnd = 0.    (True)
+!         Jmp = 14.   (LoadS)
+!     or  Jmp = 3.    (Goto)
+
+        tmp := not ( 0 lsh 10#12 +      ! Cnd
+                     0 lsh 10#8 +       ! Jmp is inserted later
+                     0 lsh 10#7 +       ! B
+                     0 lsh 10#6 +       ! H
+                     1 lsh 10#4 +       ! F
+                     7);                ! SF
+        tmp1 := tmp1 and 377;           ! X = 0
+        tmp1 := not tmp1, Goto(LuA2);
+
+!       For lower bank:
+!         X   = 0.
+!         Y   = 0.
+!         A   = 0.
+!         B   = 0.
+!         Alu = 0.
+!         W   = 0.
+!         H   = 0.
+!         F   = 3.
+!         SF  = Address rsh 10#8
+!         Z   = Address and 377.
+!         Cnd = 0.    (True)
+!         Jmp = 14.   (LoadS)
+!     or  Jmp = 3.    (Goto)
+
+LuA1:   tmp := tmp or not 17;           ! Jmp is inserted later
+        tmp := tmp and not (3 lsh 4);
+        tmp1 := not 0;
+
+LuA2:   Data := Data or 377;
+        Data, LoadS(uA1);
+        WcsLow, if true GotoS(LuA3);
+LuA3:   tmp and not (14 lsh 10#8);      ! Jmp = 14
+        WcsMid, if True GotoS(LuA4);
+LuA4:   tmp1;
+        WcsHi, if True GotoS(LuA5);
+LuA5:   Data, LoadS(uA2);
+        WcsLow, if true GotoS(LuA6);
+LuA6:   tmp and not (3 lsh 10#8);       ! Jmp = 3
+        WcsMid, if True GotoS(LuA7);
+LuA7:   tmp1;
+        WcsHi, if True GotoS(Cmd);
+        
+        
+!!!     WuWa - write microstore a (low third).  Must be preceded by a LuA.
+
+WuWa:   Call(Rcv);
+        WcsLow, if true GotoS(Cmd);
+        
+        
+!!!     WuWb - write microstore a (mid third).  Must be preceded by a LuA.
+
+WuWb:   Call(Rcv);
+        WcsMid, if true GotoS(Cmd);
+        
+        
+!!!     WuWc - write microstore a (high third).  Must be preceded by a LuA.
+
+WuWc:   Call(Rcv);
+        WcsHi, if true GotoS(Cmd);
+        
+        
+!!!     LrA - load register address.
+        
+LrA:    Call(Rcv);
+        Data := not Data, LoadS(rA2);
+        Data and 377;                   ! Y = inverted register number
+                                        ! X = not 377    (DataReg)
+        WCShi, if true GotoS(LrA1);
+LrA1:   Data and not 377, LoadS(rA1);   ! X = inverted register number
+                                        ! Y = not 377    (DataReg)
+        WCShi, if true GotoS(LrA2);
+LrA2:   Data and 377, LoadS(rA3);       ! Y = inverted register number
+                                        ! X = not 377    (DataReg)
+        WCShi, if true GoToS(Cmd);
+        
+     
+!!!     Wr - write register.  Must be preceded by a LrA.
+        
+Wr:     Call(Rcv);
+rA1:    R0 := Data;                     ! *** this instruction is modified ***
+        Goto(Cmd);
+        
+        
+!!!     Rr - read register - must be preceded with a LrA command.
+
+Rr:
+rA2:    Data := R0;                     ! *** this instruction is modified ***
+        Call(Snd);                      ! send the register value
+        Call(Rcv);
+rA3:    Data := UState;                 ! **** this instruction is modified ***
+        Call(Snd);                      !Send the xtra 4 bits
+        Goto(Cmd);
+        
+        
+!!!     LmA - load memory address.
+
+LmA:    Call(Rcv);
+        mAddr := Data, Call(Rcv);
+        Data := Data and 37, if Eql Goto(Cmd);  ! if address < 2^16
+        tmp := 100000;
+        tmp := tmp + tmp;
+LmA1:   Data := Data - 1;               ! add upper 4 bits of address
+        mAddr := mAddr + tmp, if Gtr Goto(LmA1);
+        Goto(Cmd);
+
+
+!!!     WmW - write memory word.  Must be preceded with a LmA.
+      
+WmW:    Call(Rcv);
+        MA := mAddr, store;             ! store the word
+        MDO := Data, Goto(Cmd);
+        
+        
+!!!     RmW - read memory word.  Must be preceded with a LmA command.
+        
+RmW:    MA := mAddr, Fetch;             ! fetch the word from memory
+        Data := MDI;
+        Call(Snd);                      ! send the memory word
+        Goto(Cmd);
+        
+
+!!!     SuP - start micro program.  Must be preceded with a LuA command.
+
+SuP:    IntRtn := 200, LoadS(7);        ! flag interrupt calls as user calls
+SuP1:   SSv + SSv;                      ! swap bytes without using the shifter
+        SSv := SSv + SSv + OldCarry, Repeat(SuP1);
+        SSv or 377, LoadS(SuP3);        ! get ready to modify LoadS instruction
+        WcsLow, if true GotoS(SuP2);    ! Z = low part of SSv
+SuP2:   SSv := SSv or not 17;
+        SSv and not 6060;
+        WcsMid, if true GotoS(SuP3);    ! SF = high part of SSv
+SuP3:   LoadS(0);                       ! *** this instruction is modified ***
+uA2:    Goto(0);                        ! *** this instruction is modified ***
+        
+
+!!!     Clr - clear memory from 0 - 377777 inclusive.
+        
+Clr:    tmp := 100000;
+        tmp := tmp + tmp;
+Clr1:   IntRtn := 2, Goto(ChkInt);      ! check for interrupts
+Int2:   tmp := tmp - 1;
+        not tmp,  Store;
+        0;                              ! store a zero
+        tmp, Store;
+        0, if Neq Goto(Clr1);           ! store another zero
+        Goto(Cmd);
+        
+        
+!!!     WmB - write memory block.  Write 256 words into memory starting
+!                                  at mAddr.  Must be preceded by a LmA.
+
+WmB:    mAddr := mAddr - 1, LoadS(377);
+WmB1:   Call(Rcv);                      ! get a word
+        mAddr := mAddr + 1, Store;      ! and stuff it into memory
+        Data, Repeat(WmB1);
+        Goto(Cmd);
+        
+        
+!!!     WuB - write microstore block.  Write microstore from 3777 to 0
+!                                      inclusive.  Must be preceded by
+!                                      a LuA.
+
+WuB:    LoadS(3777);
+WuB1:   Call(Rcv);
+        WcsLow, if true GotoS(WuB2);    ! write low third
+WuB2:   Call(Rcv);
+        WcsMid, if true GotoS(WuB3);    ! write middle third
+WuB3:   Call(Rcv);
+        WcsHi, if true GotoS(WuB4);     ! write high third
+WuB4:   Repeat(WuB1);                   ! continue with next word
+        Goto(Cmd);
+        
+        
+!!!     RuS - reset microprocessor state.
+!             1. clear call stack.
+!             2. turn off RasterOp
+!             3. turn off disk.
+!             4. initialize screen.
+!             5. clear E-stack.
+
+RuS:    ThreeWayBranch(0);              ! clear call stack
+        ThreeWayBranch(0);
+        ThreeWayBranch(0);
+        ThreeWayBranch(0);
+        ThreeWayBranch(0);
+        CntlRasterOp(0);                ! turn RasterOp off
+        200, IOB(301);                  ! turn disk & Z80 off
+        0,IOB(307);                     ! turn off Z80 Output interrupts
+        VR := 101154;                   ! next command: first vertical retrace
+        VCount := 0;                    ! starting vertical retrace
+        IntRtn := 0, Goto(VidInt);      ! start the display
+Int0:   StackReset, Goto(Cmd);          ! clear E-stack
+
+
+
+
+!!      subroutines.
+
+
+
+        
+!!      Rcv - wait to receive data from PDP-11.
+!             The word received is left in Data and on the R bus for those
+!             who follow the Call(Rcv) with a use of the R bus.
+
+Rcv:    IntRtn := 1, Goto(ChkInt);      ! allow interrupts
+Int1:   Iob(ReadCsr);                   ! check the receiver status
+        Iod and XBufCyc;
+        if Eql Goto(Rcv);               ! if no data
+        15, Iob(WriteCsr);              ! clear Xmit done of PDP-11
+        Iob(ReadData);                  ! request the data
+        Data := Iod;                    ! read the data
+        5, Iob(WriteCsr);               ! set Xmit done of PDP-11
+        Data, Return;                   ! place data on R
+        
+        
+!!      Snd - send data to PDP-11.
+!             The word to be sent is passed in Data.
+
+Snd:    Data, Iob(WriteData);           ! write the data
+        4, Iob(WriteCsr);               ! set data ready pulse
+        tmp := 20;
+Snd1:   tmp := tmp - 1, if Neq Goto(Snd1);
+        5, Iob(WriteCsr), Return;       ! clear data ready pulse
+        
+        
+!!      ChkInt - check for interrupts.  Calling sequence:
+!                       IntRnt := x, Goto(ChkInt);
+!                Intx:  ...
+
+ChkInt: Disable and 1;
+        if Neq Goto(IntX);              ! if interrupts are disabled
+Int:    Iob(145);                       ! read video state
+        Iod and 20;                     ! pick video interrupt bit
+        if Neq goto(VidInt);            ! if video interrupt
+IntX:   IntRtn and 200;
+        IntRtn, if Neq Return;          ! if called from user program
+        IntRtn := IntRtn - 1, if Eql Goto(Int0);
+        IntRtn := IntRtn - 1, if Eql Goto(Int1);
+        IntRtn := IntRtn - 1, if Eql Goto(Int2);
+                              if Eql Goto(Int3);
+        BreakPnt := 10#31, Goto(7401);  ! if unknown caller, restart everything
+
+
+
+!!      Z80 interrupt service.
+
+Z80Int: Iob(106), Loc(7600);
+        Goto(IntX);                     ! dismiss Z80 interrupt
+
+
+!!      disk interrupt service.
+
+DskInt: 200, Iob(301), Loc(7610);
+        Goto(IntX);                     ! dismiss disk interrupt
+
+
+!!      parity interrupt service.
+
+ParInt: Iob(147), Loc(7634);
+        Goto(IntX);                     ! dismiss parity interrupt
+
+
+!!      video interrupt service.
+
+VidInt: VR, Iob(343), Loc(7624);        ! load VidState
+        VR, Iob(340);                   ! load line count
+Vid1:   0, Iob(342);                    ! load cursor address
+        VR and 200;
+        if Eql Goto(Vid2);              ! if we didn't load second retrace
+        Screen, Iob(341);               ! address of screen bit map div 2
+        0, Iob(344);                    ! load cursor X value
+        VCount := 11;
+Vid2:   VR := 102000;                   ! next command: display normal
+        VCount := VCount - 1;
+        if Gtr Goto(IntX);              ! if not end of screen
+        VR := 101154;                   ! next command: first vertical retrace
+        VCount;
+        if Eql Goto(IntX);              ! if end of screen
+        VR := 101351;                   ! next command: second vertical retrace
+        Goto(IntX);
+        
+!!      bad interrupt service.
+
+        BadInt := 04, Goto(Bad1), Loc(7604);
+        BadInt := 14, Goto(Bad1), Loc(7614);
+        BadInt := 20, Goto(Bad1), Loc(7620);
+        BadInt := 30, Goto(Bad1), Loc(7630);
+Bad1:   Trap and 1;
+        if Eql Goto(IntX);              ! if not trapping bad interrupts
+        BreakPnt := 10#32, Goto(7401);  ! inform ODTPrq of bad interrupt
+        
+        
+        
+        
+        
+        end;

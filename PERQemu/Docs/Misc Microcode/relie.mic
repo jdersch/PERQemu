@@ -1,0 +1,50 @@
+!   This is the main routine to drive the test.
+
+
+Define(R0,0);
+Define(RX,0);
+Define(RY,0);
+Constant(X,10);
+Constant(Y,11);
+Constant(Work,12);
+Constant(Count,14);
+
+
+Start: X, Store,Loc(2400);
+       1,Loc(2401);
+       Y, Store;
+       377;
+       Call(SetUp);
+       Call(Test);
+       X, Fetch;
+       Tos:= MDI + 1;
+       X, Store;
+       Tos;
+Run:   Call(SetUp);
+       Call(Test);
+       X, Fetch;
+       Tos:= MDI + 1;
+       X, Store;
+       Tos;
+       Y, Fetch;
+       Tos:= MDI - 1;
+       Tos - 2;
+       If Eql GoTo(SetOne);
+       Y, Store;
+       Tos, GoTo(Run);
+SetOne:Y, Store;
+       Tos;
+       Call(SetUp);
+       Call(Test);
+       Y, Fetch;
+       Tos:= MDI - 1;
+       Y, Store;
+       Tos;
+       Call(SetUp);
+       Call(Test);
+       StackReset;
+       GoTo(Start);
+      
+      
+$Include Relite.micro
+$Include ReSet.micro

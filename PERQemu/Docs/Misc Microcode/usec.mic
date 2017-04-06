@@ -1,0 +1,231 @@
+!   USec.Micro
+!
+        Place(2400, 3077);
+!=========================== VERSION CONTROL ===============================
+
+        Place(7777,7777);
+        Define(MajorVersion, 1); ! 1.x    ! ## KEEP THESE UP TO DATE ##
+        Define(MinorVersion, 2); ! x.2
+          
+Version: MajorVersion - MinorVersion, Loc(7777);                            
+         ! This allows for Version number in Bin File For ODTprq
+
+!===========================================================================
+
+! Test code for debugging the micro second clock on the network
+!
+! 10 Jun 85  V1.2  R. Huber  Added ODTprq Version numbers. Changed CPUtiming
+!                            Loop to be more accurate
+!
+! Written:    ??          PR
+! Modified:  14-Jul-82    SDC    Changed for EIO
+!
+! Entry points:
+!   2400 - writes R1 and waits for interrupt, Bkp 101 if no interrupt
+!   2500 - try writing and reading value in R1
+!   2600 - writes R1, waits R2 usecs, and reads value back to R3
+!   2700 - Tests all bits of Usec Clock
+!
+! On all entry points, R0 = 1 to Loop forever, R0 = 2 to Loop until Failure,
+! otherwise it does one pass.
+
+        Define(R0, 0);
+        Define(R1, 1);
+        Define(R2, 2);
+        Define(R3, 3);
+        Define(R4, 4);
+        Define(R5, 5);
+        Define(CpuTime, 6);
+        Define(RdVal, 7);
+        Define(BuffStart, 13);
+        Define(Scratch, 20);
+        Define(WVal, 10);
+        Define(RVal, 11);
+        Define(IntOccr, 12);
+        Define(R370, 370);
+        
+        Constant(BreakPoint, 7401);
+        Constant(uSWtCntl, 334);   !*** EIO
+        Constant(uSWtHB, 335);   !*** EIO
+        Constant(uSWtLB, 336);   !*** EIO
+        Constant(uSRdLB, 136);   !*** EIO
+        Constant(uSRdHB, 137);   !*** EIO
+        Constant(WtNetCntl, 302);   !*** EIO
+        Constant(RdNetStat, 122);   !*** EIO
+        Constant(WtPrAdr, 234);
+        
+        
+        Constant(EnuSecClk, 4);
+        Constant(EnuSecInt, 6);
+
+
+
+! Writes R1 into uSec clock enables count and interrupt and waits for
+! interrupt. Allows a +2% error before returning to kernel 
+        
+        Call(NoInts), Loc(2400);
+        3, IOB(uSWtCntl);          ! set the control mode to 3
+        0, IOB(WtNetCntl);
+LoopOne:Call(IntChk);              ! Set to 1 if err
+        R0 - 1, If Neq Goto(WasErr);
+        R0 - 2, IF Eql Goto(LoopOne);
+        R370 := 100, IF Neq Goto(BreakPoint);
+        GoTo(LoopOne);             ! Loop Until Failure
+
+WasErr: R370 := 101, If Eql Goto(LoopOne);
+        GoTo(BreakPoint);
+
+        
+IntChk: WVal := NOT R1; ! Two's Complement of value to Timer
+        WVal := WVal + 1, Call(SetuSec);
+        CpuTime := R1;             ! Add One for Delay when small values
+        CpuTime := CpuTime + 1;
+        EnuSecInt, IOB(WtNetCntl); ! are loaded into USec clock
+        IntOccr := 0;
+        Nop;
+        Nop;
+        Nop;
+        Nop;
+        
+IntLp:  IF IntrPend Call(VecInt);  ! This Loop Takes 6 * 170 nsec to Execute
+        IntOccr;                   ! Approx. 1.02 MicroSeconds per loop
+        IF NEQ GoTo(GotInt);       ! The Usec Clock runs at 1.00 Usec rate
+        NOP;                       ! so They should be close (2%)
+        CpuTime := CpuTime - 1;    ! This means if you Set R1=10000 then
+        IF NEQ GoTo(IntLp);        ! R7(CpuTime) should be 200 at BrkPnt time
+                                   ! This value is approximate but should be
+                                   ! close from one board to the next.
+! Fall thru no interrupt
+
+        0, IOB(WtNetCntl), Loc(2440);
+        Call(RdUsec);
+        R3 := RVal;
+        1, Return;
+
+GotInt: 0, IOB(WtNetCntl);
+        Call(RdUsec);
+        R3 := RVal;
+        0, Return;
+        
+! Set the counter to the value supplied in register Wval.
+
+SetuSec: WVal, RightShift(10);
+         Shift, IOB(uSWtHB);
+         WVal, IOB(uSWtLB), Return;
+        
+        
+RduSec: IOB(uSRdHB);
+        IOD, LeftShift(10);
+        RVal := Shift, IOB(uSRdLB);
+        Scratch := IOD AND 377;
+        RVal := RVal OR Scratch, Return;
+        
+! Writes contents of R1 into the uSec clock and reads it back into R2
+
+Lp:     0, IOB(WtNetCntl);
+        3, IOB(uSWtCntl), Loc(2500);  ! set the control mode to 0
+        WVal := R1, Call(SetuSec);
+        Call(RduSec);
+        R2 := RVal;
+        R0 - 1;
+        IF Neq GoTo(BreakPoint);
+        GoTo(Lp);
+
+
+! Writes R1 into uSec clock and enables count for approx micro seconds
+! specified in R2 and reads the value at the end into register R3
+
+        3, IOB(uSWtCntl), Loc(2600);  ! set the control mode to 3
+        0, IOB(WtNetCntl);
+        WVal := R1, Call(SetuSec);
+        Scratch := R2;
+        EnuSecClk, IOB(WtNetCntl);
+CntLp:  Nop;
+        Nop;
+        Nop;
+        Nop;
+        Scratch := Scratch - 1;
+        IF NEQ GoTo(CntLp);
+        0, IOB(WtNetCntl);
+        Call(RdUsec);
+        R3 := RVal;
+        R0 - 1;
+        IF Neq GoTo(BreakPoint);
+        GoTo(CntLp);
+
+
+StoreVal:  Ma := BuffStart, Store4; ! By typing: Dump Mem 0 377 ow
+           MDO := R1;               ! You will get a Display of all values
+           MDO := WVal;             ! Done so Far at point of error (If any)
+           MDO := RVal;            ! 32 in all
+           MDO := 0, Return;
+
+StoreVal1: MA := BuffStart + 4, Store4;
+           MDO := WVal;
+           MDO := RVal;
+           MDO := CpuTime;
+           MDO := IntOccr;
+           BuffStart := BuffStart + 10, Return;
+           
+FullTest:  BuffStart := 0, Call(NoInts), Loc(2700);
+           R1 := 1;                    ! Walk a ones pattern and test Usec
+FTLoop:    3, IOB(uSWtCntl);           ! set the control mode to 3
+           0, IOB(WtNetCntl);
+           WVal := Not R1;
+           WVal := WVal + 1, Call(SetuSec); ! Twos Compliment
+           Call(RduSec);               ! Since value is inverted the Clock
+           Call(StoreVal);             ! is really getting mostly Ones now
+           3, IOB(uSWtCntl);           ! set the control mode to 3
+           0, IOB(WtNetCntl);
+           Call(IntChk);              
+           If Neq Goto(FTerr);
+           Call(StoreVal1);            
+           R1 - 100000;                         
+           If Eql Goto(TestInv);       ! 
+           R1 := R1 + R1, Goto(FTLoop);
+FTerr:     Call(StoreVal1);
+           R0 - 1;
+           If Eql Goto(FTLoop);
+           R370 := 101, Goto(BreakPoint);
+           
+TestInv:   R5 := 1;                    ! Walk a Zeroes pattern and test Usec
+InvLoop:   R1 := Not R5;               ! Since value is inverted the Clock
+           WVal := Not R1;             ! is really getting mostly Zeroes now
+           WVal := WVal + 1, Call(SetuSec); ! Twos Compliment
+           Call(RduSec);
+           Call(StoreVal);
+           Call(IntChk);               
+           If Neq Goto(InvErr);
+           Call(StoreVal1);
+           R5 - 100000;                         
+           If Eql Goto(TestDone);
+           R5 := R5 + R5, Goto(InvLoop);
+InvErr:    Call(StoreVal1);
+           R0 - 1;
+           If Eql Goto(InvLoop);
+           R370 := 101, Goto(BreakPoint);
+
+TestDone:  R0 - 1;
+           R0 - 2, If Eql Goto(FullTest);
+           If Eql Goto(FullTest);
+           R370 := 100, Goto(BreakPoint);
+
+NoInts: 0, IOB(305);    ! Disable Z80 interupts
+        0, IOB(147);               ! Clear any Parity Interupts 
+        0, IOB(322);               ! Disable Disk State Machine
+        Scratch := 6000;
+        Scratch, IOB(343), Return;         ! Disable Video Interupts
+           
+           
+VecInt: Vector(Z80Int);
+        
+Z80Int: R370 := (200), Goto(7401), Loc(3000);
+YInt:   R370 := (201), Goto(7401), Loc(3004);
+DskInt: R370 := (202), Goto(7401), Loc(3010);
+NetInt: IntOccr := 177777, Return, Loc(3014);
+Z80RInt:R370 := (204), Goto(7401), Loc(3020);
+VidInt: R370 := (205), Goto(7401), Loc(3024);
+XInt:   R370 := (206), Goto(7401), Loc(3030);
+ParInt: R370 := (207), Goto(7401), Loc(3034);
+
+END;

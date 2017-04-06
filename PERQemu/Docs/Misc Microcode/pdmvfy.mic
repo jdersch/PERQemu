@@ -1,0 +1,808 @@
+! VFY Version 1.1
+! copyright 1983  Three Rivers Computer Corporation
+!
+! Diagnostic Micro-Code for Perq
+
+! 12-Nov-80  MAB  Version 2.0   Modified to run under PDM.  Also,
+!                  never performs parity test.
+
+! 17-Sep-80  DAS  Version 1.1.  Added the code to allow VFY to
+!                  be used at boot time.  BVFY no longer lives.
+                  
+! 12-Sep-80  DAS  Added version numbers and reformated the file.
+
+
+
+
+!
+! Error Codes:
+!
+!    ErrorType        DDS
+!
+!        1            101        Empty stack bit not working
+!        2            102        Could not load TOS
+!        3            103        Push did not work
+!        4            104        Stack Empty did not go off
+!        5            105        Data error in push
+!        6            106        Empty or Full set when that is not the case
+!        7            107        Data error in bit 15 of the stack
+!        10           108        Stack empty set when the stack is full
+!        11           109        Data error on stack
+!        12           110        Data error after POP.  Bit 14
+!        13           111        Data error after POP.  Bit 13
+!        14           112        Data error after POP.  Bit 12
+!        15           113        Data error after POP.  Bit 11
+!        16           114        Data error after POP.  Bit 10
+!        17           115        Data error after POP.  Bit 9
+!        20           116        Data error after POP.  Bit 8
+!        21           117        Data error after POP.  Bit 7
+!        22           118        Data error after POP.  Bit 6
+!        23           119        Data error after POP.  Bit 5
+!        24           120        Data error after POP.  Bit 4
+!        25           121        Data error after POP.  Bit 3
+!        26           122        Data error after POP.  Bit 2
+!        27           123        Empty wrong.
+!        30           124        Data error after POP.  Bit 1
+!        31           125        Data error after POP.  Bit 0
+!        32           126        Empty not set after all pops.
+!        33           127        Call test falied
+!        34           128        Odd didn't jump on a 1.
+!        35           129        Odd jumped on a 0.
+!        36           130        Byte sign didn't jump on 200.
+!        37           131        Byte sign jumped on 0.
+!        40           132        C19 didn't jump when it should have.
+!        41           133        BCP[3] didn't jump when it should have.
+!        42           134        C19 jumped when it shouldn't have.
+!        43           135        BCP[3] jumped when it shouldn't have.
+!        44           136        GTR didn't jump.
+!        45           137        GTR jumped when it shouldn't have.
+!        46           138        GEQ didn't jump.
+!        47           139        GEQ jumped when it shouldn't have.
+!        50           140        LSS didn't jump when it should have.
+!        51           141        LSS jumped when it shouldn't have.
+!        52           142        LEQ didn't jump.
+!        53           143        LEQ jumped when it shouldn't have.
+!        54           144        GEQ didn't jump on equal.
+!        55           145        LEQ didn't jump on equal.
+!        56           146        Carry didn't jump when it should have.
+!        57           147        Carry jumped when it shouldn't have.
+!        60           148        Overflow didn't jump when it should have.
+!        61           149        Overflow jumped when it shouldn't have.
+!        62           150        And-Not ALU function failed.
+!        63           151        Or ALU function failed.
+!        64           152        Or-Not ALU function failed.
+!        65           153        And ALU function failed.
+!        66           154        Or-Not ALU function failed.
+!        67           155        Not-A ALU function failed.
+!        70           156        Not-B ALU function failed.
+!        71           157        Xor ALU function failed.
+!        72           158        Xnor ALU function failed.
+!        73           159        OldCarry-Add ALU function failed.
+!        74           160        OldCarry-Sub ALU function failed.
+!        75           161        OldCarry-Add /w No OldCarry failed.
+!        76           162        Fetch error on Force Bad Parity.
+!        77           163        Unexpected Parity error.
+!        100          164        No parity errors on force bad parity.        
+!        101          165        Wrong address on force bad parity.        
+!        102          166        Upper 4 bit test failed.        
+!        103          167        MDX test failed.        
+!        104          168        Stack upper bits test failed.        
+!        105          169        Dual Addr/Fetch4 test failed.        
+!        106          170        Unexpected refill.        
+!        107          171        BPC test failed.        
+!        110          172        Fetch4 test failed.        
+!        111          173        Fetch4R test failed        
+!        112          174        Store4 test failed.        
+!        113          175        Fetch2 test failed.        
+!        114          176        Store2 test failed.        
+!        115          177        NextOp test failed.        
+!        116          178        Fetch/Store overlap failed.        
+!        117          179        Bad interrupt Loc 4.        
+!        120          180        Bad interrupt Loc 14.        
+!        121          181        Bad interrupt Loc 20.        
+!        122          182        Bad interrupt Loc 30.        
+!        123          183        Memory error on No Dual Addr test.        
+!        124          184        Memory error on No Dual Addr Invert.
+
+        
+
+!
+! Register definitions.
+!
+
+define (PDCStat0,20);
+define (PCDStat1,21);
+define (PDCStat2,22);
+define (PDCStat3,23);
+
+define(ErrorType,1);
+define(tmp,2);
+define(adr,3);
+define(last,4);
+define(ParityHit,5);
+define(ParityErr,6);
+define(r0,0);
+define(r1,1);
+define(r2,2);
+define(r3,3);
+define(r4,4);
+define(r5,5);
+define(r6,6);
+define(tmp1,7);
+define(R10,10);
+define(R11,11);
+define(R12,12);
+define(R13,13);
+define(R370,370);
+define(etmp,14);
+define(ecnt,15);
+define(MaxAdrP1,16);
+define(dpytmp,300);
+define(dpycnt,301);
+define(TestContinue,0);
+define(VR,374);           ! video refresh temp
+define(Cm,372);           ! pointer to current video command
+
+
+constant(BreakPoint,7401);
+constant(SYSBEntry,7000);
+constant(PDSEntry,20);
+constant(ErrorStatus,10);
+constant(EndOfSt,2);
+constant(DebErr,0);
+
+
+!
+! Test the E stack. (Start here for VFY from PDM).
+!
+
+StackTest: StackReset, ErrorType := not 0, Loc(4001);
+        dpytmp := 101154, Loc(4002);
+        dpycnt := 0;
+        tmp := UState AND 1000;                         ! Check Empty Flag
+        if neq call(ErrorExit), ErrorType := 1;         ! 101-Empty Stack bit not working
+
+        TOS := 1;                                       ! Load a one
+        tmp := TOS - 1;                                 ! Check it
+        if neq call(ErrorExit), ErrorType := 2;         ! 102-Couldn't load TOS
+        
+        TOS := 2, Push;                                 ! try pushing a value
+        tmp := TOS - 2;
+        if neq call(ErrorExit), ErrorType := 3;         ! 103-Push Didn't work
+        
+        tmp := UState AND 1000;                         ! Check empty again
+        if eql call(ErrorExit), ErrorType := 4;         ! 104-Stack Empty did not go off
+
+        
+        tmp1 := 4;                                      ! Start data value
+        
+Pushl:  TOS := tmp1, Push;                              ! Push new value on stack
+        tmp := TOS - tmp1;                              ! Make sure it worked
+        if neq call(ErrorExit), ErrorType := 5;         ! 105-Data error in push
+        
+        tmp1 := tmp1 + tmp1;                            ! LeftShift data value
+        tmp1 - 100000;                                  ! Are we done?
+        if neq goto(Pushl);                             ! No, do again
+        
+        tmp := UState AND 1000;                         ! Check no empty
+        if eql call(ErrorExit), ErrorType := 6;         ! 106-Empty or Full when not so
+ 
+        tmp := 100000;                                  ! Push last item on stack
+        TOS := tmp, Push;                               ! Check it
+        tmp := TOS - 100000;
+        if neq call(ErrorExit), ErrorType := 7;         ! 107-Data error bit 15 on stack
+
+        tmp := UState AND 1000;                         ! Check for full
+        tmp - 1000;                                     ! Empty Clear
+        if neq call(ErrorExit), ErrorType := 10;        ! 108-Stack Empty set when full
+
+        tmp := TOS xor 100000;                          ! Check data still there        if neq call(ErrorExit), ErrorType := 11;        ! 109-Data Error on stack
+        Pop;                                            ! Pop one off
+        tmp := TOS xor 40000;                           ! Should be 40000
+        if neq call(ErrorExit), ErrorType := 12;        ! 110-Data error after pop bit 14
+
+        Pop;
+        tmp := TOS xor 20000;
+        if neq call(ErrorExit), ErrorType := 13;        ! 111-Data error after pop bit 13
+
+        Pop;
+        tmp := TOS xor 10000;
+        if neq call(ErrorExit), ErrorType := 14;        ! 112-Data error after pop bit 12
+
+        Pop;
+        tmp := TOS xor 4000;
+        if neq call(ErrorExit), ErrorType := 15;        ! 113-Data error after pop bit 11
+
+        Pop;
+        tmp := TOS xor 2000;
+        if neq call(ErrorExit), ErrorType := 16;        ! 114-Data error after pop bit 10
+
+        Pop;
+        tmp := TOS xor 1000;
+        if neq call(ErrorExit), ErrorType := 17;        ! 115-Data error after pop bit 9
+
+        Pop;
+        tmp := TOS xor 400;
+        if neq call(ErrorExit), ErrorType := 20;        ! 116-Data error after pop bit 8
+
+        Pop;
+        tmp := TOS xor 200;
+        if neq call(ErrorExit), ErrorType := 21;        ! 117-Data error after pop bit 7
+
+        Pop;
+        tmp := TOS xor 100;
+        if neq call(ErrorExit), ErrorType := 22;        ! 118-Data error after pop bit 6
+
+        Pop;
+        tmp := TOS xor 40;
+        if neq call(ErrorExit), ErrorType := 23;        ! 119-Data error after pop bit 5
+
+        Pop;
+        tmp := TOS xor 20;
+        if neq call(ErrorExit), ErrorType := 24;        ! 120-Data error after pop bit 4
+
+        Pop;
+        tmp := TOS xor 10;
+        if neq call(ErrorExit), ErrorType := 25;        ! 121-Data error after pop bit 3
+
+        Pop;
+        tmp := TOS xor 4;
+        if neq call(ErrorExit), ErrorType := 26;        ! 122-Data error after pop bit 2
+
+        tmp := UState AND 1000;
+        if eql call(ErrorExit), ErrorType := 27;        ! 123-Empty wrong
+        
+        Pop;
+        tmp := TOS xor 2;
+        if neq call(ErrorExit), ErrorType := 30;        ! 124-Data error after pop bit 1
+
+        Pop;
+        tmp := TOS xor 1;
+        if neq call(ErrorExit), ErrorType := 31;        ! 125-Data error after pop bit 0
+
+        tmp := UState AND 1000;
+        if neq call(ErrorExit), ErrorType := 32;        ! 126-Empty Not set after all pops
+
+
+
+!
+! Test the 2910 call stack
+!
+
+CallTest: tmp := 0, Call(AS);                           ! Test 2910 call stack
+        tmp - 37;                                       ! 5 levels should be 5 bit set
+        if eql GoTo(JmpTest);
+        
+CallErr:ErrorType := 33, call(ErrorExit);               ! 127-Call Test failed
+
+AS:     Call(BS);                                       ! 1st level call, now call level 2
+        tmp := tmp + 1, return;                         ! 1st level return
+BS:     Call(CS);                                       ! 2nd level call, now call level 3
+        tmp := tmp + 2, return;                         ! 2nd level return
+CS:     Call(DS);                                       ! 3rd level call, now call level 4
+        tmp := tmp + 4, Return;                         ! 3rd level return
+DS:     Call(ES);                                       ! 4th level call, now call level 5
+        tmp := tmp + 10, return;                        ! 4th level return
+ES:     tmp := tmp + 20, return;                        ! 5th level call, return now
+
+
+
+!
+! Jump tests.
+!
+
+JmpTest:0;                                              ! Try Even/Odd Jump Condition
+        if Odd goto(bad1);                              ! Should not jump
+        1;
+        if Odd goto(good1);                             ! Should jump
+        ErrorType := 34, call(ErrorExit);               ! 128-Odd didn't jump on a 1
+bad1:   ErrorType := 35, call(ErrorExit);               ! 129-Odd jumped on a 0
+
+good1:  0;                                              ! Try Byte sign jump
+        if ByteSign goto(bad2);
+        200;
+        if ByteSign goto(good3);
+        ErrorType := 36, call(ErrorExit);               ! 130-Byte Sign didn't jump on a 200
+bad2:   ErrorType := 37, call(ErrorExit);               ! 131-Byte Sign jumped on a 0
+
+good3:  r2 := not 0;                                    ! Try C19 jumps
+        if C19 goto(good6);                             ! C19 is backwards
+        ErrorType := 40, call(ErrorExit);               ! 132-C19 didn't jump when it should
+
+good6:  r2 := r2 + 1;                                   ! Cause a C19 with -1 + 1
+        if C19 goto(bad4);                              ! Shouldn't jump
+        bpc := 0;                                       ! Try jumping on BPC[3]
+        if bpc[3] goto(bad5);
+        bpc := 10;
+        if bpc[3] goto(good7);
+        ErrorType := 41, call(ErrorExit);               ! 133-BPC[3] didn't jump when it should
+bad4:   ErrorType := 42, call(ErrorExit);               ! 134-C19 jumped when it shouldn't
+bad5:   ErrorType := 43, call(ErrorExit);               ! 135-BPC[3] jumped when it shouldn't
+
+good7:  r2 := 40123;                                    ! Random data to try gtr/lss/leq/geq
+        r2 - 40124;
+        if gtr goto(bad6);
+        r2 - 40122;
+        if gtr goto(good8);
+        ErrorType := 44, call(ErrorExit);               !  136-gtr didn't jump when it should
+bad6:   ErrorType := 45, call(ErrorExit);               ! 137-gtr jumped when it shouldn't
+   
+good8:  r2 - 40124;
+        if geq goto(bad7);
+        r2 - 40122;
+        if geq goto(good9);
+        ErrorType := 46, call(ErrorExit);               ! 138-geq didn't jump when it should 
+bad7:   ErrorType := 47, call(ErrorExit);               ! 139-geq jumped when it shouldn't (gtr)
+ 
+good9:  r2 - 40122;
+        if lss goto(bad8);
+        r2 - 40124;
+        if lss goto(good10);
+        ErrorType := 50, call(ErrorExit);               ! 140-lss didn't jump when it should
+bad8:   ErrorType := 51, call(ErrorExit);               ! 141-lss jumped when it shouldn't
+ 
+good10: r2 - 40122;
+        if leq goto(bad9);
+        r2 - 40124;
+        if leq goto(good11);
+        ErrorType := 52, call(ErrorExit);               ! 142-leq didn't jump when it should
+bad9:   ErrorType := 53, call(ErrorExit);               ! 143-leq jumped when it shouldn't
+ 
+good11: r2 - 40123;
+        if geq goto(good12);
+        ErrorType := 54, call(ErrorExit);               ! 144-geq didn't jump when it was eql
+
+good12: r2 - 40123;
+        if leq goto(good13);
+        ErrorType := 55, call(ErrorExit);               ! 145-leq didn't jump when it was eql
+
+good13:  r2 := 177776;
+        r2 := r2 + 1;
+        if carry goto(bad10);
+        r2 := r2 + 1;
+        if carry goto(good14);
+        ErrorType := 56, call(ErrorExit);               ! 146-Carry didn't jump when it should
+bad10:  ErrorType := 57, call(ErrorExit);               ! 147-Carry jumped when it shouldn't
+
+good14: r2 := 77776;
+        r2 := r2 + 1;
+        if overflow goto(bad11);
+        r2 := r2 + 1;
+        if overflow goto(good15);
+        ErrorType := 60, call(ErrorExit);               ! 148-Overflow didn't jump when it should
+bad11:  ErrorType := 61, call(ErrorExit);               ! 149-Overflow jumped when it shouldn't
+
+good15: r2 := 12345;
+        r2 := r2 and not 770;
+        r2 - 12005;
+        if eql goto(good16);
+        ErrorType := 62, call(ErrorExit);               ! 150-And Not ALU function failed
+
+good16: r2 := r2 or 340;
+        r2 - 12345;
+        if eql goto(good17);
+        ErrorType := 63, call(ErrorExit);               ! 151-OR alu function failed
+
+good17: r2 := r2 or not 377;
+        r2 - 177745;
+        if eql goto(good18);
+        ErrorType := 64, call(ErrorExit);               ! 152-OR NOT alu function failed
+
+good18: r2 := r2 and 307;
+        r2 - 305;
+        if eql goto(good19);
+        ErrorType := 65, call(ErrorExit);               ! 153-AND alu function failed
+
+good19: r2 := r2 or not 12345;
+        r2 - 165737;
+        if eql goto(good20);
+        ErrorType := 66, call(ErrorExit);               ! 154-OR NOT alu function failed
+
+good20: r2 := not r2;
+        r2 - 12040;
+        if eql goto(good21);
+        ErrorType := 67, call(ErrorExit);               ! 155-NOT A alu function failed
+
+good21: r2 := not 45216;
+        r2 - 132561;
+        if eql goto(good22);
+        ErrorType := 70, call(ErrorExit);               ! 156-NOT B alu function failed
+
+good22: r2 := r2 xor 152525;
+        r2 - 060044;
+        if eql goto(good23);
+      ErrorType := 71, call(ErrorExit);                 ! 157-XOR alu function failed
+
+good23: r2 := r2 xnor 275;
+        r2 - 117546;
+        if eql goto(good24);
+        ErrorType := 72, call(ErrorExit);               ! 158-XOR alu function failed
+
+good24: r2 := 177777;
+        r2 := r2 + 1;
+        r2 := r2 + 0 + oldcarry;
+        r2 - 1;
+        if eql goto(good25);
+        ErrorType := 73, call(ErrorExit);               ! 159-OldCarry Add alu function failed
+
+good25: r2 := 0;
+        r2 := r2 - 1;
+        r2 := r2 - 0 - oldcarry;
+        0; !********r2 - 177776;
+        if eql goto(good26);
+        ErrorType := 74, call(ErrorExit);               ! 160-OldCarry subtract function failed
+
+good26: r2 := 0;
+        r2 := r2 + 0 + oldcarry;
+        if eql goto(good27);
+        ErrorType := 75, call(ErrorExit);               ! 161-OldCarry Add with no OldCarry failed
+good27:
+
+
+
+!
+! Memory test
+!
+
+MemTest:MaxAdrP1 := 100000;
+        MaxAdrP1 := MaxAdrP1 + MaxAdrP1;
+        MaxAdrP1 := MaxAdrP1 + MaxAdrP1;
+        adr := MaxAdrP1;                               ! No dual address test
+        IOB(147);                                      ! Read Parity error register to clear any error present 
+        ParityHit := 0;                                ! Should not get Parity Errors
+
+Wloop:  IF IntrPend Call(VecInt);
+        adr := adr - 1, Store;
+        MDO := adr;
+        nop;
+        adr, Fetch;
+        nop;
+        nop;
+        MDI xor adr;
+        adr - 1, if Neq GoTo(MemErr);
+        IF C19 GoTo(Read);
+        GoTo(Wloop);
+        
+Read:   adr := MaxAdrP1;
+Rloop:  IF IntrPend Call(VecInt);
+        adr := adr - 1, Fetch;
+        adr;                                           ! Dont take a chance on Abort
+        adr;
+        tmp := MDI;
+        tmp xor adr;
+        adr - 1, IF Neq GoTo(MemErr);
+        ParityHit, IF C19 GoTo(MemDone);
+        GoTo(Rloop);
+        
+MemDone: IF Eql GoTo(ForcePE);                         ! end of test, check for parity error
+
+IsParErr: tmp := ParityErr;                            ! yes, we got a parity error
+        ErrorType := 77, call(ErrorExit);              ! 163-Unexpected Parity Error
+        
+ForcePE:TestContinue and 2;
+        goto(MemTestI);                 ! Skip Parity Test  MAB
+        tmp := 10000;
+        tmp, iob(343);                                 ! Write Bad Parity
+        ma := 100, store;
+        12345;
+        nop;
+        ma := 100, fetch;
+        nop;
+        nop;
+        mdi - 12345;
+        if eql goto(FPE1);
+        ErrorType := 76, call(ErrorExit);             ! 162-Fetch error on Force Bad Parity
+ 
+FPE1:   0, Iob(343);                                  ! turn off force bad parity
+        if IntrPend Call(VecInt);
+        if IntrPend Call(VecInt);
+        if IntrPend Call(VecInt);
+        if IntrPend Call(VecInt);
+        ParityHit;
+        if neq goto(FPE2);
+        ErrorType := 100, call(ErrorExit);           ! 164-No parity errors on Force Bad Parity
+
+FPE2:   ParityErr - 100;
+        if eql goto(FPE3);
+        ErrorType := 101, call(ErrorExit);           ! 165-Wrong address on Force Bad Parity
+
+FPE3:
+
+MemTestI:adr := MaxAdrP1;                            ! No dual address inverted test
+
+WloopI: IF IntrPend Call(VecInt);
+        adr := adr - 1, Store;
+        MDO := not adr;
+        nop;
+        adr, Fetch;
+        nop;
+        nop;
+        MDI xnor adr;
+        adr - 1, if Neq GoTo(MemErrI);
+        IF C19 GoTo(ReadI);
+        GoTo(WloopI);
+        
+ReadI:  adr := MaxAdrP1;
+
+RloopI: IF IntrPend Call(VecInt);
+        adr := adr - 1, Fetch;
+        adr;                                        ! Dont take a chance on Abort
+        adr;
+        tmp := MDI;
+        tmp xnor adr;
+        adr - 1, IF Neq GoTo(MemErrI);
+        ParityHit, IF C19 GoTo(MemDoneI);
+        GoTo(RloopI);
+        
+MemDoneI: IF Neq GoTo(IsParErr);
+
+
+
+!
+! Test the Byte Program Counter
+!
+
+BpcT:   0, Iob(343);
+        tmp := 17,;
+        
+BpcL:   BPC := tmp;
+        tmp1 := USTATE AND 17;
+        tmp - tmp1;
+        IF Neq GoTo(BpcErr),tmp := tmp - 1;
+        IF Neq GoTo(BpcL);
+        MA := 100, Store4;
+        MDO := 400;
+        MDO := 1402;
+        MDO := 2404;
+        MDO := 3406;
+        0;
+        MA := 100, Fetch4;                           ! t0
+        bpc := 0;                                    ! t1
+        loadop;                                      ! t2
+        R10 := MDI;
+        R11 := MDI;
+        R12 := MDI;
+        R13 := MDI;
+        R10 - 400;
+        IF Neq GoTo(Fet4Err);
+        R11 - 1402;
+        IF Neq GoTo(Fet4Err);
+        R12 - 2404;
+        IF Neq GoTo(Fet4Err);
+        R13 - 3406;
+        IF Neq GoTo(Fet4Err);
+        tmp := 0;
+        
+        
+        
+!
+! Test NextOp
+!
+        
+NextOpT:tmp1 := NextOp;
+        tmp - tmp1;
+        IF Neq GoTo(NOerr);
+        tmp - 7;
+        tmp := tmp + 1, IF Neq GoTo(NextOpT);
+        MA := 100, Fetch4R;                         ! t0
+        bpc := 0;                                   ! t1
+        loadop;                                     ! t2
+        R10 := MDI;
+        R11 := MDI;
+        R12 := MDI;
+        R13 := MDI;
+        R10 - 3406;
+        IF Neq GoTo(Fet4RErr);
+        R11 - 2404;
+        IF Neq GoTo(Fet4RErr);
+        R12 - 1402;
+        IF Neq GoTo(Fet4RErr);
+        R13 - 400;
+        IF Neq GoTo(Fet4RErr);
+        MA := 100, Store4R;
+        MDO := 400;
+        MDO := 1402;
+        MDO := 2404;
+        MDO := 3406;
+        0;
+        MA := 100, Fetch4R;                         ! t0
+        R10 := MDI;
+        R11 := MDI;
+        R12 := MDI;
+        R13 := MDI;
+        R10 - 400;
+        IF Neq GoTo(Str4RErr);
+        R11 - 1402;
+        IF Neq GoTo(Str4RErr);
+        R12 - 2404;
+        IF Neq GoTo(Str4RErr);
+        R13 - 3406;
+        IF Neq GoTo(Fet4RErr);
+        MA := 100, Store2;
+        MDO := 2404;
+        MDO := 3406;
+        MA := 100, Fetch2; !t0
+        R10 := MDI;
+        R11 := MDI;
+        R10 - 2404;
+        IF Neq GoTo(Fet2Err);
+        R11 - 3406;
+        IF Neq GoTo(Fet2Err);
+        MA := 102, Store2;
+        MDO := 1234;
+        MDO := 5432;
+        MA := 102, Fetch2; !t0
+        R10 := MDI;
+        R11 := MDI;
+        R10 - 1234;
+        IF Neq GoTo(Fet2AErr);
+        R11 - 5432;
+        IF Neq GoTo(Fet2AErr);
+        MA := 100, Fetch;
+        adr;
+        MA := 200, Store;
+        MDO := MDI;
+        MA := 100, Fetch;
+        tmp := MDI;
+        tmp - 2404;
+        if neq goto(FSOvlpErr);
+        
+MemTest4:adr := MaxAdrP1;                           ! No dual address Fetch/Store4
+
+Wloop4: IF IntrPend Call(VecInt);
+        adr := adr - 4, Store4;
+        MDO := adr;
+        MDO := adr + 1;
+        MDO := adr + 2;
+        MDO := adr + 3;
+        adr - 1;
+        IF C19 GoTo(Read4);
+        GoTo(Wloop4);
+        
+Read4:  adr := MaxAdrP1;
+
+Rloop4: IF IntrPend Call(VecInt);
+        adr := adr - 4, Fetch4;
+        tmp := adr;
+        r10 := MDI;
+        r11 := MDI;
+        r12 := MDI;
+        r13 := MDI;
+        r10 xor tmp;
+        tmp := tmp + 1, if Neq GoTo(MemErr4);
+        r11 xor tmp;
+        tmp := tmp + 1, if Neq GoTo(MemErr4);
+        r12 xor tmp;
+        tmp := tmp + 1, if Neq GoTo(MemErr4);
+        r13 xor tmp;
+        adr - 1, if Neq GoTo(MemErr4);
+        ParityHit, IF C19 GoTo(MemDone4);
+        GoTo(Rloop4);
+        
+MemDone4: if Neq GoTo(IsParErr);
+
+Top4:   r5 := 100000;
+        r2 := 10000;
+        r3 := 1;
+        
+Top4lp: r5 := r5 + 100000;                          ! try upper 4 bits, carry propogate a 1 up there
+        r6 := not USTATE(r5);                       ! Read Y[19:16] on USTATE[15:12]
+        r6 := r6 and 170000;
+        r6 - r2;
+        ErrorType := 102, if neq call(ErrorExit);   ! 166-Upper 4 Bit Test failed
+        Ma := 100, Store2;                          ! now try to pick them up with MDX
+        0;
+        r3;
+        MA := 100, Fetch2;
+        R4 := MDI;                                  ! Make sure MDX or R4 gets good results
+        R4 := MDX or R4;
+        R6 := not UState(r4);
+        r6 := r6 and 170000;
+        r6 - r2;
+        ErrorType := 103, if neq call(ErrorExit);   ! 167-MDX test failed
+        r5, push;                                   ! Check that the Stack upper 4 bits works
+        r4 := tos;
+        r6 := tos - r5, pop;
+        r6 - 1;
+        if c19 goto(StackOk);                       ! 20 bit compare
+        ErrorType := 104, call(ErrorExit);          ! 168-Stack upper bits test failed
+
+StackOk:r5 := r5 + 100000;
+        r3 := r3 + 1;
+        r2 := r2 + 10000;
+        if neq goto(top4lp);
+        Call(VidRestore);
+        PDCStat3 := EndOfST, goto(BreakPoint);       ! signal end of pass
+
+
+
+!
+! The error routines.
+!
+
+VidRestore: VR := 102000;              ! Restore the Kernel Video Stuff
+            Cm := 177760;
+            Cm := Cm + Cm;
+            Cm := Cm - 1, LoadS(7);
+VidRes1:    Cm := Cm + 1, Store;
+            VR, Repeat(VidRes1);
+            Cm + 1, store;
+            101154;
+            Cm + 2, store;
+            101351;
+            return;
+            
+ErrorExit: ErrorType,LeftShift(10);    ! put the error code in the status reg
+           PDCStat2 := shift;
+           call(VidRestore);
+           PDCStat3 := ErrorStatus, goto(BreakPoint);
+                                       ! Set the Error Status Bit and BPT
+
+ErrorReturn: return, Loc(PDSEntry);    ! Here's where PDS comes back to cont
+
+
+MemErr: ErrorType := 123, call(ErrorExit);          ! 183-Memory Error on No Dual Addr Test
+
+MemErrI: ErrorType := 124, call(ErrorExit);         ! 184-Mem Error on No Dual Adr Invert
+
+MemErr4: ErrorType := 105, call(ErrorExit);         ! 169-Dual Addr/Fetch4 test failed
+
+Refill: ErrorType := 106, call(ErrorExit);          ! 170-Unexpected refill
+
+BpcErr: tmp := tmp + 1;
+        ErrorType := 107, call(ErrorExit);          ! 171-BPC test failed
+
+Fet4Err:ErrorType := 110, call(ErrorExit);          ! 172-Fetch4 test failed
+
+Fet4RErr:ErrorType := 111, call(ErrorExit);         ! 173-Fetch4R test failed
+
+Str4RErr:ErrorType := 112, call(ErrorExit);         ! 174-Store4 test failed
+
+Fet2Err:ErrorType := 113, call(ErrorExit);          ! 175-Fetch2 test failed
+
+Fet2AErr: ErrorType := 114, call(ErrorExit);        ! 176-Store2 test failed
+
+NOerr:  ErrorType := 115, call(ErrorExit);          ! 177-NextOp test failed
+
+FSOvlpErr: ErrorType := 116, call(ErrorExit);       ! 178-Fetch/Store Overlap failed
+
+
+
+!
+! Set up the interrupt vectors.
+!
+
+VecInt: Vector(Z80Int);
+Z80Int: IOB(106),return, Loc(6300);                   ! If Z80 Interrupts, read register to dismiss it
+
+BadInt1: ErrorType := 117, Loc(6304);! 179-Bad Interrupt loc 4
+         call(ErrorExit);
+DskInt: 0, IOB(301),return, Loc(6310);                ! If Dsk Interrupts, function:=0 to dismiss
+
+BadInt3: ErrorType := 120, Loc(6314);! 180-Bad Interrupt loc 14         call(ErrorExit);
+
+
+BadInt4: ErrorType := 121, Loc(6320);! 181-Bad interrupt loc 20         call(ErrorExit);
+
+
+DpyInt:  dpytmp, Iob(343), Loc(6324);                 ! load vidstate  !tmp := 6000, Loc(6324);
+         dpytmp, Iob(340);                           ! load line count
+Dpy1:    0, Iob(342);                                ! cursor address
+         dpycnt := dpycnt - 1;
+         dpytmp := 102000, if Gtr Return;
+         dpycnt;
+         dpytmp := 101154, if Eql Return;
+         dpytmp := 101351;
+         0, Iob(341);                                ! screen address
+         0, Iob(344);                                ! cursor x
+         dpycnt := 11, Goto(Dpy1);
+         
+BadInt6: ErrorType := 122, Loc(6330);!182-Bad interrupt loc 30
+         call(ErrorExit);
+
+ParInt: ParityHit := 1, Loc(6334);                   
+        IOB(147);                                  ! Read Parity error register
+        ParityErr := IOD, Return;
+        
+        
+END;

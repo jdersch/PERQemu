@@ -1,0 +1,4566 @@
+        TITLE    "Z80 - PERQ I/O  VERSION 8.7"
+
+
+;************ Company Confidential
+;************ Not for public release.
+;************ 
+;************ Copyright (C) 1981
+;************
+;************ Three Rivers Computer Corporation
+;************ 720 Gross Street
+;************ Pittsburgh, PA  15224
+;************ (421) 621-6250
+
+
+ Page
+;
+;------------------------------------------------------------------------------
+; Change Log:
+;
+;     24 SEP 82 DLK V8.7  1. ECO submitted to release code to Manufacturing.
+;
+;     15 SEP 82 DLK V8.67 1. Modify GPIOUT to ensure proper GPIB bus handshake.
+;
+;     20 AUG 82 DLK V8.66 1. Modify to handle the new msg format from the Kriz
+;                            Tablet hardware. Affects RAM Data, TABCHK, and 
+;                            SIOBRC.
+;
+;     16 AUG 82 DLK V8.65 1. Modified code to throw away 2 tablet msgs when
+;                            Kriz Tablet is turned on and when a tablet msg 
+;                            is overrun. This should ensure proper sync for 
+;                            subsequent msgs. See TABINI, TABSET, SIOBSP, and  
+;                            SIOBRC.
+;                         2. Modified SIOBRC to clear the SIO B Rx FIFO before
+;                            putting receiver back into Hunt Mode. 
+;                         3. Fixed TABSET to use the second bit of the msg 
+;                            as the enable/disable flag for the Kriz Tablet.
+;                            Routine STACHK also affected.
+;                         4. Removed the call to TABINI in TABSET and reset
+;                            only selected variables.
+;                         5. Changed format of tablet update msg constructed
+;                            in TABCHK.
+;
+;     20 JUL 82 DLK V8.64 1. Fixed FLPSRV and DMASRV to correctly disconnect
+;                            Floppy from DMA (i.e. IOReg3).
+;                         2. Corrected an old error in FLPCHK. The READY flag
+;                            was being modified without protection of mutual
+;                            exclusion. Also added mutex for changing FLPIST.
+;                         3. Modified SIOBRC, SPCCMD, DMASRV, and TABSET to
+;                            include a Reset Ext/Stat Int cmd when SIO B Tx
+;                            or Rx parameters are reprogrammed.
+;                         4. Modified SIOBSP to read RR1.
+;                         5. Modified SIOARS to include a Reset Ext/Stat Int
+;                            cmd when SIO A Tx/Rx parameters are reprogrammmed.
+;                            Will this correct any of our RS-232 problems?
+;                         6. Note: Change 6 in V8.6 turned out to also correct
+;                                  the Floppy hang problem in POS D.6 and F.0.
+;
+;     25 JUN 82 DLK V8.63 1. Fixed FLPSRV and FLPCHK to properly deallocate
+;                            DMABUF on Floppy Read.
+;                         2. Inserted additional code in SPCSET to release
+;                            DMA on a Speech reset.
+;                         3. Corrected position of label FOUT in FLPOUT.
+;
+;      9 JUN 82 DLK V8.62 1. Fixed DMA cmd in FLPRED - the WR0 cmd had been
+;                            accidentally removed.
+;                         2. Fixed TABINI and TABCHK.
+;
+;      7 JUN 82 DLK V8.61 1. Fixed, SEKINI, SIOBIN, SIOBST and TABSET.
+;
+;      1 JUN 82 DLK V8.6  1. Wholesale changes for SPEECH OUT to work.
+;                         2. Appropriated the Volt/Tmp Set and Get Status
+;                            routines for use with Speech.
+;                         3. Corrected Floppy problem with DMA. Also fixed
+;                            FLPCMD from size 8 to 9.
+;                         4. Added code to read DMA status so FLOPPY can 
+;                            be debugged.
+;                         5. Added support for the new Kriz Tablet on SIO B.
+;                            Rewrote the Tablet Set and Get Status routines
+;                            and the Tablet Data msg routine to support the 
+;                            Kriz Tablet.
+;                         6. Corrected old code in FLPOUT. Return down the 
+;                            "Call chain" was being short circuited when FDC
+;                            would not accept a cmd. This could be a potential
+;                            source of problems wrspct PERQR interrupts.
+;
+;      2 DEC 81 DLK V8.5  1. Corrected Tablet/Floppy interaction bug.
+;                            See "GETGPI" and "GPISRV".
+;                         2. Corrected an error in "STACHK" that set the
+;                            RS-232 transmitter ready bit in the READY flag
+;                            when it should not have.
+;
+;     30 SEP 81 DLK V8.4  1. Corrected Double Density Floppy problem.
+;                            See "FLPCMI".
+;                         2. Increased size of PRQOBF.
+;                            See "RAM ADDRESSES" section and "STACHK".
+;
+;     21 JUL 81 DLK V8.3  1. Inserted JPS Auto Enables change for RS-232.
+;                            See "SIOARS".
+;                         2. Converted source code from 8080 to Z80 and 
+;                            assembled under TEKTRONIX MDS.
+;
+;------------------------------------------------------------------------------
+
+
+
+ Page
+;
+ LIST CND
+;SpcDebug EQU 1         ;Define for debugging DMA usage with Speech and Floppy.
+;DEBUG0 EQU     1                         ;DEFINE FOR LOGGING PERQ OUTPUT
+;DEBUG1 EQU     1                         ;DEFINE FOR LOGGING PERQ INPUT
+;DEBUG2 EQU     1                         ;DEFINE TO DISABLE TRANSMIT TO PERQ
+
+        MACRO   ASCIZ
+        ASCII   '1'
+        BYTE    0
+        ENDM
+
+        MACRO   ASCII.CRLF
+        ASCII   '1'
+        BYTE    15Q,12Q
+        ENDM
+
+        MACRO   ASCIZ.CRLF
+        ASCII   '1'
+        BYTE    15Q,12Q,0
+        ENDM
+ 
+        MACRO   FILLMEM
+FILCNT  ASET    1
+        REPEAT  FILCNT <= '1'
+        BYTE    '2'
+FILCNT  ASET    FILCNT + 1
+        ENDR
+        ENDM
+
+ Page
+;;
+;INPUT/OUTPUT DEVICES
+;
+FLPSTA  EQU     250Q                    ;FLOPPY STATUS    OLD ADDRESS WAS 320Q
+FLPDAT  EQU     251Q                    ;FLOPPY DATA   OLD ADDRESS WAS 321Q
+
+DMA     EQU     230Q                            ;DMA   OLD ADDRESS WAS 310Q
+
+                                        ;****V8.6
+                                        ;    Old Touch Tablet is now defunct!
+                                        ;****
+TABLET  EQU     300Q                    ;TOUCH TABLET
+
+GPIIS0  EQU     270Q                    ;GPIB INTERRUPT STATUS 0
+GPIASW  EQU     271Q                    ;ADDRESS SWITCH
+GPIAS   EQU     272Q                    ;ADDRESS STATUS
+GPICPT  EQU     273Q                    ;COMMAND PASS THROUGH
+GPIIS1  EQU     274Q                    ;INTERRUPT STATUS 1
+GPIBS   EQU     276Q                    ;BUS STATUS
+GPIDI   EQU     277Q                    ;DATA IN
+
+GPIIMO  EQU     270Q                    ;INTERRUPT MASK 0
+GPIADD  EQU     271Q                    ;ADDRESS REGISTER
+GPIPP   EQU     273Q                    ;PARALLEL POLL
+GPIIM1  EQU     274Q                    ;INTERRUPT MASK 1
+GPISP   EQU     275Q                    ;SERIAL POLL
+GPIAUX  EQU     276Q                    ;AUXILIARY COMMAND
+GPIDO   EQU     277Q                    ;DATA OUT
+
+SIODA   EQU     260Q                    ;SIO DATA CHANNEL A
+SIOCA   EQU     261Q                    ;SIO CONTROL CHANNEL A
+SIODB   EQU     262Q                    ;SIO DATA CHANNEL B
+SIOCB   EQU     263Q                    ;SIO CONTROL CHANNEL B
+
+PERQW   EQU     320Q                    ;PERQ WRITE   OLD ADDRESS WAS 250Q
+PERQR   EQU     240Q                    ;PERQ READ
+
+IOREG2  EQU     330Q                    ;I/O REGISTER 2
+IOREG3  EQU     310Q                    ;I/O REGISTER 3   OLD ADDRESS WAS 230Q
+
+CTC0    EQU     220Q                    ;CTC CHANNEL 0
+CTC1    EQU     221Q                    ;CTC CHANNEL 1
+CTC2    EQU     222Q                    ;CTC CHANNEL 2
+CTC3    EQU     223Q                    ;CTC CHANNEL 3
+
+IOREG1  EQU     210Q                    ;I/O REGISTER 1
+
+KBD     EQU     200Q                            ;KEYBOARD
+
+ Page
+;;
+;INTERRUPT VECTORS
+;
+PRQVEC  EQU     40Q                     ;PERQ INPUT
+GPIVEC  EQU     42Q                     ;GPIB
+FLPVEC  EQU     44Q                     ;FLOPPY
+RMPVEC  EQU     46Q                     ;TABLET (RAMP STOP)
+KBDVEC  EQU     50Q                     ;KEYBOARD
+PRQGPI  EQU     52Q                     ;PERQ INPUT AND GPIB
+TABKEY  EQU     54Q                     ;TABLET (RAMP STOP) AND KEYBOARD
+OTHVEC  EQU     100Q                    ;START OF VARIABLE VECTORS
+
+ Page
+;;
+;CONSTANTS FOR THE FLOPPY
+;
+SRT     EQU     3                               ;STEP RATE
+HUT     EQU     160                     ;HEAD UNLOAD TIME
+HLT     EQU     35                              ;HEAD LOAD TIME
+GPL1    EQU     7                               ;SINGLE DENSITY GAP LENGTH
+GPL1F   EQU     27                      ;SINGLE DENSITY GAP LENGTH FOR FORMATTING
+GPL2    EQU     14                      ;DOUBLE DENSITY GAP LENGTH
+GPL2F   EQU     54                      ;DOUBLE DENSITY GAP LENGTH FOR FORMATTING
+EOT1    EQU     26                      ;SECTORS PER TRACK FOR SINGLE DENSITY
+EOT2    EQU     26                      ;SECTORS PER TRACK FOR DOUBLE DENSITY
+FLPDMA  EQU     0                       ;FLOPPY DMA ACCESS.  0 TO ENABLE
+
+
+; These are the legal values for FLPIST.  The define what the current
+; floppy action should be.  FLPIST is set by the floppy command routine 
+; when it is instructed, by PERQ, to perform some operation.
+; The Floppy interrupt routine will set the high order bit of FLPISTS
+; when an interrupt occures.  FLPCHK can check this bit to see if the 
+; floppy has done anything.
+;
+
+FLPISK  EQU     1                       ; Doing a SEEK
+FLPIRD  EQU     2                       ; A read
+FLPIWT  EQU     3                       ; A write
+FLPIFM  EQU     4                       ; Format
+FLPIIN  EQU     5                       ; Initialization
+FLPIID  EQU     6                       ; Doing nothing, Idle
+FLPIIS  EQU     7                       ; Waiting for the Seek after Recalibrate
+FLPIRC  EQU     10Q                     ; WE MUST DO A RECALIBRATE
+FLPIBT  EQU     11Q                     ; BOOTING FROM FLOPPY
+FLPICR  EQU     100Q                    ; WE MUST CHECK TO SEE IF WE SHOULD RECALIBRATE
+FLPIDN  EQU     200Q                    ; Done bit
+
+;
+; These are the valid values for FLPFLG.  FLPFLG is a word of flag
+; bits that can be used to hold state information.
+;
+
+FLPFER  EQU     1                       ; There was an error on the last command
+FLPFRD  EQU     2                       ; 1 if the drive is ready
+FLPFRP  EQU     4                       ;1 IF A RECALIBRATE IS IN PROGRESS
+
+ Page
+;;
+;CONSTANTS FOR I/O REGISTER 3
+;
+D.NONE  EQU     0*40Q                   ;NO DMA CONNECTION
+D.FLOP  EQU     1*40Q                   ;DMA TO FLOPPY
+D.PRQR  EQU     2*40Q                   ;DMA TO PERQ READ
+D.PRQW  EQU     3*40Q                   ;DMA TO PERQ WRITE
+D.SIOA  EQU     4*40Q                   ;DMA TO SIO CHANNEL A
+D.SIOB  EQU     5*40Q                   ;DMA TO SIA CHANNEL B
+D.GPIB  EQU     6*40Q                   ;DMA TO GPIB
+PRQENB  EQU     4                       ;PERQ INTERRUPT ENABLE
+KBDENB  EQU     2                       ;KBD INTERRUPT ENABLE
+FLPENB  EQU     1                       ;FLOPPY INTERRUPT ENABLE
+ALLENB  EQU     PRQENB!KBDENB!FLPENB    ;ENABLE ALL INTERRUPTS
+
+ Page
+;;
+;RAM ADDRESSES
+;
+RCVSIZ  EQU     40Q                     ;SIZE OF RECEIVER RING BUFFER
+TRNSIZ  EQU     40Q                     ;SIZE OF TRANSMITTER RING BUFFER
+SPCSIZ  EQU     100Q                    ;SIZE OF SPEECH RING BUFFER
+KBDSIZ  EQU     10Q                     ;SIZE OF KEYBOARD RING BUFFER
+GPIISZ  EQU     40Q                     ;SIZE OF GPIB INPUT BUFFER
+GPIOSZ  EQU     40Q                     ;SIZE OF GPIB OUTPUT BUFFER
+        ORG     26000Q
+DMABUF  BLOCK   256             ;DMA BUFFER (MUST BE ON A MULTIPLE OF 400Q)
+
+;****V8.6  Use old SPCBUF as a DMA cmd area for SPEECH.
+SPCDMAB  BLOCK   32              ;allocate the whole thing but only need ~ 30
+ IF \DEF(SpcDebug)
+         block   32              ; just filler
+ ELSE
+   ;Use only for debugging
+         block   15
+DMASTScnt block   1              ;Counts how many times DMA interrupts.
+DMASTAT1 block    7              ;Record DMA status upon entering DMASRV.
+         block    1              ; just filler
+DMASTAT2 block    7              ;Record DMA status after reset in DMASRV.
+         block    1              ; just filler
+ ENDIF
+;****
+
+RCVBUF  BLOCK   RCVSIZ          ;RCV BUFFER (MUST BE ON A MULTIPLE OF RCVSIZ)
+TRNBUF  BLOCK   TRNSIZ          ;TRN BUFFER (MUST BE ON A MULTIPLE OF TRNSIZ)
+GPIIBF  BLOCK   GPIISZ          ;GPIB INPUT BUFFER (ON A MULTIPLE OF GPIISZ)
+GPIOBF  BLOCK   GPIOSZ          ;GPIB OUTPUT BUFFER (ON A MULTIPLE OF GPIOSZ)
+KBDBUF  BLOCK   KBDSIZ          ;KBD BUFFER (MUST BE ON A MULTIPLE OF KBDSIZ)
+
+                                ;START OF ORDER DEPENDENT LOCATIONS
+RCVTOP  BLOCK   1               ;POINTERS INTO RCV RING BUFFER
+RCVBOT  BLOCK   1
+        IF      (SCALAR(RCVBUF)/400Q)<>(SCALAR(RCVBOT)/400Q)
+        WARNING RCVBUF AND RCVBOT NOT IN SAME 256-BYTE REGION
+        ENDIF
+SIOACL  BLOCK   1               ;CLOCK RATE FOR SIO CHANNEL A
+SIOASB  BLOCK   1               ;STATUS BITS FOR SIO CHANNEL A
+OVRRUN  BLOCK   1               ;RECEIVER OVERRUN FLAG
+                                ;END OF ORDER DEPENDENT LOCATIONS
+
+                                ;START OF ORDER DEPENDENT LOCATIONS
+TRNCNT  BLOCK   1               ;NUMBER OF USED LOCATIONS IN TRN BUFFER
+TRNTOP  BLOCK   1               ;POINTERS INTO TRN RING BUFFER
+TRNBOT  BLOCK   1
+        IF      (SCALAR(TRNBUF)/400Q)<>(SCALAR(TRNBOT)/400Q)
+        WARNING TRNBUF AND TRNBOT NOT IN SAME 256-BYTE REGION
+        ENDIF
+                                ;END OF ORDER DEPENDENT LOCATIONS
+
+;****V8.6  Ring pointers no longer used with Speech.
+     block 3      ;just maintain same offsets
+;                                    ;START OF ORDER DEPENDENT LOCATIONS
+;    SPCCNT  BLOCK   1               ;NUMBER OF USED LOCATIONS IN SPC BUFFER
+;    SPCTOP  BLOCK   1               ;POINTERS INTO SPC RING BUFFER
+;    SPCBOT  BLOCK   1
+;            IF      (SCALAR(SPCDMAB)/400Q)<>(SCALAR(SPCBOT)/400Q)
+;            WARNING SPCBUF AND SPCBOT NOT IN SAME 256-BYTE REGION
+;            ENDIF
+;****
+                                ;END OF ORDER DEPENDENT LOCATIONS
+
+                                ;START OF ORDER DEPENDENT LOCATIONS
+KBDTOP  BLOCK   1               ;POINTERS INTO KBD RING BUFFER
+KBDBOT  BLOCK   1
+        IF      (SCALAR(KBDBUF)/400Q)<>(SCALAR(KBDBOT)/400Q)
+        WARNING KBDBUF AND KBDBOT NOT IN SAME 256-BYTE REGION
+        ENDIF
+                                ;END OF ORDER DEPENDENT LOCATIONS
+
+;****V8.6  Data area for new Kriz Tablet allocated from old Tablet/Ramp area.
+;****V8.65 Redefined Tab1,...,Tab4 and TabSwitch.
+;****V8.66 Redefined to conform to new Kriz Tablet msg.
+                             ;START OF ORDER DEPENDENT LOCATIONS
+TabFlg     Block 1           ;Tells if there is tablet data to send to PERQ.
+NO_DATA    EQU   0
+DATA_AVAILABLE  EQU  1
+
+TabBuf     Block 4           ;Raw tablet data is copied into TabBuf[1..4].
+Tab1       Block 1           ;Low X co-ord.
+Tab2       Block 1           ;TabSwitch, TabOffTablet, TabCoil, and High X.
+Tab3       Block 1           ;Low Y c-ord.
+Tab4       Block 1           ;Switches and High Y.
+TABSWITCH  EQU   80H         ;A bit in Tab2 (relates to TabSwitch in Pascal).
+BUTTONS    EQU   0E0H        ;Mask to get Switches from TabBuf[4].
+
+Charcnt    Block 1           ;Character count for tablet interrupt (SIOBRC).
+Buffer     Block 6           ;Received tablet data msg is deposited here.
+MsgIgnore  Block 1           ;Must be 0 before msg in Buffer is taken as good.
+NEXT_2_MSGS EQU   2
+RcvOvrRun  Block 1           ;Counts Rx overruns on tablet data (SIOBSP).
+                             ;END OF ORDER DEPENDENT LOCATIONS
+
+     block  56     ;maintain old offsets
+;    Old allocation for Tablet/Ramp.
+;                                    ;START OF ORDER DEPENDENT LOCATIONS
+;    RMPSTA  BLOCK   1               ;RAMP STATUS (-1 IS IDLE)
+;    RMPTAB  BLOCK   2               ;POINTER INTO TABLET TABLE
+;    RMPVAR  BLOCK   2               ;POINTER INTO VOLTS ARRAY
+;                                    ;END OF ORDER DEPENDENT LOCATIONS
+;    
+;    RMPCNT  BLOCK   1               ;RAMP OVERFLOW COUNTER
+;    VOLTS   BLOCK   2*10            ;VOLTAGE/TEMPERATURE READINGS
+;    MINMAX  BLOCK   2*2*10          ;VOLTABE/TEMPERATURE MINIMUMS/MAXIMUMS
+;    
+;                                    ;START OF ORDER DEPENDENT LOCATIONS
+;    TABTMP  BLOCK   2               ;TEMPORARY X STORAGE
+;    TABFLG  BLOCK   1               ;VALID TABLET DATA FLAG
+;    TABX    BLOCK   2               ;X POSITION
+;    TABY    BLOCK   2               ;Y POSITION
+;    TABSW   BLOCK   1               ;TABLET SWITCH
+;                                    ;END OF ORDER DEPENDENT LOCATIONS
+;****
+
+                                ;START OF ORDER DEPENDENT LOCATIONS
+SEKSTA  BLOCK   1               ;SEEK STATUS
+SEKCNT  BLOCK   1               ;SEEK COUNT
+                                ;END OF ORDER DEPENDENT LOCATIONS
+
+                                ;START OF ORDER DEPENDENT LOCATIONS
+GPIOPT  BLOCK   1               ;GPIB OUTPUT BUFFER POINTER
+GPIOCN  BLOCK   1               ;GPIB OUTPUT BUFFER COUNTER
+GPITOP  BLOCK   1               ;GPIB INPUT BUFFER POINTER
+GPIBOT  BLOCK   1               ;BOTTOM POINTER
+                                ;END OF ORDER DEPENDENT LOCATIONS
+
+CLKTIC  BLOCK   1               ;NUMBER OF CLOCK TICKS
+ENABLE  BLOCK   1               ;INTERRUPT ENABLE FLAGS
+READY   BLOCK   1               ;READY FLAGS
+REQSTA  BLOCK   1               ;STATUS REQUEST FLAGS
+IOR3    BLOCK   1               ;COPY OF I/O REGISTER 3
+GPIBCM  BLOCK   1               ;LAST GPIB COMMAND
+GPIREG  BLOCK   6               ;GPIB REGS AT LAST INTERRUPT
+PRQSTA  BLOCK   2               ;PERQ INPUT STATE
+PRQIBF  BLOCK   256             ;PERQ INPUT BUFFER
+
+;****V8.6  Reduce PRQOBF to size 40 to provide more room at end of RAM.
+;          Removal of Volt/Temp support permits this.
+;********
+;******** Version 8.4 Change:
+;******** PRQOBF must be size 62 to accommodate the Voltage/Temperature
+;******** status msg  in "STACHK".  In earlier versions, PRQOBF was size 61.
+;********
+PRQOBF  BLOCK   40              ;PERQ OUTPUT BUFFER
+;****
+
+                                ; FLOPPY LOCATIONS ARE ORDER DEPENDENT
+FLPGPL   BLOCK   2              ; Two bytes of gap length
+DOUBLE   BLOCK   1              ; 100Q (octal) is double density
+BYTSEC   BLOCK   1              ; Number of bytes per sector (0 for single)
+MAXSEC   BLOCK   1              ; The max number of sectors
+DTL      BLOCK   1              ; Data length (128Q or 256Q)
+NUMHD    BLOCK   1              ; The number of heads (1 or 2)
+FLPSTB   BLOCK   7              ; Status,  7 bytes from the chip
+FLPIST   BLOCK   1              ; Floppy internal state.
+FLPNST   BLOCK   1              ; Number of bytes in FLPSTS that are valid.
+FLPCHD   BLOCK   1              ; Head,Unit for the floppy command.
+FLPCCY   BLOCK   1              ; Cylinder
+FLPCSE   BLOCK   1              ; Sector
+FLPCCM   BLOCK   1              ; The command from PERQ
+FLPCBC   BLOCK   1              ; Number of data bytes in the command.
+;****V8.6  Fix error in size of FLPCMD table.
+FLPCMD   BLOCK   9              ; Floppy command area
+;****
+FLPFLG   BLOCK   1              ; The Floppy flag byte
+FLPBNS   BLOCK  2               ; NUMBER OF SECTORS IN THE BOOT FILE.
+
+;***V8.6 Increase size from 25 to 35 for FLOPPY DMA cmd area.
+DMACMD   BLOCK   35             ; DMA command work area, used only for FLOPPY.
+;****
+DMACNT   BLOCK   1              ; THE NUMBER OF BYTES IN THE DMA COMMAND
+
+        BLOCK   100Q            ;THE STACK AREA
+STACK  BLOCK    0
+
+;****V8.6  Data area to support Speech.
+;          Arrange data to accomodate Speech Get/Put Status.
+SPCchange  Block 1           ;Flag shows user request for change in baud rate 
+NOCHANGE   EQU   0           ;  for Speech (CTC1).
+CHANGE     EQU   1
+
+;The value programmed into CTC1 determines the baud rate for Speech.
+NewSPCrate       Block 1     ;0 -> 255, 0 means 256
+CurrentSPCrate   Block 1     ;0 -> 255, 0 means 256
+
+SPCerror      Block 1     ;Only lower 2 bits are meaningful.
+NOERRORS         EQU   0
+BAD_BYTECNT      EQU   1
+DMA_NOTAVAILABLE EQU   2
+
+DMAstate   Block 1           ;IDLE or BUSY
+IDLE       EQU   0
+BUSY       EQU   1
+
+DMAowner        Block 1      ;NONE, SPEECH, or FLOP
+LastDMAuser     Block 1      ;ditto
+NONE            EQU   0
+SPEECH          EQU   1
+FLOP            EQU   2
+
+FreeBufs   Block 1           ;Number of empty 128-byte buffers available
+                             ;  for ucode to fill (0, 1, or 2).
+
+SPCblkcnt  Block 2           ;Counts number of 32-byte chunks sent by ucode.
+                             ;  (debugging aid only)
+                             ;Note: Must be aligned an even number of
+                             ;      bytes away from SPCchange.
+                             
+;Z80 must know where to store the next 32-byte chunk of Speech data from ucode.
+HighINIRaddr    EQU   Hi(DMABUF)
+LowINIRaddr     Block 1      ;0, 32, 64, 96
+                             ;128, 160, 192, 224
+
+;Z80 must know where the next 128-byte buffer of Speech data is for its DMA.
+HighDMAaddr     EQU   Hi(DMABUF)
+LowDMAaddr      Block 1      ;0 or 128
+
+SPC_RESET_CODE  EQU   231Q   ;Special code to validate reset request.
+;****
+
+
+
+
+        IF      $>=30000Q
+        WARNING RAM AREA TOO BIG
+        ENDIF
+
+ Page
+;;
+;BITS IN INTERRUPT ENABLE FLAG BYTE
+;
+ENBTAB  EQU     1                       ;TABLET
+ENBRCV  EQU     2                       ;SIO CHANNEL A RECEIVER
+ENBKBD  EQU     4                       ;KEYBOARD
+ENBCLK  EQU     10Q                     ;CLOCK
+ENBVLT  EQU     20Q                     ;VOLTAGE/TEMPERATURE CHECKING
+
+;
+;BITS IN READY FLAG BYTE
+;
+RDYTRN  EQU     1                       ;TRANSMITTER
+RDYSPC  EQU     2                       ;SPEECH
+RDYFLP  EQU     4                       ;FLOPPY
+RDYGPI  EQU     10Q                     ;GPIB
+RDYDSK  EQU     20Q                     ;DISK
+RDYCHG  EQU     200Q                    ;CHANGE IN READY FLAGS
+
+;
+;BITS IN STATUS REQUEST BYTE
+;
+STARCV  EQU     1                       ;RECEIVER
+STATAB  EQU     2                       ;TABLET
+STAKBD  EQU     4                       ;KEYBOARD
+;****V8.6 We use this for Speech now.
+;         Microcode still treats it as Volt/Temp.
+STAVLT  EQU     10Q                     ;Speech (old VOLTAGE/TEMPERATURE)
+;****
+STACLK  EQU     20Q                     ;CLOCK
+STAFLP  EQU     40Q                     ;FLOPPY
+STAGPI  EQU     100Q                    ;GPIB
+STAZ80  EQU     200Q                    ;READY FLAG
+
+ Page
+;;
+;THE STARTING ADDRESS (COURTESY OF THE HARDWARE)
+;
+        ORG     0
+        DI                      ;ENSURE THAT INTERRUPTS ARE OFF
+        JP      BEGIN           ;AND GO TO THE REAL BEGINNING
+
+;
+;THE INTERRUPT VECTORS
+;
+        ORG     PRQVEC          ;PERQ INPUT
+        WORD    PRQSRV
+
+        ORG     GPIVEC          ;GPIB
+        WORD    GPISRV
+
+        ORG     FLPVEC          ;FLOPPY
+        WORD    FLPSRV
+
+                                ;****V8.6 This is vector for old Tablet/Ramp.
+                                ;****
+        ORG     RMPVEC          ;TABLET (RAMP STOP)
+        WORD    RMPSRV
+
+        ORG     KBDVEC          ;KEYBOARD
+        WORD    KBDSRV
+
+        ORG     PRQGPI          ;PERQ AND GPIB
+        WORD    PRQSRV
+
+                                ;****V8.6 This is vector for old Tablet/Ramp.
+                                ;****
+        ORG     TABKEY          ;TABLET AND KEYBOARD
+        WORD    RMPSRV
+
+        WORD    JUNK56
+
+        ORG     OTHVEC          ;VARIABLE VECTORS
+
+        ORG     /20Q            ;SIO VECTOR MUST BE ON A MULTIPLE OF 20Q
+SIOVEC  WORD    SIOBTR          ;CHANNEL B TRANSMIT(****V8.6 Unused)
+        WORD    SIOBST          ;CHANNEL B STATUS CHANGE (60HZ CLOCK)
+        WORD    SIOBRC          ;CHANNEL B RECEIVE CHAR (****V8.6 Kriz Tablet)
+        WORD    SIOBSP          ;CHANNEL B SPECIAL (****V8.6 Kriz Tablet)
+        WORD    SIOATR          ;CHANNEL A TRANSMIT
+        WORD    SIOAST          ;CHANNEL A STATUS CHANGE
+        WORD    SIOARC          ;CHANNEL A RECEIVE CHARACTER
+        WORD    SIOASP          ;CHANNEL A SPECIAL
+
+        ORG     /10Q            ;CTC VECTOR MUST BE ON A MULTIPLE OF 10Q
+CTCVEC  WORD    CTC0SR          ;CTC 0 (INT unused; RS-232 baud rate)
+        WORD    CTC1SR          ;CTC 1 (INT unused; Speech/Tablet baud rate)
+        WORD    CTC2SR          ;CTC 2 (Hard Disk Seeks)
+        WORD    CTC3SR          ;CTC 3 (****V8.6 Unused, old TABLET/VOLT/TEMP)
+
+DMAVEC  WORD    DMASRV          ;DMA
+
+ Page
+;;
+;POWER UP SEQUENCE
+;
+        ORG     400Q
+BEGIN   LD      SP,STACK                ;SET UP THE STACK
+        IM      2               ;SET INTERRUPT MODE 2
+        SUB     A               ;GET A ZERO
+        LD      I,A             ;LOAD I REGISTER
+        SUB     A               ;GET A ZERO
+        LD      (ENABLE),A              ;NOTHING IS ENABLED
+        LD      (REQSTA),A              ;NO STATUS REQUESTS
+        LD      A,RDYTRN!RDYSPC!RDYFLP!RDYGPI!RDYDSK!RDYCHG
+        LD      (READY),A               ;EVERYTHING IS READY
+
+        LD      A,D.NONE!PRQENB!FLPENB  ;ENABLE ALL INTERRUPTS EXCEPT KEYBOARD
+        OUT     (IOREG3),A
+        LD      (IOR3),A                ;AND KEEP A COPY FOR REFERENCE
+
+;       LD      A,D.NONE!ALLENB ;***
+;       OUT     (IOREG3),A              ;***
+;       LD      (IOR3),A                ;***
+;       LD      A,ENBTAB!ENBRCV!ENBKBD!ENBCLK!ENBVLT    ;***
+;       LD      (ENABLE),A              ;***
+
+        CALL    TABINI          ;INITIALIZE THE Kriz TABLET (****V8.6)
+        ;****V8.6  Remove:  CALL    VLTINI          ;INIT VOLT/TEMP CHECKING
+        CALL    KBDINI          ;INITIALIZE THE KEYBOARD
+        CALL    SEKINI          ;INITIALIZE DISK SEEK
+        CALL    SIOAIN          ;INITIALIZE SIO CHANNEL A
+        CALL    SIOBIN          ;Init SIO CHANNEL B (****V8.6 Speech/Tablet!!!)
+        CALL    CLKINI          ;INITIALIZE LINE CLOCK
+        CALL    DMAINI          ;INITIALIZE DMA
+        CALL    GPIINI          ;INITIALIZE GPIB
+        CALL    PRQINI          ;INITIALIZE PERQ INPUT/OUTPUT
+        Call    FLPINI          ;INITIALIZE FLOPPY
+
+        EI                      ;OK FOR INTERRUPTS NOW
+        JP      RESTRT
+
+CRLF    ASCIZ.CRLF      ""
+
+ Page
+;;
+;THE MAIN LOOP OF THE PROGRAM
+;
+RESTRT  LD      SP,STACK                ;RESET THE STACK POINTER
+        CALL    TABCHK          ;CHECK FOR TABLET DATA TO SEND
+        CALL    FLPCHK          ;CHECK FOR FLOPPY COMMAND COMPLETE
+        CALL    SEKCHK          ;CHECK FOR DISK SEEK COMPLETION
+        CALL    RDYCHK          ;CHECK THE READY FLAGS
+        CALL    GPICHK          ;CHECK FOR GPIB INPUT
+        CALL    RCVCHK          ;CHECK FOR RS232 INPUT
+        CALL    KBDCHK          ;CHECK FOR KEYBOARD CHARACTERS
+        ;****V8.6 Move up:   CALL    RDYCHK          ;CHECK THE READY FLAGS
+        CALL    STACHK          ;CHECK STATUS REQUEST
+        ;****V8.6 Remove:    CALL    VLTCHK          ;CHECK VOLT/TEMPERATURES
+        JP      RESTRT          ;KEEP LOOPING
+
+ Page
+;;
+;CHECK FOR CHANGES IN READY FLAGS AND SEND TO PERQ IF NECESSARY
+;
+RDYCHK  LD      HL,READY
+        DI                      ;PRIVACY PLEASE
+        LD      A,(HL)          ;GET THE FLAGS
+        RLA                     ;RDYCHG BIT TO CARRY
+        JP      C,RDYCHK1               ;WE HAVE A CHANGE
+        EI                      ;NOTHING HAS CHANGED
+        RET
+
+RDYCHK1 RRA                     ;GET BYTE BACK TO NORMAL
+        LD      B,A             ;AND SAVE IT
+        AND     LO(\RDYCHG)     ;REMOVE THE CHANGE BIT
+        LD      (HL),A          ;BACK TO MEMORY
+        EI
+        LD      A,13Q           ;TIME TO TELL PERQ
+        CALL    PRQCMD
+        LD      A,B
+        CALL    PRQOUT
+        JP      RESTRT          ;AND RESTART THE IDLE LOOP
+
+ Page
+;;
+;CHECK FOR STATUS REQUESTS
+;
+STACHK  LD      A,(REQSTA)              ;THE FLAG BYTE
+        AND     A               ;ANYTHING ON?
+        RET     Z                       ;NOPE
+        LD      HL,PRQOBF       ;MOST ROUTINES WILL WANT THIS
+                                ;*** WARNING ***
+                                ;THE FOLLOWING CODE KNOWS THE BIT POSITIONS
+                                ;IN REQSTA
+        RRCA                    ;RECEIVER?
+        JP      C,STACHK10
+        RRCA                    ;Kriz TABLET?
+        JP      C,STACHK20
+        RRCA                    ;KEYBOARD?
+        JP      C,STACHK30
+;****V8.6 No change here but we are borrowing this bit for Speech GetStatus.
+        RRCA                    ;Speech? (old VOLTAGE/TEMPERATURE)
+        JP      C,STACHK40
+;****
+        RRCA                    ;CLOCK?
+        JP      C,STACHK50
+        RRCA                    ;FLOPPY?
+        JP      C,STACHK60
+        RRCA                    ;GPIB?
+        JP      C,STACHK70
+        JP      STACHK80                ;Z80!
+
+STACHK10        LD      (HL),3          ;RS232 STATUS
+        INC     HL
+        LD      A,(ENABLE)              ;IS IT INTERRUPT ENABLED?
+        AND     ENBRCV
+        JP      Z,STACHK11
+        LD      A,1             ;YES
+STACHK11        LD      (HL),A
+        INC     HL
+        LD      A,(SIOACL)              ;CLOCK RATE
+        LD      (HL),A
+        INC     HL
+        LD      A,(SIOASB)              ;RECEIVER/TRANSMITTER STATUS BYTE
+        LD      (HL),A
+        LD      A,\STARCV       ;THE BITS TO LEAVE ON
+        LD      B,7             ;THE COMMAND TO SEND
+        JP      STACHK90                ;JOIN COMMON EXIT
+
+;****V8.6  Reports status for new Kriz Tablet.
+STACHK20 Block 0                ;TABLET STATUS
+        LD      (HL),2          ;Put count of status bytes into PRQOBF.
+
+        INC     HL              ;Point to next slot in PRQOBF.
+        LD      A,(ENABLE)      ;IS Tablet INTERRUPT ENABLED?
+        AND     ENBTAB
+        JP      Z,STACHK21      ;No!
+        LD      A,2             ;YES! ****V8.65 New enable bit is bit 1. ****
+STACHK21 LD      (HL),A         ;Put Enable status into PRQOBF.
+
+        inc     hl              ;Point to next slot in PRQOBF.
+        ld      de, RcvOvrRun   ;Point to RcvOvrRun.
+        ld      a, (de)         ;Get the overrun count.
+        ld      (hl), a         ;Put it in PRQOBF.
+        sub     a               ;Get a zero.
+        ld      (de), a         ;Reset overrun count.
+        
+        LD      A,\STATAB       ;THE BITS TO LEAVE ON.
+        LD      B,10Q           ;THE COMMAND TO SEND
+        JP      STACHK90        ;JOIN COMMON EXIT
+;****
+
+STACHK30        LD      (HL),1          ;KEYBOARD STATUS
+        INC     HL
+        LD      A,(ENABLE)              ;IS IT INTERRUPT ENABLED?
+        AND     ENBKBD
+        JP      Z,STACHK31
+        LD      A,1             ;YES
+STACHK31        LD      (HL),A
+        LD      A,\STAKBD       ;THE BITS TO LEAVE ON
+        LD      B,11Q           ;THE COMMAND TO SEND
+        JP      STACHK90                ;JOIN COMMON EXIT
+
+;****V8.6  Provide for Speech GetStatus (borrow old Volt/Temp Status).
+STACHK40 Block 0                ;Speech Status
+         ld  (hl), 12           ;Put count of status bytes into PRQOBF.
+         
+         inc hl                 ;Point to next loc in PRQOBF.
+         ld  de, SPCchange      ;Point to start of Speech status.
+         ex  de, hl             ;Set up for block move.
+         ld  bc, 12
+         DI                     ;We need privacy.
+         ldir                   ;Put status into PRQOBF.
+         
+         sub a                  ;Get a zero.
+         ld  (SPCerror), a      ;We reset SPCerror and SPCblkcnt
+         ld  (SPCblkcnt), a     ;  when status is sent.
+         ld  (SPCblkcnt+1), a   ;
+         
+         EI                     ;O.K. for interupts now.
+
+         ld  a, \STAVLT         ;Bits to leave on in REQSTA.
+         ld  b, 15Q             ;The cmd to send to PERQ.
+         jp  STACHK90           ;Join the common exit.
+         
+         ;The following note is retained to indicate the V8.4 change that
+         ;increased PRQOBF size to accommodate the old Volt/Temp Status msg.
+                                ;********* Version 8.4 Note:
+                                ; PRQOBF is the RAM buffer for msgs going
+                                ; back to PERQ. The msg here includes 61 data
+                                ; bytes and the msg size byte. Thus PRQOBF 
+                                ; must be size 62. See the "RAM ADDRESSES"
+                                ; section.
+                                ;*********
+;****
+
+STACHK50        LD      (HL),1          ;CLOCK STATUS
+        INC     HL
+        LD      A,(ENABLE)              ;IS IT INTERRUPT ENABLED?
+        AND     ENBCLK
+        JP      Z,STACHK51
+        LD      A,1             ;YES
+STACHK51        LD      (HL),A
+        LD      A,\STACLK       ;THE BITS TO LEAVE ON
+        LD      B,16Q           ;THE COMMAND TO SEND
+        JP      STACHK90                ;JOIN COMMON EXIT
+
+STACHK60        LD      A,(FLPNST)              ;NUMBER OF FLOPPY STATUS BYTES
+        LD      (HL),A          ;PUT IT INTO THE BUFFER
+        INC     HL              ;BUMP THE POINTER
+        LD      DE,FLPSTB       ;GET THE ADDRESS OF THE FLOPPY STATUS BUFFER
+        LD      A,(FLPNST)
+        LD      B,A             ;B IS A COUNTER
+        DI                      ;DO NOT BOTHER ME
+STACHK61        LD      A,(DE)          ;GET FLOPPY STATUS BYTES FROM BUFFER
+        INC     DE
+        LD      (HL),A          ;GET THE STATUS BYTE
+        INC     HL
+        DEC     B               ;ONE LESS BYTE TO MOVE
+        JP      NZ,STACHK61             ;NOT DONE YET.  MOVE MORE
+        EI                      ;YOU CAN BOTHER ME NOW
+        LD      A,\STAFLP
+        LD      B,20Q           ;20Q IS THE FLOPPY STATUS
+        JP      STACHK90
+        
+STACHK70        LD      (HL),6          ;SEND 6 REGISTERS
+        INC     HL
+        LD      DE,GPIREG       ;WHERE THEY ARE KEPT
+        LD      B,6             ;A LOOP COUNTER
+        DI                      ;NO CHANGING WHILE READING PLEASE
+STACHK71        LD      A,(DE)          ;MOVE THEM
+        INC     DE
+        LD      (HL),A
+        INC     HL
+        DEC     B
+        JP      NZ,STACHK71
+        EI                      ;OK TO PEEK NOW
+        LD      A,\STAGPI       ;THE BITS TO LEAVE ON
+        LD      B,17Q           ;THE COMMAND TO SEND
+        JP      STACHK90                ;JOIN COMMON EXIT
+
+STACHK80        DI                      ;READY FLAG STATUS
+        LD      HL,READY
+        LD      A,(HL)
+                                ;**********
+                                ;********** Version 8.5 Change:
+                                ; In previous versions RDYTRN was "OR"ed in
+                                ; here.  Clearly, RDYCHG should have been used
+                                ; to fake the needed change!
+                                ;**********
+        OR      RDYCHG          ;FAKE A CHANGE SO IT WILL BE SENT
+                                ;**********
+        LD      (HL),A
+        LD      HL,REQSTA       ;AND CLEAR STATUS REQUEST BIT
+        LD      A,(HL)
+        AND     LO(\STAZ80)
+        LD      (HL),A
+        EI
+        RET                     ;WE ARE DONE
+
+STACHK90        LD      HL,REQSTA       ;UPDATE THE REQUEST FLAG
+        DI
+        AND     (HL)
+        LD      (HL),A
+        EI
+        LD      A,B             ;THE COMMAND CODE
+        CALL    PRQCMD          ;START IT UP
+        LD      A,(PRQOBF)              ;NUMBER OF DATA BYTES TO SEND
+        INC     A               ;INCLUDE THE COUNT BYTE
+        CALL    PRQSND          ;SEND IT
+        JP      RESTRT          ;AND THEN RESTART IDLE LOOP
+        
+        
+
+
+ Page
+;;
+;FLOPPY INITIALIZATION
+;
+; Set the initial values of the number of heads,  density, number of sides
+; and gap length.  Execute the initial floppy chip commands to get the
+; world into a usable state.
+;
+FLPINI  PUSH    HL
+        LD      HL,FLPIST
+        LD      (HL),FLPIIN     ; Doing initialization
+        
+        LD      HL,FLPGPL       ;SET INITIAL VALUES.  THE GAP LENGTH
+        LD      (HL),GPL1               ;GAP FOR SINGLE DENSITY
+        INC     HL
+        LD      (HL),GPL1F
+        INC     HL
+        LD      (HL),0             ;SET TO SINGLE DENSITY
+        INC     HL      
+        LD      (HL),0          ;NEXT IS THE BYTES PER SECTOR
+        INC     HL     
+        LD      (HL),EOT1               ;THE MAX NUMBER OF SECTORS
+        INC     HL    
+        LD      (HL),128                ;DATA LENGTH
+        INC     HL  
+        LD      (HL),1          ;NUMBER OF HEADS
+        
+        LD      HL,FCMD0                ;SPECIFY COMMAND
+       LD      A,3             ;NUMBER OF BYTES IN THE COMMAND
+        CALL    FLPOUT
+        LD      HL,FCMD1                ;RECALIBRATE
+        LD      A,2
+        EI
+        CALL    FLPOUT
+        
+FLPINI1 LD      HL,FLPIST
+        LD      A,(HL)          ;SPIN WAITING FOR THE FLOPPY TO GO IDLE
+        AND     LO(\FLPIDN)     ;Take out the change bit
+        CP      FLPIID          ;Are we idle yet
+        JP      NZ,FLPINI1
+        DI
+        
+        LD      HL,FCMD3                ;SENSE INTERRUPT STATUS
+        LD      A,1
+        CALL    FLPOUT
+        LD      A,2             ;TWO RESULT BYTE
+        CALL    FLPRSL
+        LD      A,(FLPIST)              ;GET THE INTERNAL STATE
+        OR      FLPIDN          ;SET THE DONE BIT
+        LD      (FLPIST),A              ;PUT IT BACK.
+
+FLPINI10        POP     HL
+        RET
+
+
+
+FCMD0   BYTE    3,((-SRT&17Q)*20Q)+(HUT/16),(((HLT+1)/2)*2)+FLPDMA,377Q ;SPECIFY
+FCMD1   BYTE    7,0,377Q                ;RECALIBRATE
+FCMD2   BYTE    4,0,377Q                ;SENSE DRIVE STATUS
+FCMD3   BYTE    10Q,377Q                ;SENSE INTERRUPT STATUS
+
+
+
+
+        
+        
+
+ Page
+;;
+;SEND A FLOPPY COMMAND
+;
+;   HL POINTS TO COMMAND SEQUENCE
+;   A CONTAINS NUMBER OF BYTES
+;
+;   THIS ROUTINE DESTROYS A AND HL
+;
+FLPOUT  PUSH    BC              ;SAVE B
+        LD      B,A             ;THE COUNTER
+
+FLPOUT1 IN      A,(FLPSTA)              ;GET THE STATUS REGISTER
+        AND     300Q            ;LOOK AT TOP TWO BITS
+        CP      200Q            ;OK TO TRANSFER?
+        JP      Z,FLPOUT10              ;YES.  GO GET THE BYTE
+        CP      300Q            ;IS THE CHIP TRYING TO GIVE US DATE
+        JP      NZ,FLPOUT1              ;NO.  JUST LOOP.
+
+        LD      A,7             ;THE MAX NUMBER OF BYTES FROM THE CHIP
+        CALL    FLPRSL          ;READ ALL OF THE BYTES FROM THE CHIP
+        LD      A,120Q          ;STATUS BYTE FOR THE FLOPPY
+        LD      (FLPSTB),A              ;ERROR DURRING COMMAND.  EQUIP FAULT
+        LD      A,1             ;NUMBER OF VALID BYTES IN THE RESULT BUFFFER.
+        LD      (FLPNST),A
+        LD      A,FLPISK!FLPIDN
+        LD      (FLPIST),A              ;SET THE INTERNAL STATE.
+ 
+;****V8.6  Since Speech now uses the DMA also, we must release it when we 
+;          have no further use for it.
+        ;We release the DMA if we have it.
+        ld    hl, DMAowner
+        ld    a, (hl)
+        cp    FLOP
+        jp    nz, FOUT
+        ld    (hl), NONE
+
+        ;Disconnect DMA from FLOPPY.
+        ld  hl, IOR3
+        ld  a, (hl)
+        and LO(\D.FLOP)
+        ld  (hl), a
+        out (IOREG3), a
+                
+FOUT    pop   bc
+        ret                      ;Return to caller always!!!!!!!!!!!!!!!!!
+;****
+
+        
+;****V8.6  This code is wrong and should be deleted!!!
+;          We do not want to change PRQSTA and jump to top of cmd loop if we
+;          find the Floppy in a bad state. We should just return to the caller
+;          after setting Equip Fault error. Remember, we got to FLPOUT during
+;          the interrupt service for PERQR!! We eventually have to get back 
+;          there and do an EI, RETI sequence!!!
+ 
+;
+;        LD      HL,IDLSTA       ;LOAD THE ADDRESS OF THE IDLE STATE
+;        LD      (PRQSTA),HL     ;THIS IS THE NEXT STATE ON PERQ INTERRUPT
+;        JP      RESTRT          ;JUMP TO THE TOP OF THE COMMAND LOOP.
+;****
+
+FLPOUT10        LD      A,(HL)          ;GET THE NEXT BYTE
+        OUT     (FLPDAT),A              ;SHIP IT
+        INC     HL              ;BUMP THE POINTER
+        DEC     B               ;THE LOOP COUNTER
+        JP      NZ,FLPOUT1              ;IF MORE BYTES TO GET
+
+        POP     BC              ;RESTORE
+        RET
+
+
+
+
+ Page
+;;
+;GET THE RESULTS FROM THE FLOPPY
+;
+;   A CONTAINS NUMBER OF RESULT BYTES
+;
+; The results will be placed into FLPSTB.
+;
+
+FLPRSL  PUSH    HL
+        PUSH    BC
+        LD      B,A             ; Number of result bytes
+;       LD      HL,CRLF
+;       CALL    TYPSTR
+;       LD      A,B
+;        LD     A,"F"
+;        CALL    TYPE
+;       MOV     A,B
+;       CALL    TYPNUM
+
+        LD      HL,FLPSTB       ; Address of result area
+        LD      C,255Q          ; SET THE COUNTER.
+
+FLPRSL2 IN      A,(FLPSTA)              ; Get the status byte
+        AND     300Q            ; Did we get it
+        JP      Z,FLPRSL2               ; No so try again
+        CP      300Q            ; Is the chip trying to give us data??
+        JP      Z,FLPRSL10              ; YES.  GO READ THE BYTE
+        DEC     C               ; SUBSTRACT ONE FROM THE COUNTER
+        JP      Z,FLPRSL3               ; TIME OUT !!!
+        JP      FLPRSL2         ; GO BACK AND TRY AGAIN
+        
+FLPRSL10        IN      A,(FLPDAT)              ; GET THE BYTE FROM THE CHIP
+        LD      (HL),A          ; Store it in the result buffer
+
+;       CALL    TYPNUM
+        LD      C,255Q          ; RESET THE TIMEOUT COUNTER.
+        INC     HL              ; Bump the pointer
+        DEC     B               ; Substract one from the byte count.
+        JP      NZ,FLPRSL2              ; There are still more bytes to be read.
+        
+FLPRSL3 POP     BC
+;       LD      HL,CRLF
+;       CALL    TYPSTR
+        POP     HL
+        RET
+        
+
+
+
+
+
+
+
+ Page
+;;
+; Start a Seek operation
+;
+;   B - HEAD AND UNIT NUMBER
+;   C - CYLINDER NUMBER
+;
+FLPSEK  LD      A,FLPISK
+        LD      (FLPIST),A
+        PUSH    AF              ;SAVE
+        PUSH    HL
+        LD      HL,FLPCMD+2     ;MEMORY AREA TO CONTAIN THE COMMAND
+        LD      (HL),C          ;THE CYLINDER
+        DEC     HL
+        LD      (HL),B          ;HEAD AND UNIT
+        DEC     HL
+        LD      (HL),17Q                ;THE NUMBER OF BYTES IN THE COMMAND
+        LD      A,3             ;NUMBER OF BYTES IN THE COMMAND
+        DI
+        CALL    FLPOUT          ;SEND IT
+        POP     HL              ;RESTORE
+        POP     AF
+        RET
+
+
+
+
+
+
+
+ Page
+;;
+; Start a sector read from the floppy
+;
+;   B - HEAD AND UNIT NUMBER
+;   C - CYLINDER NUMBER
+;   D - SECTOR NUMBER
+;
+FLPRED  PUSH    AF              ;SAVE THE REGS
+        PUSH    BC
+        PUSH    HL
+        
+        LD      A,FLPIRD        ;WE ARE DOING A READ
+        LD      (FLPIST),A
+
+;****V8.6  Speech and Floppy contend for the DMA.
+        Call   DMAcheck        ;We must have the DMA for this.
+        ld     a, (DMAowner)
+        cp     FLOP            ;Did DMAcheck give it to us?
+        jp     nz, EXITREAD
+;****
+        
+        LD      HL,FLPRED10             ;SET UP THE DMA COMMAND
+        LD      A,FLPRED13-FLPRED10
+        CALL    DMAINT
+        LD      A,(BYTSEC)              ;NUMBER OF BYTES PER SECTOR
+        RRCA
+        ADD     A,7FH           ;NOW IT IS NUMBER OF DATA TRANSFERS - 1
+        LD      (DMACMD+(FLPRED11-FLPRED10)),A  ;PATCH THE COMMAND
+        LD      (DMACMD+(FLPRED12-FLPRED10)),A
+        LD      HL,IOR3         ;GET THE CURRENT VALUE OF IO REG 3
+        LD      A,(HL)
+        OR      D.FLOP          ;ALLOW FLOPPY DMA
+        LD      (HL),A
+        OUT     (IOREG3),A
+
+        LD      A,(DMACNT)              ;LENGTH OF DMA COMMAND
+        CALL    DMAOUT          ;DO IT
+
+        LD      HL,FLPCMD       ;WHERE TO CONSTRUCT THE COMMAND
+        LD      A,(DOUBLE)              ;DENSITY
+        OR      46Q             ;READ DATA
+        LD      (HL),A
+        INC     HL
+        LD      (HL),B          ;HEAD AND UNIT
+        INC     HL
+        LD      (HL),C          ;CYLINDER
+        INC     HL
+        LD      A,B             ;HEAD AND UNIT AGAIN
+        RRCA                    ;REMOVE UNIT NUMBER
+        RRCA
+        AND     1
+        LD      (HL),A          ;HEAD NUMBER
+        INC     HL
+        LD      (HL),D          ;SECTOR
+        INC     HL
+        LD      A,(BYTSEC)              ;BYTES PER SECTOR
+        LD      (HL),A
+        INC     HL
+        LD      A,(MAXSEC)              ;LAST SECTOR NUMBER
+        LD      (HL),A
+        INC     HL
+        LD      A,(FLPGPL)              ;GAP LENGTH
+        LD      (HL),A
+        INC     HL
+        LD      A,(DTL)         ;DATA LENGTH
+        LD      (HL),A
+        LD      HL,FLPCMD
+        LD      A,9
+        DI                      ;NO INTERRUPTS PLEASE
+        CALL    FLPOUT          ;SEND THE COMMAND SEQUENCE
+EXITREAD  POP     HL              ;RESTORE
+        POP     BC
+        POP     AF
+        RET                     ;DONE
+
+
+
+         Block 5            ;extra for patching
+         
+;****V8.6   
+       ;Full Setup Cmd
+FLPRED10 byte 01H           ;WR0: Tx B->A
+                            ;     **** Switch direction!! Who knows 
+                            ;          why? It is the only way to 
+                            ;          make it work!
+                            ;     ****
+         byte 0C3H, 0C3H, 0C3H, 0C3H, 0C3H, 0C3H      ;WR6: 6 Resets
+         byte 0C7H, 0CBH    ;WR6: Reset Port A and B Timing
+         byte 155Q          ;WR0: Tx A->B
+           byte FLPDAT      ;     Port A addrL
+FLPRED11   word 127         ;     Block Length
+         byte 154Q          ;WR1: Port A fixed addr, I/O, Variable Timing
+           byte 0           ;     4 cycle timing, early termination
+         byte 235Q          ;WR4: Byte Mode Operation
+           word DMABUF      ;     Port B addr
+           byte 1EH         ;     INT on Block End, Pulse Gen
+FLPRED12     byte 127       ;     Pulse byte
+             byte lo(DMAVEC);     INT Vector
+         byte 120Q          ;WR2: Port B addr incr, Memory, Variable Timing
+           byte 0           ;     4 cycle timing, early termination
+         byte 212Q          ;WR5: Stop on End of Block, RDY Active HIGH
+         byte 0CFH          ;WR6: LOAD
+ IF DEF(SpcDebug)
+         ;Forget the Read Mask unless we are debugging.
+         byte 0BBH          ;     Read Mask Follows
+           byte 07FH        ;         Mask selects all 7 status regs
+ ENDIF
+         byte 08BH          ;     Reinitialize Status Byte ??? needed?
+         byte 0ABH          ;     Enable Interrupts
+         byte 087H          ;     Enable DMA
+FLPRED13   block 0
+;****
+        
+
+;****V8.6  The old DMA cmd is no longer used!
+        BYTE    1               ;SWITCH DIRECTION FOR A MOMENT
+
+        BYTE    307Q            ;RESET PORT A TIMING
+        BYTE    313Q            ;RESET PORT B TIMING
+
+        BYTE    155Q            ;DMA RECEIVE PORT A ADDR
+        BYTE    FLPDAT          ;PORT A LOWER ADDR
+               WORD    127             ;BLOCK LENGTH
+
+        BYTE    154Q,0          ;DEFINE PORT A AS A PERIPHERAL
+        BYTE    120Q,0          ;PORT B IS MEMORY WITH INCRM ADDRS
+
+        BYTE    235Q            ;PORT B ADDR FOLLOWS
+        WORD    DMABUF
+        BYTE    36Q
+               BYTE    127,LO(DMAVEC) ;SET PULSE GENERATION AND INTERRUPT VEC
+
+        BYTE    212Q            ;SET READY ACTIVE HIGH, NO AUTO RESTART
+        BYTE    317Q            ;LOAD ADDRESS
+        BYTE    253Q            ;ENABLE INTERRUPTS
+        BYTE    207Q            ;ENABLE DMA
+               BLOCK   0
+;****
+
+
+
+
+
+
+ Page
+;;
+; Start to write a floppy sector
+;
+;   B - HEAD AND UNIT NUMBER
+;   C - CYLINDER NUMBER
+;   D - SECTOR NUMBER
+;
+FLPWRT  PUSH    AF              ;SAVE THE REGS
+        PUSH    BC
+        PUSH    HL
+        
+        LD      A,FLPIWT        ;WE ARE DOING A WRITE
+        LD      (FLPIST),A
+
+;****V8.6  Speech and Floppy contend for the DMA.
+        Call   DMAcheck        ;We must have the DMA for this.
+        ld     a, (DMAowner)
+        cp     FLOP            ;Did DMAcheck give it to us?
+        jp     nz, EXITWRITE
+;****
+
+        LD      HL,FLPWRT10             ;SETUP THE DMA COMMAND
+        LD      A,FLPWRT13-FLPWRT10
+        CALL    DMAINT
+        LD      A,(BYTSEC)              ;NUMBER OF BYTES PER SECTOR
+        RRCA
+        ADD     A,7FH           ;NOW IT IS NUMBER OF DATA TRANSFERS - 1
+        LD      (DMACMD+(FLPWRT11-FLPWRT10)),A  ;PATCH THE COMMAND
+        LD      (DMACMD+(FLPWRT12-FLPWRT10)),A
+        LD      HL,IOR3
+        LD      A,(HL)          ;GET THE CURRENT VALUE OF IOREG 3
+        OR      D.FLOP          ;ALLOW FLOPPY DMA INTERRUPTS
+        LD      (HL),A
+        OUT     (IOREG3),A
+
+        LD      A,(DMACNT)              ;LENGTH OF DMA COMMAND
+        CALL    DMAOUT          ;DO IT
+
+        LD      HL,FLPCMD       ;WHERE TO CONSTRUCT THE COMMAND
+        LD      A,(DOUBLE)              ;DENSITY
+        OR      5               ;WRITE DATA
+        LD      (HL),A
+        INC     HL
+        LD      (HL),B          ;HEAD AND UNIT
+        INC     HL
+        LD      (HL),C          ;CYLINDER
+        INC     HL
+        LD      A,B             ;HEAD AND UNIT AGAIN
+        RRCA                    ;REMOVE UNIT NUMBER
+        RRCA
+        AND     1
+        LD      (HL),A          ;HEAD NUMBER
+        INC     HL
+        LD      (HL),D          ;SECTOR
+        INC     HL
+        LD      A,(BYTSEC)              ;BYTES PER SECTOR
+        LD      (HL),A
+        INC     HL
+        LD      A,(MAXSEC)              ;LAST SECTOR NUMBER
+        LD      (HL),A
+        INC     HL
+        LD      A,(FLPGPL)              ;GAP LENGTH
+        LD      (HL),A
+        INC     HL
+        LD      A,(DTL)         ;DATA LENGTH
+        LD      (HL),A
+        LD      HL,FLPCMD
+        LD      A,9
+        DI                      ;NO INTERRUPTS PLEASE
+        CALL    FLPOUT          ;SEND THE COMMAND SEQUENCE
+        
+EXITWRITE POP     HL              ;RESTORE
+        POP     BC
+        POP     AF
+        RET                     ;DONE
+
+
+         Block 5           ;extra for patching
+         
+;****V8.6  
+       ;Full Setup Cmd
+FLPWRT10 byte 0C3H, 0C3H, 0C3H, 0C3H, 0C3H, 0C3H      ;WR6: 6 Resets
+         byte 0C7H, 0CBH    ;WR6: Reset Port A and B Timing
+         byte 155Q          ;WR0: Tx A->B
+           byte FLPDAT      ;     Port A addrL
+FLPWRT11   word 127         ;     Block Length
+         byte 154Q          ;WR1: Port A fixed addr, I/O, Variable Timing
+           byte 0           ;     4 cycle timing, early termination
+         byte 0CFH          ;WR6: LOAD
+         byte 1             ;WR0: Tx B->A
+         byte 235Q          ;WR4: Byte Mode Operation
+           word DMABUF      ;     Port B addr
+           byte 1EH         ;     INT on Block End, Pulse Gen
+FLPWRT12     byte 127       ;     Pulse byte
+             byte lo(DMAVEC);     INT Vector
+         byte 120Q          ;WR2: Port B addr incr, Memory, Variable Timing
+           byte 0           ;     4 cycle timing, early termination
+         byte 212Q          ;WR5: Stop on End of Block, RDY Active HIGH
+         byte 0CFH          ;WR6: LOAD
+ IF DEF(SpcDebug)
+         ;Forget the Read Mask unless we are debugging.
+         byte 0BBH          ;     Read Mask Follows
+           byte 07FH        ;         Mask selects all 7 status regs
+ ENDIF
+         byte 08BH          ;     Reinitialize Status Byte ??? needed?
+         byte 0ABH          ;     Enable Interrupts
+         byte 087H          ;     Enable DMA
+FLPWRT13   block 0
+;****
+        
+;****V8.6  The old DMA cmd is no longer used!
+        BYTE    307Q            ;RESET PORT A TIMING
+        BYTE    313Q            ;RESET PORT B TIMING
+        BYTE    155Q            ;DMA RECEIVE PORT A ADDR
+        BYTE    FLPDAT          ;PORT A LOWER ADDR
+               WORD    127             ;BLOCK LENGTH
+
+        BYTE    154Q,0          ;DEFINE PORT A AS A PERIPHERAL
+        BYTE    317Q            ;HACK
+        BYTE    1               ;NOW, REVERSE THE DIRECTION OF TRANSFER
+
+        BYTE    235Q            ;PORT B ADDR FOLLOWS
+        WORD    DMABUF
+        BYTE    36Q
+               BYTE    127,LO(DMAVEC) ;SET PULSE GENERATION AND INTERRUPT VEC
+
+        BYTE    120Q,0          ;PORT B IS MEMORY WITH INCRM ADDRS
+        BYTE    212Q            ;SET READY ACTIVE HIGH, NO AUTO RESTART
+        BYTE    317Q            ;LOAD ADDRESS
+        BYTE    253Q            ;ENABLE INTERRUPTS
+        BYTE    207Q            ;ENABLE DMA
+               BLOCK   0
+
+;****
+
+
+
+
+
+
+
+ Page
+;;
+; Start a track fromat
+;
+;   B - HEAD AND UNIT NUMBER
+;   C - CYLINDER NUMBER
+;
+FLPFMT  PUSH    AF              ;SAVE THE REGS
+        PUSH    BC
+        PUSH    HL
+        
+        LD      A,FLPIFM        ;WE ARE DOING A FORMAT
+        LD      (FLPIST),A
+
+;****V8.6  Speech and Floppy contend for the DMA.
+        Call   DMAcheck        ;We must have the DMA for this.
+        ld     a, (DMAowner)
+        cp     FLOP            ;Did DMAcheck give it to us?
+        jp     nz, EXITFMT
+;****
+
+        LD      HL,FLPFMT10             ;SETUP THE DMA COMMAND
+        LD      A,FLPFMT12-FLPFMT10
+        CALL    DMAINT
+        LD      A,(MAXSEC)              ;NUMBER OF SECTORS
+        RLCA                    ;GET NUMBER OF BYTES TO TRANSFER
+        RLCA
+        DEC     A
+        LD      (DMACMD+(FLPFMT11-FLPFMT10)),A  ;PATCH THE DMA COMMAND
+
+        LD      HL,IOR3         ;GET THE CURRENT INTERRUPT STATUS
+        LD      A,(HL)
+        OR      D.FLOP          ;ALLOW FLOPPY DMA
+        LD      (HL),A
+        OUT     (IOREG3),A
+
+        LD      A,(DMACNT)              ;LENGTH OF DMA COMMAND
+        LD      HL,DMACMD       ;LOCATION OF DMA COMMAND
+        CALL    DMAOUT          ;DO IT
+
+        LD      E,1             ;SECTOR COUNTER
+        LD      HL,DMABUF       ;WHERE TO CONSTRUCT THE TABLE
+FLPFMT2 LD      (HL),C          ;CYLINDER NUMBER
+        INC     HL
+        LD      A,B             ;HEAD AND UNIT
+        RRCA
+        RRCA
+        AND     1               ;JUST THE HEAD NUMBER
+        LD      (HL),A
+        INC     HL
+        LD      (HL),E          ;SECTOR NUMBER
+        INC     HL
+        LD      A,(BYTSEC)              ;BYTES PER SECTOR
+        LD      (HL),A
+        INC     HL
+        LD      A,(MAXSEC)              ;LAST SECTOR?
+        CP      E
+        JP      Z,FLPFMT3               ;YES
+        INC     E               ;UP THE SECTOR NUMBER
+        JP      FLPFMT2         ;DO IT AGAIN
+
+FLPFMT3 LD      HL,FLPCMD       ;WHERE TO CONSTRUCT THE COMMAND
+        LD      A,(DOUBLE)              ;DENSITY
+        OR      15Q             ;FORMAT A TRACK
+        LD      (HL),A
+        INC     HL
+        LD      (HL),B          ;HEAD AND UNIT
+        INC     HL
+        LD      A,(BYTSEC)              ;BYTES PER SECTOR
+        LD      (HL),A
+        INC     HL
+        LD      A,(MAXSEC)              ;SECTORS PER TRACK
+        LD      (HL),A
+        INC     HL
+        LD      A,(FLPGPL+1)    ;GAP LENGTH FOR FORMATING
+        LD      (HL),A
+        INC     HL
+        LD      (HL),0          ;DATA WORD
+        LD      HL,FLPCMD
+        LD      A,6
+        DI                      ;NO INTERRUPTS PLEASE
+        CALL    FLPOUT          ;SEND THE COMMAND SEQUENCE
+        
+EXITFMT POP     HL              ;RESTORE
+        POP     BC
+        POP     AF
+        RET                     ;DONE
+
+
+
+         Block 5            ;extra for patching
+         
+;****V8.6  
+       ;Full Setup Cmd
+FLPFMT10 byte 0C3H, 0C3H, 0C3H, 0C3H, 0C3H, 0C3H      ;WR6: 6 Resets
+         byte 0C7H, 0CBH    ;WR6: Reset Port A and B Timing
+         byte 155Q          ;WR0: Tx A->B
+           byte FLPDAT      ;     Port A addrL
+FLPFMT11   word 4*26-1      ;     Block Length
+         byte 154Q          ;WR1: Port A fixed addr, I/O, Variable Timing
+           byte 0           ;     4 cycle timing, early termination
+         byte 0CFH          ;WR6: LOAD
+         byte 1             ;WR0: Tx B->A
+         byte 235Q          ;WR4: Byte Mode Operation
+           word DMABUF      ;     Port B addr
+           byte 12H         ;     INT on Block End, Pulse Gen
+             byte lo(DMAVEC);     INT Vector
+         byte 120Q          ;WR2: Port B addr incr, Memory, Variable Timing
+           byte 0           ;     4 cycle timing, early termination
+         byte 212Q          ;WR5: Stop on End of Block, RDY Active HIGH
+         byte 0CFH          ;WR6: LOAD
+ IF DEF(SpcDebug)
+         ;Forget the Read Mask unless we are debugging.
+         byte 0BBH          ;     Read Mask Follows
+           byte 07FH        ;         Mask selects all 7 status regs
+ ENDIF
+         byte 08BH          ;     Reinitialize Status Byte ??? needed?
+         byte 0ABH          ;     Enable Interrupts
+         byte 087H          ;     Enable DMA
+FLPFMT12   block 0
+;****
+
+
+;****V8.6  The old DMA cmd is no longer used!
+        BYTE    307Q            ;RESET PORT A TIMING
+        BYTE    313Q            ;RESET PORT B TIMING
+
+        BYTE    155Q            ;DMA RECEIVE PORT A ADDR
+        BYTE    FLPDAT          ;PORT A LOWER ADDR
+               WORD    4*26-1          ;BLOCK LENGTH
+
+        BYTE    154Q,0          ;DEFINE PORT A AS A PERIPHERAL
+        BYTE    317Q            ;HACK
+        BYTE    1               ;NOW, REVERSE THE DIRECTION OF TRANSFER
+
+        BYTE    235Q            ;PORT B ADDR FOLLOWS
+        WORD    DMABUF
+        BYTE    22Q,LO(DMAVEC)  ;SET NO PULSE GENERATION AND INTERRUPT VEC
+
+        BYTE    120Q,0          ;PORT B IS MEMORY WITH INCRM ADDRS
+        BYTE    212Q            ;SET READY ACTIVE HIGH, NO AUTO RESTART
+        BYTE    317Q            ;LOAD ADDRESS
+        BYTE    253Q            ;ENABLE INTERRUPTS
+        BYTE    207Q            ;ENABLE DMA
+               BLOCK   0
+;****
+
+
+
+
+
+ Page
+;;
+; ROUTINE TO DO A START A RECALIBRATE ON COMMAND FROM PERQ.
+;
+
+FLPRCL  LD      A,FLPIDN!FLPIRC ;SET THE DONE BIT AND THE RECALIBRATE BIT.
+        LD      (FLPIST),A              ;PUT THE VALUE INTO THE FLOPPY INTERNAL STATE.
+        LD      A,(FLPFLG)              ;GET THE FLAG BYTE
+        OR      FLPFRP          ;RECALIBRATE IN PROGRESS
+        LD      (FLPFLG),A
+        RET                     ;AND RETURN.  THE NEXT TIME THAT FLPCHK
+                                ;IS CALLED IT WILL START THE RECALIBRATE.
+
+
+
+ Page
+;;
+; THIS ROUTINE IS USED TO DO A FLOPPY BOOT.
+;
+
+FLPBT   PUSH    HL
+        PUSH    AF
+        PUSH    DE
+
+        LD      A,(FLPFLG)              ;GET THE FLOPPY STATUS FLAG.
+        AND     FLPFRD          ;AND CHECK TO SEE IF THE DRIVE IS READY
+        JP      Z,FLPBT100              ;NO.  IT IS AN ERROR
+
+        LD      B,0             ;SEEK TO A KNOWN LOCATION.  B IS HEAD AND UNIT.
+        LD      C,1             ;CYLINDER 1
+        CALL    FLPBSK          ;DO THE SEEK
+
+        LD      B,0             ;READ SECTOR 1 CYLINDER 1  B IS HEAD AND UNIT
+        LD      C,1             ;CYLINDER
+        LD      D,1             ;SECTOR
+        CALL    FLPBRD          ;READ THE SECTOR
+
+        LD      HL,DMABUF       ;GET A POINTER TO THE DATA THAT WE JUST READ.
+        LD      A,(HL)          ;THE FIRST BYTE
+        CP      125Q            ;IT MUST BE OCTAL 125Q
+        JP      NZ,FLPBT100             ;IT IS AN ERROR IF IT IS NOT
+        INC     HL
+        LD      A,(HL)          ;GET SECOND BYTE
+        CP      252Q            ;THE NEXT BYTE MUST BE 252Q
+        JP      NZ,FLPBT100             ;AGAIN IF IT IS NOT IT IS AN ERROR
+
+        LD      A,1             ;THE FIRST CYLINDER IS 1
+        LD      (FLPCCY),A              ;SAVE IT IN THE CYLINDER HOLDER
+        LD      A,2             ;THE FIRST SECTOR IS 2
+        LD      (FLPCSE),A              ;SAVE THE CURRENT SECTOR.
+
+FLPBT1  LD      A,(FLPCSE)              ;GET THE CURRENT SECTOR
+        CP      27              ;DID WE JUST READ THE LAST SECTOR ON THIS CYL.
+        JP      NZ,FLPBT2               ;NO WE DO NOT HAVE TO DO A SEEK.
+
+        LD      A,(FLPCCY)              ;WE MUST DO A SEEK.  GET THE CURRENT CYLINDER.
+        INC     A               ;AND BUMP IT BY ONE
+        LD      (FLPCCY),A              ;PUT IT BACK INTO THE HOLDER.
+        LD      C,A             ;ALSO PUT IT INTO C.  THE CYLINDER NUMBER.
+        LD      B,0             ;HEAD AND UNIT NUMBER.
+        CALL    FLPBSK          ;DO THE SEEK.
+        LD      A,1             ;THE NEW SECTOR NUMBER.
+        LD      (FLPCSE),A              ;SAVE IT.
+
+FLPBT2  LD      A,(FLPCSE)              ;GET THE CURRENT SECTOR
+        LD      D,A             ;D HOLDS THE SECTOR NUMBER.
+        LD      A,(FLPCCY)              ;GET THE CURRENT CYLINDER
+        LD      C,A             ;C HOLDS THE CYLINDER
+        LD      B,0             ;HEAD AN UNIT.
+        CALL    FLPBRD          ;READ THE SECTOR.
+
+        LD      A,125Q          ;START A BOOT COMMAND TO PERQ.
+        CALL    PRQOUT          ;SEND THE START BYTE
+        LD      A,23Q           ;A BOOT DATA MESSAGE
+        CALL    PRQOUT
+        LD      A,128
+        CALL    PRQOUT          ;SEND THE BYTE COUNT
+        LD      B,128           ;B WILL BE A COUNTER.
+        LD      HL,DMABUF       ;GET A POINTER TO THE DMA BUFFER.
+
+FLPBT3  LD      A,(HL)          ;GET THE BYTE
+        CALL    PRQOUT          ;SEND IT TO PERQ.
+        INC     HL              ;BUMP THE DATA POINTER.
+        DEC     B               ;ONE LESS BYTE TO DO
+        JP      NZ,FLPBT3               ;STILL MORE TO SEND.
+
+        LD      A,(FLPCSE)              ;GET THE NUMBER OF THE SECTOR THAT WE JUST READ.
+        INC     A               ;THE NEXT ONE TO READ.
+        LD      (FLPCSE),A
+        JP      FLPBT1          ;AND LOOP.
+
+
+FLPBT100        CALL    FLPERR          ;THERE WAS AN ERROR.  FLPERR DOES NOT RETURN.
+
+
+
+ Page
+;;
+; ROUTINE THAT IS USED TO DO A SEEK DURING A FLOPPY BOOT.
+;
+;   B IS HEAD,,UNIT
+;   C IS THE CYLINDER
+;   
+
+FLPBSK  PUSH    DE              ; SAVE D
+        LD      D,5             ;THE NUMBER OF TIMES TO TRY IT.
+        
+FLPBSK1 PUSH    BC              ;SAVE THE PARAMETERS.
+        CALL    FLPSEK          ;DO THE SEEK
+        CALL    FLPCER          ;WAIT FOR IT TO COMPLETE
+        OR      A               ;SET THE CONDITIONS CODES
+        JP      Z,FLPBSK2               ;NO ERRORS
+
+        POP     BC              ;GET THE PARAMETERS BACK
+        DEC     D               ;SUBSTRACT ONE FROM THE RETRY COUNT
+        JP      NZ,FLPBSK1              ;LOOP
+
+        CALL    FLPERR          ;CAN NOT DO THE SEEK.
+
+FLPBSK2 POP     BC
+        POP     DE
+        RET
+
+ Page
+;;
+; ROUTINE TO DO A READ DURING FLOPPY BOOT.
+;
+;   B IS THE HEAD,,UNIT
+;   C IS THE CYLINDER
+;   D IS THE SECTOR
+;
+
+FLPBRD  PUSH    HL              ; SAVE THE L REG.
+        LD      L,5             ; THE NUMBER OF TIMES TO TRY THE READ
+
+FLPBRD1 PUSH    BC
+        PUSH    DE
+
+        CALL    FLPRED          ; TRY TO READ THE SECTOR
+        CALL    FLPCER          ; WAIT FOR COMPLEATION.
+        
+        OR      A               ; SET THE CONDITION CODE.  CHECK FOR ERROR.
+        JP      Z,FLPBRD2               ; NO ERRORS.
+
+        POP     DE              ; GET THE PARAMETERS BACK
+        POP     BC
+        DEC     L               ; SUBSTRACT ONE FROM THE COUNT.
+        JP      NZ,FLPBRD1              ; TRY AGAIN
+
+        CALL    FLPERR          ; COULD NOT DO THE READ
+
+FLPBRD2 POP     DE
+        POP     BC
+        POP     HL
+        RET
+
+
+
+
+
+
+ Page
+;;
+; ROUTIN TO WAIT FOR A FLOPPY OPERATION TO COMPLETE AND CHECK FOR ERRORS.
+;
+; A WILL BE 0 IF THERE WERE NO ERRORS.  IT WILL BE 1 IF THERE WERE ANY ERRORS.
+;
+
+FLPCER  EI                      ;ENABLE INTERUPTS
+FLPCER1 LD      A,(FLPIST)              ;GET THE INTERNAL STATE
+        AND     FLPIDN          ;ARE WE DONE
+        JP      Z,FLPCER1               ;NO  TRY AGAIN.
+
+        LD      A,(FLPSTB)              ;GET THE FIRST BYTE OF THE STATUS BUFFER.
+        RLCA                    ;CHECK BIT 7  IF IT IS SET THEN ERROR
+        JP      C,FLPCER2
+        RLCA                    ;CHECK BIT 6  IF SET THEN ERROR
+        JP      C,FLPCER2               ;RETURN IF NO ERROR
+
+        LD      A,0             ;NO ERRORS
+        RET
+
+FLPCER2 LD      A,1             ;THERE WAS AN ERROR
+        RET
+
+
+
+
+ Page
+;;
+;ROUTINE THAT IS CALLED IF THERE IS AN ERROR DURING FLOPPY BOOT.
+;THIS ROUTINE WILL SEND AN ERROR MESSAGE TO PERQ AND THEN JUMP
+;TO THE START OF THE COMMAND LOOP.  IT DOES NOT RETURN.
+;
+
+FLPERR  LD      A,125Q          ;THE BOOT MESSAGE BYTE
+        CALL    PRQOUT          ;SEND IT
+        LD      A,22Q           ;THE ERROR MESSAGE TYPE.
+        CALL    PRQOUT          ;SEND IT.
+        JP      RESTRT          ;GO TO THE TOP OF THE COMMAND LOOP.
+
+
+
+
+ Page
+;;
+; Routine to send a DMA command to the DMA chip
+;
+;    A - The number of bytes to be sent.
+;    DMACMD - Contains the command that we are to send
+;
+DMAOUT  PUSH    BC              ;SAVE B
+        PUSH    HL
+        LD      HL,DMACMD       ; The command
+        LD      B,A             ;NUMBER OF BYTES TO SEND
+DMAOUT1 LD      A,(HL)          ;GET THE NEXT BYTE
+        OUT     (DMA),A         ;SEND IT
+        INC     HL              ;UP THE POINTER
+        DEC     B               ;THE LOOP COUNTER
+        JP      NZ,DMAOUT1
+        POP     HL
+        POP     BC              ;RESTORE
+        RET
+        
+        
+
+ Page
+;;
+; Routine to set up the DMA command area.
+;
+;    HL - Address of the command
+;    A  - Lenght of the command
+;
+DMAINT  PUSH    BC              ;MAKE SOME ROOM
+        PUSH    DE
+        PUSH    HL
+        PUSH    AF
+        LD      B,A             ;B NOW HAS THE BYTE COUNT
+        LD      (DMACNT),A              ;THE LENGHT OF THE COMMAND
+        LD      DE,DMACMD       ;ADDRESS OF THE DMA COMMAND BUFFER
+DMAINT1 LD      A,(HL)          ;GET THE BYTE FROM THE USER BUFFER
+        INC     HL
+        EX      DE,HL
+        LD      (HL),A          ;STORE THE BYTE INTO THE DMA COMMAND BUFFER
+        INC     HL
+        EX      DE,HL
+        DEC     B               ;DROP THE BYTECOUNT BY ONE
+        JP      NZ,DMAINT1              ;STILL MORE BYTES TO MOVE
+        
+        POP     AF
+        POP     HL
+        POP     DE
+        POP     BC
+        RET
+
+
+
+
+
+
+
+ Page
+;;
+;FLOPPY INTERRUPT SERVICE
+;
+FLPSRV  PUSH    AF              ;SAVE SOME REGISTERS
+        PUSH    BC
+        PUSH    HL
+        
+        LD      HL,FLPIST
+        LD      A,(HL)          ;SEE WHAT WE WERE DOING
+        AND     LO(\FLPIDN)
+        LD      B,FLPISK        ;A SEEK?
+        CP      B
+        JP      NZ,FLPSRV1              ;NOT A SEEK.  TRY AGAIN
+        LD      HL,FCMD3                ;MUST DO A SENSE INTERRUPT STATUS ON A SEEK.
+        LD      A,1
+        CALL    FLPOUT
+        LD      A,2
+        LD      (FLPNST),A              ;IT WAS A SEEK.
+        JP      FLPSRV10                ;GOTO THE COMMON PART OF THE COMMAND
+        
+FLPSRV1 LD      B,FLPIRD        ;DOING A READ??
+        CP      B
+        JP      NZ,FLPSRV2              ;NO, TRY AGAIN
+        LD      A,7
+        LD      (FLPNST),A              ;7 BYTES OF STATUS FOR A READ
+        JP      FLPSRV10   
+        
+FLPSRV2 LD      B,FLPIWT        ;MAYBE A WRITE?
+        CP      B
+        JP      NZ,FLPSRV3              ;NO
+        LD      A,7
+        LD      (FLPNST),A              ;7 BYTES OF STATUS FOR A WRITE
+        JP      FLPSRV10   
+        
+FLPSRV3 LD      B,FLPIFM        ;FORMATING A SECTOR??
+        CP      B
+        JP      NZ,FLPSRV4              ;NO
+        LD      A,7
+        LD      (FLPNST),A              ;7 BYTES OF STATUS
+        JP      FLPSRV10   
+        
+FLPSRV4 LD      B,FLPIIN        ;INITIALIZATION ??
+        CP      B
+        JP      NZ,FLPSRV5              ;NO
+        LD      A,FLPIIS        ;Set to Initial Seek.  We are going to take
+        LD      (FLPIST),A              ;INTERRUPT AT THE END OF A SEEK CAUSED BY RECALIBRATE
+        LD      A,0
+        LD      (FLPNST),A
+        JP      FLPSRV10   
+        
+FLPSRV5 LD      B,FLPIIS        ;Were we doing the initial Seek ?
+        CP      B
+        JP      NZ,FLPSRV6              ; No
+        LD      HL,FCMD3                ; Do a sence interrupt status.
+        LD      A,1
+        CALL    FLPOUT          ; Do it
+        LD      A,FLPIID
+        LD      (FLPIST),A
+        LD      A,2
+        LD      (FLPNST),A
+        JP      FLPSRV10
+
+FLPSRV6 LD      B,FLPIBT        ;ARE WE BOOTING
+        CP      B
+        JP      NZ,FLPSRV7              ;NO
+        JP      FLPSRV15                ;YES.  JUST SET THE DONE BIT AND RETURN
+
+FLPSRV7 LD      HL,FCMD3                ;WE MUST HAVE BEEN IDLE DO A SENSE STATUS
+        LD      A,1             ;NUMBER OF BYTES IN THE COMMAND
+        CALL    FLPOUT          ;EXECUTE THE COMMAND
+        LD      A,2             ;NUMBER OF RESULT BYTES
+        LD      (FLPNST),A
+
+        LD      A,FLPIID!FLPICR ;WE ARE IDLE AND YOU MUST RECALIBREATE.
+        LD      (FLPIST),A
+        
+FLPSRV10        LD      HL,FLPNST
+        LD      A,(HL)
+        CALL    FLPRSL          ;GET THE RESULTS FROM THE FLOPPY
+
+        LD      A,(FLPIST)              ;GET THE INTERNAL STATE
+        AND     LO(\FLPIDN)     ;TAKE OUT THE CHANGE BIT
+        AND     \FLPICR ;AND THE RECALIBRATE BITS.
+        CP      FLPIID          ;SEE IF WE ARE IDLE.  IF SO CHECK TO SEE IF
+        JP      NZ,FLPSRV15             ;IF WE HAVE TO RECALIBRATE
+        LD      A,(FLPIST)
+        AND     FLPICR
+        JP      Z,FLPSRV15              ;IF SO CHECK TO SEE IF THE DOOR IS CLOSED
+        LD      A,(FLPSTB)              ;THE FLOPPY STATUS BUFFER
+        AND     10Q             ;THE NOT READY BIT IS BIT 3
+        JP      NZ,FLPSRV15             ;IT IS SET.  THE DRIVE IS NOT READY
+        LD      A,FLPIRC        ;THE DOOR CLOSED.  WE MUST DO A RECALIBRATE
+        LD      (FLPIST),A
+
+FLPSRV15        LD      HL,FLPIST
+        LD      A,(HL)          ;GET THE CURRENT STATE
+        OR      FLPIDN          ;SET THE DONE BIT
+        LD      (HL),A
+        
+;****V8.6  We must let go of the DMA if we have it.
+        ;Make sure the Floppy is not connected to the DMA. (I wonder if doing
+        ;this in DMASRV would eliminate the need for the WR0 cmd in the DMA
+        ;set up in FLPRED? Investigate this sometime!)
+
+        ;Release the DMA and DMABUF if we had it.
+        ;Exception: On Floppy Read, we can not release until after FLPCHK
+        ;           removes the data from DMABUF and sends it to PERQ.
+        ld     hl, DMAowner    
+        ld     a, (hl)
+        cp     FLOP            
+        jp     nz, EXITFSRV           ;Exit if Floppy is not DMA owner.
+
+        ld     a, (FLPIST)            ;****V8.63  Floppy Read is special case.
+        and    Lo(\FLPIDN)            ;
+        cp     FLPIRD                 ;
+        jp     z, Disconnect          ;****
+        ld     (hl), NONE             ;Mark DMA as free.
+
+Disconnect Block 0                    ;****V8.64  We must also break the  
+        ld  hl, IOR3                  ;    hardware connection between Floppy 
+        ld  a, (hl)                   ;    and DMA.
+        and ALLENB                    ;
+        ld  (hl), a                   ;
+        out (IOREG3), a               ;****
+;****
+
+EXITFSRV   POP     HL
+        POP     BC
+        POP     AF
+        
+        EI
+        RETI
+        
+        
+        
+
+ Page
+;;
+; ROUTINE TO SEE IF THERE HAS BEEN SOME CHANGE IN THE
+; FLOPPY STATUS.
+;
+FLPCHK  PUSH    AF
+        PUSH    HL
+        LD      A,(FLPIST)              ;GET THE INTERNAL STAT FLAG.
+        RLCA                    ;GET THE CHANGE BIT INTO THE CARRY FLAG
+        JP      C,FLPCH100              ;THERE HAS BEEN A CHANGE.
+
+        POP     HL              ;NO CHANGE.  GO HOME
+        POP     AF
+        RET
+        
+FLPCH100        LD      A,(FLPIST)
+        AND     LO(\FLPIDN)     ;TAKE OUT THE DONE BIT
+        CP      FLPIBT          ;ARE WE TO DO A BOOT?
+        JP      NZ,FLPCH150             ;NO.  SEE WHAT HAPPENED
+
+        CALL    FLPBT           ;START TO BOOT FROM THE FLOPPY
+        JP      FLPCHK10                ;GO TO THE COMMON EXIT CODE.
+
+FLPCH150 LD     HL,FLPSTB       ;Set the Ready and Error flags first
+        LD      A,(HL)          ;Get the first byte of the status info
+        RLCA
+        JP      C,FLPCHK1               ;If the bit is set then there was an error
+        RLCA
+        JP      C,FLPCHK1               ;Same for this bit
+
+        LD      A,(FLPFLG)              ;No errors.  Get the flag byte
+        AND     \FLPFER ;Clear the error bit
+        JP      FLPCHK2
+
+FLPCHK1 LD      A,(FLPFLG)              ;There was an error.  Get the flag byte
+        OR      FLPFER          ;Set the error bit
+
+FLPCHK2 LD      (FLPFLG),A              ;Put the flag word back
+        LD      A,(HL)          ;Get the status byte again and check for ready
+        AND     10Q             ;BIT 3 is NOT ready
+        JP      NZ,FLPCHK3              ;If zero then we are ready
+
+
+        LD      A,(FLPFLG)              ;The floppy is ready.  Get the flag byte
+        OR      FLPFRD          ;Set the ready bit
+        JP      FLPCHK4
+
+FLPCHK3 LD      A,(FLPFLG)              ;Drive is not ready.  Get the flag byte
+        AND     \FLPFRD ;Clear the ready bit
+
+FLPCHK4 LD      (FLPFLG),A              ;Put the flag byte back
+
+        LD      A,(FLPIST)              ;GET THE INTERNAL STATE
+        AND     LO(\FLPIDN)     ;TAKE OUT THE CHANGE BIT
+        CP      FLPIRD          ;WERE WE DOING A READ?  (READ IS DIFFERENT)
+        JP      Z,FLPCHK5               ;YES.  GOTO THE READ CODE
+        CP      FLPIID          ;CHECK TO SEE IF WE WERE IDLE
+        JP      Z,FLPCHK400             ;IF SO SEE IF A RECALIBRATE WAS STARTED
+
+        CP      FLPIRC          ;DO WE HAVE TO DO A RECALIBRATE
+        JP      NZ,FLPCHK15             ;NO  GO TO THE COMMON CODE FOR OTHER STATES
+        ;****V8.64  Probably should have privacy to change FLPIST and
+        ;           also for the call to FLPOUT.
+        DI                      ;****V8.64
+
+        LD      A,FLPIIN        ;SET STATE TO INITIALIZATION
+        LD      (FLPIST),A
+        LD      HL,FCMD1                ;THE RECALIBRATE COMMAND
+        LD      A,2             ;NUMBER OF BYTES IN THE COMMMAND
+        CALL    FLPOUT
+        
+        EI                      ;****V8.64
+        ;****
+        JP      RESTRT          ;GO BACK TO THE TOP OF THE COMMAND LOOP.
+FLPCHK400       LD      A,(FLPFLG)              ;GET THE FLOPPY FLAG
+        AND     FLPFRP          ;WAS THERE ARE RECALIBRATE STARTED.
+        JP      Z,FLPCHK10              ;NO.  JUST GO TO THE EXIT CODE.
+        LD      A,(FLPFLG)              ;GET THE FLAG BYTE BACK
+        AND     \FLPFRP ;TAKE OUT THE RECALIBRATE BIT
+        LD      (FLPFLG),A              ;PUT THE FLAG BYTE BACK
+        JP      FLPCHK15                ;GO THE THE DONE MESSAGE CODE.
+
+
+FLPCHK15        LD      A,21Q           ;COMMAND CODE FOR A FLOPPY DONE MESSAGE
+        JP      FLPCHK6
+        
+FLPCHK5 LD      A,5             ;THE READ CODE.   5 IS THE FLOPPY DATA COMMAND
+
+FLPCHK6 CALL    PRQCMD          ;SEND THE COMMAND TO PERQ
+        LD      A,(FLPFLG)              ;Get the flag word to see if there was an error
+        AND     FLPFER
+        JP      Z,FLPCHK7               ;No errors
+
+        LD      A,1             ;1 in the message means an error
+        JP      FLPCHK8
+
+FLPCHK7 LD      A,0             ;No errors.
+FLPCHK8 CALL    PRQOUT          ;SEND THE ERROR STATUS BYTE
+
+        LD      A,(FLPIST)
+        AND     LO(\FLPIDN)
+        CP      FLPIRD
+        JP      NZ,FLPCHK10             ;IF IT WAS NOT A READ WE ARE DONE.
+
+        LD      A,(DTL)             ;THE NUMBER OF DATA BYTES
+        CP      377Q            ;SHOULD THIS BE A 0?
+        JP      NZ,FLPCHK200            ;NO IT IS A GOOD BYTE COUNT
+        SUB     A               ;CHANGE IT TO 0
+FLPCHK200       CALL    PRQOUT          ;SEND THE BYTECOUNT TO PERQ
+        
+        LD      A,(DTL)             ;THE NUMBER OF DATA BYTES
+        CP      377Q
+        JP      NZ,FLPCHK300
+        SUB     A
+
+FLPCHK300         LD      B,A             ; PUT IT INTO B
+        LD      HL,DMABUF       ;GET THE ADDRESS OF THE DMA BUFFER
+        
+FLPCHK9 LD      A,(HL)          ;GET THE BYTE FROM THE DMA BUFFER
+        CALL    PRQOUT          ;SEND THE BYTE TO PERQ
+        INC     HL
+        DEC     B
+        JP      NZ,FLPCHK9
+        
+FLPCHK10 Block 0
+        ;****V8.64  Mutual exclusion needed when we modify the READY flag!!
+        ;           Privacy when changing FLPIST also seems proper.
+        DI                      ;****V8.64  Lock out everybody else.
+
+        LD      HL,READY        ;GET THE READY FLAG ADDRESS
+
+        LD      A,(FLPFLG)      ;Get the flag and see if we are ready.
+        AND     FLPFRD          ;Check the ready bit
+        JP      Z,FLPCHK11      ;Not ready
+        
+        LD      A,(HL)          ;Get the system ready flag
+        OR      RDYFLP          ;Yes we are ready.
+        JP      FLPCHK12
+
+FLPCHK11        LD      A,(HL)  ;Get the system ready flag
+        AND     \RDYFLP         ;No we are not ready.
+
+FLPCHK12        OR      RDYCHG  ;Things have changed
+        LD      (HL),A          ;PUT IT BACK
+        
+        LD      A,FLPIID        ;WE ARE NOW IDLE
+        LD      (FLPIST),A
+        
+        EI                      ;****V8.64  OK for interrupts now.
+        ;****
+        
+        ;****V8.63  Release the DMA resources if we still have them 
+        ;           (i.e., Read cmd).
+        ld   hl, DMAowner
+        ld   a, (hl)
+        cp   FLOP
+        jp   nz, EXITFCHK
+        ld   (hl), NONE
+        ;****
+
+EXITFCHK JP      RESTRT          ;GO BACK TO THE COMMAND LOOP
+        
+
+
+
+
+ Page
+;;
+;THIS ROUTINE IS CALLED WHEN A FLOPPY COMMAND FROM PERQ
+;IS READ.  IT WILL FINISH READING THE COMMAND AND THEN
+;START TO EXECUTE IT.
+;
+;    A - THE LAST BYTE THAT PERQ SENT
+;     
+        
+FLPCMI  LD      (FLPCHD),A              ;HEAD AND UNIT NUMBER
+        LD      HL,FLPCMI1              ;NEXT STATE.  CYLINDER #
+        JP      RSTSTA
+        
+FLPCMI1 LD      (FLPCCY),A              ;CYLINDER NUMBER
+        LD      HL,FLPCMI2              ;NEXT STATE.  SECTOR
+        JP      RSTSTA
+        
+FLPCMI2 LD      (FLPCSE),A              ;SECTOR NUMBER.
+        LD      HL,FLPCMI3              ;NEXT STATE.   COMMAND
+        JP      RSTSTA
+        
+FLPCMI3 LD      (FLPCCM),A              ;COMMAND
+        LD      HL,FLPCMI4              ;NEXT STATE.  BYTECOUNT
+        JP      RSTSTA
+        
+FLPCMI4 LD      (FLPCBC),A              ;THE BYTECOUNT
+        DI
+        LD      A,(FLPCBC)
+        CALL    BIGCMD          ;READ THE DATA FROM PERQ
+        
+        PUSH    BC              ;SAVE SOME REGISTERS
+        PUSH    DE
+        
+        LD      A,(FLPCCM)              ;GET THE COMMAND
+        DEC     A               ;THE FIRST COMMAND IS 1  ADJUST TO 0
+        CP      SCALAR((FPLCMI101-FLPMCI100)/2+1)
+        JP      NC,FLPCMI50             ;BAD COMMAND
+        
+        RLCA                    ;COMMAND * 2
+        LD      E,A
+        LD      D,0
+        LD      HL,FLPMCI100            ;THE DISPATCH TABLE
+        ADD     HL,DE
+        LD      E,(HL)          ;THE ROUTINE TO CALL
+        INC     HL
+        LD      D,(HL)
+        EX      DE,HL
+        JP      (HL)           ;JUMP TO THE CORRECT CODE
+        
+FLPCMI10        LD      HL,FLPCHD       ;A READ COMMAND.         SET UP THE PARAMETERS
+        LD      B,(HL)         ;THE HEAD
+        INC     HL
+        LD      C,(HL)         ;THE CYLINDER
+        INC     HL
+        LD      D,(HL)         ;SECTOR
+        CALL    FLPRED         ;START THE READ OPERATION
+        JP      FLPCMI50               ;COMMON EXIT
+        
+        
+FLPCMI20  ld  a, (DMAowner)  ;*****V8.6
+          cp  SPEECH         ;If SPEECH is using DMA, we do not want
+          jp  z, FLPALPHA    ;  to disturb the DMABUF!
+                             ;*****
+
+        LD      HL,PRQIBF       ;WRITE  GET THE BYTES FROM PERQ INPUT BUFFER
+        LD      DE,DMABUF       ;GET THE ADDRESS OF THE DMA BUFFER
+        LD      A,(DTL)            ;NUMBER OF BYTES FOR THIS DENSITY
+                  ;**********
+                  ;********** Version 8.4 Change:
+                  ; For Double Density, we really want to use byte count of 0.
+                  ; "DTL" is 255 however. The hack below fixes this!
+                  ;**********
+        LD      B,A            ;B IS A COUNTER
+
+        INC B                  ;******* HACK TO GET CORRECT BYTE COUNT FOR
+                               ;******* DOUBLE DENSITY FLOPPY; DOES NOT
+                               ;******* ADVERSELY AFFECT SINGLE DENSITY.
+
+FLPCMI21        LD      A,(HL)         ;THE BYTE FROM THE PERQ BUFFER
+        INC     HL
+        EX      DE,HL
+        LD      (HL),A         ;PUT THE BYTE INTO THE DMA BUFFER
+        INC     HL
+        EX      DE,HL
+        DEC     B
+        JP      NZ,FLPCMI21
+        
+FLPALPHA  LD      HL,FLPCHD       ;A WRITE COMMAND.  SET UP THE PARAMETERS
+        LD      B,(HL)         ;THE HEAD
+        INC     HL
+        LD      C,(HL)         ;THE CYLINDER
+        INC     HL
+        LD      D,(HL)         ;SECTOR
+        CALL    FLPWRT         ;START THE WRITE OPERATION
+        JP      FLPCMI50               ;COMMON EXIT
+        
+        
+FLPCMI30        LD      HL,FLPCHD       ;A FORMAT COMMAND.  SET UP THE PARAMETERS
+        LD      B,(HL)         ;THE HEAD
+        INC     HL
+        LD      C,(HL)         ;THE CYLINDER
+        CALL    FLPFMT         ;START THE FORMAT OPERATION
+        JP      FLPCMI50               ;COMMON EXIT
+        
+FLPCMI40        LD      HL,FLPCHD       ;A SEEK COMMAND.         SET UP THE PARAMETERS
+        LD      B,(HL)         ;THE HEAD
+        INC     HL
+        LD      C,(HL)         ;THE CYLINDER
+        CALL    FLPSEK         ;START THE SEEK OPERATION
+        JP      FLPCMI50               ;COMMON EXIT
+        
+        
+        
+FLPCMI45        CALL    FLPRCL         ;START THE RECALIBRATE.
+        JP      FLPCMI50
+
+FLPCMI50        POP     DE             ;COMMON EXIT CODE
+        POP     BC
+        RET
+        
+        
+FLPMCI100       WORD    FLPCMI10               ;ADDRESS OF THE READ CODE
+        WORD    FLPCMI20               ;ADDRESS OF THE WRITE CODE
+        WORD    FLPCMI30               ;ADDRESS OF THE FORMAT CODE
+        WORD    FLPCMI40               ;ADDRESS OF THE SEEK CODE
+        WORD    FLPCMI45               ;ADDRESS OF THE RECALIBRATE CODE.
+
+FPLCMI101       BLOCK   0
+
+
+
+ Page
+;;
+;THIS ROUTINE IS CALLED WHEN A FLOPPY SET STATUS COMMAND IS RECEIVED FROM
+;PERQ.  THIS COMMAND IS USED TO SET      A) DENSITY,  B) NUMBER OF HEADS AND
+;C) INTERRUPT ENABLE.
+;
+;       A - CONTAINS THE NUMBER OF BYTES IN THE SET STATUS COMMAND.  THIS
+;       MUST BE 3
+;
+
+FLPSTS  PUSH    HL              ;SAVE SOME REGISTERS
+
+        DI
+        CALL    BIGCMD          ;GET THE REST OF THE COMMAND FROM PERQ
+
+        LD      HL,PRQIBF       ;GET A POINTER TO THE PERQ INPUT BUFFER
+        LD      A,(HL)          ;DOUBLE OR SINGLE DENSITY
+        LD      (DOUBLE),A
+        INC     HL
+        LD      A,(HL)          ;NUMBER OF HEADS
+        LD      (NUMHD),A
+        INC     HL
+        LD      A,(HL)          ;INTERRUPT ENABLE
+        AND     1               ;1 IS ENABLE
+        JP      NZ,FLPSTS2
+
+        LD      A,(IOR3)                ;GET THE CURRENT INTERRUPT ENABLE FLAG
+        AND     \FLPENB ;NO FLOPPY INTERRUPTS PLEASE
+        JP      FLPSTS3
+
+FLPSTS2 LD      A,(IOR3)                ;GET THE CURRENT FLAG
+        OR      FLPENB          ;LET IT HAPPEN
+
+FLPSTS3 LD      (IOR3),A                ;SAVE THE UPDATED FLAG
+        OUT     (IOREG3),A              ;TELL THE HARDWARE ABOUT THE NEW SETTING
+        LD      A,(DOUBLE)              ;SET THE SINGLE/DOUBLE DENSITY STUFF
+        CP      100Q
+        JP      Z,FLPSTS4               ;IT IS DOUBLE
+        
+        LD      A,GPL1          ;GAP LENGTH SINGLE DENSITY
+        LD      (FLPGPL),A
+        LD      A,GPL1F         ;GAP LENGTH FOR FORMAT
+        LD      (FLPGPL+1),A
+        LD      A,0             ;BYTES PER SECTOR.  0 IS 128Q
+        LD      (BYTSEC),A
+        LD      A,EOT1          ;NUMBER OF SECTORS PER TRACK
+        LD      (MAXSEC),A
+        LD      A,128
+        LD      (DTL),A
+        JP      FLPSTS5
+
+FLPSTS4 LD      A,GPL2          ;GAP LENGTH DOUBLE DENSITY
+        LD      (FLPGPL),A
+        LD      A,GPL2F
+        LD      (FLPGPL+1),A
+        LD      A,1             ;1 IS 256Q
+        LD      (BYTSEC),A
+        LD      A,EOT2
+        LD      (MAXSEC),A
+        LD      A,377Q
+        LD      (DTL),A
+
+FLPSTS5 LD      HL,FLPIST       ;GET THE CURRENT FLOPPY STATE
+        LD      A,(HL)
+        OR      FLPIDN          ;SET THE DONE BIT
+        LD      (HL),A          ;PUT IT BACK
+        LD      A,0             ;NO RESULT BYTES FOR THIS OPERATION
+        LD      (FLPNST),A
+
+        POP     HL
+        RET
+
+
+
+
+
+
+ Page
+;;
+;THIS ROUTINE IS CALLED WHEN A BOOT FROM FLOPPY IS REQUESTED BY
+;PERQ.
+;IT WILL SET THE INTERNAL FLOPPY STATE TO BOOT AND SET THE DONE
+;BIT.  THE NEXT TIME THAT FLPCHK IS CALLED IT WILL START THE FLOPPY
+;BOOT.
+;
+
+FLPBOT  LD      A,FLPIBT        ;WE MUST DO A BOOT FROM FLOPPY
+        OR      FLPIDN          ;SET THE DONE BIT
+        LD      (FLPIST),A              ;PUT THE FLAG BYTE BACK
+        RET
+
+ Page
+;;
+;****V8.6  Routine to initialize the Kriz Tablet.
+;          This routine is also called by TABSET.
+;
+TABINI  Block 0
+        push af
+        push bc
+        push de
+        push hl
+        ;First disable the old Touch Tablet.
+        sub a                   ;Get a zero.
+        out (TABLET), a         ;Turn off the Ramp.
+        
+        ;Now the Kriz Tablet.
+        ld  (TabFlg), a         ;NO_DATA to send to PERQ.
+        ld  hl, TabFlg          ;Now we will zero the rest of 
+        ld  de, TabBuf          ;  the data area associated
+        ld  bc, RcvOvrRun-TabFlg ; with the Kriz Tablet.
+        ldir                    ;  This does it.
+
+        ;****V8.65
+        ld  a, NEXT_2_MSGS      ;We will ignore the first 2 tablet msgs
+        ld  (MsgIgnore), a      ;  to make sure we are in sync.
+        ;****
+                
+        ;Additional set up occurs in SIOBIN.
+        pop hl
+        pop de
+        pop bc
+        pop af
+        ret
+;****
+
+ Page
+;;
+;
+;****V8.6  rewrote TABCHK routine to handle Kriz Tablet.
+;****V8.65 redefined the 4-byte msg.
+;****V8.66 modified to handle new Kriz Tablet msg format.
+;
+;TABCHK checks for Tablet update to send to PERQ. Every 1/60 of a second,
+;the Kriz Tablet sends a 5-byte Tablet update msg:
+;   Byte0<7:0> = sync char (filtered out by SIO B hardware)
+;   Byte1<3:0> = high bits of X
+;   Byte1<4>   = unused (0)
+;   Byte1<5>   = TabCoil (always 0 for now)
+;   Byte1<6>   = TabOffTablet (1 -> mouse off tablet)
+;   Byte1<7>   = 0
+;   Byte2<7:0> = low X
+;   Byte3<3:0> = high bits of Y
+;   Byte3<4>   = unused (0)
+;   Byte3<7:5> = the 3 Switches
+;   Byte4<7:0> = low Y
+;
+;TABCHK gets Byte1 -> Byte4 in TabBuf[1..4] and must reformat this into 
+;Tab1 -> Tab4 to send to PERQ where:
+;   Tab1<7:0> = low X
+;   Tab2<3:0> = high X
+;   Tab2<4>   = unused (0)
+;   Tab2<5>   = TabCoil (always 0 for now)
+;   Tab2<6>   = TabOffTablet (1 -> mouse off tablet)
+;   Tab2<7>   = complement of Switches or-ed (~ TabBuf^.TabSwitch in Pascal)
+;   Tab3<7:0> = low Y
+;   Tab4<3:0> = high bits of Y
+;   Tab4<4>   = unused (0)
+;   Tab4<7:5> = the 3 Switches
+;
+;When SIOBRC collects a complete Tablet update msg, it copies it into 
+;TabBuf[1:4] and sets TabFlg. TABCHK reformats this msg, putting the 4 
+;bytes into Tab1, Tab2, Tab3, and Tab4.
+;
+TABCHK  Block 0
+        ld  a, (ENABLE)          ;See if Tablet is enabled.
+        and ENBTAB
+        ret z                    ;No, so return.
+        
+        ld  hl, TabFlg           ;Yes, so see if there is data.
+        ld  a, (hl)
+        cp  DATA_AVAILABLE       ;Is there data?
+        ret nz                   ;No, so leave.
+        
+        ;We must send Tablet update so transform raw Tablet msg.
+        DI                       ;Exclude SIOBRC while we prepare the msg.
+        
+        ld  (hl), NO_DATA        ;Reset TabFlg.
+        inc hl                   ;Point to TabBuf where the raw msg is.
+        ld  a, (hl)              ;First byte is TabOffTablet, TabCoil, High X.
+        ld  (Tab2), a            ;Store it.
+        
+        inc hl                   ;Next byte holds Low X.
+        ld  a, (hl)
+        ld  (Tab1), a            ;Store it.
+        
+        inc hl                   ;Next byte is Switches and High Y.
+        ld  a, (hl)
+        ld  (Tab4), a            ;Store it.
+        
+        and BUTTONS              ;See if any Switches are pressed.
+        jp  nz, GETYLOW          ;If so, do not set TabSwitch in Tab2.
+        ld  a, (Tab2)            ;No switches pressed, so set bit for
+        or  TABSWITCH            ;  TabSwitch in Tab2. 
+        ld  (Tab2), a
+        
+GETYLOW inc hl                   ;Last byte holds Low Y.
+        ld  a, (hl)
+        ld  (Tab3), a            ;Store it.
+        
+        EI                       ;Now we can restore interrupts. 
+
+        ;Now get the formatted msg to PERQ.
+        ld  a, 3                 ;Tablet Data Cmd code.
+        call PRQCMD              ;Start the  Cmd.
+        
+        ld  hl, Tab1             ;Point to the formatted msg.
+        ld  de, PRQOBF           ;We will put it in PRQOBF.
+        ld  bc, 4
+        ldir
+        ld  a, 5                 ;We send 5 bytes.
+                                 ;Note: Ucode expects 5 bytes for this msg 
+                                 ;      although it throws away the fifth byte.
+        call PRQSND              ;Do it.
+        
+        jp  RESTRT               ;Restart the Main Loop.
+;****
+
+        
+                       
+ Page
+;;
+;****V8.6  INTERRUPT SERVICE ROUTINE FOR old Touch TABLET
+;
+RMPSRV  PUSH    AF
+        ;****V8.6
+        sub  a
+        out  (TABLET), a
+        ;**** rest of code was tossed out!
+        POP     AF
+        EI
+        RETI
+;****
+
+
+ Page
+;;
+;CTC3 INTERRUPT SERVICE (TABLET/VOLTAGE/TEMPERATURE)
+;
+CTC3SR  PUSH    AF
+        ;****V8.6
+        ld  a, 3
+        out (CTC3), a       ;Reset and disable.
+        ;****
+        POP     AF
+;
+;UNIMPLEMENTED CTC INTERRUPTS
+;
+CTC0SR  BLOCK   0
+CTC1SR  BLOCK   0
+        EI
+        RETI
+
+ Page
+;;
+;KEYBOARD INITIALIZATION ROUTINE
+;
+KBDINI  IN      A,(KBD)         ;CLEAR ANYTHING THAT IS PENDING
+        LD      HL,KBDTOP       ;SET THE POINTERS INTO THE RING BUFFER
+        LD      (HL),LO(KBDBUF)
+        INC     HL
+        LD      (HL),LO(KBDBUF)
+        RET
+
+ Page
+;;
+;ROUTINE TO SEND KEYBOARD DATA TO PERQ (IF NECESSARY)
+;
+KBDCHK  LD      A,(ENABLE)              ;IS THE KEYBOARD ENABLED?
+        AND     ENBKBD
+        RET     Z                       ;NOPE
+        CALL    GETKBD          ;GET A CHARACTER FROM THE RING BUFFER
+        RET     C                       ;NOTHING THERE
+        PUSH    AF              ;SAVE IT
+        LD      A,1             ;KBD CHAR COMING
+        CALL    PRQCMD
+        POP     AF
+        CALL    PRQOUT          ;HERE IT IS
+        JP      RESTRT          ;AND RESTART THE MAIN LOOP
+
+ Page
+;;
+;RETRIEVE A CHARACTER FROM THE KEYBOARD RING BUFFER
+;
+;   CHARACTER IS RETURNED IN A
+;
+;   CARRY IS SET IF RING BUFFER IS EMPTY
+;
+GETKBD  PUSH    HL              ;SAVE H AND L
+        LD      HL,KBDTOP       ;POINTER TO RING BUFFER
+        LD      A,(HL)          ;GET IT
+        INC     HL              ;POINT TO KBDBOT
+        CP      (HL)            ;IS THE BUFFER EMPTY?
+        JP      Z,GETKBD1               ;YES
+        LD      A,(HL)          ;GET THE POINTER
+        INC     A               ;AND BUMP IT UP ONE
+        AND     KBDSIZ-1        ;FOR WRAP AROUND
+        OR      LO(KBDBUF)      ;NOTE, THIS CLEARS CARRY
+        DI                      ;NEED PRIVACY NOW
+        LD      (HL),A          ;UPDATE THE POINTER
+        LD      L,A             ;POINT TO RING BUFFER NOW
+        LD      A,(HL)          ;GET THE CHARACTER
+        EI                      ;OK FOR INTERRUPTS AGAIN
+        POP     HL              ;RESTORE
+        RET                     ;DONE
+
+GETKBD1 SCF                     ;SET THE CARRY TO INDICATE NO DATA
+        POP     HL              ;AND LEAVE
+        RET
+
+ Page
+;;
+;KEYBOARD INTERRUPT SERVICE ROUTINE
+;
+KBDSRV  PUSH    AF              ;SAVE A
+        PUSH    HL              ;AND HL
+        IN      A,(KBD)         ;GET THE CHARACTER
+        PUSH    AF              ;SAVE IT
+        LD      HL,KBDTOP       ;POINTER TO RING BUFFER
+        LD      A,(HL)          ;GET IT
+        INC     A               ;BUMP IT UP BY ONE
+        AND     KBDSIZ-1        ;AND FORCE WRAP AROUND
+        OR      LO(KBDBUF)
+        INC     HL              ;POINT TO KBDBOT
+        CP      (HL)            ;IS THE RING BUFFER FULL?
+        JP      Z,KBDSRV2               ;YES
+        DEC     HL              ;BACK TO KBDTOP
+        LD      (HL),A          ;UPDATE IT
+        LD      L,A             ;NOW, POINT INTO RING BUFFER
+        POP     AF              ;GET THE CHARACTER BACK
+        LD      (HL),A          ;STORE IT
+KBDSRV1 POP     HL              ;RESTORE
+        POP     AF
+        EI                      ;INTERUPTS BACK ON
+        RETI
+
+KBDSRV2 POP     HL              ;DO NOT NEED THE CHARACTER ANYMORE
+        JP      KBDSRV1         ;EXIT
+
+ Page
+;;
+;DISK SEEK INITIALIZATION
+;
+SEKINI  LD      HL,SEKSTA       ;STATUS BYTE
+        SUB     A
+        LD      (HL),A          ;NOTHING ACTIVE
+        OUT     (IOREG2),A      ;ENSURE THAT SEEK HARDWARE IS OFF
+        ;****V8.6  Only CTC2 uses interrupts now.
+        ld      a, Lo(CTCVEC)
+        out     (CTC0), a       ;Set the CTC interrupt vector.
+        LD      A,3     
+        out     (CTC3),a        ;Reset CTC3 used for old Touch Tablet.
+        ;****
+        OUT     (CTC2),A        ;RESET CTC2
+        RET
+
+ Page
+;;
+;CHECK FOR DISK SEEK COMPLETION
+;
+SEKCHK  LD      HL,SEKSTA       ;STATUS BYTE
+        LD      A,(HL)
+        AND     2               ;DO WE HAVE COMPLETION?
+        RET     Z                       ;NOPE
+        LD      A,(HL)          ;CLEAR THE BIT
+        AND     \2
+        LD      (HL),A
+        LD      A,12Q           ;SEND THE COMMAND TO PERQ
+        CALL    PRQCMD
+        JP      RESTRT          ;AND RESTART THE MAIN LOOP
+
+ Page
+;;
+;ROUTINE TO START A SEEK OPERATION
+;
+;   A CONTAINS THE SEEK COUNT
+;   INTERRUPTS ARE DISABLED
+;
+SEKSTR  PUSH    HL              ;GET SOME WORKING ROOM
+        PUSH    AF
+        LD      HL,SEKSTA       ;THE STATUS BYTE
+        LD      A,(HL)
+        OR      1               ;LOADING SEEK COUNT IN PROGRESS
+        LD      (HL),A
+        INC     HL              ;POINT TO SEKCNT
+        LD      A,327Q          ;SET UP CTC2 FOR EXTERNAL COUNTS
+        OUT     (CTC2),A
+        POP     AF              ;GET THE COUNT AGAIN
+        LD      (HL),A          ;SAVE FOR INTERRUPT SERVICE
+        OUT     (CTC2),A                ;CTC IS NOW READY
+        LD      A,10Q
+        OUT     (IOREG2),A              ;START THE SEEK
+        POP     HL
+        RET
+
+ Page
+;;
+;CTC2 INTERRUPT SERVICE (SEEK COUNT OR DELAY TIMER)
+;
+CTC2SR  PUSH    AF              ;WE NEED REGISTERS
+        PUSH    DE
+        PUSH    HL
+        LD      HL,SEKSTA       ;WHAT ARE WE DOING?
+        LD      A,(HL)
+        AND     1
+        JP      Z,CTC2SR4               ;WE ARE DELAYING
+        LD      A,(HL)          ;WE HAVE LOADED THE COUNT
+        AND     \1              ;SO CLEAR THE BIT
+        LD      (HL),A
+        SUB     A
+        OUT     (IOREG2),A              ;SHUT THINGS DOWN
+        INC     HL              ;POINT TO SEKCNT
+        LD      A,(HL)          ;HOW FAR ARE WE MOVING?
+        CP      32              ;THIS IS A CRITICAL NUMBER
+        JP      NC,CTC2SR1              ;>      EQU     32Q, SO WE USE THE FORMULA
+        LD      HL,CTC2SR10-1           ;<32Q SO WE USE THE TABLE
+        LD      D,0
+        LD      E,A             ;OFFSET INTO TABLE
+        ADD     HL,DE
+        LD      L,(HL)          ;DELAY TIME IS NOW IN L
+        JP      CTC2SR2
+
+CTC2SR1 ADD     A,52            ;DELAY TIME IS A LINEAR FUNCTION OF COUNT
+        LD      L,A             ;TIME IS NOW IN L
+
+CTC2SR2 LD      H,0             ;CLEAR HIGH BYTE
+        PUSH    HL              ;WE ARE GOING TO DO A MULTIPLY BY 5
+        ADD     HL,HL           ;TIMES 2
+        ADD     HL,HL           ;TIMES 4
+        POP     DE
+        ADD     HL,DE           ;TIMES 5
+        LD      A,247Q          ;SET CTC2 TO TIMER MODE (96Q KHZ CLOCK)
+        OUT     (CTC2),A
+        LD      A,L             ;THIS IS THE FIRST TIME VALUE
+        AND     A               ;IS IT ZERO? (I.E., 256Q)
+        JP      Z,CTC2SR3               ;YES
+        INC     H               ;NUMBER OF INTERRUPTS WE WILL GET
+CTC2SR3 OUT     (CTC2),A                ;START THE TIMER
+        LD      A,H
+        LD      (SEKCNT),A              ;HOW MANY INTERRUPTS TO EXPECT
+        LD      A,245Q          ;AFTER THE FIRST COUNT TO ZERO,
+        OUT     (CTC2),A                ;USE 256Q FOR THE REMAINING COUNTS
+        SUB     A
+        OUT     (CTC2),A
+        JP      CTC2SR5
+
+CTC2SR4 INC     HL              ;POINT TO SEKCNT
+        DEC     (HL)            ;ARE WE DONE?
+        JP      NZ,CTC2SR5              ;NOPE
+        DEC     HL              ;POINT TO SEKSTA
+        LD      A,(HL)          ;ACKNOWLEDGE COMPLETION
+        OR      2
+        LD      (HL),A
+        LD      A,3             ;AND STOP THE COUNTER
+        OUT     (CTC2),A
+        LD      HL,READY                ;UPDATE THE READY MASK
+        LD      A,(HL)
+        OR      RDYCHG!RDYDSK   ;DISK IS NOW READY
+        LD      (HL),A
+
+CTC2SR5 POP     HL              ;TIME TO EXIT
+        POP     DE
+        POP     AF
+        EI
+        RETI
+
+CTC2SR10        BYTE    42,44,46        ;DELAY TIME FOR SEEKS OF 1-31Q CYLINDERS
+        BYTE    48,50,52        ;IN UNITS OF 1/2 MILLI SECOND
+        BYTE    54,56,58
+        BYTE    58,60,62
+        BYTE    62,64,66
+        BYTE    66,68,70
+        BYTE    70,72,72
+        BYTE    74,76,76
+        BYTE    78,78,80
+        BYTE    80,82,82
+        BYTE    82
+
+ Page
+;;
+;SIO CHANNEL A INITIALIZATION
+;
+SIOAIN  LD      HL,RCVTOP       ;SET THE POINTERS INTO RCV RING BUFFER
+        LD      (HL),LO(RCVBUF+1)
+        INC     HL
+        LD      (HL),LO(RCVBUF+1)
+        INC     HL              ;POINT TO SIOACL
+        LD      (HL),2          ;DEFAULT TO 4800Q BAUD
+        INC     HL              ;POINT TO SIOASB
+        LD      (HL),11110100B  ;8 BITS PER CHAR, 1 STOP BIT, NO PARITY
+        INC     HL              ;POINT TO OVRRUN
+        LD      (HL),0          ;CLEAR THE OVERRUN FLAG
+        LD      HL,TRNCNT       ;AND NOW SET UP THE TRANSMITTER RING BUFFER
+        LD      (HL),0          ;NOTHING IN THE BUFFER
+        INC     HL
+        LD      (HL),LO(TRNBUF)
+        INC     HL
+        LD      (HL),LO(TRNBUF)
+
+ Page
+;;
+;ROUTINE TO RESET SIO CHANNEL A
+;
+;   NOTE, THIS ROUTINE MAY BE CALLED WITH INTERRUPTS DISABLED
+;
+SIOARS  PUSH    HL              ;NEED SOME WORKING SPACE
+        LD      HL,SIOACL       ;CLOCK RATE
+        LD      A,27Q           ;RESET CTC0
+        OUT     (CTC0),A
+        LD      A,(HL)          ;SET THE CLOCK RATE
+        OUT     (CTC0),A
+        INC     HL              ;SIO CHANNEL A STATUS VARIABLE
+        LD      A,30Q           ;DO A CHANNEL RESET
+        OUT     (SIOCA),A
+
+        ;****V8.64  I think we should do a Reset Ext/Stat Int here.
+        Ld      A, 10H
+        Out     (SIOCA), A
+        ;****
+        
+        LD      A,4             ;SET STOP BITS AND PARITY
+        OUT     (SIOCA),A
+        LD      A,(HL)          ;GET STATUS VARIABLE
+        AND     17Q             ;ONLY STOP BITS AND PARITY PLEASE
+        OR      100Q            ;SET TO X16 CLOCK RATE
+        OUT     (SIOCA),A
+
+        LD      A,3             ;SET RECEIVE PARAMETERS
+        OUT     (SIOCA),A
+        LD      A,(HL)          ;STATUS VARIABE
+        AND     300Q            ;ONLY RECEIVE BITS PER CHARACTER
+                                ;*******
+                                ;******* Version 8.3 Change:
+        OR      41Q             ;******* ENABLE RECEIVER AND SET AUTO ENABLES.
+                                ;******* Previously, Auto Enables was not set!
+                                ;*******
+        OUT     (SIOCA),A
+
+        LD      A,5             ;SET TRANSMIT PARAMETERS
+        OUT     (SIOCA),A
+        LD      A,(HL)          ;GET STATUS VARIABLE
+        AND     60Q             ;TRANSMIT BITS PER CHARACTER
+        RLCA                    ;SHIFT INTO POSITION
+        OR      212Q            ;DTR, RTS, AND ENABLE TRANSMITTER
+        OUT     (SIOCA),A
+
+        ;****V8.64  I think we should do a Reset Ext/Stat Int here.
+        Ld      A, 10H
+        Out     (SIOCA), A
+        ;****
+        
+        LD      A,1             ;INTERRUPT ENABLES
+        OUT     (SIOCA),A
+        LD      A,(ENABLE)      ;SHOULD THE RECEIVER BE INTERRUPT ENABLED?
+        AND     ENBRCV
+        LD      A,33Q           ;ASSUME INTERRUPT RECEIVE, TRANSMIT, STATUS
+        JP      NZ,SIOARS1      ;THAT WAS VALID
+        LD      A,2             ;ONLY TRANSMIT INTERRUPT ENABLE
+SIOARS1 OUT     (SIOCA),A
+
+        POP     HL              ;WE ARE DONE
+        RET
+
+ Page
+;;
+;ROUTINE TO SEND RECEIVER DATA TO PERQ (IF NECESSARY)
+;
+RCVCHK  CALL    GETRCV          ;ANY CHARACTERS?
+        RET     C               ;NOPE
+        LD      HL,PRQOBF+1     ;SAVE THEM IN THE PERQ OUTPUT BUFFER
+        LD      D,1             ;COUNTER OF NUMBER OF CHARACTERS
+        JP      RCVCHK2
+
+RCVCHK1 LD      A,D             ;THE COUNTER
+        CP      16              ;DO NOT PERMIT MORE THAN 16Q AT ONE TIME
+        JP      Z,RCVCHK3
+        CALL    GETRCV          ;GET ANOTHER CHARACTER
+        JP      C,RCVCHK3       ;NO MORE AVAILABLE
+        INC     D               ;UP THE COUNTER
+RCVCHK2 LD      (HL),C          ;STASH THE STATUS BYTE
+        INC     HL
+        LD      (HL),B          ;AND THE CHARACTER
+        INC     HL
+        JP      RCVCHK1         ;DO IT ALL AGAIN
+
+RCVCHK3 LD      A,2             ;START THE COMMAND
+        CALL    PRQCMD
+        LD      A,D             ;NUMBER OF CHARACTERS
+        RLCA                    ;NOW NUMBER OF DATA BYTES (STATUS+CHARACTERS)
+        LD      (PRQOBF),A      ;PUT IT AT THE NEAD OF THE MESSAGE
+        INC     A               ;NUMBER OF BYTES TO SEND
+        CALL    PRQSND          ;SEND IT
+        JP      RESTRT
+
+ Page
+;;
+;RETRIEVE A CHARACTER FROM THE RECEIVER RING BUFFER
+;
+;   CHARACTER IS RETURNED IN B
+;   ERROR BITS ARE RETURNED IN C
+;
+;   CARRY IS SET IF RING BUFFER EMPTY
+;
+GETRCV  PUSH    HL              ;SAVE A REG
+        LD      HL,RCVTOP       ;POINTER TO RING BUFFER
+        LD      A,(HL)          ;GET IT
+        INC     HL              ;POINT TO RCVBOT
+        CP      (HL)            ;IS THE BUFFER EMPTY?
+        JP      Z,GETRCV1               ;YES
+        LD      A,(HL)          ;GET THE POINTER
+        ADD     A,2             ;AND BUMP IT UP ONE ENTRY
+        AND     RCVSIZ-1        ;FOR WRAP AROUND
+        OR      LO(RCVBUF)      ;NOTE, THIS CLEAR CARRY
+        DI                      ;NEED PRIVACY NOW
+        LD      (HL),A          ;UPDATE THE POINTER
+        LD      L,A             ;POINT TO THE RING BUFFER NOW
+        LD      C,(HL)          ;GET THE ERROR CODES
+        DEC     HL
+        LD      B,(HL)          ;GET THE CHARACTER CODE
+        EI                      ;OK FOR INTERRUPTS AGAIN
+        POP     HL              ;RESTORE
+        RET                     ;DONE
+
+GETRCV1 SCF                     ;SET THE CARRY TO INDICATE NO DATA
+        POP     HL              ;AND LEAVE
+        RET
+
+ Page
+;;
+;SIO CHANNEL A SPECIAL CONDITIONS INTERRUPT SERVICE
+;
+SIOASP  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    BC
+        LD      A,1             ;READ REGISTER ONE
+        OUT     (SIOCA),A
+        IN      A,(SIOCA)               ;GOT IT
+        RRCA                    ;GET THE ERROR BITS AT THE BOTTOM
+        RRCA
+        RRCA
+        RRCA
+        AND     7               ;GOT THEM
+        LD      C,A             ;SAVE THE ERROR BITS
+        IN      A,(SIODA)               ;GET THE CHARACTER
+        LD      B,A
+        LD      A,60Q           ;ERROR RESET
+        OUT     (SIOCA),A
+        JP      SIOARC1         ;AND JOIN THE NORMAL RECEIVER INTERRUPT
+
+ Page
+;;
+;SIO CHANNEL A RECEIVER INTERRUPT SERVICE
+;
+SIOARC  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    BC
+        LD      C,0             ;NO ERRORS
+        IN      A,(SIODA)               ;GET THE CHARACTER
+        LD      B,A
+SIOARC1 PUSH    HL              ;NEED ANOTHER REG PAIR
+        LD      HL,RCVTOP       ;POINTER TO THE RING BUFFER
+        LD      A,(HL)          ;GET IT
+        ADD     A,2             ;BUMP IT UP ONE ENTRY
+        AND     RCVSIZ-1        ;FOR WRAP AROUND
+        OR      LO(RCVBUF)
+        INC     HL              ;POINT TO RCVBOT
+        CP      (HL)            ;IS THE RING BUFFER FULL?
+        JP      Z,SIOARC3               ;YES
+        DEC     HL              ;BACK UP TO RCVTOP
+        LD      (HL),A          ;UPDATE THE POINTER
+        LD      L,A             ;NOW, POINT INTO RING BUFFER
+        LD      A,(OVRRUN)              ;GET THE OVERRUN FLAG
+        OR      C               ;OR IN THE NORMAL STATUS BITS
+        LD      (HL),A
+        SUB     A               ;GET A ZERO
+        LD      (OVRRUN),A              ;AND CLEAN UP THE OVERRUN FLAG
+        DEC     HL              ;BACK UP THE RING POINTER
+        LD      (HL),B          ;AND STASH THE CHARACTER
+SIOARC2 POP     HL              ;RESTORE THE REGS
+        POP     BC
+        POP     AF
+        EI                      ;ENABLE THE INTERRUPTS
+        RETI                    ;AND WE ARE DONE
+
+SIOARC3 LD      A,2             ;WE HAVE AN OVERRUN
+        LD      (OVRRUN),A
+        JP      SIOARC2
+
+ Page
+;;
+;ROUTINE TO START UP A TRANSMISSION
+;
+;   A - NUMBER OF BYTES TO SEND
+;       CHARACTERS ARE CONTAINED IN PRQIBF
+;       INTERRUPTS ARE DISABLED
+;
+TRNSTR  PUSH    HL              ;NEED SPACE
+        PUSH    DE
+        PUSH    BC
+        LD      B,A             ;THE BYTE COUNT
+        LD      DE,PRQIBF       ;POINTER TO THE CHARACTERS
+        LD      HL,TRNCNT       ;POINT TO RING BUFFER COUNTER
+        LD      A,(HL)
+        ADD     A,B             ;ADD IN NUMBER WE ARE ADDING
+        LD      (HL),A
+        INC     HL              ;POINT TO TRNTOP
+        LD      L,(HL)          ;POINTER INTO RING BUFFER
+
+TRNSTR1 LD      A,L             ;MUST INCREMENT THE RING BUFFER POINTER
+        INC     A
+        AND     TRNSIZ-1        ;WRAP AROUND
+        OR      LO(TRNBUF)
+        LD      L,A
+        LD      A,(DE)          ;GET CHAR FROM PRQIBF
+        LD      (HL),A          ;INTO THE RING BUFFER
+        INC     DE
+        DEC     B               ;THE BYTE COUNTER
+        JP      NZ,TRNSTR1
+
+        LD      A,L             ;FINAL VALUE OF RING BUFFER POINTER
+        LD      L,LO(TRNTOP)    ;POINT TO TRNTOP
+        LD      (HL),A          ;SET IT
+        IN      A,(SIOCA)               ;IS TRANSMITTER BUSY?
+        AND     4
+        JP      Z,TRNSTR2               ;YES, SO WAIT FOR THE INTERRUPTS
+        INC     HL              ;POINT TO TRNBOT
+        LD      A,(HL)
+        INC     A
+        AND     TRNSIZ-1        ;FOR WRAP AROUND
+        OR      LO(TRNBUF)
+        LD      (HL),A
+        LD      L,A             ;POINT TO FIRST BYTE IN RING BUFFER
+        LD      A,(HL)          ;GET IT
+        OUT     (SIODA),A               ;AND SEND IT
+        LD      L,LO(TRNCNT)    ;POINT TO THE COUNTER
+        DEC     (HL)            ;ONE LESS BYTE NOW
+TRNSTR2 LD      L,LO(TRNCNT)    ;(TRANS. BUSY ENTERS HERE) POINT TO COUNTER
+        LD      A,(HL)          ;NUMBER IN USE
+        CP      TRNSIZ-15       ;DO WE HAVE ROOM FOR 16Q MORE BYTES?
+        JP      NC,TRNSTR3              ;NOPE
+        LD      HL,READY                ;BACK TO THE READY FLAG
+        LD      A,(HL)
+        OR      RDYCHG!RDYTRN   ;READY FOR A TRN MESSAGE AGAIN
+        LD      (HL),A
+
+TRNSTR3 POP     BC
+        POP     DE
+        POP     HL
+        RET
+
+ Page
+;;
+;SIO CHANNEL A TRANSMITTER INTERRUPT SERVICE
+;
+SIOATR  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    HL
+        LD      HL,TRNCNT       ;LOOK AT NUMBER OF FREE LOCATIONS
+        LD      A,(HL)
+        AND     A               ;IS IT EMPTY?
+        JP      Z,SIOATR2               ;YES
+        LD      L,LO(TRNBOT)    ;POINT AT RING BUFFER POINTER
+        LD      A,(HL)
+        INC     A               ;MOVE IT UP BY ONE
+        AND     TRNSIZ-1        ;WRAP AROUND
+        OR      LO(TRNBUF)
+        LD      (HL),A
+        LD      L,A             ;HL NOW POINTS INTO RING BUFFER
+        LD      A,(HL)          ;GET THE NEXT BYTE
+        OUT     (SIODA),A
+        LD      L,LO(TRNCNT)    ;POINT AT THE COUNTER
+        DEC     (HL)            ;ONE MORE FREE BYTE
+        LD      A,(HL)
+        CP      TRNSIZ-16       ;ARE THERE NOW 16Q BYTES FREE?
+        JP      NZ,SIOATR1              ;NOPE
+        LD      HL,READY                ;YES, SO WE CAN ACCEPT ANOTHER TRN MESSAGE
+        LD      A,(HL)
+        OR      RDYCHG!RDYTRN   ;SET THE READY MASK
+        LD      (HL),A
+SIOATR1 POP     HL              ;TIME TO EXIT
+        POP     AF
+        EI
+        RETI
+
+SIOATR2 LD      A,50Q           ;RESET TRANSMITTER INTERRUPT PENDING
+        OUT     (SIOCA),A
+        JP      SIOATR1
+
+ Page
+;;
+;****V8.6  Speech, Kriz Tablet, and Line Freq Clock use SIO B.
+;SIO Channel B Initialization
+;
+SIOBIN  Block 0
+        ;Setup the SPEECH DMA cmd area in RAM, we will patch it 
+        ;  each time we load a new SPEECH DMA cmd.
+        ld  hl, SPC20B
+        ld  de, SPCDMAB
+        ld  bc, SPC20E-SPC20B
+        ldir                      ;Move the ROM table to RAM.
+        
+        ;Set up Baud rate generation for Speech and Kriz Tablet.
+        ld  a, 17H    ;Setup CTC1
+        out (CTC1), a
+        ld  a, 5      ;Default initially to 32 KHz.
+        out (CTC1), a ;Start the clock going.
+
+        ;Remember the rate.
+        ld  (NewSPCrate), a
+        ld  (CurrentSPCrate), a
+        
+        ;Init flags for Speech.
+        sub a
+        ld  (SPCchange), a      ;NOCHANGE
+        ld  (SPCerror), a       ;NOERRORS
+        ld  (SPCblkcnt), a      ;0
+        ld  (SPCblkcnt+1), a    ;0
+        
+        ;Init double buffering for Speech.
+        ld  (LowINIRaddr), a    ;0
+        ld  (LowDMAaddr), a     ;0
+        ld  a, 2
+        ld  (FreeBufs), a       ;Both buffers free.
+
+        ;Set up the SIO B.
+        ld  hl, SIOBIN2
+        ld  c, SIOCB
+        ld  b, SIOBIN3-SIOBIN2
+        otir
+        
+        ret
+        
+SIOBIN2 Byte    18H             ;Channel Reset
+        Byte    2,Lo(SIOVEC)    ;Set Interrupt Vector
+        Byte    10H             ;Reset Ext/Stat Interrupts
+        Byte    4,0             ;X1 Clock, Mono Sync
+        Byte    6, 55H          ;Tx sync char
+        Byte    7, 81H          ;Rx sync char
+        Byte    3,0C0H          ;8-bit char, Rx comes up Disabled, no Sync Hunt
+        Byte    5,0E2H          ;8-bit char, DTR, RTS, Tx comes up Disabled
+        Byte    10H             ;Reset Ext/Stat Interrupts
+        Byte    1,0DDH          ;RDY func with Tx, Status Affects,
+                                ;  Rx Interrupts, Ext/Stat Interrupts,
+                                ;  no Tx Interrupts
+SIOBIN3 Block   0
+        ;Only the Line Freq Clock is enabled by the above. We let the Line
+        ;Clock run to see its affect on Speech (the ucode throws away Clock
+        ;Data msgs).
+;****
+
+        
+        
+        
+ Page
+;
+;****V8.6  Modified to support Speech, Kriz Tablet, and  Line Freq Clock.
+;          Note: This interrupt presented some problems. You can only program
+;                WR0 with 1 cmd at a time even though the reg has cmd fields!!
+;
+;SIO B STATUS CHANGE INTERRUPT SERVICE (Tx Underrun, SYNC/HUNT, 60HZ CLOCK)
+;
+SIOBST  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    BC
+        PUSH    HL
+
+        IN      A,(SIOCB)       ;Get RR0;
+        LD      C, A            ;Save RR0.
+
+        ;Note: We do not bother to check for Sync/Hunt bit transitions.
+        
+        AND     100Q            ;Any Tx Underrun?
+        JP      Z,TICCHK        ;If not, go make next check.
+        LD      A,300Q          ;Else prepare RESET Tx Underrun/EOM.
+        OUT     (SIOCB),A       ;Do it.
+        
+TICCHK  LD      A, C            ;Get RR0 again.
+        AND     10Q             ;DCD is our line freq clock
+        JP      Z,EXTSTAT       ;  and we only care when it is high.
+        LD      HL,CLKTIC       ;It is high
+        INC     (HL)            ;  so add one more tic.
+        
+EXTSTAT LD      A, 20Q          ;Prepare the RESET EXT/STAT INT cmd.
+        OUT     (SIOCB),A       ;Do it.
+
+        POP     HL     ;RESTORE
+        POP     BC
+        POP     AF
+        EI
+        RETI
+;****
+
+
+ Page
+;
+;****V8.6  Rewritten to support the Kriz Tablet.
+;****V8.66 Modify to handle the additional byte in the new Kriz Tablet msg.
+;
+;SIO CHANNEL B RECEIVER INTERRUPT 
+;
+SIOBRC  PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
+
+        IN      A,(SIODB)       ;Get the char.
+        CPL                     ;Invert it.
+                                ;Note: Tablet data is active low. 
+        LD      B,A             ;Save the char in reg B.
+        
+        LD      HL,CHARCNT      ;Get the CHARCNT and
+        INC     (HL)            ; count one more.
+        LD      A,(HL)          ;Also put it in a reg.
+        
+STOREIT LD      HL,BUFFER-1     ;Point to 1 before our BUFFER.
+        ADD     A,L             ;CHARCNT is our offset
+        LD      L,A             ;  into BUFFER where we
+        LD      (HL),B          ;  store the char.
+        
+        LD      HL,CHARCNT      ;Find out which char we
+        LD      A,(HL)          ;  just stored.
+        CP      6               ;Is it the sixth char?
+        JP      NZ,ALLDONE      ;No, so just exit.
+
+ENDMSG  Block 0                 ;Yes, we have a complete msg.
+                                ;Note: A complete msg is only 4 chars. But we
+                                ;      count 2 extra chars and just throw them 
+                                ;      away. This was done to overcome problem
+                                ;      we had with SIO internal operation on
+                                ;      Sync recognition when it is programmed 
+                                ;      back into Hunt mode below.
+        ;****V8.65 After complete msg, empty FIFO before we reset to Sync Hunt.
+        ;First turn off SIO B Rx.
+        LD      A,3              
+        OUT     (SIOCB),A       
+        LD      A,0C0H
+        OUT     (SIOCB),A
+
+        ;Next we must make sure the Rx data FIFO is empty.
+GETRR0  IN      A, (SIOCB)      ;Get RR0.
+        BIT     0, A            ;Check for Rx data available.
+        JP      Z, HUNTSYNC     ;No, so go put SIO B into Hunt Mode.
+        IN      A, (SIODB)      ;Yes, so take data from the FIFO
+        JP      GETRR0          ;  and go see if there is any more.
+        ;****
+        
+        ;Now put SIO B back into the Hunt Mode.
+HUNTSYNC LD     A,3              
+        OUT     (SIOCB),A       
+        LD      A,0D1H
+        OUT     (SIOCB),A
+
+        ;****V8.64  I think we also want to do a Reset Ext/Stat Int when we
+        ;           reprogram SIO parameters.
+        Ld      A, 10H
+        Out     (SIOCB), A
+        ;****
+        
+        LD      (HL),0          ;CHARCNT goes back to 0.
+        
+        ;****V8.65 This filters out potential bad msgs as well as bad ones.
+        LD      HL, MsgIgnore   ;See if we should ignore this msg. (MsgIgnore 
+        LD      A, (HL)         ;  is set on overrun and when tablet goes on.)
+        CP      0               ;Have we ignored the required number?
+        JP      Z, OKMSG        ;Yes, so go put into TabBuf for TABCHK to find.
+        
+        DEC     (HL)            ;No, so reduce the count in MsgIgnore. TABCHK
+        JP      ALLDONE         ;  will not get this msg so just leave.
+        ;****
+        
+OKMSG   LD      DE, TabFlg      ;Set TabFlg to tell TABCHK that
+        LD      A, DATA_AVAILABLE ;  there is a Tablet update.
+        LD      (DE), A         ;
+        INC     DE              ;Point to TabBuf.
+        LD      HL, Buffer
+        LD      BC, 4
+        LDIR                    ;Deposit the msg in TabBuf.
+        
+        
+ALLDONE POP     HL
+        POP     DE
+        POP     BC
+        POP     AF
+        EI
+        RETI
+;****
+
+        
+
+
+ Page
+;
+;****V8.6  Rewritten to support Kriz Tablet.
+;
+;SIO Channel B Special Receive Interrupt
+;
+SIOBSP  PUSH    AF
+        PUSH    HL
+
+        ;****V8.64  We probably also should get the error register.
+        LD      A,1             ;Point to RR1.
+        OUT     (SIOCB),A
+        IN      A,(SIOCB)       ;Get it but we do not care what is there.
+        ;****
+
+        ;****V8.65 
+        LD      HL,MsgIgnore    ;We want to ignore current msg and the next.
+        LD      (HL), NEXT_2_MSGS    
+        ;****                   ;Note: We just set MsgIgnore and allow SIOBRC
+                                ;      to collect the full msg. SIOBRC will
+                                ;      subsequently discard this msg and 
+                                ;      reprogram SIO B to Sync Hunt mode.
+                                ;      Aborting the msg and reprogramming here
+                                ;      could result in premature recognition of
+                                ;      Sync if data happened to match the Sync 
+                                ;      char.
+
+        INC     HL              ;Point to RcvOvrRun flag.
+        INC     (HL)            ;Count another Rx overrun!
+
+        IN      A,(SIODB)       ;Get the bad char.
+
+        LD      A,60Q           ;Error Reset to SIO B.
+        OUT     (SIOCB),A
+
+        POP     HL
+        POP     AF
+        EI
+        RETI
+;****
+        
+        
+
+
+
+ Page
+;;
+;
+;****V8.6  SIO B Transmit Interrupt (Not Used)
+;Speech no longer uses Tx interrupts. We use DMA instead!
+;
+SIOBTR  BLOCK   0
+        EI
+        RETI
+;****
+
+
+ Page
+;
+;
+;****V8.6  SPEECH data messages are handled here.
+;          Note: Interrupts are disabled!
+;
+SPCCMD push af
+       push hl
+       push bc
+       
+       ;Turn off RDYSPC in READY flag.
+       ld   hl, READY
+       ld   a, (hl)
+       and  \RDYSPC
+       ld   (hl), a
+       
+       ;Get the byte count.
+       in   a, (PERQR)
+       ld   b, a
+       cp   32                ;Data always comes in 4 chunks of 32 bytes.
+       jp   z, SPCDATA        ;Byte count is O.K. so we have data!
+       
+       ld   hl, SPCerror      ;Otherwise it is a trash data
+       ld   a, (hl)           ;  msg so set the error flag
+       or   BAD_BYTECNT       ;  accordingly.
+       ld   (hl), a           ;
+       jp   BADNEWS           ;And exit.
+       
+       ;Make sure the DMA and DMABUF are not assigned to FLOPPY.
+SPCDATA block 0
+       ld   hl, DMAowner
+       ld   a, (hl)
+       cp   FLOP              ;Does Floppy have the DMA
+       jp   nz, SPCASSIGN     ;No, so ..
+
+       ld   hl, SPCerror      ;Yes, so we can not accept the
+       ld   a, (hl)           ;  data. So set the error flag
+       or   DMA_NOTAVAILABLE  ;  accordingly.
+       ld   (hl), a           ;
+       jp   BADNEWS           ;And exit.
+       
+SPCASSIGN Block 0
+       ld   (hl), SPEECH      ;DMAowner is now SPEECH.
+
+       ;The SPCblkcnt will help to track the Keyboard interaction bug!
+       ld   hl, (SPCblkcnt)   ;We maintain a count of the number
+       inc  hl                ;  of 32-byte chunks we accept from ucode.
+       ld   (SPCblkcnt),hl    ;
+              
+       ;Buffer the SPEECH data msg.
+       ld   h, hi(DMABUF)
+       ld   a, (LowINIRaddr)
+       ld   l, a
+       ld   c, PERQR
+       inir
+       
+       ld   a, l              ;L has the low order adddr for the next
+       ld   (LowINIRaddr), a  ;  32-byte chunk.
+                              ;Note: L will also correctly point to the
+                              ;      next 128-byte buffer when we have
+                              ;      filled a 128-byte buffer.
+                                     
+       and  7FH               ;Low order bits of addr tell if we have
+       jp   nz, NXTCHUNK      ;  filled a buffer.
+       
+       ;So we have filled a 128-byte buffer.
+       ld   a, (DMAstate)
+       cp   IDLE
+       jp   nz, DMABUSY       ;When DMA is BUSY on the other buffer, just
+                              ;  go do the setup of the cmd area.
+       
+FULLSETUP block 0 
+       ;Fix hardware for DMA to SIO B.
+       ld  hl, IOR3
+       ld  a, (hl)
+       or  D.SIOB
+       ld  (hl), a
+       out (IOREG3), a
+
+       ;Patch the SPEECH DMA cmd area with addr of correct buffer.
+       ld   a, (LowDMAaddr)
+       ld   (SPCDMAB+(SPC20patch-SPC20B)), a    ;Patch the DMA cmd.
+
+       ;Now load the DMA chip.
+       ld   hl, SPCDMAB
+       ld   c, DMA
+       ld   b, SPC20E-SPC20B
+       otir
+       
+COMMONSETUP block 0
+       ;Check to see if CTC1 rate should change before
+       ;  starting up the next DMA transfer.
+       ld  hl, SPCchange
+       ld  a, (hl)
+       cp  NOCHANGE
+       jp  z, TURNONSIO
+       
+       ;Set new CTC1 rate.
+       ld  a, 17H
+       out (CTC1), a
+       ld  a, (NewSPCrate)    ;Get the new rate.
+       out (CTC1), a          ;Load new rate.
+       ld  (CurrentSPCrate), a ;It is now our current rate.
+       ld  a, NOCHANGE
+       ld  (hl), a             ;Reset SPCchange flag.
+       
+TURNONSIO block 0
+       ld a, 5
+       out (SIOCB), a
+       ld   a, 0EAH
+       out  (SIOCB), a         ;Enable SIO B Tx.
+       
+       ;****V8.64  I think we should also do Reset Ext/Stat Int when we
+       ;           reprogram SIO parameters.
+       Ld   A, 10H
+       Out  (SIOCB),A
+       ;****
+       
+       ld   a, BUSY
+       ld   (DMAstate), a      ;Mark DMA as BUSY.
+       
+       ld   hl, LowDMAaddr     ;Point to next buffer for DMA.
+       ld   a, (hl)
+       add  a, 128
+       ld   (hl), a
+       jp   FREEUPDATE
+       
+       
+DMABUSY block 0
+       ;Just patch the SPEECH DMA cmd area and DMASRV will load it later.
+       ld a, (LowDMAaddr)
+       ld (SPCDMAB+(SPC20patch-SPC20B)), a
+                               
+FREEUPDATE block 0
+       ld   hl, freebufs       ;Update the # of free buffers for INIR.
+       ld   a, (hl)
+       dec  a
+       ld   (hl), a
+       jp   z, SPCEXIT         ;If no free buffers, then leave.
+       
+SETREADY block 0
+       ld   hl, READY          ;Tell ucode to give us another 128-byte block.
+       ld   a, (hl)
+       or   RDYCHG ! RDYSPC
+       ld   (hl), a
+       jp   SPCEXIT
+       
+NXTCHUNK block 0
+       jp   SETREADY          ;Tell ucode to give us another 32-byte chunk.
+                              ;We use common code above.
+                               
+       ;SPEECH does not have the DMA and DMABUF or else bad bytecnt 
+       ;  so just throw away the SPEECH data.
+BADNEWS block 0
+       in  a, (PERQR)
+       dec b
+       jp  nz, BADNEWS
+       jp  SETREADY
+       
+       
+SPCEXIT block 0
+       pop  bc
+       pop  hl
+       pop  af
+       ret
+       
+       
+       ;Short Setup Cmd
+       block 10
+SPC10B byte 205Q          ;WR4:
+SPC10patch byte 0         ;     Port B addrL, we will patch it later.
+       byte 0CFH          ;WR6: LOAD
+       byte 08BH          ;     Reinitialize Status Byte ??? needed?
+       byte 0ABH          ;     Enable Interrupts
+       byte 087H          ;     Enable DMA
+SPC10E   block 0
+       block 10
+       
+
+       ;Full Setup Cmd
+SPC20B byte 0C3H, 0C3H, 0C3H, 0C3H, 0C3H, 0C3H      ;WR6: 6 Resets
+       byte 0C7H, 0CBH    ;WR6: Reset Port A and B Timing
+       byte 155Q          ;WR0: Tx A->B
+         byte SIODB       ;     Port A addrL
+         word 127         ;     Block Length
+       byte 154Q          ;WR1: Port A fixed addr, I/O, Variable Timing
+         byte 0           ;     4 cycle timing, early termination
+       byte 0CFH          ;WR6: LOAD
+       byte 1             ;WR0: Tx B->A
+       byte 235Q          ;WR4: Byte Mode Operation
+SPC20patch byte 0         ;     Port B addrL, we will patch it later
+         byte hi(DMABUF)  ;     Port B addrH
+         byte 12H         ;     INT on Block End, No Pulse Gen
+           byte lo(DMAVEC);     INT Vector
+       byte 120Q          ;WR2: Port B addr incr, Memory, Variable Timing
+         byte 0           ;     4 cycle timing, early termination
+       byte 212Q          ;WR5: Stop on End of Block, RDY Active HIGH
+       byte 0CFH          ;WR6: LOAD
+ IF DEF(SpcDebug)
+       ;Forget the Read Mask unless we are debugging.
+       byte 0BBH          ;     Read Mask Follows
+           byte 07FH        ;         Mask selects all 7 status regs
+ ENDIF
+       byte 08BH          ;     Reinitialize Status Byte ??? needed?
+       byte 0ABH          ;     Enable Interrupts
+       byte 087H          ;     Enable DMA
+SPC20E   block 0
+       block 10
+;****
+        
+       
+       
+ Page
+;;
+;****V8.6  DMA INITIALIZATION
+;
+DMAINI sub a
+       ld  (DMAowner), a      ;NONE
+       ld  (DMAstate), a      ;IDLE
+ IF DEF(SpcDebug)
+       ld  (DMASTScnt), a     ;0
+ ENDIF
+       ld  (LastDMAuser), a   ;NONE
+
+        LD      HL,DMAINI10
+        LD      C,DMA           ;THE I/O ADDRESS
+        LD      B,DMAINI11-DMAINI10     ;NUMBER OF BYTES TO SEND
+        OTIR                    ;SHIP IT
+        RET
+
+DMAINI10 BYTE    0C3H            ;RESET
+        BYTE    0C7H            ;PORT A RESET Timing
+        BYTE    0CBH            ;PORT B RESET Timing
+        BYTE    91H             ;WR4
+           byte    10H              ;Int Ctrl
+           byte    lo(DMAVEC)       ;Int Vector
+DMAINI11 BLOCK   0
+;****
+   
+   
+ Page
+;
+;****V8.6 
+;    Modified completely to support SPEECH OUT along with the FLOPPY!
+;
+;DMA INTERRUPT SERVICE
+;
+DMASRV  push af
+        push hl
+        push bc
+
+ IF DEF(SpcDebug)
+        ld   hl, DMASTScnt
+        inc  (hl)             ;Count another DMA interrupt.
+        
+        ;Get the chip status before reset.
+        ld   a, 0A7H
+        out  (DMA), a         ;WR6: Initiate Read Sequence.
+        ld   hl, DMASTAT1     ;Where to put the status.
+        ld   c, DMA
+        ld   b, 7
+        inir
+ ENDIF
+ 
+        ;Reset the DMA.
+        ld hl, DMA10B
+        ld c, DMA
+        ld b, DMA10E-DMA10B
+        otir
+
+ IF DEF(SpcDebug)
+        ;Get the chip status after reset.
+        ld   a, 0A7H
+        out  (DMA), a         ;WR6: Initiate Read Sequence.
+        ld   hl, DMASTAT2     ;Where to put the status.
+        ld   c, DMA
+        ld   b, 7
+        inir
+ ENDIF
+        
+        
+        ld   hl, DMAowner
+        ld   a, (hl)
+        ld   (LastDMAuser), a
+
+        cp   SPEECH
+        jp   z, SPCCASE
+        
+        ;Service for FLOPPY
+        ;     Also see FLPSRV. This may be a better place to remove
+        ;     D.FLOP from IOREG3.
+        ld   (hl), NONE       ;Mark DMA as free.
+        
+        ;****V8.64  Do hardware disconnect of DMA from Floppy.
+        Ld   HL, IOR3
+        Ld   A, (HL)
+        And  ALLENB
+        Out  (IOREG3), A      ;Do it to the hardware.
+        Ld   (HL), A          ;Keep copy for reference.
+        ;****
+        
+
+        jp   DMAEXIT
+        
+        ;Service for SPEECH
+SPCCASE block 0
+        ld   hl, freebufs
+        ld   a, (hl)
+        inc  a                ;Count 1 more free 128-byte buffer.
+        ld   (hl), a
+        
+        cp   2                ;See if we have another block ready
+        jp   nz, GOAGAIN      ;  Yes, then do it.
+        
+        ;We do not have another block ready for Tx.
+        ld  hl, IOR3          ;Break DMA connection with SIO B.
+        ld  a, (hl)
+        and ALLENB
+        ld  (hl), a
+        out (IOREG3), a
+
+        ld a, 5               ;We are going to program WR5 in SIO B.
+        out (SIOCB),a
+        ld   a, 0E2H
+        out  (SIOCB),a        ;So SIO B <- Tx Disable.
+       
+        ;****V8.64  I think we should also do Reset Ext/Stat Int when we
+        ;           reprogram SIO parameters.
+        Ld   A, 10H
+        Out  (SIOCB),A
+        ;****
+       
+        sub  a                ;IDLE == 0
+        ld   (DMAstate), a    ;DMA going IDLE.
+        
+        ld   a, (LowINIRaddr) ;Are we filling a buffer elsewhere?
+        and  7FH              ;Test for 0 or 128
+        jp   nz, SETRDY
+        ld   (DMAowner), a    ;Set owner to NONE.
+        jp   SETRDY
+                
+        ;We have another buffer ready to transmit.
+GOAGAIN block 0
+        ;Do we have to change CTC1.
+        ld   hl , SPCchange
+        ld  a, (hl)
+        cp  NOCHANGE
+        jp  z, LOADAGAIN
+        
+        ;Setup new CTC1 rate.
+        ld   a, 17H
+        out (CTC1), a
+        ld   a, (NewSPCrate)     ;Get the new rate.
+        out  (CTC1), a           ;Load new rate.
+        ld   (CurrentSPCrate), a ;It is now our current rate.
+        ld   (hl), NOCHANGE             ;Reset SPCchange flag.
+
+LOADAGAIN block 0
+        ld   hl, SPCDMAB
+        ld   c, DMA
+        ld   b, SPC20E-SPC20B
+        otir
+        
+        ld   hl, LowDMAaddr
+        ld   a, (hl)
+        add  a, 128
+        ld   (hl), a
+        
+
+        ;Tell ucode that we can take another 128-byte block.
+SETRDY  ld   hl, READY
+        ld   a, (hl)
+        or   RDYCHG ! RDYSPC
+        ld   (hl), a
+        
+DMAEXIT pop  bc
+        pop  hl
+        pop  af
+        ei
+        reti
+        
+        
+        block 10
+DMA10B  byte  083H         ;WR6: Disable DMA
+        byte  0A3H         ;     Reset and Disable Interrupts
+        byte  08BH         ;     Reinitialize Status Byte
+DMA10E  block 0
+        block 10
+;****
+
+ Page
+;
+;
+;****V8.6  DMAcheck is a new routine.
+;          Called only by FLOPPY to acquire the DMA.
+;
+DMAcheck push af
+         push hl
+         
+         ld   hl, DMAowner
+         ld   a, (hl)
+         cp   SPEECH
+         jp   nz, OKFLOP
+         
+         ;SPEECH has the DMA so ...
+         ld   a, 120Q               ;just report undetermined
+         ld   (FLPSTB), a           ;  equipment fault.
+         ld   a, 1
+         ld   (FLPNST), a
+         
+         ld   hl, FLPIST            ;Show DONE for FLPCHK.
+         ld   a, (hl)
+         or   FLPIDN
+         ld   (hl), a
+         jp   CHKEXIT
+         
+OKFLOP   ld   a, FLOP
+         ld   (hl), a
+         
+CHKEXIT  pop  hl
+         pop  af
+         ret
+;****
+
+
+ Page
+;;
+;CLOCK INITIALIZATION
+;
+CLKINI  SUB     A               ;GET A ZERO
+        LD      (CLKTIC),A              ;NO PENDING CLOCK TICKS
+        RET
+
+;
+;ROUTINE TO SEND A CLOCK TICK TO PERQ (IF NECESSARY)
+;
+CLKCHK  LD      A,(ENABLE)              ;IS THE CLOCK ENABLED?
+        AND     ENBCLK
+        RET     Z                       ;NOPE
+        LD      HL,CLKTIC       ;POINTER TO TICK COUNTER
+        LD      A,(HL)
+        AND     A               ;ANY CLOCK TICKS?
+        RET     Z                       ;NOPE
+        LD      B,A             ;SAVE THE COUNTER
+        LD      A,4             ;THE CLOCK TICK COMMAND
+        CALL    PRQCMD
+        LD      A,B             ;AND THE NUMBER OF TICKS
+        CALL    PRQOUT
+        DI                      ;PRIVACY FOR A BIT
+        LD      A,(HL)          ;CURRENT TICK COUNTER
+        SUB     B               ;MINUS THE NUMBER WE JUST SENT
+        LD      (HL),A
+        EI                      ;OK TO PEEK AGAIN
+        JP      RESTRT          ;AND RESTART THE MAIN LOOP
+ Page
+;;
+;GPIB INITIALIZATION
+;
+GPIINI  LD      HL,GPIOCN       ;OUTPUT BUFFER COUNTER
+        LD      (HL),0          ;SET IT TO ZERO
+        LD      HL,GPITOP       ;GET THE INPUT BUFFER POINTER
+        LD      (HL),LO(GPIIBF+1)
+        INC     HL
+        LD      (HL),LO(GPIIBF+1)
+        RET
+
+ Page
+;;
+;ROUTINE TO SEND GPIB DATA TO PERQ (IF NECESSARY)
+;
+GPICHK  CALL    GETGPI          ;ANY CHARACTERS
+        RET     C                       ;NOPE
+        LD      HL,PRQOBF+1     ;SAVE THEM IN THE PERQ OUTPUT BUFFER
+        LD      D,1             ;COUNTER OF NUMBER OF CHARACTERS
+        JP      GPICHK2
+
+GPICHK1 LD      A,D             ;THE COUNTER
+        CP      16              ;DO NOT PERMIT MORE THAN 16Q AT ONE TIME
+        JP      Z,GPICHK3
+        CALL    GETGPI          ;GET ANOTHER CHARACTER
+        JP      C,GPICHK3               ;NO MORE AVAILABLE
+        INC     D               ;UP THE COUNTER
+GPICHK2 LD      (HL),B          ;GET THE CHARACTER
+        INC     HL
+        JP      GPICHK1         ;DO IT ALL AGAIN
+
+GPICHK3 LD      A,6             ;START THE COMMAND
+        CALL    PRQCMD
+        LD      A,D             ;NUMBER OF CHARACTERS
+        LD      (PRQOBF),A              ;PUT IT AT THE NEAD OF THE MESSAGE
+        INC     A               ;NUMBER OF BYTES TO SEND
+        CALL    PRQSND          ;SEND IT
+        JP      RESTRT
+
+
+ Page
+;;
+;RETRIEVE A CHARACTER FROM THE GPIB INPUTR RING BUFFER
+;
+;   CHARACTER IS RETURNED IN B
+;
+;   CARRY IS SET IF RING BUFFER EMPTY
+;
+GETGPI  PUSH    HL              ;SAVE A REG
+        LD      HL,GPITOP       ;POINTER TO RING BUFFER
+        LD      A,(HL)          ;GET IT
+        INC     HL              ;POINT TO GPIBOT
+        CP      (HL)            ;IS THE BUFFER EMPTY?
+        JP      Z,GETGPI1               ;YES
+        LD      A,(HL)          ;GET THE POINTER
+        ADD     A,1             ;AND BUMP IT UP ONE ENTRY
+        AND     GPIISZ-1        ;FOR WRAP AROUND
+        OR      LO(GPIIBF)      ;NOTE,  THIS WILL CLEAR THE CARRY
+        DI                      ;NEED PRIVACY NOW
+        LD      (HL),A          ;UPDATE THE POINTER
+                                 
+                                ;*********
+                                ;********* Version 8.5 Change:
+                                ; The following instruction was added to 
+                                ; correct the Tablet/Floppy bug. The ring 
+                                ; pointers and ring buffer for GPIB do not 
+                                ; have the same high order address byte.
+                                ; See also "GPISRV".
+                                ;*********
+        LD      H,HI(GPIIBF)    ;Fix high part of address!!!!!!!!
+                                ;*********
+                                
+        LD      L,A             ;POINT TO THE RING BUFFER NOW
+        LD      B,(HL)          ;GET THE CHARACTER CODE
+        EI                      ;OK FOR INTERRUPTS AGAIN
+        POP     HL              ;RESTORE
+        RET                     ;DONE
+
+GETGPI1 SCF                     ;SET THE CARRY TO INDICATE NO DATA
+        POP     HL              ;AND LEAVE
+        RET
+
+ Page
+;;
+;ROUTINE TO OUTPUT A BYTE TO GPIB
+;
+;   INTERRUPTS ARE DISABLED
+;
+GPIOUT  LD      HL,GPIOCN       ;OUTPUT COUNT
+        LD      A,(HL)          ;GET THE BYTE COUNT
+        OR      A               ;ARE WE DONE YET??
+        JP      Z,GPIOUT10      ;YES.  TIME TO SPLIT
+
+        DEC     (HL)            ;ONE LESS BYTE TO DO
+        JP      NZ,GPIOUT1      ;NOT THE END
+        ;**** V8.67 Some code was moved down.
+        ;****
+        LD      A,(GPIBCM)      ;WHAT WAS THE LAST COMMAND?
+        CP      2               ;TEST FOR SEND WITH EOI
+        JP      NZ,GPIOUT1      ;NO EOI NEEDED
+        LD      A,10Q           ;FEOI COMMAND
+        OUT     (GPIAUX),A
+
+GPIOUT1 LD      HL,GPIOPT       ;POINT TO POINTER TO OUTPUT BUFFER
+        LD      A,(HL)          ;GET IT
+        INC     (HL)            ;AND NOW INCREMENT IT
+        LD      H,HI(GPIOBF)    ;SET HIGH PART OF ADDRESS
+        ADD     A,LO(GPIOBF)    ;GET THE LOW PART OF ADDRESS
+        LD      L,A
+        LD      A,(HL)          ;GET THE BYTE
+        OUT     (GPIDO),A       ;SHIP IT
+        RET
+
+GPIOUT10 EQU $
+        ;**** V8.67 Next 4 lines were moved down from above. This ensures 
+        ;           that the GPIB handshake completes on the last byte before
+        ;           we signal PERQ.
+        LD      HL,READY       ;CHANGE THE READY FLAG
+        LD      A,(HL)
+        OR      RDYCHG!RDYGPI
+        LD      (HL),A
+        ;****
+        RET
+
+ Page
+;;
+;GPIB INTERRUPT SERVICE ROUTINE
+;
+GPISRV  PUSH    AF              ;SAVE THEM
+        PUSH    HL
+        LD      HL,GPIREG       ;SAVE THE READ REGISTERS
+        IN      A,(GPIIS0)
+        LD      (HL),A
+        INC     HL
+        IN      A,(GPIASW)
+        LD      (HL),A
+        INC     HL
+        IN      A,(GPIAS)
+        LD      (HL),A
+        INC     HL
+        IN      A,(GPICPT)
+        LD      (HL),A
+        INC     HL
+        IN      A,(GPIIS1)
+        LD      (HL),A
+        INC     HL
+        IN      A,(GPIBS)
+        LD      (HL),A
+
+        LD      A,(GPIREG)              ;GET INTERRUPT STATUS 0
+        AND     60Q             ;ARE THERE ANY BITS SET??
+        JP      NZ,GPISRV2              ;YES THERE ARE.
+
+;       LD      HL,REQSTA       ;SET A GPIB STATUS
+;       LD      A,(HL)          ;UNSOLICITED
+;       OR      STAGPI
+;       LD      (HL),A
+
+GPISRV1 POP     HL              ;RESTORE
+        POP     AF
+        EI
+        RETI
+
+GPISRV2 AND     40Q             ;BI INTERRUPT??
+        JP      NZ,GPISRV20             ;YES
+
+
+GPISRV10        CALL    GPIOUT          ;BO INTERRUPT.  TRANSMIT THE NEXT BYTE
+        JP      GPISRV1         ;ALL FOR NOW
+
+GPISRV20        IN      A,(GPIDI)               ;READ THE DATA BYTE
+        PUSH    AF              ;SAVE IT
+        LD      HL,GPITOP       ;POINTER TO RING BUFFER
+        LD      A,(HL)          ;GET IT
+        INC     A               ;BUMP IT UP BY ONE
+        AND     GPIISZ-1        ;AND FORCE WRAP AROUND
+        OR      LO(GPIIBF)
+        INC     HL              ;POINT TO GPIBOT
+        CP      (HL)            ;IS THE RING BUFFER FULL?
+        JP      Z,GPISRV22              ;YES
+        DEC     HL              ;BACK GPITOP
+        LD      (HL),A          ;UPDATE IT
+                                 
+                                ;*********
+                                ;********* Version 8.5 Change:
+                                ; The following instruction was added to 
+                                ; correct the Tablet/Floppy bug. The ring 
+                                ; pointers and ring buffer for GPIB do not 
+                                ; have the same high order address byte.
+                                ; See also "GETGPI".
+                                ;*********
+        LD      H,HI(GPIIBF)    ;Fix high part of address!!!!!!!!
+                                ;*********
+                                
+        LD      L,A             ;NOW, POINT INTO RING BUFFER
+        POP     AF              ;GET THE CHARACTER BACK
+        LD      (HL),A          ;STORE IT
+        JP      GPISRV1         ;SPLIT FOR THE COAST
+
+GPISRV22        POP     AF              ;DO NOT NEED THE CHARACTER ANYMORE
+        JP      GPISRV1         ;EXIT
+
+ Page
+;;
+;PERQ INPUT/OUTPUT INITIALIZATION
+;
+PRQINI  LD      HL,IDLSTA       ;SET INPUT TO IDLE STATE
+        LD      (PRQSTA),HL
+        RET
+
+;
+;PERQ INPUT INTERRUPT SERVICE
+;
+PRQSRV  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    HL
+        LD      HL,PRQSRV10     ;FAKE A RETURN POINT FOR A SUBROUTINE CALL
+        PUSH    HL
+        IN      A,(PERQR)               ;GET THE DATA
+        LD      HL,(PRQSTA)             ;OUR CURRENT STATE
+        IF      DEF(DEBUG1)
+        PUSH    AF              ;***
+        PUSH    AF              ;***
+        LD      A,"R"           ;***
+        CALL    TYPE            ;***
+        POP     AF              ;***
+        CALL    TYPNUM          ;***
+        LD      A,L             ;***
+        CALL    TYPNUM          ;***
+        LD      A,H             ;***
+        CALL    TYPNUM          ;***
+        POP     AF              ;***
+        ENDIF
+        JP      (HL)            ;GO TO IT
+
+PRQSRV10        LD      HL,IDLSTA       ;BACK TO IDLE STATE
+        LD      (PRQSTA),HL             ;UPDATE THE STATE
+PRQSRV11        BLOCK   0
+        IF      DEF(DEBUG1)
+        LD      HL,PRQSTA       ;***
+        LD      A,(HL)          ;***
+        CALL    TYPNUM          ;***
+        INC     HL              ;***
+        LD      A,(HL)          ;***
+        CALL    TYPNUM          ;***
+        LD      HL,CRLF         ;***
+        CALL    TYPSTR          ;***
+        ENDIF
+        POP     HL              ;AND EXIT
+        POP     AF
+        EI
+        RETI
+
+RSTSTA  LD      (PRQSTA),HL             ;UPDATE THE STATE
+        POP     HL              ;POP UN-NEEDED RETURN ADDRESS
+        JP      PRQSRV11                ;AND EXIT
+
+;
+;COME HERE WHEN WE ARE CURRENTLY IDLE
+;
+IDLSTA  CP      153Q            ;START OF COMMAND?
+        RET     NZ                      ;NOPE
+        LD      HL,CMDSTA       ;START COMMAND STATE
+        JP      RSTSTA          ;SET THE NEW STATE
+
+ Page
+;;
+;START A RECEIVED COMMAND FROM PERQ
+;
+CMDSTA  CP      153Q            ;IS IT THE FLAG BYTE AGAIN?
+        JP      Z,CMDSTA1               ;YES, SO IGNORE IT
+        IF      DEF(DEBUG1)
+        PUSH    AF              ;***
+        PUSH    AF              ;***
+        LD      A,"c"           ;***
+        CALL    TYPE            ;***
+        POP     AF              ;***
+        CALL    TYPNUM          ;***
+        POP     AF              ;***
+        ENDIF
+        
+        ;****V8.6  Skip the calculation below and make a compare
+        ;           for the SPEECH cmd code.
+        cp   4
+        jp   z, SPCCMD      ;Make sure we turn off RDYSPC and check the
+        ;****               ;  bytecnt when we get there.
+        
+        DEC     A               ;FIRST VALID COMMAND IS NUMBER 1
+        CP      SCALAR((CMDSTA11-CMDSTA10)/3+1) ;IS IT A VALID NUMBER?
+        RET     NC                      ;NOPE
+        PUSH    DE              ;NEED ANOTHER REG PAIR
+        LD      E,A             ;THE COMMAND NUMBER
+        RLCA                    ;COMMAND TIMES 2
+        ADD     A,E             ;NOW TIMES 3
+        LD      E,A
+        LD      D,0
+        LD      HL,CMDSTA10             ;THE DISPATCH TABLE
+        ADD     HL,DE           ;ADD IN THE COMMAND TIMES 3
+        LD      A,(READY)               ;THE READY FLAG
+        AND     (HL)            ;TURN OFF ANY REQUESTED BITS
+        LD      (READY),A
+        INC     HL              ;BUMP TO NEXT ENTRY OF TABLE
+        LD      E,(HL)          ;GET THE ADDRESS TO CALL
+        INC     HL
+        LD      D,(HL)
+        EX      DE,HL                   ;PUT INTO HL
+        POP     DE
+        JP      RSTSTA          ;WE WILL GO TO THAT ROUTINE ON NEXT INTERRUPT
+
+CMDSTA1 LD      HL,CMDSTA       ;REMAIN IN COMMAND STATE
+        JP      RSTSTA
+
+        MACRO   CMDTAB
+        BYTE    \'1'
+        WORD    '2'
+        ENDM
+
+CMDSTA10        CMDTAB  RDYTRN,TRNCMD   ;RS232 OUTPUT
+        CMDTAB  RDYFLP,FLPCMI   ;FLOPPY
+        CMDTAB  RDYGPI,GPICMD   ;GPIB
+        CMDTAB  RDYSPC,SPCCMD   ;SPEECH
+        CMDTAB  0,RCVSET        ;RS232 STATUS
+        CMDTAB  0,TABSET        ;TABLET STATUS
+        CMDTAB  0,KBDSET        ;KEYBOARD STATUS
+        CMDTAB  RDYDSK,SEKCMD   ;DISK SEEK
+                                ;****V8.6
+        CMDTAB  0,SPCSET        ;Speech Set Status (used to be old VOLTAGE SET)
+                                ;****
+        CMDTAB  0,CLKSET        ;CLOCK SET
+        CMDTAB  0,SETREQ        ;REQUEST STATUS
+        CMDTAB  0,FLPSTS        ;SET FLOPPY STATUS
+        CMDTAB  RDYFLP,FLPBOT   ;FLOPPY BOOT
+CMDSTA11        BLOCK   0
+
+ Page
+;;
+;RS232 OUTPUT COMMAND
+;
+TRNCMD  CALL    BIGCMD          ;GET THE DATA BYTES
+        JP      TRNSTR          ;AND START THE TRANSMIT
+
+
+
+
+;
+;SPEECH OUTPUT COMMAND
+;
+;****V8.6
+;Moved to another location above and modified!
+          ;SPCCMD  CALL    BIGCMD          ;GET THE DATA BYTES
+          ;JP      SPCSTR          ;AND START THE OUTPUT
+;****
+   
+
+
+
+;
+;DISK SEEK COMMAND
+;
+SEKCMD  JP      SEKSTR          ;A ALREADY CONTAINS THE COUNT
+
+
+
+
+ Page
+;;
+;GPIB COMMAND
+;
+GPICMD  LD      (GPIBCM),A              ;SAVE THE COMMAND CODE
+        LD      HL,GPICMD1              ;WHERE TO GO ON THE NEXT INTERRUPT
+        JP      RSTSTA          ;RESET THE CURRENT STATUS
+GPICMD1 CALL    BIGCMD          ;GET A PACKAGE OF DATA
+        PUSH    BC              ;NEED MORE REGISTERS
+        PUSH    DE
+        LD      B,A             ;NUMBER OF DATA BYTES
+        LD      A,(GPIBCM)              ;THE COMMAND CODE
+        DEC     A               ;FIRST VALID COMMAND IN NUMBER 1
+        CP      SCALAR((GPCIMD101-GPIMCD100)/2+1)       ;IS IT A VALID COMMAND?
+        JP      NC,GPICMD23             ;NOPE
+        RLCA                    ;COMMAND TIMES TWO
+        LD      E,A
+        LD      D,0
+        LD      HL,GPIMCD100            ;THE DISPATCH TABLE
+        ADD     HL,DE
+        LD      E,(HL)          ;THE ROUTINE TO CALL
+        INC     HL
+        LD      D,(HL)
+        EX      DE,HL
+        JP      (HL)            ;CALL IT
+
+GPICMD10        LD      A,B             ;NUMBER OF DATA BYTES
+        LD      (GPIOCN),A              ;SET THE TRANSMIT COUNT
+        LD      HL,PRQIBF       ;WHERE THE DATA IS
+        LD      DE,GPIOBF       ;WHERE TO PUT IT
+GPICMD11        LD      A,(HL)          ;TRANSFER A BYTE AT A TIME
+        INC     HL
+        LD      (DE),A
+        INC     DE
+        DEC     B               ;THE LOOP COUNTER
+        JP      NZ,GPICMD11
+        LD      HL,GPIOPT       ;POINT TO OUTPUT BUFFER POINTER
+        LD      (HL),0          ;THE OFFSET OF THE FIRST BYTE IS 0
+        CALL    GPIOUT          ;START THE TRANSMIT
+        POP     DE              ;RESTORE
+        POP     BC
+        RET
+
+GPICMD20        LD      A,B             ;GET THE BYTE COUNT INTO A
+        AND     A               ;CLEAR CARRY
+        RRA                     ;HALVE THE BYTE COUNT
+        LD      B,A
+        LD      HL,PRQIBF       ;POINT TO INPUT BUFFER
+GPICMD21        LD      A,(HL)          ;REGISTER CODE
+        INC     HL
+        ADD     A,GPIIS0                ;CONVERT TO REGISTER NUMBER
+        LD      C,A
+        CP      GPIIS0          ;SETTING INTERRUPT ENABLES?
+        JP      Z,GPICMD24              ;YES!
+        LD      A,(HL)          ;GET THE BYTE TO MOVE
+        INC     HL
+        BYTE    355Q,171Q               ;OUT (C),A
+GPICMD22        DEC     B               ;THE LOOP COUNTER
+        JP      NZ,GPICMD21
+GPICMD23        LD      HL,READY                ;UPDATE READY
+        LD      A,(HL)
+        OR      RDYCHG!RDYGPI
+        LD      (HL),A
+        POP     DE              ;RESTORE
+        POP     BC
+        RET
+
+GPICMD24        LD      A,(HL)          ;DATA BYTE FOR GPIIS0
+        INC     HL
+        OR      60Q             ;SET BI AND BO INTERRUPTS
+        OUT     (GPIIS0),A
+        JP      GPICMD22
+
+GPIMCD100       WORD    GPICMD10                ;SEND DATA BYTES
+        WORD    GPICMD10                ;SEND DATA BYTES WITH EOI ON LAST BYTE
+        WORD    GPICMD20                ;SET COMMAND REGISTERS
+GPCIMD101       BLOCK   0
+
+ Page
+;;
+;RECEIVER STATUS SET
+;
+RCVSET  CALL    BIGCMD          ;GET THE REST OF THE COMMAND
+        PUSH    BC
+        LD      B,A             ;NUMBER OF DATA BYTES
+        LD      HL,PRQIBF       ;THE INPUT BUFFER
+        LD      A,(HL)          ;GET THE INTERRUPT ENABLE BYTE
+        RRCA                    ;FLAG BIT TO CARRY
+        LD      A,(ENABLE)
+        JP      NC,RCVSET1              ;INTERRUPT WILL BE OFF
+        OR      ENBRCV          ;ENABLE INTERRUPTS
+        JP      RCVSET2
+RCVSET1 AND     \ENBRCV ;TURN OFF INTERRUPT ENABLE
+RCVSET2 LD      (ENABLE),A
+        DEC     B               ;MORE BYTES?
+        JP      Z,RCVSET3               ;NOPE
+        INC     HL
+        LD      A,(HL)          ;GET THE CLOCK BYTE
+        LD      (SIOACL),A
+        DEC     B               ;MORE?
+        JP      Z,RCVSET3               ;NOPE
+        INC     HL
+        LD      A,(HL)          ;GET THE STATUS BYTE
+        LD      (SIOASB),A
+RCVSET3 POP     BC              ;RESTORE
+        JP      SIOARS          ;AND RESET SIO CHANNEL A
+
+ Page
+;;
+;
+;****V8.6  Modified this routine to support Kriz Tablet.
+;
+;Kriz TABLET SET STATUS
+;
+TABSET  Block 0
+        push    bc
+
+        CALL    BIGCMD          ;GET THE COMMAND into PRQIBF.
+        LD      A,(PRQIBF)      ;Msg byte tells us whether to
+        RRCA                    ;  turn Tablet on/off.
+        RRCA                    ;****V8.65 Second bit is enable flag for Kriz
+                                ;          Tablet.
+
+        LD      HL,ENABLE       ;We must update the ENABLE flag to
+                                ;  show Tablet on/off.
+
+        JP      NC,TABOFF       ;Did the msg tell us to turn Tablet off?
+
+TABON   ld      b, 0D1H         ;Cmd for SIO B to turn Rx on.
+        ;****V8.65
+        ld      a, NEXT_2_MSGS  ;We will ignore the first 2 msgs when tablet
+        ld      (MsgIgnore), a  ;  goes on.
+        ;****
+        ld      a, (hl)         ;Get the ENABLE flag.
+        OR      ENBTAB          ;Tablet going on.
+        jp      TABCOMMON
+
+TABOFF  ld      b, 0C0H         ;Cmd for SIO B to turn Rx off.
+        ld      a, (hl)         ;Get the ENABLE flag.
+        AND     \ENBTAB         ;Tablet going off.
+        
+TABCOMMON LD      (HL),A        ;Now update the ENABLE flag.
+        ld      a, 3            
+        out     (SIOCB), a      ;Point to SIO B WR3.
+        ld      a, b
+        out     (SIOCB), a      ;Set SIO B Rx accordingly.
+       
+        ;****V8.64  I think we should also do Reset Ext/Stat Int when we
+        ;           reprogram SIO parameters.
+        Ld   A, 10H
+        Out  (SIOCB),A
+        ;****
+
+        ;****V8.65 Replace the call to TABINI.
+        ;Reset the Tablet state.
+        sub     a               ;Get a zero
+        ld      (TabFlg), a     ;NO_DATA.
+        ld      (Charcnt), a    ;No msg bytes received.
+        ld      (RcvOvrRun), a  ;No overrun.
+        ;****
+       
+        pop     bc
+        RET                     ;BACK TO IDLE
+;****
+
+
+ Page
+;;
+;KEYBOARD SET STATUS
+;
+KBDSET  CALL    BIGCMD          ;GET THE COMMAND
+        LD      A,(PRQIBF)              ;LOOK AT ENABLE BYTE
+        RRCA                    ;FLAG BIT TO CARRY
+        LD      HL,ENABLE
+        LD      A,(HL)
+        JP      NC,KBDSET1              ;KEYBOARD IS GOING OFF
+        OR      ENBKBD          ;TURN IT ON
+        LD      (HL),A
+        LD      HL,IOR3         ;MUST ALSO DO IT TO THE HARDWARE
+        LD      A,(HL)
+        OR      KBDENB
+        JP      KBDSET2
+
+KBDSET1 AND     \ENBKBD ;TURN IT OFF
+        LD      (HL),A
+        LD      HL,IOR3         ;MUST ALSO DO IT TO THE HARDWARE
+        LD      A,(HL)
+        AND     \KBDENB
+KBDSET2 OUT     (IOREG3),A              ;SET THE INTERRUPT ENABLES
+        LD      (HL),A          ;AND REMEMBER WHAT WE WROTE
+        RET
+
+ Page
+;;
+;
+;****V8.6  We are using the old Volt/Temp Set Status cmd to serve as our 
+;          Speech Set Status cmd. Z80Monitor is used as the Unit parameter
+;          to IOPutStatus in Pascal.
+;
+;Speech Set Status
+;
+SPCSET  Block 0              ;The msg may be 1 or 2 bytes long.
+        push bc
+        
+        call BIGCMD          ;Get the msg into PRQIBF.
+        ld   b, a            ;Save the msg bytecnt in b.
+        
+        ld   hl, PRQIBF      ;Point to PRQIBF.
+        ld   a, (hl)         ;Get first byte of msg
+        ld   (NewSPCrate), a ;  which is the new rate for Speech.
+        ld   a, CHANGE       ;We must set a flag to 
+        ld   (SPCchange), a  ;  request the rate change.
+        
+        ld   a, b            ;Now look at the msg bytecnt.
+        cp   2               ;If it is a 2-byte msg, user wants to reset.
+        jp   nz, SPCFIN      ;If not, then we are done.
+        
+        inc  hl              ;For reset, we require user to supply a code.
+        ld   a, (hl)         ;Get the code from PRQIBF.
+        xor  SPC_RESET_CODE  ;Verify the code.
+        jp   nz, SPCFIN      ;Exit on invalid code.
+        
+        ld   (LowDMAaddr),a  ;Set to zero.
+        ld   (LowINIRaddr),a ;Set to zero.
+        ld   a, (DMAstate)   ;****V8.63  If DMA is BUSY, then do nothing more.
+        cp   BUSY            ;           Otherwise, if DMA is still owned by 
+        jp   z, SPCFIN       ;           SPEECH, release it and the buffers.
+        ld   hl, DMAowner    ;
+        ld   a, (hl)         ;
+        cp   SPEECH          ;
+        jp   nz, SPCFIN      ;
+        ld   (hl), NONE      ;
+        ld   a, 2            ;
+        ld   (FreeBufs), a   ;
+                             ;****
+        ;Note: Reset is not really intended for normal Speech Set Status. It
+        ;      is provided until the Keyboard interaction bug is fixed.
+        ;      We do not really want users altering Z80 state variables.
+        
+SPCFIN  pop  bc
+        ret
+;****
+        
+ Page
+;;
+;CLOCK STATUS SET
+;
+CLKSET  CALL    BIGCMD          ;GET THE REST OF THE COMMAND
+        LD      A,(PRQIBF)              ;GET THE ENABLE BYTE
+        RRCA                    ;FLAG BIT TO CARRY
+        LD      HL,ENABLE
+        LD      A,(HL)
+        JP      NC,CLKSET1              ;TURN OFF THE CLOCK
+        OR      ENBCLK          ;TURN IT ON
+        JP      CLKSET2
+CLKSET1 AND     \ENBCLK ;TURN IT OFF
+CLKSET2 LD      (HL),A
+        RET
+ Page
+;;
+;STATUS REQUEST
+;
+SETREQ  LD      HL,REQSTA       ;POINT TO FLAG BYTE
+        OR      (HL)            ;OR IN THE NEW BITS
+        LD      (HL),A
+        RET                     ;THAT IS ALL THERE IS
+
+ Page
+;;
+;ROUTINE TO GET A BLOCK OF DATA BYTES FROM PERQ
+;
+;   A CONTAINS THE BYTE COUNT
+;   HL IS FREE FOR USE
+;   INTERRUPTS ARE DISABLED
+;
+BIGCMD  PUSH    AF              ;THIS IS THE BYTE COUNT
+        PUSH    BC
+        LD      B,A
+        LD      HL,IOR3         ;WHAT IS CURRENT VALUE OF IOREG3
+        LD      A,(HL)
+        AND     \PRQENB ;TURN OFF PERQ INPUT INTERRUPTS
+        OUT     (IOREG3),A
+        LD      (HL),A
+        EI                      ;OK FOR INTERRUPTS NOW
+        LD      C,PERQR         ;I/O CHANNEL
+        LD      HL,PRQIBF       ;WHERE TO PUT THE DATA
+        INIR                    ;READ IT
+        DI                      ;TIME FOR PRIVACY AGAIN
+        LD      HL,IOR3         ;MUST UPDATE THIS AGAIN
+        LD      A,(HL)
+        OR      PRQENB
+        OUT     (IOREG3),A
+        LD      (HL),A
+        POP     BC              ;RESTORE
+        POP     AF              ;RETURN BYTE COUNT IN A
+        IF      DEF(DEBUG1)
+        PUSH    AF
+        PUSH    BC
+        LD      B,A
+        LD      HL,PRQIBF
+BIGCMD1 LD      A,(HL)
+        CALL    TYPNUM
+        INC     HL
+        DEC     B
+        JP      NZ,BIGCMD1
+        POP     BC
+        POP     AF
+        ENDIF
+        RET
+
+ Page
+;;
+;START A COMMAND SEQUENCE TO PERQ
+;
+;   A CONTAINS THE COMMAND BYTE
+;
+PRQCMD  PUSH    AF              ;SAVE THE COMMAND
+        IF      DEF(DEBUG0)
+        PUSH    HL
+        LD      HL,CRLF
+        CALL    TYPSTR
+        LD      A,"S"
+        CALL    TYPE
+        POP     HL
+        ENDIF
+        LD      A,153Q          ;THE STARTING FLAG
+        CALL    PRQOUT          ;SHIP IT
+        POP     AF              ;AND GET THE COMMAND BACK
+
+ Page
+;;
+;ROUTINE TO SEND A BYTE TO PERQ
+;
+;   A CONTAINS THE DATA BYTE
+;
+PRQOUT  PUSH    AF              ;SAVE IT
+PRQOUT1 IN      A,(IOREG1)              ;SEE IF THE BUFFER IS READY
+        AND     100Q
+        IF      \DEF(DEBUG2)
+        JP      NZ,PRQOUT1              ;NOPE
+        ENDIF
+        POP     AF              ;GET THE DATA BYTE
+        IF      \DEF(DEBUG2)
+        OUT     (PERQW),A               ;SEND IT
+        ENDIF
+        IF      DEF(DEBUG0)
+        CALL    TYPNUM
+        ENDIF
+        RET
+
+ Page
+;;
+;ROUTINE TO SEND COMMAND BUFFER TO PERQ
+;
+;   A CONTAINS THE NUMBER OF BYTES TO SEND
+;
+PRQSND  PUSH    BC              ;NEED MORE REGISTERS
+        PUSH    HL
+        LD      HL,PRQOBF       ;ADDRESS OF OUTPUT BUFFER
+        LD      B,A             ;BYTE COUNT
+        LD      C,PERQW         ;OUTPUT CHANNEL
+        IF      DEF(DEBUG0)
+        PUSH    BC
+        ENDIF
+PRQSND1 IN      A,(IOREG1)              ;WAIT FOR BUFFER TO BECOME EMPTY
+        AND     100Q
+        IF      \DEF(DEBUG2)
+        JP      NZ,PRQSND1
+        LD      A,(HL)          ;GET THE BYTE THAT WE ARE TO SEND
+        OUT     (PERQW),A               ;SEND THE BYTE TO PERQ
+        INC     HL              ;BUMP THE POINTER TO THE NEXT BYTE
+        DEC     B
+        JP      NZ,PRQSND1              ;LOOP AND SEND THE NEXT ONE
+
+;       OTIR                    ;SHIP IT
+        ENDIF
+        IF      DEF(DEBUG0)
+        LD      HL,PRQOBF
+        POP     BC
+PRQSND2 LD      A,(HL)          ;***
+        CALL    TYPNUM          ;***
+        INC     HL              ;***
+        DEC     B               ;***
+        JP      NZ,PRQSND2              ;***
+        LD      HL,CRLF
+        CALL    TYPSTR
+        ENDIF
+        POP     HL              ;RESTORE
+        POP     BC
+        RET
+
+ Page
+;;
+;UNIMPLEMENTED INTERRUPT SERVICES
+;
+JUNK56  EI
+        RETI
+
+
+
+ Page
+;;
+SIOAST  PUSH    AF
+        PUSH    HL
+        LD      A,20Q           ;RESET STATUS CHANGE
+        OUT     (SIOCA),A
+        POP     HL
+        POP     AF
+        EI
+        RETI
+
+
+ Page
+;;
+;ROUTINE TO OUTPUT A SINGLE CHARACTER TO SIO CHANNEL A
+;
+;   A CONTAINS THE CHARACTER
+;
+TYPE    PUSH    HL
+        PUSH    AF
+        BYTE    355Q,127Q
+        JP      PO,TYPE2
+        LD      HL,TRNCNT
+        SUB     A
+TYPE1   CP      (HL)
+        JP      NZ,TYPE1
+TYPE2   IN      A,(SIOCA)
+        AND     4
+        JP      Z,TYPE2
+        POP     AF
+        OUT     (SIODA),A
+        POP     HL
+        RET
+
+ Page
+;;
+;ROUTINE TO OUTPUT AN ASCIZ STRING TO SIO CHANNEL A
+;
+;   HL CONTAINS ADDRESS OF THE STRING
+;
+TYPSTR  LD      A,(HL)
+        AND     A
+        RET     Z
+        CALL    TYPE
+        INC     HL
+        JP      TYPSTR
+
+ Page
+;;
+;ROUTINE TO OUTPUT AN OCTAL NUMBER
+;
+;   A CONTAINS THE NUMBER
+;
+TYPNUM  PUSH    BC
+        LD      B,A
+        RLCA
+        RLCA
+        AND     3
+        CALL    TYPDIG
+        LD      A,B
+        RRCA
+        RRCA
+        RRCA
+        CALL    TYPDIG
+        LD      A,B
+        CALL    TYPDIG
+        POP     BC
+        LD      A," "
+        JP      TYPE
+
+ Page
+;;
+;ROUTINE TO TYPE A SINGLE OCTAL DIGIT
+;
+TYPDIG  AND     7
+        ADD     A,"0"
+        JP      TYPE
+ 
+        IF      $>=20000Q
+        WARNING TOO MUCH DATA FOR EPROM
+        ENDIF
+ 
+
+ 
+ 
+        FILLMEM 10000Q-SCALAR($),377Q
+
+
+        END
+

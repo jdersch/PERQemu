@@ -1,0 +1,137 @@
+!       DMAb.Bin
+
+        Define(R0,0);
+        Define(R1,1);
+        Define(R2,2);
+        Define(R3,3);
+        Define(R4,4);
+        Define(R5,5);
+        Define(R6,6);
+        Define(R7,7);
+        Define(R10,10);
+        Define(R11,11);
+        Define(R370,370);
+
+        Constant(C7401,7401);
+        Constant(C7624,7624);
+
+        Place(0,334);
+
+        R1 := 0;                        ! 0
+L1:     R0, Call(L101);                 ! 1
+        R4 := R10;                      ! 2
+L3:     R5 := 1;                        ! 3
+        R2 := 20, Call(L37);            ! 4
+        R2 := 360, Call(L70);           ! 5
+        R0, PushLoad(L3);               ! 6
+        0, Iob(247);                    ! 7
+        R0, RepeatLoop;                 ! 10
+        R0, PushLoad(L30);              ! 11
+        R0, if IntrPend Call(L122);     ! 12
+        R0, RepeatLoop;                 ! 13
+        R2 := 320, Call(L61);           ! 14
+        R0, PushLoad(L3);               ! 15
+        1, Iob(247);                    ! 16
+        R0, RepeatLoop;                 ! 17
+        R0, PushLoad(L30);              ! 20
+        R0, if IntrPend Call(L122);     ! 21
+L22:    R0, RepeatLoop;                 ! 22
+        R4 := R7;                       ! 23
+        R5 := 1;                        ! 24
+        R2 := 10;                       ! 25
+        R370 := 101, Call(L47);         ! 26
+        R4 := R6;                       ! 27
+L30:    R2 := 10;                       ! 30
+        R370 := 102, Call(L47);         ! 31
+        R1 := R1 + 1;                   ! 32
+        R0;                             ! 33
+        R0, if Eql Goto(L116);          ! 34
+        R0, Goto(L1);                   ! 35
+
+L37:    MA := R4, Store;                ! 37
+        R5;                             ! 36
+        R0, if IntrPend Call(L122);     ! 40
+        R4 := R4 + 1;                   ! 41
+        R5 := R5 + 1;                   ! 42
+        R2 := R2 - 1;                   ! 43
+        R0, if Neq Goto(L37);           ! 44
+        R0, Return;                     ! 45
+
+L47:    MA := R4, Fetch;                ! 47
+        R3 := Mdi and 37;               ! 46
+        R0, if IntrPend Call(L122);     ! 50
+        R3 - R5;                        ! 51
+        R0, if Neq JumpPop(L117);       ! 52
+        R4 := R4 + 1;                   ! 53
+        R5 := R5 + 1;                   ! 54
+        R5 := R5 and 37;                ! 55
+        R2 := R2 - 1;                   ! 56
+        R0, if Neq Goto(L47);           ! 57
+        R0, Return;                     ! 60
+
+L61:    4, Iob(300);                    ! 61
+        R3 := R6;                       ! 62
+        R3, Iob(324);                   ! 63
+        0, Iob(325);                    ! 64
+        R3 := R7;                       ! 65
+        R3, Iob(326);                   ! 66
+        R2, Iob(327), Return;           ! 67
+
+L70:    4, Iob(300);                    ! 70
+        R3 := R10;                      ! 71
+        R3, Iob(324);                   ! 72
+        0, Iob(325);                    ! 73
+        R3 := R11;                      ! 74
+        R3, Iob(326);                   ! 75
+        R2, Iob(327), Return;           ! 76
+
+L101:   R4 := 1, PushLoad(L22);         ! 101
+        R4 := R4 + R4, RepeatLoop;      ! 102
+        R4 := R4 - 1;                   ! 103
+L104:   MA := R4, Store;                ! 104
+        0;                              ! 77
+        R0, if IntrPend Call(L122);     ! 105
+        R4 := R4 - 1;                   ! 106
+        R0, if C19 Return;              ! 107
+        R0, Goto(L104);                 ! 110
+
+        R370 := 100;                    ! 100
+L112:   MA := R0, Fetch;                ! 112
+        Mdi;                            ! 111
+        R0, if Neq Goto(C7401);         ! 113
+        R0, if IntrPend Call(L122);     ! 114
+        R0 := R0 + 1, Goto(L112);       ! 115
+
+        R370 := 100, Loc(100);                    ! 100
+L114:   MA := R0, Fetch;                ! 114
+        Mdi;                            ! 77
+        if Neq Goto(7401);         ! 115
+        if IntrPend Call(L122);     ! 116
+        R0 := R0 + 1, Goto(L114);       ! 117
+
+L116:   R370 := 100;                    ! 116
+L117:   R0 - 1;                         ! 117
+        R0, if Eql Goto(L1);            ! 120
+        R0, Goto(C7401);                ! 121
+
+L122:   R0, Vector(L300);               ! 122
+
+L300:   0, Iob(305), Return,Loc(300);            ! 300
+
+        R0, Iob(10),Loc(304);                    ! 304
+        R0, Return;                     ! 305
+
+        R0, Iob(123), Return,Loc(310);           ! 310
+
+        0, Iob(302);                    ! 313
+        0, Iob(303), Return,Loc(314);            ! 314
+
+        0, Iob(305), Return,Loc(320);            ! 320
+
+        R0, Goto(C7624),Loc(324);                ! 324
+
+        R0, Return,Loc(330);                     ! 330
+
+        R0, Return,Loc(334);                     ! 334
+
+        end;

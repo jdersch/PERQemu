@@ -1,0 +1,21 @@
+!Routine to clear memory
+ define(rpos,10);
+ define(r370,370);
+ constant(vecint,7600);
+ place(2400,2500);
+ 
+  loc(2400), call(clear);
+    r370 := 100;
+    goto(7401);
+
+Clear: Rpos := 1, PushLoad(22);
+    Rpos := Rpos + Rpos, RepeatLoop;  ! 2^19 words = 1 Mbyte
+    Rpos := Rpos-1;
+Cl1: Rpos, Store;
+    MDO := 0;
+    if IntrPend call(interupt);
+    Rpos := Rpos-1;
+    if C19 return;                 ! Carry when C19 low
+    goto(Cl1);
+interupt: vector(vecint);
+end;

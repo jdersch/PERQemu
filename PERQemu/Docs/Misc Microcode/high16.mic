@@ -1,0 +1,482 @@
+!!!     High16 - Test top 3.5 banks of Perq microstore on 16K CPU.
+!
+!!      Modification history
+!
+!       16 Aug 83 V1.0   HC  Start Program ( modified from High )
+!
+!       ( Modification history of High and Low.
+!
+!         5 Aug 83  V1.1   HC  Fix bugs in use of Victim register
+!
+!         1 Nov 80  V1.0  JPS  Start program. )
+
+!!!   This program was developed from 'High', written by J. P. Strait of 3RCC
+
+!!!     High16 tests the top 3.5 banks of the Perq microstore on the
+!       16K CPU. Generally it tests by writing interesting instructions
+!       into each word of the microstore and executing them to see what
+!       happened.  All other permissable locations are filled with
+!
+!             Goto(Self);
+!
+!       Locations 7400..7777 cannot be tested since they are used by KRNL.
+!       In addition a small number of locations at the low end of banks 1,
+!       2 and 3 are not tested. This is because the Jump types used in
+!       tests 1, 2 and 6 cannot jump between banks of controlstore. When
+!       the upper banks are under test the code plants leaps to the 
+!       proper places in Bank0 in those locations at the low end of
+!       the bank under test which are the targets of the test instruction
+!       in tests 1, 2 and 6. The constants FixAdd1, 2 and 3 control this
+!       process.
+!       If there are bad bits, High16 gives a breakpoint, loops at some
+!       address (a wrong one) in the bank being tested, or goes
+!       off the deep end.
+!
+
+!!      Words of microcode have this form:
+!             
+!             5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+!             ------------------------------- 
+!       Hi:  |        X      |       Y       |
+!            |-------------------------------|
+!       Mid: |  Cnd  |  Jmp  |B|H| F |   SF  |
+!            |-------------------------------|
+!       Low: |        Z      |  A  |1|W|0|3|2|  0, 1, 2, 3 are bits of Alu
+!             ------------------------------- 
+
+
+$PERQ1A
+$NOBASE
+
+!!      Configuration constants for High16.                           ! High
+                                                                      ! High
+        Constant(ProgFirst,0000);     ! first location of code        ! High
+        Constant(ProgLast,2777);      ! last location of code         ! High
+        Constant(Entry,2000);         ! entry address                 ! High
+        Constant(Error,2700);         ! location to jump to on error  ! High
+        Constant(Resume,0101);        ! address for "P" after error   ! High
+                                                                      ! High
+        Constant(TestFirst,4000);     ! first location to test        ! High
+        Constant(TestLast,37777);     ! last location to test         ! High
+        Constant(Go,1000);            ! target of Goto                ! High
+        Constant(KRNLBottom,7377);    ! Bottom of KRNL - 1
+        
+        
+!!      The interesting instructions are:
+!
+!       1)   R377 := Tos xor 177777, ReviveVictim;
+!            a) initialize Tos and R377 to 177777
+!            b) initialize BPC to 10
+!            c) make a Victim
+!            d) distinguish ReviveVictim from NextInst
+!            e) check R377=0
+
+        Constant(Hi1,  177777);  ! X=377, Y=377
+        Constant(Mid1, 001300);  ! Cnd=0, Jmp=2, B=1, H=1, F=0, SF=0
+        Constant(Low1, 177772);  ! Z=377, A=7, Alu=12, W=1
+        
+!       2)   NextInst(NxtI);
+!            a) initialize the Op file empty
+!            b) make a Victim
+!            c) distinguish ReviveVictim from NextInst
+!            d) clear the victim register                 V1.1
+
+        Constant(Hi2,  000000);  ! X=0, X=0
+        Constant(Mid2, 001000);  ! Cnd=0, Jmp=2, B=0, H=0, F=0, SF=0
+        Constant(Low2, 177400);  ! Z=377, A=0, Alu=0, W=0             ! High
+        
+!       3)   if true Return;
+!            a) call this one and make sure it returns
+!            b) call it after: BPC := 0;
+!                              R1 := 1;
+!                              R1 - 1;   (C19, Neq, Lss, Gtr, OverFlow, Odd,
+!                                         Bpc[3], ByteSign, False)
+!            c) call it after: 1;        (Eql, Leq, Carry)
+!            d) call it after: not 0;    (Geq)
+
+        Constant(Hi3,  000000);  ! X=0, Y=0
+        Constant(Mid3, 005000);  ! Cnd=0, Jmp=12, B=0, H=0, F=0, SF=0
+        Constant(Low3, 000000);  ! Z=0, A=0, Alu=0, W=0
+
+!       4)   Shift and not R0, Pop, Return;
+!            a) set shift-control to Rotate(0)
+!            b) set R0 to 0
+!            c) put two things in the stack
+!            d) put 177777 thru the shifter before calling this one
+!            e) read 177777 on the shifter
+!            d) be sure R0 doesn't change
+!            f) be sure that have the lower one on top
+
+        Constant(Hi4,  000000);  ! X=0, Y=0
+        Constant(Mid4, 005005);  ! Cnd=0, Jmp=12, B=0, H=0, F=0, SF=5
+        Constant(Low4, 000005);  ! Z=0, A=0, Alu=5, W=0
+
+!       5)   if Geq, Goto(Go);
+!            a) execute after: BPC := 0;
+!                              R1 := 1;
+!                              R1 - 1;   (C19, Neq, Lss, Gtr, OverFlow, Odd,
+!                                         Bpc[3], ByteSign, False)
+!            b) execute after: 1;        (Eql, Leq, Carry)
+
+        Constant(Hi5,  000002);  ! X=0, Y=2
+        Constant(Mid5, 171427);  ! Cnd=17, Jmp=3, B=0, H=0, F=1, SF=7 
+        Constant(Low5, 177400);  ! Z=377, A=0, Alu=0, W=0
+        
+!       6)   LoadOp, if False Loop;
+!            a) get known stuff in the Op file
+!            b) do a Fetch4 on other known stuff
+!            c) call it and check the Op file
+!            d) do a return and verify that we went back to the right place
+
+        Constant(Hi6,  000000);  ! X=0, Y=0
+        Constant(Mid6, 016412);  ! Cnd=0, Jmp=15, B=0, H=0, F=0, SF=12
+        Constant(Low6, 000000);  ! Z=0, A=0, Alu=0, W=0
+        
+
+!!      Constants for Goto(Self);  ( Using a Leap )
+
+        Constant(HiG,  000000);       ! X=0, Y=0
+        Constant(MidG, 001427);       ! Cnd=0, Jmp=3, B=0, H=0, F=1, SF=7
+        Constant(LowG, 000300);       ! Z=0, A=6, Alu=0, W=0
+        
+!!      Constants to define the target locations of the jumps in Tests 1, 2 & 6
+!       with respect to the base of the bank in which the instruction under
+!       test is being executed.
+!        [ N.B. The code assumes  0 =< FixAdd1 < FixAdd2 < FixAdd3 =< 377 ]
+
+        Constant(FixAdd1,0);
+        Constant(FixAdd2,1);
+        Constant(FixAdd3,4);
+                
+!!      Constants to define leaps into bank 0 at FixAdd1, 2 & 3 from the upper
+!       banks.
+
+        Constant(LeapHi,000000);           ! X = 0 , Y = 0
+        Constant(LeapMid,001427);          ! Cnd=0, Jmp=3, B=0, H=0, F=1, SF=7
+        Constant(LeapLow1, NOT FixAdd1 LSH 10 OR 000300);
+                                           ! Z=0, A=6, W=0, ALU=0
+        Constant(LeapLow2, NOT FixAdd2 LSH 10 OR 000300);
+                                           ! Z=0, A=6, W=0, ALU=0
+        Constant(LeapLow3, NOT FixAdd3 LSH 10 OR 000300);
+                                           ! Z=0, A=6, W=0, ALU=0
+
+        
+
+
+
+        Define(R0,0);
+        Define(R1,1);
+        Define(R377,377);
+        Define(R370,370);
+        
+        Define(Address,210);          ! Location under test
+        Define(Test,11);              ! Test No of test being executed
+        Define(Hi,12);
+        Define(Mid,13);
+        Define(Low,14);
+        Define(MakeVictim,15);
+        Define(NextInstDesired,16);
+        Define(State,17);
+        Define(T,20);
+        Define(CurrBank,21);
+        Define(Banklast,22);          ! Last Location to test in current bank
+        Define(Tmp,23);
+        Define(Save377,177);
+        
+        
+        Place(ProgFirst, ProgLast);
+
+!    First write a one line loop, Goto(Self), to every location to be tested
+!    being careful not to overwrite KRNL.
+
+
+High16: Address := TestLast, Loc(Entry);
+StartA: Address, RightShift(0);                   ! Set up Shifter
+        LoadS(Shift);                       ! Write address to S
+        Call(Self);                         ! Write GoTo(Self) at current loc
+        Address XOR 10000;                         ! Bottom of Bank1?
+        If NEQ GoTo(Cont1); 
+        Address := KRNLBottom;              ! dodge KRNL
+        Goto(StartA);
+Cont1:  Address XOR TestFirst;              ! finished this yet?
+        Address := Address - 1, 
+               If Neq Goto(StartA);         ! Jump unless finished
+ 
+Startb: Address := TestLast;            ! Initialise
+
+
+!    Then Work out which bank to do next and write Leaps back to Bank0
+!    to make the code work and/or erase such Leaps as required, see above.
+!    Write leaps in current bank if current bank > 0
+!    Erase leaps in current bank+1 if current bank < 3
+!    Also set BankLast to last address to be tested in bank.
+
+BankLoop: Address, field(14,2); 
+          CurrBank:= Shift;          ! Get No of current bank
+          If GTR Call(WriteLeaps);   
+          CurrBank - 3;
+          If LSS Call(EraseLeaps);
+          Address, RightShift(0);
+          LoadS(Shift);              ! Initialise S for this bank
+          BankLast := TestFirst;     ! Now set up BankLast
+          CurrBank;
+          If EQL Goto(Top);          ! BankLast = TestFirst for Bank0
+          CurrBank, Leftshift(14);
+          BankLast := Shift;                        ! & Bottom of bank + 1
+          BankLast := BankLast + (FixAdd3 + 1);     !   + FixAdd3 otherwise
+
+
+
+
+!   Now the loop which actually tests the bank
+
+Top:    if True Loop;                ! clear the call stack
+        if True Loop;                ! "if True" required by placer bug
+        if True Loop;
+        if True Loop;
+        if True Loop;
+        StackReset;                  ! clear the expression stack
+        
+!       Test 1.
+
+        Test := 1;
+        Hi := Hi1;
+        Mid := Mid1;
+        Low := Low1;
+        NextInstDesired := 0;
+        Call(Write);                 ! write the instruction
+        R377 := 177777;
+        Tos := R377;
+        Bpc := 10;
+        MakeVictim := 1;
+        NextOp, if Bpc[3] Goto(T1a),        ! cancel "if Bpc[3] Goto(Refill)"
+           Loc(FixAdd2);                    ! Tie Down the Victim address
+T1a:    BPC := 0;                           ! V1.1 No victim 2nd time round
+        MakeVictim;
+        MakeVictim := 0, if Eql Goto(T1b); ! if returning from ReviveVictim
+        GotoS;      ! execute the instruction
+T1b:    R377;
+        if Neq Goto(Wrong);
+        
+
+!       Test 2.
+
+        Test := 2;
+        Hi := Hi2;
+        Mid := Mid2;
+        Low := Low2;
+        NextInstDesired := 1;
+        T := 1;                      ! V1.1 
+        Call(Write);                 ! write the instruction
+        Bpc := 10;
+        MakeVictim := 1;
+        NextOp, if Bpc[3] Goto(T2a); ! cancel "if Bpc[3] Goto(Refill)"
+T2a:    T;                           ! V1.1 Finished Test2 ?
+        If EQL GoTo(T3a);            ! V1.1
+        MakeVictim;
+        MakeVictim := 0, if Eql Goto(Wrong); ! if returning from ReviveVictim
+                                             ! at test location
+        CallS;                       ! execute the instruction
+        NextInstDesired := 0;
+        BPC := 0;                    ! V1.1 No victim 2nd time round
+        T := 0,ReviveVictim;         ! V1.1 Clear down victim register
+
+!       Test 3.
+
+T3a:    Test := 3;
+        Hi := Hi3;
+        Mid := Mid3;
+        Low := Low3;
+        Call(Write);                 ! write the instruction
+        BPC := 0;
+        R1 := 1;
+        R1 - 1, CallS;               ! execute the instruction
+        1, CallS;                    ! execute it again
+        not 0, CallS;                ! one last time
+
+!       Test 4.
+
+        Test := 4;
+        Hi := Hi4;
+        Mid := Mid4;
+        Low := Low4;
+        Call(Write);                 ! write the instruction
+        R0 := 0, Rotate(0);
+        R1 := 12345;
+        Tos := R1;
+        R1 := 54321;
+        Tos := R1, Push;
+        R1 := 12345;
+        177777, CallS;               ! execute the instruction
+        not Shift;
+        R0, if Neq Goto(Wrong);
+        Tos xor R1, if Neq Goto(Wrong);
+        if Neq Goto(Wrong);
+
+!       Test 5.
+
+        Test := 5;
+        Hi := Hi5;
+        Mid := Mid5;
+        Low := Low5;
+        Call(Write);                 ! write the instruction
+        Bpc := 0;
+        R1 := 1;
+        R1 - 1, CallS;               ! execute the instruction
+        1, CallS;                    ! execute it again
+
+!       Test 6.
+
+        Test := 6;
+        Hi := Hi6;
+        Mid := Mid6;
+        Low := Low6;
+        0, Store4;
+        0;
+        0;
+        0;
+        0;
+        4, Store4;
+        177777;
+        177777;
+        177777;
+        177777;
+        Call(Write);                 ! write the instruction
+        4, Fetch4;
+        nop;
+        LoadOp;
+        nop;
+        nop;
+        nop;
+        State := 2;
+        0, Fetch4;
+        CallS;                              ! execute the instruction
+        State := State - 1, loc(FixAdd3);  ! Tie down destination of 'Loop'
+        if Gtr Return;                      ! if first time
+        Bpc := 0;
+        NextOp;
+        if Neq Goto(Wrong);
+
+!       Advance to next address.
+
+Loc(Resume), Call(Self);                  ! erase location under test
+        Address xor BankLast;             ! test for end of bank
+        if Eql Goto(CheckEnd);
+        Address := Address - 1, Repeat(Top);
+
+
+
+CheckEnd: Address XOR TestFirst;               ! Test for end of High16
+          CurrBank - 1, If EQL Goto(Done);     ! Is next bank bank0 ? 
+          Address:= Address - (FixAdd3 + 2),   ! NO.  Fix up Address 
+             If NEQ Goto(BankLoop);            !      & back to BankLoop
+          Address := KRNLBottom;               ! YES. Special Address fix
+          Goto(BankLoop);                      !      to avoid KRNL
+                                               ! and do next bank
+
+Done:   R370 := 100, Goto(7401);               ! Success
+
+
+
+!!      Subroutines.
+
+
+
+
+!!      Here if "NextInst(0000)".
+
+Loc(FixAdd1), NextInstDesired;       ! Tie down the destination of the NextInst
+        if Neq Return;               ! if we wanted a NextInst
+        Goto(Wrong);
+        
+
+!!      Here if "Goto(1000)".
+
+Loc(Go), Return;                     ! if we wanted a Goto(5000)
+        
+        
+!!      Here if "if Bpc[3] Goto(Refill)".
+
+Refill: Goto(Refill);
+
+
+!!      Write leaps to FixAdd1, 2 and 3 at 
+!       (bottom of current bank) + Fixadd1, 2 and 3 respectively,
+!       so that Test1, Test2 and Test6 work in upper banks.
+!       Code assumes all 3 fixed addresses are < 377 
+
+Writeleaps: CurrBank, LeftShift(14);
+            Tmp := Shift, RightShift(0);     ! Tmp = bottom of current bank
+            Tmp + FixAdd1;
+            LoadS(Shift);
+            Hi := LeapHi;
+            Mid := LeapMid;
+            Low := LeapLow1;
+            Call(Write);
+            Tmp + FixAdd2;
+            LoadS(Shift);
+            Low := LeapLow2;
+            Call(Write);
+            Tmp + FixAdd3;
+            LoadS(Shift);
+            Low := LeapLow3;
+            Call(Write);
+            Return;
+            
+!!      Erase leaps to FixAdd1, 2 and 3 at 
+!       (bottom of [ current bank + 1 ]) + Fixadd1, 2 and 3 respectively,
+!       and write one line loops [Goto(self)] to those locations
+!       Code assumes all 3 fixed addresses are < 377 and that
+!       Fixadd1 < FixAdd2 < Fixadd3
+
+
+EraseLeaps: Tmp := Address;                   ! Save Address for later
+            CurrBank + 1,Leftshift(14);       ! Bottom of Current Bank + 1
+            Address := Shift, RightShift(0);
+            Address := Address + FixAdd1;
+            LoadS(Shift);
+            Call(Self);
+            Address := Address + (FixAdd2 - FixAdd1);
+            LoadS(Shift);
+            Call(Self);
+            Address := Address + (FixAdd3 - FixAdd2);
+            LoadS(Shift);
+            Call(Self);
+            Address := Tmp, Return;                   ! Restore Address
+                        
+            
+
+
+!!      Write "Goto(Address)" at Address=S.
+!       Use a Leap address in case anything really funny is happening.
+
+Self:   Address, Rightshift(10);
+        T := Shift OR HiG;
+        Not T;
+        WcsHi, if True GotoS(Selfa);
+Selfa:  not MidG;
+        WcsMid, if True GotoS(Selfb);
+Selfb:  not Address, LeftShift(10);
+        T := Shift or LowG;
+        not T, RightShift(0);             ! Restore shifter function
+        WcsLow, if True GotoS(Selfc);
+Selfc:  Return;
+
+
+!!      Write Hi, Mid, Low at Address=S.
+
+Write:  not Hi;
+        not Mid, WcsHi, if True GotoS(Writea);
+Writea: not Low, WcsMid, if True GotoS(Writeb);
+Writeb: WcsLow, if True GotoS(Writec);
+Writec: Return;
+
+
+!!      Here if something went wrong.
+
+Wrong:  Save377 := R377, Loc(Error);
+        R370 := Resume;
+        Goto(7401);
+
+
+        end;

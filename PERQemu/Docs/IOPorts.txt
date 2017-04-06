@@ -1,0 +1,197 @@
+PERQ Input/Output port addresses
+--------------------------------
+Octal         Hex      Function
+EIO card : 
+134:136       5C:5E    Load usec clock
+130:132       58:5A    Load Bit Counter
+124:127       54:57    Load DMA Address
+336:337       DE:DF    Read usec clock
+332:333       DA:DB    Read Bit Counter
+105           45       Load Interrupt Enable
+                       Bit     Meaning
+                         3      External Address
+                         2      Not Reset
+                         1      Microprocessor Ready Interrupt Enable
+                         0      Microprocessor Interrupt Enable (to PERQ)
+104           44       Load uproc data
+103           43       Load Net Enable
+                       Bit     Meaning
+                         0      Enable Network Interrupt
+102           42       Load Net Control
+                       Bit     Meaning
+                         8      Go
+                         6      Receive All
+                         5      Not Reset Net
+                         4      Transmit
+                         3      Enable bit count
+                         2      Enable usec clock
+                         1      Enable usec interrupt
+101           41       Load FP Inst (Not implemented)
+100           40       Load DMA Channel
+110:117       48:4F    Load Net File
+325           D5       Read uproc status
+                       Bit     Meaning
+                        15      Micro IOD out ready
+                         7      Micro Ready
+324           D4       Read uproc data
+323           D3       Read disk status
+                       Bit     Meaning
+                        10      Drive type bit 1} 11=8"micropolis, 10=14"
+                         9      Drive type bit 0} Shugart, 00=5.25" All types
+                         8      Index/2
+                         7      Drive unit ready
+                         6      Seek complete
+                         5      Drive (write) fault
+                         4      Seek Error/Track 0 (depends on drive type)
+                         3:0    Disk controller status?
+322           D2       Read net status
+                       Bit     Meaning
+                         7      Carrier sensed
+                         6      PIP????
+                         5      usec clock overflow
+                         4:0    Net controller status
+321           D1       Read FP Result (Not implemented)
+320           D0       Read FP status (Not implemented)
+123           53       Load disk control 2
+                       Bit     Meaning
+                         7      Drive select 0/DIB address 0
+                         6      Drive select 1/DIB address 1
+                         5      BA0/Dir/Data5
+                         4      BA1/Fault Clr/Data4
+                         3:0    Data3:Data0 
+122           52       Load disk control 1
+                       Bit     Meaning
+                         7      T2 bit
+                         6      Bus Enable/Disk Step/Load
+                         5      T bit
+                         4      Disk Interrupt Enable
+                         3      Not disk reset
+                         2:0    Disk function
+121           51       Load disk register file data
+120           50       Load disk register file counter
+EIO buffers are enabled for all ports 100:137 octal (40:5F hex) and 300:337
+octal (C0:DF hex)
+
+Mem : 
+140          60        Load Line counter
+141          61        Load Display Address counter
+142          62        Load cursor address counter
+143          63        Load video status
+                       Bit     Meaning
+                       15:13    Map select
+                        12      Write bad parity
+                        11      Enable parity interrupt
+                        10      Enable display?
+                         9      Enable vertical sync
+                         8      Enable cursor 
+144          64        Load cursor X posn
+345          E5        Read CRT signals
+                       Bit     Meaning
+                         7      Landscape display
+                         4      Line couner overflow
+                         2      Loopthrough - low if all 3 boards in place
+                         1      Vertical sync
+                         0      Horizontal sync
+346          E6        Read Hi address parity
+347          E7        Read low address parity
+
+OIO:
+000:003      00:03     Load SMD 4
+004:007      04:07     Load Streamer 4 (and Canon Interface)
+ 004          04       Load Canon Control
+                       Bit     Meaning
+                         4      Enable Canon Interrupt
+                         3      Read Status
+                         1      Reset Canon Interface
+                         0      Not Blank
+ 005          05       Load Canon Length Counter
+                        (Ports 4,5 may be swapped - I'll check)
+014:017      0C:0F     Load bit counter
+024:027      14:17     Load Canon 4
+ 024          14       Margin Counter control
+ 025          15       Left Margin
+ 026          16       Right Margin
+030          18        Load SMD data
+031          19        Load PERQ Control register for ethernet
+                       Bit     Meaning
+                         8      Go
+                         6      Receive All
+                         5      Not Reset net
+                         4      Transmit
+                         3      Enable Bit Counter
+                         2      Enable usec clock
+                         1      Enable usec Interrupt
+                         0      Enable Net Interrupt
+032          1A        Load SMD 2
+033          1B        Load SMD 3
+034          1C        Load PROM 1
+035          1D        Load PROM 2
+036          1E        Ext Dev 1 Wr
+037          1F        Ext Dev 2 Wr
+210:213      88:8B     Read Canon 4
+ 210          88       Read Canon Status
+ 211          89       Read Canon Interrupt 
+                       Bit     Meaning
+                         3      Status Full
+                         2      Ready
+                         1      Canon PRND
+                         0      End of Band 
+214          8C        Read SMD
+215          8D        Read Streamer 1
+216          8E        Read Streamer 2
+217          8F        Read net status
+                       Bit     Meaning
+                         7      Carrier sensed
+                         6      CRC Error
+                         5      usec clock overflow
+                         4      Net Controller Status
+                         3      Busy
+                         2      Receive Transition
+                         1      Collision
+                         0      PIP 
+220:223      90:93     Ex Dev 41 Rd
+224:227      94:97     Ex Dev 42 Rd
+230:233      98:9B     Ex Dev 43 Rd
+234:237      9C:9F     Ex Dev 44 Rd
+240          A0        Read Link status
+                       Bit     Meaning
+                         3      Transmit Done Input
+                         2      Flag Input
+                         1      External Data cycle (Data Available)
+                         0      Data to bus
+041          21        Load Link Control
+                       Bit     Meaning
+                         3      Transmit done output
+                         2      Flag output
+                         1      Ext Data to bus
+                         0      Data Cycle
+242          A2        Read Link Data
+043          23        Write Link Data
+044          24        Write Loopback
+245          A5        Read Loopback
+200:237      80:8F     Read I/O test PROM
+
+Multibus Adaptor :
+000          00        Load Control Register
+                       Bit     Meaning
+                        7      Read cycle, Not write cycle
+                        6      IO cycle, Not Memory cycle
+                        5      Enable PERQ to do multibus cycles
+                        4      Enable DMA
+                        3      Initialise Multibus
+                        2      Byte, Not word I/O
+                        1      Enable Multibus Interrupt
+                        0      Enable Interrupt on cycle complete
+001          01        Write Data Register
+002          02        Write High 8 address lines
+003          03        Write Low 16 address lines and start bus cycle
+006          06        Enable Interrupt lines
+007          07        Write DMA Base (High 8 bits of DMA address)
+212          8A        Status
+                       Bit     Meaning
+                       15      Interrupt pending
+                       8       Non existant memory
+                       5:3     Multibus Interrupt number
+                       2       Cycle Interrupt
+                       0       Cycle complete
+213          8B        Read Data Register

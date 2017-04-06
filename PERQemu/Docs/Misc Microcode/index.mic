@@ -1,0 +1,207 @@
+! INDEX.MICRO              
+! William C. Hulley - 16 November 1981
+! Copyright 1981     
+! Three Rivers Computer Corp.   
+! Pittsburgh, Pa.
+
+! Version  1.0  WCH  12 Nov 81 first attempt
+!          1.1  WCH  17 Nov 81 added routine to store krnl state in user stack
+!          1.2   HC  14 Jul 83 Changes to enable testing of R377 :-
+!                              Added MaxReg to fix one-off errors
+!                              Changed address initialisation code so it 
+!                              doesn't use R377.
+           
+! INDEX attempts to test the indexing hardware by reading and writing the 
+! X and Y registers in the following ways:
+!     index all of the registers at once
+!     index some of the registers
+!     index X registers and not Y 
+!     index Y registers and not X
+! Tests include saving register contents in memory and saving memory contents
+! in registers, arithmetic operations between indexed registers, and 
+! arithmetic operations involving indexed and nonindexed registers.
+ 
+! The program saves some of the krnl registers on the user stack to be popped
+! back when it is finished, either through an error or a good run
+
+
+$perq1a
+$base
+
+              define(%R0,0);         ! use R0 as an index register
+              define(%R1,1);         ! use R1 as an index register
+              define(%R2,2);         ! use R2 as an index register
+              define(%R3,3);         ! use R3 as an index register
+              
+              define(R200,200);      ! holds error register address
+              
+              define(R377,377);      ! krnl registers      
+              define(R374,374);      ! to be saved on the users stack
+              define(R373,373);      
+              define(R372,372);      
+              define(R370,370);      
+              define(R365,365);      
+              define(R364,364);      
+              define(R363,363);      
+              define(R360,360);      
+              define(R357,357);      
+              
+              constant(MaxReg,377);           ! Maximum register address 
+              constant(breakpoint,7401);
+
+$nobase
+$Include CheckSize.micro
+
+! Each of these routines uses registers 0 to 376 inclusive for index testing
+! first section saves necessary krnl registers
+
+SaveKrnlSt:   Call (CheckSize),  loc(2400);
+$base
+              tos := R374, push;     ! save video refresh
+              tos := R373, push;     ! save cursor addr
+              tos := R372, push;     ! save video command
+              tos := R365, push;     ! save S register
+              tos := R364, push;     ! save uState register
+              tos := R363, push;     ! save trap register
+              tos := R360, push;     ! save disable register
+              tos := R357, push;     ! save video counter
+              push;                  ! open tos for program use
+              
+              
+! Try to write each register with its own address (R0 gets 0, etc.)
+! using the top of the stack as the source and the indexed register 
+! as the destination. NOTE: RBase gets the NOT(IndexValue) and the register
+! address is (IndexValue OR [XAddr][YAddr]).
+
+WrReg:        Tos := MaxReg;
+              tos := Tos + 1;           ! tos gets 400
+WrRegLp:      tos := tos - 1;        ! tos gets RegAddr<n>
+              if LSS goto(RegToMem); ! all registers written ?
+              RBase := not tos;      ! RBase gets NOT(0 to 377)
+              %R0 := tos;            ! Reg<n> gets n (0 to 377) 
+              goto(WrRegLp);
+                          
+! Now try to write each register to memory locations 0 to 377. 
+
+RegToMem:     Tos := MaxReg;           ! initialize
+              tos := Tos + 1;
+RegMemLp:     tos := tos - 4;        ! decrement tos by four registers
+              if LSS goto(MemRead);  ! all registers stored ?
+              RBase := not tos;      ! load base with new index
+              tos, Store4;           ! write register contents to mem<0-377>
+              MDO := %R0;
+              MDO := %R1;
+              MDO := %R2;
+              MDO := %R3, goto(RegMemLp);
+              
+
+! compare memory location<n> and register<n> for equal contents.
+
+MemRead:      Tos := MaxReg;
+              tos := Tos + 1;
+AddrDec:      tos := tos - 1;
+              if LSS goto(MemToReg);
+              RBase := not tos;      ! load new base address offset
+              tos, fetch;            ! fetch contents of MAddr<tos>
+              nop;                   ! wait for data from memory
+              nop;
+              MDI - %R0;             ! compare Maddr<tos> and RegAddr<tos>
+              if NEQ goto(Error1);   ! wrong, goto error routine
+              goto(AddrDec);
+              
+! try writing a block of memory to registers
+
+MemToReg:     Tos := MaxReg;           ! base memory address
+              tos := Tos + 1;
+MemWrLp:      tos := tos - 1;
+              if LSS goto(MemTLp);   ! whole block written ?
+              tos, store;            ! store a word
+              MDO := not tos;
+              goto(MemWrLp);
+MemTLp:       Tos := MaxReg;           ! write block from memory to registers
+              tos := Tos + 1;
+MemToRegLp:   tos := tos - 1;
+              if LSS goto(Compare);  ! whole block transferred ?
+              RBase := not tos;      ! load new base address offset
+              MA := tos, fetch;
+              nop;
+              nop;
+              %R0 := MDI;            ! Reg<n> gets Mem<n>  
+              goto(MemToRegLp);
+
+! compare Reg<n> and Mem<n> contents
+
+Compare:      Tos := MaxReg;
+              tos := Tos + 1;
+CompareLp:    tos := tos - 1;
+              if LSS goto(XYTest);   ! all addresses checked ?
+              RBase := not tos;      ! load new base address offset
+              MA := tos, fetch;      ! fetch contents of MAddr<tos>
+              nop;                   ! wait for data from memory
+              nop;
+              MDI - %R0;             ! compare Maddr<tos> and RegAddr<tos>
+              if NEQ goto(Error2);   ! wrong, goto error routine
+              goto(CompareLp);
+              
+              
+! force X and Y indexing for registers 0 to 377
+
+XYTest:       Tos := MaxReg;
+              tos := Tos + 1;           
+XYLp:         tos := tos - 1;
+              if LSS goto(DualTest);
+              RBase := not tos;      ! load new base address offset
+              %R0 - %R0;             ! XRegAddr<tos> - YRegAddr<tos>
+              if NEQ goto(error3);
+              goto(XYLp);
+
+! now do some indexed/nonindexed arithmetic operations 
+
+                 
+DualTest:     Tos := MaxReg;           ! test indexed and non indexed registers
+              tos := Tos + 1;
+              R377 := not Tos;       ! make (R377) match previously assigned
+                                     ! register contents after instruction *
+DualLp:       tos := tos - 1;
+              if LSS goto(NoError);  ! loop until all registers are tested
+              R377 := R377 + 1;      ! *
+              Rbase := not tos;      ! load new base address offset      
+              %R0 - R377;
+              if NEQ goto(error4);   ! XAddr<indexed n> - YAddr<n>
+              R377 - %R0;            
+              if NEQ goto(error5);   ! XAddr<n> - YAddr<indexed n>
+              goto(DualLp);
+              
+
+NoError:      R370 := 0,
+                        goto(KrnlReturn);      
+Error1:       R370 := 1, 
+                        goto(KrnlReturn);  
+Error2:       R370 := 2, 
+                        goto(KrnlReturn); 
+Error3:       R370 := 3, 
+                        goto(KrnlReturn); 
+Error4:       R370 := 4, 
+                        goto(KrnlReturn); 
+Error5:       R370 := 5, 
+                        goto(KrnlReturn); 
+Error6:       R370 := 6, 
+                        goto(KrnlReturn); 
+                   
+                   
+KrnlReturn:   RBase := 377;          ! clear indexing register
+
+              R200 := tos, pop;      ! save error register address
+              R357 := tos, pop;      ! return video counter
+              R360 := tos, pop;      ! return disable register
+              R363 := tos, pop;      ! return trap register
+              R364 := tos, pop;      ! return uState register
+              R365 := tos, pop;      ! return S register
+              R372 := tos, pop;      ! return video command
+              R373 := tos, pop;      ! return cursor addr
+              R374 := tos, pop;      ! return video refresh
+
+              R370 := R370 + 100;    ! add error code to breakpoint register
+              goto(breakpoint);
+              
+end;

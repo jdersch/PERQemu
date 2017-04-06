@@ -1,0 +1,696 @@
+        TITLE    "Z80 - PERQ I/O  VERSION 9.7"
+
+;Special version for Stan Kriz
+; Updated DEC 7, 1981 to conform to the patched V9.6 EPROMS.
+; Contains all the standard V8.5 updates and corrections.
+
+; UPDATED JAN 13, 1982 WITH DUMP ROUTINES
+ 
+; special program to test sio made from v100.z80
+ 
+
+;********* Company Confidential
+;********* Not for public release
+;********* 
+;********* Copyright (C) 1981
+;********* Three Rivers Computer Corporation
+;********* 720 Gross Street
+;********* Pittsburgh, PA  15224
+;********* (412) 621-6250
+
+
+
+;DEBUG0 EQU     1                               ;DEFINE FOR LOGGING PERQ OUTPUT
+;DEBUG1 EQU     1                               ;DEFINE FOR LOGGING PERQ INPUT
+;DEBUG2 EQU     1                               ;DEFINE TO DISABLE TRANSMIT TO PERQ
+
+        MACRO   ASCIZ
+        ASCII   '1'
+        BYTE    0
+        ENDM
+
+        MACRO   ASCII.CRLF
+        ASCII   '1'
+        BYTE    15Q,12Q
+        ENDM
+
+        MACRO   ASCIZ.CRLF
+        ASCII   '1'
+        BYTE    15Q,12Q,0
+        ENDM
+ 
+        MACRO   FILLMEM
+FILCNT  ASET    1
+        REPEAT  FILCNT <= '1', 5000H
+        BYTE    '2'
+FILCNT  ASET    FILCNT + 1
+        ENDR
+        ENDM
+;
+;
+;INPUT/OUTPUT DEVICES
+;
+FLPSTA  EQU     250Q                    ;FLOPPY STATUS    OLD ADDRESS WAS 320Q
+FLPDAT  EQU     251Q                    ;FLOPPY DATA   OLD ADDRESS WAS 321Q
+
+DMA     EQU     230Q                            ;DMA   OLD ADDRESS WAS 310Q
+
+TABLET  EQU     300Q                    ;TOUCH TABLET
+
+GPIIS0  EQU     270Q                    ;GPIB INTERRUPT STATUS 0
+GPIASW  EQU     271Q                    ;ADDRESS SWITCH
+GPIAS   EQU     272Q                    ;ADDRESS STATUS
+GPICPT  EQU     273Q                    ;COMMAND PASS THROUGH
+GPIIS1  EQU     274Q                    ;INTERRUPT STATUS 1
+GPIBS   EQU     276Q                    ;BUS STATUS
+GPIDI   EQU     277Q                    ;DATA IN
+
+GPIIMO  EQU     270Q                    ;INTERRUPT MASK 0
+GPIADD  EQU     271Q                    ;ADDRESS REGISTER
+GPIPP   EQU     273Q                    ;PARALLEL POLL
+GPIIM1  EQU     274Q                    ;INTERRUPT MASK 1
+GPISP   EQU     275Q                    ;SERIAL POLL
+GPIAUX  EQU     276Q                    ;AUXILIARY COMMAND
+GPIDO   EQU     277Q                    ;DATA OUT
+
+SIODA   EQU     260Q                    ;SIO DATA CHANNEL A
+SIOCA   EQU     261Q                    ;SIO CONTROL CHANNEL A
+SIODB   EQU     262Q                    ;SIO DATA CHANNEL B
+SIOCB   EQU     263Q                    ;SIO CONTROL CHANNEL B
+
+PERQW   EQU     320Q                    ;PERQ WRITE   OLD ADDRESS WAS 250Q
+PERQR   EQU     240Q                    ;PERQ READ
+
+IOREG2  EQU     330Q                    ;I/O REGISTER 2
+IOREG3  EQU     310Q                    ;I/O REGISTER 3   OLD ADDRESS WAS 230Q
+
+CTC0    EQU     220Q                    ;CTC CHANNEL 0
+CTC1    EQU     221Q                    ;CTC CHANNEL 1
+CTC2    EQU     222Q                    ;CTC CHANNEL 2
+CTC3    EQU     223Q                    ;CTC CHANNEL 3
+
+IOREG1  EQU     210Q                    ;I/O REGISTER 1
+
+KBD     EQU     200Q                            ;KEYBOARD
+
+;
+;
+;INTERRUPT VECTORS
+;
+PRQVEC  EQU     40Q                     ;PERQ INPUT
+GPIVEC  EQU     42Q                     ;GPIB
+FLPVEC  EQU     44Q                     ;FLOPPY
+RMPVEC  EQU     46Q                     ;TABLET (RAMP STOP)
+KBDVEC  EQU     50Q                     ;KEYBOARD
+PRQGPI  EQU     52Q                     ;PERQ INPUT AND GPIB
+TABKEY  EQU     54Q                     ;TABLET (RAMP STOP) AND KEYBOARD
+OTHVEC  EQU     100Q                    ;START OF VARIABLE VECTORS
+
+;
+;
+;CONSTANTS FOR I/O REGISTER 3
+;
+D.NONE  EQU     0*40Q                   ;NO DMA CONNECTION
+D.FLOP  EQU     1*40Q                   ;DMA TO FLOPPY
+D.PRQR  EQU     2*40Q                   ;DMA TO PERQ READ
+D.PRQW  EQU     3*40Q                   ;DMA TO PERQ WRITE
+D.SIOA  EQU     4*40Q                   ;DMA TO SIO CHANNEL A
+D.SIOB  EQU     5*40Q                   ;DMA TO SIA CHANNEL B
+D.GPIB  EQU     6*40Q                   ;DMA TO GPIB
+PRQENB  EQU     4                       ;PERQ INTERRUPT ENABLE
+KBDENB  EQU     2                       ;KBD INTERRUPT ENABLE
+FLPENB  EQU     1                       ;FLOPPY INTERRUPT ENABLE
+ALLENB  EQU     PRQENB!KBDENB!FLPENB    ;ENABLE ALL INTERRUPTS
+
+
+
+;
+;
+;RAM ADDRESSES
+;
+
+
+
+        org  1000H
+        
+        
+
+        BLOCK   100Q            ;THE STACK AREA
+STACK   BLOCK    0
+
+IOR3    BLOCK   1               ;COPY OF I/O REGISTER 3
+
+ 
+prqcnt  byte 0
+gpicnt  byte 0
+flpcnt  byte 0
+rmpcnt  byte 0
+kbdcnt  byte 0
+junkcnt  byte 0
+dmacntt  byte 0
+ctc0cnt  byte 0
+ctc1cnt  byte 0
+ctc2cnt  byte 0
+ctc3cnt  byte 0
+
+brccnt  byte 0
+bspcnt  byte 0
+bstcnt  byte 0
+
+;Some next bytes are order dependent and
+;  must not cross a 256 byte boundary!
+ 
+
+tcnt  block 1
+sine  block 1
+txund block 1
+
+RCVOVRUN BLOCK   1
+
+READCNT BLOCK 1
+ADDRH   BLOCK 1
+ADDRL   BLOCK 1
+ 
+CHARCNT  BLOCK   1
+BUFFER   BLOCK   3
+
+
+
+          ORG 3000H
+DUMPBUF  BYTE 0
+ 
+ 
+;
+;
+;THE STARTING ADDRESS (COURTESY OF THE HARDWARE)
+;
+        ORG     0
+        DI                      ;ENSURE THAT INTERRUPTS ARE OFF
+        JP      BEGIN           ;AND GO TO THE REAL BEGINNING
+
+;
+;THE INTERRUPT VECTORS
+;
+        ORG     PRQVEC          ;PERQ INPUT
+        WORD    PRQSRV
+
+        ORG     GPIVEC          ;GPIB
+        WORD    GPISRV
+
+        ORG     FLPVEC          ;FLOPPY
+        WORD    FLPSRV
+
+        ORG     RMPVEC          ;TABLET (RAMP STOP)
+        WORD    RMPSRV
+
+        ORG     KBDVEC          ;KEYBOARD
+        WORD    KBDSRV
+
+        ORG     PRQGPI          ;PERQ AND GPIB
+        WORD    PRQSRV
+
+        ORG     TABKEY          ;TABLET AND KEYBOARD
+        WORD    RMPSRV
+        WORD    JUNK56
+
+        ORG     OTHVEC          ;VARIABLE VECTORS
+
+        ORG     /20Q            ;SIO VECTOR MUST BE ON A MULTIPLE OF 20Q
+SIOVEC  WORD    SIOBTR          ;CHANNEL B TRANSMIT
+        WORD    SIOBST          ;CHANNEL B STATUS CHANGE (60HZ CLOCK)
+        WORD    SIOBRC          ;CHANNEL B RECEIVE CHARACTER (NOT USED)
+        WORD    SIOBSP          ;CHANNEL B SPECIAL (NOT USED)
+        WORD    SIOATR          ;CHANNEL A TRANSMIT
+        WORD    SIOAST          ;CHANNEL A STATUS CHANGE
+        WORD    SIOARC          ;CHANNEL A RECEIVE CHARACTER
+        WORD    SIOASP          ;CHANNEL A SPECIAL
+
+        ORG     /10Q            ;CTC VECTOR MUST BE ON A MULTIPLE OF 10Q
+CTCVEC  WORD    CTC0SR          ;CTC 0 (NOT USED)
+        WORD    CTC1SR          ;CTC 1 (NOT USED)
+        WORD    CTC2SR          ;CTC 2 (NOT USED)
+        WORD    CTC3SR          ;CTC 3 (TABLET/VOLTAGE/TEMPERATURE)
+
+DMAVEC  WORD    DMASRV          ;DMA
+
+
+ 
+
+;
+;
+;
+;POWER UP SEQUENCE
+;
+        ORG     400Q
+BEGIN   LD      SP,STACK                ;SET UP THE STACK
+        IM      2                       ;SET INTERRUPT MODE 2
+        SUB     A               ;GET A ZERO
+        LD      I, A                    ;LOAD I REGISTER
+        SUB     A               ;GET A ZERO
+        OUT     (IOREG3),A    ;******* All interrupts disabled ********
+        LD      (IOR3),A                ;AND KEEP A COPY FOR REFERENCE
+        Call DevInit
+        Call CTCInit
+        CALL SIOBIN            ;INITIALIZE SIO CHANNEL B
+
+        EI                      ;OK FOR INTERRUPTS NOW
+;
+;
+;THE MAIN LOOP OF THE PROGRAM
+;
+
+
+
+idleloop jp idleloop
+
+
+;
+DevInit push af
+        sub a
+        out (ioreg2), a      ;turn off seek hrdwre
+        out (tablet), a     ;disable ramp
+     ld (brccnt), a
+     ld (bspcnt), a
+     ld (bstcnt), a
+        pop af
+        ret
+        
+
+;
+CTCInit push af
+        
+        ld a, lo(CTCVEC)
+        out (CTC0), a
+        
+        ld a, 3       ;will do reset + disable
+        out (CTC0), a
+        out (CTC2), a
+        out (CTC3), a
+
+        ld a, 17H       ;16 Khz for SIO
+        out (CTC1), a
+        ld a, 9
+        out (CTC1), a
+        
+        pop af
+        ret
+                        
+
+;
+;
+;SIO CHANNEL B INITIALIZATION
+;
+SIOBIN  SUB     A               ;Get a zero.
+        LD      (CHARCNT),A     ;No chars received yet.
+        LD      (RCVOVRUN),A    ;No receive overrun.
+      LD (READCNT), A
+      LD (ADDRL), A
+      LD A, 30H
+      LD (ADDRH), A
+ 
+ 
+
+        LD      HL,SIOBIN2      ;Set up block move to SIO B Control.
+        LD      C,SIOCB
+        LD      B,SIOBIN3-SIOBIN2
+        OTIR
+ 
+
+
+        ld a, 18H
+        out  (SIOCA), a   ;Ch A Reset
+
+
+        sub a
+        ld  (tcnt), a
+        ld  (txund), a
+        ld  (bspcnt), a
+        ld  a, 0FFH
+        ld  (sine), a
+        out (siodb), a    ; send out first char of FF
+        
+        RET
+        
+SIOBIN2 BYTE    18H             ;CHANNEL RESET
+        BYTE    2,LO(SIOVEC)    ;SET INTERRUPT VECTOR
+        byte    10H             ;Reset Ext/Stat Ints
+        BYTE    4,0             ;X1 CLOCK, MONO SYNC
+        BYTE    6,55H           ;Tx sync char
+        BYTE    7,55H           ;Rx sync char
+        BYTE    3,0D0H          ;Rx 8 bit chars, Rx DisEnable, Hunt Phase
+        BYTE    5,0EAH           ;TX 8 BIT CHARS, Tx Enable, DTR, RTS
+        byte    10H             ;Reset Ext/Stat Ints
+        BYTE    1,6H           ;Tx INTERRUPTS, STATUS AFFECTS VECTOR, EXT INT ENB
+SIOBIN3 BLOCK   0
+
+
+
+;
+;SIO B Tx service
+;
+SIOBTR push af
+       push bc
+       push hl
+       
+       ld   (hl), tcnt
+       ld   a, (hl)
+       cp   7FH
+       jp   nz, tnxt
+       ld   a, 28H    ;Reset Tx Interrupt Pending
+       out  (siocb), a
+       jp   tdone
+tnxt   inc  (hl)
+ 
+       ld   hl, sine
+       ld   a, (hl)
+       cp   0FFH
+       jp   z, zeros
+       ld   (hl), 0FFH
+       jp   tsend
+zeros  ld   (hl), 00H 
+tsend  ld   a, (hl)
+       out  (siodb), a
+
+tdone  pop  hl
+       pop  bc
+       pop  af
+       ei
+       reti
+       
+       
+                     
+       
+       
+;
+;
+;SIO CHANNEL B STATUS CHANGE INTERRUPT SERVICE (Tx Underrun, SYNC/HUNT, 60HZ CLOCK)
+;
+SIOBST  PUSH    AF              ;SAVE THOSE REGS
+        PUSH    BC
+        PUSH    HL
+
+        ld   hl, bstcnt
+        inc (hl)
+        
+        LD      B,0
+        IN      A,(SIOCB)       ;Get RR0;
+        AND     100Q            ;Any Tx Underrun?
+        JP      Z,SYNCHUNT      ;If not, go make next check.
+        LD      B,300Q          ;Else prepare RESET Tx Underrun/EOM.
+        ld   hl, txund
+        inc  (hl)
+         
+SYNCHUNT IN     A,(SIOCB)       ;Get RR0;
+        AND     20Q             ;Have we returned to HUNT Mode?
+                                ;If not, press onward
+        NOP                     ;  else * do nothing, I hope *
+        
+EXTSTAT LD      A,B             ;What we must do to the SIO B.
+        OR      20Q             ;Plus the RESET EXT/STAT INT.
+        OUT     (SIOCB),A       ;Do it all.
+
+        POP     HL              ;RESTORE
+        POP     BC
+        POP     AF
+        EI
+        RETI
+
+;
+;
+;SIO CHANNEL B RECEIVER INTERRUPT 
+;
+SIOBRC  PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
+
+        IN      A,(SIODB)       ;Get the char.
+        LD      B,A             ;Save it.
+        
+        ld  hl, brccnt
+        inc (hl)
+        
+        LD      HL,CHARCNT      ;Get the CHARCNT and
+        INC     (HL)            ; count one more.
+        LD      A,(HL)          ;Also put it in a reg.
+        
+STOREIT LD      HL,BUFFER-1     ;Point to 1 before our BUFFER.
+        ADD     A,L             ;CHARCNT is our offset
+        LD      L,A             ;  into BUFFER where we
+        LD      (HL),B          ;  store the char.
+        
+        LD      HL,CHARCNT      ;Find out which char we
+        LD      A,(HL)          ;  just stored.
+        CP      5               ;If it is the third char, then
+        JP      Z,ENDMSG        ;  we have a complete msg.
+        
+ALLDONE POP     HL
+        POP     DE
+        POP     BC
+        POP     AF
+        EI
+        RETI
+
+
+ENDMSG  LD      A,3             ;After a complete msg, we put 
+        OUT     (SIOCB),A       ;  SIO B back into the Hunt Mode.
+        LD      A,321Q
+        OUT     (SIOCB),A
+        
+        LD      (HL),0          ;CHARCNT goes back to 0.
+        
+ CALL DUMPIT
+        JP      ALLDONE
+ NOP  ;
+        
+
+
+;
+;
+;SIO Channel B Special Receive Interrupt
+;
+SIOBSP  PUSH    AF
+        PUSH    HL
+        
+        ld  hl, bspcnt
+        inc (hl)
+        
+        LD      HL,RCVOVRUN     ;Point to the flag.
+        INC     (HL)            ;Count another Rx overrun!
+        IN      A,(SIODB)       ;Get the bad char.
+        LD      A,60Q           ;Error Reset to SIO B.
+        OUT     (SIOCB),A
+        CALL    SIOBERROR       ;Set up initial conditions.
+        POP     HL
+        POP     AF
+        EI
+        RETI
+        
+        
+
+
+        
+;
+;
+;Resets conditions upon Rx overrun and loss of sync.
+;
+SIOBERROR PUSH  AF
+        
+        LD      A,3              ;WR3
+        OUT     (SIOCB),A
+        LD      A,321Q           ;Re-enter Hunt Phase!
+        OUT     (SIOCB),A
+        
+        SUB     A                ;Get a zero.
+        LD      (CHARCNT),A      ;Reset CHARCNT.
+        
+        POP     AF
+        RET
+        
+        
+                
+;
+;
+ 
+DUMPIT push hl
+       push de
+       push af
+       push bc
+       LD HL, READCNT
+       LD A, (HL)
+       INC A
+       LD (HL), A        ;UPDATE READCNT
+ 
+       INC HL            ;ADDRH
+       LD D, (HL)
+       INC HL            ;ADDRL
+       LD E, (HL)
+ 
+       LD (DE), A        ;STORE NEW READCNT
+ 
+       INC DE            ;NEXT READING GOES HERE
+       LD HL, BUFFER     ;WHERE READING IS
+       LD BC, 3
+       LDIR
+ 
+       LD A, 80H
+       CP D
+       JP NZ, OUTT
+       LD A, 0
+       CP E
+       JP NZ, OUTT
+       LD (ADDRL), A    ;BACK TO BEGINNING OF DUMPBUF
+       LD A, 30H
+       LD (ADDRH), A
+       LD HL, READCNT
+       INC (HL)         ;SHOWS ROLLOVER
+       pop bc
+       pop af
+       pop de
+       pop hl
+       RET
+ 
+OUTT    LD HL, ADDRH     ;STORE NEXT LOC
+       LD (HL), D
+       INC HL
+       LD (HL), E
+       pop bc
+       pop af
+       pop de
+       pop hl
+       RET
+ 
+ 
+ 
+ 
+ 
+ 
+
+;  SIOBTR          nop              ;CHANNEL B TRANSMIT
+SIOATR          nop              ;CHANNEL A TRANSMIT
+SIOAST          nop              ;CHANNEL A STATUS CHANGE
+SIOARC          nop              ;CHANNEL A RECEIVE CHARACTER
+SIOASP          nop              ;CHANNEL A SPECIAL
+wrong       jp wrong         ;loop and do not return
+            ;EI
+            ;RETI
+            
+             
+ 
+PRQSRV push hl
+       ld hl, prqcnt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+gpisrv push hl
+       ld hl, gpicnt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+flpsrv push hl
+       ld hl, flpcnt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+rmpsrv push hl
+       push af
+       ld hl, rmpcnt
+       inc (hl)
+       ld a, 0
+       out (tablet), a
+       pop af
+       pop hl
+       ei 
+       reti
+       
+kbdsrv push hl
+       push af
+       ld hl, kbdcnt
+       inc (hl)
+       in a, (kbd)
+       pop af
+       pop hl
+       ei 
+       reti
+       
+junk56 push hl
+       ld hl, junkcnt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+dmasrv push hl
+       ld hl, dmacntt
+       inc (hl)
+       pop hl
+       ei 
+       reti
+       
+       
+       
+ctc0sr push hl
+       push af
+       ld hl, ctc0cnt
+       inc (hl)
+       ld a, 3
+       out (CTC0), a
+       pop af
+       pop hl
+       ei 
+       reti
+       
+       
+       
+       
+ctc1sr push hl
+       push af
+       ld hl, ctc1cnt
+       inc (hl)
+       ld a, 17H
+       out (CTC1), a
+       ld a, 9
+       out (CTC1), a
+       pop af
+       pop hl
+       ei 
+       reti
+       
+       
+       
+       
+ctc2sr push hl
+       push af
+       ld hl, ctc2cnt
+       inc (hl)
+       ld a, 3
+       out (CTC2), a
+       pop af
+       pop hl
+       ei 
+       reti
+       
+       
+       
+       
+ctc3sr push hl
+       push af
+       ld hl, ctc3cnt
+       inc (hl)
+       ld a, 3
+       out (CTC3), a
+       pop af
+       pop hl
+       ei 
+       reti
+       
+       
+
+        END
+

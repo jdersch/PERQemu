@@ -1,0 +1,360 @@
+!  Program IncVmem
+!
+!  Displays Display Memory Addressing Problems up to 2MEG
+!  and Cursor Address and Data Problems and Line Counter problems
+!
+!    In ODTprq Type: GO 2400
+!
+!******* NOTE: All These problems can only show a Visible Failure on the
+!              Screen. So it is necessary to Study the screen carefully
+!              to spot failures
+!
+           Define(DataI,        1);
+           Define(Data,         2);
+           Define(Address,      3);
+           Define(Vloop,        4);
+           Define(CursX,        5);     ! Actual Cursor X Value
+           Define(Ones,         6);
+           Define(CursAdd,      7);
+           Define(MaxX,        10);     ! Maximum value for Cursor at Right
+           Define(Tmp,         11);
+           Define(Tmp1,        12);
+           Define(LineCnt,     13);
+           Define(LineCnt2,    14);
+           Define(RotateData,  15);
+           Define(DpyTmp,      21);
+           Define(DpyCnt,      22);
+           Define(MemorySize,  26);     ! How Many Words of Memory
+           Define(MemoryCount, 27);     ! How many 1/4 Megs of Memory
+           Define(VidCnt,     266);
+           Define(OldVidCnt,  267);
+           
+           Constant(LeftCursor,  360);
+           Constant(MaxRightPort,230);
+           
+           
+           Define(Screen,     371);     ! Just For KRNL use in ODTprq
+           Define(BreakPoint, 370);     !
+           Constant(Krnl,    7401);     !
+           Constant(Passed,   100);     !
+           Constant(Failed,   101);     !
+
+           !
+
+
+SizeMemory:   0,  Fetch;                         ! Get the 1st word 
+              Tmp := MDI;                        !   don't have to wait 2cycle?
+              MemoryCount := 0;                  ! Initialise MemoryCount 
+              MemorySize  := 100000;             ! Size/Top of 1/4 MByte memory
+              MemorySize  := MemorySize  +
+                             MemorySize ;
+SizeTimes2:   MemorySize  := MemorySize  +
+                             MemorySize ,
+              Store;                             ! Write to Top+1
+              MDO := Not Tmp;                    !   1's complement of Tmp
+              0,  Fetch;                         ! Get 1st word again
+              MDI - Tmp;                         !   0 if overwritten (found)
+              If Eql GoTo (SizeTimes2), 
+                MemoryCount := MemoryCount + 1;  ! Count unit of memory
+              0,  Store;                         ! Restore value of word 0
+              MDO := Tmp;
+              MaxX := 230;
+              IOB(145);
+              IOD And 200;
+              If Eql Goto(SLand);
+              Return;
+SLand:        MaxX := 130;
+              Return;
+           
+CurPat1:  Tmp := 10;
+Pat1Loop: MA := Address, Store4;
+          MDO := 177777;
+          MDO := 125252;   
+          MDO := 177777;
+          MDO := 125252;
+          Address := Address + 4;
+          Tmp := Tmp - 1;
+          If Neq Goto(Pat1Loop);
+          Return;
+
+CurPat2:  Tmp := 10;
+Pat2Loop: MA := Address, Store4;
+          MDO := 052525;
+          MDO := 000000;
+          MDO := 052525;           
+          MDO := 000000;
+          Address := Address + 4;
+          Tmp := Tmp - 1;
+          If Neq Goto(Pat2Loop);
+          Return;
+
+CurPat3:  Tmp := 10;
+Pat3Loop: MA := Address, Store4;
+          MDO := 146314;
+          MDO := 125252;
+          MDO := 31463;
+          MDO := 125252;
+          Address := Address + 4;
+          Tmp := Tmp - 1;
+          If Neq Goto(Pat3Loop);
+          Return;
+
+CurPat4:  Tmp := 10;
+Pat4Loop: MA := Address, Store4;
+          MDO := 52525;
+          MDO := 31463;
+          MDO := 52525;
+          MDO := 31463;
+          Address := Address + 4;
+          Tmp := Tmp - 1;
+          If Neq Goto(Pat4Loop);
+          Return;
+
+MakeCurs: Nop;                 ! Make a Cursor pattern at mem loc 14400
+          Address := 14400;    ! Cursadd = 620  64 Lines of 64 bits
+          Call(CurPat1);
+          Call(CurPat2);
+          Call(CurPat3);
+          Call(CurPat4);
+          Call(CurPat1);
+          Call(CurPat2);
+          Call(CurPat3);
+          Call(CurPat4);
+          Return;
+
+RotCurs:  Address := 17400;     ! Make rotating cursor pattern at mem 17400
+RotCurs1: Tmp := 100;           ! Cursadd = 760  64 Lines of 64 Bits
+RotLoop:  MA := Address, Store4;
+          MDO := RotateData;
+          MDO := RotateData;
+          MDO := RotateData;
+          MDO := RotateData;
+          Address := Address + 4;
+          Tmp := Tmp - 1;
+          If Neq Goto(Pat3Loop);
+          Return;
+
+          
+            
+WrPattern:  Ones := 177777;
+            Address := 400;                ! First Screen Address bit set
+            Tmp1 := 1;
+            Tmp := 10;
+WLoop1:     MA := Address + Tmp1, Store;        
+            MDO := Ones;
+            Address := Address + Address;
+            MaxX - 230;
+            Tmp1 := Tmp1 + 1, If Eql Goto(WPort);
+            Tmp1 := Tmp1 + 1;
+WPort:      Tmp := Tmp - 1;
+            If Neq Goto(Wloop1);
+            Tmp := MemoryCount;
+WLoop2:     MA := Address + Tmp1, Store;        
+            MDO := Ones;
+            Address := Address + Address;
+            MaxX - 230;
+            Tmp1 := Tmp1 + 1, If Eql Goto(WPort2);
+            Tmp1 := Tmp1 + 1;
+WPort2:     Tmp := Tmp - 1;
+            If Neq Goto(Wloop2);
+            Return;
+            
+      
+Clear:      Tmp := 0;           
+Clr1:       MA := Tmp, Store;
+            MDO := 0; 
+            Nop;
+            Nop, If Intrpend Call(KrnlVec);
+            Tmp := Tmp + 1;
+            if C19 Goto(Clr1);
+            Return;
+
+KrnlVec:    Vector(7600);
+
+
+
+ChangeScr:  CursX := CursX - 1;             !**** Changes Cursors and Patterns 
+            CursX - MaxX;             
+            If Gtr Goto(CkLine);
+            CursX := 360;
+CkLine:     LineCnt := LineCnt - 1;
+            LineCnt2 := LineCnt2 + 1;
+            LineCnt - 1;            
+            If Gtr Goto(CkRot);
+            LineCnt := 177;
+            LineCnt2 := 1;
+CkRot:      RotateData := RotateData + RotateData;
+            If Neq Goto(EndCS);
+            RotateData := 1;
+            Call(RotCurs);
+EndCS:      Return;
+
+
+!
+        
+Start:      Nop, Loc(2400);
+            Call(SizeMemory);
+            Call( Clear);
+            Call( WrPattern);
+            Call(MakeCurs);
+            Screen := 0;
+            Vloop := 10#12;
+            LineCnt := 200;
+            CursX := 360;
+            RotateData := 1;
+            360, IOB(344);  
+            Goto (StartVR);
+StartV:     Screen := 0;
+            
+            DpyTmp := 162700;         ! Cursor Loops
+LoopA:      Call(VidWait);            
+            Screen := 11150;          ! Memory Address 223200  Blank Screen
+            Tmp1 := MaxX;
+            Tmp1, IOB(344);
+            CursAdd := 760;
+            CursAdd, IOB(342);            
+            Screen, IOB(341);           
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            DpyTmp := 162700;
+LoopB:      Call(VidWait);            
+            CursX,  IOB(344);
+            CursAdd := 620;
+            CursAdd, IOB(342);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            DpyTmp := 162200;
+LoopC:      Call(VidWait);            
+            360,  IOB(344);
+            CursAdd, IOB(342);            
+            DpyTmp, IOB(343); 
+            LineCnt, IOB(340);         ! LineCount   
+            DpyTmp := 162600;
+LoopD:      Call(VidWait);            
+            360,  IOB(344);
+            CursAdd, IOB(342);            
+            DpyTmp, IOB(343); 
+            LineCnt2, IOB(340);            
+
+            Screen := 20;              ! Main Video Address Loops
+            DpyTmp := 102177;
+            Tmp := 10#64;              
+Loop5:      Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop5);
+            Screen := 40;
+            Tmp := 10#64;              
+Loop6:      Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop6);
+            Screen := 100;
+            Tmp := 10#64;              
+Loop7:      Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop7);
+            Screen := 200;
+            Tmp := 10#64;              
+Loop8:      Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop8);
+            Screen := 400;
+            Tmp := 10#64;              
+Loop9:      Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop9);
+            Screen := 1000;
+            Tmp := 10#64;              
+Loop10:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop10);
+            Screen := 2000;
+            Tmp := 10#64;              
+Loop11:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop11);
+            Screen := 4000;
+            Tmp := 10#64;              
+Loop12:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop12);
+            Screen := 10000;
+            Tmp := 10#64;              
+Loop13:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop13);
+            Screen := 20000;
+            Tmp := 10#64;              
+Loop14:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop14);
+            Screen := 40000;
+            Tmp := 10#64;              
+Loop15:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop15);
+            Screen := 100000;     ! Now at the 2MEG boundary Address 2000000
+            Tmp := 10#64;         ! This will be blank on less than 2MEGs     
+Loop16:     Call(VidWait);            
+            DpyTmp, IOB(343); 
+            DpyTmp, IOB(340);            
+            Screen, IOB(341);           
+            Tmp := Tmp - 1;
+            If Gtr Goto(Loop16);
+
+StartVR:    VLoop := VLoop - 1;   ! Vertical Retrace Loop counter apox. 200ms
+            If Gtr Goto(StartVR);
+            VLoop := 10#12;
+            Call(ChangeScr);      ! Move Patterns and Cursors
+            Screen := 0;
+            DpyTmp := 101154;     ! Start The Vertical Retrace up the Screen
+LoopVr1:    Call(VidWait);        ! Wait until the last scan line at bottom   
+            DpyTmp, IOB(343);     ! Execute Retrace
+            DpyTmp, IOB(340);     ! Set LineCount for 26 Lines for Correct 
+            Screen, IOB(341);     ! Vertical Sync Pulse to Monitor      
+            DpyTmp := 101351;     ! End The Vertical Retrace at The TOP  
+LoopVR2:    Call(VidWait);        ! Wait for specified time (26 scan lines)   
+            DpyTmp, IOB(343);     ! End it Now
+            DpyTmp, IOB(340);     ! Just as long as bit 7 is Set to cause      
+            Screen, IOB(341);     ! an Immediate interupt from lineCount    
+            Goto(StartV);         ! Back To The Display Loops
+
+VidWait:    Iob(145);              ! Waits for Line counter interupt bit     
+            Iod and 20;            ! in Video Status. Always happens within   
+            if Eql goto(VidWait);  ! 128 or less scan lines unless bad mem                                         ! board
+            Return;
+            
+            
+            End;

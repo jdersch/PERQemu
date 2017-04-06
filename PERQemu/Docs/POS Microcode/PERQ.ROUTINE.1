@@ -1,0 +1,1167 @@
+
+! 13 Jan 82  WJH      change , to ; in StkOv
+
+
+$Title Addressing routines.
+
+! Routine ChkSeg.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ChkSeg checks a segment number for residency and returns its base
+!       address (if resident).
+!
+! Environment:
+!       tmp = Segment number.
+!
+! Result:
+!       tmp = Base address.
+!       tmp and ALU result are Odd if non-resident.
+!
+!-----------------------------------------------------------------------------
+
+(*****
+ChkSeg: tmp + tmp, Fetch2;                   ! fetch segment table entry
+        tmp := Mdi and not 376;            
+        tmp := Mdx or tmp, Return;           ! base address and residency
+*****)
+ChkSeg: tmp + tmp, Fetch2;                   ! fetch segment table entry
+        tmp12 := tmp;
+        Tos := tmp := Mdi, Push;            
+        tmp := Mdx or tmp,                   ! base address and flags
+                           if Odd Goto(ChkSeg1);  ! if not resident
+        tmp := tmp and not 377;              ! clear the flags
+        tmp12 + tmp12, Store;
+ChkSeg1: Tos or 4, Pop, Return;              ! set RecentlyUsed in SAT
+
+! Routine GetGP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Get the global pointer for an external segment.  The input is an
+!       internal segment number, and the output is a global pointer.
+!       An internal segment number of zero is used to mean the current
+!       segment.
+!
+! Environment:
+!       tmp2 = Internal segment number.
+!
+! Result:
+!       tmp2 = External global pointer.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetGP2: Call(VectSrv);                       ! serve an interrupt
+        Nop;                                 ! let placer make two groups
+GetGP:  tmp2, if IntrPend Goto(GetGP2);
+        tmp2 := tmp2 + tmp2, if Neq Goto(GetGP1);
+        tmp2 := GP, Return;                  ! same segment as current
+
+!       Other segment.
+
+GetGP1: GP - tmp2, Fetch;
+        tmp2 := Mdi + SB, Return;
+
+! Routine GetLL.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       GetLL gets the lexical level of a routine given its number and code
+!       base address.  The code segment must be resident.
+!
+! Environment:
+!       tmp4 = Code base address as a physical address.
+!       tmp10 = Routine number.
+!
+! Result:
+!       tmp1 = Address of LL field.
+!       LL word of the routine descriptor fetched--it may be read on Mdi.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetLL:  tmp4, Fetch;                         ! fetch dictionary pointer
+        tmp10, LeftShift(3);                 ! multiply routine number by 8
+        tmp1 := Shift + tmp4;                ! offset of dictionary entry
+        tmp1 := tmp1 + RDLL;                 ! offset of LL field
+        tmp1 := Mdi + tmp1, if IntrPend Call(VectSrv);  ! address of LL field
+        tmp1, Fetch, Return;                 ! fetch LL field
+
+! Routine GetLP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Get the local pointer for another activation record.  The input
+!       is an offset in static nesting, and the output is a local pointer.
+!
+! Environment:
+!       tmp2 = AP.
+!       tmp3 = offset in static nesting.
+!
+! Result:
+!       The memory word containing the desired local pointer is Fetched
+!       in the instruction which returns.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetLP1: tmp3 := tmp3 + 1, Call(VectSrv);
+GetLP:  tmp2, Fetch;                   ! fetch static link
+        tmp3 := tmp3 - 1, if IntrPend Goto(GetLP1);
+        tmp2 := Mdi + SB,                    ! AP for next activation
+                          if Gtr Goto(GetLP);  ! if not there yet
+        tmp2 + ACBLP, Fetch, Return;         ! fetch desired LP
+
+! Routine GetSL.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       GetSL gets the static link of a procedure that is n lexical levels
+!       away.  Thus specifying zero gets the static link for a procedure
+!       that is at the same level as the starting one.
+!
+! Environment:
+!       tmp10 = Starting AP.
+!
+! Result:
+!       tmp10 = Desired SL.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetSL:  tmp10, Fetch;                        ! get next static link
+        tmp1 := tmp1 - 1;
+        tmp10 := Mdi + SB,                   ! static link
+                           if Geq Goto(GetSL);  ! if not there yet
+        Return;
+
+! Routine XSTMap.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       XstMap maps an internal segment number (ISN) into an external
+!       segment number (SSN) and an external global pointer (XGP).  An
+!       ISN of zero is taken to mean the current segment.
+!
+! Environment:
+!       tmp = ISN.
+!
+! Result:
+!       tmp = XSN.
+!       tmp7 = XGP.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+XSTMap: tmp, LeftShift(1);
+        tmp := Shift, if Eql Goto(XSTMap1);  ! if current segment desired
+        GP - tmp, Fetch2;                    ! fetch XST entry
+        tmp7 := Mdi + SB;                    ! XGP
+        tmp := Mdi, Return;                  ! SSN
+
+!       ISN = 0 means XSN = CS, XGP = GP.
+
+XSTMap1:  tmp := CS, if IntrPend Call(VectSrv);
+        tmp7 := GP, Return;
+
+
+
+
+$Title Boolean routines.
+
+! Routine SetFalse.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetFalse sets the top of the expression stack to false.  SetFalse
+!       is not called, it is jumped to.  It exits via a NextInst.
+!
+! Environment:
+!       (Tos) = Anything.
+!
+! Result:
+!       (Tos) = False.
+!
+!-----------------------------------------------------------------------------
+
+SetFalse: Tos := 0, NextInst(0);
+
+! Routine SetTrue.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SetTrue sets the top of the expression stack to false.  SetTrue
+!       is not called, it is jumped to.  It exits via a NextInst.
+!
+! Environment:
+!       (Tos) = Anything.
+!
+! Result:
+!       (Tos) = True.
+!
+!-----------------------------------------------------------------------------
+
+SetTrue: Tos := 1, NextInst(0);
+
+
+
+
+$Title Byte array and string routines.
+
+! Routine GetStringIndex.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       GetStringIndex gets an index into a string variable and checks it
+!       against the dynamic length of the string.  If the index is out of
+!       range, GetStringIndex causes an ErrInxCase error.  If the index is
+!       in range, GetStringIndex fetches the correct word and returns.
+!
+! Environment:
+!       (Tos) = Byte offset.
+!       (Tos-1) = Word address as offset from stack base.
+!
+! Result:
+!       Stack popped.
+!       tmp4 = Physical word address of the beginning of the string.
+!       tmp1 = Word offset within the string.
+!       Word containing character fetched and readable on Mdi.
+!
+! Calls:
+!       ChkOvr, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetStringIndex: tmp := Tos and AllOnes, Pop, RightShift(1);       ! byte offset
+        tmp1 := Shift, if IntrPend Call(VectSrv);! word offset
+        Tos + SB, Fetch;
+        tmp4 := Mdi and 377;
+        tmp4 - tmp;
+        tmp4 := Tos + SB, if Lss Goto(ChkOvr);
+        tmp4 + tmp1, Fetch, Return;
+
+! Routine GetSrcDst.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       GetSrcDst gets a source and destination byte pointer from the
+!       expression stack.  It also pre-fetches the first bytes referenced
+!       by the two byte pointers.  This is done to get the length bytes
+!       for string operations.  The result conditions of GetSrcDst are
+!       precisely the evironment for GetSrc, GetDst, and PutDst.
+!
+! Environment:
+!       (Tos) = Source byte offset.
+!       (Tos-1) = Source address as offset from stack base.
+!       (Tos-2) = Destination byte offset.
+!       (Tos-3) = Destination address as offset from stack base.
+!
+! Result:
+!       Stack popped four times.
+!       Src = Source word physical address (Address + ByteOffset div 2).
+!       SrcLsb = Least significant bit of the source byte address.
+!       SrcWord = First source word.
+!       SrcByte = First source byte.
+!       Dst = Destination word physical address (Address + ByteOffset div 2).
+!       DstLsb = Least significant bit of the destination byte address.
+!       DstWord = First destination word.
+!       DstByte = First destination byte.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetSrcDst: tmp3 := Tos and AllOnes, Pop, RightShift(1);  ! get Src byte offset
+        Src := Shift + SB, if IntrPend Call(VectSrv);
+        Src := Tos + Src, Fetch;             ! Src word address
+        SrcLsb := tmp3, Pop;                 ! Src least significant bit
+        if Odd Goto(GetSD2);                 ! if first byte is upper byte
+        SrcWord := Mdi;                      ! 1st Src word
+        SrcByte := Mdi and 377;              ! 1st Src byte
+GetSD1: tmp3 := Tos and AllOnes, Pop, RightShift(1);     ! get Dst byte offset
+        Dst := Shift + SB, if IntrPend Call(VectSrv);
+        Dst := Tos + Dst, Fetch;             ! Dst word address
+        DstLsb := tmp3, Pop;                 ! Dst least significant bit
+        if Odd Goto(GetSD3);                 ! if first byte is upper byte
+        DstWord := Mdi;                      ! 1st Dst word
+        DstByte := Mdi and 377, Return;      ! 1st Dst byte
+
+GetSD2: SrcWord := Mdi, Field(0,10);         ! 1st Src word
+        SrcByte := Shift, Goto(GetSD1);      ! 1st Src byte
+
+GetSD3: DstWord := Mdi, Field(0,10);         ! 1st Dst word
+        DstByte := Shift, Return;            ! 1st Dst byte
+
+! Routine GetSrc.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       GetSrc gets the next source byte from a byte array or a string.
+!
+! Environment:
+!       Src = Source word physical address.
+!       SrcLsb = Least significant bit of the source byte address.
+!       SrcWord = Current source word.
+!
+! Result:
+!       SrcWord = Current source word.
+!       SrcByte = Current source byte.
+!       Source address (Src and SrcLsb) advanced to next byte.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetSrc: SrcLsb;
+        if Odd Goto(GetSrc2);                ! if upper byte
+GetSrc1: Src, Fetch;                         ! get a new word
+        SrcLsb := 1, if IntrPend Goto(GetSrc3);  ! next byte is upper byte
+        SrcWord := Mdi;                      ! current word
+        SrcByte := Mdi and 377, Return;      ! current byte
+        
+GetSrc2: SrcWord, RightShift(10);            ! get upper byte from current word
+        SrcByte := Shift and 377;            ! current byte
+        Src := Src + 1, if IntrPend Call(VectSrv);  ! advance to next word
+        SrcLsb := 0, Return;                 ! next byte is lower byte
+        
+!       Serve an interrupt.
+
+GetSrc3: Call(VectSrv);
+        Goto(GetSrc1);
+
+! Routine GetDst.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       GetDst gets the next destination byte from a byte array or a string.
+!
+! Environment:
+!       Dst = Destination word physical address.
+!       DstLsb = Least significant bit of the destination byte address.
+!       DstWord = Current destination word.
+!
+! Result:
+!       DstWord = Current destination word with current byte removed.
+!       DstByte = Current destination byte.
+!       Destination address (Dst and DstLsb) advanced to next byte.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+GetDst: DstLsb;
+        if Odd Goto(GetDst2);                ! if upper byte
+GetDst1: Dst, Fetch;                         ! get a new word
+        DstLsb := 1, if IntrPend Goto(GetDst3);  ! next byte is upper byte
+        DstWord := Mdi and not 377;          ! current word
+        DstByte := Mdi and 377, Return;      ! current byte
+        
+GetDst2: DstWord, RightShift(10);            ! get upper byte from current word
+        DstByte := Shift and 377;            ! current byte
+        Dstword := DstWord and 377;          ! current word
+        Dst := Dst + 1, if IntrPend Call(VectSrv);  ! advance to next word
+        DstLsb := 0, Return;                 ! next byte is lower byte
+
+!       Serve an interrupt.
+
+GetDst3: Call(VectSrv);
+        Goto(GetDst1);
+
+! Routine PutDst.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       PutDst puts the next destination byte into a byte array or a string.
+!
+! Environment:
+!       Dst = Destination word physical address.
+!       DstLsb = Least significant bit of the destination byte address.
+!       DstWord = Current destination word with current byte removed.
+!       SrcByte = Current source byte to be put into the destination.
+!
+! Result:
+!       DstWord = Current destination word with source byte added.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+PutDst: DstLsb;
+        if Odd Goto(PutDst1);                ! if lower byte
+        SrcByte, LeftShift(10);              ! move SrcByte to upper byte
+        DstWord := Shift or DstWord,          ! put SrcByte in upper byte
+                                    if IntrPend Call(VectSrv);
+        Dst - 1, Store;
+        DstWord, Return;                     ! store destination word
+
+PutDst1:DstWord := DstWord or SrcByte, Return;  ! put SrcByte in lower byte
+
+! Routine BytCmp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       BytCmp compares two byte arrays.  After the call to BytCmp, the Eql,
+!       Neq, Leq, Lss, Geq, and Gtr condition codes can be used to check
+!       the results of the comparison.
+!
+! Environment:
+!       Next byte in the opcode/operand stream = Length.
+!       If Length <> 0:
+!            (Tos) = Byte offset for ByteArray0.
+!            (Tos-1) = Word address of ByteArray0.
+!            (Tos-2) = Byte offset for ByteArray1.
+!            (Tos-3) = Word address of ByteArray1.
+!       If Length = 0:
+!            (Tos) = Length of byte arrays.
+!            (Tos-1) = Byte offset for ByteArray0.
+!            (Tos-2) = Word address of ByteArray0.
+!            (Tos-3) = Byte offset for ByteArray1.
+!            (Tos-4) = Word address of ByteArray1.
+!
+! Result:
+!       Length removed from opcode/operand stream.
+!       If Length <> 0:
+!            Stack popped four times.
+!       If Length = 0:
+!            Stack popped five times.
+!       ALU result = ByteArray0 compared to ByteArray1.
+!
+! Calls:
+!       GetSrcDst, GetSrc, GetDst, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+BytCmp: tmp2 := NextOp;                      ! get length
+        if Neq Goto(BytCmp1);                ! if non-zero length byte
+        tmp2 := Tos, Pop;                    ! get length from expression stack
+BytCmp1: Call(GetSrcDst);                    ! get byte pointers
+        Goto(BytCmp3);                       ! enter comparison loop
+
+BytCmp2: if Lss Goto(BytCmp4),               ! if done and all equal
+                               dstbyte - srcbyte;  ! compare bytes
+        if Neq Goto(BytCmp5);                ! if done and not equal
+BytCmp3:Call(GetSrc);                        ! get next byte
+        Call(GetDst);                        ! get next byte
+        tmp2 := tmp2 - 1, Goto(BytCmp2);     ! count byte
+
+!       Byte arrays are equal.
+
+BytCmp4: 0, Return;                          ! return Eql
+
+!       Byte arrays are not equal, return with condition codes set for
+!       byte comparison.
+
+BytCmp5: dstByte - srcByte, Return;
+
+! Routine StrCmp.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       StrCmp compares two strings.  After the call to StrCmp, the Eql,
+!       Neq, Leq, Lss, Geq, and Gtr condition codes can be used to check
+!       the results of the comparison.  The strings must be word aligned.
+!
+! Environment:
+!       (Tos) = Byte offset for String0.
+!       (Tos-1) = Word address of String0.
+!       (Tos-2) = Byte offset for String1.
+!       (Tos-3) = Word address of String1.
+!
+! Result:
+!       Stack popped three times.
+!       ALU result = String0 compared with String1.
+!
+! Calls:
+!       GetSrcDst, GetSrc, GetDst, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+StrCmp: Call(GetSrcDst);                     ! get string pointers
+        SrcLsb := SrcLsb xor 1;              ! skip length bytes
+        DstLsb := DstLsb xor 1;
+        Tos := dstByte - srcByte, Push;      ! compare lengths, save difference
+        tmp := srcByte, if Geq Goto(StrCmp1);  ! if src is shorter
+        tmp := dstByte;
+
+!       Compare the strings, tmp is length of shorter string.
+
+StrCmp1: if Eql Goto(StrCmp3);               ! if strings equal up to tmp
+        Call(GetSrc);                        ! get next character
+        Call(GetDst);                        ! get next character
+        dstByte - srcByte, if IntrPend Goto(StrCmp5);
+StrCmp2:if Neq Goto(StrCmp4);                ! if characters are not equal
+        tmp := tmp - 1, Goto(StrCmp1);       ! count the character
+
+!       Strings are equal up to length of shorter string, return with
+!       condition codes set for length comparison.
+
+StrCmp3: Tos, Return;
+
+!       Strings are not equal, return with condition codes set for character
+!       comparison.
+
+StrCmp4: dstByte - srcByte, Return;
+
+!       Serve an interrupt.
+
+StrCmp5: Call(VectSrv);
+        dstbyte - srcbyte, Goto(StrCmp2);
+
+
+
+
+$List
+$Title Call and return routines.
+
+! Routine CllSub.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CllSub is a common routine used by the call opcodes to build the new
+!       activation record and set up the new pointers (GP, AP, TP, etc.).
+!
+! Environment:
+!       tmp = New routine number.
+!       tmp5 = New code segment number.
+!       tmp6 = New code base.
+!       tmp7 = New global pointer.
+!       tmp11 = Length of call instruction (for PCBackup).
+!       S = Routine to jump to on stack overflow.
+!
+! Result:
+!       New activation record built.
+!       Code state pointers saved in ACB.
+!       Expression stack saved in ACB.
+!       Code state pointers updated.
+!
+! Calls:
+!       GetLL, GetSL, SvStk, VectSrv, S.
+!
+!-----------------------------------------------------------------------------
+
+! Routine CllV.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CllV is a common routine used to make a call to a routine described
+!       by a variable routine descriptor.  CllV builds the new activation
+!       record and set up the new pointers (GP, AP, TP, etc.).
+!
+! Environment:
+!       tmp = New routine number.
+!       tmp5 = New code segment number.
+!       tmp6 = New code base.
+!       tmp7 = New global pointer.
+!       tmp10 = New static link.
+!       tmp11 = Length of call instruction (for PCBackup).
+!       S = Routine to jump to on stack overflow.
+!       First half of routine dictionary entry fetched and readable on Mdi.
+!
+! Result:
+!       New activation record built.
+!       Code state pointers saved in ACB.
+!       Expression stack saved in ACB.
+!       Code state pointers updated.
+!
+! Calls:
+!       SvStk, VectSrv, S.
+!
+!-----------------------------------------------------------------------------
+
+CllSub:
+
+!       Get the new static link.
+
+        tmp4 := tmp6;                        ! new code base (for GetLL)
+        tmp10 := tmp, Call(GetLL);           ! get new lexical level
+        tmp2 := Mdi - 2;
+        tmp3 := tmp1,                        ! save address of LL in RD
+                      if Leq Goto(CllSub3);  ! if calling a top-level routine
+        tmp4 := CB;                          ! current codebase
+        tmp10 := RN, Call(GetLL);            ! get current LL
+        tmp2 := tmp2 + 2;                    ! new lex level
+        tmp1 := Mdi - tmp2;                  ! current LL - new LL
+                                             ! (typically positive)
+        tmp10 := AP, if Geq Call(GetSL);     ! if not calling deeper
+                                             ! if calling deeper, new SL = AP
+CllSub1: tmp3 - RDLL, Fetch4;                ! get 1st half of RD entry
+
+!       Call variable routine entry point.
+
+CllV:   Tos := TP + 1, Push;                 ! address of new locals area
+        tmp1 := Mdi + SB;                    ! PS = parameter size
+        tmp2 := Mdi;                         ! RPS = result + parameter size
+        tmp3 := Mdi;                         ! LTS = locals + temporaries
+        tmp4 := Mdi;                         ! entry point
+
+!       Check for stack overflow
+
+        tmp12 := TP;                         ! save TP in case of overflow
+        TP := Tos + tmp3;
+        TP := TP + 3;                        ! quad-align new ACB
+        TP := TP and not 3, if IntrPend Call(VectSrv);  ! new AP
+        TP := TP + ACBReserve;
+        SL - TP;
+        TP := TP - ACBReserve, if C19 Goto(CllSub4);  ! if stack overflow
+
+!       Build new ACB.
+
+CllSub2: LP := Tos - tmp2, Pop;              ! new LP = local pointer
+        tmp2 := TP;                          ! new AP = activation pointer
+        TP, Store4;
+        tmp10 - SB;                          ! new SL = static link
+        LP - SB;                             ! new LP = local pointer
+        AP - SB;                             ! new DL = dynamic link = old AP
+        GP - SB;                             ! new GL = global link = old GP
+        tmp13 := UState and 17;
+        UPC - CB, LeftShift(1);
+        tmp13 := Shift + tmp13;
+        TP := TP + 4, Store4;
+        tmp12 - tmp1;                        ! new TL = top link = old TP
+        CS;                                  ! return CS = code segment
+        tmp13;                               ! RA = return address
+        RN;                                  ! RR = return routine number
+        RN := tmp;                           ! new RN = routine number
+        CS := tmp5, if IntrPend Call(VectSrv);  ! new CS = code segment
+        TP := TP + 4, Store;
+        0;                                   ! new EP = exception pointer
+        CB := tmp6;                          ! new CB = code base
+        AP := tmp2;                          ! new AP = activation pointer
+
+!       Save the expression stack.
+
+        tmp := not 0, if IntrPend Call(VectSrv);  ! -1
+        TP := TP + 1, Call(SaveStack);       ! start after length word
+        TP - tmp, Store;
+        tmp, if IntrPend Call(VectSrv);      ! store E-stack length
+        GP := tmp7;                          ! new GP = global pointer
+
+!       Set up new PC.
+
+! ----> The following instruction is a good place to set a breakpoint.  CS,
+! ----> RN, and UPC have their new values, although BPC doesn't yet.
+
+        BPC := tmp4 and 7;                   ! CB is on a 256 word boundary
+        tmp4 and not 7, RightShift(1);
+        UPC := Shift + CB, Return;           ! quad program counter
+
+!       Set SL for top-level routines: LL <= 2.
+
+CllSub3: tmp10 := SB, Goto(CllSub1);         ! static link is not used
+
+!       Signal a stack overflow.  Restore Both stacks.
+
+CllSub4: TP := tmp12, Pop, GotoS;
+
+! Routine SaveStack.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SaveStack saves the expression stack in the activation control block.
+!
+! Environment:
+!       TP = First word address of the saved stack (length word + 1).
+!       tmp = -1.
+!
+! Result:
+!       Expression stack pushed onto memory stack.
+!       tmp = Number of saved words.
+!
+!-----------------------------------------------------------------------------
+
+SaveStack:  UState and 1000;                 ! extract StackEmpty field
+        tmp := tmp + 1, if Eql Return;       ! bottom of stack reached
+        TP := TP + 1, Store;
+        Tos, Pop, Goto(SaveStack);           ! store a word
+(*****
+
+! Routine RestoreStack.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RestoreStack restores the expression stack from the ACB prior to
+!       returning from a routine.
+!
+! Environment:
+!       Expression stack empty.
+!
+! Result:
+!       Expression stack restored.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+RestoreStack:AP + ACBStackSize, Fetch;
+        tmp1 := AP;
+        tmp1 := tmp1 + ACBSaveStack;
+        tmp2 := Mdi;                         ! number of saved words of stack
+        tmp1 := tmp1 + tmp2, if Eql Return;  ! if no words to restore
+Restore1: tmp1 := tmp1 - 1, Fetch;
+        tmp2 := tmp2 - 1, Push, if IntrPend Goto(Restore2);
+        Tos := Mdi, if Gtr Goto(Restore1);   ! if more words to restore
+        Return;
+
+!       Serve an interrupt.
+
+Restore2: tmp1 := tmp1 + 1, Call(VectSrv);
+        Pop, tmp2 := tmp2 + 1, Goto(Restore1);
+*****)
+
+! Routine RetExit.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RetExit is used when a RETURN instruction finds that the return
+!       address is zero.  This means that the return address is the exit
+!       point of the routine.
+!
+! Result:
+!       PC set to exit point of current routine.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+RetExit: CB, Fetch;                          ! fetch dictionary address
+        Hold, RN, LeftShift(3);
+        Hold, tmp1 := Shift + CB;
+        Hold, tmp1 := tmp1 + RDEXIT;
+        Hold, Mdi + tmp1, Fetch;             ! fetch exit word in dictionary
+        BPC := Mdi and 7, RightShift(1);     ! set BPC and UPC
+        Mdi and not 7;
+        UPC := Shift + CB, Return;
+
+! Routine ExSub.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ExSub is used by EXIT and EXGO to get the target segment number and
+!       routine number from the opcode/operand stream and set return addresses
+!       to zero in the memory stack.
+!
+! Environment:
+!       Segment and routine numbers are in the opcode/operand stream.
+!       tmp2 = Target AP.
+!
+! Result:
+!       Appropriate return addresses set to zero.
+!
+! Calls:
+!       WordParm, XSTMap, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+ExSub:  Call(WordParm);                      ! get ISN
+        tmp := Shift + tmp, Call(XSTMap);    ! convert to XSN
+        tmp1 := NextOp;                      ! get routine number
+        tmp - CS;
+        tmp2 := AP, if Neq Goto(ExSub1);     ! if different code segment
+        tmp1 - RN;
+        if Eql Return;                       ! if current routine
+ExSub1: tmp2 + ACBRA, Store;                 ! set a return address to zero
+        0;
+        if IntrPend Call(VectSrv);
+        tmp2 + ACBRS, Fetch;                 ! get return segment number
+        Mdi - tmp;
+        if Neq Goto(ExSub2);                 ! if segment numbers don't match
+        tmp2 + ACBRR, Fetch;                 ! get return routine number
+        Mdi - tmp1;
+        if Eql Return;                       ! if routine numbers match, done
+ExSub2: tmp2 + ACBDL, Fetch;                 ! get next ACB
+        tmp2 := Mdi + SB, Goto(ExSub1);
+
+
+
+
+$Title Error processing routines.
+
+! Routine ChkOvr.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ChkOvr signals a ErrInxCase error.  ChkOvr is not called, rather it
+!       is jumped to.  It exits to RunError0.
+!
+! Result:
+!       tmp2 = ErrInxCase.
+!
+! Calls:
+!       RunError1.
+!
+!-----------------------------------------------------------------------------
+
+ChkOvr: tmp2 := ErrInxCase, Goto(RunError0);
+
+! Routine ChkStk.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ChkStk checks to be sure that N words can be pushed onto the memory
+!       stack without overflowing.  If the words will not fit, ChkStk jumps
+!       to the address in the 2910's S register.
+!
+! Environment:
+!       tmp10 = Number of words.
+!       S = Address of stack overflow handler.
+!
+! Result:
+!       tmp10 unchanged.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+ChkStk: tmp10 := tmp10 + TP, Goto(ChkStk2);
+
+ChkStk1: Call(VectSrv);                      ! serve an interrupt
+ChkStk2: SL - tmp10, if IntrPend Goto(ChkStk1);
+        tmp10 := tmp10 - TP, if C19 Goto(ChkStk3);  ! if no room
+        Return;                              ! there's room, so return
+
+!       No room, signal error by jumping to S.
+ 
+ChkStk3:GotoS;
+
+! Routine ErrCall.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ErrCall initiates the raising of an exception by calling routine
+!       RNRaise in segment ExcCS (procedure Raise in module Except).
+!       The caller pushes parameters to the exception (if any) onto the
+!       memory stack before calling ErrCall.  ErrCall is jumped to and
+!       exits to RefillJmp.  If the Except module has not been initialized,
+!       is non-resident, or a stack overflow happens while calling Raise,
+!       transfer to Busted.
+!
+! Environment:
+!       tmp3 = ParameterSize = Number of words of parameters.
+!       ExcCS = Segment number of the Except module.
+!       ExcGP = Global pointer of the Except module.
+!       tmp1 = Segment number of the exception.
+!       tmp2 = Routine number of the exception.
+!
+! Result:
+!       Micro level call stack cleared.
+!       Four words pushed on the memory stack.
+!       Memory[TP - 0] = PStart = TP - 3 - ParameterSize.
+!       Memory[TP - 1] = PEnd = TP - 3.
+!       Memory[TP - 2] = ER = tmp2.
+!       Memory[TP - 3] = ES = tmp1.
+!       tmp10 unchanged.
+!       ExcCS unchanged.
+!       ExcGP unchanged.
+!       tmp1 unchanged.
+!
+! Calls:
+!       ChkSeg, CllSub, RefillJmp, VectSrv.
+!
+! Design:
+!       If the Except module has not been initialized, ExcCS = 0.  Since
+!       segment 0 is guaranteed to be non-resident, we need not make a
+!       separate check for ExcCS = 0.
+!
+!-----------------------------------------------------------------------------
+
+ErrCall: TP := TP + 1, Store;
+        tmp1, ThreeWayBranch(0);             ! ES, clear the call stack
+        Tos := TP - SB, Push;
+        TP := TP + 1, Store;
+        tmp2, ThreeWayBranch(0);             ! ER
+        TP := TP + 1, Store;
+        Tos - tmp3, ThreeWayBranch(0);       ! PStart
+        TP := TP + 1, Store;
+        Tos, Pop;                            ! PEnd
+        tmp5 := ExcCS, ThreeWayBranch(0);    ! segment number of Raise
+        tmp := tmp5, Call(ChkSeg);
+        tmp6 := tmp,                         ! code base of Raise
+                     if Odd Goto(Busted);    ! if not resident
+        tmp := RNRaise,                      ! routine number of Raise
+                        LoadS(Busted);       ! where to go on stack overflow
+        tmp7 := ExcGP, ThreeWayBranch(0);
+        tmp7 := tmp7 + SB, Call(CllSub);     ! global pointer of Raise
+        Goto(RefillJmp);                     ! enter the routine
+
+! Routine PCBackup.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       PCBackup sets the Q-code program counter back N bytes.  This is
+!       used when a recoverable error is detected (e.g. segment fault).
+!       The PC is set back in order that the instruction can be re-executed
+!       after the error condition is cleared.
+!
+! Environment:
+!       tmp11 = Number of bytes.
+!
+! Result:
+!       tmp = New program counter as byte offset from code base.
+!       UPC set back.
+!       BPC set back.
+!
+! Calls:
+!       VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+PCBackup: tmp := UState and 17;              ! get byte program counter
+        UPC, LeftShift(1);                   ! word program counter ==> bytes
+        tmp := Shift + tmp, if IntrPend Call(VectSrv);  ! full byte PC
+        tmp := tmp - tmp11, RightShift(1);   ! new byte program counter
+        UPC := Shift and not 3;              ! set UPC back
+        BPC := tmp and 7, Return;            ! set BPC back
+
+! Routine RunError, RunError0.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RunError is called when the microcode wants to raise an exception.
+!       The caller pushes parameters to the exception (if any) onto the
+!       memory stack before calling RunError.  RunError is jumped to and
+!       exits to ErrCall.  The variant of RunError that is called depends
+!       on how many words of parameters were pushed on the memory stack.
+!       RunError0 is called when 0 words were pushed.  If parameters were
+!       pushed onto the memory stack, RunError can be called with ParameterSize
+!       in tmp3.
+!
+! Environment:
+!       tmp3 = ParameterSize = Number of words of parameters (if calling
+!                              RunError, not RunError0.
+!       ExcCS = Segment number of the Except module.
+!       ExcGP = Global pointer of the Except module.
+!       tmp2 = Error number = Routine number of the exception.
+!
+! Result:
+!       tmp3 unchanged.
+!       ExcCS unchanged.
+!       ExcGP unchanged.
+!       tmp2 unchanged.
+!       tmp1 = ExcCS.
+!
+! Calls:
+!       ErrCall.
+!
+!-----------------------------------------------------------------------------
+
+RunError0: tmp3 := 0;
+Loc(RunError), tmp1 := ExcCS, Goto(ErrCall); 
+
+! Routine SASErr.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SASErr causes the ErrStrLong error.
+!
+! Result:
+!       tmp2 = ErrStrLong.
+!
+! Calls:
+!       RunError0.
+!
+!-----------------------------------------------------------------------------
+
+SASErr: tmp2 := ErrStrLong, Goto(RunError0);
+
+! Routine SegFault.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SegFault signals a segment fault error.  If SegFault is called from
+!       STLATE, two segment numbers are passed.  Otherwise, tmp5 contains a
+!       segment number, and SegFault is entered at SegFault1.
+!
+! Environment:
+!       tmp5 = First segment number.
+!       tmpstk0 = Second segment number.
+!       tmp11 = Amount to back up the program counter.
+!
+! Result:
+!       Program counter backed up.
+!       Four words pushed onto the memory stack.
+!       Memory[TP - 0] = Code segment number.
+!       Memory[TP - 1] = Stack segment number.
+!       Memory[TP - 2] = Second segment number.
+!       Memory[TP - 3] = First segment number.
+!       Segment fault error signalled.
+!
+! Calls:
+!       PCBackup, RunError.
+!
+!-----------------------------------------------------------------------------
+
+SegFault1: tmpstk0 := tmp5;
+SegFault: TP := TP + 1, Store;
+        tmp5;
+        TP := TP + 1, Store;
+        tmpstk0;
+        TP := TP + 1, Store;
+        SS;
+        TP := TP + 1, Store;
+        CS;
+        tmp3 := 4, Call(PCBackup);         ! 4 words of parameters on MStack
+        tmp2 := ErrSegmentFault, Goto(RunError);
+
+! Routine StkOv.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       StkOv signals a stack overflow error.
+!
+! Environment:
+!       tmp11 = Amount to back up the program counter.
+!
+! Result:
+!       Program counter backed up.
+!       Stack overflow error signalled.
+!
+! Calls:
+!       PCBackup, RunError0.
+!
+!-----------------------------------------------------------------------------
+
+! Routine StkOvPop.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       StkOvPop signals a stack overflow error after popping the expression
+!       stack.
+!
+! Environment:
+!       tmp11 = Amount to back up the program counter.
+!
+! Result:
+!       Stack popped.
+!       Program counter backed up.
+!       Stack overflow error signalled.
+!
+! Calls:
+!       PCBackup, RunError0, SetQState.
+!
+!-----------------------------------------------------------------------------
+
+StkOvPop: Pop;
+StkOv:  Call(PCBackup);
+        tmp := 100;                         !(must be separate line for placer)
+        Call(SetQState);                     ! set stack limit (SL)
+        SL := SL + StackLimit;               ! add a little extra to work with
+        tmp2 := ErrStackOverflow, Goto(RunError0);
+
+! Routine UOP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       UOP signals an ErrUndfQcd error.
+!
+! Result:
+!       tmp2 = ErrUndfQcd.
+!
+! Calls:
+!       RunError0.
+!
+!-----------------------------------------------------------------------------
+
+UOP:    tmp2 := ErrUndfQcd, Goto(RunError0);
+$NoList
+
+
+
+
+$Title Interrupts: Microcode level and Pascal level.
+
+! Routine UserSrv.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       UserSrv serves Pascal level interrupts by calling the appropriate
+!       Pascal level interrupt service routine.
+!
+! Environment.
+!       UserIntr bits 0..14 non-zero.  That is, UserIntr > 0.
+!
+! Result:
+!       One interrupt served.
+!
+! Calls:
+!       ChkSeg, CllV, RefillJmp, VectSrv, StkOv.
+!
+! Design:
+!       It is assumed that:
+!          1) The segment with the interrupt handler is always resident.
+!          2) The table with variable routine descriptors (IntTab) is
+!             quadword aligned.
+!
+!-----------------------------------------------------------------------------
+
+UserSrv: tmp := UserIntr;
+        tmp and 377;
+        dst := 0, Goto(UserSrv1);            ! initialize count
+!*****            if Neq Goto(UserSrv1);
+!*****  dst := 10, if IntrPend Call(VectSrv);
+!*****  userintr, RightShift(10);
+!*****  tmp := Shift;                        ! swap bytes
+UserSrv1: if IntrPend Call(VectSrv);
+        tmp, RightShift(1);                  ! next bit position
+        tmp := Shift, if Odd Goto(UserSrv2); ! if this bit is set
+        dst := dst + 1, Goto(UserSrv1);      ! update bit position counter
+        
+!       Bit found, index into IntTab by the bit position to get the routine
+!       descriptor for the interrupt handler.
+
+UserSrv2: dst, LeftShift(2);                 ! turn index into offset
+        Shift + IntPtr, Fetch4;              ! get variable routine desc.
+        UserIntr := UserIntr or 100000;      ! turn off further interrupts
+        tmp11 := 0, LoadS(StkOv);            ! watch out for stack overflow
+        tmp5 := Mdi;                         ! new CS = code segment number
+        tmp7 := Mdi + SB;                    ! new GP = global pointer
+        tmp2 := Mdi;                         ! new RN = routine number
+        tmp10 := Mdi + SB;                   ! new SL = static link
+        tmp := tmp5, Call(ChkSeg);           ! get code base
+        tmp6 := tmp, Fetch,                  ! offset of routine dictionary
+                            if Odd Goto(Busted);  ! if not resident
+        Hold, tmp := tmp2, LeftShift(3);
+        Hold, tmp1 := Shift + tmp6;          ! offset of dictionary entry
+        Hold, Mdi + tmp1, Fetch4;            ! fetch dictionary entry.
+        Call(CllV);                          ! set up ACB
+        dst, LeftShift(4);                   ! set up shift mask
+        Shift or 17, ShiftOnR;               ! form LeftShift(dst)
+        1;                                   ! clear bit where interrupt found 
+        UserIntr := Shift xor UserIntr, Goto(RefillJmp);  ! enter routine
+
+! Routine VectSrv.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       VectSrv serves micro level interrupts by vectoring into the IO
+!       microcode.  VectSrv should be called.
+!
+! Environment.
+!       IntrPend true.
+!
+! Result:
+!       Interrupt served.
+!
+! Calls:
+!       IO microcode.
+!
+!-----------------------------------------------------------------------------
+
+VectSrv: Vector(IntVec);

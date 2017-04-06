@@ -1,0 +1,239 @@
+!Twinkle   Copyright 1981 by Three Rivers Computer
+!
+! Written By John R. Rose
+!
+! Twinkle sprinkles the screen with random sprinkles
+! The sprinkles should be 16 by 16 pixels (16 words of memory).
+! Each twink is randomly placed on the screen
+
+
+define(tmp0,0);
+define(tmp1,1);
+define(tmp2,2);
+define(tmp3,3);
+define(tmp4,4);
+define(tmp5,5);
+define(tmp6,6);
+define(tmp7,7);
+define(tmp10,10);
+define(tmp11,11);
+define(tmp12,12);
+define(tmp13,13);
+define(tmp14,14);
+define(tmp15,15);
+define(tmp16,16);
+define(tmp17,17);
+define(tmp20,20);
+define(tmp21,21);
+define(tmp22,22);
+define(xpos,23);
+define(rand,24);
+define(intcount, 25);
+define(frand1, 26);
+define(frand2, 27);
+define(frand3, 30);
+define(frand4, 31);
+define(tmp32, 32);
+define(tmp33, 33);
+define(tmp34, 34);
+define(r371, 371);
+define(r376, 376);
+
+
+
+
+constant(pat00,0);
+constant(pat01,77776);
+constant(pat02,40002);
+constant(pat10,17770);
+constant(pat11,10010);
+constant(pat20,3740);
+constant(pat21,2040);
+constant(pat30,600);
+
+
+
+place(0, 377);
+
+
+start:   r371 := 0, loc(0);
+         r376 := 200;
+         tmp22 := 0;
+         call(random);
+newrand: call(random);    !get the first random number
+gotrand: tmp20 := rand;           !save it
+setx:    xpos := xpos + tmp20;
+twinktyp:call(random);
+         if intrpend call(vecint);
+         tmp20 := rand;
+         tmp20 := tmp20 and 17;
+         call(maketwink);
+         call(puttwink);
+         call(wait);
+         goto(newrand);
+newrand1:call(random);
+         rotate(10);
+         tmp20 := shift;
+         rand := rand + tmp20, goto(newrand);
+         
+         
+         
+maketwink:tmp20 and 10;
+          if neq goto(layer01);
+          goto(layer00);
+mktw1:    tmp20 and 4;
+          if neq goto(layer1);
+mktw2:    tmp20 and 2;
+          if neq goto(layer2);
+mktw3:    tmp20 and 1;
+          if neq goto(layer3);
+          return;
+          
+layer01:  tmp0 := pat00;
+          tmp1 := pat01;
+          tmp2 := pat02;
+          tmp3 := pat02;
+          tmp4 := pat02;
+          tmp5 := pat02;
+          tmp6 := pat02;
+          tmp7 := pat02;
+          tmp10 := pat02;
+          tmp11 := pat02;
+          tmp12 := pat02;
+          tmp13 := pat02;
+          tmp14 := pat02;
+          tmp15 := pat02;
+          tmp16 := pat01;
+          tmp17 := pat00;
+          if intrpend call(vecint);
+          goto(mktw1);
+          
+layer00:  tmp0 := pat00;
+          tmp1 := pat00;
+          tmp2 := pat00;
+          tmp3 := pat00;
+          tmp4 := pat00;
+          tmp5 := pat00;
+          tmp6 := pat00;
+          tmp7 := pat00;
+          tmp10 := pat00;
+          tmp11 := pat00;
+          tmp12 := pat00;
+          tmp13 := pat00;
+          tmp14 := pat00;
+          tmp15 := pat00;
+          tmp16 := pat00;
+          tmp17 := pat00;
+          goto(mktw1);
+          
+layer1:   tmp3 := tmp3 or pat10;
+          tmp4 := tmp4 or pat11;
+          tmp5 := tmp5 or pat11;
+          tmp6 := tmp6 or pat11;
+          tmp7 := tmp7 or pat11;
+          tmp10 := tmp10 or pat11;
+          tmp11 := tmp11 or pat11;
+          tmp12 := tmp12 or pat11;
+          tmp13 := tmp13 or pat11;
+          tmp14 := tmp14 or pat10;
+          if intrpend call(vecint);
+          goto(mktw2);
+          
+layer2:   tmp5 := tmp5 or pat20;
+          tmp6 := tmp6 or pat21;
+          tmp7 := tmp7 or pat21;
+          tmp10 := tmp10 or pat21;
+          tmp11 := tmp11 or pat21;
+          tmp12 := tmp12 or pat20;
+          if intrpend call(vecint);
+          goto(mktw3);
+          
+layer3:   tmp7 := tmp7 or pat30;
+          tmp10 := tmp10 or pat30;
+          if intrpend call(vecint);
+          return;
+          
+          
+          
+puttwink: tmp21 := 60;
+          MA := xpos, store;
+          tmp0;
+          if intrpend call(vecint);
+          MA := xpos := xpos + tmp21, store;
+          tmp1;
+          MA := xpos := xpos + tmp21, store;
+          tmp2;
+          MA := xpos := xpos + tmp21, store;
+          tmp3;
+          MA := xpos := xpos + tmp21, store;
+          tmp4;
+          MA := xpos := xpos + tmp21, store;
+          tmp5;
+          MA := xpos := xpos + tmp21, store;
+          tmp6;
+          if intrpend call(vecint);
+          MA := xpos := xpos + tmp21, store;
+          tmp7;
+          MA := xpos := xpos + tmp21, store;
+          tmp10;
+          MA := xpos := xpos + tmp21, store;
+          tmp11;
+          MA := xpos := xpos + tmp21, store;
+          tmp12;
+          MA := xpos := xpos + tmp21, store;
+          tmp13;
+          MA := xpos := xpos + tmp21, store;
+          tmp14;
+          MA := xpos := xpos + tmp21, store;
+          tmp15;
+          MA := xpos := xpos + tmp21, store;
+          tmp16;
+          if intrpend call(vecint);
+          MA := xpos := xpos + tmp21, store;
+          tmp17;
+          return;
+          
+          
+          
+wait:     tmp22 := tmp22 + 1;
+          if intrpend call(vecint);
+          intcount := rand;
+          intcount := intcount and 377;
+          tmp22 - intcount;
+          if neq goto(wait);
+          tmp22 := 0, return;
+          
+          
+random:   rand, rightshift(4);
+          TOS := not rand, if lss goto(rneg);
+Rpos:     rand := shift xor rand, leftshift(13);
+          rand := shift xor rand, return;
+Rneg:     rand := TOS + 1, goto(rpos);
+
+
+vecint:   vector(7600);
+          tmp32 := shift;
+          tmp32 := tmp32 and 17;
+          tmp33 := rand;
+          tmp33 := tmp33 and 17;
+          tmp32 - tmp33;
+          if eql goto(randomize);
+          return;
+randomize:MA := xpos or rand, fetch4;
+          frand1 := MDI;
+          frand2 := MDI;
+          frand3 := MDI;
+          frand4 := MDI;
+          frand1 := frand1 + frand2;
+          frand1 := frand1 + frand3;
+          frand1 := frand1 + frand4;
+          frand1,shiftonr;
+          frand1 := frand1 and xpos;
+          frand1 := frand1 xor rand;
+          frand1 := frand1 and intcount;
+          tmp34 := shift;
+          frand1 := frand1 + tmp34;
+          rand := rand + frand1;
+          return;
+          
+                    end;

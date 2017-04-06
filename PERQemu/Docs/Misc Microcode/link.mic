@@ -1,0 +1,164 @@
+!!!     Link - Perq parallel link communications routines.
+!       J. P. Strait    11 July 80.
+!       Copyright (C) Three Rivers Computer Corporation 1980, 1981, 1982, 1983.
+!       Company Confidential.
+
+
+!!      Change history.
+!
+!       14 Jan 82  V1.2  J Strait.
+!       Do not do retries in Link.Micro.  Let the caller take care of
+!       retries so that OdtPrq doesn't have problems with the screen
+!       jumping around.
+!
+!       30 Jun 81  V1.1  J. Strait.
+!       Use IO.Dfs to get definition of IntVec.
+!       Move Link.Micro to #7400.
+!   
+
+!       4 Jun 81   V1.0  J. Strait.
+!       Move Link.Micro to #6000.
+!
+!       11 Jul 80  V0.0  J. Strait.
+!       Start file.
+
+
+!!!     Link provides a send and receive routine for use with the Perq
+!       parallel communications hardware.  The routines send and receive
+!       16 bit data words with timeout processing, but implement no other
+!       communications protocol.
+
+
+!!      Registers.
+
+        Define(Count,350);                    ! Timeout counter
+        Define(WCsr,351);                     ! Current WriteCsr value
+        
+        
+!!      Constants.
+
+        Constant(ReadCsr,40);                 ! Link input command/status
+        Constant(ReadData,42);                ! Link input data
+        Constant(WriteCsr,241);               ! Link output command/status
+        Constant(WriteData,243);              ! Link output data
+
+        Constant(SndDataReady,1);             ! output signal - assert low
+        Constant(SndDone,4);                  ! input signal - assert high
+        Constant(RcvDataReady,2);             ! input signal - assert high
+        Constant(RcvDone,10);                 ! output signal - assert low
+       
+        Constant(CFalse,0);
+        Constant(CTrue,1);
+
+$Include IO.Dfs
+        
+        
+        
+!!      Placement.
+
+        Place(7400,7477);
+        
+        
+!!!     Prs - Preset link.
+!
+!       Address = 7400.
+!
+!       Entry   none.
+!
+!       Exit    Link initialized.
+!               (Tos) = True if success, false otherwise.
+
+Prs:    WCsr := not RcvDone, Iob(WriteCsr), Loc(7400);! initialize the WriteCsr
+        Tos := CTrue, Push, NextInst(0);
+        
+
+!!!     Snd - Send word to link.
+!
+!       Address = 7410.
+!
+!       Entry   (Tos) = Data to send.
+!
+!       Exit    (Tos) = True if success, false otherwise.
+
+!       Send data and set SndDataReady.
+
+Snd:    Tos, Iob(WriteData), Loc(7410);       ! send the data
+        WCsr := WCsr and not SndDataReady, Iob(WriteCsr);
+        Count := 20;
+Snd1:   Count := Count - 1, if Neq Goto(Snd1);
+        WCsr := WCsr or SndDataReady, Iob(WriteCsr);
+        Tos := CTrue, NextInst(0);
+        
+!        WCsr := WCsr and not SndDataReady, Iob(WriteCsr);  ! set data ready
+!               
+!!       Watch for no SndDone (receiver has started).
+!        
+!        Count := not 0;                       ! timeout count
+!Snd1:   if IntrPend Call(VecSrv);
+!        Count := Count - 1, Iob(ReadCsr);
+!        Iod and SndDone, if Eql Goto(Snd3);   ! if timed out
+!        if Neq Goto(Snd1);                    ! if receiver not yet started
+!        
+!!       Clear SndDataReady (signal we are finished).
+!        
+!        WCsr := WCsr or SndDataReady, Iob(WriteCsr);  ! clear data ready
+!        
+!!       Watch for SndDone (receiver is finished).
+!
+!        Count := 0;                           ! timeout count
+!Snd2:   if IntrPend Call(VecSrv);
+!        Count := Count - 1, Iob(ReadCsr);
+!        Iod and SndDone, if Eql Goto(Snd4);   ! if timed out
+!        if Eql Goto(Snd2);                    ! if receiver not yet done
+!        Tos := CTrue, NextInst(0);            ! set success
+!
+!Snd3:   WCsr := WCsr or SndDataReady, Iob(WriteCsr);  ! clear data ready
+!Snd4:   Tos := CFalse, NextInst(0);           ! set failure
+        
+
+!!!     Rcv - Receive word from link.
+!
+!       Address = 7420.
+!
+!       Entry   none.
+!
+!       Exit    (Tos) = True if success, false otherwise.
+!               (Tos-1) = Data iff success.
+
+!       Look for DataReady.
+
+Rcv:    if IntrPend Call(VecSrv), Loc(7420);
+        Iob(ReadCsr);
+        Iod and RcvDataReady;
+        if Eql Goto(Rcv1);                    ! if no data ready
+       
+!       Clear RcvDone (signal that we are starting).
+
+        WCsr := WCsr or RcvDone, Iob(WriteCsr);  ! clear receive done
+        
+!       Read the data.
+        
+        Iob(ReadData);                        ! request the data
+        Tos := Iod, Push;                     ! read the data
+        
+!!       Watch for RcvDataReady to go away (sender is finished).
+!        
+!        Count := not 0;                       ! timeout count
+!Rcv2:   if IntrPend Call(VecSrv);
+!        Count := Count - 1, Iob(ReadCsr);
+!        Iod and RcvDataReady, if Eql Goto(Rcv3);  ! if timed out
+!        if Neq Goto(Rcv2);                    ! if data still ready
+!
+!!       Set RcvDone (data has been received).
+        
+        WCsr := WCsr and not RcvDone, Iob(WriteCsr);  ! set receive done
+        Tos := CTrue, Push, NextInst(0);      ! set success
+        
+Rcv1:   Tos := CFalse, Push, NextInst(0);     ! set failure
+        
+
+VecSrv: Vector(IntVec);
+
+
+        end;
+        

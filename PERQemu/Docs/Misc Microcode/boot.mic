@@ -1,0 +1,638 @@
+! Perq Boot Prom Microcode   Version 4
+!   Written by Brian Rosen
+!   Copyright (C) 1981, 1982, 1983 Three Rivers Computer Corporation,
+!        Pittsburgh PA.
+!
+!
+!   This code resides in the 512 microinstruction Boot Prom
+!   It occupies the low 512 words of the 4k addressable Writable
+!   Microstore.  The prom is enabled by the boot button, and
+!   when enabled, overlaps the bottom 2k of RAM.  Addresses from
+!   512 to 2047 are essentially unused when the prom is on (they are
+!   actually the Boot prom repeated every 512 locations.  It is possible
+!   to address the upper 2k of ram from the prom.
+!   The prom is disabled by executing a LoadOp special function. When
+!   disabled, the prom is not addressable, and the Ram occupies the
+!   entire 4k address space.  It is not possible for the prom to become enabled
+!   by anything other than pressing the boot button.
+!
+!   This code first attempts to verify correct operation of the processor
+!   at least enough to run the boot loader.
+
+        Define(R0,0);  !Define registers with varing bit patterns for addresses
+        Define(R1,1);
+        Define(R2,2);
+        Define(R4,4);
+        Define(R10,10);
+        Define(R20,20);
+        Define(R40,40);
+        Define(R100,100);
+        Define(R200,200);
+        Define(R252,252);
+        Define(R277,277);
+        Define(R307,307);
+        Define(R337,337);
+        Define(R350,350);
+        Define(R357,357);
+        Define(R367,367);
+        Define(R373,373);
+        Define(R375,375);
+        Define(R376,376);
+        Define(R377,377);
+
+
+        Place(0,777);               !Boot code occupies lower 512 locations
+
+        StackReset,Next,loc(0);     ! Display 1 - We can execute something
+        SrcRasterOp := 200, Next, loc(1); ! Turn Power Down bit off
+        Next, loc(2);              ! Do some Nexts to make sure 2910 looks alive
+        Next, loc(3);
+        Goto(L10), loc(4);          ! Try a simple GoTo
+bad1:   Goto(bad1);                 ! Unconditional jump didn't jumpr
+L10:    Goto(L20), loc(10);         ! GoTo increasing bit positions
+L20:    Goto(L30), loc(20);         !   verifies Z and J mux
+L30:    Goto(L40), loc(30);
+L40:    Goto(L100), loc(40);
+L100:   GoTo(L200), loc(100);
+L200:   Goto(L400), loc(200);
+L400:   Goto(L11), loc(400);        ! Go back to low addresses
+L11:    177777;                     ! force non zero alu stuff
+        if Neq Goto(Good1);         ! Does the simplest condition branch work?
+Bad2:   0, Goto(Bad2);              ! Jumps don't work
+
+Good1:  177777;                     ! Make non zero alu again
+        0, if Eql Goto(Bad2);       ! but this time try an Equal jump
+        0, if Eql Goto(good2);      ! Try equal jump with a real 0
+bad3:   0, Goto(bad3);              ! Jumps don't work
+
+sub1:   Return;                     ! Used below as simple subroutine
+sub2:   Call(sub1);                 ! a two level subroutine call
+        Return;                     ! return from 2nd level subr call
+
+good2:  1, if Neq Goto(bad3);       ! had a 0, shouldn't jump on Neq
+        10, if Eql Goto(bad3);      ! make sure every alu chip can detect
+        if Eql Goto(bad3);          ! a non zero bit
+        400;                        !   alu chips are on 4 bit boundaries
+        if Eql Goto(bad3);
+        40000;
+        0, if Eql Goto(bad3);
+        Call(sub1);                 ! now try a simple subroutine call
+        Call(sub2);                 ! try a two level call
+        R0 := 0, StackReset;        ! Display 2 - simple branch/calls work
+
+        R0 xor 0;                   ! try read/write of registers
+        R1 := 1, if Neq Goto(DeepEnd);     ! Cant Write a 0
+        R1 xor 1;                   ! try all bits, using different registers
+        R2 := 2, if Neq Goto(DeepEnd);
+        R2 xor 2;
+        R4 := 4, if Neq Goto(DeepEnd);
+        R4 xor 4;
+        R10 := 10, if Neq Goto(DeepEnd);
+        R10 xor 10;
+        R20 := 20, if Neq Goto(DeepEnd);
+        R20 xor 20;
+        R40 := 40, if Neq Goto(DeepEnd);
+        R40 xor 40;
+        R100 := 100, if Neq Goto(DeepEnd);
+        R100 xor 100;
+        R200 := 200, if Neq Goto(DeepEnd);
+        R200 xor 200;
+        if Neq Goto(DeepEnd);
+        R377 := 400;
+        R377 xor 400;
+        if Neq Goto(DeepEnd);
+        R376 := 1000;
+        R376 xor 1000;
+        if Neq Goto(DeepEnd);
+        R375 := 2000;
+        R375 xor 2000;
+        if Neq Goto(DeepEnd);
+        R373 := 4000;
+        R373 xor 4000;
+        if Neq Goto(DeepEnd);
+        R367 := 10000;
+        R367 xor 10000;
+        if Neq Goto(DeepEnd);
+        R357 := 20000;
+        R357 xor 20000;
+        if Neq Goto(DeepEnd);
+        R337 := 40000;
+        R337 xor 40000;
+        if Neq Goto(DeepEnd);
+        R277 := 100000;
+        R277 xor 100000;
+        if Neq Goto(DeepEnd);
+        R0 xor 0, StackReset;     !Display 3 - simple register read/write works
+                                  !read then back again to check addressing
+        R1 xor 1, if Neq Goto(DeepEnd);
+        R2 xor 2, if Neq Goto(DeepEnd);
+        R4 xor 4, if Neq Goto(DeepEnd);
+        R10 xor 10, if Neq Goto(DeepEnd);
+        R20 xor 20, if Neq Goto(DeepEnd);
+        R40 xor 40, if Neq Goto(DeepEnd);
+        R100 xor 100, if Neq Goto(DeepEnd);
+        R200 xor 200, if Neq Goto(DeepEnd);
+        if Neq Goto(DeepEnd);
+        R377 xor 400;
+        if Neq Goto(DeepEnd);
+        R376 xor 1000;
+        if Neq Goto(DeepEnd);
+        R375 xor 2000;
+        if Neq Goto(DeepEnd);
+        R373 xor 4000;
+        if Neq Goto(DeepEnd);
+        R367 xor 10000;
+        if Neq Goto(DeepEnd);
+        R357 xor 20000;
+        if Neq Goto(DeepEnd);
+        R337 xor 40000;
+        if Neq Goto(DeepEnd);
+        R277 xor 100000;
+        if Neq Goto(DeepEnd);
+        R0 := 1, StackReset;        ! Display 4 - X addressing works
+                                    ! read them back again on Y
+        R0 xor R1;
+        R0 := 2, if Neq Goto(DeepEnd);
+        R0 xor R2;
+        R0 := 4, if Neq Goto(DeepEnd);
+        R0 xor R4;
+        R0 := 10, if Neq Goto(DeepEnd);
+        R0 xor R10;
+        R0 := 20, if Neq Goto(DeepEnd);
+        R0 xor R20;
+        R0 := 40, if Neq Goto(DeepEnd);
+        R0 xor R40;
+        R0 := 100, if Neq Goto(DeepEnd);
+        R0 xor R100;
+        R0 := 200, if Neq Goto(DeepEnd);
+        R0 xor R200, Call(ChkIt);
+        R0 := 400;
+        R0 xor R377, Call(ChkIt);
+        R0 := 1000;
+        R0 xor R376, Call(ChkIt);
+        R0 := 2000;
+        R0 xor R375, Call(ChkIt);
+        R0 := 4000;
+        R0 xor R373, Call(ChkIt);
+        R0 := 10000;
+        R0 xor R367, Call(ChkIt);
+        R0 := 20000;
+        R0 xor R357, Call(ChkIt);
+        R0 := 40000;
+        R0 xor R337, Call(ChkIt);
+        R0 := 100000;
+        R0 xor R277, Call(ChkIt);
+        R0 := 1, StackReset;        ! Display 5 - Y addressing works
+        R0 xor R1, Call(ChkIt);     ! an interesting bug can occur in
+        R0 xor R2, Call(ChkIt);     ! which Y is busted in such a way that
+        R0 xor R4, Call(ChkIt);     ! because the Y field is both an
+        R0 xor R10, Call(ChkIt);    ! address and a constant
+        R0 xor R20, Call(ChkIt);    ! errors can go undetected
+        R0 xor R40, Call(ChkIt);    ! So we check that case here
+        R0 xor R100, Call(ChkIt);   ! Since CheckIt uses add
+        R0 xor R200, Call(ChkIt);   ! we are also verifing ALU and carries
+        R0 xor R377, Call(ChkIt);
+        R0 xor R376, Call(ChkIt);
+        R0 xor R375, Call(ChkIt);
+        R0 xor R373, Call(ChkIt);
+        R0 xor R367, Call(ChkIt);
+        R0 xor R357, Call(ChkIt);
+        R0 xor R337, Call(ChkIt);
+        R0 xor R277, Call(ChkIt);
+        StackReset;              ! Display 6 - Constants & Carry propogate works
+
+        R0 := 0;                    ! now check other alu functions
+        R1 := 177777;
+        R0 and R0;                  ! 0 and 0 = 0
+        R0 and R1, if Neq Goto(DeepEnd);        ! 0 and 1 = 0
+        R1 and R0, if Neq Goto(DeepEnd);        ! 1 and 0 = 0
+        R1 := R1 and R1, if Neq Goto(DeepEnd);  ! 1 and 1 = 1
+        R1 xor 177777;              ! check all bits are 1
+        R0 or R0, if Neq Goto(DeepEnd);         ! 0 or 0 = 0
+        R0 := R0 or R1, if Neq Goto(DeepEnd);   ! 0 or 1 = 1
+        R0 xor 177777;
+        R0 := 0, if Neq Goto(DeepEnd);          ! make R0 0 again
+        R1 := R1 or R0;             ! 1 or 0 = 1
+        R1 xor 177777;
+        R1 := R1 or R1, if Neq Goto(DeepEnd);   ! 1 or 1 = 1
+        R1 xor 177777;
+        R0 := R0 xnor R0, if Neq Goto(DeepEnd); ! 0 xnor 0 = 1
+        R0 := R0 xor 177777;
+        R0 xnor R1, if Neq Goto(DeepEnd);       ! 0 xnor 1 = 0
+        R1 xnor R0, if Neq Goto(DeepEnd);       ! 1 xnor 0 = 0
+        R1 := R1 xnor R1, if Neq Goto(DeepEnd); ! 1 xnor 1 = 1
+        R1 xor 177777;
+        R0 := not R0, if Neq Goto(DeepEnd);     ! not 0 = 1 (not a)
+        R0 := R0 xor 177777;
+        not R1, if Neq Goto(DeepEnd);           ! not 1 = 0 (not a)
+        R1 := not 0;                            ! not 0 = 1 (not b)
+        R1 xor 177777;
+        R0 := not R1, if Neq Goto(DeepEnd);     ! not 1 = 0 (not b)
+        if Neq Goto(DeepEnd);
+        R2 := 73567;                ! 0111 on all 4 bit boundaries
+        R0 := R0 + R0;              ! add 0 to 0 (= 0)
+        R0 := R0 + R2, if Neq Goto(DeepEnd);    ! 0 + 73567 = 73567
+        R0 := R0 xor 73567;
+        R2 := R2 + R0, if Neq Goto(DeepEnd);    ! 73567 + 0 = 73567
+        R2 xor 73567;
+        if Neq Goto(DeepEnd);
+        R4 := 104210;               ! 1000 on all 4 bit boundaries
+        R4 := R4 + 0;               ! 104210 + 0 = 0
+        R4 xor 104210;
+        R4 := R4 + R4, if Neq Goto(DeepEnd);    ! cause carries on all alu's
+        R4 xor 10420;               ! the right answer is
+        if Neq Goto(DeepEnd);
+        R4 := 104211;               ! same number plus 1
+        R2 + R4;                    ! 0111011101110111 + 1000100010001001
+        R4 + R2, if Neq Goto(DeepEnd);          ! is 0, either way you cut it
+        R0 := R0 - R2, if Neq Goto(DeepEnd);    ! 0 - 73567
+        R0 := R0 xor R4;            ! is 104211
+        R0 := R0 - R4, if Neq Goto(DeepEnd);    ! and 0 - 104211
+        R0 := R0 xor R2;            ! is 73567
+        if Neq Goto(DeepEnd);
+        1, StackReset;              ! Display 7 - Alu works
+        R1, if Gtr Goto(good4);     ! check all conditional branches we need
+DeepEnd: Goto(DeepEnd);             ! loop forever in the deeeep blue see
+
+
+ChkIt:  R0 := R0 + R0, if Neq Goto(DeepEnd);    ! This subroutine used above
+        Return;                     ! to check constants and alu plus/carry
+
+good4:  R1 + 1, if Gtr Goto(DeepEnd);           ! -1 is not greater
+        if Gtr Goto(DeepEnd);       ! -1 + 1 is 0 (not Gtr)
+        R10 := 77777;               ! largest postive number
+        R10 + 1;                    ! + 1 makes a negative number
+        R0 - 1, if Gtr Goto(good5); ! 0 - 1 is a negative number
+        Goto(DeepEnd);
+
+good5:  R0, if Gtr Goto(DeepEnd);   ! 0 is a GEQ number
+        R1, if Geq Goto(good6);     ! -1 is not geq
+        Goto(DeepEnd);
+
+good6:  R10, if Geq Goto(DeepEnd);  ! a large positive number is geq
+        R0, if Geq Goto(good7);     ! 0 is leq
+        Goto(DeepEnd);
+
+good7:  R1, if Leq Goto(good8);     ! -1 is leq
+        Goto(DeepEnd);
+
+good8:  R10, if Leq Goto(good9);    ! large positive is not leq
+        Goto(DeepEnd);
+
+good9:  R0, if Leq Goto(DeepEnd);   ! 0 is no carry
+!********** no worky Perqy *******   logical functions don't set carries 
+        R20 := not 0, if C19 Goto(good10);      ! calculate a 20 bit -1
+        Goto(DeepEnd); 
+
+good10: R20 + 1, if C19 Goto(good11);           ! -1 + 1 carries
+        Goto(DeepEnd);
+
+good11: R0 - 1, if C19 Goto(DeepEnd);           ! 0 - 1 carries
+        if C19 Goto(DeepEnd); 
+        StackReset;                 ! Display 8 - Conditional Branch works
+
+        R0 := 0, LoadS(5252);       ! Try LoadS and Repeat with a loop
+lp1:    R0 := R0 + 1, Repeat(lp1);  ! heres your loop
+        R0 xor 5253;                ! should have looped n+1 times
+        if Neq Goto(DeepEnd);
+        R0 := 2526;                 ! try it backwards
+        LoadS(2525);
+lp2:    R0 := R0 - 1, Repeat(lp2);
+        if Neq Goto(DeepEnd);       ! should be 0
+        StackReset;                 ! Display 9 - Looping works
+
+        not 0, LoadS(7777);         ! Load control store 7777 with a 
+        WcsLow, if True GotoS(t1Lo);! return instruction
+t1Lo:   not 5000;
+        not 0, WcsMid, if True GotoS(t1mid); 
+t1mid:  WcsHi, if True GotoS(t1hi);
+t1hi:   Repeat(t1rpt);              ! decrement address to 7776t
+t1rpt:  R1 := 3777;                 ! write 2k -1 locations
+t2lp:   if Eql Goto(t2end);         ! of R0 := R0 + 1, Next
+        not 313;
+        WcsLow, if True GotoS(t2lo);
+t2lo:   not 7200;
+        not 1, WcsMid, if True GotoS(t2mid);
+t2mid:  WcsHi, if True GotoS(t2hi);
+t2hi:   R1 := R1 - 1, Repeat(t2lp); ! count your words
+t2end:  R0 := 0, Call(4000);        ! call the code just loaded
+        R0 xor 3777;                ! should count 2k - 1 times
+        if Neq Goto(DeepEnd);
+        StackReset;                 ! Display 10 - Control Store works
+
+
+! fall in to the boot code 
+
+
+!Perq Boot Loader
+!Brian Rosen with John Strait
+!Copyright (C) 1980   Three Rivers Computer Corporation
+!
+! Will Boot from 1 of 3 sources
+!       1 - If Link Cable is plugged in, will boot from link
+!       2 - If Cable is not in, will try to boot from Floppy
+!       3 - If that fails, will try to boot from Hard Disk
+!       4 - if that fails, will loop forever
+!
+!
+!
+constant(IntVec,700);  !Interrupt vector location
+!
+!    B O O T   f r o m   L I N K
+!
+!Assumes PDP-11 Link on other end
+!Protocol:  PDP-11 Sends a 12345 as a flag, when Perq sees it, it
+!           starts receiving 3 word data items to be loaded into
+!           the control store.  256 (decimal) words are loaded
+!           at location 7400 in the ram, with last word written
+!           first (ie 7777 first, 7776 next,...,7400 last)
+!           Data is sent low word 1st, then mid, then hi
+!           When all 256 MI are loaded, Boot jumps to 7400
+constant(ReadCsr,40);  !Complement of 40, the read csr address
+constant(WriteCsr,241); !Write csr, with z7 set for write
+constant(ReadData,42);
+constant(WriteData,243);
+constant(XmitDone,10);  !These define the bits in the csr
+constant(Flag,4);       !They are mainly for reference
+constant(RcsrToBus,1);  !Since the microassembler won't allow
+constant(XbufCyc,2);    !expressions where a constant is expected
+define(count,1);  !The number of microinstructions to load
+define(data,2);   !the guy who has the data to be written
+Begin:  IOB(ReadCsr);
+        IOD AND Flag;                     !Check Flag to see if Link is present
+        IF NEQ GoTo(DiskStart);
+Start:  Count := 377; !Number of micro instructions to load -1
+        LoadS(7777), Count := Count + 1;  !Load R Counter with 1st addr to load
+        5,IOB(WriteCsr); !XmitDone:=1, Flag:=0, RcsrToBus:=1, XbufCyc:=0
+WaitHeader: Call(AwaitData);              !Look for header word
+        Data xor 12345;                   !check to see if it is right
+        IF Neq GoTo(WaitHeader);
+MainLoop: Call(AwaitData);                !Returns with Data in UW
+        Data;
+        WCSlow, if true GoToS(DatMid); !Write Control Store using R as the addr
+DatMid: Call(AwaitData);
+        Data;
+        WCSmid, if true GoToS(DatHi);
+DatHi:  Call(AwaitData);
+        Data;
+        WCShi, if true GoToS(DecAdr);
+DecAdr: Repeat(DoLoop), Count := Count - 1;
+DoLoop: IF Neq GoTo(MainLoop);
+        GoTo(7400);                       !Jump to the code just loaded
+AwaitData: IOB(ReadCsr);                  !Wait for a word to come from PDP-11
+        IOD AND XbufCyc;             !Check for him to load his transmit buffer
+        IF Eql GoTo(AwaitData);           !Keep looping until he does
+        15, IOB(WriteCsr);                !Clear XmitDone
+        IOB(ReadData);                    !Get the data
+        Data := IOD;
+        5, IOB(WriteCsr), Return;         !Set Xmit Done
+!
+!
+!       B O O T  f r o m  D I S K
+!
+!
+!
+!Use the Floppy or Hard Disk to Read Microcode
+!Step the head to track 0, and read 2k of microcode
+!2048 microwords of 48 bits each (3 - 16 bit words) is 6144 words
+!at 256 words/sector 6144 div 256 is 24 sectors
+!
+!   Display Error Codes
+!     10 - Hung in Disk Boot
+!     11 - Memory Data Error
+!     12 - Memory Address Error
+!     13 - Disk Didn't come ready
+!     14 - Couln't boot from either disks
+!     15 thru 21 - Bad Interrupts Reading Floppy Disk Data
+!     29 - Finished Disk Code
+!
+define(c400,4);
+define(c1777,1);
+define(TryCnt,10);
+define(Dir,20);
+define(ByteCnt,20);   !Note Same register as Dir
+define(Head,40);
+define(Bite,40);      !Note Same register as Head
+define(tmp,100);
+define(Sec,200);
+define(CylHd,357);    !Should be 377, set to 357 for testing
+define(MemAdr,307);
+define(CkSum,350);    !Should be 370, set to 350 for testing
+define(Dly,252);
+!  Count In Diagnostic Display Register when this routine is called
+constant(DskDDSstart,10#10);
+!  Count In Diagnostic Display Register when this routine finishes
+constant(DskDDSend,10#29);
+!    Difference ->  DDSend - DDSstart
+constant(DskDDSdif,10#19);
+constant(dstat,100);   !disk status register IOB address
+constant(dseek,301);   !disk command register IOB address
+constant(dhead,302);   !disk head register IOB address
+constant(CylSec,310);  !disk Cylinder/Sector IOB address
+constant(FileL,311);   !disk low File Serial Number IOB address
+constant(FileH,312);   !disk hi File Serial Number IOB address 
+constant(Block,313);   !disk Logical Block Number IOB address
+constant(CWadrL,331);  !disk Header address low IOB address
+constant(CWadrH,321);  !disk Header address hi IOB address
+constant(DatAdrL,330); !disk Data Buffer address low IOB address
+constant(DatAdrH,320); !disk Data Buffer address low IOB address
+constant(DirOut,0);    !move disk heads out towards track 0
+constant(DirIn,10);    !move disk heads in towards track 201
+DiskStart:
+        TryCnt := 50, CntlRasterOp(0);  !wait 50 mem tests for disk ready
+                                        !turn RasterOp off
+        100, store;                     !get memory state cleared
+        iob(106);                       !read any latent Z80 data
+        tmp := 6000;                    !Must turn off video
+        100, fetch;
+        tmp, IOB(341);                  !Initialize video addresses
+        tmp, IOB(341);
+        tmp, IOB(343);                  !Shut off video interrupts
+!
+!Try to read the Floppy
+!
+DoFloppy: MemAdr:=0, IOB(dseek);        !Turn Z80 on
+        ByteCnt := 0, Call(WaitAWhile); !Let it start up
+        153, IOB(307);                  !Start of message
+        Call(WaitAWhile);
+        015, IOB(307);                  !FloppyBoot
+        Call(WaitAWhile);
+        000, IOB(307);                  !Kick the Z80 state machine.
+        
+MoreBytes: ByteCnt := ByteCnt - 2;      !Count bytes in this block
+        tmp := 100, if gtr goto(RdFlop);!More to do, otherwise, new block
+        
+FindHdr:Call(RecZ80Byte);               !Get a Z80 byte
+        tmp := tmp - 1;                 !Count Chars
+        Bite xor 125, if leq goto(IsDskRdy);   !Was it Start of message?
+        if neq goto(FindHdr);           !Try some more
+GotHdr: Call(RecZ80Byte);
+        Bite xor 23;                      !Good Boot Data?
+        CkSum := 0, if neq goto(IsDskRdy);
+        Call(RecZ80Byte);               !Get Byte Count
+        ByteCnt := Bite, LoadS(7);
+RdFlop: Call(RecZ80Byte);               !Get a Data Word
+        Data := Bite, Call(RecZ80Byte); !Save low byte, get high Byte
+ShftByt:Bite := Bite + Bite, Repeat(ShftByt); !Put bite in high Byte
+        MemAdr, Store;
+        Data + Bite, LoadS(7);
+        MemAdr xor 13777;                 !Check Expiration of data
+        MemAdr := MemAdr + 1, if neq goto(MoreBytes);
+        Data := 0, call(Copy);
+        if eql GoTo(StartIt);           !If sucessfull, go execute it
+!
+!Floppy didn't work, try the rigid disk
+!
+IsDskRdy: iob(dstat);  !Read status register
+        iod and 200, ThreeWayBranch(PopStk);  !pop call stack
+PopStk: TryCnt := TryCnt - 1, if neq goto(GoManGo);
+        r1 := 0, if eql GoTo(NoDskSpinUp);
+wloop:  r1 := r1 - 1, store;
+        r1;
+        r1, fetch;
+        mdi - r1;
+        tmp := 1, if neq goto(Busted);  !Code 11, Memory Error
+        r1 - 1;
+        if c19 goto(doread);
+        goto(wloop);
+doread: r1 := 0;
+rloop:  r1 := r1 - 1, fetch;
+        mdi - r1;
+        tmp := 2, if neq goto(Busted);  !Code 12, Memory Address Error
+        r1 - 1;
+        if c19 goto(IsDskRdy);
+        goto(rloop);
+
+NoDskSpinUp: tmp := 3, GoTo(Busted);    !Code 13,  Disk Error
+        
+GoManGo:C400 := 400;                    !A constant used many times
+        C1777 := 1777;
+        TryCnt := C400, LoadS(10);      !Give the disk 400 steps to get to trk 0
+Jog:    Dir := DirIn, Call(Seek);       !Shove the heads out a ways
+        Head := 0, repeat(Jog);         !Move out 10 tracks, initialize head
+Restore:tmp := 20;                      !in WaitABit, the TrackZero bit
+        Dir := DirOut, Call(Seek);      !Go back one step
+        TryCnt := TryCnt - 1, if neq goto(StartRead); !Keep trying
+        Data := 0, if gtr goto(Restore);
+!
+!Read the disk into memory
+!
+StartRead: CylHd := 0, Call(DoDiskRead);!First try Cylinder 0, head 0
+        If Eql GoTo(StartIt);           !You Made it
+        Dir := DirIn, Call(seek);       !Try next cylinder, next head
+        CylHd := 440;                   !One track out, head one
+        Head := 1, Call(DoDiskRead);    !Try it here
+        tmp := 4, if eql GoTo(StartIt); !Made it on alternate track
+                                        !Code 14, Couldn't Read Disk
+Busted: Call(SetDisplay);
+Sleep:  GoTo(Sleep);                    !Loop forever
+SetDisplay: StackReset, Call(WaitAWhile);
+        tmp := tmp - 1;
+        if neq goto(SetDisplay);
+        return;
+!
+!Looks Good, try to execute the code you loaded
+!
+StartIt: tmp := dskDDSdif, Call(SetDisplay);  ! Read Disk OK
+        GoTo(4000);
+!
+!Try to read 24 sectors into memory from 0 to 13777
+!
+DoDiskRead: Sec := 27;                  !Read 24 (Decimal) sectors, load into
+        MemAdr := 13400;                !Do last sector first
+        CkSum := 0;                     !Initialize the Checksum
+DoAnother: TryCnt := 170, Call(DoOneSec); !Give it 10 trys per sector
+        Sec := Sec - 1;                 !Count your sectors
+        MemAdr := MemAdr - C400, if geq GoTo(DoAnother); !Do another sector
+!
+!Data is now loaded into memory, copy it into the microstore
+!
+Copy:   MemAdr := 14000;                !Starting at the high end of the data
+        LoadS(7777);                    !Load into top 2k of microstore
+wd0:    Cksum := Cksum + Data, Call(NextData);  !Write high word 1st
+        WCShi,  if true GotoS(wd1);
+wd1:    Cksum := Cksum + Data, Call(NextData);  !Always accumulating checksum
+        WCSmid, if true GoToS(wd2);
+wd2:    Cksum := Cksum + Data, Call(NextData);
+        WCSlow, if true GoToS(wd3);
+wd3:    MemAdr, Repeat(wd4);            !Decrement Address, check Address
+wd4:    if gtr goto(wd0);               !if >0 more to do
+        Cksum + Data, return;           !otherwise, add final word to Cksum
+
+NextData: MemAdr := MemAdr - 1, Fetch;  !Decr address and get that word
+        Data := MDI, Return;            !Data goes on R
+
+!
+!Read one sector from the hard disk into memory
+!
+DoOneSec:CylHd or Sec, IOB(CylSec);     !Physical header data
+        head, IOB(dhead);               !Head number
+        not 0, IOB(FileL);              !Files 1 and 2 for heads 0 and 1
+        not 0, IOB(FileH);
+        Sec, IOB(Block);                !Sector Number
+        0, IOB(CWAdrL);    
+        not 1, IOB(CWAdrH);             !Stash label in high memory
+        MemAdr xnor C1777, IOB(DatAdrL);
+        not 0, IOB(DatAdrH);            !Stash data in low memory
+        1, IOB(dseek);                  !Read it baby
+WtBzy:  IOB(dstat);                     !Wait for busy
+        r0 := IOD and 7;
+        r0 xor 7;                       !Disk status code 7 is busy
+        if neq goto(WtBzy);
+        dly := 177777;
+WtDone: nop;
+        nop;
+        nop;
+        IOB(dstat);                     !Check doneness
+        r0 := IOD and 7;                !Check status bits
+        dly := dly - 1, if eql goto(IsDone);!status code 0 is done, Keep trying
+        if neq goto(WtDone);            !Until you find it
+        47, IOB(dseek);                 !If you dont, Reset the disk
+        Call(WaitAWhile);               !Let that work
+        TryCnt := TryCnt + 1;
+        if ByteSign return;             !Try it again
+        GoTo(DoOneSec);                 !I give up
+IsDone: 0, IOB(dseek), return;          !Clear disk and done
+!
+!Seek the disk One track in dir direction
+!
+Seek:   dir or 27, iob(dseek);          !Set the step bit + dir bit + reset
+        dly := C1777, Call(wtwl1);      !Make a pulse
+        dir, iob(dseek);                !Clear the step bit
+                                        ! Assumes Seek Complete Happens
+!
+!Wait for a bit to come up
+!
+WaitABit: Call(WaitAWhile);             !Wait some time
+        iob(dstat);                     !Get the disk status
+        r0 := iod;
+        r0 and tmp, return;             !Test the bit and return
+!
+!Wait long enough for a sector to transfer, a head to settle, etc
+!
+WaitAWhile: dly := 177777;
+wtwl1:  if eql return;
+        dly := dly - 1, goto(wtwl1);
+!
+!Get A Byte from Z80
+!
+RecZ80Byte: r1:=177777;
+waitbyte: if intrpend Vector(Z80Int);   !Allow interrupts
+        dly := 100, call(wtwl1);
+        r1 := r1 - 1;                   !Dont wait too long
+        if neq goto(waitbyte);          ! give up eventually
+        goto(IsDskRdy);                 !Z80 isn't saying anything
+!
+!Allow only Z80 Interrupts to do anything
+!  Note that the instruction at waitbyte is a Vector
+!    -> we can return from RecZ80Byte from Z80Int
+Z80Int: iob(106), loc(700);             !Here on Z80 Read Interrupt
+        Bite := iod and 377, return;    !pick up byte and return
+BadInt1: tmp := 5, goto(busted), loc(704);  !Bad Interrupt Codes
+BadInt2: tmp := 6, goto(busted), loc(710);  ! 15 thru 23.
+BadInt3: tmp := 7, goto(busted), loc(714);
+BadInt4: tmp := 10, goto(busted), loc(720);
+BadInt5: tmp := 11, goto(busted), loc(724);
+BadInt6: tmp := 12, goto(busted), loc(730);
+BadInt7: tmp := 13, goto(busted), loc(734);
+END;

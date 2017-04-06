@@ -1,0 +1,209 @@
+
+Comprehensive list of PERQ IO ports
+Last updated: 10-Nov-2016
+
+------
+
+000:177     00:7F   read
+200:377     80:FF   write
+
+------
+
+Memory board (all?)
+
+iob address
+oct     hex     name            function                            source
+145     65      VideoStatus     read video status register          *allsysb, *canon, eioz80
+146     66      --              read bad parity address?            memadd (diagnostic)
+147     67      --              dismiss memory parity interrupt     *allsysb, kernelinit
+340     E0/60   LineCount       load line count register            iovideo
+341     E1/61   ScreenAddr      load screen bitmap address          iovideo
+342     E2/62   CursorAddr      load cursor bitmap address          iovideo
+343     E3/63   VideoState      load next video state register      iovideo, *allsysb
+344     E4/64   CursorX         load cursor x position              iovideo
+
+------
+
+Perq-1 IO board (iob), or early Perq-2? (cio)
+
+iob address
+oct     hex     name            function                            source
+100     40      DskStat         (Dstat) disk status register        [oc]ioallsysb, ciodisk
+106     46      CioZ80In        read Z80 input                      [oc]ioallsysb, [oc]ioz80, iopas.dfs
+301     C1/41   CioZ80Start     (Dseek, dskCntl) Z80 control        [oc]ioallsysb, [oc]ioz80, ciodisk, iopas.dfs
+302     C2/42   Dhead           (dskHead) shugart head register     [oc]ioallsysb, ciodisk
+307     C7/47   CioZ80Out       load Z80 output                     [oc]ioallsysb, [oc]ioz80, iopas.dfs
+310     C8/48   CylSec          (dskCylSec) shugart cyl/sec reg     [oc]ioallsysb, ciodisk
+311     C9/49   FileL           (dskFSNlo) file sernum low bits     [oc]ioallsysb, ciodisk, boot
+312     CA/4A   FileH           (dskFSNhi) file sernum hi bits      [oc]ioallsysb, ciodisk, boot
+313     CB/4B   Block           (dskLBN) shugart block #            boot, dtst, io, ciodisk
+314     CC/4C   MicSecNo*       disk sector #? cio only?            ciossysb?
+320     D0/50   DatAdrH         shugart data buffer addr hi         [oc]ioallsysb
+321     D1/51   CWAdrH          shugart header buffer addr hi       [oc]ioallsysb
+324     D4/54   DMAhi           load buffer addr high 4 bits        canon
+325     D5/55   HDRhi           load header addr high 4 bits        canon
+330     D8/58   DatAdrL         shugart data buffer addr low        [oc]ioallsysb
+331     D9/59   CWAdrL          shugart header buffer addr low      [oc]ioallsysb
+334     DC/5C   DMAlo           load buffer addr low 16 bits        canon
+335     DD/5D   HDRlo           load header addr low 16 bits        canon
+
+* Evidence that the "CIO" diverged slightly from the original IOB: in "ciosys" (diagnostic -- or the
+ICL version of SysB?) implies the new Z80 protocol, and at least one extra register for the Micropolis 8"
+drive that wasn't used on the original.  MicZero, MicSync, MicCylin, MicHead and MicSecNo (310:314) replace
+CylSec, FileL/H, and Block (310:313).  Hmm.  NibBus renames Dhead, too.
+
+------
+
+Perq-2 Ethernet (eio) or non-Ethernet (nio) IO board
+
+iob address
+oct     hex     name            function                            source
+120     50      FPSat           read floating point status          fptest (diagnostic)
+121     51      FPResult        read floating point result          fptest (diagnostic)
+122     52      E10ERdNetSR     read net status register            ioe10
+123     53      dskStat         (SMStat) read disk status reg       eio{5}allsysb, eio{5}disk
+124     54      EioZ80In        dismiss Z80 interrupt               eio{5}allsysb, eioz80, iopas.dfs
+125     55      EioZ80Stat      read Z80 interface status           eioz80, iopas.dfs
+132     5A      E10ERdBCLow     read bit count low byte             ioe10
+133     5B      E10ERdBCHgh     read bit count high byte            ioe10
+234     9C/5C   AdrReg*         enable state machine addr reg       eioech (diagnostic)
+235     9D/5D   WrtRam*         load ethernet test mumble?          eioech (diagnostic)
+247     A7/67   DMATest         load DMA test register              dmabte (diagnostic)
+300     C0/40   ChanSel         (E10EwrDMAChn) DMA Ch# Selector     eio{5}allsysb, eioz80, eiodisk, ioe10, canon etc
+301     C1/41   FPInst          load floating point data            fptest (diagnostic)
+302     C2/42   E10EWrNetCR     load net control register           ioe10
+303     C3/43   E10EWrIntEnb    load net interrupt enable reg       ioe10
+304     C4/44   EioZ80Out       PERQ->Z80 send byte                 eio{5}allsysb, eioz80
+305     C5/45   EioZ80Ctrl      Z80 control                         eio{5}allsysb, eioz80, fptest
+310     C8/48   E10EWrNA0       load net addr low word byte 6       ioe10
+311     C9/49   E10EWrNA1       load net addr low word byte 5       ioe10
+312     CA/4A   E10EWrMCCmd     load multicast command byte         ioe10
+313     CB/4B   E10EWrMC0       load multcast reg grp 0             ioe10
+314     CC/4C   E10EWrMC1       load multcast reg grp 1             ioe10
+315     CD/4D   E10EWrMC2       load multcast reg grp 2             ioe10
+316     CE/4E   E10EWrMC3       load multcast reg grp 3             ioe10
+317     CF/4F   E10EWrMC4       load multcast reg grp 4             ioe10
+320     D0/50   ConstPtr        constant register selector          eio{5}allsysb, eio{5}disk
+321     D1/51   RamFile         constreg load and incr selector     eio{5}allsysb, eio{5}disk
+322     D2/52   SmCtl           state machine control register      eio{5}allsysb, eio{5}disk
+323     D3/53   dskCtl          disk control register               eio{5}allsysb, eio{5}disk
+324     D4/54   DmaDbLo         (E10EWrBufLo) load buf addr lo      eio{5}allsysb, eio{5}disk, eioz80, ioe10, canon
+325     D5/55   DmaDbHi         (E10EWrBufHi) load buf addr hi      eio{5}allsysb, eio{5}disk, eioz80, ioe10, canon
+326     D6/56   DmaLhLo         (E10EWrHdrLo) load hdr addr lo      eio{5}allsysb, eio{5}disk, eioz80, ioe10, canon
+327     D7/57   DmaLhHi         (E10EWrHdrHi) load hdr addr hi      eio{5}allsysb, eio{5}disk, eioz80, ioe10, canon
+330     D8/58   E10OWrBCCR      load bit count control reg          ioe10
+331     D9/59   E10OWrBCHgh     load bit count high byte            ioe10
+332     DA/5A   E10OWrBCLow     load bit count low byte             ioe10
+334     DC/5C   E10EWrUSCR      load usec clock control             ioe10
+335     DD/5D   E10EWrUSHgh     load usec clock high byte           ioe10
+336     DE/5E   E10EWrUSLow     load usec clock low byte            ioe10
+346     E6/66   *               "put ones on the iob"               diagnostics
+
+* unnamed diagnostic function? several files use iob(346) to "put ones on the iob" for testing; others seem to
+allow poking directly at the ethernet state machine and/or scratchpad ram?
+
+------
+
+Option IO board (Canon, Ethernet, EthCan, or EthCanTape)
+
+iob address
+oct     hex     name            function                            source
+006     06      E10ORdBCLow     read bit count low byte             ioe10
+007     07      E10ORdBCHgh     read bit count high byte            ioe10
+010     08      IntStat         4-bit interrupt status              Canon.MicroMac
+011     09      MechStat        16-bit mechanical status            Canon.MicroMac
+015     0D      StrStat         read streamer state                 tsio
+016     0E      StrDataRcv      read streamer data                  tsio
+017     0F      E10ORdNetCR     read net control register           ioe10
+040     20      ReadCSR         read link control status reg        (diagnostic)
+042     22      ReadData        read link data                      (diagnostic)
+045     25      RdLnkReg        read link prom register             (diagnostic)
+204     84/04   LineCount*      load canon lines-per-band reg       Canon.MicroMac
+204     84/04   StrDataSnd*     load stremaer data                  tsio
+205     85/05   CanonCntl       5-bit canon control port            Canon.MicroMac
+206     86/06   StrControl      load streamer control               tsio
+210     88/08   E10OWrUSCR      load usec clock control             ioe10
+211     89/09   E10OWrUSHgh     load usec clock high byte           ioe10
+212     8A/0A   E10OWrUSLow     load usec clock low byte            ioe10
+214     8C/0C   E10OWrBCCR      load bit count control reg          ioe10
+215     8D/0D   E10OWrBCHgh     load bit count high byte            ioe10
+216     8E/0E   E10OWrBCLow     load bit count low byte             ioe10
+220     90/10   E10OWrNetAddr   load net addr low word reg          ioe10
+221     91/11   E10OWrMC1       load multcast reg grp 1             ioe10
+222     92/12   E10OWrMC2       load multcast reg grp 3             ioe10
+223     93/13   E10OWrMC3       load multcast reg grp 5             ioe10
+224     94/14   MargnCntl       page margin control port            Canon.MicroMac
+225     95/15   LeftMar         blank words (left margin reg)       Canon.MicroMac
+226     96/16   RightMar        line length (right margin reg)      Canon.MicroMac
+231     99/19   E10OWrNetCR     load net control register           ioe10
+241     A1/21   WriteCSR        load link control register          (diagnostic)
+243     A3/23   WriteData       load link data                      (diagnostic)
+244     A4/24   WrLnkReg        load link register
+246     A6/26   WtDummy         load test value??
+326     D6/56   E10OWrBufHi     load buffer addr high 4 bits        ioe10
+327     D7/57   E10OWrHdrHi     load header addr high 4 bits        ioe10
+336     DE/5E   E10OWrBufLo     load buffer addr low 16 bits        ioe10
+337     DF/5F   E10OWrHdrLo     load header addr low 16 bits        ioe10
+377     FF/7F   --              dummy write?                        SIDCX, SIDCANON
+ 
+Canon microcode supported every flavor of IOB/CIO/EIO/NIO, built (using PasMac) for each CPU type
+and IO board combination.  Uses DMA setup regs 300,324:327 (new) or 324:325,334:335 (old).
+
+Accent doesn't support the streaming qic tape at all?  No mention of it anywhere!?  Only MLO tape?
+But POS G sources Josh included make no mention either.  Hmm.  Found 'em in the F.0 STUT sources.
+
+* Note overlap with the Canon LineCount register -- can't print while the tape is streaming, or vice
+versa.  Microcode would need some kind of interlock, like the E3/disk thing.  Sigh.
+
+------
+
+3mbit Ethernet board
+
+iob address
+oct     hex     name            function                            source
+160     70      ioClock         read clock?                         iopas.dfs
+171     79      E3RdRecWdCnt    read recv word count register       ioe3
+173     7B      E3RdCSR         read network ctrl status reg        ioe3
+175     7D      E3RdXmtWdCnt    read xmit word count register       ioe3
+177     7F      E3RdNetAddr     read network address bits           ioe3
+326     D6/56   E3WrBuffHi      load buffer addr hi 4 bits          ioe3
+327     D7/57   E3WrHdrHi       load header addr hi 4 bits          ioe3
+336     DE/5E   E3WrBuffLo      load buffer addr lo 16 bits         ioe3
+337     DF/5F   E3WrHdrLo       load header addr lo 16 bits         ioe3
+370     F8/78   E3WrRecWdCnt    load recv word count register       ioe3
+372     FA/7A   E3WrCSR         load network ctrl status reg        ioe3
+374     FC/7C   E3WrXmtWdCnt    load xmit word count register       ioe3
+376     FE/7E   E3WrDly         load start delay register           ioe3
+
+
+------
+
+Multibus (mlo) board
+
+iob address
+oct     hex     name            function                            source
+012     0A      Stat            read status register                mbus
+013     0B      Rdata           read data                           mbus
+014     0C      dskstat*        read SMD disk status??              ndt (diagnostic)
+200     80/00   Cntl            multibus control register           mbus
+201     81/01   Wdata           load data                           mbus
+202     82/02   Haddr           high 8-bit address register         mbus
+203     83/03   Laddr           low 16-bit address register         mbus
+206     86/06   MbIntMask       interrupt mask register             mbus
+207     87/07   DMABase         load dma address register           mbus
+230     98/18   smctl*          load SMD state control?             ndt (diagnostic)
+233     9B/1B   dskctl*         load SMD disk control?              ndt (diagnostic)
+
+Multibus microcode only supported the EIO; uses DMA setup registers 300, 324:327.
+*Not clear if these registers are on the MLO board, or if 3RCC had an SMD controller on the EIO!?!?
+
+------
+
+IOB(0) is a weird special case: it only explicitly occurs in multibus/tape/micro/iorwregs.micro.
+Accent literally modifies the microinstruction to read or write any IO register (part of the
+kernel debugger).  So this is likely just a stand-in so the microassembler won't flag an error.
+(The modified instruction sets the Z field the register to be read/written; the same trick is used
+to modify the X/Y fields to read and write registers in the debugger.  Wild.  Does PERQemu handle
+this correctly?  Do we invalidate the microinstruction cache when a WCSHi/Mid/Low instruction is
+executed?)
+

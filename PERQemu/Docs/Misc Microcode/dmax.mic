@@ -1,0 +1,769 @@
+!   DmaTest.Micro
+!
+$Title     ~~~~~~~~~~~ EIO DMA Test ~~~~~~~~~~~~
+!
+$perq1a
+$Nobase
+!
+!=========================== VERSION CONTROL ==============================
+         Define(MajorVersion, 1);  ! ### KEEP THESE VERSIONS UP TO DATE ###
+         Define(MinorVersion, 2);  !
+Version: MajorVersion - MinorVersion, Loc(7777); ! This is Read by ODTprq
+!==========================================================================
+!
+!  08 Mar 85  V1.2  REH          Added Version Control and Complete ReWrite
+!                                For All Addresses and 20/24 Bit EIO
+!
+!  24 Sep 84  V1.1  R. Huber     Added HighBits Register to allow
+!                                The High Order Dma Bits to be tested
+!
+!  14 Oct 82  V1.0  Steve Clark  Program Written
+!
+! Test program for Perq-DMA on EIO board.  Requires a link card with
+! DMA test modifications.
+! Only tests DMA on EXT A channel. Also only Data bits 0-4 Valid.
+!
+!
+!--------------------------------------------------------------------------
+! Program Entry Points:
+!     0 - Enter here for One Pass of Full Test. (Not Implemented Yet)
+!     2 - Enter Here for Quick Test. This test doesn't Check all memory
+!           for extra bits. One pass only.
+!
+!     1 - Enter here for Multiple passes of Full Test STOP On Error
+!            (R1 contains the number of times the test passed.)
+!     3 - Enter here for Multiple Passes of quick test. More DMA action
+!           on this test because of skipping memory tests STOP On Error
+!
+!     4 - Enter here for Multiple passes of Full Test CONTINUE Past Errors
+!            (R1 contains the number of times the test passed.)
+!     5 - Enter here for Multiple Passes of quick test. More DMA action
+!           on this test because of skipping memory tests CONTINUE Past Errors
+!
+!   100 - Enter Her with DirtyMem(R0) Set to Address to Start Scan for
+!         Memory other than 0
+!   110 - Enter Here to Start at Address 0 And Look for Memory that is
+!           Non-Zero and Ignoring Read And write Headers and Data.
+!   120 - Enter here after setting up DMA Data and headers and counts and
+!           WriteOffset and will enter a High Speed Loop for Scopes Only.
+!           This Loops at Only the one address set up previously.
+!   130 - Extra Hi-Speed Loop at full DMA speed over ALL Addresses. All
+!           DINCO's should be humming.
+!--------------------------------------------------------------------------
+! Program BreakPoints:
+!   100 - All DMA tests Passed
+!   101 - Wrong DMAHeader Data
+!   102 - Wrong DMAdata Data
+!   103 - Wrong DMAdata Data and Headers
+!   104 - Good DMA but extra Bits in Memory Starting at Address "R0"
+!   105 - Bad Header Data and extra Bits in Memory Starting at Address "R0"
+!   106 - Bad DMAdata Data and extra Bits in Memory Starting at Address "R0"
+!   107 - Bad DMAData & Header and extra Bits in Memory at Address "R0"
+!   200 - Memory from ReadSize was less Than 1 Megabyte
+!--------------------------------------------------------------------------
+!IO addresses
+    
+    constant (DMAChan, 300);      !DMA channel register
+    constant (DMADLA , 324);      !DMA low data address
+    constant (DMADHA , 325);      !DMA high data address
+    constant (DMAHLA , 326);      !DMA low header address
+    constant (DMAHHA , 327);      !DMA high header address and count
+    constant (DMATest, 247);      !DMA test register
+
+!Other constants
+
+    constant (Bits,     37);       !DMA tester only looks at bottom 5 bits
+    constant (ExtChanA,  4);       !EXT A channel number
+!
+!Registers
+
+    Define (DirtyMem     , 0); 
+    Define (Passes       , 1);
+    Define (RFail        , 2);
+    Define (Option     , 3); 
+
+    Define (ReadData     , 4);     ! 20/24 Bit Address of Read Data
+    Define (ReadHeader   , 5);     ! 20/24 Bit Address of Read Header
+    Define (WriteData    , 6);     ! 20/24 Bit Address of Write Data  
+    Define (WriteHeader  , 7);     ! 20/24 Bit Address of Write Header
+
+    Define (WrHeadCnt    , 11);
+    Define (WriteOffset  , 12);
+    Define (RdHeadCnt    , 13);
+ 
+    define (tmp          , 14);
+    define (tmp1         , 15);
+    
+    Define (Loops        , 17);
+        
+    Define (Save0,         21);
+    Define (MAddr,         22);
+    Define (HiAddrLines,   23);    ! For Size Memory Routines
+    
+    Define(Count   ,  24);
+    Define(Data    ,  25);
+    Define(Addr    ,  26);
+    
+    Define (Full24,        30);    ! for 24bit Conversions
+    Define (LoBits,        31);
+    Define (HiBits,        32);
+
+
+    Define(Header00, 100);         ! FIFO is 16 Words Deep So we need to
+    Define(Header01, 101);         ! allow 16 registers to save DMA Mem into.
+    Define(Header02, 102);         ! When headerCnt is 4 all 16 Header regs
+    Define(Header03, 103);         ! will be used.
+    Define(Header04, 104);
+    Define(Header05, 105);
+    Define(Header06, 106);
+    Define(Header07, 107);
+    Define(Header10, 110);
+    Define(Header11, 111);
+    Define(Header12, 112);
+    Define(Header13, 113);
+    Define(Header14, 114);
+    Define(Header15, 115);
+    Define(Header16, 116);
+    Define(Header17, 117);
+   
+    Define(Data00, 140);        ! These are the 16 data registers.
+    Define(Data01, 141);        ! When HEaderCnt is 0 all 16 are used.
+    Define(Data02, 142);        ! Remember all DMA is Quad Word Based
+    Define(Data03, 143);
+    Define(Data04, 144);
+    Define(Data05, 145);
+    Define(Data06, 146);
+    Define(Data07, 147);
+    Define(Data10, 150);
+    Define(Data11, 151);
+    Define(Data12, 152);
+    Define(Data13, 153);
+    Define(Data14, 154);
+    Define(Data15, 155);
+    Define(Data16, 156);
+    Define(Data17, 157);
+   
+    define (Dpytmp,200);
+    define (Dpycnt,201);
+    define (R370, 370);         ! BreakPoint Register for ODTprq
+    Define (R371, 371);         ! Screen Address Register for ODTprq
+
+!    
+!Test routine
+                Option := 0, Goto(InitTest) , loc(0);
+                Option := 1, Goto(InitTest) , loc(1);
+                Option := 2, Goto(InitTest) , loc(2);
+                Option := 3, Goto(InitTest) , loc(3);
+                Option := 4, Goto(InitTest) , loc(4);
+                Option := 5, Goto(InitTest) , loc(5);
+InitTest:       Passes := 0;                
+                R371 := 0;
+                Call(ClearRegs);
+                Call(ReadSize);               ! Read The Size Of Memory
+                HiAddrLines - 3;              ! Check that MA 16,17,18 exist
+                RFail := 100, If Lss Goto(Fail); ! Must be 1 Meg or Greater
+DMATest1:       Nop, Loc(10);               ! clear memory
+                ReadData    :=  0, Loc(11);   ! set up DMA Addresses
+                ReadHeader  := 10;            !
+                WriteData   := 20;            ! Start at 20 So Skip Read Data
+                WriteHeader := 40;            !
+                RdHeadCnt   :=  0;            ! Set up Header Quad Count
+                WrHeadCnt   :=  0;            !
+                WriteOffset :=  0;            ! Start with No Boundary Offset
+                                 
+                RFail := 0,Call(ClearAll), Loc(20);
+                Loops := HiAddrLines, Loc(21);! Use Your Own Values Here
+                Loops := Loops + 10#12;       ! Set Up For Valid MA Lines
+                call(FillDMAmem), Loc(23);    ! Load Pattern at DMA RdMem
+Loop1:          Call(ClearRegs);              ! Clear Out The Result Registers
+                Call(DoDMA);                  ! Do The DMA
+                Call(CheckDMAmem);            ! Check DMA Data at DMA WrMem
+                Option And 2;                 ! See if We want to Scan All Mem
+                If Eql Call(CheckRestMem);    ! Check For Extra Bits in Memory
+                RFail;                        ! This Will be Set if Error
+                If Neq Goto(Error);
+                Loops := Loops - 1;           ! How Many More Loops
+                Option And 2, If Eql Goto(Test1Done);
+                If Eql Call(ClearDMAmem);     ! Clear out Last Dma to Mem
+                WriteData := WriteData + WriteData;
+                WriteHeader := WriteData;
+                WriteHeader := WriteHeader + 20; ! Header is Above Data
+                Goto(Loop1);
+                
+Test1Done:      Option And 1;
+                if eql goto(Brk);
+                Passes := Passes + 1;
+                goto(DMATest1);
+
+Error:          Goto(Fail);
+
+!
+        ! Routine to do The Actual DMA, Have DMA Address and Count Registers
+        ! Set Up Before Calling this Routine.
+
+DoDMA:          call(SetR);                   ! set up DMA Data and headers
+                Pushload(3);                  ! transfer 4 quads
+                0, IOB(DMATest);              ! Read One Quad Word From Memory
+                                              ! Into the FIFO's.
+                RepeatLoop;
+                PushLoad(30);                 !wait a while
+                if IntrPend call(Vecint);
+                RepeatLoop;
+
+                call(SetW);                   ! set up DMA Data and headers
+                PushLoad(3);
+                1, IOB(DMATest);              ! Transfer One Quad Word from the
+                                              ! FIFO's into Memory
+                RepeatLoop;
+
+                PushLoad(30);
+                if IntrPend call(Vecint);
+                RepeatLoop;
+                Return;
+
+        ! ------------ HI-DMA REGISTER FORMAT -------------
+        ! xxxxHHHHCCCCLLLL                         
+        !     HHHH         ~ HiDMA address Bits 20-23 (Only Used on 24bit-EIO)
+        !         CCCC     ~ Inverted Header Count
+        !             LLLL ~ HiDMA address Bits 16-19 
+
+!Routine to point DMA to W buffers. 
+SetW:           Full24 := WriteData;    ! Offset causes Crosses of MA Boundary
+                Full24 := Full24 - WriteOffset, Call(ConvFrom24); 
+                ExtChanA, IOB(DMAChan);
+                LoBits, IOB(DMADLA);
+                HiBits, IOB(DMADHA);     ! 
+                Full24 := WriteHeader, Call(ConvFrom24);
+                Tmp := HiBits;
+                Tmp := Tmp And 360;      ! Bits for 24Bit DMA are Here 20-23
+                Tmp := Tmp Or WrHeadCnt; ! Header Count Bits are here
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp XOr 360;      ! Invert Header Count
+                HiBits := HiBits And 17;  
+                LoBits, IOB(DMAHLA);
+                Tmp := Tmp Or HiBits, IOB(DMAHHA), return;
+               
+!Routine to point DMA to R buffers. 
+SetR:           Full24 := ReadData, Call(ConvFrom24);
+                ExtChanA, IOB(DMAChan);
+                LoBits, IOB(DMADLA);
+                HiBits, IOB(DMADHA);
+                Full24 := ReadHeader, Call(ConvFrom24);
+                Tmp := HiBits;
+                Tmp := Tmp And 360;        ! Bits for 24Bit DMA are Here 20-23
+                Tmp := Tmp Or RdHeadCnt;   ! Header Count Bits are here
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp XOr 360;        ! Invert Header Count
+                HiBits := HiBits And 17;  
+                LoBits, IOB(DMAHLA);
+                Tmp := Tmp Or HiBits, IOB(DMAHHA), return;
+              
+!
+
+ClearRegs:      Header00 := 0;      ! Clear the Registers Out
+                Header01 := 0;
+                Header02 := 0;
+                Header03 := 0;
+                Header04 := 0;
+                Header05 := 0;
+                Header06 := 0;
+                Header07 := 0;
+                Header10 := 0;
+                Header11 := 0;
+                Header12 := 0;
+                Header13 := 0;
+                Header14 := 0;
+                Header15 := 0;
+                Header16 := 0;
+                Header17 := 0;
+                Data00 := 0;
+                Data01 := 0;
+                Data02 := 0;
+                Data03 := 0;
+                Data04 := 0;
+                Data05 := 0;
+                Data06 := 0;
+                Data07 := 0;
+                Data10 := 0;
+                Data11 := 0;
+                Data12 := 0;
+                Data13 := 0;
+                Data14 := 0;
+                Data15 := 0;
+                Data16 := 0;
+                Data17 := 0;
+                Return;
+
+        ! Looks at "RdHeadCnt" to Determine How Many Quads(0-3) to Fill at
+        ! Address "ReadHeader" and Then Fills The Remaining Quads(0-3)
+        ! At Address "ReadData".
+
+FillDMAmem:     Data := 177740;
+                Addr := ReadHeader;
+                Count := RdHeadCnt, Call(Fill);
+                Addr := ReadData;
+                Count := 4;
+                Count := Count - RdHeadCnt, Call(Fill);
+                Return;
+                
+Fill:           Count;                          !! T1
+FillLp:         If Eql Return;                  !! T2
+                MA := Addr, Store4;             !! T3 After Sync
+                MDO := Data := Data + 1;        !! T0
+                MDO := Data := Data + 1;        !! T1
+                MDO := Data := Data + 1;        !! T2
+                MDO := Data := Data + 1;        !! T3
+                Addr := Addr + 4;               !! T0
+                Count := Count - 1, Goto(FillLp); !! T1
+
+        ! Routine to Clear out FillCount words of memory
+        ! starting at location FillAddr.
+
+ClearDMAmem:    Addr := WriteHeader;
+                Count := WrHeadCnt, Call(Fill0);
+                Addr := WriteData;
+                Addr := Addr - WriteOffset;
+                Count := 4;
+                Count := Count - WrHeadCnt, Call(Fill0);
+                Return;
+                
+Fill0:           Count;                          !! T1
+Fill0Lp:        If Eql Return;                   !! T2
+                MA := Addr, Store4;              !! T3 After Sync
+                MDO := 0;                        !! T0
+                MDO := 0;                        !! T1
+                MDO := 0;                        !! T2
+                MDO := 0;                        !! T3
+                Addr := Addr + 4;
+                Count := Count - 1, Goto(Fill0Lp); !! T0
+
+        ! Routine to check Count words of memory with a sequence
+CheckDMAmem:    Addr := WriteHeader;
+                Count := WrHeadCnt, Call(ReadHeadMem);
+                Addr := WriteData;
+                Addr := Addr - WriteOffset;
+                Count := 4;
+                Count := Count - WrHeadCnt, Call(ReadDataMem);
+                RFail := 0;
+CompareHead:    Tmp := WrHeadCnt;
+                Data := 1, If Neq Goto(SomeHead);
+                Data := 0;  ! No Header Count so Should be Zeroes 
+SomeHead:       Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp; ! Shift Count up 2 places for "CkInc"
+                Header00 - Data, Call(CkIncHead);
+                Header01 - Data, Call(CkIncHead);
+                Header02 - Data, Call(CkIncHead);
+                Header03 - Data, Call(CkIncHead);
+                Header04 - Data, Call(CkIncHead);
+                Header05 - Data, Call(CkIncHead);
+                Header06 - Data, Call(CkIncHead);
+                Header07 - Data, Call(CkIncHead);
+                Header10 - Data, Call(CkIncHead);
+                Header11 - Data, Call(CkIncHead);
+                Header12 - Data, Call(CkIncHead);
+                Header13 - Data, Call(CkIncHead);
+                Header14 - Data, Call(CkIncHead);
+                Header15 - Data, Call(CkIncHead);
+                Header16 - Data, Call(CkIncHead);
+                Header17 - Data, Call(CkIncHead);
+
+CompareData:    WrHeadCnt - 4;
+                Data := Tmp, If Neq Goto(SomeData);
+                Data := Not 0;  ! Header Count = 4 so Should be all Zeroes 
+SomeData:       Data := Data + 1;
+                Tmp := 20;
+                Data00 - Data, Call(CkIncData);
+                Data01 - Data, Call(CkIncData);
+                Data02 - Data, Call(CkIncData);
+                Data03 - Data, Call(CkIncData);
+                Data04 - Data, Call(CkIncData);
+                Data05 - Data, Call(CkIncData);
+                Data06 - Data, Call(CkIncData);
+                Data07 - Data, Call(CkIncData);
+                Data10 - Data, Call(CkIncData);
+                Data11 - Data, Call(CkIncData);
+                Data12 - Data, Call(CkIncData);
+                Data13 - Data, Call(CkIncData);
+                Data14 - Data, Call(CkIncData);
+                Data15 - Data, Call(CkIncData);
+                Data16 - Data, Call(CkIncData);
+                Data17 - Data, Call(CkIncData);
+                RFail, Return;
+
+CkIncHead:      Data - Tmp, If Eql Goto(GoodHead);
+                RFail := RFail Or 1, If Geq Goto(NoMoreHead);
+IncHead:        Data;
+                If Eql Return;
+                Data := Data + 1, Return;
+GoodHead:       If Lss Goto(IncHead);
+NoMoreHead:     Data := 0, return;                
+
+CkIncData:      Data - Tmp, If Eql Goto(GoodData);
+                RFail := RFail Or 2, If Geq Goto(NoMoreData);
+IncData:        Data;
+                If Eql Return;
+                Data := Data + 1, Return;
+GoodData:       If Lss Goto(IncData);
+NoMoreData:     Data := 0, return;                
+                
+ReadHeadMem:    Count;
+                If Eql Return;
+                MA := Addr, Fetch4;
+                Nop;
+                Nop;
+                Header00 := MDI And Bits;
+                Header01 := MDI And Bits;
+                Header02 := MDI And Bits;
+                Header03 := MDI And Bits;
+ReadHead1:      Count - 1;
+                If Eql Return;
+                MA := Addr + 4, Fetch4;
+                Nop;
+                Nop;
+                Header04 := MDI And Bits;
+                Header05 := MDI And Bits;
+                Header06 := MDI And Bits;
+                Header07 := MDI And Bits;
+ReadHead2:      Count - 2;
+                If Eql Return;
+                MA := Addr + 10, Fetch4;
+                Nop;
+                Nop;
+                Header10 := MDI And Bits;
+                Header11 := MDI And Bits;
+                Header12 := MDI And Bits;
+                Header13 := MDI And Bits;
+ReadHead3:      Count - 3;
+                If Eql Return;
+                MA := Addr + 14, Fetch4;
+                Nop;
+                Nop;
+                Header14 := MDI And Bits;
+                Header15 := MDI And Bits;
+                Header16 := MDI And Bits;
+                Header17 := MDI And Bits;
+                Return;
+
+ReadDataMem:    Count;
+                If Eql Return;
+                MA := Addr, Fetch4;
+                Nop;
+                Nop;
+                Data00 := MDI And Bits;
+                Data01 := MDI And Bits;
+                Data02 := MDI And Bits;
+                Data03 := MDI And Bits;
+ReadData1:      Count - 1;
+                If Eql Return;
+                MA := Addr + 4, Fetch4;
+                Nop;
+                Nop;
+                Data04 := MDI And Bits;
+                Data05 := MDI And Bits;
+                Data06 := MDI And Bits;
+                Data07 := MDI And Bits;
+ReadData2:      Count - 2;
+                If Eql Return;
+                MA := Addr + 10, Fetch4;
+                Nop;
+                Nop;
+                Data10 := MDI And Bits;
+                Data11 := MDI And Bits;
+                Data12 := MDI And Bits;
+                Data13 := MDI And Bits;
+ReadData3:      Count - 3;
+                If Eql Return;
+                MA := Addr + 14, Fetch4;
+                Nop;
+                Nop;
+                Data14 := MDI And Bits;
+                Data15 := MDI And Bits;
+                Data16 := MDI And Bits;
+                Data17 := MDI And Bits;
+                Return;
+
+!!!     Clear - clear all available memory or available CPU MA Bits.
+        
+ClearAll:       MA := MAddr := 0, Store4;            !! T3  ! Syncronize to T3
+                MDO := 177777;                       !! T0  ! Write Ones to 0
+                MDO := 0;                            !! T1
+                MDO := 0;                            !! T2
+                MDO := 0;                            !! T3
+                Nop;                                 !! T0
+                Nop;                                 !! T1
+                Tmp := 0;                            !! T2
+                                                     !       ** Start Loop **
+ClrLp:          MA := 0, Fetch;                      !! T3 ! ReSync to T3 
+                IOB(145);                            !! T0 ! read video state
+                Tmp := Iod and 20;                   !! T1 ! pick vidint bit
+                MDI - 177777;                        !! T2   
+                MA := MAddr := MAddr + 4, Store4,
+                            If Neq Goto(WrapAround); !! T3 ! Return at Wrap
+                MDO := 0, If C19 Goto(Cmore);        !! T0 ! Ck for C19/C23 
+                                                     ! This is Bad Mem or Cpu
+WrapAround:     MDO := 0;                            ! or 20Bit CPU and 2meg
+                MDO := 0;                          
+                MDO := 0;                          
+                MDO := 0, Return;
+Cmore:          MDO := 0;                             !! T1 ! Write 0 to memory
+                MDO := 0;                             !! T2 
+                MDO := 0;                             !! T3 
+                Tmp;                                  !! T0 ! Check vid Int Now
+                if Neq Call(DpyInt);                  !! T1 ! if vid int
+                Goto(ClrLp);
+                
+ConvFrom24:     LoBits := Full24;
+                LoBits := LoBits And 177777;
+                UState And 400; 
+                HiBits := not UState(Full24), If Neq Goto(Upper8); 
+                HiBits := HiBits + HiBits, LoadS(3);  !
+Rrshft:         HiBits := HiBits + HiBits + OldCarry, Repeat(Rrshft);
+                HiBits := HiBits And 17, Return;
+            ! ** If Bit 8 in UState is Set it Must be a 24Bit CPU **
+Upper8:         HiBits := UState(Full24), Hold, Return; 
+            ! NOTE: "UState, Hold" is The UPPER() cmd for 24bit PrqMic
+
+ReadSize:       MAddr := 100000;                !! T2 ! Start at Bit 16
+                MA := HiAddrLines := 0, Fetch;  !! T3 ! Syncronize to T3
+                Nop;                            !! T0 ! 
+                Nop;                            !! T1 ! 
+                Save0 := MDI;                   !! T2 ! Save Location 0  
+                MA := Maddr := MAddr + Maddr,         
+                       Fetch,Goto(RCf1);        !! T3 ! Fetch First Boundary
+RCfLP:          MA := Maddr, Fetch;             !! T3 ! Read it Back 
+                Nop;                            !! T0 ! 
+                Nop;                            !! T1 ! 
+                MDI - Tmp1, Hold;               !! T2 ! 
+        
+RCfGo:          MA := Maddr := MAddr + Maddr,
+                      Fetch,If Eql Goto(Retrn0);!! T3 ! Bump Up Memory Addr
+                HiAddrLines := HiAddrLines + 1; !! T0 ! Bump Cntr
+
+RCf1:           Nop;                            !! T0 ! 
+                Nop;                            !! T1 ! 
+                MA := 0, Store, Hold;           !! T2 ! Store the inv data 
+                Tmp1 := MDO := Not MDI;         !! T3 ! Back In Memory 0 
+                Nop;                            !! T0 ! 
+                HiAddrLines And 177760;         !! T1 ! Check Count OverFlow
+                If Eql Goto(RCfLp);             !! T2 ! 
+                                                      ! If Here Then Bad Mem
+                Nop;                            !! T3 ! 
+Retrn0:         Nop;                            !! T0 ! 
+                Nop;                            !! T1 ! Extract Important Bits
+                MA := 0, Store;                 !! T2 ! 
+                MDO := Save0;                   !! T3 ! Return Data to Mem 0
+                Return;
+
+                
+
+CheckRestMem:   DirtyMem := 0;
+CRMLoop:        Call(Find);                 ! Search Memory for Non-Zero word
+                RFail And 4;                ! Bit 4 Set if Something Found
+                Tmp := 0, If Eql Return;    ! Rest of Memory is Clear OK
+                Call(CkKnownMem);           ! See if its a Known Dirty Spot
+                Tmp := Tmp + Tmp, If Neq Return; 
+                                            ! It Is so Add in Size of Known 
+                Tmp := Tmp + Tmp;           ! Dirty Area and Try Again
+                DirtyMem := DirtyMem + Tmp, Goto(CRMLoop);
+
+CkKnownMem:     DirtyMem - ReadHeader;
+                ReadHeader - DirtyMem, If C19 Goto(CkRdData);
+                Tmp := RdHeadCnt, If C19 Goto(CkRdData);
+                0, If Neq Return;
+CkRdData:       DirtyMem - ReadData;
+                ReadData - DirtyMem, If C19 Goto(CkWrHead);
+                Tmp := 4, If C19 Goto(CkWrHead);
+                Tmp := Tmp - RdHeadCnt;
+                0, If Neq Return;
+CkWrHead:       DirtyMem - WriteHeader;
+                WriteHeader - DirtyMem, If C19 Goto(CkWrData);
+                Tmp := WrHeadCnt, If C19 Goto(CkWrData);
+                0,If Neq Return;
+CkWrData:       Tmp1 := WriteData;
+                Tmp1 := Tmp1 - WriteOffset;
+                DirtyMem - Tmp1;
+                Tmp1 - DirtyMem, If C19 Goto(UnknownDirt);
+                Tmp := 4, If C19 Goto(UnknownDirt);
+                Tmp := Tmp - WrHeadCnt;
+                0,If Neq Return;
+UnKnownDirt:    RFail := RFail Or 4, Return;                   
+                ! There shouldn't be anything here but there is
+
+!
+! -------------------- ALTERNATE PROGRAM ENTRY POINTS ---------------------
+MemSearch:      RFail := 0, loc(100);        ! Set R0 Where to Start and Look
+                Call(Find);
+                Option := 0, Goto(Fail);
+
+CheckSearch:    RFail := 0, loc(110);        ! Set R0 Where to Start and Look
+                Call(CheckRestMem);
+                Option := 0, Goto(Fail);
+
+HiSpeedTest:    Nop, Loc(120);
+                Call(SetHSW);
+                
+HiSpeedLoop:    ExtChanA, IOB(DMAChan);
+                Header00, IOB(DMADLA);
+                Header01, IOB(DMADHA);
+                Header02, IOB(DMAHLA);
+                Header03, IOB(DMAHHA);
+                
+                Pushload(3);                  ! transfer 4 quads to FIFO's
+                0, IOB(DMATest);              ! Read One Quad Word From Memory
+                RepeatLoop;
+                
+                PushLoad(10);                  !wait a while
+                Nop;                          ! PL EXT A is High Now
+                RepeatLoop;
+                
+                ExtChanA, IOB(DMAChan);
+                Header04, IOB(DMADLA);
+                Header05, IOB(DMADHA);
+                Header06, IOB(DMAHLA);
+                Header07, IOB(DMAHHA);
+                
+                PushLoad(3);                  ! transfer 4 quads from FIFO's
+                1, IOB(DMATest);              ! Transfer One Quad Word from the
+                RepeatLoop;
+
+                PushLoad(16);                 !wait a while
+                Nop;                          ! ??? Longer for TOP than PL
+                RepeatLoop;                   ! TOP EXT A is Pulsing now
+
+                Goto(HiSpeedLoop);
+!
+XHiSpeedTest:   Nop, Loc(130);
+                Call(SetHSW);
+                ExtChanA, IOB(DMAChan);
+                Header00, IOB(DMADLA);
+                Header01, IOB(DMADHA);
+                Header02, IOB(DMAHLA);
+                Header03, IOB(DMAHHA);
+                
+XHiSpeedLoop:   Pushload(3);                  ! transfer 4 quads to FIFO's
+                0, IOB(DMATest);              ! Read One Quad Word From Memory
+                RepeatLoop;
+                
+                PushLoad(10);                  !wait a while
+                Nop;                          ! PL EXT A is High Now
+                RepeatLoop;
+                                
+                PushLoad(3);                  ! transfer 4 quads from FIFO's
+                1, IOB(DMATest);              ! Transfer One Quad Word from the
+                RepeatLoop;
+
+                PushLoad(16);                 !wait a while
+                Nop;                          ! ??? Longer for TOP than PL
+                RepeatLoop;                   ! TOP EXT A is Pulsing now
+
+                Goto(XHiSpeedLoop);
+
+! Routine to point DMA Registers to Correct Memory buffers. 
+SetHSW:         Full24 := WriteData;    ! Offset causes Crosses of MA Boundary
+                Full24 := Full24 - WriteOffset, Call(ConvFrom24); 
+                Header04 := LoBits;
+                Header05 := HiBits;     ! 
+                Full24 := WriteHeader, Call(ConvFrom24);
+                Tmp := HiBits;
+                Tmp := Tmp And 360;      ! Bits for 24Bit DMA are Here 20-23
+                Tmp := Tmp Or WrHeadCnt; ! Header Count Bits are here
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp + Tmp;        
+                Tmp := Tmp XOr 360;      ! Invert Header Count
+                HiBits := HiBits And 17;  
+                Header06 := LoBits;
+                Tmp := Tmp Or HiBits;
+                Header07 := Tmp;
+                
+!Routine to point DMA to R buffers. 
+SetHSR:         Full24 := ReadData, Call(ConvFrom24);
+                Header00 := LoBits;
+                Header01 := HiBits;
+                Full24 := ReadHeader, Call(ConvFrom24);
+                Tmp := HiBits;
+                Tmp := Tmp And 360;        ! Bits for 24Bit DMA are Here 20-23
+                Tmp := Tmp Or RdHeadCnt;   ! Header Count Bits are here
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp + Tmp;
+                Tmp := Tmp XOr 360;        ! Invert Header Count
+                HiBits := HiBits And 17;  
+                Header02 := LoBits;
+                Tmp := Tmp Or HiBits;
+                Header03 := Tmp;
+                Return;
+! FIND
+Find:           MA := DirtyMem, FETCH4;  
+                Nop;
+                Nop;
+                MDI;                         ! For Memory Data other than 0
+                MDI, if neq goto(FoundDirty);
+                MDI, if neq goto(FoundDirty);
+                MDI, if neq goto(FoundDirty);
+                     if neq goto(FoundDirty);
+                if intrPend call(VecInt);
+                DirtyMem := DirtyMem + 4;
+                If C19 Goto(Find);           ! This stops the endless Loop
+                0, Return;                   ! Breakpoint 100 Means all clr
+FoundDirty:     Tmp := HiAddrLines;
+                Tmp := Tmp And 17;
+                Tmp1 := 1;
+BumpMax:        Tmp := Tmp - 1;
+                Tmp1 := Tmp1 + Tmp, If Neq Goto(BumpMax);
+                Full24 := DirtyMem, Call(ConvFrom24);
+                HiBits - tmp1;
+                If Geq Goto(FindWrap);
+                RFail := RFail Or 4, Return;
+FindWrap:       DirtyMem := LoBits;
+                0, Return;                    ! If Wrap around through 0
+
+
+Brk:            RFail := 0;
+Fail:           Option - 4;                        ! Only Continue past error
+                Option - 5, if Eql goto(InitTest); ! IF option is a 4 or 5
+                if Eql goto(InitTest);
+                R370 := 100;
+                R370 := R370 Or RFail, goto(7401);
+
+! Interrupt service        
+
+VecInt:         Vector(Z80Int);
+        
+Z80Int:         0,IOB(305),Return, Loc(300);
+
+YInt:           IOB(10), Loc(304);               !** for Canon link board **
+                Return;
+
+DskInt:         IOB(123), Return, Loc(310);
+
+NetInt:         0, IOB(302);
+                0, IOB(303), Return, Loc(314);   !** FOR EIO **
+
+Z80RInt:        0,IOB(305),Return, Loc(320);
+
+DpyInt:         DpyTmp, IOB(343), Loc(324);
+                DpyTmp, IOB(340);
+Dpy1:           0, IOB(342);
+                DpyCnt := DpyCnt - 1;
+                DpyTmp := 102400, If GTR Return;
+                DpyCnt;
+                DpyTmp := 101154, If EQL Return;
+                DpyTmp := 101351;
+                R371, IOB(341);
+                260, IOB(344);
+                DpyCnt := 11, GoTo(Dpy1);
+        
+XInt:           Return, Loc(330);
+
+ParInt:         Return, Loc(334);
+
+                END;

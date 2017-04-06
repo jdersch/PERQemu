@@ -1,0 +1,656 @@
+$List   !jbb view real number stuff in order to use odtperq
+$Title Floating point arithmetic operators.
+
+!================================================================
+!
+!     (c) Copyright Three Rivers Computer Corporation, 1981
+!
+!  Abstract:
+!      Floating Point Arithmetic 
+!
+!  Design:
+!              assumes the following EStack layout:
+!
+!                           ===========
+!                  TOS ---> | B<low>  |
+!                           | B<high> |
+!                           | A<low>  |
+!                           | A<high> |
+!                           =========== 
+!
+!         (implements the IEEE floating point standard)
+!
+!================================================================
+
+!================================================================
+!
+!  Change Log:
+!
+!     9 Apr 82 Michael R. Kristofic
+!         Fix floating point comparison bug fix bug
+!
+!    12 Mar 82 JBB and SLB
+!         Fix floating point mantissa comparison
+!
+!     3 Jan 82 Michael R. Kristofic
+!         Miscellaneous bug fixes (normalize, multiply, compare, trunc, round)
+!
+!================================================================
+
+
+! Opcode ROPS
+!---------------------------------------------------------------------
+!
+! Abstract:
+!       ROPS is a two byte opcode for performing arithemetic
+!       operations on real (32 bit) values.  The second byte is used
+!       as a dispatch into the 15 operations.
+!
+! Instruction:
+!       ROPS
+!
+! Environment:
+!       In general, real operations take their argument(s) from the EStack
+!       with the low-order word on top:
+!           (Tos) = low word of 1st real
+!           (Tos-1) = high word of 1st real
+!           (Tos-2) = low word of 2nd real (if applicable)
+!           (Tos-3) = high word of 2nd real (if applicable)
+!
+! Note:
+!       The IEEE floating point double word is the following:
+!
+!                 seeeeeeeehhhhhhhllllllllllllllll
+!
+!       where s is the sign bit, e is an exponent bit, h is a high order
+!       word mantissa bit and l is a low order word mantissa bit. An implied
+!       1 is inserted to the left of the most significant h. The value
+!       is given by
+!                    1.hhhhhhhllllllllllllllll X 2^(eeeeeeee - 127)
+!
+!       with the appropriate sign. For complete details, see the January
+!       1980 issue of "Computer".
+!
+!---------------------------------------------------------------------
+Constant(RealOps,6000);             
+Opcode(ROPS), tmp := NextOp;
+        tmp, Field(0,4);
+        Dispatch(RealOps); 
+
+
+
+
+
+
+
+!==============================================================================
+!
+! Subroutine to unpack parameters
+!
+! Entries:
+!       UNPACK: unpack 2 parameters (a,b)
+!       UNPACK1:unpack 1 parameter (a)
+!
+! Unpacked parameters:
+!       bsign   B<sign>
+!       bexp    B<exponent>
+!       blow    b<low>
+!       bhigh   b<high> with hidden bit inserted
+!       asign   A<sign>
+!       aexp    A<exponent>
+!       alow    a<low>
+!       ahigh   a<high> with hidden bit inserted
+! 
+!==============================================================================
+UNPACK: blow := TOS, pop; 
+        bsign := TOS and SignBit, field(0,7);
+        bexp := TOS and 077600;
+        TOS, pop, if eql goto(UnpackBZero);
+Unpackx:bhigh := shift + 200, goto(Unpack1);    ! insert the hidden bit
+UnpackBZero:                                    ! check on operand zero 
+        bhigh := shift;                         ! don't insert hidden bit
+        bhigh or blow, if neq goto(Unpackx);
+        if neq goto(Unpackx);
+        bsign := 0;                             ! make zero positive
+Unpack1:alow := TOS, pop;
+        asign := TOS and SignBit, field(0,7);
+        aexp := TOS and 077600;
+        TOS,if eql goto(UnpackAZero);           ! leave last word on stack
+Unpacky:ahigh := shift + 200, return;           ! insert the hidden bit
+UnpackAZero:                                    ! check on operand zero 
+        ahigh := shift;                         ! don't insert hidden bit
+        ahigh or alow, if neq goto(Unpacky);
+        if neq goto(Unpacky);
+        asign := 0, return;                     ! make zero positive
+
+
+
+
+!==============================================================================
+!
+! Codesequence to normalize result, push it on ESTACK, and exit
+!
+! Entries:
+!       NORMALIZE:      assumes exponents within bounds
+!       NORMOVER:       exponent overflow during previous operations
+!       NORMXOVFL:      division by 0 during previous operations
+!       NORMUNDER:      exponent underflow during previous operations
+!
+! NORMALIZE assumes:
+!       TOS  -  exponent
+!       tmp  -  low order mantissa
+!       tmp1 -  high order mantissa
+!       bsign-  sign
+!
+!       exits with floating point number in ETOS, ETOS-1
+!
+! Vars:
+!       tmp10 - the rounding bit
+!
+!==============================================================================
+NORMALIZE:tmp or tmp1;                             ! check on mantissa zero
+          tmp1 and not 377, if eql goto(NORMZERO); ! try shifting right
+          if eql goto(NORMLEFT);
+        
+NORMRIGHTSHIFT: tmp1, rightshift(1);
+                tmp1 := shift, if odd goto(NORMCARRY);
+                tmp;
+                tmp := shift, if odd goto(NORMODD);
+                tmp10 := 0, goto(NORMINC);
+NORMODD:        tmp10 := 1, goto(NORMINC);
+NORMCARRY:      tmp;
+                tmp := shift or SignBit, if odd goto(NORMODDCARRY);
+                tmp10 := 0, goto(NORMINC);
+NORMODDCARRY:   tmp10 := 1;
+NORMINC:        TOS := TOS+200, if IntrPend Call(VectSrv); ! increment exponent
+
+NORMTEST:tmp1 and not 377;                    ! is the mantissa still to big?
+         tmp1, if neq goto(NORMRIGHTSHIFT);      
+NORMEXIT:tmp10, field(0,7);
+         tmp1, if odd goto(NORMROUND);
+        
+NORMRETURN:tmp1 := shift or bsign, if IntrPend Call(VectSrv); ! suppress 
+                                                      ! leading 1, insert sign
+           TOS and 177600;   ! exp all 0's?
+           if eql goto(NORMUNDER);
+           TOS - 77600;   ! exp 255?
+           TOS,          if eql goto(NORMOVER); ! exp > 255?
+           if lss goto(NORMNOGOOD);
+           TOS := TOS or tmp1;
+           TOS := tmp, push, NextInst(0);
+        
+NORMROUND:tmp := tmp + 1;
+        tmp1 := tmp1 + 0 + oldcarry;
+        tmp10 := 0, goto(NORMTEST);
+
+NORMLEFT:tmp1 and 200, field(0,7);        ! mantissa big enough yet?
+         tmp1, if neq goto(NORMRETURN);
+         tmp := tmp + tmp;
+         tmp1 := tmp1 + tmp1 + oldcarry;
+         TOS := TOS -  200, if IntrPend call(VectSrv);    ! excrement exponent
+         tmp10 := 0, goto(NORMLEFT);
+
+        
+!*************** special cases **************
+
+
+NORMNOGOOD: tmp2 := 177777;       ! exponent has over or underflowed - 
+                                  ! determine which by examining top 4 bits
+            tmp2 := tmp2 + tmp2;                          ! create 1000000                  tmp2 := tmp2 + tmp2;                          ! create 1000000
+            tmp2 := tmp2 + 4, if IntrPend call(VectSrv);  ! create 1000000
+            TOS + tmp2;              ! if the next to highest bit is on then
+            if C19 goto(NORMOVER);   ! underflow else overflow
+
+NORMUNDER:TOS := tmp1, if IntrPend call(VectSrv);  ! return the mantissa
+          TOS := tmp,push;                         ! with a 0 exponent
+          tmp2 := ErrUnderReal, goto(RunError0);   ! and raise exception
+          
+          
+NORMOVER:  tmp2 := ErrOvrReal, if IntrPend call(VectSrv); 
+NORMXOVFL: bsign := bsign or 77600;      ! return max exponent
+           TOS := bsign;                 ! and 0 mantissa
+           TOS := 0,push;
+           goto(RunError0);     ! raise exception
+
+
+NORMZERO:TOS := 0;                     ! return 0
+         TOS := 0, push, NextInst(0);
+
+
+
+!==============================================================================
+!
+! Floating Point Multiplication C := A * B
+!
+! Outline of the algorithm (a and b are the mantissas of A and B rsp.):
+!       1. compute four products (32-bit fixed point arithmetic):
+!               a.high*b.high
+!               a.high*b.low
+!               b.high*a.low
+!               a.low*b.low
+!       2. sum: (a.low*b.low)<31:16> + a.high*b.low + b.high*a.low
+!          (neglect (a.low*b.low)<15:0>)
+!       3. add to (a.high*b.high)<leftshift(16)>
+!       4. adjust exponent to compensate for fixed point arithmetic
+!          and correct for double bias 
+!       5. add exponents
+!       6. normalize
+!
+!==============================================================================
+Case(RealOps,MPR), tmpstk3 := 0, call(UNPACK);     ! Multiply Real
+        tmp := alow, if IntrPend Call(VectSrv);    ! a.low*b.low
+        tmp1 := blow, call(TMulTIPLYLONG);
+        tmpstk2 := tmp1;                           ! product.high, neglect low 
+        tmp := ahigh, if IntrPend Call(VectSrv);   ! a.high*b.low
+        tmp1 := blow, call(TMulTIPLYLONG);
+        tmpstk2 := tmpstk2 + tmp;                  ! product.low
+        tmpstk3 := tmpstk3 + tmp1 + oldcarry;      ! product.high
+        tmp := bhigh, if intrpend call(VectSrv);   ! b.high*a.low
+        tmp1 := alow, call(TMulTIPLYLONG);
+        tmpstk2 := tmpstk2 + tmp;                          
+        tmpstk3 := tmpstk3 + tmp1 + oldcarry;
+        tmp := ahigh, if IntrPend Call(VectSrv);   ! a.high*b.high
+        tmp1 := bhigh, call(TMulTIPLYLONG);
+        tmp1 := tmp, if IntrPend Call(VectSrv);
+        tmp1 := tmp1 + tmpstk3;
+        tmp := tmpstk2;        ! low order result
+        
+        tmp2 := aexp;                                    ! compute exponent
+        tmp2 := tmp2 - 41400; !subtract bias (127), and 7 (due to 32 bit mult.)
+        TOS := tmp2 + bexp, if IntrPend Call(VectSrv);   ! add exponents
+        bsign := bsign xor asign, goto(NORMALIZE);       ! compute sign
+
+
+
+!==============================================================================
+!
+! Floating Point Division
+!
+! Algorithm:
+!       1. Unpack parameters
+!       2. remainder := dividend
+!          result := long_integer_divide(remainder<<7,divisor) !delivers 8 bits
+!          for i:=1 until 3 do
+!            result := result<<10 + long_integer_divide(remainder<<10, divisor)
+!       3. subtract exponents, adjust exponent (-8) to compensate for
+!          long integer arithmetic and correct for bias (+127)
+!       4. normalize
+!
+!==============================================================================
+Case(RealOps,DVR), tmp := 0, call(UNPACK);
+        tmp1 := 0; 
+        blow or bhigh, loadS(3);                ! set loopcount
+        tmp10 := blow, if eql goto(RDIVZERO);   ! save divisor
+        tmp11 := bhigh, if IntrPend Call(VectSrv); 
+        ahigh, leftshift(7);
+        ahigh := shift, if IntrPend Call(VectSrv);
+        alow, field(11,7);
+        ahigh := shift or ahigh;
+        alow, leftshift(7);
+        alow := shift, goto (DIVRDIV);
+DIVRShift8:
+        bhigh, leftshift(10);           ! shift remainder for next division
+        ahigh := shift, if IntrPend Call(VectSrv);
+        blow, field(10,10);
+        ahigh := shift or ahigh;        ! high order
+        blow, leftshift(10);
+        alow := shift;                  ! low order
+        blow := tmp10, if IntrPend Call(VectSrv); ! restore divisor
+DIVRDIV:bhigh := tmp11, call(LDivideAll);
+        tmp1, leftshift(10);            ! insert partial result
+        tmp1 := shift, if IntrPend Call(VectSrv);
+        tmp, field(10,10);
+        tmp1 := shift or tmp1;          ! high order
+        tmp, leftshift(10);
+        tmp := shift or alow, repeat(DivRShift8);! low order
+                                        ! (insert 8 result bits)
+        TOS := aexp - bexp; 
+        ! now adjust exponent by -8 and correct for bias by +127:
+        bexp := 35600;                  ! 119 << 7
+        TOS := TOS + bexp;            
+        bsign:= bsign xor asign, goto(NORMALIZE);
+   
+RDIVZERO:bsign := bsign xor asign;
+         tmp2 := ErrRealDivZero, goto(NORMXOVFL); ! Return overflow bit pattern
+
+
+        
+
+
+
+!==============================================================================
+!
+! Add/Subtract Floating Point Numbers
+!
+! Algorithm:
+!       1. Unpack
+!       2. adjust exponents:
+!            if difference of exponents too large, ignore smaller parameter
+!            else shift mantissa of larger parameter to the left, mantissa
+!            of the smaller parameter to the right until exponents match
+!       3. add/subtract mantissas
+!       4. Normalize
+!
+!==============================================================================
+Constant(MAXSHIFT,7200);        ! max position to shift without losing
+                                ! the entire mantissa (leftshift(7) of higher
+                                ! operand + rightshift(23) of smaller operand),
+                                ! 29 << 7
+Case(RealOps,SBR), loadS(AddRSub);
+        goto(AddR0);
+Case(RealOps,ADR), LoadS(AddRAdd);
+AddR0:  tmp := MAXSHIFT;
+        tmp1 := 0, call(UNPACK);
+        nop;
+        ahigh or alow, leftshift(0);
+        bhigh or blow, if eql goto(AddRAZero);  ! shortcut if parameter == 0
+AddR1:  aexp - bexp, if eql goto(AddRBZero);
+AddR2:  shift - tmp, if lss goto(AddRAlssB);
+        tmp := 7, if gtr goto(AddRNeglectB);    ! check whether we'll lose all 
+                                                ! significant bits
+AddRLeftShift:
+        aexp - bexp, if intrpend goto(AddRLSInt);
+        tmp := tmp - 1, if eql goto(AddROp);
+        aexp := aexp - 200, if leq goto(AddRR);
+        alow := alow + alow;
+        ahigh := ahigh + ahigh + oldcarry, goto(AddRLeftshift);
+AddRR:  aexp := aexp + 200;     ! undo last decrement
+AddRRightshift:
+        bhigh, rightshift(1);
+        bhigh := shift, if odd call(AddROdd);
+        blow;
+        blow := shift or tmp1;
+        bexp := bexp + 200, if intrpend call(VectSrv);
+        aexp - bexp;
+        tmp1 := 0, if neq goto(AddRRightshift);
+AddROp: bsign;
+AddROp0:if lss call(LNegB);
+AddROp1:asign;
+        if lss call(LNegA), TOS := aexp;
+        tmp1 := 0, gotoS;
+AddRSub:alow := alow - blow, leftshift(0);
+        ahigh := ahigh - bhigh - oldcarry, goto(AddREnd);
+AddRLSInt:call(VectSrv);
+        goto(AddRLeftShift);
+AddRAdd:alow := alow + blow;
+        ahigh := ahigh + bhigh + oldcarry, leftshift(0);
+AddREnd:bsign := shift and SignBit, if lss call(LNegA);
+        tmp1 := ahigh, if intrpend call(VectSrv);
+        tmp := alow, goto(NORMALIZE);
+AddROdd:tmp1 := SignBit, return;
+AddRAlssB:
+        bexp - aexp, leftshift(0);
+        shift - MAXSHIFT;      ! check whether
+                               ! we'll lose all significant bits
+        tmp := 7, if gtr goto(AddRNeglA);
+AddRLeft:
+        bexp - aexp, if intrpend goto(AddRLInt);
+        tmp := tmp - 1, if eql goto(AddROp);
+        bexp := bexp - 200, if leq goto(AddRRR);
+        blow := blow + blow;
+        bhigh := bhigh + bhigh + oldcarry, goto(AddRLeft);
+AddRRR: bexp := bexp + 200;    ! undo last decrement
+AddRRight:
+        ahigh, rightshift(1);
+        ahigh := shift, if odd call(AddROdd);
+        alow;
+        alow := shift or tmp1;
+        aexp := aexp + 200, if intrpend call(VectSrv);
+        bexp - aexp;
+        tmp1 := 0, if neq goto(AddRRight);
+        bsign, goto(AddROp0);
+AddRAZero:
+        aexp := bexp, goto(AddROp);
+AddRBZero:
+        bexp := aexp, goto(AddROp1);
+AddRNeglectB:
+        blow := 0, if intrpend call(VectSrv);
+        bhigh := 0, goto(AddROp1);
+AddRNeglA:
+        asign := 0;
+        aexp := bexp, if intrpend call(VectSrv);
+        alow := 0;
+        ahigh := 0, goto(AddROp);
+AddRLInt:call(VectSrv);
+        goto(AddRLeft);
+
+
+
+
+
+!==============================================================================
+!
+! Float: Convert integer into floating point number
+!
+! Algorithm:
+!       1. if zero push 0,0 and exit
+!       2. if negative, negate number, save sign
+!       3. initialize exponent with bias (excess)
+!          mantissa := 0
+!          loop:
+!               shift mantissa right and insert number<0> into mantissa.high<6>
+!                  (the hidden bit)
+!               shift number right
+!               increment exponent
+!          until: number is zero
+!       4. normalize
+!
+!==============================================================================
+Constant(BIASMINUS1,037400);          ! 126(decimal) in the exponent field
+Case(RealOps,FLT),  tmp2 := TOS;
+        bsign := TOS and Signbit, if eql goto(FLTZero);
+        tmp := 0, if neq call(FLTNegate); ! low order mantissa
+        nop;
+        tmp1 := BIASMINUS1;
+        TOS := tmp1, if intrpend call(VectSrv); ! exponent
+        tmp1 := 0, goto(FLT0);                  ! high order mantissa
+FLTLoop:tmp, rightshift(1);
+        tmp := shift;
+        tmp1;
+        tmp1 := shift, if odd call(FLTCarry);
+FLT0:   tmp2, rightshift(1);
+        tmp2 := shift, if odd call(FLTInsert);
+        TOS := TOS + 200, if neq goto(FLTLoop);
+        tmp10 := 0, goto(NORMEXIT);     ! assemble real number on ESTACK
+
+FLTCarry:tmp := tmp or SignBit, return; ! shift out of high order word into low
+FLTInsert:tmp1 := tmp1 or 200, if intrpend call(VectSrv); ! insert into position of hidden bit
+        tmp2, return;
+FLTZero:TOS := 0, push, NextInst(0);
+FLTNegate:
+        tmp2:= not tmp2, rightshift(1);
+        tmp2:= tmp2 + 1, return;
+
+
+
+
+
+
+!==============================================================================
+!
+! Absolute Value and Negate Real Number
+!
+!==============================================================================
+! Abs
+Case(RealOps,ABR), tmp := TOS, pop;
+        TOS := TOS and not SignBit;           ! clear sign bit
+        TOS := tmp, push, NextInst(0);
+
+
+! Negate Real
+!
+Case(RealOps,NGR),    tmp := TOS, pop;
+        TOS := TOS + SignBit;           ! Invert sign
+        TOS := tmp, push, NextInst(0);
+
+
+
+
+
+
+!==============================================================================
+!
+! Truncate Real
+!
+! Algorithm:
+!       1. unpack
+!       2. check for zero or < 0.5
+!       3. tmp := mantissa<23:7>
+!          subtract bias from exponent
+!          result := 0
+!       4. while (exponent > 0)
+!          {
+!             leftshift result
+!             leftshift low order mantissa word
+!             result := result + next bit from a leftshift of 
+!                                (h. o. mantissa + carry from l. o. mantissa) 
+!             decrement exponent
+!          }
+!       5. Calculate rounding bit
+!       6. Exit ( check for integer overflow and set sign)
+!
+!==============================================================================
+Constant(EXCESS,176);                  ! bias - 1, non shifted
+
+Case(RealOps,TNC), tmp:= 0, call(TNCSub);
+         tmp, goto(TNCXit);
+
+TNCSub: tmp1 := 0, call(UNPACK1);       ! tmp1 holds the rounding bit
+        aexp, field(7,10);     
+        aexp := shift - EXCESS;         ! leaves exponent one high     
+        aexp, if gtr goto(TNCLoop);
+        if eql goto(TNC05);             ! prepare for rounding (.5 --> 1)
+        asign := 0, return;             ! < .5
+
+TNCLoop:tmp := tmp + tmp;
+        alow := alow + alow, if carry goto(TNCng);
+        ahigh := ahigh + ahigh + oldcarry, field(10,1);
+        tmp := shift + tmp, if intrpend call(VectSrv); ! tmp will not ovfl here
+        aexp := aexp - 1, field(10,1);
+TNCRND: ahigh + ahigh, if gtr goto(TNCLoop);
+        tmp1 := shift, return;
+        
+TNC05:  ahigh + ahigh, field(10,1);
+        tmp1 := shift, return;
+        
+
+
+
+!==============================================================================
+!
+! Round Real
+!
+! Algorithm:
+!       1. truncate
+!       2. add in rounding bit
+!       3. check for integer overflow, if found raise exception
+!       4. check sign, return number or 2's complement accordingly
+!
+!==============================================================================
+
+Case(RealOps,RND), tmp:= 0, call(TNCSub);
+        tmp := tmp + tmp1;          ! add rounding bit
+        tmp, if carry goto(TNCng);
+        
+TNCXit: asign, if geq goto(TNCok);  ! abs(x) <= 32767
+        if geq goto(TNCng);         ! x > 0 and abs(x) > 32767
+        tmp and 77777;              ! -32768 (100000) a special case
+        if eql goto(TNCleave);
+        
+TNCng:  tmp2 := ErrRtoIOvfl, goto(RunError0); ! Raise exception
+        
+TNCok:  if geq goto(TNCleave);
+        not tmp, leftshift(0);           ! Negative - return 2's complement
+        TOS := shift + 1, NextInst(0);
+        
+TNCleave: TOS := tmp, NextInst(0);
+
+
+
+ 
+
+
+
+
+!========================================================
+!
+! Subroutine FloatCompare
+!       calls Unpack
+!       leaves condition code bits set on return
+!
+!       Basically, compares numbers starting with the most significant
+!       entity (the exponent) and finishing with the least significant
+!       (the low order mantissa word).  As soon as an inequality is found,
+!       the condition codes are set and a return is made.  The low order
+!       mantissa word is a special case since the MSB of that word is a
+!       mantissa value bit (as opposed to a sign bit) -- simple signed
+!       arithmetic comparisons are not enough.  The case of only one negative
+!       operand is handled specially.
+!
+!========================================================
+FloatCompare:call(Unpack);
+        asign or bsign;                   ! Negative argument(s)?
+        aexp - bexp, if neq goto(FLCXOR);
+        aexp - bexp, if neq return;       ! Compare exponents.
+        ahigh - bhigh;
+        ahigh - bhigh, if neq return;     ! Compare high order mantissa word.
+        alow or blow;                     ! If the MSB of both operands is off
+        alow - blow, if geq return;       ! this simple subtraction test works.
+        alow xor blow, if eql return;     ! If the MSB of both operands is on
+        alow - blow, if geq return;       ! this simple subtraction test works.
+        blow or 1, return;                ! Else only one MSB on -- set
+                                          ! condition code.  The or-ing of 1
+                                          ! insures a non-zero result
+        
+!    *****  At least one operand negative  ***** 
+FLCXOR: bsign;                          ! If b positive, a must be negative.
+        asign xor bsign, if geq return;
+        1, if lss return;               ! a positive, therefore gtr.
+        bexp - aexp;                    ! Otherwise, compare as in the non-
+        bexp - aexp, if neq return;     ! negative case above but with the 
+        bhigh - ahigh;                  ! operands reversed.
+        bhigh - ahigh, if neq return;
+        blow or alow;
+        blow - alow, if geq return;
+        blow xor alow, if eql return;
+        blow - alow, if geq return;
+        alow or 1, return;
+                
+
+
+
+
+!==============================================================================
+!
+!               Floating Point Comparisons
+!
+!==============================================================================
+
+Case(RealOps,EQUReal), call(FloatCompare);
+        if eql goto(NQRYes);
+EQRNO:  TOS := 0, NextInst(0);
+                
+
+Case(RealOps,NEQReal), call(FloatCompare);
+        if eql goto(EQRNO);
+NQRYES: TOS := 1, NextInst(0);
+
+Case(RealOps,LEQReal), call(FloatCompare);
+        if leq goto(NQRYES);
+        TOS := 0, NextInst(0);
+
+Case(RealOps,LESReal), call(FloatCompare);
+        if lss goto(NQRYES);
+        TOS := 0, NextInst(0);
+                
+
+Case(RealOps,GEQReal), call(FloatCompare);
+        if geq goto(NQRYES);
+        TOS := 0, NextInst(0);
+                
+
+Case(RealOps,GTRReal), call(FloatCompare);
+        if gtr goto(NQRYES);
+        TOS := 0, NextInst(0);
+
+$NoList !jbb stop the listing already

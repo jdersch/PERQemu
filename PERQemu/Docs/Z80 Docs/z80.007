@@ -1,0 +1,692 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                      PERQ <--> Z-80 Messages
+
+
+
+
+                  Bill Glass and Donald A. Scelza
+
+
+
+
+
+
+
+
+
+
+
+    This document briefly describes the message protocol used in
+    the PERQ <--> Z80 communication interface.
+
+
+
+
+
+
+
+
+
+
+    Copyright (C) 1981
+    Three Rivers Computer Corporation
+    720 Gross Street
+    Pittsburgh, PA  15224
+    (412) 621-6250
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+
+
+
+
+
+
+
+
+
+
+    This  document  is  not  to  be  reproduced  in  any form or
+    transmitted in whole or in part, without the  prior  written
+    authorization of Three Rivers Computer Corporation.
+
+    The  information  in  this  document  is  subject  to change
+    without notice and should not be construed as  a  commitment
+    by  Three  Rivers Computer Corporation.  The Company assumes
+    no responsibility for any errors that  may  appear  in  this
+    document.
+
+    Three  Rivers Computer Corporation will make every effort to
+    keep customers apprised  of  all  documentation  changes  as
+    quickly   as   possible.   The  Reader's  Comments  card  is
+    distributed with this document to  request  users'  critical
+    evaluation to assist us in preparing future documentation.
+
+
+
+
+
+    PERQ is a trademark of Three Rivers Computer Corporation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              - ii -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+__  ____________1.  Introduction
+
+     This   document   gives  a  brief  description  of the messages
+that are interchanged between  PERQ  and  the  Z-80   on   the   I/O
+board.   The descriptions  give  the  syntax of the command, a brief
+description of its function, and any restrictions.   Note  that  all
+commands  begin  with  a  153  byte  which is not shown.  In all the
+descriptions, <N> is a byte count.  An N of zero is  interpreted  as
+256.  The <enable> byte has the low  order bit set if that device is
+to be enabled, and clear if it is to be disabled.  The  remaining  7
+bits  are  device  specific   and   should normally  be  zero.   All
+numbers are octal unless they are terminated with a period.
+
+     Whenever  PERQ  sends  a   message   that   requires   a   data
+transfer,   no  further  transfer  messages, for that device, should
+be sent until the Z-80 says that it is willing  to  accept  messages
+for that device.
+
+
+
+
+
+__  ____ __ ___ ________2.  Perq -> Z80 Messages
+
+
+
+     ________ ____     RS232Out Char
+     <001><N><char1><char2>...<charN>
+
+               This   message   places   characters   into
+          the  RS-232  output ring buffer.  The byte count
+          <N>    must   be   less   than   or   equal   to
+          sixteen.   The  Z-80  will  give  a  transmitter
+          ready  status  whenever  there  are sixteen free
+          bytes in the ring buffer.
+
+
+     ______ _______     Floppy Command
+     <002><head,unit><cyl><sec><cmd><N><Data0><Data1>...<DataN>
+
+               The <head,unit>, <cyl> and <sec> bytes of a
+          floppy   command   must be  in  the  same format
+          that is expected by the NEC  floppy  chip.   The
+          valid  values  for  the  <cmd>  byte of a floppy
+          command are:
+               1 - read  a sector of data.
+               2 - write a sector of data.
+               3 - format a sector.
+               4 - seek to a cylinder.
+          The  write  command  is  the only  command  that
+          must   contain  valid  data.   This data will be
+          written  to  the   floppy   in   the   specified
+          sector.   All   writes  transfer   256  bytes of
+          data to  the  floppy.   If  256  bytes  are  not
+          provided  by  PERQ  then  the  remainder  of the
+          sector will be written with  what  ever  is left
+
+
+                              - 1 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+          in  the  buffer.  For all of the commands except
+          Write a byte count of 1 must be specified.  This
+          data byte will not be used.
+
+
+     ____ _______     GPIB Command
+     <003><cmd><N><Data1><Data2>...<DataN>
+
+          The allowable  values  of cmd are:
+               1 - write data.
+               2 - write data with EOI on last byte.
+               3 - write registers.
+          The   first   two commands cause a data transfer
+          on the GPIB bus.  N must be in the range of 1 to
+          32.   The GPIB will not be marked as ready until
+          all the bytes have been transfered.   The  third
+          command  allows  PERQ to directly write into the
+          TI-9914 registers.  In this command,  each  pair
+          of  data  bytes  is  treated  as the first being
+          a register number, and the second a data  value.
+          The register numbers are:
+                0 - Interrupt   Mask   0  (The  Z-80  will
+                    always enable  BI  and  BO  with  your
+                    data).
+                1 - Address  Register
+                3 - Parallel  Poll
+                4 - Interrupt Mask 1
+                5 - Serial Poll
+                6 - Auxiliary Command
+          Again, N must be in the range of 1 to 32.
+
+
+     ______ _______     Speech Command
+     <004><N><Data1><Data2>...<DataN>
+
+               This  command  is  similar  to  the  RS-232
+          output command except  that the  output  goes to
+          the  speech channel.  The byte count (N) must be
+          less than or equal to thirty-two.  The Z-80 will
+          give  a  speech  ready status whenever there are
+          thirty-two free bytes in the ring buffer
+
+
+     _____ ______     RS232 Status
+     <005><3><enable><clock><settings>
+
+               This command sets  the  current  state   of
+          the   RS-232  channel.  <clock>  represents  the
+          baud  rate  (1 is 9600, 2 is 4800,  4  is  2400,
+                                                  ________          etc.).   <settings> is the bit pattern  rrttsspp
+          where:
+               __               rr is number of bits per receive  character
+                  (00  for  5, 01  for  7, 10 for 6 and 11
+                  for 8).
+
+
+
+
+                              - 2 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+               __               tt is  the  number  of  bits  per  transmit
+                  character (same as rr).
+               __               ss is   the   number   of stop bits (00 for
+                  synchronus, 01 for 1, 10 for 1 1/2,  and
+                  11 for 2).
+               __               pp is the parity setting (00 for no parity,
+                  01 for  odd,  11  for even).
+
+
+     ______ ______     Tablet Status
+     <006><1><enable>
+
+               Turns   the   tablet   on   or   off.    No
+          other  status settings are possible.
+
+
+     ________ ______     Keyboard Status
+     <007><1><enable>
+
+               Turns  the keyboard on or  off.   No  other
+          status  settings  are possible.
+
+
+     ____ ____     Disk Seek
+     <010><count>
+
+               Performs  a seek of <count> cylinders.  The
+          seek   complete  message  is  issued  after  the
+          appropriate delay time based on  the  value   of
+          <count>.
+
+
+     _______ ________     Voltage Settings
+     <011><N><enable><voltages>
+
+               Enables   or  disables  voltage/temperature
+          checking  and  sets  the  minimum  and   maximum
+          allowable  values  (the   range  is  inclusive).
+          The  values are specified as four bytes for each
+          voltage/temperature.   The first byte is the low
+          order minimum, the second  is  the  high   order
+          minimum, the third is the low order maximum, and
+          the fourth is  the  high  order  maximum.    The
+          ordering  of  the voltages/temperatures  is:
+               ground
+               +5
+               +12
+               +12/-12
+               Vref
+               Network
+               CRT
+               base unit
+
+
+
+
+
+
+                              - 3 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+               +55
+               +24
+          The  value   of   <N>   specifies  the number of
+          data bytes in the command.  It may fall  in  the
+          range of 1 to 51 (octal).
+
+
+     _____ ______     Clock Status
+     <012><1><enable>
+
+               Turns  the  clock  on  or  off.   No  other
+          status  settings  are possible.
+
+
+     _______ ______     Request Status
+     <013><flag>
+
+               Requests  the  Z-80  to return  the  status
+          settings  of  any  device.   The  <flag> byte is
+          treated as a set of one bit flag   to   indicate
+          which   device   statuses  are  being requested.
+          The bit definitions are:
+               001 - RS-232
+               002 - Tablet
+               004 - Keyboard
+               010 - Voltage
+               020 - Clock
+               040 - Floppy 100 - GPIB
+               200 - send status change
+
+
+     ______ ______     Floppy Status
+     <014><003><Density><  Heads><Interrupt enable>
+
+               The Floppy Status command is  used  to  set
+          the  status  of  the floppy.   <Density> is used
+          to set the floppy to single or  double  density.
+          A   0   indicates   single   density   while   a
+          100(octal)  indicates   double   density.     < 
+          Heads>   indicates  the number of heads that the
+          floppy  has.   Valid  values  are   1   and   2.
+          <Interrupt   Enable>    is   used   to  set  the
+          interrupt status of the floppy.   If  interrupts
+          are  disable  then   the   floppy  will  not  be
+          able  to interrupt  the  Z80.   A  1   indicates
+          that  interrupts  are  to  be allowed.  A 0 will
+          disable interruptes.
+
+
+
+
+
+
+
+
+
+
+
+                              - 4 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+     ______ ____     Floppy Boot
+     <15>
+
+               The Floppy Boot message is used to  request
+          the  Z80  to read a boot file  from  the floppy.
+          The  format  of  boot  floppies   is   described
+          elsewhere.
+
+
+
+
+
+__  ___ __ ____ ________3.  Z80 -> Perq Messages
+
+
+
+     ________ ____     Keyboard Char
+     <001><Char>
+
+               <Char> is the eight bit value received from
+          the keyboard.
+
+
+     _______ ____     RS232In Char
+     <002><2*N><Status1><Char1>...<StatusN><CharN>
+
+               This   message   transfers  up  to  sixteen
+          characters   received  on  the  RS-232  channel.
+          <Char>  represents  the   eight   bit   quantity
+          received.  The <Status> bytes have the following
+          error bits:
+               1 (bit 0) - parity
+               2 (bit 1) - overrun
+               4 (bit 2) - framing.
+
+
+     ______     Tablet
+     <003><Xlow><Xhigh><Ylow><Yhigh><count>
+
+               This message reports the  X  and  Y  values
+          from  the  tablet.   The tablet  switch  appears
+          as  the  high  order  bit  of  Xhigh.    <count>
+          represents  the  number  of  clock  ticks  (1/60
+          second) elapsed  since the sending of  the  last
+          tablet message.
+
+
+     _____     Clock
+     <004><count>
+
+               This   message   reports   the   number  of
+          clock ticks since the last clock message.  Note,
+          this  message  is  used  only  when the clock is
+          enabled and the tablet is disabled.
+
+
+
+
+                              - 5 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+     ______ ____     Floppy Data
+     <005><Status><N><Data1><Data2>...<DataN>
+
+               This  message  is  used  to  transmit  data
+          from  a  read  operation to PERQ.  The low order
+          bit of the status byte  indicates  if  the  Read
+          operation    completed   without   error.   A  1
+          indicates that there was error.
+
+
+     ____     GPIB (not implemented)
+     <006><Status><N><Data1><Data2>...<DataN>
+
+
+     _____ ______     RS232 Status
+     <007><3><enable><clock><settings>
+
+               Reports the  current  RS-232  status.   The
+          interpretation  of <clock> and <settings> is the
+          same as for the PERQ to Z-80 message.
+
+
+     ______ ______     Tablet Status
+     <010><1><enable>
+
+               Reports the current status of the tablet.
+
+
+     ________ ______     Keyboard Status
+     <011><1><enable>
+
+               Reports the current status of the keyboard.
+
+
+     ____ ________     Seek Complete
+     <012>
+
+               Acknowledges completion of a disk seek.
+
+
+     ______ ______     Status Change
+     <013><flag>
+
+               This   message   reports   the  ability  of
+          the Z-80 to accept  data  transfer  messages  to
+          different  devices.   <flag> is interpreted as a
+          set of one bit flags that indicate which devices
+          are currently permitted:
+               001 - Can Accept RS232 Output
+               002 - Can Accept Speech Output
+               004 - Can Accept Floppy Input/Output
+               010 - Can Accept GPIB command
+
+
+
+
+
+
+                              - 6 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+               020 - Can Accept Disk Seek
+               200 - Always set
+
+
+     _______ _____     Voltage Error
+     <014><024><current voltages>
+
+               Reports   that   at   least   one   of  the
+          voltage/temperatures was out  of the   allowable
+          bounds.   The  values  are  reported in the same
+          order as in the PERQ to Z-80  message  with  the
+          low  byte   preceeding   the  high  byte in each
+          case.
+
+
+     _______ ______     Voltage Status
+     <015><75><enable><current voltages><min/max settings>
+
+               This   message  reports   the   status   of
+          voltage/temperature  checking.   <current  volt-
+          ages> reports the  current  values  (as  in  the
+          voltage error  message),  and <min/max settings>
+          give the lower and  upper  bounds  in  the  same
+          format as the PERQ to Z-80 message.
+
+
+     _____ ______     Clock Status
+     <016><1><enable>
+
+               Reports the status of the clock.
+
+
+     ______ ______     Floppy Status
+     <20><N><reg1>..<regN>
+
+               This  message  is used to return the status
+          of the floppy.   Up  to seven  registers  may be
+          returned  by this message.  These are the status
+          registers that are provided by the NEC chip.
+
+
+     ______ ____     Floppy Done
+     <21><Status>
+
+               The floppy done message is used to indicate
+          that    the    requested  floppy  operation  has
+          finished.  The low order bit of this message  is
+          used  to  provide  error status information.  If
+          the  low  order bit  is  set  then  there was an
+          error  during  the operation.  The Floppy Status
+          command  can  be  used  to  get  more   detailed
+          information  about  any  errors  that  may  have
+          occurred.
+
+
+
+
+
+                              - 7 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+     ____ ______     GPIB Status
+     <017><6><reg1><reg2><reg3><reg4><reg5><reg6>
+
+               This message reports the status of the GPIB
+          read registers at the last interrupt.  The order
+          of the  registers  is:
+               1 - Interrupt Status  0
+               2 - Address Switch
+               3 - Address Status
+               4 - Command Pass Through
+               5 - Interrupt Status 1
+               6 - Bus Status
+
+
+     ______ ____ _____     Floppy Boot Error
+     <22>
+
+               The floppy boot error message will be  sent
+          anytime that there  is an  error  while  the Z80
+          is reading a boot file  from  the  floppy.   The
+          possible errors are:
+               a) the floppy is  not  ready
+               b) the floppy  is not a boot floppy
+               c) any error reported by the floppy chip.
+
+
+     ______ ____ ____     Floppy Boot Data
+     <23><N><Data1>...<DataN>
+
+               This  message  is  used to send a block  of
+          boot  file  information from the  Z80  to  Perq.
+          <N>  is  the  number  of  bytes  in the message.
+          NOTE: in a Floppy Boot Data message a byte count
+          of  zero means NO data  bytes.  A message with a
+          zero byte count will be sent after  all  of  the
+          boot blocks from the floppy have been read.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              - 8 -
+
+
+PERQ <--> Z-80 Messages                                    14 Aug 81
+
+
+          _____ __ ________          Table of Contents
+
+                1    1. Introduction
+                1    2. Perq -> Z80 Messages
+                1         RS232Out Char
+                1         Floppy Command
+                2         GPIB Command
+                2         Speech Command
+                2         RS232 Status
+                3         Tablet Status
+                3         Keyboard Status
+                3         Disk Seek
+                3         Voltage Settings
+                4         Clock Status
+                4         Request Status
+                4         Floppy Status
+                5         Floppy Boot
+                5    3. Z80 -> Perq Messages
+                5         Keyboard Char
+                5         RS232In Char
+                5         Tablet
+                5         Clock
+                5         Floppy Data
+                6         GPIB
+                6         RS232 Status
+                6         Tablet Status
+                6         Keyboard Status
+                6         Seek Complete
+                6         Status Change
+                7         Voltage Error
+                7         Voltage Status
+                7         Clock Status
+                7         Floppy Status
+                7         Floppy Done
+                8         GPIB Status
+                8         Floppy Boot Error
+                8         Floppy Boot Data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              - iii -
+

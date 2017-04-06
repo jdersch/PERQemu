@@ -1,0 +1,1053 @@
+!-----------------------------------------------------------------------------
+!
+!  File : perq.qcode.3
+!
+!  Abstract:
+!        More qcode expansions
+!
+!-----------------------------------------------------------------------------
+
+!-----------------------------------------------------------------------------
+!
+!  Change Log:
+!
+!   3 Jan 82  Michael R. Kristofic
+!      Deleted pointer, floating point comparisons.
+!
+!-----------------------------------------------------------------------------
+
+$Title ROTSHI, QAND, QOR, QNOT - Logical operators.
+
+! Opcode ROTSHI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ROTSHI is a two byte instruction that performs a shift or rotate on
+!       a word in the expression stack.  The function (shift or rotate) is
+!       selected by an operand byte.  0 means shift and non-zero means
+!       rotate.
+!
+!       A positive shift count means shift left, and a negative shift count
+!       means shift right.  The shift count must be in the range -15..15.
+!
+!       A positive rotate count means rotate right, and a negative rotate
+!       count means rotate right.  The rotate count may be in the range
+!       -32768..32767.
+!
+! Instruction:
+!       ROTSHI  Function
+!
+! Environment:
+!       (Tos) = Shift or rotate count.
+!       (Tos-1) = Word to shift or rotate.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Shifted or rotated word.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(ROTSHI), tmp := NextOp;               ! function
+        tmp := Tos, Pop, if Eql Goto(RotSh1);  ! if shift function
+
+!       Rotate.
+
+        tmp := tmp and 17, LeftShift(4);     ! number of bits to rotate
+        tmp1 := Shift + 215;                 ! 8..15,13
+        tmp - 10;
+        if Lss Goto(RotSh3);                 ! if count < 8, 8..15,13
+        tmp1 := tmp1 + 201, Goto(RotSh3);    ! if count >= 8, 8..15,14
+        
+!       Shift.
+
+RotSh1: tmp1 := 17, if Geq Goto(RotSh2);
+        tmp1 := tmp1 + tmp;                  ! shift right, we need 15 - n.
+        tmp := not tmp;                      ! n is negative so 15 - (-n)=15+n
+        tmp := tmp + 1;
+RotSh2: tmp, LeftShift(4);
+        tmp1 := Shift + tmp1, Goto(RotSh3);  ! 0..15,15 for shift left
+                                             ! 0..15,15..0 for shift right
+
+!       Do the shift or rotate.
+
+RotSh3: tmp1, ShiftOnR;                      ! set up the shifter
+        Tos;                                 ! data to be shifted
+        Tos := Shift, NextInst(0);           ! put the result on the stack
+
+! Opcode QAND.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       QAND is a one byte instruction that computes a fullword bitwise AND
+!       of two words in the expression stack.
+!
+! Instruction:
+!       QAND
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0 and Word1.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(QAND), tmp := Tos, Pop;
+        Tos := Tos and tmp, NextInst(0);
+
+! Opcode QOR.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       QOR is a one byte instruction that computes a fullword bitwise OR
+!       of two words in the expression stack.
+!
+! Instruction:
+!       QOR
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0 or Word1.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(QOR), tmp := Tos, Pop;
+        Tos := Tos or tmp, NextInst(0);
+
+! Opcode QNOT.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       QNOT is a one byte instruction that complements the low order bit
+!       of a word in the expression stack.
+!
+! Instruction:
+!       QNOT
+!
+! Environment:
+!       (Tos) = Word.
+!
+! Result:
+!       (Tos) = not Word.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(QNOT), Tos := Tos xor 1, NextInst(0);
+
+
+
+
+$Title xxxBool - Boolean comparisons.
+
+! Opcode EQUBool, NEQBool, LEQBool, LESBool, GEQBool, GTRBool.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxBool opcodes are one byte instructions that compare two boolean
+!       values in the expression stack for equality and/or order.  The
+!       following statements define the comparison operations.
+!
+!            Ord(False) = 0.
+!            Ord(True) = 1.
+!            False < True.
+!
+! Instruction:
+!       xxxBool
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0 xxx Word1.
+!
+! Design:
+!       These opcodes should be removed at a later time since the integer
+!       comparisons will do the right thing for single bit inputs.
+!
+! Calls:
+!       Integer comparisons.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EQUBool), Goto(EQUInt);
+
+Opcode(NEQBool), tmp := Tos, Pop;             ! this one's also used for
+        Tos := Tos xor tmp, NextInst(0);      ! fullword XOR
+
+Opcode(LEQBool), Goto(LEQInt);
+
+Opcode(LESBool), Goto(LESInt);
+
+Opcode(GEQBool), Goto(GEQInt);
+
+Opcode(GTRBool), Goto(GTRInt);
+
+
+
+
+$Title - xxI, MODI, CHK - Integer arithmetic.
+
+! Opcode ABI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ABI is a one byte instruction that computes the absolute value of
+!       an integer in the expression stack.
+!
+! Instruction:
+!       ABI
+!
+! Environment:
+!       (Tos) = Word.
+!
+! Result:
+!       (Tos) = Absolute value of Word.
+!
+! Calls:
+!       Nxt.     *** BAD: jumps into another Q-code ***
+!
+!-----------------------------------------------------------------------------
+
+
+! Opcode NGI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       NGI is a one byte instruction that negates an integer in the
+!       expression stack.
+!
+! Instruction:
+!       NGI
+!
+! Environment:
+!       (Tos) = Word.
+!
+! Result:
+!       (Tos) = - Word.
+!
+! Calls:
+!       Nxt.     *** BAD: jumps into another Q-code ***
+!
+!-----------------------------------------------------------------------------
+
+Opcode(ABI), tmp := Tos;
+        if Geq Goto(Nxt);                    ! if already positive
+NegateInteger: Tos := Zero - tmp, NextInst(0);
+
+Opcode(NGI), tmp := Tos, Goto(NegateInteger);
+
+
+! Opcode ADI, SBI, MPI, DVI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ADI, SBI, MPI, DVI are one byte instructions that perform addition,
+!       subtraction, multiplication, and division respectively on two
+!       integer values in the expression stack.
+!
+! Instruction:
+!       xxI
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0 function Word1.
+!
+! Calls:
+!       Multiply, Divide.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(ADI), tmp := Tos, Pop;
+        Nop;                                 !***** MAB
+        Tos := Tos + tmp, NextInst(0);
+
+Opcode(SBI), tmp := Tos, Pop;
+        Nop;                                 !***** MAB
+        Tos := Tos - tmp, NextInst(0);
+
+Opcode(MPI), tmp1 := Tos and AllOnes, Pop;
+        tmp := Tos and AllOnes, Call(Multiply);
+        Tos := tmp, NextInst(0);
+
+Opcode(DVI), tmp1 := Tos and AllOnes, Pop;
+        tmp := Tos and AllOnes, Call(Divide);
+        Tos := tmp, NextInst(0);
+
+! Opcode MODI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       MODI is a one byte instruction that computes the modulus (remainder
+!       after integer division) of two integer values in the expression stack.
+!
+! Instruction:
+!       MODI
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0 mod Word1.
+!
+! Calls:
+!       Divide.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(MODI), tmp1 := Tos, Pop;
+        tmp := Tos, Call(Divide);
+        Tos := tmp1, NextInst(0);
+
+! Opcode CHK.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CHK is a one byte instruction that checks an integer value to be sure
+!       that it is in a certain range.  If the value is out of range, an
+!       ErrInxCase error is caused.
+!
+! Instruction:
+!       CHK
+!
+! Environment:
+!       (Tos) = Minimum.
+!       (Tos-1) = Maximum.
+!       (Tos-2) = Value
+!
+! Result:
+!       Stack popped twice.
+!       (Tos) = Value.
+!
+! Calls:
+!       ChkOvr.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(CHK), tmp := Tos, Pop;                ! get Minimum
+        tmp1 := Tos, Pop;                    ! get Maximum
+        tmp2 := Tos;                         ! get Value  !***** BR
+        tmp2 - tmp1;                         !***** BR
+        tmp2 - tmp, if Lss Goto(ChkOvr);     ! if Value < Minimum  !***** BR
+        if Gtr Goto(ChkOvr);                 ! if Value > Maximum
+        NextInst(0);                         ! if in range
+
+
+
+
+$Title xxxI - Integer comparisons.
+
+! Opcode EQUI, NEQI, LEQI, LESI, GEQI, GTRI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxI opcodes are one byte instructions that compare two integer
+!       values in the expression stack for equality and/or order.
+!
+! Instruction:
+!       xxxI
+!
+! Environment:
+!       (Tos) = Word0.
+!       (Tos-1) = Word1.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Word0 xxx Word1.
+!
+! Calls:
+!       SetFalse, SetTrue.
+!
+!-----------------------------------------------------------------------------
+
+EQUInt:
+Opcode(EQUI), tmp := Tos, Pop;
+        tmp1 := Tos;                         !***** BR
+        tmp1 := tmp1 xor tmp;                !***** BR MAB
+        if Eql Goto(SetTrue);                ! if equal
+        Tos := 0, NextInst(0);               ! set false
+
+NEQInt:
+Opcode(NEQI), tmp := Tos, Pop;
+        tmp1 := Tos;                         !***** BR
+        tmp1 := tmp1 xor tmp;                !***** BR MAB
+        if Neq Goto(SetTrue);                ! if not equal
+        Tos := 0, NextInst(0);               ! set false
+
+LEQInt:
+Opcode(LEQI), tmp := Tos, Pop;
+        tmp1 := Tos;                         !***** BR
+        tmp1 := tmp1 - tmp;                  !***** BR MAB
+        if Leq Goto(SetTrue);                ! if less than or equal
+        Tos := 0, NextInst(0);               ! set false
+
+LESInt:
+Opcode(LESI), tmp := Tos, Pop;
+        tmp1 := Tos;                         !***** BR
+        tmp1 := tmp1 - tmp;                  !***** BR MAB
+        if Lss Goto(SetTrue);                ! if less than
+        Tos := 0, NextInst(0);               ! set false
+
+GEQInt:
+Opcode(GEQI), tmp := Tos, Pop;
+        tmp1 := Tos;                         !***** BR
+        tmp1 := tmp1 - tmp;                  !***** BR MAB
+        if Geq Goto(SetTrue);                ! if greater than or equal
+        Tos := 0, NextInst(0);               ! set false
+
+GTRInt:
+Opcode(GTRI), tmp := Tos, Pop;
+        tmp1 := Tos;                         !***** BR
+        tmp1 := tmp1 - tmp;                  !***** BR MAB
+        if Gtr Goto(SetTrue);                ! if greater than
+        Tos := 0, NextInst(0);               ! set false
+
+
+
+
+
+$Title ADJ, SGS, SRS, INN, UNI, QINT, DIF - Set arithmetic.
+
+! Data structure SET.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Sets are represented in two ways--the first is used when a set is
+!       in memory (in a variable).  The second is used when a set is loaded
+!       onto the expression and memory stack.
+!
+!       In memory, a set is stored as a collection of bits.  The set
+!
+!            S: set of Low..High
+!
+!       is represented in the same way as
+!
+!            A: packed array[0..High] of Boolean
+!
+!       where
+!
+!            x in S <==> A[x].
+!            
+!       That is, bit B of word W is set when W*16 + B is a member of the set.
+!       Thus the position of a certain element does not depend on the declared
+!       low bound of the set type.  Sets are implemented as though all sets
+!       have a low bound of 0.  The number of words in such a set is exactly
+!       High div 16 + 1.  No length information is stored when a set is in
+!       memory.  The length is compiled into the code.
+!
+!       On the stack (expression and memory stacks together), a set is
+!       represented by a length on the expression stack, and a bit string
+!       on the memory stack.  The length is in words.  The bit string is
+!       in reverse order as though it were loaded via a LDMW instruction.
+!       Thus bit B of word Memory[TP-W] is set when W*16 + B is a member
+!       of the set.
+!
+!       A set is loaded onto the stack by loading its declared length (in
+!       words) onto the expression stack, and loading its bit string onto
+!       the memory stack with LDMW.
+!
+!       A set is stored into memory by adjusting its length on the memory
+!       stack until it is the same as the declared length.  This is done
+!       adding zero words or deleting words from its high end (farthest
+!       from the top of the memory stack).  The length word is popped from
+!       the expression stack, and an STMW is used to store the set.
+!
+!       When a two operand set instruction is to be done, the set that is
+!       lower in the memory stack must have a length that is greater than
+!       or equal to the length of the other set.  If the lower set has a
+!       smaller length, it is adjusted to be the same length as the longer
+!       set.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode ADJ.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       ADJ is a two byte instruction that adjusts a set prior to storing
+!       it.
+!
+! Instruction:
+!       ADJ     DesiredLength
+!
+! Environment:
+!       (Tos) = Actual length.
+!
+! Result:
+!       Stack popped.
+!       Set on the memory stack adjusted to have the desired length.
+!
+! Calls:
+!       SetMovUp, SetMovDown, VectSrv, StkOv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(ADJ), tmp := Tos, pop;                ! actual length
+        tmp1 := NextOp - tmp;                ! difference in length
+        tmp3 := tmp1, if Gtr Goto(Adj1);     ! if set should be lengthened
+        tmp1;                                ! allow placer to do page escape
+        if Lss Goto(Adj3);                   ! if set should be shortened
+        NextInst(0);                         ! if set is already the right size
+
+!       Lengthen the set with zero words.
+
+Adj1:   Tos := TP - tmp, Push;               ! save address of deep end
+        TP := TP + tmp1, if IntrPend Call(VectSrv);
+        SL - TP;
+        tmp, if C19 Goto(Adj4);              ! if not enough room
+        dst := Tos + tmp1, if Eql Goto(Adj2);  ! if null set
+        Call(SetMovUp);                      ! open up the set
+Adj2:   tmp1 := tmp3, Call(SetZero);         ! zero out the new words
+        Pop, NextInst(0);
+
+!       Shorten set by deleting words.
+
+Adj3:   Tos := TP + 1, Push;                 ! end of set + 1
+        TP := TP + tmp1, if IntrPend Call(VectSrv);
+        dst := Tos + tmp1, Call(SetMovDown); ! delete words
+        Pop, NextInst(0);
+
+!       It won't fit, signal an error.
+
+Adj4:   tmp11 := 2;                          ! PC backup
+        TP := TP - tmp1;                     ! TP backup
+SetOverFlow: Tos := tmp, Goto(StkOv);        ! restore ESTK
+
+! Opcode SGS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SGS is a one byte instruction that builds a singleton set--a set
+!       that consists of a single member.  If the member ordinal is outside
+!       the range 0..4095 a null set is built.
+!
+! Instruction:
+!       SGS
+!
+! Environment:
+!       (Tos) = N = Member ordinal.
+!
+! Result:
+!       (Tos) = L = Length of set = N div 16 + 1.
+!       N words pushed onto memory stack.
+!       Memory[TP-0] = 0.
+!       Memory[TP-1] = 0.
+!          ...
+!       Memory[TP-L+2] = 0.
+!       Memory[TP-L+1] = 1 LeftShift (N mod 16).
+!
+! Calls:
+!       MakeBit, SetZero, ChkStk, SetOverFlow, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(SGS), tmp11 := 1, Call(MakeBit);      ! make a word with a single bit
+        tmp - 10000;
+        tmp, if Lss Goto(SGS2);              ! if member <= 4095
+
+!       Make a null set.
+
+SGS1:   Tos := 0, Push, NextInst(0);         ! null set
+
+SGS2:   dst := TP, if Lss Goto(SGS1);        ! if member < 0
+        tmp, RightShift(4);
+        tmp1 := Shift + 1, Push;             ! set size
+        tmp10 := tmp1, LoadS(SetOverFlow);
+        dst := dst + tmp1, Call(ChkStk);     ! see if the set will fit
+        TP := TP + 1, Store;                 ! push the bit
+        tmp5, if IntrPend Call(VectSrv);
+        tmp1 := tmp1 - 1, Call(SetZero);     ! push the zeros
+        TP := dst, NextInst(0);
+
+! Opcode SRS.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       SRS is a one byte instruction that builds a subrange set--a set
+!       that consists of a contiguous span of members.  If the high bound
+!       is greater than 4095, the low bound is less than 0, or the low
+!       bound is greater than the high bound, a null set is built.
+!
+! Instruction:
+!       SRS
+!
+! Environment:
+!       (Tos) = High bound.
+!       (Tos-1) = Low bound.
+!
+! Result:
+!       Stack popped.
+!       (Tos) = Length of set = High div 16 + 1.
+!       N words pushed onto memory stack.
+!       Memory[TP-0] = 0.
+!       Memory[TP-1] = 0.
+!          ...
+!       Memory[TP-(Low div 16)+1] = 0.
+!       Memory[TP-(Low div 16)] = LeftMask(16 - (Low mod 16)).
+!       Memory[TP-(Low div 16)-1] = 177777.
+!       Memory[TP-(Low div 16)-2] = 177777.
+!          ...
+!       Memory[TP-(High div 16)+1] = 177777.
+!       Memory[TP-(High div 16)] = RightMask((High mod 16) + 1).
+!
+! Calls:
+!       MakeMask, SetZero, ChkStk, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(SRS), tmp := Tos, Pop;                ! high bound
+        tmp1 := Tos;                         ! low bound   !***** BR
+        tmp1 - tmp, if Lss Goto(SRS7);       ! if low bound < 0  !***** BR
+        if Gtr Goto(SRS7);                   ! if low bound > high bound
+        tmp - 10000;
+        if Geq Goto(SRS7);                   ! if high bound > 4095
+        loadS(SRS8);
+        tmp, RightShift(4);
+        tmp10 := Shift, Call(ChkStk);        ! length-1 = (High div 16)
+        TP := TP + 1, Call(MakeMask);        ! RightMask((High mod 16) + 1)
+        dst := TP, Store, if Neq Goto(SRS1); ! store the right mask
+        AllOnes, Goto(SRS2);                 ! zero mask means all ones
+
+SRS1:   tmp2;                                ! Upper word
+SRS2:   tmp := tmp or 17, if IntrPend Call(VectSrv);
+        tmp - tmp1, RightShift(4);
+        tmp := Shift;                        ! number of middle words + 1
+
+!       Store the contiguous 177777's.
+
+SRS3:   tmp4 := tmp1, if Leq Goto(SRS6);
+        dst := dst + 1, Store;
+        AllOnes, if IntrPend Goto(SRS5);
+SRS4:   tmp := tmp - 1, Goto(SRS3);
+
+SRS5:   Call(VectSrv);
+        Goto(SRS4);
+        
+SRS6:   tmp1, Field(0,4);
+        tmp := Shift - 1, Call(MakeMask);    ! RightMask(Low mod 16)
+        dst, Fetch;                          ! t3  fetch a 177777 or RightMask
+        tmp1, RightShift(4);                 ! t0
+        tmp1 := Shift;                       ! t1  number of zero words
+        dst, Store;                          ! t2
+        Mdi and not tmp2;                    ! t3  LeftMask(16-(Low div 16))
+        TP := TP + tmp10, if IntrPend Call(VectSrv); 
+        dst := TP, Call(SetZero);            ! make the zero words
+        Tos := tmp10 + 1, NextInst(0);       ! push length on stack
+
+!       Make a null set.
+
+SRS7:   Tos := 0, NextInst(0);
+
+!       There's no room on the stack.
+
+SRS8:   Tos := tmp1, Push;              ! restore ESTK
+        tmp11 := 1, Goto(StkOv);
+
+! Opcode INN.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       INN is a one byte instruction that determines set membership.
+!
+! Instruction:
+!       INN
+!
+! Environment:
+!       (Tos) = L = Length of set.
+!       (Tos-1) = Element.
+!       Top L words on the memory stack = the Set.
+!
+! Result:
+!       Stack popped.
+!       L words popped from memory stack.
+!       (Tos) = Element in Set.
+!
+! Calls:
+!       MakeBit.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(INN), tmp2 := Tos, Pop;               ! get length of the set
+        Call(MakeBit);                       ! make a bit
+        Nop;                                 ! allow placer to do page escape
+        tmp, RightShift(4);                  ! potential element
+        tmp := Shift, Push,                  ! word offset
+                            if Lss Goto(INN2);  ! if potential member < 0
+        tmp - tmp2;
+        if Geq Goto(INN2),                   ! if word offset >= length
+                            MA := TP - tmp, Fetch;  ! get word from stack
+        Mdi and tmp5;                        ! test the bit
+        Tos := 1,                            ! assume true
+                  if Eql Goto(INN2);         ! if bits don't match
+INN1:   TP := TP - tmp2, NextInst(0);        ! cut back stack to get rid of set
+
+INN2:   Tos := 0, Goto(INN1);                ! not in set, push false
+
+! Opcode UNI.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       UNI is a one byte instruction that computes the union of two sets.
+!
+! Instruction:
+!       UNI
+!
+! Environment:
+!       (Tos) = L0 = Length of Set0.
+!       (Tos-1) = L1 = Length of Set1.
+!       Top L0 words on the memory stack = Set0.
+!       Next L1 words on the memory stack = Set1.
+!
+! Result:
+!       Stack popped.
+!       The lesser of L0 and L1 words popped from the memory stack.
+!       (Tos) = L = The greater of L0 and L1.
+!       Top L words of memory stack = Set0 + Set1.
+!
+! Calls:
+!       SetAdj, SetOp.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(UNI), Call(SetAdj);                   ! make L1 >= L0
+        if Neq Goto(UNI1);                   ! if Set0 <> []
+        NextInst(0);                         ! result is Set1
+
+UNI1:   LoadS(UNI2);
+        Call(SetOp);                         ! compute the union
+        NextInst(0);
+
+UNI2:   Mdi or tmp, Goto(SetOp);             ! union of two words
+
+! Opcode QINT.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       QINT is a one byte instruction that computes the intersection
+!        of two sets.
+!
+! Instruction:
+!       QINT
+!
+! Environment:
+!       (Tos) = L0 = Length of Set0.
+!       (Tos-1) = L1 = Length of Set1.
+!       Top L0 words on the memory stack = Set0.
+!       Next L1 words on the memory stack = Set1.
+!
+! Result:
+!       Stack popped.
+!       The lesser of L0 and L1 words popped from the memory stack.
+!       (Tos) = L = The greater of L0 and L1.
+!       Top L words of the memory stack = Set0 * Set1.
+!
+! Calls:
+!       SetAdj, SetOp.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(QINT), Call(SetAdj);                  ! make L1 >= L0
+        tmp5 := tmp3, if Eql Goto(INT1);     ! if Set0 = []
+        LoadS(INT2);
+        Nop;                                 ! allow placer to do page escape
+        Call(SetOp);                         ! compute the union
+INT1:   tmp1 := Tos - tmp5;                  ! diff. of set sizes
+        dst := tmp4, Call(SetZero);          ! fill with zero words
+        NextInst(0);
+
+INT2:   Mdi and tmp, Goto(SetOp);            ! intersection of two words
+
+! Opcode DIF.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       DIF is a one byte instruction that computes the difference
+!        of two sets.
+!
+! Instruction:
+!       DIF
+!
+! Environment:
+!       (Tos) = L0 = Length of Set0.
+!       (Tos-1) = L1 = Length of Set1.
+!       Top L0 words on the memory stack = Set0.
+!       Next L1 words on the memory stack = Set1.
+!
+! Result:
+!       Stack popped.
+!       The lesser of L0 and L1 words popped from the memory stack.
+!       (Tos) = L = The greater of L0 and L1.
+!       Top L words of the memory stack = Set0 - Set1.
+!
+! Calls:
+!       SetAdj, SetOp.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(DIF), Call(SetAdj);                   ! make L1 >= L0
+        if Eql Goto(DIF1);
+        LoadS(DIF2);
+        Nop;                                 ! allow placer to do a page escape
+        Call(SetOp);                         ! compute the difference
+DIF1:   NextInst(0);
+
+DIF2:   Mdi and not tmp, Goto(SetOp);        ! difference of two words
+
+
+
+
+$Title xxxPowr - Set comparisons.
+
+! Opcode EQUPowr, NEQPowr, LEQPowr, GEQPowr.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxPowr opcodes are one byte instructions that compare two set
+!       operands.
+!
+! Instruction:
+!       xxxPowr
+!
+! Environment:
+!       (Tos) = L0 = Length of Set0.
+!       (Tos-1) = L1 = Length of Set1.
+!       Top L0 words on the memory stack = Set0.
+!       Next L1 words on the memory stack = Set1.
+!
+! Result:
+!       Stack popped.
+!       L0 + L1 words popped from memory stack.
+!       (Tos) = Set0 xxx Set1.
+!
+! Calls:
+!       SetFalse, SetTrue.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EQUPowr), Call(SetAdj);
+        Call(SetSizes);
+        tmp3;
+        IF Eql Goto(EQUPZ), Tos := 1;
+        LoadS(EQUPop);
+        Nop;                           ! placer !!!!!!!!!!!!!!!!!!!!!
+EQUPCMP:Call(SETCOMP);
+        if Odd Goto(EQUPZ);       ! already false
+        TP := tmp6, NextInst(0);
+EQUPZ:  Call(SETZCHK);
+EQUPX:  TP := tmp6, NextInst(0);
+EQUPop: Mdi - tmp;  !Compare Equal
+        IF eql Goto(SETCOMP);
+        Tos:= 0, Return;
+
+Opcode(NEQPowr), Call(SetAdj);
+        Call(SetSizes);
+        tmp3;
+        IF Eql Goto(EQUPZ), Tos := 0;
+        LoadS(NEQPop);
+        Call(SETCOMP);
+        if Odd Goto (EQUPX);
+        Goto(EQUPZ);
+NEQPop: Mdi - tmp;  !Compare Equal
+        IF eql Goto(SETCOMP);
+        Tos := 1, Return;
+
+Opcode(LEQPowr), Call(SetAdj);
+        Call(SetSizes);
+        tmp3;
+        if Eql Goto(EQUPZ), Tos := 1;
+        LoadS(LEQPop);
+        Goto(EQUPCMP);
+LEQPop: Mdi and not tmp;
+        IF eql Goto(SETCOMP);
+        Tos := 0, Return;
+
+Opcode(GEQPowr), Call(SetAdj);
+        Call(SetSizes);
+        tmp3;
+        if eql Goto(GEQPEND), Tos := 1;
+        LoadS(GEQPop);
+        Call(SETCOMP);
+GEQPEND:TP := tmp6, NextInst(0);
+GEQPop: tmp1 := Mdi;
+        tmp and not tmp1;
+        IF eql Goto(SETCOMP);
+        Tos := 0, Return;
+
+
+
+
+$Title xxxStr - String comparisons.
+
+! Opcode EQUStr, NEQStr, LEQStr, LESStr, GEQStr, GTRStr.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxStr opcodes are one byte instructions that compare two string
+!       values for equality and/or order.  The strings must be word aligned.
+!
+! Instruction:
+!       xxxStr
+!
+! Environment:
+!       (Tos) = Byte offset for String0.
+!       (Tos-1) = Word address of String0.
+!       (Tos-2) = Byte offset for String1.
+!       (Tos-3) = Word address of String1.
+!
+! Result:
+!       stack popped three times.
+!       (Tos) = String0 xxx String1.
+!
+! Calls:
+!       StrCmp, SetTrue.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EQUStr), Call(StrCmp);
+        Tos := 0, if Eql Goto(SetTrue);      ! assume false
+        NextInst(0);
+
+Opcode(NEQStr), Call(StrCmp);
+        Tos := 0, if Neq Goto(SetTrue);      ! assume false
+        NextInst(0);
+
+Opcode(LEQStr), Call(StrCmp);
+        Tos := 0, if Leq Goto(SetTrue);      ! assume false
+        NextInst(0);
+
+Opcode(LESStr), Call(StrCmp);
+        Tos := 0, if Lss Goto(SetTrue);      ! assume false
+        NextInst(0);
+
+Opcode(GEQStr), Call(StrCmp);
+        Tos := 0, if Geq Goto(SetTrue);      ! assume false
+        NextInst(0);
+
+Opcode(GTRStr), Call(StrCmp);
+        Tos := 0, if Gtr Goto(SetTrue);      ! assume false
+        NextInst(0);
+
+
+
+
+$Title xxxByt - Byte array comparisons.
+
+! Opcode EQUByt, NEQByt, LEQByt, LBytBytByt, GEQByt, GTRByt.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxByt opcodes are two byte instructions that compare two byte
+!       arrays for equality and/or order.  The length of the byte arrays is
+!       specified as an operand byte if it is a constant and less than 256.
+!       Otherwise the operand byte is zero and the length is on the
+!       expression stack.
+!
+! Instruction:
+!       xxxByt  Length
+!
+! Environment:
+!       If Length <> 0:
+!            (Tos) = Byte offset for ByteArray0.
+!            (Tos-1) = Word address of ByteArray0.
+!            (Tos-2) = Byte offset for ByteArray1.
+!            (Tos-3) = Word address of ByteArray1.
+!       If Length = 0:
+!            (Tos) = Length of byte arrays.
+!            (Tos-1) = Byte offset for ByteArray0.
+!            (Tos-2) = Word address of ByteArray0.
+!            (Tos-3) = Byte offset for ByteArray1.
+!            (Tos-4) = Word address of ByteArray1.
+!
+! Result:
+!       If Length <> 0:
+!            Stack popped three times.
+!       If Length = 0:
+!            Stack popped four times.
+!       (Tos) = ByteArray0 xxx ByteArray1.
+!
+! Calls:
+!       BytCmB, SetTrue.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EQUByt), Call(BytCmp);
+        Tos := 0, Push, if Eql Goto(SetTrue);  ! assume false
+        NextInst(0);
+
+Opcode(NEQByt), Call(BytCmp);
+        Tos := 0, Push, if Neq Goto(SetTrue);  ! assume false
+        NextInst(0);
+
+Opcode(LEQByt), Call(BytCmp);
+        Tos := 0, Push, if Leq Goto(SetTrue);  ! assume false
+        NextInst(0);
+
+Opcode(LESByt), Call(BytCmp);
+        Tos := 0, Push, if Lss Goto(SetTrue);  ! assume false
+        NextInst(0);
+
+Opcode(GEQByt), Call(BytCmp);
+        Tos := 0, Push, if Geq Goto(SetTrue);  ! assume false
+        NextInst(0);
+
+Opcode(GTRByt), Call(BytCmp);
+        Tos := 0, Push, if Gtr Goto(SetTrue);  ! assume false
+        NextInst(0);
+
+
+
+
+$Title xxxWord - Multiple word comparisons.
+
+! Opcode EQUWord, NEQWord.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The xxxWord opcodes are two byte instructions that compare two word
+!       arrays for equality or inequality.  The length of the word arrays is
+!       specified as an operand byte if it is a constant and less than 256.
+!       Otherwise the operand byte is zero and the length is on the
+!       expression stack.
+!
+! Instruction:
+!       xxxWord  Length
+!
+! Environment:
+!       if Length <> 0:
+!            (Tos) = Word address of WordArray0.
+!            (Tos-1) = Word address of WordArray1.
+!       if Length = 0:
+!            (Tos) = Length of word arrays.
+!            (Tos-1) = Word address of WordArray0.
+!            (Tos-2) = Word address of WordArray1.
+!
+! Result:
+!       if Length <> 0:
+!            Stack popped once.
+!       if Length = 0:
+!            Stack popped twice.
+!       (Tos) = WordArray0 xxx WordArray1.
+!
+! Calls:
+!       CmpMW.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EQUWord), Call(CmpMW);
+        NextInst(0);
+
+Opcode(NEQWord), Call(CmpMW);
+        Tos := Tos xor 1, NextInst(0);       ! flip results

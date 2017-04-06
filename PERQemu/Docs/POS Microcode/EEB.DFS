@@ -1,0 +1,29 @@
+{ EEB Definitions.
+{-----------------------------------------------------------------------------
+{
+{       EEB.Dfs - Exception enable block definitions.
+{       J. P. Strait   10 Dec 80.
+{       Copyright (c) Three Rivers Computer Corporation, 1980.
+{
+{ Abstract:
+{       This file defines offsets within the Exception Enable Blocks
+{       (EEB's) in the Perq memory stack.  Only the routine number of the
+{       handler is required (not a full variable routine descriptor)
+{       because the handler is guaranteed to be nested immediately
+{       inside of the routine which enabled it.  The handler's segment
+{       number is the same as the enabler's segment number, the handler's
+{       static link is the enabler's activation pointer, and the
+{       handler's global pointer is the same as the enabler's global
+{       pointer.
+{
+{-----------------------------------------------------------------------------}
+
+{ 10 Dec 80  1.0  J. P. Strait.
+{ Start file.
+{ }
+
+        EEBES     = 0;   { exception segment number }
+        EEBER     = 1;   { exception routine number }
+        EEBHR     = 2;   { handler routine number }
+        EEBNE     = 3;   { next exception pointer }
+        EEBLength = 4;   { size of an EEB }

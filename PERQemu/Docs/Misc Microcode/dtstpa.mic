@@ -1,0 +1,297 @@
+! DTST - Perq Hard Disk Test Program
+! Brian Rosen
+! Copyright (C) Three Rivers Computer Corp., 1981, 1982, 1983
+
+!
+! 21-Aug-81  JPS  1.2  Add copyright notice.
+!
+! 28-Mar-81  JPS  1.1  Change  "IOB(dstat)" to "0, IOB(dstat)".
+!
+! 15-Sep-80  DAS  1.0  Formatted the file and added code for
+!                      24 MByte disks.
+!
+
+!
+! Running instructions:
+!    R0 is used to determin the size of the disk.  If it is set to
+!    24 then the disk is assumed to be 24 MBytes.  If it is any other
+!    value then the disk is assumed to be 12 MBytes.
+!
+!    After R0 is set type "0G" to ODTPRQ to start DTST.
+!
+
+ 
+define(DiskSize,0);
+define(trk,1);
+define(steps,2);
+define(dir,3);
+define(tmp,4);
+define(tmp1,11);
+define(dest,5);
+define(cyl,6);
+define(head,7);
+define(sec,10);
+define(dskStatus,12);
+define(cmd,13);
+define(Buffer,14);
+define(error,15);
+define(BlkN,16);
+define(Ran,17);
+define(RRan,20);
+define(NumHeads,21);
+
+constant(dstat,100);
+constant(dseek,301);
+constant(dhead,302);
+constant(CylSec,310);
+constant(FileL,311);
+constant(FileH,312);
+constant(Block,313);
+constant(CWadrL,331);
+constant(CWadrH,321);
+constant(DatAdrL,330);
+constant(DatAdrH,320);
+constant(ReadChk,1);
+constant(WriteW,4);
+constant(FmtWrite,5);
+constant(Reset,0);
+constant(DirOut,20);
+constant(DirIn,30);
+constant(BreakPoint,7401);
+
+!
+! Execution starts here.
+!
+
+DTST:   DiskSize - 24,  Loc(0);                  ! Check to see if it si 12 or
+        if eql GoTo(MByte24), DiskSize - 30;     ! 24 MBytes.
+        if eql GoTo(MByte24);
+        
+MByte12: NumHeads := 4, GoTo(DoTest);             ! 4 heads for 12 MBytes.
+
+MByte24: NumHeads := 10, GoTo(DoTest);            ! 8 heads for 24 MBytes.
+         
+DoTest: If IntrPend Call(VecInt);
+        0, IOB(dstat);
+        iod and 200;
+        if eql goto(DoTest);
+        Ran := 13205;
+        Call(Restore);                            ! Get heads at known position
+        Call(MasterZ);
+        Call(LdBuf);
+        40, iob(dseek);                           ! Clear Write Fault
+        cmd := FmtWrite, Call(DoDisk);
+        Call(SetZero);
+        cmd := ReadChk, Call(DoDisk);             ! Scan the whole disk for errors
+
+GetSec: Ran, RightShift(4);
+        Sec := Shift and 37, Call(Random);
+        Sec - 35;
+        IF gtr GoTo (GetSec);
+        
+GetHead: Ran, RightShift(10);
+         Head := Shift and 3, Call(Random);       ! Trial Head
+         
+GetCyl: Ran, RightShift(7);
+        Cyl := Shift and 377, Call(Random);       ! Trial Cylinder
+        Cyl - 311;
+        IF Gtr GoTo(GetCyl);
+        dest := cyl, Call(seek);
+        tmp := ran, Call(Random);
+        tmp and 10; ! Get direction
+        cmd := ReadChk, If Neq GoTo(ItsABoy);
+        cmd := WriteW;
+        Call(LdBuf);
+        Call(DskDoIt);
+        If Neq GoTo(BreakPoint);
+        GoTo(GetSec);
+
+ItsABoy: Call(DskDoIt);                           ! Read the sector
+        If Neq GoTo(BreakPoint);
+        Call(CkBuf);
+        GoTo(GetSec);
+
+LdBuf:        tmp := 403;
+        MA := tmp, Store;                         ! The location of the header buffer
+        MDO := Ran, Call(Random);                 ! Store the seed
+        Buffer := 777;
+        LoadS(377);
+WrtBuf: Buffer := Buffer + 1, Store;
+        MDO := Ran, Call(Random);
+        If IntrPend Call(VecInt);
+        Repeat(WrtBuf);
+        Return;
+        
+CkBuf:  tmp := 403;                               ! Get the old seed
+        tmp, Fetch;
+        RRan := Ran;                              ! Save the current random seed
+        Buffer := 777;                            ! Place for the data buffer
+        Ran := MDI, Call(Random);                 ! Pick up the old one
+        LoadS(377);
+RdCmp:  Buffer := Buffer + 1, Fetch;
+        IF IntrPend GoTo(BPI);
+        MDI - Ran;
+        IF Neq GoTo(RdErr);
+        Call(Random);
+        Repeat(RdCmp);
+        Ran := RRan, Return;
+        
+RdErr:  Error := 3, GoTo(BreakPoint);
+
+BPI:    Call(VecInt);
+        Buffer := Buffer - 1, GoTo(RdCmp);
+        
+DoDisk:  dest := cyl, Call(seek);
+         Call(DskDoIt);
+         If Neq GoTo(BreakPoint);
+         cmd - ReadChk;
+         If Eql GoTo(DDRead);
+         Sec := Sec + 1;
+         Sec - 36;
+         If Neq GoTo(DoDisk);
+         Sec := 0;
+         
+IncHead: Head := Head + 1;
+         Head - NumHeads;
+         IF Neq GoTo(DoDisk);
+         Head := 0;
+         Call(WaitIndex);
+         Cyl := Cyl + 1;
+         Cyl - 312;
+         IF Neq GoTo(DoDisk);
+         Return;
+         
+DDRead:  Call(CkBuf);
+         Sec := Sec + 2, If IntrPend Call(VecInt);
+         Sec - 36;
+         Sec - 37, If Lss Goto(DoDisk);
+         Sec := 1, If Neq GoTo(DoDisk);
+         Sec := 0, GoTo(IncHead);
+         
+Restore:trk := 1;                                 ! assume head is at track 1
+Res1:   dest := 0;                                ! move 1 track
+        call(seek);                               ! doit
+        iob(dstat);
+        tmp := iod and 20;                        ! check track 0
+        trk := 1, if eql goto(Res1);
+        trk := 0, Return;
+
+Seek:   dir := DirIn;                             ! The master seek routine
+        steps := dest;
+        steps := steps - trk;
+        steps, if gtr goto(Seek1T);
+        dir := DirOut, if eql return;
+        steps := not steps;
+        steps := steps + 1;
+        
+Seek1T: dir, iob(dseek);
+        nop;
+        nop, If IntrPend Call(VecInt);
+        nop;
+        nop;
+        dir := dir and not 20;
+        dir, iob(dseek);
+        nop;
+        nop;
+        nop;
+        steps := steps - 1;
+        dir := dir or 20, if gtr goto(Seek1T);
+        
+SekCom: if IntrPend Call(VecInt);
+        iob(dstat);
+        tmp := iod and 100;                       ! check seek complete
+        if eql goto(SekCom);
+        tmp := 177777;
+dlys:   If IntrPend Call(VecInt);
+        tmp := tmp - 1;
+        if neq goto(dlys);
+        trk := dest, return;
+
+WaitIndex: IF IntrPend Call(VecInt);
+        0, IOB(dstat);
+        IOD AND 10; ! Index
+        IF Eql Goto(WaitIndex);
+        Return;
+        
+MasterZ: 240, IOB(dseek);                         ! Set Intial Conditions, Start by reseting disk
+        nop;
+        nop;
+        0, IOB(dseek);
+        Call(DskCode7);
+        Call(WaitIndex);
+        
+SetZero: head := 0;
+        Cyl := 0;
+        Sec := 0, Return;
+
+DskDoIt: Cyl, leftshift(10);
+        BlkN := SHIFT or Sec;
+        head, LeftShift(5);
+        BlkN := SHIFT or BlkN, If IntrPend Call(VecInt);
+        BlkN, IOB(CylSec);
+        head, IOB(dhead);
+        1, IOB(FileL);
+        0, IOB(FileH);
+        BlkN, IOB(Block);
+        tmp := 400;
+        MA := tmp, Store;
+        MDO := 1;
+        MA := tmp + 1, Store;
+        MDO := 0;
+        MA := tmp + 2, Store;
+        MDO := BlkN;
+        tmp := tmp xnor 1777;
+        tmp, IOB(CWAdrL);
+        not 0, IOB(CWAdrH);
+        tmp := 1000;
+        tmp := tmp xnor 1777;
+        tmp, IOB(DatAdrL);
+        not 0, IOB(DatAdrH);
+        cmd, IOB(dseek);
+        dskStatus := 0;
+        tmp1 := 5;                                ! Wait two index pulses before giving up
+ 
+WaitBusy: Error := 0, IF IntrPend Call(VecInt);
+        IOB(dstat), dskStatus;
+        IOD AND 10, IF Neq GoTo(IsDone);
+        IF Eql GoTo(WaitBusy);
+        tmp1 := tmp1 - 1;
+        IF Neq GoTo(WaitBusy);
+        Call(DskReset), Error := 1;
+        
+IsDone: dskStatus and 47;                         ! Check Error Code and Write Fault
+        Error, If Eql Return;                     ! If Zero, return with Z set
+        dskStatus and 40;                         ! Distinguish the error
+        Error := 4, If Neq Return;                ! Code 4 is Write Fault
+        Error := 2, Return;                       ! Code 2 is Non Zero Error Code
+
+DskReset: iob(dstat);                             ! Reset disk if result code is not zero
+        iod and 7;
+        if eql return;
+DskCode7: 7, iob(dseek);
+        dskStatus := 0;
+        
+DR1:    If IntrPend Call(VecInt);
+        dskStatus;
+        if eql goto(DR1);
+        return;
+
+
+Random: Ran, RightShift(4);
+        TOS := not Ran, if Lss GoTo(RNeg);
+        
+RPos:   Ran := Shift Xor Ran, LeftShift(13);
+        Ran := Shift Xor Ran, Return;
+        
+RNeg:   Ran := TOS + 1, GoTo(RPos);
+
+VidInt: GoTo(7624), loc(224);
+
+VecInt: Vector(Z80Int);
+
+Z80Int: 0, IOB(106),return,loc(200);                 ! If Z80 Interrupts, read register to dismiss it
+
+DskInt: 0, IOB(dstat),loc(210);                      ! If Dsk Interrupts, function:=0 to dismiss
+        dskStatus := IOD;
+        0, IOB(dseek), return;
+END;

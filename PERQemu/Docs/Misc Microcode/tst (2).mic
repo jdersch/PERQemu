@@ -1,0 +1,877 @@
+! Tst - PERQ Pre-Boot Diagnostic.
+! Copyright (C) Three Rivers Computer Corporation, 1981, 1982, 1983.
+
+! 21 Aug 81  JPS  V1.1  Add copyright notice and change history.
+
+
+!  PreBoot microcode: To help locate problem  processor cards.
+
+! This code will live in ROMS that will be plugged into processors
+! to help in initial debugging.
+! The code first tries out the sequencer and integrity of the bits on 
+! the JMux. It then tests the BMux passes them thru the ALU and tests
+! the integrity of the RBus. It then tests a few condition codes
+! before moving on to the ALU test.
+! A check of the registers is done to ensure that all address and
+! data bits in each of the register files can be set and cleared.
+
+! When an error is discovered the program will hang in a tight loop
+! displaying the error.
+
+! MORE TESTS ********!!!!!!
+
+
+! Registers
+
+  Define(R0,0);
+  Define(R1,1);
+  Define(R2,2);
+  Define(R4,4);
+  Define(R10,10);
+  Define(R20,20);
+  Define(R40,40);
+  Define(R100,100);
+  Define(R200,200);
+  Define(R377,377);
+
+  Constant(Zero,0);
+  Constant(Bit0,1);
+  Constant(Bit1,2);
+  Constant(Bit2,4);
+  Constant(Bit3,10);
+  Constant(Bit4,20);
+  Constant(Bit5,40);
+  Constant(Bit6,100);
+  Constant(Bit7,200);
+  Constant(Bit8,400);
+  Constant(Bit9,1000);
+  Constant(Bit10,2000);
+  Constant(Bit11,4000);
+  Constant(Bit12,10000);
+  Constant(Bit13,20000);
+  Constant(Bit14,40000);
+  Constant(Bit15,100000);
+  Constant(NotBit0,177776);
+  Constant(NotBit1,177775);
+  Constant(NotBit2,177773);
+  Constant(NotBit3,177767);
+  Constant(NotBit4,177757);
+  Constant(NotBit5,177737);
+  Constant(NotBit6,177677);
+  Constant(NotBit7,177577);
+  Constant(NotBit8,177377);
+  Constant(NotBit9,176777);
+  Constant(NotBit10,175777);
+  Constant(NotBit11,173777);
+  Constant(NotBit12,167777);
+  Constant(NotBit13,157777);
+  Constant(NotBit14,137777);
+  Constant(NotBit15,077777);
+  Constant(Allones,177777);
+  Constant(Pat1,177777);
+  Constant(Pat2,177400);
+  Constant(Pat3,170360);
+  Constant(Pat4,125252);
+  Constant(Pat5,101010);
+  Constant(Pat6,02020);
+  Constant(Pat7,103030);
+  Constant(Pat8,04040);
+  Constant(NotPat1,0);
+  Constant(NotPat2,377);
+  Constant(NotPat3,7417);
+  Constant(NotPat4,52525);
+  Constant(NotPat5,76767);
+  Constant(NotPat6,175757);
+  Constant(NotPat7,74747);
+  Constant(NotPat8, 173737);
+  Constant(Word0,313);
+  Constant(Word1,7200);
+  Constant(Word2,1);
+  Constant(IoPat0,0);
+  Constant(IoPat1,1);
+  Constant(IoPat2,2);
+  Constant(IoPat3,3);
+  Constant(IoPat4,4);
+  Constant(IoPat5,5);
+  Constant(IoPat6,6);
+  Constant(IoPat7,7);
+  Constant(IoPat8,10);
+  Constant(IoPat9,11);
+  Constant(IoPat10,12);
+  Constant(IoPat11,13);
+  Constant(IoPat12,14);
+  Constant(IoPat13,15);
+  Constant(IoPat14,16);
+  Constant(IoPat15,17);  
+  Constant(IoPat16,20);
+  Constant(IoPat17,21);
+  Constant(IoPat18,22);
+  Constant(IoPat19,23);
+  Constant(IoPat20,24);
+  Constant(IoPat21,25);
+  Constant(IoPat22,26);
+  Constant(IoPat23,27);
+  Constant(IoPat24,30);
+  Constant(IoPat25,31);
+  Constant(IoPat26,32);
+  Constant(IoPat27,33);
+  Constant(IoPat28,34);
+  Constant(IoPat29,35);
+  Constant(IoPat30,36);
+  Constant(IoPat31,37);
+  Constant(WtLnkReg,244);
+  Constant(WtDummy,246);
+  Constant(RdLnkReg,45);
+
+PLACE(0,777);
+
+! SEQUENCER Test.
+! First try the sequencer. See if each bit on the JMux can be set and
+! cleared. Jump to locations 1,2,4.. 400 and display
+! on a logic analyzer. Try a Next at first to see if any
+! thing works!
+
+      Next, Loc(0);
+      Nop;
+      Nop, Loc(2);
+      Nop, Loc(4);
+      Nop, Loc(10);
+      Nop, Loc(20);
+      Nop, Loc(40);
+      Nop, Loc(100);
+      Nop, Loc(200);
+      Nop, Loc(400);
+      Nop, Loc(777);
+
+! Now try some short jumps and see if the page register works.
+
+      StackReset, Loc(3);     ! use up the SF field so we get short jump
+      Nop, Loc(5);           ! If page register is bogus we will go to
+                              ! Loc 5 in a different page.
+      StackReset, Loc(401);   ! force a short jump again
+      Nop, Loc(402);          ! If Page bad go to Loc 2 in diff page
+
+! Now try a some calls both of the short and long variety
+
+      Call(ST1), Loc(403);    ! should generate long call
+      Nop;
+      Call(ST1), Loc(6);      ! should generate short call
+      Nop;   
+
+! Try the condition code test. Test  False, Eql, Neq. 
+
+      If False GoTo(Bad2);     ! Test False
+      GoTo(Cont1);
+Bad2: GoTo(Bad2);
+
+Cont1:177777;                  ! Test NEQ Set
+      377, If NEQ GoTo(Cont2); ! NEQ should be set
+      377, GoTo(Cont1);        ! If we fall thru error
+
+Cont2:177777;                  ! test EQL not set
+      377, If EQL GoTo(Cont2); ! EQL should not be set
+
+Cont3:0;                       ! Test NEQ Cleared
+      0, If NEQ GoTo(Cont3);   ! 0 should have cleared NEQ   
+
+Cont4:0;                       ! test EQL set    
+      0, If EQL GoTo(Cont5);   ! EQl should be set
+      0, GoTo(Cont4);          ! Fall thru EQL did not get made
+
+! Data path test. Following attempts to test the integrity of the data
+! paths in the processor. Errors here can be attributed,
+! to a very large portion of the board. Control store,
+! MIR, the A,B and R bussses and the X register bank are all tested!
+
+Cont5:R0 := 0;
+      R0;
+      R0, If NEQ GoTo(Cont5);  ! 0 should have generated EQL
+
+Cont6:R0 := 177777;
+      R0;
+      R0, If EQL GoTo(Cont6);  ! R0 had no bits set??
+
+! Use R0 in combination with the ALU to see if predictable things happen
+
+Cont7:R0 := 0;
+      R0 := R0 + 177777;      ! try an add
+      R0,IF EQL GoTo(Cont7);  ! ALU put out a zero??
+      R0, IF EQL GoTo(Cont7); ! R0 had no bits set??
+
+Cont8:R0 := 0;
+      R0 := R0 - 125252;      ! try a subtract
+      R0,If EQL GoTo(Cont8);  ! ALU put out a zero
+      R0, If EQL GoTo(Cont8);
+
+Cont9:R0 := 0;
+      R0 := R0 XNOR 0;        ! Try XNOR
+      R0,If EQL GoTo(Cont9);
+      R0, If EQL GoTo(Cont9);
+
+! Now get more serious.
+! Set and clear individual bits in the register. Do a little 
+! arithmetic to make sure we got the right bits set.
+
+Cont10: R0 := Bit0;             ! BIT 0 *
+      R0, IF EQL GoTo(Cont10);! Bit didnt make it thru or to the ALU
+      R0, IF EQL GoTo(Cont10);! Bit cant be set
+
+Cont11: R0 - Bit0;
+      R0 - Bit0, If NEQ GoTo(Cont11);    ! should get 0
+
+Cont12: R0 := NotBit0;        ! Clear bit in reg
+      R0 XNOR Bit0;
+      0, If NEQ GoTo(Cont12);
+
+      R0 := R0 + Bit0;        ! expect all ones
+      R0 - 177777;
+      0, If NEQ GoTo(Cont12); ! R0 has some bits cleared
+
+Cont13: R0 := Bit1;           ! BIT 1 *
+      R0, IF EQL GoTo(Cont13);! Bit didnt make it thru or to the ALU
+      R0, IF EQL GoTo(Cont13);! Bit cant be set
+
+Cont14: R0 - Bit1;
+      0, If NEQ GoTo(Cont14); ! should get 0
+
+Cont15: R0 := NotBit1;          ! Clear bit in reg
+      R0 XNOR Bit1;
+      0, If NEQ GoTo(Cont15);
+
+      R0 := R0 + Bit1;        ! expect all ones
+      R0 - 177777;
+      0, If NEQ GoTo(Cont15); ! R0 has some bits cleared
+
+Cont16: R0 := Bit2;           ! BIT 2 *
+      R0, IF EQL GoTo(Cont16);! Bit didnt make it thru or to the ALU
+      R0, IF EQL GoTo(Cont16);! Bit cant be set
+
+Cont17: R0 - Bit2;
+      0, If NEQ GoTo(Cont17); ! should get 0
+
+Cont18: R0 := NotBit2;        ! Clear bit in reg
+      R0 XNOR Bit2;
+      0, If NEQ GoTo(Cont18);
+
+      R0 := R0 + Bit2;        ! expect all ones
+      R0 - 177777;
+      0, If NEQ GoTo(Cont18); ! R0 has some bits cleared
+
+Cont19: R0 := Bit3;           ! BIT 3 *
+      R0, IF EQL GoTo(Cont19);! Bit didnt make it thru or to the ALU
+      R0, IF EQL GoTo(Cont19);! Bit cant be set
+
+Cont20: R0 - Bit3;
+      0, If NEQ GoTo(Cont20); ! should get 0
+
+Cont21: R0 := NotBit3;        ! Clear bit in reg
+      R0 XNOR Bit3;
+      0, If NEQ GoTo(Cont21);
+
+      R0 := R0 + Bit3;        ! expect all ones
+      R0 - 177777;
+      0, If NEQ GoTo(Cont21); ! R0 has some bits cleared
+
+Cont22: R0 := Bit4;           ! BIT 4 *
+      R0, IF EQL GoTo(Cont22);! Bit didnt make it thru or to the ALU
+      R0, IF EQL GoTo(Cont22);! Bit cant be set
+
+Cont23: R0 - Bit4;
+      0, If NEQ GoTo(Cont23); ! should get 0
+
+Cont24: R0 := NotBit4;        ! Clear bit in reg
+      R0 XNOR Bit4;
+      0, If NEQ GoTo(Cont24);
+
+      R0 := R0 + Bit4;        ! expect all ones
+      R0 - 177777;
+      0, If NEQ GoTo(Cont24); ! R0 has some bits cleared
+
+Cont25: R0 := Bit5;           ! BIT 5 *
+      R0, IF EQL GoTo(Cont25);! Bit didnt make it thru or to the ALU
+      0, IF EQL GoTo(Cont25); ! Bit cant be set
+
+Cont26: R0 - Bit5;
+      0, If NEQ GoTo(Cont26);   ! should get 0
+
+Cont27: R0 := NotBit5;          ! Clear bit in reg
+        R0 XNOR Bit5;
+        0, If NEQ GoTo(Cont27);
+
+        R0 := R0 + Bit5;        ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont27); ! R0 has some bits cleared
+
+Cont28: R0 := Bit6;             ! BIT 6 *
+        R0, IF EQL GoTo(Cont28);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont28);! Bit cant be set
+        
+Cont29: R0 - Bit6;
+        0, If NEQ GoTo(Cont29); ! should get 0
+        
+Cont30: R0 := NotBit6;          ! Clear bit in reg
+        R0 XNOR Bit6;
+        0, If NEQ GoTo(Cont30);
+        
+        R0 := R0 + Bit6;        ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont30); ! R0 has some bits cleared
+
+Cont31: R0 := Bit7;             ! BIT 7 *
+        R0, IF EQL GoTo(Cont31);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont31);! Bit cant be set
+
+Cont32: R0 - Bit7;
+        0, If NEQ GoTo(Cont32); ! should get 0
+
+Cont33: R0 := NotBit7;          ! Clear bit in reg
+        R0 XNOR Bit7;
+        0, If NEQ GoTo(Cont33);
+
+        R0 := R0 + Bit7;        ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont33); ! R0 has some bits cleared
+
+Cont34: R0 := Bit8;             ! BIT 8 *
+        R0, IF EQL GoTo(Cont34);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont34);! Bit cant be set
+
+Cont35: R0 - Bit8;
+        0, If NEQ GoTo(Cont35); ! should get 0
+
+Cont36: R0 := NotBit8;          ! Clear bit in reg
+        R0 XNOR Bit8;
+        0, If NEQ GoTo(Cont36);
+
+        R0 := R0 + Bit8;        ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont36); ! R0 has some bits cleared
+
+Cont37: R0 := Bit9;             ! BIT 9 *
+        R0, IF EQL GoTo(Cont37);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont37);! Bit cant be set
+
+Cont38: R0 - Bit9;
+        0, If NEQ GoTo(Cont38); ! should get 0
+
+Cont39: R0 := NotBit9;          ! Clear bit in reg
+        R0 XNOR Bit9;
+        0, If NEQ GoTo(Cont39);
+        
+        R0 := R0 + Bit9;        ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont39); ! R0 has some bits cleared
+
+Cont40: R0 := Bit10;            ! BIT 10 *
+        R0, IF EQL GoTo(Cont40);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont40);! Bit cant be set
+
+Cont41: R0 - Bit10;
+        0, If NEQ GoTo(Cont41); ! should get 0
+
+Cont42: R0 := NotBit10;         ! Clear bit in reg
+        R0 XNOR Bit10;
+        0, If NEQ GoTo(Cont42);
+
+        R0 := R0 + Bit10;       ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont42); ! R0 has some bits cleared
+
+Cont43: R0 := Bit11;            ! BIT 11 *
+        R0, IF EQL GoTo(Cont43);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont43);! Bit cant be set
+
+Cont44: R0 - Bit11;
+        0, If NEQ GoTo(Cont44); ! should get 0
+
+Cont45: R0 := NotBit11;         ! Clear bit in reg
+        R0 XNOR Bit11;
+        0, If NEQ GoTo(Cont45);
+
+        R0 := R0 + Bit11;       ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont45); ! R0 has some bits cleared
+
+Cont46: R0 := Bit12;            ! BIT 12 *
+        R0, IF EQL GoTo(Cont46);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont46);! Bit cant be set
+
+Cont47: R0 - Bit12;
+        0, If NEQ GoTo(Cont47); ! should get 0
+
+Cont48: R0 := NotBit12;        ! Clear bit in reg
+        R0 XNOR Bit12;
+        0, If NEQ GoTo(Cont48);
+
+        R0 := R0 + Bit12;      ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont48); ! R0 has some bits cleared
+
+Cont49: R0 := Bit13;            ! BIT 13 *
+        R0, IF EQL GoTo(Cont49);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont49); ! Bit cant be set
+
+Cont50: R0 - Bit13;
+        0, If NEQ GoTo(Cont50); ! should get 0
+
+Cont51: R0 := NotBit13;         ! Clear bit in reg
+        R0 XNOR Bit13;
+        0, If NEQ GoTo(Cont51);
+
+        R0 := R0 + Bit13;       ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont51); ! R0 has some bits cleared
+
+Cont52: R0 := Bit14;            ! BIT 14 *
+        R0, IF EQL GoTo(Cont52);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont52);! Bit cant be set
+
+Cont53: R0 - Bit14;
+        0, If NEQ GoTo(Cont53); ! should get 0
+
+Cont54: R0 := NotBit14;         ! Clear bit in reg
+        R0 XNOR Bit14;
+        0, If NEQ GoTo(Cont54);
+
+        R0 := R0 + Bit14;       ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont54); ! R0 has some bits cleared
+
+Cont55: R0 := Bit15;            ! BIT 15 *
+        R0, IF EQL GoTo(Cont55);! Bit didnt make it thru or to the ALU
+        R0, IF EQL GoTo(Cont55);! Bit cant be set
+
+Cont56: R0 - Bit15;
+        0, If NEQ GoTo(Cont56); ! should get 0
+
+Cont57: R0 := NotBit15;         ! Clear bit in reg
+        R0 XNOR Bit15;
+        0, If NEQ GoTo(Cont57);
+
+        R0 := R0 + Bit15;       ! expect all ones
+        R0 - 177777;
+        0, If NEQ GoTo(Cont57); ! R0 has some bits cleared
+
+! Register Test.
+!Test for double addressing and data.
+
+Cont63:R0 := Pat1;
+       R1 := NotPat1;       ! test on bit 0 of the addr
+       R0 - Pat1;            ! see if R0 is expect OK
+       If NEQ GoTo(Cont63);
+
+      
+Cont64:R1 - NotPat1;        ! Register X Bank OK?
+       If NEQ GoTo(Cont64), R0 - R0; ! Register Y Bank OK??
+       R1 - R1, If NEQ GoTo(Cont64);         
+       If NEQ GoTo(Cont64);
+       
+! ***
+
+Cont67:R0 := Pat2;
+       R2 := NotPat2;       ! test on bit 1 of the addr
+       R0 - Pat2;            ! see if R0 is expect OK
+       If NEQ GoTo(Cont67);
+
+Cont68:R2 - NotPat2;        ! Register X Bank OK?
+       If NEQ GoTo(Cont68), R0 - R0;! Register Y Bank OK??
+       R2 - R2, If NEQ GoTo(Cont68);
+       If NEQ GoTo(Cont68);
+! ***
+
+Cont71:R0 := Pat3;
+       R4 := NotPat3;       ! test on bit 2 of the addr
+       R0 - Pat3;           ! see if R0 is expect OK
+       If NEQ GoTo(Cont71);
+
+Cont72:R4 - NotPat3;        ! Register X Bank OK?
+       If NEQ GoTo(Cont72), R0 - R0; ! Register Y Bank OK??
+       R4 - R4, If NEQ GoTo(Cont72);         
+       If NEQ GoTo(Cont72);
+! ***
+
+Cont75:R0 := Pat4;
+       R10 := NotPat4;      ! test on bit 3 of the addr
+       R0 - Pat4;           ! see if R0 is expect OK
+       If NEQ GoTo(Cont75);
+
+Cont76:R10 - NotPat4;       ! Register X Bank OK?
+       If NEQ GoTo(Cont76), R0 - R0;! Register Y Bank OK??
+       R10 - R10, If NEQ GoTo(Cont76);         
+       If NEQ GoTo(Cont76);
+! ***
+
+Cont175:R0 := Pat5;
+       R20 := NotPat5;       ! test on bit 4 of the addr
+       R0 - Pat5;            ! see if R0 is expect OK
+       If NEQ GoTo(Cont175);
+
+Cont176:R20 - NotPat5;       ! Register X Bank OK?
+       If NEQ GoTo(Cont176), R0 - R0; ! Register Y Bank OK??
+       R20 - R20, If NEQ GoTo(Cont176);         
+       If NEQ GoTo(Cont176);
+
+! ***
+
+
+Cont275:R0 := Pat6;
+       R40 := NotPat6;       ! test on bit 5 of the addr
+       R0 - Pat6;            ! see if R0 is expect OK
+       If NEQ GoTo(Cont275);
+
+Cont276:R40 - NotPat6;       ! Register X Bank OK?
+      If NEQ GoTo(Cont276), R0 - R0; ! Register Y Bank OK??
+       R40 - R40, If NEQ GoTo(Cont276);
+       If NEQ GoTo(Cont276);
+! ***
+
+Cont375:R0 := Pat7;
+       R100 := NotPat7;      ! test on bit 6 of the addr
+       R0 - Pat7;            ! see if R0 is expect OK
+       If NEQ GoTo(Cont375);
+
+Cont376:R100 - NotPat7;      ! Register X Bank OK?
+      If NEQ GoTo(Cont376), R0 - R0;! Register Y Bank OK??
+       R100 - R100, If NEQ GoTo(Cont376);         
+       If NEQ GoTo(Cont376);
+! ***
+
+Cont475:R0 := Pat8;
+       R200 := NotPat8;      ! test on bit 7 of the addr
+       R0 - Pat8;            ! see if R0 is expect OK
+       If NEQ GoTo(Cont475);
+
+Cont476:R200 - NotPat8;      ! Register X Bank OK?
+      If NEQ GoTo(Cont476), R0 - R0;! Register Y Bank OK??
+       R200 - R200, If NEQ GoTo(Cont476);         
+       If NEQ GoTo(Cont476);
+
+! Now go back and check that the registers retained the values put
+! into them
+
+Cont79:R0 - Pat8;           ! R0 should have Pat8
+       0, If NEQ GoTo(Cont79);
+       
+Cont80:R1 - NotPat1;        ! R1 should have NotPat1
+       0, If NEQ GoTo(Cont80);
+       
+Cont81:R2 - NotPat2;        ! R2 should have NotPat2
+       0, If NEQ GoTo(Cont81);
+
+Cont82:R4 - NotPat3;        ! R4 should have NotPat3
+       0, If NEQ GoTo(Cont82);
+
+Cont83:R10 - NotPat4;       ! R10 should have NotPat4
+       0, If NEQ GoTo(Cont83);
+
+Cont84:R20 - NotPat5;       ! R20 should have NotPat5
+       0, If NEQ GoTo(Cont84);
+
+Cont85:R40 - NotPat6;       ! R40 should have NotPat6
+       0, If NEQ GoTo(Cont85);
+
+Cont86:R100 - NotPat7;      ! R100 should have NotPat7
+       0, If NEQ GoTo(Cont86);
+
+Cont87:R200 - NotPat8;      ! R200 should have NotPat8
+       0, If NEQ GoTo(Cont87);
+
+! Try a counting. This has to succeed for the boot program to work!
+
+Cont90:R0 := 377;
+       R0 := R0 + 1;          ! R0 _ 400
+       PushLoad(377);         ! set up the 2910 counter
+       R0 := R0 - 1, RepeatLoop;   ! Decrement and loop 400 times
+       If NEQ GoTo(Cont90);   ! R0 should be zero
+
+! Now test writing the control store. Write locations 7776 thru 7400
+! with R0  := R0 + 1, Next; and call 7400. loc 7777 has a return.
+
+Cont91:LoadS(7776);           ! First address to write is 7776
+       R1 := 377;             ! 377 words to write 
+       
+WtLp:  If EQL GoTo(WtDone);
+       NOT Word0;             ! Inverted data for control store write
+       WCSLow, If True GoToS(WtMid);  ! Write the micro word 0
+WtMid: NOT Word1;
+       WCSMid, If True GoToS(WtHi);   ! Write micro word 1
+WtHi:  NOT Word2;
+       WCSHi, If True GoToS(WtDecr);  ! Write micro word 2
+WtDecr:Repeat(WtLp), R1 := R1 - 1;    ! decrement count and address
+
+! Now write Loc 7777 with a return instruction
+
+WtDone:LoadS(7777);                   ! address to write
+       NOT 0;
+       WCSLow, If True GoToS(Mid777); ! Write word 0
+Mid777:NOT 5000;                          ! return instruction
+       WCSMid, If True GoToS(Hi777);  ! Write word 1
+Hi777: NOT 0;
+       WCSHi, If True GoToS(Don777);  ! Write word 2
+
+Don777:R0 := 0;                       ! Set up register to be incremented
+                                      ! by the control store program
+       Call(7400);
+       
+! We return here after executing in the control store (hopefully).
+
+       R0 - 377;                      ! R0 should have 377 in it
+       If EQL GoTo(Cnt500);           ! Go to link boot code
+Bad62: R0, GoTo(Bad62);               ! Control store program did not
+                                      ! do the right thing.
+
+
+
+ST1:   Return, Loc(111);
+                                      
+!Test IO data lines.
+! First we read the prom on the link board checking to see that we
+! get the right values.
+
+Cnt500: 0, IOB(IoPat0);            ! read Link Prom
+      IOD XOR Bit0;
+      0, If NEQ GoTo(Cnt500);
+
+Cnt501: 0, IOB(IoPat1);            ! read Link Prom
+      IOD XOR Bit1;
+      0, If NEQ GoTo(Cnt501);
+
+Cnt502: 0, IOB(IoPat2);            ! read Link Prom
+      IOD XOR Bit2;
+      0, If NEQ GoTo(Cnt502);
+
+Cnt503: 0, IOB(IoPat3);            ! read Link Prom
+      IOD XOR Bit3;
+      0, If NEQ GoTo(Cnt503);
+
+Cnt504: 0, IOB(IoPat4);            ! read Link Prom
+      IOD XOR Bit4;
+      0, If NEQ GoTo(Cnt504);
+
+Cnt505: 0, IOB(IoPat5);            ! read Link Prom
+      IOD XOR Bit5;
+      0, If NEQ GoTo(Cnt505);
+
+Cnt506: 0, IOB(IoPat6);            ! read Link Prom
+      IOD XOR Bit6;
+      0, If NEQ GoTo(Cnt506);
+
+Cnt507: 0, IOB(IoPat7);            ! read Link Prom
+      IOD XOR Bit7;
+      0, If NEQ GoTo(Cnt507);
+
+Cnt508: 0, IOB(IoPat8);            ! read Link Prom
+      IOD XOR Bit8;
+      0, If NEQ GoTo(Cnt508);
+
+Cnt509: 0, IOB(IoPat9);            ! read Link Prom
+      IOD XOR Bit9;
+      0, If NEQ GoTo(Cnt509);
+
+Cnt510: 0, IOB(IoPat10);            ! read Link Prom
+      IOD XOR Bit10;
+      0, If NEQ GoTo(Cnt510);
+
+Cnt511: 0, IOB(IoPat11);            ! read Link Prom
+      IOD XOR Bit11;
+      0, If NEQ GoTo(Cnt511);
+
+Cnt512: 0, IOB(IoPat12);            ! read Link Prom
+      IOD XOR Bit12;
+      0, If NEQ GoTo(Cnt512);
+
+Cnt513: 0, IOB(IoPat13);            ! read Link Prom
+      IOD XOR Bit13;
+      0, If NEQ GoTo(Cnt513);
+
+Cnt514: 0, IOB(IoPat14);            ! read Link Prom
+      IOD XOR Bit14;
+      0, If NEQ GoTo(Cnt514);
+
+Cnt515: 0, IOB(IoPat15);            ! read Link Prom
+      IOD XOR Bit15;
+      0, If NEQ GoTo(Cnt515);
+
+Cnt516: 0, IOB(IoPat16);            ! read Link Prom
+      IOD XOR NotBit0;
+      0, If NEQ GoTo(Cnt516);
+
+Cnt517: 0, IOB(IoPat17);            ! read Link Prom
+      IOD XOR NotBit1;
+      0, If NEQ GoTo(Cnt517);
+
+Cnt518: 0, IOB(IoPat18);            ! read Link Prom
+      IOD XOR NotBit2;
+      0, If NEQ GoTo(Cnt518);
+
+Cnt519: 0, IOB(IoPat19);            ! read Link Prom
+      IOD XOR NotBit3;
+      0, If NEQ GoTo(Cnt519);
+
+Cnt520: 0, IOB(IoPat20);            ! read Link Prom
+      IOD XOR NotBit4;
+      0, If NEQ GoTo(Cnt520);
+
+Cnt521: 0, IOB(IoPat21);            ! read Link Prom
+      IOD XOR NotBit5;
+      0, If NEQ GoTo(Cnt521);
+
+Cnt522: 0, IOB(IoPat22);            ! read Link Prom
+      IOD XOR NotBit6;
+      0, If NEQ GoTo(Cnt522);
+
+Cnt523: 0, IOB(IoPat23);            ! read Link Prom
+      IOD XOR NotBit7;
+      0, If NEQ GoTo(Cnt523);
+
+Cnt524: 0, IOB(IoPat24);            ! read Link Prom
+      IOD XOR NotBit8;
+      0, If NEQ GoTo(Cnt524);
+
+Cnt525: 0, IOB(IoPat25);            ! read Link Prom
+      IOD XOR NotBit9;
+      0, If NEQ GoTo(Cnt525);
+
+Cnt526: 0, IOB(IoPat26);            ! read Link Prom
+      IOD XOR NotBit10;
+      0, If NEQ GoTo(Cnt526);
+
+Cnt527: 0, IOB(IoPat27);            ! read Link Prom
+      IOD XOR NotBit11;
+      0, If NEQ GoTo(Cnt527);
+
+Cnt528: 0, IOB(IoPat28);            ! read Link Prom
+      IOD XOR NotBit12;
+      0, If NEQ GoTo(Cnt528);
+
+Cnt529: 0, IOB(IoPat29);            ! read Link Prom
+      IOD XOR NotBit13;
+      0, If NEQ GoTo(Cnt529);
+
+Cnt530: 0, IOB(IoPat30);            ! read Link Prom
+      IOD XOR NotBit14;
+      0, If NEQ GoTo(Cnt530);
+
+Cnt531: 0, IOB(IoPat31);            ! read link Prom
+      IOD XOR NotBit15;
+      0, If NEQ GoTo(Cnt531);
+
+! Now write patterns into the Link register and read back.
+
+Cnt550: R0 := Pat1;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt550);
+
+Cnt552: R0 := Pat2;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt552);
+                  
+Cnt553: R0 := Pat3;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt553);
+                  
+Cnt554: R0 := Pat4;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt554);
+                  
+Cnt560: R0 := NotPat1;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt560);
+                  
+Cnt562: R0 := NotPat2;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt562);
+                  
+Cnt563: R0 := NotPat3;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt563);
+                  
+Cnt564: R0 := NotPat4;
+      R0, IOB(WtLnkReg);          ! write pattern
+      Not R0, IOB(WtDummy);       ! force IOD to change      
+      0, IOB(RdLnkReg);
+      IOD XOR R0;                 ! read back
+      0, If NEQ GoTo(Cnt564);
+             
+! BOOT FROM LINK
+!Protocol: 11 send a 12345 as a flag, when Perq sees it, it starts
+! receiving 3 data words at a time to be loaded into the control
+! store. 256 (Decimal) words are loaded at Ram addresses 7400:7777.
+! Address 7777 is written first and address 7400 last. When this is
+! done the code jumps to 7400. Data is sent Lo, Mid and Hi.
+
+      Constant(ReadCSR,40);           ! Link CSR
+      Constant(WriteCSR,241);         ! Link write
+      Constant(ReadData,42);          ! Link Read data
+      Constant(WriteData,243);        ! Link Write data
+      Constant(XMitDon,10);           ! bits in the CSRs
+      Constant(Flag,4);
+      Constant(RCSRToBus,1);
+      Constant(XBufCyc,2);
+      Define(Count,1);                ! The number of micro instr to load
+      Define(Data,2);                 ! Data register
+
+Boot: IOB(ReadCSR);
+      IOD AND Flag;                   ! check to see if link is there
+      If NEQ GoTo(Boot);              ! If link not there hang
+
+      Count := 377;                   ! number of instrs - 1
+      Count := Count + 1,LoadS(7777); ! 2910 counter gets first address t
+      5,IOB(WriteCSR);                ! Init XMitCSR
+
+WaitHeader: Call(AwaitData);          ! Go look for header word
+      Data - 12345;
+      If NEQ GoTo(WaitHeader);        ! If not correct loop
+
+MainLoop: Call(AwaitData);            
+      Data;                           ! Returns with instrs in Data
+      WCSLow,If True GoToS(DatMid);   ! Write CS with address in 2910
+
+DatMid: Call(AwaitData);
+      Data;
+      WCSMid,If True GoToS(DatHi);    ! Write Middle word of same addr
+
+DatHi: Call(AwaitData);
+      Data;
+      WCSHi, If True GoToS(DecAdr);    ! Write Hi word of same address
+
+DecAdr: Repeat(DoLoop), Count := Count - 1; ! Decr 2910 reg and count
+DoLoop: If NEQ GoTo(MainLoop);        ! If not done keep going
+
+! All Done
+
+      GoTo(7400);                     ! Jump to start of Kernel
+      
+! Subroutine to wait for data from the link
+
+AwaitData: IOB(ReadCSR);              ! Check to see that the
+      IOD AND XBufCyc;                ! Xmit buffer has been loaded
+      If EQL GoTo(AwaitData);         ! If not wait.....
+      
+      15,IOB(WriteCSR);               ! Clear XMit Done
+      IOB(ReadData);                  ! Get the data from the link
+      Data := IOD;
+      5,IOB(WriteCSR), Return;        ! Return after setting Xmit done
+
+      END;

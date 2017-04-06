@@ -1,0 +1,195 @@
+$Title EIO DMA Test
+$perq1
+!
+!Test program for DMA on EIO board.  Requires a link card with
+!DMA test modifications.
+!Only tests DMA on EXT A channel.
+!Write data addresses increment through the 64K boundary, testing
+!the incrementer on bits 2:16. Read data goes through 32K.
+!
+!Written by Steve Clark      10/14/82
+!
+!Start the routine at location 0.  If R0 is loaded with 0, it runs once
+! and stops.  If R0 is loaded with 1 it runs in spite of faults,
+! otherwise it runs until a fault is detected.  Faults result in one of
+! the following breakpoints:
+!
+!After stopping, R1 contains the number of times the test passed.
+!
+!Breakpoint 100 - correct (if R0 = 0)
+!           101 - bad header
+!           102 - bad data
+!
+
+!Registers
+
+    define (Cntn,0);             !User set
+    define (Rnum,1);
+    define (Rcnt,2);
+    define (tmp,3);
+    define (Rpos,4);
+    define (Rseq,5);
+
+    define (Dpytmp,200);
+    define (Dpycnt,201);
+
+    define (RFail,370);
+
+!IO addresses
+    
+    constant (DMAChan,300);      !DMA channel register
+    constant (DMADLA,324);       !DMA low data address
+    constant (DMADHA,325);       !DMA high data address
+    constant (DMAHLA,326);       !DMA low header address
+    constant (DMAHHA,327);       !DMA high header address and count
+    constant (DMATest,247);      !DMA test register
+
+!Main memory addresses
+    
+    constant (Wdata,100000);
+    constant (Whdr,100);
+    constant (Rdata,77750);
+    constant (Rhdr,4000);
+
+!Other constants
+
+    constant (Bits,37);          !DMA tester only looks at bottom 5 bits
+    constant (Allend,7401);      !Exit address
+    constant (Chan,4);           !EXT A channel number
+    
+!Test routine
+    Rnum := 0, loc(0);
+Test:  Call(Clear);              !clear memory
+    Rpos := Rdata;               !set up memory
+    RSeq := 5000;
+    Rcnt := 20, call(Fill);
+    Rcnt := 360, call(SetR);     !set up DMA. no headers
+    Pushload(3);                 !transfer 4 quads
+    0, IOB(DMATest);             !do reads
+    RepeatLoop;
+    PushLoad(30);                !wait a while
+    if IntrPend call(Vecint);
+    RepeatLoop;
+
+    Rcnt := 320, call(SetW);     !2 headers
+    PushLoad(3);
+    1, IOB(DMATest);             !do writes
+    RepeatLoop;
+
+    PushLoad(30);
+    if IntrPend call(Vecint);
+    RepeatLoop;
+
+    Rpos := Whdr;                !check the header
+    Rseq := 5000;
+    Rcnt := 10;
+    RFail := 101, call(Check);
+
+    Rpos := Wdata;               !check the data
+    Rcnt := 10;
+    RFail := 102, call(Check);
+    
+    Rnum := Rnum + 1;
+    Cntn;
+    if eql goto(Brk);
+    goto(Test);
+
+!Routine to fill memory with Rcnt words of a sequence
+!starting with Rseq at location Rpos.
+
+Fill: MA := Rpos, Store;
+    MDO := Rseq;
+    if IntrPend call(Vecint);
+    Rpos := Rpos+1;
+    Rseq := Rseq+1;
+    Rcnt := Rcnt-1;
+    if neq goto(Fill);
+    return;
+
+!Routine to check Rcnt words of memory with a sequence
+!starting with Rseq at location Rpos.
+
+Check: MA := Rpos, Fetch;
+    tmp := MDI and bits;            !only look at bottom 5 bits
+    if IntrPend call(Vecint);
+    tmp-Rseq;
+    if neq JumpPop(Fail);
+    Rpos := Rpos+1;
+    Rseq := Rseq+1;
+    Rseq := Rseq and bits;
+    Rcnt := Rcnt-1;
+    if neq goto(Check);
+    return;
+
+!Routine to point DMA to W buffers. Rcnt must have header count
+
+SetW: Chan, IOB(DMAChan);
+    tmp := Wdata;
+    tmp, IOB(DMADLA);
+    0, IOB(DMADHA);
+    tmp := Whdr;
+    tmp, IOB(DMAHLA);
+    Rcnt, IOB(DMAHHA), return;
+
+!Routine to point DMA to R buffers. Rcnt must have header count
+
+SetR: Chan, IOB(DMAChan);
+    tmp := Rdata;
+    tmp, IOB(DMADLA);
+    0, IOB(DMADHA);
+    tmp := Rhdr;
+    tmp, IOB(DMAHLA);
+    Rcnt, IOB(DMAHHA), return;
+
+!Routine to clear memory
+
+Clear: Rpos := 1, PushLoad(22);
+    Rpos := Rpos + Rpos, RepeatLoop;  ! 2^19 words = 1 Mbyte
+    Rpos := Rpos-1;
+Cl1: Rpos, Store;
+    MDO := 0;
+    if IntrPend call(Vecint);
+    Rpos := Rpos-1;
+    if C19 return;                 ! Carry when C19 low
+    goto(Cl1);
+
+!Exit
+
+Brk:  RFail := 100;
+Fail: Cntn-1;
+      if eql goto(Test);
+      goto(Allend);
+
+! Interrupt service        
+
+VecInt: Vector(Z80Int);
+        
+Z80Int: 0,IOB(305),Return, Loc(300);
+
+YInt:   IOB(10), Loc(304);               !** for Canon link board **
+        Return;
+
+DskInt: IOB(123), Return, Loc(310);
+
+NetInt: 0, IOB(302);
+        0, IOB(303), Return, Loc(314);   !** FOR EIO **
+
+Z80RInt:0,IOB(305),Return, Loc(320);
+
+DpyInt: DpyTmp, IOB(343), Loc(324);
+        DpyTmp, IOB(340);
+Dpy1:   0, IOB(342);
+        DpyCnt := DpyCnt - 1;
+        DpyTmp := 102000, If GTR Return;
+        DpyCnt;
+        DpyTmp := 101154, If EQL Return;
+        DpyTmp := 101351;
+        0, IOB(341);
+        0, IOB(344);
+        DpyCnt := 11, GoTo(Dpy1);
+        
+XInt:   Return, Loc(330);
+
+ParInt: Return, Loc(334);
+
+        END;

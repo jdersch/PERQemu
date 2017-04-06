@@ -1,0 +1,66 @@
+
+
+
+
+$List
+$Title Initialization.
+
+! Routine Init.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Init is the entrypoint and initialization of the Perq Q-code
+!       interpreter microcode.
+!
+!-----------------------------------------------------------------------------
+
+Loc(2400),
+
+!       Initialize constant registers.
+
+        tmp := InitBlock;
+!       Where := not 0;                      !!!! use with CheckPC !!!!
+        AllOnes := 177777;
+        SignBit := 100000;
+        SignXtnd := not 77777;               ! upper 5 bits set to 1
+        C1777 := 1777;
+        C400 := 400;
+        
+!       Initialize no interrupts and interrupts off.
+
+        UserIntr := 100000;                  ! interrupts turned off
+
+!       Z80 state registers for IO microcode.
+
+        Z80State := 100000;                  ! use DpyTmp
+        Z80OState := 0;
+        Z80Status := 0;
+        Z80WantOutput := 0;
+        dpyTmp := 6000;                      ! 128 lines of Off in Visloop
+        zero := 0, StackReset;
+        tmp, Fetch2;
+        tmp5 := Mdi;                         ! initial code segment number
+        SS := Mdi;                           ! initial stack segment number
+        ExcCS := 0;                          ! no exception module yet
+        ExcGP := 0;
+        AP := SB;                            ! main program dynamic link
+        RN := 0;                             ! main program return routine
+        CS := 0;                             ! main program return segment
+        CB := 0;                             ! main program return code base
+        UPC := BPC := 0;                     ! main program return address
+        tmp := 160, Call(SetQState);         ! set SB and SL registers
+        tmp10 := SB;                         ! main program static link
+        SB + StkTP, Fetch;
+        TP := Mdi + SB;                      ! initial top pointer
+        SB + StkGP, Fetch;
+        GP := Mdi + SB, LoadS(Busted);       ! initial global pointer
+        tmp := tmp5, Call(ChkSeg);
+        tmp6 := tmp, Fetch,                  ! new codebase
+                            if Odd Goto(Busted);  ! if not resident: BAD!
+        Hold, tmp := InitProc, LeftShift(3);
+        Hold, tmp1 := Shift + tmp6;
+        Hold, Mdi + tmp1, Fetch4;            ! fetch dictionary entry
+        tmp7 := GP, Call(CllV);              ! set up ACB etc.
+        Goto(RefillJmp);                     ! enter main program
+
+Busted: Goto(Busted);

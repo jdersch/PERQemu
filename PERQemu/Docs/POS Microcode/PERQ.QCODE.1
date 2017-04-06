@@ -1,0 +1,983 @@
+$Title LDCx - Constant one word loads.
+
+! Opcode LDC0, LDC1, ..., LDC15.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The LDCx opcodes are single byte instructions that load the
+!       constant x onto the expression stack.
+!
+! Instruction:
+!       LDCx
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = x.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDCMO.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       Load the constant -1 onto the expression stack.
+!
+! Instruction:
+!       LDCMO
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = -1.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDCN.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDCN is a one byte instruction that loads the constant Nil onto
+!       the expression stack.  Nil is represented by two zero words.
+!
+! Instruction:
+!       LDCN
+!
+! Result:
+!       Stack pushed twice.
+!       (Tos) = 0.
+!       (Tos-1) = 0.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDCB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDCB is a two byte instruction that loads a constant byte onto
+!       the expression stack.
+!
+! Instruction:
+!       LDCB    SignedByte
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = SignedByte.
+!
+! Calls:
+!       ExtendByte.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDCW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDCW is a three byte instruction that loads a constant word onto
+!       the expression stack.
+!
+! Instruction:
+!       LDCB    LowByteConstant HighByteConstant
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Constant.
+!
+! Calls:
+!       WordParm.
+!
+!-----------------------------------------------------------------------------
+
+LoadZero:
+Opcode(LDC0),  Tos :=  0, Push, NextInst(0);
+
+Opcode(LDC1),  Tos :=  1, Push, NextInst(0);
+
+Opcode(LDC2),  Tos :=  2, Push, NextInst(0);
+
+Opcode(LDC3),  Tos :=  3, Push, NextInst(0);
+
+Opcode(LDC4),  Tos :=  4, Push, NextInst(0);
+
+Opcode(LDC5),  Tos :=  5, Push, NextInst(0);
+
+Opcode(LDC6),  Tos :=  6, Push, NextInst(0);
+
+Opcode(LDC7),  Tos :=  7, Push, NextInst(0);
+
+Opcode(LDC8),  Tos := 10, Push, NextInst(0);
+
+Opcode(LDC9),  Tos := 11, Push, NextInst(0);
+
+Opcode(LDC10), Tos := 12, Push, NextInst(0);
+
+Opcode(LDC11), Tos := 13, Push, NextInst(0);
+
+Opcode(LDC12), Tos := 14, Push, NextInst(0);
+
+Opcode(LDC13), Tos := 15, Push, NextInst(0);
+
+Opcode(LDC14), Tos := 16, Push, NextInst(0);
+
+Opcode(LDC15), Tos := 17, Push, NextInst(0);
+
+Opcode(LDCMO), Tos := AllOnes, Push, NextInst(0);
+
+Opcode(LDCN), Tos := Zero, Push, Goto(LoadZero);
+
+Opcode(LDCB), tmp := NextOp;
+        Tos := tmp, Push, if ByteSign Goto(ExtendByte);
+Nxt:    NextInst(0);
+
+Opcode(LDCW), Call(WordParm);
+        Tos := Shift or tmp, Push, NextInst(0);
+
+
+
+
+$Title LDLx - Load local variable.
+
+! Opcode LDL0, LDL1, ..., LDL15.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The LDLx opcodes are single byte instructions that load local
+!       variables with offset x onto the expression stack.
+!
+! Instruction:
+!       LDLx
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[LP + x].
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDLB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDLB is a two byte instruction that loads a local variable with an
+!       offset in the range 0..255 onto the expression stack.
+!
+! Instruction:
+!       LDLB    Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[LP + Offset].
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDLW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDLW is a three byte instruction that loads a local variable with
+!       an offset in the range 0..65535 onto the expression stack.
+!
+! Instruction:
+!       LDLW    LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[LP + Offset].
+!
+! Calls:
+!       VectSrv, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDL0),  LP +  0, Fetch, Goto(LoadLocal);
+
+Opcode(LDL1),  LP +  1, Fetch, Goto(LoadLocal);
+
+Opcode(LDL2),  LP +  2, Fetch, Goto(LoadLocal);
+
+Opcode(LDL3),  LP +  3, Fetch, Goto(LoadLocal);
+
+Opcode(LDL4),  LP +  4, Fetch, Goto(LoadLocal);
+
+Opcode(LDL5),  LP +  5, Fetch, Goto(LoadLocal);
+
+Opcode(LDL6),  LP +  6, Fetch, Goto(LoadLocal);
+
+Opcode(LDL7),  LP +  7, Fetch, Goto(LoadLocal);
+
+Opcode(LDL8),  LP + 10, Fetch, Goto(LoadLocal);
+
+Opcode(LDL9),  LP + 11, Fetch, Goto(LoadLocal);
+
+Opcode(LDL10), LP + 12, Fetch, Goto(LoadLocal);
+
+Opcode(LDL11), LP + 13, Fetch, Goto(LoadLocal);
+
+Opcode(LDL12), LP + 14, Fetch, Goto(LoadLocal);
+
+Opcode(LDL13), LP + 15, Fetch, Goto(LoadLocal);
+
+Opcode(LDL14), LP + 16, Fetch, Goto(LoadLocal);
+
+Opcode(LDL15), LP + 17, Fetch, Goto(LoadLocal);
+
+Opcode(LDLB), tmp := NextOp;
+        LP + tmp, Fetch;
+LoadLocal: Tos := Mdi, Push, NextInst(0);
+
+Opcode(LDLW), Call(WordParm);
+        tmp := Shift or tmp, if IntrPend Call(VectSrv);
+        LP + tmp, Fetch, Goto(LoadLocal);
+
+
+
+
+$Title LLAx - Load local address.
+
+! Opcode LLAB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LLAB is a two byte instruction that loads the address of a local
+!       variable with an offset in the range 0..255 onto the expression stack.
+!
+! Instruction:
+!       LLAB    Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = LP - SB + Offset.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LLAW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LLAW is a three byte instruction that loads the address of a local
+!       variable with an offset in the range 0..65535 onto the expression
+!       stack.
+!
+! Instruction:
+!       LLAW    LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = LP - SB + Offset.
+!
+! Calls:
+!       VectSrv, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LLAB), tmp := NextOp + LP;
+LoadLAddr: Tos := tmp - SB, Push, NextInst(0);
+
+Opcode(LLAW), Call(WordParm);
+        tmp := Shift or tmp, if IntrPend Call(VectSrv);
+        tmp := tmp + LP, GoTo(LoadLAddr);
+
+
+
+
+$Title STLx - Store local variable.
+
+! Opcode STL0, STL1, ..., STL7.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The STLx opcodes are single byte instructions that store local
+!       variable with offset x from the expression stack.
+!
+! Instruction:
+!       STLx
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[LP + x] = Value.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STLB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STLB is a two byte instruction that stores a local variable with
+!       an offset in the range 0..255 from the expression stack.
+!
+! Instruction:
+!       STLB    Offset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[LP + Offset] = Value.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STLW
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STLW is a three byte instruction that stores a local variable with
+!       an offset in the range 0..65535 from the expression stack.
+!
+! Instruction:
+!       STLW    LowByteOffset HighByteOffset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[LP + Offset] = Value.
+!
+! Calls:
+!       VectSrc, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STL0), LP + 0, Store, Goto(StoreLocal);
+
+Opcode(STL1), LP + 1, Store, Goto(StoreLocal);
+
+Opcode(STL2), LP + 2, Store, Goto(StoreLocal);
+
+Opcode(STL3), LP + 3, Store, Goto(StoreLocal);
+
+Opcode(STL4), LP + 4, Store, Goto(StoreLocal);
+
+Opcode(STL5), LP + 5, Store, Goto(StoreLocal);
+
+Opcode(STL6), LP + 6, Store, Goto(StoreLocal);
+
+Opcode(STL7), LP + 7, Store, Goto(StoreLocal);
+
+StoreLocal: Tos, Pop, NextInst(0);
+
+Opcode(STLB), tmp := NextOp;
+STLB1:  LP + tmp, Store;
+        Tos, Pop, NextInst(0);
+
+Opcode(STLW), Call(WordParm);
+        tmp := Shift or tmp, if IntrPend Call(VectSrv);
+        Goto(STLB1);
+
+
+
+
+$Title LDOx - Load own variable.
+
+! Opcode LDO0, LDO1, ..., LDO15.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The LDOx opcodes are single byte instructions that load own
+!       variables with offset x onto the expression stack.
+!
+! Instruction:
+!       LDOx
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[GP + x].
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDOB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDOB is a two byte instruction that loads an own variable with an
+!       offset in the range 0..255 onto the expression stack.
+!
+! Instruction:
+!       LDOB    Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[GP + Offset].
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDOW
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDOW is a three byte instruction that loads an own variable with an
+!       offset in the range 0..65535 onto the expression stack.
+!
+! Instruction:
+!       LDOW    LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[GP + Offset].
+!
+! Calls:
+!       VectSrv, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDO0),  GP +  0, Fetch, Goto(LoadOwn);
+
+Opcode(LDO1),  GP +  1, Fetch, Goto(LoadOwn);
+
+Opcode(LDO2),  GP +  2, Fetch, Goto(LoadOwn);
+
+Opcode(LDO3),  GP +  3, Fetch, Goto(LoadOwn);
+
+Opcode(LDO4),  GP +  4, Fetch, Goto(LoadOwn);
+
+Opcode(LDO5),  GP +  5, Fetch, Goto(LoadOwn);
+
+Opcode(LDO6),  GP +  6, Fetch, Goto(LoadOwn);
+
+Opcode(LDO7),  GP +  7, Fetch, Goto(LoadOwn);
+
+Opcode(LDO8),  GP + 10, Fetch, Goto(LoadOwn);
+
+Opcode(LDO9),  GP + 11, Fetch, Goto(LoadOwn);
+
+Opcode(LDO10), GP + 12, Fetch, Goto(LoadOwn);
+
+Opcode(LDO11), GP + 13, Fetch, Goto(LoadOwn);
+
+Opcode(LDO12), GP + 14, Fetch, Goto(LoadOwn);
+
+Opcode(LDO13), GP + 15, Fetch, Goto(LoadOwn);
+
+Opcode(LDO14), GP + 16, Fetch, Goto(LoadOwn);
+
+Opcode(LDO15), GP + 17, Fetch, Goto(LoadOwn);
+
+Opcode(LDOB), tmp := NextOp;
+        GP + tmp, Fetch, Goto(LoadOwn);
+
+Opcode(LDOW), Call(WordParm);
+        tmp := Shift or tmp, if IntrPend Call(VectSrv);
+        GP + tmp, Fetch, Goto(LoadOwn);
+
+LoadOwn: Tos := Mdi, Push, NextInst(0);
+
+
+
+
+$Title LOAx - Load own address.
+
+! Opcode LOAB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LOAB is a two byte instruction that loads the address of an own
+!       variable with an offset in the rang 0..255 onto the expression
+!       stack.
+!
+! Instruction:
+!       LOAB    Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = GP - SB + Offset.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LOAW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LOAW is a three byte instruction that loads the address of an own
+!       variable with an offset in the rang 0..65535 onto the expression
+!       stack.
+!
+! Instruction:
+!       LOAW    LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = GP - SB + Offset.
+!
+! Calls:
+!       VectSrv, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LOAB), tmp := NextOp + GP;
+LoadOAddr: Tos := tmp - SB, Push, NextInst(0);
+
+Opcode(LOAW), Call(WordParm);
+        tmp := Shift or tmp, if IntrPend Call(VectSrv);
+        tmp := tmp + GP, GoTo(LoadOAddr);
+
+
+
+
+$Title STOx - Store own variable.
+
+! Opcode STO0, STO1, ..., STO7.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       The STOx opcodes are single byte instructions that store own
+!       variables with offset x from the expression stack.
+!
+! Instruction:
+!       STOx
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[GP + x] = Value.
+!
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STOB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STOB is a two byte instruction that stores an own variable with
+!       an offset in the range 0..255 from the expression stack.
+!
+! Instruction:
+!       STOB    Offset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[GP + Offset] = Value.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STOW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STOW is a three byte instruction that stores an own variable with
+!       an offset in the range 0..65535 from the expression stack.
+!
+! Instruction:
+!       STOW    LowByteOffset HighByteOffset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[GP + Offset] = Value.
+!
+! Calls:
+!       VectSrc, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STO0), GP + 0, Store, Goto(StoreOwn);
+
+Opcode(STO1), GP + 1, Store, Goto(StoreOwn);
+
+Opcode(STO2), GP + 2, Store, Goto(StoreOwn);
+
+Opcode(STO3), GP + 3, Store, Goto(StoreOwn);
+
+Opcode(STO4), GP + 4, Store, Goto(StoreOwn);
+
+Opcode(STO5), GP + 5, Store, Goto(StoreOwn);
+
+Opcode(STO6), GP + 6, Store, Goto(StoreOwn);
+
+Opcode(STO7), GP + 7, Store, Goto(StoreOwn);
+
+Opcode(STOB), tmp := NextOp;
+        GP + tmp, Store;
+StoreOwn: Tos, Pop, NextInst(0);
+
+Opcode(STOW), Call(WordParm);
+        tmp := Shift or tmp, if IntrPend Call(VectSrv);
+        GP + tmp, Store, Goto(StoreOwn);
+
+
+
+
+$Title LDGx - Load global variable.
+
+! Opcode LDGB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDGB is a three byte instruction that loads a global variable onto
+!       the expression stack.  The segment number must be in the range
+!       0..255 and the offset must be in the range 0..255.
+!
+! Instruction:
+!       LDGB    Segment Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[GlobalArea + Offset].
+!
+! Calls:
+!       GetGP.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDGW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDGW is a four byte instruction that loads a global variable onto
+!       the expression stack.  The segment number must be in the range
+!       0..255 and the offset must be in the range 0..65535.
+!
+! Instruction:
+!       LDGW    Segment LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[GlobalArea + Offset].
+!
+! Calls:
+!       GetGP, VectSrv, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDGB), tmp2 := NextOp;
+        tmp3 := NextOp;
+LoadGlobal:  Call(GetGP);
+        tmp2 + tmp3, Fetch;
+        Tos := Mdi, Push, NextInst(0);
+
+Opcode(LDGW), tmp2 := NextOp;
+        Call(WordParm);
+        tmp3 := Shift + tmp, Goto(LoadGlobal);
+
+
+
+
+$Title LGAx - Load global address.
+
+! Opcode LGAB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LGAB is a three byte instruction that loads the address of a global
+!       variable onto the expression stack.  The segment number must be
+!       in the range 0..255, and the offset must be in the range 0..255.
+!
+! Instruction:
+!       LGAB    Segment Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = GlobalArea - SB + Offset.
+!
+! Calls:
+!       GetGP.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LGAW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LGAW is a three byte instruction that loads the address of a global
+!       variable onto the expression stack.  The segment number must be
+!       in the range 0..255, and the offset must be in the range 0..65535.
+!
+! Instruction:
+!       LGAW    Segment LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = GlobalArea - SB + Offset.
+!
+! Calls:
+!       GetGP, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LGAWW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LGAWW is a four byte instruction that loads the address of a global
+!       variable onto the expression stack.  The segment number must be
+!       in the range 0..65535, and the offset must be in the range 0..65535.
+!
+! Instruction:
+!       LGAW    LowByteSegment HighByteSegment
+!               LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = GlobalArea - SB + Offset.
+!
+! Calls:
+!       GetGP, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LGAB), tmp2 := NextOp;
+        Push, Call(GetGp);
+        tmp := NextOp + tmp2;                !**** BR
+        Tos := tmp - SB, NextInst(0);        !**** BR
+
+Opcode(LGAW), tmp2 := NextOp;
+LoadGAddr: Call(GetGP);
+        tmp2 := tmp2 - SB, Call(WordParm);
+        tmp := Shift + tmp;                    !***** BR
+        Tos := tmp + tmp2, Push, NextInst(0);  !***** BR
+
+Opcode(LGAWW), Call(WordParm);
+        tmp2 := Shift + tmp, Goto(LoadGAddr);
+
+
+
+
+$Title STGx - Store global variable.
+
+! Opcode STGB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STGB is a three byte instruction that stores a global variable
+!       from the expression stack.  The segment number must be in the
+!       range 0..255, and the offset must be in the range 0..255.
+!
+! Instruction:
+!       STGB    Segment Offset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[GlobalArea + Offset] = Value.
+!
+! Calls:
+!       GetGP.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STGW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STGW is a four byte instruction that stores a global variable
+!       from the expression stack.  The segment number must be in the
+!       range 0..255, and the offset must be in the range 0..65535.
+!
+! Instruction:
+!       STGW    Segment LowByteOffset HighByteOffset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[GlobalArea + Offset] = Value.
+!
+! Calls:
+!       GetGP, VectSrc, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STGB), tmp2 := NextOp;
+        tmp3 := NextOp;
+StoreGlobal: Call(GetGP);
+        tmp2 + tmp3, Store;
+        Tos, Pop, NextInst(0);
+
+Opcode(STGW), tmp2 := NextOp;
+        Call(WordParm);
+        tmp3 := Shift + tmp, Goto(StoreGlobal);
+
+
+
+
+$Title LDIx - Load intermediate variable.
+
+! Opcode LDIB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDIB is a three byte instruction that loads an intermediate variable
+!       onto the expression stack.  The lexical level of the variable is
+!       represented by an offset in static nesting that must be in the
+!       range 0..255.  The offset of the variable within its activation
+!       record must be in the range 0..255.
+!
+! Instruction:
+!       LDIB    OffsetInStaticNesting Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[IntermediateArea + Offset].
+!
+! Calls:
+!       GetLP.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LDIW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDIW is a four byte instruction that loads an intermediate variable
+!       onto the expression stack.  The lexical level of the variable is
+!       represented by an offset in static nesting that must be in the
+!       range 0..255.  The offset of the variable within its activation
+!       record must be in the range 0..65535.
+!
+! Instruction:
+!       LDIW    OffsetInStaticNesting LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = Memory[IntermediateArea + Offset].
+!
+! Calls:
+!       GetLP, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LDIB), tmp3 := NextOp;
+        tmp4 := NextOp + SB;
+LoadInter: tmp2 := AP, Call(GetLP);
+        tmp4 := Mdi + tmp4;                  ! physical address of variable
+        tmp4, Fetch;
+        Tos := Mdi, Push, NextInst(0);
+
+Opcode(LDIW), tmp3 := NextOp;
+        Call(WordParm);
+        tmp4 := Shift + tmp;
+        tmp4 := tmp4 + SB, Goto(LoadInter);
+
+
+
+
+$Title LIAx - Load intermediate address.
+
+! Opcode LIAB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LIAB is a three byte instruction that loads the address of an
+!       intermediate variable onto the expression stack.  The lexical
+!       level of the variable is represented by an offset in static
+!       nesting that must be in the range 0..255.  The offset of the
+!       variable within its activation record must be in the range 0..255.
+!
+! Instruction:
+!       LIAB    OffsetInStaticNesting Offset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = IntermediateArea - SB + Offset.
+!
+! Calls:
+!       GetLP.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode LIAW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LIAW is a four byte instruction that loads the address of an
+!       intermediate variable onto the expression stack.  The lexical
+!       level of the variable is represented by an offset in static
+!       nesting that must be in the range 0..255.  The offset of the
+!       variable within its activation record must be in the range 0..65535.
+!
+! Instruction:
+!       LIAW    OffsetInStaticNesting LowByteOffset HighByteOffset
+!
+! Result:
+!       Stack pushed.
+!       (Tos) = IntermediateArea - SB + Offset.
+!
+! Calls:
+!       GetLP, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LIAB), tmp3 := NextOp;
+        tmp4 := NextOp;
+LoadIAddr: tmp2 := AP, Call(GetLP);
+        Tos := Mdi + tmp4, Push, NextInst(0);
+
+Opcode(LIAW), tmp3 := NextOp;
+        Call(WordParm);
+        tmp4 := Shift + tmp, Goto(LoadIAddr);
+
+
+
+
+$Title STIx - Store intermediate variable.
+
+! Opcode STIB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       STIB is a three byte instruction that stores an intermediate variable
+!       from the expression stack.  The lexical level of the variable is
+!       represented by an offset in static nesting that must be in the
+!       range 0..255.  The offset of the variable within its activation
+!       record must be in the range 0..255.
+!
+! Instruction:
+!       STIB    OffsetInStaticNesting Offset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[IntermediateArea + Offset] = Value.
+!
+! Calls:
+!       GetLP.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode STIW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LDIW is a four byte instruction that stores an intermediate variable
+!       from the expression stack.  The lexical level of the variable is
+!       represented by an offset in static nesting that must be in the
+!       range 0..255.  The offset of the variable within its activation
+!       record must be in the range 0..65535.
+!
+! Instruction:
+!       STIW    OffsetInStaticNesting LowByteOffset HighByteOffset
+!
+! Environment:
+!       (Tos) = Value.
+!
+! Result:
+!       Stack popped.
+!       Memory[IntermediateArea + Offset] = Value.
+!
+! Calls:
+!       GetLP, VectSrc, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(STIB), tmp3 := NextOp;
+        tmp4 := NextOp + SB;
+StoreInter: tmp2 := AP, Call(GetLP);
+        Mdi + tmp4, Store;
+        Tos, Pop, NextInst(0);
+
+Opcode(STIW), tmp3 := NextOp;
+        Call(WordParm);
+        tmp4 := Shift + tmp, if IntrPend Call(VectSrv);
+        tmp4 := tmp4 + SB, Goto(StoreInter);

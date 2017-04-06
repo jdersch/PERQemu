@@ -1,0 +1,1489 @@
+!
+!                     5.25" Disk Test Code
+!
+!
+! This code is run on a testbed from ODTPRQ to test 5.25" disks.
+! It provides entry points to do all individual disk operations,
+! including formatting.  Errors are returned in two places:
+! SMStatus (R14) holds the contents of the EIO controller status
+! register and Abort (R17) holds an error return code.  Breakpoints
+! (R370) usually return the abort code to indicate whether
+! an operation passed or failed,
+!
+! 22 jun 82  J.Rose
+!    modified for the mechanical requirements of the Shugart drive
+!
+! 19 Nov 82  L. Costas
+!    modified the code to test for the 5.25" disk. Also changed the
+!    reads so that the data is checked in memory.
+!                           
+!  2 May 83  S. Clark
+!    Rewrote disk seek section to use 6-bit bus.  Also fixed up other
+!    control bits.
+!
+! 30 Jun 83  SDC
+!    Changed format code to turn on mark bit while formatting
+!
+!  6 Jul 83  SDC
+!    Added pre-comp code to Seek routine
+!
+! 29 Jul 83  SDC
+!    Renumbered some commands and added documentation.  Added
+!    seek and read/write tests.
+!
+! 12 Sep 83  BR
+!    Added defect map processing
+!
+! 19 Oct 83  SDC
+!    Swapped order of words in bad block map.  Added block copy command
+!    Fixed seek and fault clear code
+!
+! 8 Jan 84   SDC
+!    Added go/no-go seek test.  Fixed timeout in Seek.
+!
+! 22 Jan 84  SDC
+!    Added ChkStat call, fixed return codes, added some new data for
+!    writes (2xx entries), added timeout to format
+!
+! 13 Feb 84  SDC
+!    Changed to NDT version of ShowProg.  Moved defect map to 1000(8)
+
+
+define(NumTry,0);         !no. of retrys to perform in tests
+define(r0,0);             !data
+define(Count,1);          !no. of tracks from restore, words in ChkData
+define(cyl,2);
+define(head,3);
+define(sector, 4);
+define(oldindex,5);
+define(newindex,6);
+define(C60,7);            ! 60 Hz counter for display interrupts
+define(mikecmd,10);
+define(tmp, 11);          ! Local to current routine, not saved thru subrs.
+define(incr, 12);         ! Direction to step in seek tests
+define(smint, 13);        ! EIO state machine interrupt flag
+define(smstatus,14);      ! EIO state machine status
+define(smdint, 15);       ! State machine interrupt flag
+define(Timer,16);         ! Run time in jiffies
+define(abort,17);         ! error code
+define(seed,20);          ! For random number gen
+define(sdata,21);
+define(indexcnt,22);
+! define(memaddr,23);     !unused
+define(lhw0,24);
+define(lhw1,25);
+define(lhw2,26);
+define(lhw3,27);
+define(scratch,30);
+define(prog, 31);         !address of progress display
+define(pword, 32);        !data for progress display
+! define(R1,33);            ! Unused
+define(ran,34);
+define(sdatabase,35);     !pointer to memory address
+define(tmp1,36);
+define(tmp2,37);
+define(CurCyl,40);        ! Holder for cylinder value during recal
+define(LHA,41);
+define(LLA,42);
+define(DHA,43);
+define(DLA,44);
+define(cmd,45);
+define(tmpcmd,46);
+! define(cmdcnt,47);        ! Unused
+define(retcnt,50);
+define(badsect,51);       ! Pointer to bad sectors
+define(badsectcnt,52);    ! Number of bad sectors
+define(oldcyl,53);
+define(DoRWC,54);         ! Do RWC from this cylinder inwards
+! define(chkcnt,55);        ! Unused
+define(runtype,56);       ! 0 = run once, 1 = run forever
+define(passcnt,57);
+! define(prog,60);          ! Unused
+! define(retflg,61);        ! Unused
+define(bDLA,62);
+define(drivenum,63);
+define(dir,64);
+define(dirbit,65);
+define(dmachan,66);
+define(defectptr,67);
+define(defectsec,70);
+define(defectcyl,71);
+define(defecthead,72);
+
+define(Origin,100);
+define(X1,101);
+define(Y1,102);
+define(X2,103);
+define(Y2,104);
+define(style,105);
+define(dX,106);
+define(dY,107);
+define(Word,110);
+define(Bit,111);
+define(AddY,112);
+define(Last,113);
+define(D,114);
+define(E,115);
+define(F,116);
+define(T,117);
+define(TplusD,120);
+define(allones,121);
+define(badsmstatus,122);
+define(badabort,123);
+define(headad,124);
+define(progflag,125);
+
+define(r370,370);
+define(r371,371);
+define(dpytmp,376);
+define(dpycnt,377);
+
+!                                                    Maxtor    Micropolis
+! disk constants                                   1140  1105  1303  1304
+
+constant(sync, 360);         ! 125
+constant(maxcyl, 1475);      ! Largest cylinder    1626  1626  1475  1475
+constant(maxhd, 4);          ! Largest head no.      16           4     5
+constant(maxsect, 20);       ! Sectors per track     20    20    20    20
+constant(InnerCyl, 620);     ! RWC from here in    1627  1627   620   620
+constant(LandZone, 1475);    ! Power off track     1627  1627  1475  1475
+
+! constant bits in dskstat
+
+constant(smintmsk, 7);       ! 0 = idle,  1 = busy,  2 = data CRC error
+                             ! 3 = bad cyl, 4 = bad LH, 5 = PH or LH CRC
+constant(smintocc, 10);      ! 1 = Interrupt occurred
+constant(trk00msk, 20);      ! 0 = on track 00
+constant(fltmsk, 40);        ! 0 = disk fault
+constant(oncylmsk, 100);     ! 0 = seek complete
+constant(rdymsk, 200);       ! 0 = ready
+constant(indxmsk, 400);      ! index (alternates each revolution)
+constant(DiskType, 3000);    ! disk type bits, 00 = 5.25
+
+constant(rdyoncyl,300);      ! condition to wait for after seek
+
+constant(goodStat, 17
+              or trk00msk
+              or fltmsk
+              or oncylmsk
+              or rdymsk
+              or disktype);  ! bits to check in seek test
+
+constant(c3777, 777);        ! to mask status bits
+
+! Memory addresses
+
+constant(DefectMap, 1000);    ! start of defect map
+
+! IOB addresses
+
+constant(IODHA, 325);         ! High data
+constant(IODLA, 324);         ! Low data
+constant(IOLHA, 327);         ! High header and header count
+constant(IOLLA, 326);         ! Low header
+constant(dmachn,300);
+constant(dskstat, 123);       ! 123 for EIO, 014 for smd
+constant(smctl, 322);         ! 322 for EIO, 233 for smd
+constant(dskctl, 323);        ! 323 for EIO, 230 for smd
+
+! constant bits in smctl
+
+constant(mark, 100);          ! for generating sector marks
+constant(DskEna, 10);         ! enable disk
+
+! constant bits in dskctl
+
+constant(dirbitin, 20);       ! toward spindle
+constant(dirbitout, 0);       ! froward spindle
+constant(ctladr,300);         ! addr for head, dir and drive
+constant(histep,200);         ! addr for high 6 bits of step count
+constant(lostep,100);         ! addr for low 6 bits of step count
+constant(RWC, 10);            ! for write current and pre-comp
+constant(drive0,0);
+constant(drive1,40);
+constant(drivebit,40);        ! drive select bit
+
+!! constant(fltclrbit, 20);   ! no such bits
+!! constant(step, 100);             "
+!! constant(busen, 100);            "
+
+
+place (0,1777);
+!
+!
+! Entry points.  Commands marked "!!" must be revised for 5 1/4
+!
+!    0   = init testbed and disk, does not alter memory.
+!
+!   10   = read the status, return as breakpoint and in r14.
+!
+!   20   = seek bang, moves heads alternately from 0 to maxcyl.
+!          Reboot to stop.
+!
+!   30   = restore, moves heads to track 0. Returns status.
+!
+!   40   = state machine fault clear. Returns status.
+!
+!   50   = go to landing zone and shut off testbed
+!
+!   60   = turn on formatter for one revolution (overwrites previous data
+!          on the track with zeros)
+!
+!   70   = do a seek (r2 = new cyl, r3 = new head, r53 = old cyl)
+!
+!  100   = turn on formatter. go 0 to shut off (overwrites previous data
+!          on the track with zeros)
+!
+!  110   = go/no-go seek test.  Does various sized seeks and checks to make
+!          sure they worked.  Stops on error and returns abort code.
+!          Runtype (r56) <> 0 to repeat.
+!
+!  120   = seeks in and out one track at a time (2 * maxcyl one-track
+!          seeks).  Returns time in jiffies in r16
+!
+!  130   = seeks in and out, first by one track, then two, etc.  Returns
+!          time in jiffies in r16, number of seeks in r1.
+!
+!  140   = seeks by one-third stroke seeks.  Returns time in jiffies in
+!          r16, number of seeks in r1.
+!
+!  150   = Compare data in read and write buffers.  Breakpoint 0 if same,
+!          3 if different.  Returns position of first wrong value in r1.
+!
+!  160   = generate pseudo-random data in write buffer.
+!
+!  170   = copy defect map to write buffer
+!
+!  171   = copy block pointed to by r0 to write buffer.
+!
+!  250   = generate write buffer from R0
+!  260   = generate alternating 0/1 bits in write buffer
+!  270   = generate alternating 0/1 words in write buffer
+!
+! Tests numbered 3xx should not be run with the disk connected.  They
+! are specific hardware tests.
+!
+!  300   = toggle bus0             These routines generate a 680 ns
+!  301   = toggle bus1             square wave on the DskCtl lines.
+!  302   = toggle bus2
+!  303   = toggle bus3
+!  304   = toggle bus4
+!  305   = toggle bus5
+!  306   = toggle bus addr 0
+!  307   = toggle bus addr 1
+!
+!  310   = toggle Disk bus addresses (ctladr, histep, lostep)
+!
+!  320   = toggle SM reset (1.3 us square wave)
+!
+!  330   = toggle mark line (680 ns square wave)
+!
+!
+!
+! Commands numbered 4xx perform individual sector operations.
+! They return an abort code as a breakpoint (R370)
+! When performing the operation after a seek R2 and R3 must be set
+! to the desired cylinder and head.  On all operations, R4 must be
+! set to the desired sector number.  Set r56 <> 0 to loop.
+!
+!  420   = write a sector after a seek          c w w
+!  421   = write a sector
+!  430   = check-write a sector after a seek    c c w
+!  431   = check-write a sector
+!  450   = block-read a sector after a seek     c r r
+!  451   = block-read a sector
+!  470   = check-read a sector after a seek     c cr r
+!  471   = check-read a sector
+!
+!
+!
+!  500   = Format the whole disk using data in the write buffer.
+!
+!  510   = Format the current track using data in the write buffer.
+!          Set r56 <> 0 to loop.
+!
+!  520   = write the whole disk using data in the write buffer.
+!          If runtype (r56) <> 0 then the 520 and 540 tests will be
+!          run alternately on the disk until it is rebooted.  After
+!          rebooting, r57 = # of completed passes, r52 = # of errors.
+!          The error log is kept in memory starting at 12000, 4 words
+!          per error.   The format is: cyl, head*1000+sector, abort,
+!          status.  Set r0 to 0 to stop on first error.
+!
+!  530   = fix bad tracks
+!
+!  540   = read and check all LH and Data on the disk.  See 520 for
+!          parameters and results.
+!
+!  570   = track read and check after seek
+!  571   = track read and check
+!
+!  600   = track write after seek
+!  601   = track write
+!
+!  610   = read the whole disk into memory
+
+
+! Memory locations:
+!   1000:  1777  Defect map
+!   4000:  4777  Logical header data for writes
+!   5000:  5007  Disk parameters from current command
+!   6000:  6777  Data for writes
+!   7000:  7007  Logical header from reads
+!  10000: 10377  Data from reads.   Sector = 10000:10377    Tk = 10000:17777
+!  12000:   big  Bad sectors
+!  14000:117777  Progress
+!
+!
+! Error codes:
+!
+!abort = 0:   all OK
+!abort = 1:   bad status, check smstatus (r14)
+!abort = 2:   controller status error, check smstatus for data problems
+!abort = 3:   logical header or data buffer mismatch. Incorrect on read
+!abort = 4:   mid-sector int out of order, check smstatus for disk problems
+!abort = 5:   sector int out of order, check smstatus for disk problems
+!abort = 6:   index mismatch during format (see sector)
+!abort = 7:   timeout during seek
+!abort =10:   timeout of sector operation, sector not found
+!abort =11:   failed on seek to cylinder 0
+!abort =12:   extra interrupt during seek
+!abort =13:   seek count doesn't match restore count
+!
+!there are eight possible commands for the disk controller
+!
+!0 = idle/nop
+!1 = format write - formats the next SECTOR
+!2 = block write  - checks ph, writes lh and db
+!3 = check write  - checks ph and lh, writes only the data block
+!4 = not used
+!5 = data read    - checks ph, reads lh and db
+!6 = not used
+!7 = block read   - checks ph and lh, reads lh and db
+!
+
+start:   DHA := 0, loc(0);
+         0, IOB(smctl);         !reset controller
+         drivenum := drive0;
+         drivenum or ctladr, IOB(dskctl); !zero smd ctl
+         dpytmp := 101154;
+         R371 := 0;             !Set screen base to 0
+         cyl := 0;
+         head := 0;
+         sector := 0;
+         LLA := 4000;
+         LHA := 320;
+         DLA := 6000;
+         dmachan := 2;          !disk DMA channel number
+         dpycnt := 0;
+         allones := 177777;     !used in showprog
+         progflag := 0;
+         badabort := 0;
+         seed := 357;
+         sdatabase := 4000;
+         call(gendata);
+         sdatabase := 6000;
+         call(gendata);
+         runtype := 0;          !Don't loop forever
+         DoRWC := InnerCyl;
+         NumTry := 1;           !Don't retry
+         abort := 0, call(waitindex);
+         mikecmd := 30, IOB(smctl);   !enable controller and interrupts
+
+         call(restore), loc(30);
+         nop;
+
+stat:    call (ChkStat), loc(10);
+         r370 := abort, goto(7401);
+
+ChkStat: IOB(dskstat);              !read status
+         smstatus := IOD and c3777;
+         tmp := smstatus;
+         tmp := tmp and GoodStat;
+         cyl;                       !which way is track0?
+         if eql goto(ChkTk0);
+         tmp := tmp - Trk00msk;     !should be high
+ChkTk0:  tmp := tmp - fltmsk;       !fault shouldn't be low
+         abort := 0, if eql return;
+         abort := 1, return;
+               
+         
+seekbang:cyl := 0, loc(20);         !do some seeks
+sklp:    if intrpend call(vecint);
+         call(seek);                !limits are zero and maxcyl
+         cyl := cyl xor maxcyl;
+         goto(sklp);
+         
+random:   ran, rightshift(4);
+          TOS := not ran, if lss goto(rneg);
+           
+rpos:     ran := shift xor ran, leftshift(13);
+          ran := shift xor ran, return;
+           
+rneg:     ran := TOS + 1, goto(rpos);
+
+
+          call(fltclr), loc(40);
+          call(ChkStat);
+          r370 := abort, goto(7401);  !call fault clr and return
+
+          cyl := landzone, loc(50);
+          call(seek);
+off:      SrcRasterOp := 0, goto(off);
+          goto(off);
+          
+          call(ensect), loc(60);   !put sector marks on current track
+          goto(stat);
+         
+ensect:   mikecmd or mark, IOB(smctl);
+          call(waitindex);
+          mikecmd, IOB(smctl);
+          call(waitindex);
+          return;
+
+doseek:   call(seek), loc(70);
+          goto(stat);
+        
+
+          Mikecmd or mark, IOB(smctl), loc(100);
+          goto(stat);
+       
+! Code to do go/no-go seek test
+          
+          abort := 0, call(restore), loc(110);
+skgtop:   incr := maxcyl;             !longest seek
+skglp:    cyl := incr, call(seek);
+          call(ChkStat);
+          r370 := abort, if neq goto(7401);
+          call(restore);              !now count tracks back to zero
+          Count - incr;               !same number?
+          R370 := 13, if neq goto(7401);
+          incr, rightshift(1);        !now do a shorter seek
+          incr := SHIFT;
+          if neq goto(skglp);
+          runtype;                    !success! try it again?
+          r370 := 0, if eql goto(7401);
+          goto(skgtop);
+
+! Code to do single-track seeks.  It steps all the way in,
+! then all the way out.
+      
+          call(restore), loc(120); !move to cyl 0
+          Count := 0, LeftShift(0);
+          Timer := SHIFT - C60;    !init
+seektest1: incr := 1;              !one track seeks
+          cyl := 0;
+sk1lp:    if intrpend call(vecint);
+          call(seek);
+          cyl := cyl + incr;       !next cylinder
+          runtype, if geq goto(skcon);  !if negative, start again
+          if neq goto(seektest1);  !loop forever or do just one pass
+          Timer := Timer+C60, goto(7401);
+skcon:    cyl - maxcyl;
+          if lss goto(sk1lp);      !at inner track?
+          incr := not incr;        !yep, turn around
+          incr := incr + 1, goto(sk1lp);
+          
+! Code to do "average" seeks.  It oscillates around the
+! cylinder MaxCyl/2 starting with the longest possible
+! seek and doing seeks that are one cylinder shorter
+! each time through the loop.
+          
+          call(restore), loc(130); !move to cyl 0
+          Count := 0, LeftShift(0);
+          Timer := SHIFT - C60;    !init
+seektest2: incr := MaxCyl;         !start with all-track seeks
+sk2lp:    if intrpend call(vecint);
+          cyl := cyl + incr;       !next cylinder
+          Count := Count + 1, call(seek);
+          tmp := incr;             !decrement and invert increment
+          if gtr goto(sk2p);
+          incr := not tmp, goto(sk2chk);
+sk2p:     incr := 1;
+          incr := incr - tmp;
+sk2chk:   if neq goto(sk2lp);      !at zero?
+          runtype;
+          cyl := 0, if neq goto(seektest2);
+          Timer := Timer + C60, goto(7401);
+          
+
+! Code to do 1/3 stroke seeks.
+! Alternates in and out, walking inward one cylinder each time
+! until it reaches MaxCyl.  It does 2 * (MaxCyl div 3) seeks.
+          
+          Timer := 0, loc(140);
+SeekTest3: call(restore);          !move to cyl 0
+          Count := 0;
+          Incr := (MaxCyl div 3);
+          Timer := Timer-C60;      !init time
+          CurCyl := 0;             !lo cylinder
+sk3lp:    if intrpend call(vecint);
+          incr := incr + 1;        !next hi cylinder
+          incr - MaxCyl;
+          if gtr goto(sk3end);
+          cyl := incr;
+          Count := Count + 1, call(seek);
+          CurCyl := CurCyl + 1;    !next lo cylinder
+          Cyl := CurCyl;
+          Count := Count + 1, call(seek);
+          goto(sk3lp);
+sk3end:   runtype;
+          cyl := 0, if neq goto(seektest3);
+          Timer := Timer + C60, goto(7401);
+
+
+    loc(150), Call(ChkData);
+          r370 := 0, if eql goto(7401);
+          r370 := 3, goto(7401);       !data mismatch
+
+    loc(160), SDataBase := 4000;       !put random data in write buffer
+          Call(GenRData);
+          SDataBase := 6000;
+          Call(GenRData);
+          R370 := 0, goto(7401);
+
+
+!Copy a data block to the write data buffer.  LH unchanged.
+
+          r0 := DefectMap, loc(170);        !defect map address
+          sdata := 6000, loc(171);
+          sdatabase := r0;
+          PushLoad(377);
+            sdatabase, Fetch;           !t3!
+            sDataBase := SDataBase+1;   !t0!
+            nop;                        !t1!
+            sData, Store, hold;         !t2!  no DMA
+            MDO := MDI;                 !t3!
+            sData := sData + 1;         !t0!
+            nop;                        !t1!
+            RepeatLoop;                 !t2!  allow DMA
+          R370 := 0, goto(7401);
+
+    
+
+    loc(250), sdataBase := 6000;
+          SData := r0;               !user-specified data in r0
+          Call(GenCdata);
+          R370 := 0, goto(7401);
+
+    
+    loc(260), sdataBase := 6000;
+          SData := 125252;           !alternating bits
+          Call(GenCdata);
+          R370 := 0, goto(7401);
+
+           
+    loc(270), sDataBase := 6000;     !alternating words
+          PushLoad(177);
+             MA := sdatabase,store2;
+             0;
+             not 0;
+             if intrpend call(vecint);
+             sdatabase := sdatabase + 2;
+             RepeatLoop;
+          R370 := 0, goto(7401);
+
+! test to write the whole disk a sector at a time using write
+! Entering at 520 with runtype <> 0 will cause the disk to do alternate
+! read/write passes on the disk until it is re-booted.
+
+wrtdsk:   badsectcnt := 0, loc(520);
+          badsect := 12000;
+          passcnt := 0, call(InitDefect);
+
+wrtdsk1:  cyl := 1250;
+          head := 0;
+          sector := 0;
+
+wrtsk:    call(seek);
+wrtloop:  retcnt := NumTry;
+          badabort := 0, call(showprog);
+wrterr:   LHA := 320;
+          LLA := 4000;
+          DLA := 6000;
+          DHA := 0, call(ChkDefect);
+          if neq goto(wcont);
+          cmd := 2, call(stcmd);    !do a write c w w
+          if eql goto(wcont);       !check for an error
+
+          Numtry;                   !error.  Continue?
+          R370 := 1, if eql goto(7401);
+          retcnt := retcnt - 1;
+          if neq goto(wrterr);
+          badabort := abort, call(showprog);
+          call(report);
+          
+wcont:    call(incrsect);
+          if eql goto(wrtloop);
+          sector := 0, call(incrcyl);
+          runtype, if eql goto(wrtsk);
+          passcnt := passcnt + 1, if neq goto(rddsk1);
+          R370 := BadSectCnt, goto(7401);
+
+! Read and check the whole disk.
+! Enter with NumTry in r0, RunType in r56 (0 = run once, else loop)
+! Do NumTry trys on each sector (min = 1)
+!    NumTry = 0 means stop on first error
+! Catalog any failures in BadSect
+! Exit with BadSectCnt in r52, passcnt in r57
+
+rddsk:    badsect := 12000, loc(540);!reads the disk and records bad sectors
+          badsectcnt := 0;
+          passcnt := 0, call(InitDefect);
+
+rddsk1:   cyl := 0;
+          head := 0;
+          sector := 1;
+          call(seek);
+          IOB(DskStat);
+          smstatus := IOD;
+          smstatus and trk00msk;    !did we get to 0?
+          abort := 11, if neq goto(CmdEnd);
+          cyl := 1250;
+rcont:    call(seek);
+rdloop:   retcnt := NumTry;
+          badabort := 0, call(showprog);
+rderr:    LHA := 320;
+          LLA := 7000;
+          DLA := 10000;
+          DHA := 0, call(ChkDefect);
+          if neq goto(rdnxt);
+          cmd := 5, call(stcmd);    !do a  c r r
+          if neq goto(restop);      !log error
+          call(chkdata);
+          if eql goto(rdnxt);
+          abort := 3;               !lh or data error
+
+restop:   Numtry;
+          if neq goto(rstp2);
+          R370 := 1, goto(7401);    !stop on 1 error
+
+rstp2:    retcnt := retcnt - 1;     !retry the operation?
+          if neq goto(rderr);
+          badabort := abort, call(Showprog);
+          call(report);             !log error
+
+rdnxt:    call(isect);              !on to the next sector
+          if eql goto(rdloop);
+          sector := 1, call(incrcyl);
+          runtype, if eql goto(rcont);
+          passcnt := passcnt + 1, if neq goto(wrtdsk1);
+          r370 := BadSectCnt, goto(7401);
+                    
+
+! Report an error
+
+Report:   head, LeftShift(11);
+          tmp := SHIFT or sector;
+          MA := badsect, store4;    !save the pertinent data
+          MDO := cyl;
+          MDO := tmp;
+          MDO := abort;
+          MDO := smstatus;
+          badsectcnt := badsectcnt + 1;
+          badsect := badsect + 4;
+          tmp := smstatus;
+          tmp := tmp and SMIntMsk;
+          tmp := tmp - 3;           !was it a cylinder mismatch?
+          if neq return;
+          CurCyl := cyl, call(restore);  !do a recal
+          cyl := CurCyl, call(seek);
+          return;
+
+fixfor:   badsect := 12000,loc(530);    !fix bad tracks
+          LLA := 4000;
+          DLA := 6000;
+fixlp:    MA := badsect, fetch4;
+          cyl := MDI;
+          sector := MDI, RightShift(11);
+          head := SHIFT;
+          oldcyl - cyl;
+          if gtr goto(7401);
+          badsect := badsect + 4, call(seek);
+          call(format);
+          BadSectCnt := BadSectCnt - 1;
+          if gtr goto(fixlp);
+          call(restore);
+          r370 := abort, goto(7401);
+
+
+!showprog: prog-4400;                     !too small?
+!          if c19 goto(shrep);            !replace prog if < 4400
+!          prog-5000;
+!          if c19 goto(shz);              !ok if prog < 5000
+!shrep:    prog := 4400;                  !start at beginning
+!          pword;
+!          pword := 0, if neq goto(shz);
+!          pword := 177777;
+!shz:      MA := prog, store;             !toggle a word
+!          MDO := pword;
+!          prog := prog+1, return;
+          
+
+          call(seek), loc(420);
+write:    LHA := 320, loc(421);
+          LLA := 4000;
+          DHA := 0;
+          DLA := 6000;
+          cmd := 2, call(stcmd);    !do a write c w w
+          RunType;
+          if neq goto(write);
+          goto(CmdEnd);
+
+
+
+          call(seek), loc(430);
+cwrite:   LHA := 320, loc(431);
+          LLA := 4000;
+          DHA := 0;
+          DLA := 6000;
+          cmd := 3, call(stcmd);    !do a write c c w
+          RunType;
+          if neq goto(cwrite);
+          goto(CmdEnd);
+
+          call(seek), loc(450);
+bread:    LHA := 320, loc(451);
+          LLA := 7000;
+          DHA := 0;
+          DLA := 10000;
+          cmd := 5, call(stcmd);    !do a read c r r
+          if neq goto(br2);
+          call(chkdata);            !check the read data
+          if eql goto(br2);
+          abort := 3; 
+br2:      RunType;
+          if neq goto(bread);
+          goto(CmdEnd);
+
+
+          call(seek), loc(470);
+read:     LHA := 320, loc(471);
+          LLA := 7000;
+          DHA := 0;
+          DLA := 10000;
+          cmd := 7, call(stcmd);    !do a read c cr r
+          if neq goto(rd2);
+          call(chkdata);            !check the read data
+          if eql goto(rd2);
+          abort := 3; 
+rd2:      RunType;
+          if neq goto(read);
+          goto(CmdEnd);
+
+
+        call(seek), loc(570);   !read a whole track
+mread:  LHA := 320, loc(571);
+        LLA := 7000;
+        DHA := 400;
+        DLA := 10000;
+        sector := 0;
+mread1: cmd := 7, call(stcmd);  !do a read c cr r
+        if neq goto(CmdEnd);
+        call (chkdata);         !check the read data
+        if eql goto(mrd2);      !data ok
+        abort := 3;             !data error
+        r370 := abort, goto (7401); !abort
+mrd2:   call(incrsect);
+        DLA := DLA + DHA, if eql goto(mread1);
+        runtype;
+        r370 := abort, if eql goto(7401);
+        goto(571);
+        
+
+        call(seek), loc(600); !write a track from the read buffer
+mrite:  LHA := 320, loc(601);
+        LLA := 4000;
+        DHA := 400;
+        DLA := 6000;
+mrite1: cmd := 2, call(stcmd);     !do a read c w w
+        call(incrsect);
+        if eql goto(mrite1);
+        sector := 0;
+
+CmdEnd: r370 := abort, goto(7401);
+
+!reads whole disk without checking into memory
+!changes disk data block base after each cylinder
+
+
+diskin:   DLA := 10000,loc(610);   !start here
+          LHA := 320;
+          LLA := 7000;
+          DHA := 400;
+          bDLA := DLA;
+          sector := 0;
+          head := 0;
+          cyl := 0;
+dinlp1:   call(seek);
+mread2:   cmd := 7, call(stcmd);    !do a read c cr r
+          call(incrsect);
+          DLA := DLA + DHA, if eql goto(mread2);
+          bDLA := bDLA + 4; !next quad
+          DLA := bDLA;
+          sector := 0, call(incrcyl);
+          if neq goto(CmdEnd);
+          goto(dinlp1);
+
+!this code executes data handling commands other than format
+
+        
+stcmd:  call(ldcnst);                !load the constants 
+        smdint := 0;
+        abort := 0, call(ldcmd);     !load the command
+        call(setdma);                !set up the dma channel
+wtst1:  if intrpend call(vecint);
+        indexcnt := 3, IOB(dskstat); !wait for state machine to pick up the
+        IOD and 7;                   !command and assert status 1, while at
+        smstatus := IOD, if eql goto(wtst1); !the same time watching interrupts
+        oldindex := IOD and indxmsk; !get the reference data
+cntindx:if intrpend call(vecint);
+        IOB(dskstat);
+        IOD and 10;                  !check for disk interrupt
+        smdint, if neq goto(chkint); !check for state machine interrupts
+        if neq goto(chkint);
+        newindex := IOD and indxmsk; !get the second sample
+        oldindex xor newindex;       !compare for a difference and get new
+        if eql goto(cntindx);        !decrement index count at an edge
+        indexcnt := indexcnt - 1;
+        smstatus := IOD, if eql goto(tout);  !timed out ?
+        oldindex := newindex, goto(cntindx); !no, save new data
+
+chkint: smstatus := IOD;
+        smstatus and fltmsk;         !start testing the state machine status
+        smdint := 0, if eql goto(abort1); !quit if mechanical trouble
+        smstatus := smstatus and 7;  !mask for state machine message
+        smstatus - 1, if eql goto(done); !done when IDLE
+        if eql goto(cntindx);        !still busy
+        abort := 2, goto(abortp);    !otherwise, quit
+
+abort1: abort := 1, call(unldcmd);   !fault bit set
+        abort, return;
+        
+tout:   abort := 10, call(fltclr);
+abortp:
+done:   smstatus := IOD, call(unldcmd);
+        abort, return;
+
+! Format the whole disk
+
+        head := 0, loc(500);
+        cyl := 1250;
+        cmd := 0, call(ldcmd);      !make sure SM isn't reset
+     !  call(restore);
+        call(format);               !make sure there are some sector marks
+for:    call(seek);
+        call(format);               !format one track
+        r370 := abort, if neq goto(7401);
+        call(incrcyl);              !next track number
+        if eql goto(for);
+        R370 := abort, goto(7401);
+        
+Fort:   call(format), loc(510);     !format current track
+        RunType;
+        if neq goto(Fort);
+        R370 := abort, goto(7401);
+
+
+! Code to format one track
+!    seek and gendata already performed
+!    returns neq if error
+
+Format: LHA := 320;
+        LLA := 4000;
+        DHA := 400;
+        DLA := 6000;
+        sector := 0, call(ldcnst);  !assumes constants are ready
+        smdint := 0, call(setdma);  !assumes DMA addresses are ready
+        Call(WaitIndex);            !Index cant occur between next two commands
+        Mikecmd or mark, IOB(smctl); ! turn on formatter
+        call(waitindex);            !wait for the index mark
+form1:  cmd := 1, call(ldcmd);      !write the command and turn off formatter
+        count := 0;                 !0 during PH and LH
+
+        smdint := 0;
+        tmp2 := C60;
+fwait1: if intrpend call(vecint);   !watch interrupts
+        C60 - tmp2, RightShift(0);  !Wait 60 jiffies for int
+        Shift - 10#60;
+        abort := 10, if gtr goto(abortp);
+        smdint;
+        if eql goto(fwait1);        !ignore non disk interrupts
+
+        smstatus and fltmsk;
+        if eql goto(abort1);        !check for disk fault
+        tmp := smstatus;
+        tmp := tmp and 17;          !mask for state machine message
+        tmp - 11;
+        abort := 4, if neq goto(abortp);    !should be mid-sector interrupt
+        
+        sector := sector + 1, call(ldcnst); !reload the constants
+        badabort := 0, call(showprog);
+        count := 1;                 !1 during data
+
+        smdint := 0;
+        tmp2 := C60;
+fwait2: if intrpend call(vecint);   !watch interrupts
+        C60 - tmp2, RightShift(0);  !Wait 60 jiffies for int
+        Shift - 10#60;
+        abort := 10, if gtr goto(abortp);
+        smdint; 
+        if eql goto(fwait2);        !ignore non disk interrupts
+
+        smstatus and fltmsk;
+        if eql goto(abort1);        !check for disk fault
+        tmp := smstatus;
+        tmp := tmp and 17;          !mask for state machine message
+        tmp - 10;
+        abort := 5, if neq goto(abortp); !should be sector interrupt
+
+        sector - maxsect;
+        abort := 0,if eql goto(forchk); !quit at rollover
+        call(unldcmd);              !zero the command between sectors
+        call(setdma);               !reset the dma channel
+        tmp := smstatus;
+        tmp := tmp and IndxMsk;     !check index
+        tmp xor oldindex;           !should be different
+        if neq goto(form1);
+        abort := 6, goto(abortp);
+
+forchk: IOB(DskStat);
+        tmp := IOD and IndxMsk;     !check index
+        tmp xor oldindex;           !should be the same
+        if eql goto(done);
+        abort := 6, goto(abortp);
+
+! Step thru all tracks, return neq when done
+
+incrcyl:head := head + 1;
+        head - maxhd;
+        0,if leq return;            !no head overflow
+        head := 0;                  !head overflow
+        cyl := cyl + 1;
+        cyl - maxcyl;
+        0,if leq return;            !no cylinder overflow
+        1, return;                  !cylinder overflow
+        
+!********************common utilities for all disks*******************
+!
+! this subroutine increments the sector number and flags overflows
+        
+incrsect: sector := sector + 1;     !increment the sector count
+        sector - maxsect;
+        0, if lss return;           !sectors 0 to maxsect-1
+        1, return;                  !otherwise continue
+
+!generate interleaved sectors for reading or writing, sectors start at 1
+
+isect:  sector := sector + 2;       !interleaving of two
+        sector - maxsect;
+        if geq goto(zsect);
+        0, return;
+zsect:  sector - maxsect;
+        1, if eql return;
+        sector := 0, return;
+
+ldcmd:  mikecmd or cmd, IOB(smctl), return;
+
+unldcmd:mikecmd, IOB(smctl), return;
+        
+
+chkdata:Count := 0;                  !check read data
+        SDataBase := 4000;
+chklh:  MA := LLA + Count, fetch;
+        tmp := MDI;
+        MA := SDataBase + Count, fetch;
+        MDI - tmp;
+        if neq goto(chkerr);
+        Count := Count + 1, if intrpend call(vecint);
+        Count - 10;
+        if lss goto(chklh);
+        Count := 0;
+        SDataBase := 6000;
+chkdb:  MA := DLA + Count, fetch;
+        tmp := MDI;
+        MA := SDataBase + Count, fetch;
+        MDI - tmp;
+        if neq goto(chkerr);
+        Count := Count + 1, if intrpend call(vecint);
+        Count - 400;
+        if lss goto(chkdb);
+        0, return;                  !check is OK
+chkerr: 1, return;
+         
+        
+!this subroutine watches for index edges
+
+waitindex: IOB(dskstat);
+         oldindex := IOD and indxmsk; !get first sample for a reference
+waitdex: IOB(dskstat);
+         IOB(dskstat);
+         newindex := IOD and indxmsk; !mask for index bit
+         oldindex xor newindex;       !check for an edge
+         if neq return;               !return if edge is present
+         if intrpend call(vecint);
+         goto(waitdex);               !go get a new sample
+
+!seek code needs updated cylinder number(cyl) and the head desired.
+!there is no explicit head change code
+!if the cylinder is unchanged from the last seek, only a head change will be
+!done. the code does not check for cylinder too large
+
+
+seek:    dir := dirbitin;           ! assume we are stepping in
+         tmp := cyl;
+         tmp := tmp - oldcyl;       ! number of steps
+         if geq goto(hdchange);
+         dir := dirbitout;          ! nope. we're steppin' out
+         tmp := oldcyl;
+         tmp := tmp - cyl;
+hdchange:  dir := dir or ctladr;
+         cyl - DoRWC;
+         if lss goto(sek2);
+         dir := dir or RWC;         ! on inner track
+sek2:    dir := dir or drivenum;    ! set drive
+         dir or head, IOB(dskctl);  ! send head, dir, drive to adapter
+         tmp := tmp-1;
+         if lss return;             ! Just select head, drive
+         tmp, rightshift(6);        ! high six bits
+         shift  or histep, IOB(dskctl);
+         tmp := tmp and 77;         ! low six bits
+         tmp or lostep, IOB(dskctl);
+         oldcyl := cyl;
+         
+         smdint := 0;
+         tmp2 := C60;
+wtoncyl: C60 - tmp2, RightShift(0); ! Wait 60 jiffies for seek
+         Shift - 10#60;
+         if gtr goto(SkTime);
+         if intrpend call(vecint);  ! Wait for seek complete or not ready
+         smdint;
+         if eql goto(wtoncyl);
+
+         IOB(dskstat);
+         IOD and rdyoncyl;          ! Wait for both bits set
+         if eql return;
+         abort := 12, return;       ! Bad status
+
+SkTime:  abort := 7, return;        ! Timed out
+
+         
+fltclr:  tmp := drivenum;
+         tmp := tmp or ctladr;      ! default control 
+         tmp xor drivebit, IOB(dskctl);   ! select other drive
+         loadS(10#300);                   ! wait about 50 usec
+fltlp:   Repeat(fltlp);
+         tmp, IOB(dskctl);          ! select drive again
+         mikecmd and not DskEna, IOB(smctl);   ! reset SM
+         nop;
+         mikecmd, IOB(smctl);       ! turn off reset
+
+wtze:    if intrpend call(vecint);  !state machine must be runable
+         IOB(dskstat);
+         IOD and 7;
+         if neq goto(wtze);         !wait for SM to be zero
+         return;                    !should be done
+         
+restore: count := 0;
+         oldcyl := 0;
+         cyl := 0;
+restep:  IOB(dskstat);
+         IOD and trk00msk;
+         if eql return;
+         oldcyl := 1, call(seek);   !step out 1 cylinder
+         count := count+1, goto(restep);
+
+!Defect Map Handling
+!Assumes defect map is loaded starting at address DefectMap
+!Also assumes that defects are in the same order as the disk is scanned.
+!Format of defect map is two word entries:
+
+!------------------------------------------!
+!       Head        !       Sector         !
+!------------------------------------------!
+!                Cylinder                  !
+!------------------------------------------!
+!msb                                     lsb
+
+!Initialize defect handling code
+
+InitDefect:
+        DefectPtr := DefectMap;   !Start of Defect Map
+        goto(NextDefect);         !Load up first entry
+
+
+!Check cyl/head/sector to see if it is next defect, return nonzero if so and
+! fetch next defect, return 0 if not at defect yet
+ChkDefect:
+         cyl - DefectCyl;
+         head - DefectHead, if neq goto(defgoodret);
+         sector - DefectSec, if neq goto(defgoodret);
+         if neq goto(defgoodret);
+NextDefect:
+         DefectPtr, Fetch2;
+         DefectSec := MDI;
+         DefectCyl := MDI;
+         DefectSec, RightShift(10);
+         DefectHead := Shift;
+         DefectSec := DefectSec and 377;
+         DefectPtr := DefectPtr + 2, Return;
+
+DefGoodRet: 0, Return;
+
+
+!bit tests: toggle a particular control bit
+
+ben:     0, IOB(smctl), loc(330);  !toggles format line
+         nop;
+         100, IOB(smctl);
+         goto(ben);
+
+         nop, loc(307);
+devs0:   200, IOB(dskctl);    !toggles bus addr 1
+         nop;
+         0, IOB(dskctl);
+         goto(devs0);
+
+         nop, loc(306);
+devs1:   100, IOB(dskctl);    !toggles bus addr 0
+         nop;
+         0, IOB(dskctl);
+         goto(devs1);
+
+         nop, loc(305);
+busad1:  40, IOB(dskctl);    !toggles ba1
+         nop;
+         0, IOB(dskctl);
+         goto(busad1);
+
+         nop, loc(304);
+busad0:  20, IOB(dskctl);    !toggles ba0
+         nop;
+         0, IOB(dskctl);
+         goto(busad0);
+
+         nop, loc(303);
+busda3:  10, IOB(dskctl);    !toggles bus3
+         nop;
+         0, IOB(dskctl);
+         goto(busda3);
+
+         nop, loc(302);
+busda2:  4, IOB(dskctl);    !toggles bus2
+         nop;
+         0, IOB(dskctl);
+         goto(busda2);
+
+         nop, loc(301);
+busda1:  2, IOB(dskctl);    !toggles bus1
+         nop;
+         0, IOB(dskctl);
+         goto(busda1);
+
+         nop, loc(300);
+busda0:  1, IOB(dskctl);    !toggles bus0
+         nop;
+         0, IOB(dskctl);
+         goto(busda0);
+         
+
+! other tests
+
+cldbt:   10, IOB(smctl), loc(310);
+         ctladr, IOB(dskctl);
+         histep, IOB(dskctl);
+         lostep, IOB(dskctl);
+         if intrpend call(vecint);
+         goto(cldbt);
+        
+trst:    0, IOB(smctl),loc(320);    !test reset line
+         nop;
+         nop;
+         nop;
+         10, IOB(smctl);
+         nop;
+         nop;
+         goto(trst);
+         
+
+!load the constant register with various constants
+
+!new LOAD CONSTANT routine for pointer file
+
+ldcnst:    0, IOB(320);                !load a zero in the pointer
+           tmp := cyl, leftshift(4);   !xxxxAAAABBBBBBBB
+           tmp1 := shift and 170000;   !AAAAxxxxxxxxxxxx
+           tmp := tmp and 377;         !xxxxxxxxBBBBBBBB
+           tmp := tmp or tmp1;         !AAAAxxxxBBBBBBBB
+           head, leftshift(10);        !xxxxHHHHxxxxxxxx
+           tmp := shift or tmp;        !AAAAHHHHBBBBBBBB
+                                       !-cylhi-!-cylow-!
+           scratch := 4000;
+           scratch,fetch4;
+           LHW1 := MDI;
+           LHW2 := MDI;
+           LHW3 := MDI;
+           scratch := MDI;
+           not 0, IOB(321);            !load zero !0
+           not sync, IOB(321);         !load sync !1
+           not head, IOB(321);         !load head !2
+           not sector, IOB(321);       !load sector !3
+           not tmp, IOB(321);          !load clyinder low !4
+           not LHW1, IOB(321);         !load LH1 low !5
+           not LHW2, IOB(321);         !load LH2 low !6
+           not LHW3, IOB(321);         !load LH3 low !7
+           tmp, rightshift(10);
+           not shift, IOB(321);        !load cylinder high !10
+           LHW1;
+           not shift, IOB(321);        !load LH1 high !11
+           LHW2;
+           not shift, IOB(321);        !load LH2 high !12
+           LHW3;
+           not shift, IOB(321);        !load LH3 high !13
+           
+           scratch := 5000;
+           MA := scratch, store4;
+           sector;
+           head;
+           cyl;
+           0, return;
+
+
+! routine to set dma address
+       
+SetDma:    dmachan, IOB(dmachn);
+           LHA, IOB(IoLHA);        !write lh data
+           LLA, IOB(IoLLA);
+           DHA, IOB(IoDHA);        !write datablock data
+           DLA, IOB(IoDLA), Return;
+
+gendata:   sdata:= 0;
+gendata1:  MA := sdatabase,store;  !set up the base of the data to be sent
+           sdata;
+           sdata := sdata + 1;     !increment the data and the address
+           if intrpend call(vecint);
+           sdatabase := sdatabase + 1;
+           sdata - 400;            !the data is the loop counter too!
+           if neq goto(gendata1);  !do 377 writes
+           sdata := 0, return;
+
+gen2data:   sdata:= 400;
+gen2data1:  MA := sdatabase,store; !set up the base of the data to be sent
+           sdata;
+           sdata := sdata + 401;   !increment the data and the address
+           if intrpend call(vecint);
+           sdatabase := sdatabase + 1;
+           sdata - 1000;           !the data is the loop counter too!
+           if neq goto(gen2data1); !do 377 writes
+           sdata := 400, return;
+           
+           
+genrdata:  sdata := 0;
+           ran := seed;
+genrdata1: call(random);
+           MA := sdatabase, store; !set up the base of the data to be sent
+           ran;
+           sdata := sdata + 1;     !increment the data and the address
+           if intrpend call(vecint);
+           sdatabase := sdatabase + 1;
+           sdata - 400;            !the data is the loop counter too!
+           if neq goto(genrdata1); !do 377 writes
+           sdata := 0, return;
+
+           
+genCdata:  PushLoad(377);          !constant data
+             MA := sdatabase,store;
+             sdata;
+             if intrpend call(vecint);
+             sdatabase := sdatabase + 1;
+             RepeatLoop;
+           return;
+
+!
+! Called:  Badabort := abort, Call(ShowProg);
+!
+
+wob:     style := 2, goto(pstyle);
+showbad: style := 0;
+         headad := 577;
+         goto(pstyle);
+showprog:badabort;
+         style := 2, if neq goto (showbad);
+         passcnt;
+         headad := 0, if odd goto(wob);
+pstyle:   tos := style,push;  !push style
+        sector, leftshift(1);
+        x1 := shift;  
+        head, leftshift(6);  !multiply head number by 32
+        x1 := shift + x1;
+        tos := x1 := x1 + headad, push;  !push x1
+        y1 := cyl;   
+        tos := y1 := y1 + 200,push;  !push y1
+        x2 := x1;
+        tos := x2 := x2 + 1, push;  !push x2
+        Tos := y2 := y1, push;   !push y2
+               
+!       Calling sequence:
+!
+!       push Style
+!       push X1;
+!       push Y1;
+!       push X2;
+!       push Y2;
+!       push Origin;
+!       call Line;
+!
+!
+!       Style = 1       Erase line.
+!               2       Xor line.
+!               else    Draw line.
+!
+!
+!       X coordinates range from 0 (left) to 1377 (right).
+!       Y coordinates range from 0 (top) to 1777 (bottom).
+        
+        
+!       Get X1,Y1 and initial Word and Bit addresses.
+        
+        Y1 := Tos and AllOnes, LeftShift(4);
+        Word := Shift;                          !*****
+        Y1, LeftShift(5);
+        Word := Shift + Word, Pop;              ! Y1 * 60 + Origin
+        X1 := Tos and AllOnes, RightShift(4);
+        Word := Shift + Word;                   ! Y1 * 60 + X1 div 20 + Origin
+        X1 and 17, LeftShift(4);
+        not Shift, ShiftOnR;
+        1, Pop;
+        Bit := Shift, if IntrPend Call(vecint); ! X1 bit mask
+        
+        
+        
+!       Get X2,Y2 and calculate dX,dY.
+        
+        Tos := Tos and AllOnes;
+        dY := Tos - Y1, Pop, LeftShift(17);
+        AddY := 60, if Geq goto(L1);
+        AddY := not 57;                         ! -60
+        dY := Shift - dY;                       ! Shift = 0
+L1:     Tos := Tos and AllOnes;
+        dX := Tos - X1, Pop;
+        Last := 1, if Geq goto(L2);
+        Last := 100000;
+        dX := Shift - dX;                       ! Shift = 0
+        
+!       Determine line style.
+
+L2:     Tos := Tos and AllOnes;
+        Tos - 1, LoadS(Clear);
+        Word := Word + 0, if Eql goto(L3);     ! physical address
+        Tos - 2, LoadS(Flip);
+        if Eql goto(L3);
+        LoadS(Set);
+
+
+!       Calculate derived values.
+        
+L3:     T := Tos := dY, if IntrPend Call(vecint);
+        D := Tos - dX;
+        F := Tos + dX, if Lss goto(L4);
+        T := Tos := dX;
+        D := Tos - dY;
+L4:     E := 0;
+        TplusD := Tos + D;
+
+
+!       Main loop.
+
+Top:    Tos := E + E, if IntrPend Call(vecint);
+        F := F - 1;
+        Tos + TplusD, if Lss goto(ExitLine);
+        Tos := D + E, if Lss goto(L5);
+        F := F - 1;
+        E := Tos;
+        Last;
+        Word := Word + AddY, Fetch, if Lss goto(Minus);
+        
+!       X is going positive.
+        
+Plus:   Bit and not Last, Rotate(1);
+PlusA:  Bit := Shift, if eql goto(PlusB);
+        Word, Store, GotoS;
+PlusB:  Nop;
+        Word := Word + 1, Fetch;
+        Last, goto(PlusA);
+
+
+L5:     dY - dX;
+        E := E + T, if Gtr Goto(Same);
+        Last;
+        Word, Fetch, if Gtr goto(Plus);
+
+!       X is going negative.
+
+Minus:  Bit and not Last, Rotate(17);
+MinusA: Bit := Shift, if eql goto(MinusB);
+        Word, Store, GotoS;
+MinusB: Word := Word - 1, Fetch;
+        Last, goto(MinusA);
+        
+!       X is not changing.
+        
+Same:   Word := Word + AddY, Fetch;
+        Nop;
+        Nop;
+        Word, Store, GotoS;
+        
+!       Combine new bit with old word.
+        
+Set:    MDO := MDI or Bit, Goto(Top);
+Clear:  MDO := MDI and not Bit, Goto(Top);
+Flip:   MDO := MDI xor Bit, Goto(Top);
+        
+exitline:  badabort;
+           badabort := 0, if eql return;
+           style := 2;
+           headad := 0, goto(pstyle);
+           
+        
+! Interrupt routines
+
+VecInt: Vector(Z80Int);
+
+
+
+
+Z80Int:  Return, Loc(200);
+BadInt1: Return, Loc(204);
+
+Diskint: IOB(dskstat), loc(210);
+         smstatus := IOD and c3777;
+         smdint := 1, Return;   !use smdint for now
+
+BadInt3: Return, Loc(214);
+BadInt4: Return, Loc(220);
+
+! Display interrupt routine
+
+DpyInt: DpyTmp, IOB(343), Loc(224);
+        DpyTmp, IOB(340);
+Dpy1:   0, IOB(342);
+        Dpytmp and 200;
+        if eql goto(Dpy2);
+        R371, IOB(341);
+        0, IOB(344);
+        DpyCnt := 11;
+Dpy2:   DpyTmp := 102000;
+        DpyCnt := DpyCnt - 1;
+        If GTR Return;
+        DpyTmp := 101154;
+        DpyCnt;
+        If EQL Return;
+        C60 := C60+1;
+        DpyTmp := 101351, return;
+        
+XInt:   R370 := 1111, Loc(230);
+        JumpPop(7401);
+
+ParInt: IOB(147), return, Loc(234);
+          
+        end;

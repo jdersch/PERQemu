@@ -1,0 +1,183 @@
+$title                      MEMTIME program
+
+!           A simple test to find out the timimg relationship
+!           between memrqst states, Ras, and Madr.
+
+!         written by yours truly, R. Bishop (alias, DOG)
+
+!*******************************************************************************
+
+
+
+            define(addr,1);         !address to use
+            define(data0,2);        !data to use
+            define(data1,3);        !data to use
+            define(data2,4);        !data to use
+            define(data3,5);        !data to use
+            define(swtch,6);        !if set to 1, loop            
+            
+            constant(breakpoint,7401);  !breakpoint
+            
+            
+!*******************************************************************************!
+!                      ENTRY POINTS TO PROGRAM
+!
+!
+!            GO "0"---- Tests fetch
+!
+!               "10"---   "   fetch4
+!
+!               "20"---   "   fetch2
+!
+!               "30"---   "   fetch4R
+!
+!               "40"---   "   store
+!
+!               "50"---   "   store2
+!
+!               "60"---   "   store4
+!
+!               "70"---   "   store4R
+!
+!
+!******************************************************************************
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!
+! TO USE:
+!
+! Set R6 to a "0", if only one pass on an individual test is desired.
+!    A breakpoint message will then be returned.
+!    Else, the test selected will loop forever.
+!
+!                    FETCH INSTRUCTIONS
+!
+! For all fetch instructions, Register R1 contains the starting address of
+! the data. EX: R1=100, next put the data you want to retrieve into memory
+! location 100, (M100/= 525252 or whatever).
+! 
+!                         *****REMEMBER********
+!
+!    fetch  requires only 1 mem loction to be loaded.
+!
+!    fetch2 requires 2 sequential mem.locations to be loaded.
+!
+!            **EX: R1=100; M100= data, M101= data.
+!
+!    fetch4 & fetch4R requires 4 sequential mem. locations to be loaded.
+!
+! The data loaded into memory should appear in the respective registers;
+!   R2 thru R5, when one of the fetch instructions are executed.
+!
+!
+!                            STORE INSTRUCTIONS
+!
+! Store instructions require that R1 (address register) be set up with the
+!   starting address for the data.
+! Also the data that is to be stored at these locations must be put in
+!   registers R2 thru R5.
+!
+! A store requires only R2 to be loaded.
+!
+!   store2 requires R2 & R3.
+!
+!   store4 & store4R requires R2 thru R5 to be loaded.
+!
+! The data loaded into the registers should now appear in the memory, or
+!  sequential memory locations, (specified in R1)  when the store instructions 
+!   are executed.
+!
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+LP:  LOC(0),
+     addr, fetch;                   !fetch 1
+     nop;
+     nop;
+     Data0 := MDI;                  !get data
+     swtch;
+     if neq goto(LP);
+     goto(breakpoint);
+
+
+LP1: LOC(10),
+     addr, fetch4;                  !fetch4
+     nop;
+     nop;
+     data0 := MDI;
+     data1 := MDI;
+     data2 := MDI;
+     data3 := MDI;
+     swtch;
+     if neq goto(LP1);
+     goto(breakpoint);
+     
+     
+LP2: LOC(20),
+     addr, fetch2;                  !fetch2 instruction----(no shit!!!)
+     nop;
+     nop;
+     data0 := MDI;
+     data1 := MDI;
+     swtch;
+     if neq goto(LP2);
+     goto(breakpoint);
+
+
+
+LP3: LOC(30),
+     addr, fetch4R;                  !fetch4R
+     nop;
+     nop;
+     data0 := MDI;
+     data1 := MDI;
+     data2 := MDI;
+     data3 := MDI;
+     swtch;
+     if neq goto(LP3);
+     goto(breakpoint);
+     
+     
+
+LP4: LOC(40),
+     MA := addr, store;              !store
+     MDO := data0;
+     swtch;
+     if neq goto(LP4);
+     goto(breakpoint);
+
+     
+     
+LP5: LOC(50),
+     MA := addr, store2;
+     MDO := data0;
+     MDO := data1;
+     swtch;
+     if neq goto(LP5);
+     goto(breakpoint);
+     
+     
+LP6: LOC(60),
+     MA := addr, store4;
+     MDO := data0;
+     MDO := data1;
+     MDO := data2;
+     MDO := data3;
+     swtch;
+     if neq goto(LP6);
+     goto(breakpoint);
+     
+     
+     
+LP7: LOC(70),
+     MA := addr, store4R;
+     MDO := data0;
+     MDO := data1;
+     MDO := data2;
+     MDO := data3;
+     swtch;
+     if neq goto(LP7);
+     goto(breakpoint);
+     end;

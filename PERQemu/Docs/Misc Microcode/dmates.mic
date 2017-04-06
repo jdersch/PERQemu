@@ -1,0 +1,131 @@
+!       DMAtest.Bin
+
+        Define(R0,0);
+        Define(R1,1);
+        Define(R2,2);
+        Define(R3,3);
+        Define(R4,4);
+        Define(R5,5);
+        Define(R370,370);
+
+        Constant(C7401,7401);
+        Constant(C7624,7624);
+
+        Place(0,334);
+
+        R1 := 0;                        ! 0
+        R0, Call(L72);                  ! 1
+L2:     R4 := 77774;                    ! 2
+L3:     R5 := 1;                        ! 3
+        R2 := 20, Call(L41);            ! 4
+        R2 := 360, Call(L101);          ! 5
+        R0, PushLoad(L3);               ! 6
+        0, Iob(247);                    ! 7
+        R0, RepeatLoop;                 ! 10
+        R0, PushLoad(L30);              ! 11
+        R0, if IntrPend Call(L124);     ! 12
+        R0, RepeatLoop;                 ! 13
+        R2 := 320, Call(L63);           ! 14
+        R0, PushLoad(L3);               ! 15
+        1, Iob(247);                    ! 16
+        R0, RepeatLoop;                 ! 17
+        R0, PushLoad(L30);              ! 20
+        R0, if IntrPend Call(L124);     ! 21
+L22:    R0, RepeatLoop;                 ! 22
+        R4 := 2000;                     ! 23
+        R5 := 1;                        ! 24
+        R2 := 10;                       ! 25
+        R370 := 101, Call(L51);         ! 26
+        R4 := 177774;                   ! 27
+L30:    R2 := 10;                       ! 30
+        R370 := 102, Call(L51);         ! 31
+        R1 := R1 + 1;                   ! 32
+        R0;                             ! 33
+        R0 - 1, if Eql Goto(L120);      ! 34
+        R0, if Eql Goto(L2);            ! 35
+        R0, Call(L72);                  ! 36
+        R0, Goto(L2);                   ! 37
+
+L41:    MA := R4, Store;                ! 41
+        R5;                             ! 40
+        R0, if IntrPend Call(L124);     ! 42
+        R4 := R4 + 1;                   ! 43
+        R5 := R5 + 1;                   ! 44
+        R2 := R2 - 1;                   ! 45
+        R0, if Neq Goto(L41);           ! 46
+        R0, Return;                     ! 47
+
+L51:    MA := R4, Fetch;                ! 51
+        R3 := Mdi and 37;               ! 50
+        R0, if IntrPend Call(L124);     ! 52
+        R3 - R5;                        ! 53
+        R0, if Neq JumpPop(L121);       ! 54
+        R4 := R4 + 1;                   ! 55
+        R5 := R5 + 1;                   ! 56
+        R5 := R5 and 37;                ! 57
+        R2 := R2 - 1;                   ! 60
+        R0, if Neq Goto(L51);           ! 61
+        R0, Return;                     ! 62
+
+L63:    4, Iob(300);                    ! 63
+        R3 := 177774;                   ! 64
+        R3, Iob(324);                   ! 65
+        0, Iob(325);                    ! 66
+        R3 := 2000;                     ! 67
+        R3, Iob(326);                   ! 70
+        R2, Iob(327), Return;           ! 71
+
+L101:   4, Iob(300);                    ! 101
+        R3 := 77774;                    ! 102
+        R3, Iob(324);                   ! 103
+        0, Iob(325);                    ! 104
+        R3 := 4000;                     ! 105
+        R3, Iob(326);                   ! 106
+        R2, Iob(327), Return;           ! 107
+
+        R0, Call(L72);                  ! 200
+        R0, Goto(C7401);                ! 201
+
+L72:    R4 := 1, PushLoad(L22);         ! 72
+        R4 := R4 + R4, RepeatLoop;      ! 73
+        R4 := R4 - 1;                   ! 74
+L76:    MA := R4, Store;                ! 76
+        0;                              ! 75
+        R0, if IntrPend Call(L124);     ! 110
+        R4 := R4 - 1;                   ! 111
+        R0, if C19 Return;              ! 112
+        R0, Goto(L76);                  ! 113
+
+        R370 := 100;                    ! 100
+L114:   MA := R0, Fetch;                ! 114
+        Mdi;                            ! 77
+        R0, if Neq Goto(C7401);         ! 115
+        R0, if IntrPend Call(L124);     ! 116
+        R0 := R0 + 1, Goto(L114);       ! 117
+
+L120:   R370 := 100;                    ! 120
+L121:   R0 - 1;                         ! 121
+        R0, if Eql Goto(L2);            ! 122
+        R0, Goto(C7401);                ! 123
+
+L124:   R0, Vector(L300);               ! 124
+
+L300:   0, Iob(305), Return;            ! 300
+
+        R0, Iob(10);                    ! 304
+        R0, Return;                     ! 305
+
+        R0, Iob(123), Return;           ! 310
+
+        0, Iob(302);                    ! 313
+        0, Iob(303), Return;            ! 314
+
+        0, Iob(305), Return;            ! 320
+
+        R0, Goto(C7624);                ! 324
+
+        R0, Return;                     ! 330
+
+        R0, Return;                     ! 334
+
+        end;

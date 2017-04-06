@@ -1,0 +1,48 @@
+!
+! CALLS1   A test of the CallS function in all four banks of microcode store
+!          for the case in which the condition is true.
+!          The test is designed as part of the CPU Diagnostic test suite
+!          to be loaded via ODTPRQ and interface with KRNL.
+!          This is the first of 4 files, one for each bank.
+!
+!
+!     14 Jul 83  V1.1   Hugh Conkey ICL
+!                       Set up a well known value in the S register and report
+!                       an error if the program ever gets to that location.
+!
+!     1981 ?     V1.0   3RCC
+!                       First version
+
+
+
+
+$perq1a
+$nobase
+              
+              define(r370, 370);
+              
+              place(0000,3777);
+              
+              constant(adr10010, 10010);
+              constant(adr20200, 20020);
+              constant(Error,300);             ! V1.1
+              constant(BreakPoint,7401);       ! V1.1
+
+              
+$Include CheckSize.micro
+
+adr00500:     Return, loc(500);
+
+adr02400:     Call (CheckSize),  Loc (2400);
+              LoadS(Error);                    ! V1.1 put a known value in S
+              if TRUE CallS (adr10010);
+              if TRUE CallS (adr20200);
+              R370 := 100;
+              GoTo (BreakPoint);               ! V1.1 BreakPoint replaces 7401
+
+BadOne:       R370 := 101, Loc(Error);         ! V1.1 Here if CallS goes to S
+              GoTo(BreakPoint);                ! V1.1  
+
+
+
+END;

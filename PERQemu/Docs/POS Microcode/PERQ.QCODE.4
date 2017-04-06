@@ -1,0 +1,661 @@
+$Title Jxxx, XJP - Jumps.
+
+! Opcode JMPB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JMPB is a two byte unconditional jump instruction.
+!
+! Instruction:
+!       JMPB    Offset
+!
+! Environment:
+!       old PC = Byte address + 1 of the Offset operand.  PC = UPC * 2 + BPC.
+!
+! Result:
+!       new PC = old PC + Offset.
+!
+! Calls:
+!       AdjustPC.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode JFB, JTB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JFB and JTB are two byte conditional jump instructions which jump
+!       if the value on the top of the expression stack is false or true
+!       respectively.
+!
+! Instruction:
+!       JxB     Offset
+!
+! Environment:
+!       old PC = Byte address + 1 of the Offset operand.  PC = UPC * 2 + BPC.
+!       (Tos) = Boolean value.
+!
+! Result:
+!       Stack popped.
+!       If condition met then new PC = old PC + Offset.
+!       If condition not met then new PC = old PC.
+!
+! Calls:
+!       AdjustPC.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode JEQB, JNEB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JEQB, JNEB are two byte conditional jump instructions which jump
+!       if the two values on the top of the expression stack are equal or
+!       not equal respectively.
+!
+! Instruction:
+!       JxB     Offset
+!
+! Environment:
+!       old PC = byte address + 1 of the Offset operand.  PC = UPC * 2 + BPC.
+!       (Tos) = Value0.
+!       (Tos-1) = Value1.
+!
+! Result:
+!       Stack popped twice.
+!       If condition met then new PC = old PC + Offset.
+!       If condition not met then new PC = old PC.
+!
+! Calls:
+!       AdjustPC.
+!
+!-----------------------------------------------------------------------------
+
+JMPB1:
+Opcode(JMPB), JmpOffset := NextOp;           ! byte offset
+        if ByteSign Goto(JMPB2);             ! if backward jump
+        Goto(AdjustPC);
+
+JMPB2:  JmpOffset := JmpOffset or not 377, Goto(AdjustPC);  ! sign extend
+
+Opcode(JFB), Tos and 1, Pop;
+JFB1:   if Eql Goto(JMPB1);
+PuntByte: NextOp;
+        NextInst(0);
+
+Opcode(JTB), Tos and 1, Pop;
+JTB1:   if Neq Goto(JMPB1);
+        NextOp;
+        NextInst(0);
+
+Opcode(JEQB), tmp := Tos, Pop;
+        Tos xor tmp, Pop, Goto(JFB1);
+        
+Opcode(JNEB), tmp := Tos, Pop;
+        Tos xor tmp, Pop, Goto(JTB1);
+
+! Opcode JMPW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JMPW is a three byte unconditional jump instruction.
+!
+! Instruction:
+!       JMPW    LowByteOffset HighByteOffset
+!
+! Environment:
+!       old PC = Byte address + 1 of the HighByteOffset operand.
+!                PC = UPC * 2 + BPC.
+!
+! Result:
+!       new PC = old PC + Offset.
+!
+! Calls:
+!       AdjustPC.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode JFW, JTW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JFW and JTW are three byte conditional jump instructions which jump
+!       if the value on the top of the expression stack is false or true
+!       respectively.
+!
+! Instruction:
+!       JxW     LowByteOffset HighByteOffset
+!
+! Environment:
+!       old PC = Byte address + 1 of the HighByteOffset operand.
+!                PC = UPC * 2 + BPC.
+!       (Tos) = Boolean value.
+!
+! Result:
+!       Stack popped.
+!       If condition met then new PC = old PC + Offset.
+!       If condition not met then new PC = old PC.
+!
+! Calls:
+!       AdjustPC, PuntByte.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode JEQW, JNEW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       JEQW, JNEW are three byte conditional jump instructions which jump
+!       if the two values on the top of the expression stack are equal or
+!       not equal respectively.
+!
+! Instruction:
+!       JxW     LowByteOffset HighByteOffset
+!
+! Environment:
+!       old PC = Byte address + 1 of the HighByteOffset operand.
+!                PC = UPC * 2 + BPC.
+!       (Tos) = Value0.
+!       (Tos-1) = Value1.
+!
+! Result:
+!       Stack popped twice.
+!       If condition met then new PC = old PC + Offset.
+!       If condition not met then new PC = old PC.
+!
+! Calls:
+!       AdjustPC, PuntByte.
+!
+!-----------------------------------------------------------------------------
+
+JMPW1:
+Opcode(JMPW), JmpOffset := NextOp;           ! why not use WordParm?
+        tmp1 := NextOp;
+        tmp1, LeftShift(10);
+        JmpOffset := Shift or JmpOffset, Goto(AdjustPC);  ! jump offset
+
+Opcode(JFW), Tos and 1, Pop;
+JFW1:   if Eql Goto(JMPW1);
+        NextOp;
+        Goto(PuntByte);
+
+Opcode(JTW), Tos and 1, Pop;
+JTW1:   if Neq Goto(JMPW1);
+        NextOp;
+        Goto(PuntByte);
+
+Opcode(JEQW), tmp := Tos, Pop;
+        Tos xor tmp, Pop, Goto(JFW1);
+
+Opcode(JNEW), tmp := Tos, Pop;
+        Tos xor tmp, Pop, Goto(JTW1);
+
+! Opcode XJP.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       XJP is a variable length instruction that implements the Pascal
+!       case statement.  It is an n-way branch which chooses the target
+!       based on an integer value in some range Low..High.  Three words
+!       follow the XJP in the code stream, and they must be word aligned.
+!       A noise byte is added when the XJP opcode is in a low order byte.
+!       The three words are the minimum index (Low), the maximum index
+!       (High), and the self-relative address of the code to be executed
+!       when the case selector is outside the range Low..High.  A word
+!       aligned jump table immediately follows the maximum index, and
+!       each word in the table contains a self-relative address.
+!
+! Instruction:
+!       XJP         Low
+!                   High
+!                   Address for out of range case
+!       JumpTable:  Address for Low case
+!                   Address for Low+1 case
+!                       ...
+!                   Address for High case
+!
+! Environment:
+!       (Tos) = Index = Case selector.
+!
+! Result:
+!       Stack popped.
+!       If (Index < Low) or (Index > High) then
+!                  new PC = JumpTable byte address + 2 * (High-Low).
+!       Otherwise  new PC = JumpTable byte address + JumpTable[Index - Low].
+!
+! Calls:
+!       RefillJmp, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(XJP), UState, Field(0,4);             ! read BPC
+        tmp := Shift + 1, RightShift(1);     ! round up to word boundary
+        UPC := Shift + UPC, Fetch;           ! fetch Low
+        UPC := UPC + 3;                      ! JumpTable word address
+        tmp1 := Mdi, if IntrPend Call(VectSrv);  ! Low
+        MA := UPC - 2, Fetch;                ! fetch High
+        tmp2 := Tos - tmp1, RightShift(1);   ! offset within JumpTable
+        tmp1 := Tos, Pop, if Lss Goto(Case2);  ! if Index < Low
+        tmp2 := tmp2 and AllOnes;            ! ensure tmp2 is good offset
+        Mdi - tmp1;
+        UPC + tmp2, Fetch,                   ! fetch JumpTable[Index - Low]
+                           if Lss Goto(Case1);  ! if Index > High
+
+!       Case selector is in range.
+
+        UPC := UPC + tmp2, Goto(Case3);      ! word address of JumpTable[...]
+
+!       Case index is out of range, jump to default.
+
+Case1:  Mdi, if IntrPend Call(VectSrv);      ! allow mem to finish
+Case2:  UPC := UPC - 1, Fetch;               ! fetch address for default
+        RightShift(1);
+Case3:  tmp2 := Mdi;                         ! byte offset
+        tmp2, if Lss Goto(Case5);            ! if jumping backward
+        UPC := Shift + UPC, LeftShift(1);    ! add word offset to UPC 
+Case4:  tmp1 := Shift and 7, if IntrPend Call(VectSrv);  ! word in quad * 2
+        tmp2 := tmp2 and 1;                  ! byte in word
+        tmp1 := tmp1 + tmp2;                 ! byte in quad = word in quad * 2
+                                             !              + byte in word
+        BPC := tmp1;                         ! set BPC
+        UPC := UPC and not 3, Goto(RefillJmp);  ! UPC is a quad address
+
+!       Byte offset is negative, sign extension is necessary.
+
+Case5:  tmp := Shift or SignXtnd, LeftShift(1);
+        UPC := UPC + tmp, Goto(Case4);
+
+
+
+
+$List
+$Title CALLx, LVRD, RET, EXITT, EXGO - Calls and returns.
+
+! Opcode CALLL.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CALLL is a two byte routine call instruction.  It is used to call
+!       routines in the current code segment.
+!
+! Instruction:
+!       CALLL  RoutineNumber
+!
+! Result:
+!       New activation record built on memory stack.
+!       Code state registers saved in new ACB.
+!       Expression stack saved in new ACB.
+!       Code state registers updated.
+!
+! Calls:
+!       CllSub, RefillJmp, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(CALLL), tmp := NextOp;                ! new RN
+        tmp7 := GP;                          ! new GP = old GP
+        tmp5 := CS, if IntrPend Call(VectSrv);  ! new CS = old CS
+        tmp11 := 2, LoadS(StkOv);            ! instruction is two bytes long
+        tmp6 := CB,                          ! new CB = old CB
+                    Call(CllSub);            ! set up ACB etc.
+        Goto(RefillJmp);                     ! enter the routine
+
+! Opcode CALLXB.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CALLXB is a three byte routine call instruction.  It is used to call
+!       routines in an external code segment.  The external segment is
+!       identified by an ISN (internal segment number) which is an index
+!       into the XST (external segment table).  The XST maps an ISN into
+!       an XSN (external segment number) and an XGP (external global pointer).
+!
+! Instruction:
+!       CALLXB  ISN RoutineNumber
+!
+! Result:
+!       New activation record built on memory stack.
+!       Code state registers saved in new ACB.
+!       Expression stack saved in new ACB.
+!       Code state registers updated.
+!
+! Calls:
+!       CllSub, XSTMap, ChkSeg, RefillJmp, SegFault, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+! Opcode CALLXW.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CALLXW is a four byte routine call instruction.  It is used to call
+!       routines in an external code segment.  The external segment is
+!       identified by an ISN (internal segment number) which is an index
+!       into the XST (external segment table).  The XST maps an ISN into
+!       an XSN (external segment number) and an XGP (external global pointer).
+!
+! Instruction:
+!       CALLXW  LowByteISN HighByteISN RoutineNumber
+!
+! Result:
+!       New activation record built on memory stack.
+!       Code state registers saved in new ACB.
+!       Expression stack saved in new ACB.
+!       Code state registers updated.
+!
+! Calls:
+!       CllSub, XSTMap, ChkSeg, WordParm, RefillJmp, SegFault, VectSrv.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(CALLXB), tmp := NextOp;               ! ISN
+        tmp11 := 2;                          ! backup 2 bytes if segfault
+CallExternal: Call(XSTMap);
+        tmp5 := tmp, LoadS(StkOv);           ! XSN
+        Call(ChkSeg);                        ! be sure XSN is resident
+        tmp6 := tmp, if Odd Goto(SegFault1); ! if not resident
+        tmp := NextOp;                       ! new RN
+        tmp11 := tmp11 + 1,                  ! back up one more if stack ovfl
+                            Call(CllSub);    ! set up ACB etc.
+        Goto(RefillJmp);                     ! enter the routine
+
+Opcode(CALLXW), tmp11 := 3, Call(WordParm);  ! backup 3 bytes if segfault
+        tmp := Shift + tmp, Goto(CallExternal);  ! ISN
+
+! Opcode LVRD.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       LVRD is a five byte instruction that builds a variable routine
+!       descriptor.  This descriptor may be used later in a CALLV (call
+!       variable) instruction.  The external segment is identified by an
+!       ISN (internal segment number).  An ISN of zero identifies the
+!       current segment.  The ISN is an index into the XST (external
+!       segment table).  The XST maps an ISN into an XSN (external
+!       segment number) and an XGP (external global pointer).
+!
+! Instruction:
+!       LVRD    LowByteISN HighByteISNRoutineNumber LexicalLevel
+!
+! Result:
+!       Stack pushed four times.
+!       (Tos..Tos-3) = Variable routine descriptor:
+!            (Tos) = XSN = External segment number.
+!            (Tos-1) = XGP = Global link as offset from stack base.
+!            (Tos-2) = new RN = Routine number.
+!            (Tos-3) = new SL = Static link as offset from stack base.
+!
+! Calls:
+!        WordParm, XSTMap, GetLL, GetSL.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(LVRD), Call(WordParm);
+        tmp := Shift + tmp, Call(XSTMap);  ! ISN
+        tmp2 := NextOp;                 ! new RN
+        tmp10 := 0;                     ! SL of top-level routine
+        tmp3 := NextOp - 2;             ! new LL - 2
+        tmp4 := CB, if Leq Goto(LVRD2); ! if calling top-level routine
+        Nop;                            ! allow placer to do page escape
+        tmp10 := RN, Call(GetLL);       ! get current LL
+        tmp3 := tmp3 + 2;               ! new LL
+        tmp1 := Mdi - tmp3;             ! current LL - new LL (typically >=0)
+        tmp10 := AP, if Geq Call(GetSL);  ! if not calling deeper
+                                        ! if calling deeper, new SL = AP
+LVRD1:  tmp10 - SB, Push;               ! static link
+        tmp2, Push;                     ! routine number
+        tmp7 - SB, Push;                ! global link
+        tmp, Push, NextInst(0);         ! system segment number
+
+LVRD2:  tmp10 := 0, Goto(LVRD1);
+
+! Opcode CALLV.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       CALLV is a one byte routine call instruction.  It is used to call
+!       routines described by variable routine descriptors.
+!
+! Instruction:
+!       CALLV
+!
+! Environment:
+!       (Tos..Tos-3) = Variable routine descriptor:
+!            (Tos) = XSN = External segment number.
+!            (Tos-1) = XGP = Global link as offset from stack base.
+!            (Tos-2) = new RN = Routine number.
+!            (Tos-3) = new SL = Static link as offset from stack base.
+!
+! Result:
+!       New activation record built on memory stack.
+!       Code state registers saved in new ACB.
+!       Expression stack saved in new ACB after popping four words.
+!       Code state registers updated.
+!
+! Calls:
+!       CllV, ChkSeg, RefillJmp, SegFault.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(CALLV), tmp := Tos, Call(ChkSeg);     ! XSN
+        tmp5 := Tos,                         ! new CS
+                     if Odd Goto(CallV2);    ! if segment not resident
+        tmp6 := tmp, Pop, LoadS(CallV1);     ! new CB 
+        nop;                                 ! *** separate "Pop" from "Tos +"
+        tmp7 := Tos + SB, Pop;               ! new GP
+        tmp6, Fetch;                         ! get routine dictionary address
+        Hold, tmp := Tos, Pop, LeftShift(3); ! new RN
+        Hold, tmp1 := Shift + tmp6;          ! offset to dictionary entry
+        Hold, Mdi + tmp1, Fetch4;            ! fetch dictionary entry
+        tmp10 := Tos + SB, Pop,              ! static link
+                                Call(CllV);  ! set up ACB etc.
+        Goto(RefillJmp);                     ! enter the routine
+
+!       Stack overflow.
+
+CallV1: Tos := tmp, Push;                    ! restore expression stack
+        Tos := GP - SB, Push;
+        Tos := CS, Push, Goto(StkOv);
+
+!       Segment fault.
+
+CallV2: tmp11 := 1, Goto(SegFault1);         ! instruction is one byte long
+
+! Opcode RET.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       RET is a one byte instruction used to return from a routine.  If
+!       the return address from the ACB is zero, the program counter is
+!       set to the exit point of the routine that is being returned to.
+!       This is used by the EXITT and EXGO opcodes.
+!
+! Instruction:
+!       RET
+!
+! Result:
+!       Code state registers restored from old ACB.
+!       Expression stack restored from old ACB.
+!       Old activation record popped from memory stack.
+!       Function result (if any) left on top of memory stack.
+!
+! Calls:
+!       RetExit, RefillJmp, VectSrv, RestoreStack.
+!
+!-----------------------------------------------------------------------------
+
+(*****
+Opcode(RET), AP + ACBRS, Fetch;
+        Mdi - CS;
+        tmp5 := Mdi, if Neq Goto(Return4);  ! if returning to another segment
+Return1: Call(RestoreStack);                ! restore expression stack
+        AP + ACBGL, Fetch;
+        GP := Mdi + SB, if IntrPend Call(VectSrv);  ! global pointer
+        AP + ACBTL, Fetch;
+        TP := Mdi + SB;                     ! top pointer
+        AP + ACBRR, Fetch;
+        RN := Mdi;                          ! routine number
+        AP + ACBRA, Fetch;
+        tmp := Mdi, RightShift(1);          ! return address
+        UPC := Shift and not 3, if Eql Goto(Return2);  ! if return address = 0
+        UPC := UPC + CB, if IntrPend Call(VectSrv);
+
+! ----> The following line is a good place to set a breakpoint.  RN, CS, and
+! ----> UPC have been restored (though BPC hasn't).
+
+        BPC := tmp and 7, Goto(Return3);
+
+!       In the middle of an exit sequence.
+
+Return2: Call(RetExit);
+
+Return3: AP + ACBDL, Fetch;
+        AP := Mdi + SB;                     ! activation pointer
+        AP + ACBLP,Fetch;
+        LP := Mdi + SB,                     ! local pointer
+                        Goto(RefillJmp);    ! enter routine
+
+!       Cross segment return.
+
+Return4: tmp5 + tmp5, Fetch2;               ! check residence
+        tmp1 := CB;                         ! save old CB just in case
+        CB := Mdi and not 376;
+        CB := Mdx or CB, if Odd Goto(Return5);  ! if not resident
+        CS := tmp5, Goto(Return1);          ! code segment
+        
+!       Segment fault.
+
+Return5: CB := tmp1;                        ! restore CB
+        tmp11 := 1, Goto(SegFault1);
+*****)
+Opcode(RET), AP + 4, Fetch4;                !      t3
+        Tos := Mdi, Push;                   ! TL   t1, 2
+        tmp5 := Mdi;                        ! RS   t3
+        tmp6 := Mdi;                        ! RA   t0
+        tmp7 := Mdi;                        ! RR   t1
+        tmp5 - CS;                          !      t2
+        tmp10 := CB, if Neq Goto(Return6);  !      t3 if cross segment return
+Return1: TP := Tos + SB,                    !      t0
+                         if IntrPend Call(VectSrv);
+        RN := tmp7;                         !      t1
+        AP + 2, Fetch2;                     !      t2, 3
+        tmp4 := AP, Pop;                    !      t0 old AP
+        BPC := tmp6 and 7;                  !      t1
+        AP := Mdi + SB;                     ! DL   t2
+        GP := Mdi + SB;                     ! GL   t3
+        tmp6, RightShift(1);                !      t0
+        UPC := Shift and not 3,             !      t1
+                                if Eql Goto(Return2);
+        UPC := UPC + CB,                    !      t2
+                         Goto(Return3);
+
+!       In the middle of an exit sequence.
+
+Return2: Call(RetExit);
+
+Return3: AP + ACBLP, Fetch;                 !      t3
+        LP := Mdi + SB;                     !      t0, 1, 2
+        tmp4 + ACBStackSize, Fetch;         !      t3
+        tmp4 := tmp4 + ACBSaveStack;        !      t0
+        tmp3 := Mdi;                        !      t1 - t2  saved word count
+        tmp4 := tmp4 + tmp3,                !      t3 address+1 of last
+                             if Eql Goto(RefillJmp);  ! if stack empty
+Return4: tmp4 := tmp4 - 1, Fetch;           !      t3
+        tmp3 := tmp3 - 1, Push,             !      t0
+                                if IntrPend Goto(Return5);
+        Tos := Mdi, if Gtr Goto(Return4);   !      t1
+        Goto(RefillJmp);
+
+!       Interrupt while restoring the stack.
+
+Return5: tmp4 := tmp4 + 1, Call(VectSrv);
+        Pop, tmp3 := tmp3 + 1, Goto(Return4);
+
+!       Cross segment return.
+
+(*****
+Return6: tmp5 + tmp5, Fetch2;               ! check residence
+        CB := Mdi and not 376;
+        CB := Mdx or CB, if Odd Goto(Return7);  ! if not resident
+        CS := tmp5, Goto(Return1);          ! code segment
+*****)
+Return6: tmp := tmp5, Call(ChkSeg);         ! find new code base
+        CB := tmp, if Odd Goto(Return7);    ! if not resident
+        CS := tmp5, Goto(Return1);          ! code segment
+        
+!       Segment fault.
+
+Return7: CB := tmp10, Pop;                  ! restore CB
+        tmp11 := 1, Goto(SegFault1);
+
+! Opcode EXITT.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       EXITT is a four byte instruction used to exit from a routine.  The
+!       routine to exit from is identified in the same way as an external
+!       procedure is identified in the CALLXW instruction.
+!
+!       The PC is set to the exit point of the current procedure.  The
+!       ACBs up to and including the one that returns to the target routine
+!       are modified so that the return address is zero.  Note that the
+!       RET opcode treats a return address of zero as an exit request.
+!
+! Instruction:
+!       EXITT   LowByteISN HighByteISN RoutineNumber
+!
+! Result:
+!       PC (UPC, BPC) = Exit point of current procedure.
+!       ACBs modified as described in abstract.
+!
+! Calls:
+!       ExSub, RetExit, RefillJmp.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EXITT), Call(ExSub);                  ! set return addresses to zero
+        Call(RetExit);                       ! set PC to exit point
+        Goto(RefillJmp);                     ! continue at exit address
+
+! Opcode EXGO.
+!-----------------------------------------------------------------------------
+!
+! Abstract:
+!       EXGO is a six byte instruction used to jump to a particular point
+!       in another routine.  The target routine is identified in the same
+!       way as an external procedure is identified in the CALLXW instruction.
+!       The target address is specified as an absolute byte address within
+!       the target code segment--it is not self-relative.
+!
+!       The PC is set to the exit point of the current procedure.  The
+!       ACBs up to but not including the one that returns to the target
+!       routine are modified so that the return address is zero.  Note
+!       that the RET opcode treats a return address of zero as an exit
+!       request.  The ACB that returns to the target routine has its
+!       return address set to the target address.
+!
+! ----> The assumption is made that the segment and routine numbers do not
+!       specify the current procedure.
+!
+! Instruction:
+!       EXGO    LowByteISN HighByteISN
+!               RoutineNumber
+!               LowByteAddress HighByteAddress
+!
+! Result:
+!       PC (UPC, BPC) = Exit point of current procedure.
+!       ACBs modified as described in abstract.
+!
+! Calls:
+!       ExSub, RetExit, RefillJmp, WordParm.
+!
+!-----------------------------------------------------------------------------
+
+Opcode(EXGO), Call(ExSub);                   ! set return addresses to zero
+        Call(WordParm);
+        tmp := Shift + tmp;                  ! target address
+        tmp2 + ACBRA, Store;                 ! store in last ACB
+        tmp, Call(RetExit);                  ! set PC to exit point
+        Goto(RefillJmp);                     ! continue at exit address
+$NoList
+
