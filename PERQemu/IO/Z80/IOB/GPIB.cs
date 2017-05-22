@@ -16,11 +16,10 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.IO.GPIB;
+
 using System;
 using System.Collections.Generic;
-using System.Text;
-using PERQemu.CPU;
-using PERQemu.IO.GPIB;
 
 namespace PERQemu.IO.Z80.IOB
 {
@@ -38,7 +37,6 @@ namespace PERQemu.IO.Z80.IOB
     /// When I move away from the "black box simulation" model for Z80
     /// then this will have to be fleshed out more significantly.
     /// </summary>
-    [Serializable]
     public sealed class GPIB : IZ80Device
     {
         public GPIB()

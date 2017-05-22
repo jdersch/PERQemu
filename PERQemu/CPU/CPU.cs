@@ -17,7 +17,6 @@
 //
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using PERQemu.IO;
@@ -52,8 +51,7 @@ namespace PERQemu.CPU
     /// this is a singleton.
     ///
     /// There are some aspects that could be factored out of this class (for example the boot ROM logic).
-    /// </summary>
-    [Serializable]
+    /// </summary>    
     public sealed class PERQCpu
     {
         private PERQCpu()
@@ -80,9 +78,6 @@ namespace PERQemu.CPU
         public static PERQCpu Instance
         {
             get { return _instance; }
-
-            // Only allowed for deserialization of state (it is the root of serialization)
-            set { _instance = value; }
         }
 
         /// <summary>
@@ -228,8 +223,7 @@ namespace PERQemu.CPU
                     }
 #endif
 
-                    // On aborts, no writes occur; just bump the state machine
-                    _memory.Tock(null);
+                    // On aborts, no memory writes occur.                    
 
                     // Clock video
                     VideoController.Instance.Clock();
@@ -295,7 +289,8 @@ namespace PERQemu.CPU
             _lateWriteback = false;
 
             // If the hardware multiply unit is enabled, check and possibly modify the ALU op
-            if ( _mqEnabled ) {
+            if ( _mqEnabled )
+            {
                 DoMulDivALUOp(amux, bmux, _mq, uOp.ALU);
             }
             else
@@ -320,8 +315,12 @@ namespace PERQemu.CPU
                 // Clock the RasterOp pipeline
                 _rasterOp.Clock();
 
-                // Do any pending RasterOp stores (supercede the ALU)
-                _memory.Tock(_rasterOp.Result());
+                // Do any pending RasterOp stores (supercede the ALU) if a
+                // memory operation is in progress.
+                if (MemoryBoard.Instance.MDONeeded)
+                {
+                    _memory.Tock(_rasterOp.Result());
+                }
             }
             else
             {

@@ -16,10 +16,10 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.CPU;
+
 using System;
 using System.Collections.Generic;
-using System.Text;
-using PERQemu.CPU;
 
 namespace PERQemu.IO.Z80.IOB
 {
@@ -112,8 +112,7 @@ namespace PERQemu.IO.Z80.IOB
         Shift = 1,
         Ctrl = 2
     }
-
-    [Serializable]
+    
     public sealed class Keyboard : IZ80Device
     {
         public Keyboard()

@@ -17,8 +17,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.CPU
 {
@@ -49,7 +47,6 @@ namespace PERQemu.CPU
     /// PERQ quirk: it appears that Boot or VFY is leaking a push... but SYSB clears
     /// the stack before entering the interpreter.
 
-    [Serializable]
     public sealed class CallStack
     {
         public void Clear()

@@ -19,7 +19,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using PERQemu.CPU;
 
 namespace PERQemu.Debugger
 {

@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.IO.Ports;
 
 namespace PERQemu.IO.SerialDevices
@@ -27,7 +26,6 @@ namespace PERQemu.IO.SerialDevices
     /// Represents a real host-supplied physical Serial port.  Basically encapsulates
     /// a System.IO.Ports.SerialPort to talk to a real serial port.
     /// </summary>
-    [Serializable]
     public class PhysicalPort : ISerialDevice
     {
         public PhysicalPort(string portName)

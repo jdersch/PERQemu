@@ -16,14 +16,13 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.CPU;
+
 using System;
 using System.Collections.Generic;
-using System.Text;
-using PERQemu.CPU;
 
 namespace PERQemu.IO.Z80.IOB
 {
-    [Serializable]
     public sealed class Clock : IZ80Device
     {
         public Clock()

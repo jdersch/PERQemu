@@ -25,7 +25,6 @@ namespace PERQemu.CPU
     /// <summary>
     /// Represents the ALU's register file.
     /// </summary>
-    [Serializable]
     public struct ALURegisterFile
     {
         public int  R;
@@ -56,7 +55,6 @@ namespace PERQemu.CPU
     /// than, overflow, etc.) These are also emulated here.
     ///
     /// </summary>
-    [Serializable]
     public sealed class ALU
     {
         public ALU()

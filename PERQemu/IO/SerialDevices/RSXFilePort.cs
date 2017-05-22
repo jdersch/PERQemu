@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.IO.Ports;
 using System.IO;
 
@@ -73,7 +72,6 @@ namespace PERQemu.IO.SerialDevices
     /// I've tried to comment up all of the oddities I've encountered.  This is very much a hack, but it
     /// is fairly useful to have (makes uploading source written on the host a lot easier).
     /// </summary>
-    [Serializable]
     public class RSXFilePort : ISerialDevice
     {
         public RSXFilePort()

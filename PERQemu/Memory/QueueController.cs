@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 using PERQemu.CPU;
 
@@ -35,7 +34,6 @@ namespace PERQemu.Memory
     /// <summary>
     /// Represents a request to the memory subsystem.
     /// </summary>
-    [Serializable]
     public class MemoryRequest
     {
         public MemoryRequest(MemoryCycle type, int addr, long id)
@@ -64,7 +62,6 @@ namespace PERQemu.Memory
     /// Represents one element in the memory fetch/store queues.  Each instruction
     /// is scheduled to execute in a particular T-state.
     /// </summary>
-    [Serializable]
     public class MemoryInstruction
     {
         public MemoryInstruction(MemoryRequest req, int addr, int index, int when, bool valid, bool done)
@@ -96,7 +93,6 @@ namespace PERQemu.Memory
     /// generating CPU Wait (and IO Hold -- eventually) states and managing
     /// the memory instruction pipelines.
     /// </summary>
-    [Serializable]
     public class QueueController
     {
         public QueueController(string name)

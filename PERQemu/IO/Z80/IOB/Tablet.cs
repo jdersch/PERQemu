@@ -16,11 +16,10 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.CPU;
+
 using System;
 using System.Collections.Generic;
-using System.Text;
-using PERQemu.CPU;
-using PERQemu.Display;
 
 namespace PERQemu.IO.Z80.IOB
 {
@@ -28,7 +27,6 @@ namespace PERQemu.IO.Z80.IOB
     /// <summary>
     /// Implements Kriz Tablet functionality.
     /// </summary>
-    [Serializable]
     public sealed class Tablet : IZ80Device
     {
         public Tablet()

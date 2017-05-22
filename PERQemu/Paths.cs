@@ -16,9 +16,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
 
 namespace PERQemu

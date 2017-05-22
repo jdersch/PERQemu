@@ -17,8 +17,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.CPU
 {
@@ -26,7 +24,6 @@ namespace PERQemu.CPU
     /// Represents a 16k CPU "extended" register -- a 12-bit register with 2 extra bits tacked
     /// on.  These are used for the PC and S registers, and have some unique behaviors...
     /// </summary>
-    [Serializable]
     public struct ExtendedRegister
     {
         /// <summary>

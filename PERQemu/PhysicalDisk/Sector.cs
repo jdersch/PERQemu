@@ -17,9 +17,7 @@
 //
 
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace PERQemu.PhysicalDisk
 {
@@ -27,7 +25,6 @@ namespace PERQemu.PhysicalDisk
     /// Represents a physical disk sector, which is where the actual
     /// data lives.  Woo!
     /// </summary>
-    [Serializable]
     public sealed class Sector
     {
         public Sector(int cylID, int trackID, int sectorID, DiskGeometry geometry)

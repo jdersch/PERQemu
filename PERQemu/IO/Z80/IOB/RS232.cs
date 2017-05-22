@@ -16,12 +16,11 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.IO.SerialDevices;
+
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.IO.Ports;
-using System.IO;
-using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO.Z80.IOB
 {
@@ -29,7 +28,6 @@ namespace PERQemu.IO.Z80.IOB
     /// Represents the PERQ's RS232 serial port.
     /// Talks to a physical RS232 device!
     /// </summary>
-    [Serializable]
     public sealed class RS232 : IZ80Device
     {
         public RS232()

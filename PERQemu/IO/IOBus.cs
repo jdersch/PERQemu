@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using PERQemu.Display;
 
 namespace PERQemu.IO
@@ -39,7 +38,6 @@ namespace PERQemu.IO
     /// correct devices.  It does not at this time deal with details like
     /// arbitration and timing.
     /// </summary>
-    [Serializable]
     public sealed class IOBus
     {
         private IOBus()

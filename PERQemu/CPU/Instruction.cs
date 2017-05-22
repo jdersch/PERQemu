@@ -17,8 +17,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.CPU
 {
@@ -26,7 +24,6 @@ namespace PERQemu.CPU
     /// Represents a single PERQ microcode instruction and its component fields.
     /// This will pre-compute as much data (jump addresses, etc) as can be done.
     /// </summary>
-    [Serializable]
     public sealed class Instruction
     {
         /// <summary>

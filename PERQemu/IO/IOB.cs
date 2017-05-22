@@ -17,10 +17,7 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using PERQemu.IO.Z80.IOB;
-using PERQemu.CPU;
 
 namespace PERQemu.IO
 {
@@ -29,7 +26,6 @@ namespace PERQemu.IO
     /// This contains hardware for the Shugart disk controller and a Z80
     /// for controlling low-speed devices.
     /// </summary>
-    [Serializable]
     public class IOB : IIODevice
     {
         public IOB()

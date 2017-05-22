@@ -17,17 +17,13 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace PERQemu.IO
 {
     /// <summary>
     /// Implements logic for the PERQLink interface.
     /// </summary>
-    [Serializable]
     public sealed class PERQLink
     {
         public PERQLink()

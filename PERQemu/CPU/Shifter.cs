@@ -17,38 +17,13 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Runtime.Serialization;
 using System.Security.Permissions;
 
 namespace PERQemu.CPU
 {
-    [Serializable]
-    public sealed class Shifter : ISerializable
+    public sealed class Shifter
     {
-        #region Serialization
-        [SecurityPermissionAttribute(SecurityAction.LinkDemand,
-            Flags = SecurityPermissionFlag.SerializationFormatter)]
-        void ISerializable.GetObjectData(
-            SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("shifterOutput", _shifterOutput);
-            info.AddValue("currentShifterParams", _shifterParams);
-        }
-
-        public Shifter(SerializationInfo info, StreamingContext context)
-        {
-            _shifterOutput = info.GetUInt16("shifterOutput");
-            _shifterParams = (ShifterTableEntry)info.GetValue("currentShifterParams", typeof(ShifterTableEntry));
-
-            BuildShifterTable();
-
-            _instance = this;
-        }
-
-        #endregion
-
         public Shifter()
         {
         }
@@ -56,11 +31,6 @@ namespace PERQemu.CPU
         static Shifter()
         {
             BuildShifterTable();
-        }
-
-        public static Shifter Instance
-        {
-            get { return _instance; }
         }
 
         /// <summary>
@@ -214,8 +184,7 @@ namespace PERQemu.CPU
         // Shifter output
         private ushort _shifterOutput;
         private ShifterTableEntry _shifterParams;
-
-        [Serializable]
+        
         private struct ShifterTableEntry
         {
             public ShifterCommand Command;
@@ -223,8 +192,7 @@ namespace PERQemu.CPU
             public int ShiftMask;
         }
 
-        private static ShifterTableEntry[] _shifterTable;
-        private static Shifter _instance;
+        private static ShifterTableEntry[] _shifterTable;        
     }
 }
 

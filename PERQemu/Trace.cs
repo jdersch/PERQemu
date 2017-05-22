@@ -16,12 +16,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-#define TRACE
-
 using System;
-using System.Collections.Generic;
-using System.Text;
-using PERQemu.Debugger;
 
 namespace PERQemu
 {

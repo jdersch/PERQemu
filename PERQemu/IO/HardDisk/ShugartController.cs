@@ -16,84 +16,23 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using System.Runtime.Serialization;
-using System.Security.Permissions;
-
 using PERQemu.CPU;
 using PERQemu.PhysicalDisk;
 using PERQemu.IO.Z80.IOB;
 using PERQemu.Memory;
+
+using System;
+using System.IO;
+using System.Runtime.Serialization;
+using System.Security.Permissions;
 
 namespace PERQemu.IO.HardDisk
 {
     /// <summary>
     /// Represents a PERQ 1's Shugart hard drive controller
     /// </summary>
-    [Serializable]
-    public sealed class ShugartDiskController : ISerializable
+    public sealed class ShugartDiskController
     {
-        #region Serialization
-        [SecurityPermissionAttribute(SecurityAction.LinkDemand,
-         Flags = SecurityPermissionFlag.SerializationFormatter)]
-        void ISerializable.GetObjectData(
-            SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("disk", _disk);
-            info.AddValue("controllerStatus", _controllerStatus);
-            info.AddValue("trackZero", _trackZero);
-            info.AddValue("driveFault", _driveFault);
-            info.AddValue("seekComplete", _seekComplete);
-            info.AddValue("unitReady", _unitReady);
-            info.AddValue("index", _index);
-            info.AddValue("cylinder", _cylinder);
-            info.AddValue("physCylinder", _physCylinder);
-            info.AddValue("head", _head);
-            info.AddValue("sector", _sector);
-            info.AddValue("serialNumberLow", _serialNumberLow);
-            info.AddValue("serialNumberHigh", _serialNumberHigh);
-            info.AddValue("blockNumber", _blockNumber);
-            info.AddValue("headerAddressLow", _headerAddressLow);
-            info.AddValue("headerAddressHigh", _headerAddressHigh);
-            info.AddValue("dataBufferLow", _dataBufferLow);
-            info.AddValue("dataBufferHigh", _dataBufferHigh);
-            info.AddValue("seekState", _seekState);
-            info.AddValue("seekData", _seekData);
-            info.AddValue("busyTime", _busyTime);
-        }
-
-        private ShugartDiskController(SerializationInfo info, StreamingContext context)
-        {
-            _disk = (ShugartDisk)info.GetValue("disk", typeof(ShugartDisk));
-            _controllerStatus = (Status)info.GetValue("controllerStatus", typeof(Status));
-            _trackZero = info.GetInt32("trackZero");
-            _driveFault = info.GetInt32("driveFault");
-            _seekComplete = info.GetInt32("seekComplete");
-            _unitReady = info.GetInt32("unitReady");
-            _index = info.GetInt32("index");
-            _cylinder = info.GetInt32("cylinder");
-            _physCylinder = info.GetInt32("physCylinder");
-            _head = info.GetInt32("head");
-            _sector = info.GetInt32("sector");
-            _serialNumberLow = info.GetInt32("serialNumberLow");
-            _serialNumberHigh = info.GetInt32("serialNumberHigh");
-            _blockNumber = info.GetInt32("blockNumber");
-            _headerAddressLow = info.GetInt32("headerAddressLow");
-            _headerAddressHigh = info.GetInt32("headerAddressHigh");
-            _dataBufferLow = info.GetInt32("dataBufferLow");
-            _dataBufferHigh = info.GetInt32("dataBufferHigh");
-            _seekState = (SeekState)info.GetValue("seekState", typeof(SeekState));
-            _seekData = info.GetInt32("seekData");
-            _busyTime = info.GetInt32("busyTime");
-
-            _instance = this;
-        }
-
-        #endregion
-
         private ShugartDiskController()
         {
             Reset();

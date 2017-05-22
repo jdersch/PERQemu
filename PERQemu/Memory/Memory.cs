@@ -16,13 +16,9 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Collections.Generic;
-using System.Text;
-
 using PERQemu.CPU;
-using PERQemu.IO;
 
+using System;
 using System.Runtime.Serialization;
 using System.Security.Permissions;
 
@@ -32,46 +28,8 @@ namespace PERQemu.Memory
     /// Implements the PERQ's Memory board and memory state machine,
     /// which is also connected to the IO bus.
     /// </summary>
-    [Serializable]
-    public sealed class MemoryBoard : ISerializable
+    public sealed class MemoryBoard
     {
-        #region Serialization
-        [SecurityPermissionAttribute(SecurityAction.LinkDemand,
-         Flags = SecurityPermissionFlag.SerializationFormatter)]
-        void ISerializable.GetObjectData(
-            SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("mdiQueue", _mdiQueue);
-            info.AddValue("mdoQueue", _mdoQueue);
-            info.AddValue("Tstate", _Tstate);
-            info.AddValue("wait", _wait);
-            info.AddValue("mdi", _mdi);
-            info.AddValue("loadOpFile", _loadOpFile);
-            info.AddValue("opFile", _opFile);
-            info.AddValue("memory", _memory);
-        }
-
-        private MemoryBoard(SerializationInfo info, StreamingContext context)
-        {
-            _mdiQueue = (QueueController)info.GetValue("mdiQueue", typeof(QueueController));
-            _mdoQueue = (QueueController)info.GetValue("mdoQueue", typeof(QueueController));
-            _Tstate = info.GetInt32("Tstate");
-            _wait = info.GetBoolean("wait");
-            _mdi = (ushort)info.GetValue("mdi", typeof(ushort));
-            _loadOpFile = info.GetBoolean("loadOpFile");
-            _opFile = (byte[])info.GetValue("opFile", typeof(byte[]));
-            _memory = (ushort[])info.GetValue("memory", typeof(ushort[]));
-
-            //
-            // This is ugly.  Ensure that the singleton static instance is set to this newly
-            // rehyrdated version.  This does mean that if more than one MemoryBoard is
-            // deserialized, the others will be clobbered.  Oh well?
-            //
-            _instance = this;
-        }
-
-        #endregion
-
         private MemoryBoard()
         {
             Reset();
@@ -178,29 +136,17 @@ namespace PERQemu.Memory
 
         /// <summary>
         /// Second half of the memory cycle: if a store is pending, writes the output
-        /// (from the ALU or current RasterOp result) to memory.  If we're expecting a
-        /// word to write and get a null instead, there's a bug or bad microcode somewhere
-        /// and we're kinda screwed.
+        /// (from the ALU or current RasterOp result) to memory.
         /// </summary>
         /// <param name="input">Word to write (MDO)</param>
-        public void Tock(ushort? input)
+        public void Tock(ushort input)
         {
-            if (input != null)
-            {
+            
 #if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.MemoryState, "Memory: Tock! T{0} mdoNeeded={1} input={2:x4}", _Tstate, MDONeeded, input);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MemoryState, "Memory: Tock! T{0} mdoNeeded={1} input={2:x4}", _Tstate, MDONeeded, input);
 #endif
-                ExecuteStore((ushort)input);
-            }
-            else
-            {
-                // uh, nothing we can do but whine and move on?
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.MemoryState, "Memory: Tock! T{0} mdoNeeded={1} input=null", _Tstate, MDONeeded);
-#endif
-            }
+            ExecuteStore((ushort)input);                      
         }
 
         /// <summary>
@@ -409,7 +355,7 @@ namespace PERQemu.Memory
         private bool _hold;                 // True if IO hold asserted (not implemented)
 
 
-        // Memory board size should at some point be configurable at runtime...
+        // TODO: Memory board size should at some point be configurable at runtime...
 #if TWO_MEG
         private const int _memSize     = 0x100000;  // 2MB == 1MW
         private const int _memSizeMask = 0x0fffff;  // i.e., full 20 bits

@@ -17,12 +17,8 @@
 //
 
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using PERQemu.IO;
 using PERQemu.CPU;
 using PERQemu.Memory;
 using PERQemu.Debugger;
@@ -311,25 +307,7 @@ namespace PERQemu
             {
                 Console.WriteLine("unset");
             }
-        }
-
-        [DebugFunction("save state", "Saves a complete snapshot of the current PERQ state, including disk state, to the specified path.")]
-        private void SaveState(string stateFile)
-        {
-            FileStream stateStream = File.Open(stateFile, FileMode.Create);
-            BinaryFormatter formatter = new BinaryFormatter();
-            formatter.Serialize(stateStream, PERQCpu.Instance);
-            stateStream.Close();
-        }
-
-        [DebugFunction("load state", "Restores PERQ state from the specified snapshot.")]
-        private void LoadState(string stateFile)
-        {
-            FileStream stateStream = File.Open(stateFile, FileMode.Open);
-            BinaryFormatter formatter = new BinaryFormatter();
-            PERQCpu.Instance = (PERQCpu)formatter.Deserialize(stateStream);
-            stateStream.Close();
-        }
+        }       
 
         #endregion
 

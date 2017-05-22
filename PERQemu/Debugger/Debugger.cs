@@ -23,8 +23,6 @@ using System.Text;
 using System.IO;
 using PERQemu.CPU;
 using PERQemu.Memory;
-using PERQemu.QCode;
-using PERQemu.IO.SerialDevices;
 using PERQemu.IO.Z80.IOB;
 
 namespace PERQemu.Debugger

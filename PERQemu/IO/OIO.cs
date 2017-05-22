@@ -17,8 +17,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.IO
 {
@@ -32,7 +30,6 @@ namespace PERQemu.IO
     /// Eventually this OIO implementation should support dynamic configuration so that individual options
     /// may be selected at runtime!
     /// </summary>
-    [Serializable]
     public sealed class OIO : IIODevice
     {
         public OIO()

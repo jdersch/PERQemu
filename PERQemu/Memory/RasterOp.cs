@@ -16,18 +16,16 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.IO;
-using System.Text;
-using System.Collections.Generic;
-using System.Runtime.Serialization;
-using System.Security.Permissions;
-
-using PERQemu;
 using PERQemu.CPU;
 #if DEBUG
 using PERQemu.Debugger;
 #endif
+
+using System;
+using System.IO;
+using System.Collections.Generic;
+using System.Runtime.Serialization;
+using System.Security.Permissions;
 
 namespace PERQemu.Memory
 {
@@ -72,7 +70,6 @@ namespace PERQemu.Memory
     /// A memory word in the RasterOp datapath, augmented with debugging info
     /// (tracks the source address of a given word).
     /// </summary>
-    [Serializable]
     public struct ROpWord
     {
         public ROpWord(int addr, int idx, ushort val)
@@ -108,7 +105,6 @@ namespace PERQemu.Memory
     /// to feed quad words through the shifter/combiner to move rectangular regions of memory
     /// very quickly.
     /// </summary>
-    [Serializable]
     public sealed class RasterOp : ISerializable
     {
 
@@ -469,7 +465,10 @@ namespace PERQemu.Memory
 
             _state = NextState();
 
-            if (!_enabled) return;
+            if (!_enabled)
+            {
+                return;
+            }
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -532,17 +531,13 @@ namespace PERQemu.Memory
         }
 
         /// <summary>
-        /// Gets the next word from the result queue. Returns null (i.e., no-op) if
-        /// a Store4/4R cycle is not currently in progress..
+        /// Gets the next word from the result queue.  Expected to be called only if
+        /// a Store4/4R cycle is currently in progress..
         /// </summary>
-        public ushort? Result()
+        public ushort Result()
         {
             ROpWord dest;
-
-            // Bail out now if no result needed this cycle
-            if (!MemoryBoard.Instance.MDONeeded) return null;
-
-#if DEBUG
+#if DEBUG            
             // A few sanity checks, until things are debugged...
             if (!_enabled && _state != State.Off)
                 throw new InvalidOperationException("Result needed while RasterOp disabled");
@@ -577,7 +572,7 @@ namespace PERQemu.Memory
 
             #region Align Words
 
-            // The Emporer has made a critical error, and the time for our word
+            // The Emperor has made a critical error, and the time for our word
             // alignment has come.  Admiral Ackbar will explain the plan of attack:
             //
             // 1.   At the start of a scanline, our source FIFO is aligned and the

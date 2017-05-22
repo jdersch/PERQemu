@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.IO.GPIB
 {
@@ -26,7 +25,6 @@ namespace PERQemu.IO.GPIB
     // Implements an emulation of a Summagraphics BitPadOne tablet.
     // This is used as a pointing device.
     //
-    [Serializable]
     public class BitPadOne : IGPIBDevice
     {
         public BitPadOne()

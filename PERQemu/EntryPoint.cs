@@ -17,10 +17,7 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Reflection;
-
 
 namespace PERQemu
 {
@@ -65,8 +62,8 @@ namespace PERQemu
         {
             Version currentVersion = Assembly.GetCallingAssembly().GetName().Version;
             Console.WriteLine("PERQemu v{0}.{1}. ('As the sparks fly upwards.')", currentVersion.Major, currentVersion.Minor);
-            Console.WriteLine("Copyright (c) 2006-2016, J. Dersch (derschjo@gmail.com).");
-            Console.WriteLine("Currently maintained by S. Boondoggle (skeezicsb@gmail.com).");
+            Console.WriteLine("Copyright (c) 2006-2017, J. Dersch (derschjo@gmail.com).");
+            Console.WriteLine("                     and S. Boondoggle (skeezicsb@gmail.com).");
             Console.WriteLine("Type 'go' to start the machine; hit 'tab' key for a list of command completions.");
             Console.WriteLine();
         }

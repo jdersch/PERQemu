@@ -17,16 +17,13 @@
 //
 
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace PERQemu.PhysicalDisk
 {
     /// <summary>
     /// Represents the physical structure of a given disk (Shugart/Micropolis/floppy, etc...)
     /// </summary>
-    [Serializable]
     public struct DiskGeometry
     {
         public DiskGeometry(uint cyls, uint tracks, uint secs, uint sectorSize, bool hasBlockHeader)
@@ -88,7 +85,6 @@ namespace PERQemu.PhysicalDisk
     /// This is the primary interface for interaction with the disk image, and allows
     /// reading sectors of data.
     /// </summary>
-    [Serializable]
     public abstract class PhysicalDisk
     {
         /// <summary>

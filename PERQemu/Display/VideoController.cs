@@ -17,12 +17,9 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using PERQemu.Memory;
 using PERQemu.IO;
 using System.Runtime.Serialization;
-using System.Security.Permissions;
 using PERQemu.CPU;
 
 namespace PERQemu.Display
@@ -30,51 +27,8 @@ namespace PERQemu.Display
     /// <summary>
     /// Implements functionality for the PERQ's video controller.
     /// </summary>
-    [Serializable]
-    public sealed class VideoController : IIODevice, ISerializable
-    {
-        #region Serialization
-        [SecurityPermissionAttribute(SecurityAction.LinkDemand,
-         Flags = SecurityPermissionFlag.SerializationFormatter)]
-        void ISerializable.GetObjectData(
-            SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("cycle", _cycle);
-            info.AddValue("state", _state);
-            info.AddValue("scanLine", _scanLine);
-            info.AddValue("vBlankScanLine", _vBlankScanLine);
-            info.AddValue("lineCounter", _lineCounter);
-            info.AddValue("videoStatus", _videoStatus);
-            info.AddValue("displayAddress", _displayAddress);
-            info.AddValue("cursorAddress", _cursorAddress);
-            info.AddValue("cursorX", _cursorX);
-            info.AddValue("cursorY", _cursorY);
-            info.AddValue("cursorFunc", _cursorFunc);
-            info.AddValue("lineCounterInit", _lineCounterInit);
-            info.AddValue("crtSignals", _crtSignals);
-        }
-
-        private VideoController(SerializationInfo info, StreamingContext context)
-        {
-            _cycle = info.GetInt32("cycle");
-            _state = (VideoState)info.GetInt32("state");
-            _scanLine = info.GetInt32("scanLine");
-            _vBlankScanLine = info.GetInt32("vBlankScanLine");
-            _lineCounter = info.GetInt32("lineCounter");
-            _videoStatus = (StatusRegister)info.GetInt32("videoStatus");
-            _displayAddress = info.GetInt32("displayAddress");
-            _cursorAddress = info.GetInt32("cursorAddress");
-            _cursorX = info.GetInt32("cursorX");
-            _cursorY = info.GetInt32("cursorY");
-            _cursorFunc = (CursorFunction)info.GetInt32("cursorFunc");
-            _lineCounterInit = info.GetInt32("lineCounterInit");
-            _crtSignals = (CRTSignals)info.GetInt32("crtSignals");
-
-            _instance = this;
-        }
-
-        #endregion
-
+    public sealed class VideoController : IIODevice
+    {        
         public static VideoController Instance
         {
             get { return _instance; }
@@ -329,20 +283,6 @@ namespace PERQemu.Display
                 (_state == VideoState.VBlankScanline ? CRTSignals.VerticalSync : CRTSignals.None) |
                 (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None) |
                 (lineCounterHit ? CRTSignals.LineCounterOverflow : CRTSignals.None);
-        }
-
-        public void DebugDumpScreen(int baseAddress)
-        {
-            for (int y = 0; y < PERQ_DISPLAYHEIGHT; y++)
-            {
-                for (int x = 0; x < PERQ_DISPLAYWIDTH_IN_WORDS; x++)
-                {
-                    int dataAddress = y * PERQ_DISPLAYWIDTH_IN_WORDS + x + baseAddress;
-                    int screenAddress = y * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
-
-                    Display.Instance.DrawWord(screenAddress, TransformDisplayWord(MemoryBoard.Instance.FetchWord(dataAddress)));
-                }
-            }
         }
 
         private bool CursorEnabled

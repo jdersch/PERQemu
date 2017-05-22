@@ -16,15 +16,13 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.IO.Z80.IOB;
+using PERQemu.HostInterface;
+
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Drawing.Imaging;
-
-using PERQemu.IO.Z80.IOB;
-using PERQemu.HostInterface;
 
 namespace PERQemu.Display
 {
@@ -183,11 +181,6 @@ namespace PERQemu.Display
             _buffer = new Bitmap(VideoController.PERQ_DISPLAYWIDTH,
                                  VideoController.PERQ_DISPLAYHEIGHT,
                                  PixelFormat.Format1bppIndexed);
-
-            // TODO:  Add an 8-bit grey buffer for simulating the rolling retrace lines when
-            // the display is "turned off".  Would be AWESOME (and VERY silly) to simulate that...
-            // If I were a complete maniac, I'd have the display "fade in" as the CRT warms up,
-            // while playing the audio of the Shugart and fans coming up to speed.  Oh hells yeah.
 
             _dispBox = new PictureBox();
             _dispBox.Image = _buffer;

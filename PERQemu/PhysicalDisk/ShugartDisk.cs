@@ -17,15 +17,12 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.PhysicalDisk
 {
     //
-    // Represents the contents of a 12- or 24MB Shugart SA4000-series hard disk.
+    // Represents the contents of a 12 or 24MB Shugart SA4000-series hard disk.
     //
-    [Serializable]
     public sealed class ShugartDisk : PhysicalDisk
     {
         public ShugartDisk(bool is24mb) : base()

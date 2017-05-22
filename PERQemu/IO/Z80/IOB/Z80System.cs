@@ -17,8 +17,6 @@
 //
 
 using System;
-using System.IO;
-using System.Text;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Security.Permissions;
@@ -85,57 +83,8 @@ namespace PERQemu.IO.Z80.IOB
     /// The Z80 system controls the PERQ's hard/floppy disk, serial ports, speech,
     /// GPIB, keyboard, clock and pointer devices.
     /// </summary>
-    [Serializable]
-    public sealed class Z80System : ISerializable
+    public sealed class Z80System
     {
-        #region Serialization
-        [SecurityPermissionAttribute(SecurityAction.LinkDemand,
-         Flags = SecurityPermissionFlag.SerializationFormatter)]
-        void ISerializable.GetObjectData(
-            SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("state", _state);
-            info.AddValue("messageType", _messageType);
-            info.AddValue("messageData", _messageData);
-            info.AddValue("deviceReadyState", _deviceReadyState);
-            info.AddValue("deviceBusyClocks", _deviceBusyClocks);
-            info.AddValue("frob", _dataReadyInterruptRequested);
-            info.AddValue("floppyDisk", _floppyDisk);
-            info.AddValue("keyboard", _keyboard);
-            info.AddValue("gpib", _gpib);
-            info.AddValue("tablet", _tablet);
-            info.AddValue("rs232", _rs232);
-            info.AddValue("speech", _speech);
-            info.AddValue("clock", _clockDev);
-            info.AddValue("fifo", _outputFifo);
-            info.AddValue("clocks", _clocks);
-        }
-
-        private Z80System(SerializationInfo info, StreamingContext context)
-        {
-            _state = (MessageParseState)info.GetInt32("state");
-            _messageType = (PERQtoZ80Message)info.GetInt32("messageType");
-            _messageData = (byte[])info.GetValue("messageData", typeof(byte[]));
-            _deviceReadyState = (ReadyFlags)info.GetInt32("deviceReadyState");
-            _deviceBusyClocks = (int[])info.GetValue("deviceBusyClocks", typeof(int[]));
-            _dataReadyInterruptRequested = info.GetBoolean("frob");
-            _floppyDisk = (FloppyController)info.GetValue("floppyDisk", typeof(FloppyController));
-            _keyboard = (Keyboard)info.GetValue("keyboard", typeof(Keyboard));
-            _gpib = (GPIB)info.GetValue("gpib", typeof(GPIB));
-            _tablet = (Tablet)info.GetValue("tablet", typeof(Tablet));
-            _rs232 = (RS232)info.GetValue("rs232", typeof(RS232));
-            _speech = (Speech)info.GetValue("speech", typeof(Speech));
-            _clockDev = (Clock)info.GetValue("clock", typeof(Clock));
-            _outputFifo = (Queue<byte>)info.GetValue("fifo", typeof(Queue<byte>));
-            _clocks = info.GetInt32("clocks");
-
-            _devices = new List<IZ80Device>(16);
-            BuildDeviceList();
-            _instance = this;
-        }
-
-        #endregion
-
         private Z80System()
         {
             _messageData = new byte[256];
@@ -591,7 +540,7 @@ namespace PERQemu.IO.Z80.IOB
             bool statusChange = false;
 
             // This is slow and terrible.
-            for (int i = 0; i < 17; i++)    // 17?
+            for (int i = 0; i < (int)ReadyFlags.Seek + 1; i++)
             {
                 if (_deviceBusyClocks[i] != 0)
                 {

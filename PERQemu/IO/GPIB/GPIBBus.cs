@@ -18,11 +18,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.IO.GPIB
 {
-    [Serializable]
     public sealed class GPIBBus
     {
         private GPIBBus()

@@ -17,8 +17,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.QCode
 {
@@ -42,7 +40,8 @@ namespace PERQemu.QCode
     /// <summary>
     /// Contains methods and structures to aid in disassembling POS and Accent PERQ Q-Code.
     /// Somewhat useful when debugging emulation issues in the POS Q-Code interpreter...
-    /// TODO: Incorporate PNX "C-Code" as well!
+    /// TODO: Create other classes for dealing with other bytecodes (PNX C-Code, for example...)
+    /// TODO: Make it possible to switch between mappings in the debugger.
     /// </summary>
     public static class QCodeHelper
     {

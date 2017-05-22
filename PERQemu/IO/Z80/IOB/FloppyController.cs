@@ -16,12 +16,11 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.PhysicalDisk;
+
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using PERQemu.PhysicalDisk;
-
 
 namespace PERQemu.IO.Z80.IOB
 {
@@ -30,7 +29,6 @@ namespace PERQemu.IO.Z80.IOB
     /// Represents a virtual PERQ floppy drive (w/floppy disk).
     /// This performs the various actions the drive is responsible for.
     /// </summary>
-    [Serializable]
     public sealed class FloppyController : IZ80Device
     {
 

@@ -22,8 +22,7 @@ using System.Text;
 
 namespace PERQemu.PhysicalDisk
 {
-    // Represents a single or double-sided 8" floppy disk in RAW format
-    [Serializable]
+    // Represents a single or double-sided 8" floppy disk in RAW format    
     public sealed class RawFloppyDisk : PhysicalDisk
     {
         public RawFloppyDisk(DiskGeometry geometry) : base()

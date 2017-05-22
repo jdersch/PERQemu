@@ -18,8 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.IO.Ports;
 
 namespace PERQemu.IO.Z80.IOB
 {
@@ -27,7 +25,6 @@ namespace PERQemu.IO.Z80.IOB
     /// Represents the PERQ's "Speech" device (digital sound output)
     /// Currently drives the PC Squeaker, need to work in some DSound output or the likes.
     /// </summary>
-    [Serializable]
     public sealed class Speech : IZ80Device
     {
         public Speech()
