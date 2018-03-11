@@ -1,8 +1,4 @@
-
 RDS00 Emulated ROM input table
-
-$Id: mask_table.txt,v 1.2 2017/03/18 20:07:13 skeezics Exp $
-$Source: /home/skeezics/perq/shared/PERQemu-source/PERQemu/PROM/RCS/mask_table.txt,v $
 
 This is NOT the PERQ ROM, but rather a synthesized table used to
 tag each word with a mask type as it flows through the source and
@@ -15,14 +11,15 @@ Note: "phase" is only the two low bits of the RasterOp phase (from
 the CntlRasterOp register). You are not expected to understand this.
 
 result	00 (00000) = Invalid
-	01 (00001) = DontMask
-	02 (00010) = LeftEdge
-	04 (00100) = RightEdge
-	06 (00110) = Both
-	08 (01000) = FullWord
-	10 (10000) = Leftover
+		01 (00001) = DontMask
+		02 (00010) = LeftEdge
+		04 (00100) = RightEdge
+		06 (00110) = Both
+		08 (01000) = FullWord
+		10 (10000) = Leftover
 
-key:	phase dir dwp wid idx	result
+key:
+	phase dir dwp wid idx	result
 
 000	  0   0   0  0  0	LeftEdge
 001	  0   0   0  0  1	FullWord
