@@ -1,4 +1,4 @@
-// debugger.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// debugger.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -257,9 +257,10 @@ namespace PERQemu.Debugger
                     }
                     else
                     {
-                        // no entry defaults to single-step (this is ugly)
-                        List<MethodInfo> methods = _commandRoot.FindSubNodeByName("step").Methods;
-                        InvokeDebugMethod(methods, null);
+						ExecuteLine("step");	// why not just this?
+                        //// no entry defaults to single-step (this is ugly)
+                        //List<MethodInfo> methods = _commandRoot.FindSubNodeByName("step").Methods;
+                        //InvokeDebugMethod(methods, null);
                     }
                 }
                 catch (Exception e)
