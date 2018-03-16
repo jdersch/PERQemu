@@ -1,4 +1,4 @@
-// tablet.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// tablet.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -67,7 +67,7 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "--> Tablet message: {0}\tdata: {1:x}\tenabled: {2}",
+                Trace.Log(LogType.Tablet, "Tablet: message {0} data={1:x} enabled={2}",
                                           message, value, _enabled);
 #endif
             return retVal;
@@ -89,13 +89,10 @@ namespace PERQemu.IO.Z80.IOB
                 if (_pollCount >= _jiffyInterval)
                 {
                     int jiffies = (_pollCount / _jiffyInterval);
-#if TRACING_ENABLED
-                    //if (Trace.TraceOn)
-                    //    Trace.Log(LogType.Tablet, "--> Tablet: jiffies since last Poll: {0} (interval {1})", jiffies, _jiffyInterval);
-#endif
                     int x = 0;
                     int y = 0;
                     int button = Display.Display.Instance.MouseButton;
+
                     GetTabletPos(out x, out y, button);
 
                     fifo.Enqueue(Z80System.SOM);
@@ -107,6 +104,11 @@ namespace PERQemu.IO.Z80.IOB
                     fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last message, according to perqz80.doc)
                                                     // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
                                                     // maintenance moved to the video interrupt instead.
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
+						          				   x, y, button, jiffies);
+#endif
                     _lastX = x;
                     _lastY = y;
                     _lastButton = button;
@@ -163,7 +165,7 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "--> Tablet message: GetStatus\tenabled: {0}", _enabled);
+				Trace.Log(LogType.Tablet, "Tablet: GetStatus() returns enabled={0}", _enabled);
 #endif
         }
 
