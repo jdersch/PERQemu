@@ -47,6 +47,12 @@ namespace PERQemu.IO.GPIB
 			_lastUpdate = -1;
 			_talking = false;
 			_listening = false;
+			_firstPoll = true;
+
+#if TRACING_ENABLED
+			if (Trace.TraceOn)
+				Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
+#endif
 		}
 
 		/// <summary>
@@ -63,7 +69,8 @@ namespace PERQemu.IO.GPIB
 #endif
 			if (_talking)
 			{
-				_lastUpdate = _sampleRate;	// Reset counter so we don't start sampling immediately
+				_lastUpdate = _sampleRate;  // Reset counter so we don't start sampling immediately
+				_firstPoll = true;			// An experiemental HACK
 			}
 		}
 
@@ -94,7 +101,7 @@ namespace PERQemu.IO.GPIB
 #if TRACING_ENABLED
 				// If this creates too much spewage, disable it - mostly for debugging
 				if (Trace.TraceOn)
-					Trace.Log(LogType.GPIB, "BitPadOne poll requested, but I'm not the talker!");
+					Trace.Log(LogType.GPIB, "BitPadOne: poll requested, but I'm not the talker!");
 #endif
 				return;
 			}
@@ -133,8 +140,14 @@ namespace PERQemu.IO.GPIB
 			// However, Accent (in particular) seems unhappy if the queue overflows, so
 			// temper our update rate by checking that the fifo is empty before sending.
 			//
-			if (((x != _lastX || y != _lastY || button != _lastButton) || (_lastUpdate-- < 0)) && fifo.Count == 0)
+			if (((x != _lastX || y != _lastY || button != _lastButton) ||
+			     (_lastUpdate++ > _sampleRate)) && fifo.Count == 0)
 			{
+				if (_firstPoll)
+				{
+					fifo.Enqueue(_delimiter2);  // send an initial LF to bump PERQ state machine
+					_firstPoll = false;
+				}
 				WriteIntAsStringToQueue(x, ref fifo);
 				fifo.Enqueue(_delimiter1);  // separator (')
 				WriteIntAsStringToQueue(y, ref fifo);
@@ -142,29 +155,32 @@ namespace PERQemu.IO.GPIB
 				fifo.Enqueue(_buttonMapping[button]);
 				fifo.Enqueue(_delimiter2);  // LF                 
 
+#if TRACING_ENABLED
+				// For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
+				if (Trace.TraceOn)
+					Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
+					         x, y, button, _lastUpdate);
+#endif
 				_lastX = x;
 				_lastY = y;
 				_lastButton = button;
-				_lastUpdate = _sampleRate;  // counts down
-
-#if TRACING_ENABLED
-				if (Trace.TraceOn)
-					Trace.Log(LogType.GPIB, "BitPadOne polled: x={0} y={1} button={2} update={3}",
-					         x, y, button, _lastUpdate);
-#endif
+				_lastUpdate = 0;
 			}
         }
 
 		public void Write(byte b)
         {
-			// Seriously?  Writing to a graphics tablet?  This should never happen...
 #if TRACING_ENABLED
 			if (Trace.TraceOn)
-				Trace.Log(LogType.GPIB, "BitPadOne write requested ({0:x2}){1}", b,
+				Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2}){1}", b,
 				          (_listening ? "." : " but la-la-la-I-can't-hear-you!"));
 #endif
         }
 
+		/// <summary>
+		/// Sends the x, y integer coordinates as four ASCII digit strings.
+		/// Because THAT's efficient, 200 times a second.
+		/// </summary>
         private void WriteIntAsStringToQueue(int i, ref Queue<byte> fifo)
         {
             string str = String.Format("{0:d4}", i);
@@ -175,11 +191,12 @@ namespace PERQemu.IO.GPIB
             }            
         }
 
+		/// <summary>
+		/// Get the X & Y position from the display and translate them into the range
+		/// of the BitPadOne tablet.
+		/// </summary>
         private void GetTabletPos(out int x, out int y, out byte button)
         {
-            //
-            // Get the X & Y position from the display and translate them into the range
-            // of the BitPadOne tablet.
             //
             // Since we're using the emulated display area as the tablet surface, there are certain ranges
             // (mostly in the X axis) that we can't reach.  We may want to investigate some other
@@ -207,6 +224,7 @@ namespace PERQemu.IO.GPIB
 		private byte _myAddress;
 		private bool _talking;
 		private bool _listening;
+		private bool _firstPoll;
 
         private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
         private const byte _delimiter1 = (byte)'\'';

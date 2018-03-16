@@ -1,4 +1,4 @@
-// gpib.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// gpib.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -64,7 +64,7 @@ namespace PERQemu.IO.Z80.IOB
 			switch (_messageIndex - 1)
 			{
 				case 0:
-					// command type
+					// Command type
 					_cmdType = (GPIBCommand)value;
 					_cmdIndex = 0;
 
@@ -74,7 +74,7 @@ namespace PERQemu.IO.Z80.IOB
 					break;
 
 				case 1:
-					// data length
+					// Data length
 					_cmdLength = value;
 
 #if TRACING_ENABLED
@@ -113,7 +113,7 @@ namespace PERQemu.IO.Z80.IOB
 					_cmdIndex++;
 
 					//
-					// End of command.
+					// End of command
 					//
 					if (_cmdIndex >= _cmdLength)
 					{
@@ -228,7 +228,8 @@ namespace PERQemu.IO.Z80.IOB
 			switch (grp)
 			{
 				case RemoteCommandGroup.AddressedCommandGroup:
-					// Nothing to do, really?  But log whatever comes in for debugging?
+					// Nothing to do, since I'm not sure which (if any) of these ever get used
+					// by the PERQ, or even what they do... But log whatever comes in for debugging.
 					switch ((AddressCommands)data)
 					{
 						case AddressCommands.dcl:
@@ -264,7 +265,7 @@ namespace PERQemu.IO.Z80.IOB
 						if (Trace.TraceOn)
 							Trace.Log(LogType.GPIB, "GPIB Listen Address Group 'unlisten' command received");
 #endif
-						_listen = false;    // ???
+						_listen = false;    // Unlisten the controller (as with lon=false?)
 					}
 					else
 					{
@@ -285,7 +286,7 @@ namespace PERQemu.IO.Z80.IOB
 						if (Trace.TraceOn)
 							Trace.Log(LogType.GPIB, "GPIB Talker Address Group 'untalk' command received");
 #endif
-						_talk = false;    // ???
+						_talk = false;    // Untalk the controller too (same as ton=false?)
 					}
 					else
 					{
@@ -299,12 +300,12 @@ namespace PERQemu.IO.Z80.IOB
 					break;
 
 				case RemoteCommandGroup.SecondaryCommandGroup:
+					// Nothing to do with these either, since we don't care about secondary listeners
+					// or parallel polling...?  Log it in case something comes our way.
 #if TRACING_ENABLED
 					if (Trace.TraceOn)
 						Trace.Log(LogType.GPIB, "GPIB Secondary Command/Address {0} received (ignored)", data);
 #endif
-					// Nothing to do, really, since we don't care about secondary listeners
-					// or parallel polling...
 					break;
 			}
 		
