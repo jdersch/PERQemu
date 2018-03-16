@@ -231,13 +231,6 @@ namespace PERQemu.CPU
 				// WCS writes take two cycles to run on the real hardware, but just
 				// one cycle here -- enough to screw up memory timing during the loop
 				// when microcode is being loaded!  Clear the hold flag to continue.
-#if DEBUG
-				if (_wcsHold && _memory.Wait)
-				{
-					Console.WriteLine("\t** CPU abort on memory wait while WCS hold true?");
-					currentState = RunState.Debug;
-				}
-#endif
 				_wcsHold = false;
 
 				// So we can single step through aborts for debugging

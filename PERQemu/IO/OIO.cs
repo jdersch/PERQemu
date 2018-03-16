@@ -77,6 +77,10 @@ namespace PERQemu.IO
 
             switch (ioPort)
             {
+				case 0x0f:	// Ethernet control register - not yet implemented
+					retVal = 0;		// Return zero to let Accent S4 detect missing hardware?
+					break;
+
                 case 0x20:  // PERQlink input status port
                     retVal = _link.ReadCommandStatus();
                     break;

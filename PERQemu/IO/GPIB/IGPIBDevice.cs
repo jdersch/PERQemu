@@ -1,4 +1,4 @@
-// igpibdevice.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// igpibdevice.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //  
 // This file is part of PERQemu.
 //
@@ -30,17 +30,27 @@ namespace PERQemu.IO.GPIB
         byte DeviceID { get; }
 
         /// <summary>
-        /// Resets the given GPIB device
+        /// Resets the given GPIB device.
         /// </summary>
         void Reset();
 
+		/// <summary>
+		/// Sets the talker address.
+		/// </summary>
+		void SetTalker(byte address);
+
+		/// <summary>
+		/// Sets the listener address.
+		/// </summary>
+		void SetListener(byte address);
+
         /// <summary>
-        /// Polls the GPIB device for data
+		/// Polls the GPIB device for data (if we're the talker).
         /// </summary>
         void Poll(ref Queue<byte> fifo);
 
         /// <summary>
-        /// Does a write to the device
+		/// Does a write to the device (if we're the listener).
         /// </summary>        
         /// <param name="value"></param>
         void Write(byte value);

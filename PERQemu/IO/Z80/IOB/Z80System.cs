@@ -402,11 +402,11 @@ namespace PERQemu.IO.Z80.IOB
                     break;
 
                 case MessageParseState.Message:
-                    // The IOB's message format is really really annoying to parse, especially as compared
-                    // to that of the CIO/EIO board.  Once we've gotten the message type, the length of the
-                    // message is dependent on the type of the message sent.  Some have fixed lengths, some
-                    // are variable.  Basically this requires a state machine for each individual message.
-                    // Or I could make this code really tangled.
+					// The IOB's message format ("Old Z80") is really really annoying to parse, especially as
+					// compared to that of the CIO/EIO board ("New Z80").  Once we've gotten the message type,
+                    // the length of the message is dependent on the type of the message sent.  Some have fixed
+                    // lengths, some are variable.  Basically this requires a state machine for each individual
+                    // message.  Or I could make this code really tangled.
                     switch (_messageType)
                     {
                         case PERQtoZ80Message.SetKeyboardStatus:
@@ -610,7 +610,7 @@ namespace PERQemu.IO.Z80.IOB
         /// <param name="requested"></param>
         private void GetStatus(byte requested)
         {
-            Console.WriteLine("GetStatus: {0}", requested);
+            Console.WriteLine("GetStatus: {0}", requested);		// TODO: uh, these should be traces or #if DEBUG
 
             for (int i = 1; i <= 256; i = (i << 1))
             {
@@ -638,11 +638,11 @@ namespace PERQemu.IO.Z80.IOB
 
                         // This is likely extraneous, but it's part of the spec.
                         case DeviceStatus.Z80:
-                            Console.WriteLine("Z80 GetStatus bit set");
+                            Console.WriteLine("Z80 GetStatus bit set");		// fixme
                             break;
 
                         default:
-                            Console.WriteLine("Unhandled GetStatus type {0}", (DeviceStatus)i);
+                            Console.WriteLine("Unhandled GetStatus type {0}", (DeviceStatus)i);	// fixme
                             break;
                     }
                 }
@@ -689,7 +689,7 @@ namespace PERQemu.IO.Z80.IOB
             Voltage = 0x8,          // OZ80DoSVoltage = #1000 = 0x200 -> message 11 (unused)
             Clock = 0x10,           // OZ80DoSClock = #2000 = 0x400 -> message 12
             Floppy = 0x20,          // OZ80DoSFloppy = #10000 = 0x1000 -> message 14
-            GPIB = 0x40,            // No GetStat for GPIB...
+            GPIB = 0x40,            // No GetStat for GPIB...?
             Z80 = 0x80              // OZ80DoGetStat = #100000 = 0x8000 "Always on"
         }
 

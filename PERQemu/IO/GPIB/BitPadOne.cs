@@ -1,4 +1,4 @@
-﻿// bitpadone.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+﻿// bitpadone.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //  
 // This file is part of PERQemu.
 //
@@ -21,34 +21,84 @@ using System.Collections.Generic;
 
 namespace PERQemu.IO.GPIB
 {
-    //
-    // Implements an emulation of a Summagraphics BitPadOne tablet.
-    // This is used as a pointing device.
-    //
-    public class BitPadOne : IGPIBDevice
-    {
-        public BitPadOne()
-        {
-            Reset();
-        }
+	//
+	// Implements an emulation of a Summagraphics BitPadOne tablet.
+	// This is used as a pointing device.
+	//
+	public class BitPadOne : IGPIBDevice
+	{
+		public BitPadOne()
+		{
+			_myAddress = 8;     // The PERQ expects the factory default device address of 010 (octal)
 
-        public byte DeviceID 
-        { 
-            get 
-            { 
-                return 10;     // Most PERQ software seems to assume the tablet is device 10.
-            } 
-        }
+			Reset();
+		}
 
-        public void Reset()
-        {
-            _lastX = -1;
-            _lastY = -1;
-            _lastButton = -1;
-        }
+		public byte DeviceID
+		{
+			get { return _myAddress; }
+		}
 
-        public void Poll(ref Queue<byte> fifo)
-        {
+		public void Reset()
+		{
+			_lastX = -1;
+			_lastY = -1;
+			_lastButton = -1;
+			_lastUpdate = -1;
+			_talking = false;
+			_listening = false;
+		}
+
+		/// <summary>
+		/// If the controller selects our address as the talker, enable sending tablet updates.
+		/// Otherwise, don't send any response to Poll()s.
+		/// </summary>
+		public void SetTalker(byte address)
+		{
+			_talking = (address == _myAddress);
+
+#if TRACING_ENABLED
+			if (Trace.TraceOn)
+				Trace.Log(LogType.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
+#endif
+			if (_talking)
+			{
+				_lastUpdate = _sampleRate;	// Reset counter so we don't start sampling immediately
+			}
+		}
+
+		/// <summary>
+        /// If the controller selects our address as the listener, someone is out to lunch.
+		/// But wryly note the request for posterity, so future software archaeologists can
+		/// puzzle over it.
+		/// </summary>
+		public void SetListener(byte address)
+		{
+			_listening = (address == _myAddress);
+
+#if TRACING_ENABLED
+			if (Trace.TraceOn)
+				Trace.Log(LogType.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
+#endif
+		}
+
+		/// <summary>
+		/// Sends a mouse position update.  Only queues updates if we're the current GPIB talker,
+		/// if the current GPIB fifo is empty, if the position has changed (or it hasn't but we've
+		/// not sent one recently and our sample timer has gone off).
+		/// </summary>
+		public void Poll(ref Queue<byte> fifo)
+		{
+			if (!_talking)
+			{
+#if TRACING_ENABLED
+				// If this creates too much spewage, disable it - mostly for debugging
+				if (Trace.TraceOn)
+					Trace.Log(LogType.GPIB, "BitPadOne poll requested, but I'm not the talker!");
+#endif
+				return;
+			}
+
             //
             // From the BitPadOne documentation and from perusing the iogpib.pas
             // the data sent back to the PERQ looks like:
@@ -57,7 +107,7 @@ namespace PERQemu.IO.GPIB
             //
             // Where XXXX/YYYY are X,Y coordinates in plain ASCII, ranging from
             // 0000-2200; D1 is configured to be "'" (single quote) and D2 is a
-            // Linefeed (12 octal).
+			// Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual.)
             // The delimiters and the range (switching between US/Metric) can
             // be configured on the BitPadOne itself, but the PERQ software
             // seems to require at least that D2 is LF (D1 can be any non-numeric
@@ -70,25 +120,49 @@ namespace PERQemu.IO.GPIB
             byte button = 0;
 
             GetTabletPos(out x, out y, out button);
-            
-            if (x != _lastX || y != _lastY || button != _lastButton)
-            {                
-                WriteIntAsStringToQueue(x, ref fifo);
-                fifo.Enqueue(_delimiter1);  // separator (')
-                WriteIntAsStringToQueue(y, ref fifo);
-                fifo.Enqueue(_delimiter1);  // separator
-                fifo.Enqueue(_buttonMapping[button]);
-                fifo.Enqueue(_delimiter2);   // LF                 
-                
-                _lastX = x;
-                _lastY = y;
-                _lastButton = button;
-            }
+
+			//
+			// The PERQ expects a steady stream of updates from the BitPad, typically
+			// set by hardware switches to the factory default 200 samples/sec(!), so
+			// even if the mouse hasn't moved we need to send an update.  POS, at least,
+			// does some smoothing by averaging several samples, so our emulated pointer
+			// is very jerky if updates are too far between.  Play with the _sampleRate
+			// constant to find a reasonable balance between smooth operation and too
+			// much overhead (keep in mind the IOFudge factor).
+			//
+			// However, Accent (in particular) seems unhappy if the queue overflows, so
+			// temper our update rate by checking that the fifo is empty before sending.
+			//
+			if (((x != _lastX || y != _lastY || button != _lastButton) || (_lastUpdate-- < 0)) && fifo.Count == 0)
+			{
+				WriteIntAsStringToQueue(x, ref fifo);
+				fifo.Enqueue(_delimiter1);  // separator (')
+				WriteIntAsStringToQueue(y, ref fifo);
+				fifo.Enqueue(_delimiter1);  // separator
+				fifo.Enqueue(_buttonMapping[button]);
+				fifo.Enqueue(_delimiter2);  // LF                 
+
+				_lastX = x;
+				_lastY = y;
+				_lastButton = button;
+				_lastUpdate = _sampleRate;  // counts down
+
+#if TRACING_ENABLED
+				if (Trace.TraceOn)
+					Trace.Log(LogType.GPIB, "BitPadOne polled: x={0} y={1} button={2} update={3}",
+					         x, y, button, _lastUpdate);
+#endif
+			}
         }
 
-        public void Write(byte b)
+		public void Write(byte b)
         {
-            // Nuttin' yet -- maybe a nice HPIB printer someday? POS "print" supports one...
+			// Seriously?  Writing to a graphics tablet?  This should never happen...
+#if TRACING_ENABLED
+			if (Trace.TraceOn)
+				Trace.Log(LogType.GPIB, "BitPadOne write requested ({0:x2}){1}", b,
+				          (_listening ? "." : " but la-la-la-I-can't-hear-you!"));
+#endif
         }
 
         private void WriteIntAsStringToQueue(int i, ref Queue<byte> fifo)
@@ -113,7 +187,7 @@ namespace PERQemu.IO.GPIB
             // support an RS232 BitPadOne on the host PC...)
             //
             // Note also that unlike the Kriz tablet, the BitPadOne does not report "puck off tablet" status.
-            //
+            // 
 
             //
             // Calc y and x positions.  The offsets tacked onto the end are based on playing around with the
@@ -127,11 +201,16 @@ namespace PERQemu.IO.GPIB
 
         private int _lastX;
         private int _lastY;
-        private int _lastButton;        
+        private int _lastButton;
+		private int _lastUpdate;
+
+		private byte _myAddress;
+		private bool _talking;
+		private bool _listening;
 
         private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
         private const byte _delimiter1 = (byte)'\'';
-        private const byte _delimiter2 = 0xa;          // LF
-
+        private const byte _delimiter2 = 0xa;          	// LF
+		private const int _sampleRate = 5115;			// Season to taste (or compute @ reset like Tablet.cs)
     }
 }
