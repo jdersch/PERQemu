@@ -42,8 +42,8 @@ namespace PERQemu.IO.Z80.IOB
             _enabled = false;
             _messageIndex = 0;
 
-            _jiffyInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);    // Essentially a constant...
-            _pollCount = _jiffyInterval - PERQCpu.IOFudge - 1;                  // Force an update on next Poll()
+            _jiffyInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);
+            _pollCount = _jiffyInterval - PERQCpu.IOFudge - 1;                  // Update on next Poll()
 
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
@@ -107,7 +107,7 @@ namespace PERQemu.IO.Z80.IOB
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
-						          				   x, y, button, jiffies);
+                                                     x, y, button, jiffies);
 #endif
                     _lastX = x;
                     _lastY = y;
@@ -165,7 +165,7 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-				Trace.Log(LogType.Tablet, "Tablet: GetStatus() returns enabled={0}", _enabled);
+                Trace.Log(LogType.Tablet, "Tablet: GetStatus() returns enabled={0}", _enabled);
 #endif
         }
 

@@ -21,90 +21,90 @@ using System.Collections.Generic;
 
 namespace PERQemu.IO.GPIB
 {
-	//
-	// Implements an emulation of a Summagraphics BitPadOne tablet.
-	// This is used as a pointing device.
-	//
-	public class BitPadOne : IGPIBDevice
-	{
-		public BitPadOne()
-		{
-			_myAddress = 8;     // The PERQ expects the factory default device address of 010 (octal)
+    //
+    // Implements an emulation of a Summagraphics BitPadOne tablet.
+    // This is used as a pointing device.
+    //
+    public class BitPadOne : IGPIBDevice
+    {
+        public BitPadOne()
+        {
+            _myAddress = 8;     // The PERQ expects the factory default device address of 010 (octal)
 
-			Reset();
-		}
+            Reset();
+        }
 
-		public byte DeviceID
-		{
-			get { return _myAddress; }
-		}
+        public byte DeviceID
+        {
+            get { return _myAddress; }
+        }
 
-		public void Reset()
-		{
-			_lastX = -1;
-			_lastY = -1;
-			_lastButton = -1;
-			_lastUpdate = -1;
-			_talking = false;
-			_listening = false;
-			_firstPoll = true;
-
-#if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
-#endif
-		}
-
-		/// <summary>
-		/// If the controller selects our address as the talker, enable sending tablet updates.
-		/// Otherwise, don't send any response to Poll()s.
-		/// </summary>
-		public void SetTalker(byte address)
-		{
-			_talking = (address == _myAddress);
+        public void Reset()
+        {
+            _lastX = -1;
+            _lastY = -1;
+            _lastButton = -1;
+            _lastUpdate = -1;
+            _talking = false;
+            _listening = false;
+            _firstPoll = true;
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
+            if (Trace.TraceOn)
+                Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
 #endif
-			if (_talking)
-			{
-				_lastUpdate = _sampleRate;  // Reset counter so we don't start sampling immediately
-				_firstPoll = true;			// An experiemental HACK
-			}
-		}
+        }
 
-		/// <summary>
+        /// <summary>
+        /// If the controller selects our address as the talker, enable sending tablet updates.
+        /// Otherwise, don't send any response to Poll()s.
+        /// </summary>
+        public void SetTalker(byte address)
+        {
+            _talking = (address == _myAddress);
+
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
+#endif
+            if (_talking)
+            {
+                _lastUpdate = _sampleRate;  // Reset counter so we don't start sampling immediately
+                _firstPoll = true;          // An experiemental HACK
+            }
+        }
+
+        /// <summary>
         /// If the controller selects our address as the listener, someone is out to lunch.
-		/// But wryly note the request for posterity, so future software archaeologists can
-		/// puzzle over it.
-		/// </summary>
-		public void SetListener(byte address)
-		{
-			_listening = (address == _myAddress);
+        /// But wryly note the request for posterity, so future software archaeologists can
+        /// puzzle over it.
+        /// </summary>
+        public void SetListener(byte address)
+        {
+            _listening = (address == _myAddress);
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
+            if (Trace.TraceOn)
+                Trace.Log(LogType.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
 #endif
-		}
+        }
 
-		/// <summary>
-		/// Sends a mouse position update.  Only queues updates if we're the current GPIB talker,
-		/// if the current GPIB fifo is empty, if the position has changed (or it hasn't but we've
-		/// not sent one recently and our sample timer has gone off).
-		/// </summary>
-		public void Poll(ref Queue<byte> fifo)
-		{
-			if (!_talking)
-			{
+        /// <summary>
+        /// Sends a mouse position update.  Only queues updates if we're the current GPIB talker,
+        /// if the current GPIB fifo is empty, if the position has changed (or it hasn't but we've
+        /// not sent one recently and our sample timer has gone off).
+        /// </summary>
+        public void Poll(ref Queue<byte> fifo)
+        {
+            if (!_talking)
+            {
 #if TRACING_ENABLED
-				// If this creates too much spewage, disable it - mostly for debugging
-				if (Trace.TraceOn)
-					Trace.Log(LogType.GPIB, "BitPadOne: poll requested, but I'm not the talker!");
+                // If this creates too much spewage, disable it - mostly for debugging
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.GPIB, "BitPadOne: poll requested, but I'm not the talker!");
 #endif
-				return;
-			}
+                return;
+            }
 
             //
             // From the BitPadOne documentation and from perusing the iogpib.pas
@@ -114,7 +114,7 @@ namespace PERQemu.IO.GPIB
             //
             // Where XXXX/YYYY are X,Y coordinates in plain ASCII, ranging from
             // 0000-2200; D1 is configured to be "'" (single quote) and D2 is a
-			// Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual.)
+            // Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual.)
             // The delimiters and the range (switching between US/Metric) can
             // be configured on the BitPadOne itself, but the PERQ software
             // seems to require at least that D2 is LF (D1 can be any non-numeric
@@ -128,80 +128,81 @@ namespace PERQemu.IO.GPIB
 
             GetTabletPos(out x, out y, out button);
 
-			//
-			// The PERQ expects a steady stream of updates from the BitPad, typically
-			// set by hardware switches to the factory default 200 samples/sec(!), so
-			// even if the mouse hasn't moved we need to send an update.  POS, at least,
-			// does some smoothing by averaging several samples, so our emulated pointer
-			// is very jerky if updates are too far between.  Play with the _sampleRate
-			// constant to find a reasonable balance between smooth operation and too
-			// much overhead (keep in mind the IOFudge factor).
-			//
-			// However, Accent (in particular) seems unhappy if the queue overflows, so
-			// temper our update rate by checking that the fifo is empty before sending.
-			//
-			if (((x != _lastX || y != _lastY || button != _lastButton) ||
-			     (_lastUpdate++ > _sampleRate)) && fifo.Count == 0)
-			{
-				if (_firstPoll)
-				{
-					fifo.Enqueue(_delimiter2);  // send an initial LF to bump PERQ state machine
-					_firstPoll = false;
-				}
-				WriteIntAsStringToQueue(x, ref fifo);
-				fifo.Enqueue(_delimiter1);  // separator (')
-				WriteIntAsStringToQueue(y, ref fifo);
-				fifo.Enqueue(_delimiter1);  // separator
-				fifo.Enqueue(_buttonMapping[button]);
-				fifo.Enqueue(_delimiter2);  // LF                 
+            //
+            // The PERQ expects a steady stream of updates from the BitPad, typically
+            // set by hardware switches to the factory default 200 samples/sec(!), so
+            // even if the mouse hasn't moved we need to send an update.  POS, at least,
+            // does some smoothing by averaging several samples, so our emulated pointer
+            // is very jerky if updates are too far between.  Play with the _sampleRate
+            // constant to find a reasonable balance between smooth operation and too
+            // much overhead (keep in mind the IOFudge factor).
+            //
+            // However, Accent (in particular) seems unhappy if the queue overflows, so
+            // temper our update rate by checking that the fifo is empty before sending.
+            //
+            if (((x != _lastX || y != _lastY || button != _lastButton) ||
+                 (_lastUpdate++ > _sampleRate)) && fifo.Count == 0)
+            {
+                if (_firstPoll)
+                {
+                    Console.WriteLine("GPIB: first poll, sending extra LF");    // hack
+                    fifo.Enqueue(_delimiter2);  // send an initial LF to bump PERQ state machine
+                    _firstPoll = false;
+                }
+                WriteIntAsStringToQueue(x, ref fifo);
+                fifo.Enqueue(_delimiter1);  // separator (')
+                WriteIntAsStringToQueue(y, ref fifo);
+                fifo.Enqueue(_delimiter1);  // separator
+                fifo.Enqueue(_buttonMapping[button]);
+                fifo.Enqueue(_delimiter2);  // LF                 
 
 #if TRACING_ENABLED
-				// For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
-				if (Trace.TraceOn)
-					Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
-					         x, y, button, _lastUpdate);
+                // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
+                             x, y, button, _lastUpdate);
 #endif
-				_lastX = x;
-				_lastY = y;
-				_lastButton = button;
-				_lastUpdate = 0;
-			}
+                _lastX = x;
+                _lastY = y;
+                _lastButton = button;
+                _lastUpdate = 0;
+            }
         }
 
-		public void Write(byte b)
+        public void Write(byte b)
         {
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2}){1}", b,
-				          (_listening ? "." : " but la-la-la-I-can't-hear-you!"));
+            if (Trace.TraceOn)
+                Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2}){1}", b,
+                          (_listening ? "." : " but la-la-la-I-can't-hear-you!"));
 #endif
         }
 
-		/// <summary>
-		/// Sends the x, y integer coordinates as four ASCII digit strings.
-		/// Because THAT's efficient, 200 times a second.
-		/// </summary>
+        /// <summary>
+        /// Sends the x, y integer coordinates as four ASCII digit strings.
+        /// Because THAT's efficient, 200 times a second.
+        /// </summary>
         private void WriteIntAsStringToQueue(int i, ref Queue<byte> fifo)
         {
             string str = String.Format("{0:d4}", i);
 
             for (int j = 0; j < str.Length; j++)
             {
-                fifo.Enqueue((byte)str[j]);                
-            }            
+                fifo.Enqueue((byte)str[j]);
+            }
         }
 
-		/// <summary>
-		/// Get the X & Y position from the display and translate them into the range
-		/// of the BitPadOne tablet.
-		/// </summary>
+        /// <summary>
+        /// Get the mouse X, Y positions from the display and translate them into the range
+        /// of the BitPadOne tablet.
+        /// </summary>
         private void GetTabletPos(out int x, out int y, out byte button)
         {
             //
             // Since we're using the emulated display area as the tablet surface, there are certain ranges
-            // (mostly in the X axis) that we can't reach.  We may want to investigate some other
-            // means of tablet manipulation for the emulator to make this possible.  (Hey, might be fun to
-            // support an RS232 BitPadOne on the host PC...)
+            // (mostly in the X axis) that we can't reach.  We may want to investigate some other means of
+            // tablet manipulation for the emulator to make this possible.  (Hey, might be fun to support
+            // an RS232 BitPadOne on the host PC...)
             //
             // Note also that unlike the Kriz tablet, the BitPadOne does not report "puck off tablet" status.
             // 
@@ -219,16 +220,17 @@ namespace PERQemu.IO.GPIB
         private int _lastX;
         private int _lastY;
         private int _lastButton;
-		private int _lastUpdate;
+        private int _lastUpdate;
 
-		private byte _myAddress;
-		private bool _talking;
-		private bool _listening;
-		private bool _firstPoll;
+        private byte _myAddress;
+        private bool _talking;
+        private bool _listening;
+        private bool _firstPoll;
 
-        private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
+        private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+                                                   0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
         private const byte _delimiter1 = (byte)'\'';
-        private const byte _delimiter2 = 0xa;          	// LF
-		private const int _sampleRate = 5115;			// Season to taste (or compute @ reset like Tablet.cs)
+        private const byte _delimiter2 = 0xa;           // LF
+        private const int _sampleRate = 5115;			// Season to taste (or compute @ reset like Tablet.cs)
     }
 }
