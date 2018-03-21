@@ -16,6 +16,8 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using PERQemu.CPU;
+
 using System;
 using System.Collections.Generic;
 
@@ -29,7 +31,18 @@ namespace PERQemu.IO.GPIB
     {
         public BitPadOne()
         {
-            _myAddress = 8;     // The PERQ expects the factory default device address of 010 (octal)
+            // The PERQ expects the factory default device address of 010 (octal)
+            _myAddress = 8;
+
+            // How many samples/sec? Account for the IO "fudge factor".  In reality,
+            // the BitPad sends 200/sec by default; POS averages every four samples
+            // for an effective tracking rate of 50 per second.  Let's try this at a
+            // more reasonable speed to reduce overhead a bit.  Season to taste.
+            // (NB: computed, not constant, since we may someday offer on-the-fly
+            // configuration of IO board types; the EIO ran the Z80 at 4Mhz, faster
+            // than the older IOB @ 2.45Mhz, so the IO "fudge" might change.  This
+            // is very silly.)
+            _sampleRate = (PERQCpu.Frequency / 100) / PERQCpu.IOFudge;
 
             Reset();
         }
@@ -44,10 +57,9 @@ namespace PERQemu.IO.GPIB
             _lastX = -1;
             _lastY = -1;
             _lastButton = -1;
-            _lastUpdate = -1;
+            _lastUpdate = 0;
             _talking = false;
             _listening = false;
-            _firstPoll = true;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -69,8 +81,7 @@ namespace PERQemu.IO.GPIB
 #endif
             if (_talking)
             {
-                _lastUpdate = _sampleRate;  // Reset counter so we don't start sampling immediately
-                _firstPoll = true;          // An experiemental HACK
+                _lastUpdate = 0;    // Reset counter so we don't start sampling immediately
             }
         }
 
@@ -98,11 +109,6 @@ namespace PERQemu.IO.GPIB
         {
             if (!_talking)
             {
-#if TRACING_ENABLED
-                // If this creates too much spewage, disable it - mostly for debugging
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.GPIB, "BitPadOne: poll requested, but I'm not the talker!");
-#endif
                 return;
             }
 
@@ -143,12 +149,6 @@ namespace PERQemu.IO.GPIB
             if (((x != _lastX || y != _lastY || button != _lastButton) ||
                  (_lastUpdate++ > _sampleRate)) && fifo.Count == 0)
             {
-                if (_firstPoll)
-                {
-                    Console.WriteLine("GPIB: first poll, sending extra LF");    // hack
-                    fifo.Enqueue(_delimiter2);  // send an initial LF to bump PERQ state machine
-                    _firstPoll = false;
-                }
                 WriteIntAsStringToQueue(x, ref fifo);
                 fifo.Enqueue(_delimiter1);  // separator (')
                 WriteIntAsStringToQueue(y, ref fifo);
@@ -221,16 +221,15 @@ namespace PERQemu.IO.GPIB
         private int _lastY;
         private int _lastButton;
         private int _lastUpdate;
+        private int _sampleRate;
 
         private byte _myAddress;
         private bool _talking;
         private bool _listening;
-        private bool _firstPoll;
 
         private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
                                                    0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
         private const byte _delimiter1 = (byte)'\'';
         private const byte _delimiter2 = 0xa;           // LF
-        private const int _sampleRate = 5115;			// Season to taste (or compute @ reset like Tablet.cs)
     }
 }

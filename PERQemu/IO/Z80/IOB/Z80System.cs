@@ -29,44 +29,44 @@ namespace PERQemu.IO.Z80.IOB
 
     public enum PERQtoZ80Message
     {
-        Invalid         = 0x0,
-        RS232           = 0x1,
-        FloppyCommand   = 0x2,
-        GPIBCommand     = 0x3,
-        Speech          = 0x4,
-        SetRS232Status  = 0x5,
+        Invalid = 0x0,      // "Old Z80 Output message numbers" (oioz80.mic)
+        RS232 = 0x1,
+        FloppyCommand = 0x2,
+        GPIBCommand = 0x3,
+        Speech = 0x4,
+        SetRS232Status = 0x5,
         SetTabletStatus = 0x6,
         SetKeyboardStatus = 0x7,
-        HardDriveSeek   = 0x8,
+        HardDriveSeek = 0x8,
         SetSpeechStatus = 0x9,      // Z80 v8.7: was Voltage Set
-        SetClockStatus  = 0xa,
-        GetStatus       = 0xb,
+        SetClockStatus = 0xa,
+        GetStatus = 0xb,
         SetFloppyStatus = 0xc,
-        FloppyBoot      = 0xd,
+        FloppyBoot = 0xd,
     }
 
     public enum Z80toPERQMessage
     {
-        Invalid         = 0x0,      // "Old Z80 Output message numbers" (oioz80.mic)
-        KeyboardData    = 0x1,
-        RS232Data       = 0x2,
-        TabletData      = 0x3,
-        ClockData       = 0x4,
-        FloppyData      = 0x5,
-        GPIBData        = 0x6,
-        RS232Status     = 0x7,      // bit 5 => message 5
-        TabletStatus    = 0x8,      // message 6
-        KeyboardStatus  = 0x9,      // message 7
-        SeekComplete    = 0xa,
+        Invalid = 0x0,
+        KeyboardData = 0x1,
+        RS232Data = 0x2,
+        TabletData = 0x3,
+        ClockData = 0x4,
+        FloppyData = 0x5,
+        GPIBData = 0x6,
+        RS232Status = 0x7,
+        TabletStatus = 0x8,
+        KeyboardStatus = 0x9,
+        SeekComplete = 0xa,
         Z80StatusChange = 0xb,
-        VoltageData     = 0xc,
-        VoltageStatus   = 0xd,      // message 11
-        ClockStatus     = 0xe,      // message 12
-        GPIBStatus      = 0xf,      // missing?
-        FloppyStatus    = 0x10,     // message 14
-        FloppyDone      = 0x11,
+        VoltageData = 0xc,
+        VoltageStatus = 0xd,
+        ClockStatus = 0xe,
+        GPIBStatus = 0xf,      // Is this really "missing" in POS D/F IO.micro!?
+        FloppyStatus = 0x10,
+        FloppyDone = 0x11,
         FloppyBootError = 0x12,
-        FloppyBootData  = 0x13,
+        FloppyBootData = 0x13,
     }
 
     /// <summary>
@@ -134,7 +134,8 @@ namespace PERQemu.IO.Z80.IOB
             _outputFifo.Clear();
 
             // All devices are ready
-            _deviceReadyState = ReadyFlags.Z80 | ReadyFlags.Floppy | ReadyFlags.GPIB | ReadyFlags.RS232 | ReadyFlags.Seek | ReadyFlags.Speech;
+            _deviceReadyState = ReadyFlags.Z80 | ReadyFlags.Floppy | ReadyFlags.GPIB |
+                                ReadyFlags.RS232 | ReadyFlags.Seek | ReadyFlags.Speech;
             _dataReadyInterruptRequested = false;
         }
 
@@ -195,7 +196,6 @@ namespace PERQemu.IO.Z80.IOB
         /// particular the order of those instructions: we still have to look at the on/off flag
         /// even if the Z80 isn't "running"!
         /// </summary>
-        /// <param name="data"></param>
         public void LoadStatus(int data)
         {
             if (data == 0x80 && _running)
@@ -232,12 +232,14 @@ namespace PERQemu.IO.Z80.IOB
         ///  NAND gate.  So -- if the PERQ sets IOD 8 high with a write, and there is no pending PERQ->
         ///  Z80 request, Z80 READY INT L will be low (triggered).
         /// </summary>
-        /// <param name="data"></param>
         public void LoadData(int data)
         {
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.Z80State, "Z80 data port write: {0:x4}", data);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.Z80State,
+                          "Z80 data port write: {0:x4} (byte {1:x2}), {2} items in queue.",
+                          data, (byte)data, _inputFifo.Count);
 #endif
             //
             // The 8th bit of the incoming data to this port is latched.
@@ -256,7 +258,8 @@ namespace PERQemu.IO.Z80.IOB
             else
             {
 #if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
 #endif
                 _dataReadyInterruptRequested = true;
             }
@@ -272,7 +275,6 @@ namespace PERQemu.IO.Z80.IOB
         /// Reads a byte from the Z80's FIFO, used for non-DMA transfers.
         /// Corresponds to IOB port 0x46 (106 oct).
         /// </summary>
-        /// <returns></returns>
         public int ReadData()
         {
             int retVal = 0;
@@ -290,7 +292,7 @@ namespace PERQemu.IO.Z80.IOB
             else
             {
                 //
-                // If the output queue is empty, clear the output ready interrupt.
+                // If the output queue is now empty, clear the output ready interrupt.
                 // This serves to shut off interrupts even when the Z80 is "off" (see
                 // SysB code snippet above); normally our Clock() handles it.
                 //
@@ -323,15 +325,20 @@ namespace PERQemu.IO.Z80.IOB
             _clocks++;
 
             //
-            // Handle output first:
-            // Poll devices for new data
+            // Count down our busy timers, and if any devices come ready send an update
+            //
+            RefreshReadyState();
+
+            //
+            // Handle output first: Poll devices for new data.
             //
             for (int i = 0; i < _devices.Count; i++)
             {
-                _devices[i].Poll(ref _outputFifo);
+                if (_deviceBusyClocks[i] == 0)      // Are we busy?
+                {
+                    _devices[i].Poll(ref _outputFifo);
+                }
             }
-
-            RefreshReadyState();
 
             // If we have data available in the FIFO we'll interrupt...
             if (_outputFifo.Count > 0)
@@ -357,6 +364,10 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+        /// <summary>
+        /// Reads the input FIFO and runs the PERQ->Z80 protocol, dispatching incoming
+        /// commands to the correct device, and setting the ready status accordingly.
+        /// </summary>
         private void ParseInputFifo()
         {
             if (_inputFifo.Count == 0)
@@ -369,7 +380,7 @@ namespace PERQemu.IO.Z80.IOB
             switch (_state)
             {
                 case MessageParseState.WaitingForSOM:
-                    if( data == SOM )
+                    if (data == SOM)
                     {
                         _state = MessageParseState.MessageType;
 #if TRACING_ENABLED
@@ -384,7 +395,12 @@ namespace PERQemu.IO.Z80.IOB
                     }
                     else
                     {
-                        if (Trace.TraceOn)
+                        // Lots of these are spurious; seems the microcode sends a zero byte to turn off the
+                        // Z80In interrupt, which the Z80 ignores.  We could probably check and ignore these
+                        // in LoadData(), not bothering to queue them up in the first place.  But for now,
+                        // just have to ignore 'em.  Maybe only log non-zero bytes here?  Those would indicate
+                        // a situation worth investigating...
+                        if (Trace.TraceOn && data != 0)
                             Trace.Log(LogType.Z80State,
                                      "Non-SOM byte sent to Z80 subsystem while waiting for SOM: {0:x2}", data);
 #endif
@@ -397,6 +413,12 @@ namespace PERQemu.IO.Z80.IOB
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Z80State,
                                  "Z80 Message type is {0}, transitioning to Message state.", _messageType);
+#endif
+#if DEBUG
+                    if (data == 0xb)
+                    {
+                        Console.WriteLine("HEY, MESSAGE TYPE IS GETSTATUS.");
+                    }
 #endif
                     _state = MessageParseState.Message;
                     break;
@@ -421,9 +443,9 @@ namespace PERQemu.IO.Z80.IOB
                             }
                             break;
 
-                        case PERQtoZ80Message.FloppyBoot:
                         case PERQtoZ80Message.SetFloppyStatus:
                         case PERQtoZ80Message.FloppyCommand:
+                        case PERQtoZ80Message.FloppyBoot:
                             if (_floppyDisk.RunStateMachine(_messageType, data))
                             {
                                 _state = MessageParseState.WaitingForSOM;
@@ -533,7 +555,7 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Updates the ready state for busy devices
+        /// Updates the ready state for busy devices.
         /// </summary>
         private void RefreshReadyState()
         {
@@ -559,6 +581,9 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+        /// <summary>
+        /// Sends the status change message.
+        /// </summary>
         private void SendStatusChange()
         {
 #if TRACING_ENABLED
@@ -573,7 +598,6 @@ namespace PERQemu.IO.Z80.IOB
         /// <summary>
         /// Puts the specified device into the ready state.
         /// </summary>
-        /// <param name="device"></param>
         private void SetReadyState(ReadyFlags device)
         {
             _deviceReadyState |= device;
@@ -585,29 +609,60 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Puts the specified device into the busy state
+        /// Puts the specified device into the busy state.
+        /// TODO: For fun, come up with a way to specify a delay based on the
+        /// actual command given; for a seek, figure the track-to-track delay
+        /// based on how far we're seeking.  For a simple configuration command
+        /// (writing registers, for example) keep the delay very short.
         /// </summary>
-        /// <param name="device"></param>
         private void SetBusyState(ReadyFlags device)
         {
+            int delay;
+
             _deviceReadyState &= (~device);
 
-            _deviceBusyClocks[(int)device] = 50;            // Made up delay time
+            switch (device)
+            {
+                // Most disk commands would run in the millisecond range... several thousand
+                // clock cycles at least, but that's silly here.
+                case ReadyFlags.Floppy:
+                case ReadyFlags.Seek:
+                    delay = 100;        // Scale it back orders of magnitude.
+                    break;
 
-            _outputFifo.Enqueue(Z80System.SOM);             // SOM
-            _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
-            _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
+                // GPIB spec goes up to 1MB/sec, but that's well beyond our needs or the
+                // old Z80's capacity. BitPad updates @ 2800 chars/sec == ~262 Z80 clocks/char.
+                case ReadyFlags.GPIB:
+                    delay = 26;         // Can't wait all day...
+                    break;
+
+                // At 9600 baud (960cps) we'd spin around 760 simulated Z80 clocks/char.
+                case ReadyFlags.RS232:
+                    delay = 76;         // Keep things a little peppier.
+                    break;
+
+                default:
+                    delay = 50;         // Speech isn't really implemented yet anyway...
+                    break;
+            }
+
+            _deviceBusyClocks[(int)device] = delay;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Busy state for {0} set.  ReadyState now {1}.", device, _deviceReadyState);
+                Trace.Log(LogType.Z80State, "Busy state for {0} set (delay={1}).  ReadyState now {2}.",
+                          device, delay, _deviceReadyState);
 #endif
+            // Force a status change in the Ready->Busy transition (RefreshReadyState
+            // only catches the Busy->Ready change)
+            SendStatusChange();
         }
 
         /// <summary>
-        /// Calls subdevices to retrieve status based on the requested flags.
+        /// Calls subdevices to retrieve status based on the requested flags.  This
+        /// is a one-byte command (no count byte) and should always return true.  But
+        /// it never seems to get called!  Somethin's wrong somewheres...
         /// </summary>
-        /// <param name="requested"></param>
         private void GetStatus(byte requested)
         {
             Console.WriteLine("GetStatus: {0}", requested);		// TODO: uh, these should be traces or #if DEBUG
@@ -616,7 +671,7 @@ namespace PERQemu.IO.Z80.IOB
             {
                 if ((requested & i) != 0)
                 {
-                    Console.WriteLine("Checking: {0}", i);
+                    Console.WriteLine("Checking: {0}", i);      // fixme WHY isn't GetStatus ever called!?!?
                     switch ((DeviceStatus)i)
                     {
                         // Hmm.  According to PerqIO.Pas, Tablet Status isn't used.  Sigh.
@@ -670,27 +725,27 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         [Flags]
-        private enum ReadyFlags
+        private enum ReadyFlags     // "Bits in Ready Flag Byte" per v87.z80
         {
             RS232 = 0x1,
             Speech = 0x2,
             Floppy = 0x4,
             GPIB = 0x8,
             Seek = 0x10,
-            Z80 = 0x80
+            Z80 = 0x80              // "Change in Ready flags"
         }
 
         [Flags]
-        private enum DeviceStatus   // "Z80 Output request bits - Old protocol" (oioz80.mic)
+        private enum DeviceStatus   // "Bits in Status Request Byte" per v87.z80
         {
-            RS232 = 0x1,            // OZ80DoSRS232 = #40 = 0x20    -> bit 5/message 5
-            Tablet = 0x2,           // OZ80DoSTablet = #100 = 0x40  -> message 6
-            Keyboard = 0x4,         // OZ80DoSKeybd = #200 = 0x80   -> message 7
-            Voltage = 0x8,          // OZ80DoSVoltage = #1000 = 0x200 -> message 11 (unused)
-            Clock = 0x10,           // OZ80DoSClock = #2000 = 0x400 -> message 12
-            Floppy = 0x20,          // OZ80DoSFloppy = #10000 = 0x1000 -> message 14
-            GPIB = 0x40,            // No GetStat for GPIB...?
-            Z80 = 0x80              // OZ80DoGetStat = #100000 = 0x8000 "Always on"
+            RS232 = 0x1,
+            Tablet = 0x2,
+            Keyboard = 0x4,
+            Voltage = 0x8,          // Speech, as of v8.6 (voltage/temp removed)
+            Clock = 0x10,
+            Floppy = 0x20,
+            GPIB = 0x40,
+            Z80 = 0x80              // "Ready flag"
         }
 
 

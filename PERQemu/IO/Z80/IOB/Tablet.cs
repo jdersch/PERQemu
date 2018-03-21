@@ -42,8 +42,8 @@ namespace PERQemu.IO.Z80.IOB
             _enabled = false;
             _messageIndex = 0;
 
-            _jiffyInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);
-            _pollCount = _jiffyInterval - PERQCpu.IOFudge - 1;                  // Update on next Poll()
+            _jiffyInterval = ((PERQCpu.Frequency / 60) / PERQCpu.IOFudge);
+            _pollCount = 0;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
@@ -101,9 +101,11 @@ namespace PERQemu.IO.Z80.IOB
                     fifo.Enqueue((byte)(x >> 8));   // X high
                     fifo.Enqueue((byte)y);          // Y low
                     fifo.Enqueue((byte)(y >> 8));   // Y high
-                    fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last message, according to perqz80.doc)
-                                                    // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
-                                                    // maintenance moved to the video interrupt instead.
+                    fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last
+                                                    // message, according to perqz80.doc)
+
+                    // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
+                    // maintenance moved to the video interrupt instead.
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
@@ -117,14 +119,13 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+        /// <summary>
+        /// Get the mouse X, Y positions from the display and translate them into the range
+        /// of the Kriz tablet. Coordinate translation based on tweaking, not solid data...
+        /// </summary>
         private void GetTabletPos(out int x, out int y, int button)
         {
-            // Get the X & Y position from the display and translate them into the range
-            // of the Kriz tablet
-            // TODO: There seem to be two modes: absolute and relative positioning;
-            // not sure how they both work.  Only absolute is implemented.
-            // Coordinate translation based on tweaking, not solid data...
-
+            //
             // From the Z80 disassembly (v87.z80):
             // ;   Tab1<7:0> = low X
             // ;   Tab2<3:0> = high X
@@ -139,6 +140,7 @@ namespace PERQemu.IO.Z80.IOB
             //
             // In summary: the upper 3 bits of Y are the three buttons
             // The high bit of X indicates that any button is pressed.
+            //
 
             // Calc y and x positions:
             y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY + 64);

@@ -1,4 +1,4 @@
-﻿// clock.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+﻿// clock.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -84,7 +84,7 @@ namespace PERQemu.IO.Z80.IOB
                 fifo.Enqueue((byte)Z80toPERQMessage.ClockData); // Clock data message type
                 fifo.Enqueue((byte)elapsed);                    // Data (# of 1/60th sec ticks since last status)
 #if TRACING_ENABLED
-                Console.WriteLine("--> Clock: jiffies since last Poll: {0} (interval {1})", elapsed, tickInterval);
+                Console.WriteLine("Clock: jiffies since last Poll: {0} (interval {1})", elapsed, tickInterval); // fixme
 #endif
                 _lastTick = Z80System.Instance.Clocks();
             }

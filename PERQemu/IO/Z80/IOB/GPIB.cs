@@ -165,7 +165,6 @@ namespace PERQemu.IO.Z80.IOB
         /// <summary>
         /// Writes incoming data to the GPIB registers.
         /// </summary>
-        /// <param name="value"></param>
         private void WriteRegisters(GPIBWriteRegister register, byte value)
         {
             // Save the value
@@ -173,6 +172,15 @@ namespace PERQemu.IO.Z80.IOB
 
             switch (register)
             {
+                case GPIBWriteRegister.InterruptMask0:
+                    _registers[(int)register] |= 0x30;     // The Z80 sets the BI, BO bits automatically
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.GPIB, "GPIB InterruptMask0 set {0:x2} ({1:x2})",
+                                  _registers[(int)register], value);
+#endif
+                    break;
+
                 case GPIBWriteRegister.AuxiliaryCommand:
                     AuxiliaryCommand cmd = (AuxiliaryCommand)(value & 0x1f);
                     bool cs = (value & 0x80) != 0;
@@ -343,7 +351,7 @@ namespace PERQemu.IO.Z80.IOB
             _listen = false;
             _talk = false;
             _listener = 0x1f;   // nobody
-            _talker = 0x1f;		// nobody
+            _talker = 0x1f;     // nobody
         }
 
         private enum GPIBCommand
@@ -372,7 +380,7 @@ namespace PERQemu.IO.Z80.IOB
             InterruptMask1 = 4,     // GPIIM1
             SerialPoll = 5,         // GPISP
             AuxiliaryCommand = 6,   // GPIAUX
-            DataOut = 7				// GPIDO
+            DataOut = 7             // GPIDO
         }
 
         private enum GPIBReadRegister
@@ -383,7 +391,7 @@ namespace PERQemu.IO.Z80.IOB
             CommandPassThrough = 3, // GPICPT
             InterruptStatus1 = 4,   // GPIIS1
             BusStatus = 6,          // GPIBS
-            DataIn = 7				// GPIDI
+            DataIn = 7              // GPIDI
         }
 
         /// <summary>

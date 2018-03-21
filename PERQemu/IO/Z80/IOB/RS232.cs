@@ -69,7 +69,7 @@ namespace PERQemu.IO.Z80.IOB
             _serialDevice = device;
         }
 
-        public bool RunStateMachine(PERQtoZ80Message message,  byte value)
+        public bool RunStateMachine(PERQtoZ80Message message, byte value)
         {
             bool retVal = false;
 
@@ -384,12 +384,12 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "--> RS232 message: GetStatus\tenabled: {0}", _enabled);
+                Trace.Log(LogType.Tablet, "RS232: GetStatus() returns enabled={0}", _enabled);
 #endif
         }
 
         private ISerialDevice _serialDevice;
-        private const string _defaultPort = "COM1";
+        private const string _defaultPort = "COM1";		// TODO: set platform-appropriate default
         private byte[] _messageData;
         private int _messageIndex;
         private int _pollCount;

@@ -98,7 +98,7 @@ namespace PERQemu.CPU
 		// good range?) and expose it so the "clock" hardware can simulate the 60Hz line
 		// frequency "jiffy clock" more accurately.  Cuz why not.
 		//
-		public static readonly int IOFudge = 0x8;
+		public static readonly int IOFudge = 8;
 
 		/// <summary>
 		/// Reset the CPU, clear the writable control store and re-enable the boot ROM.
@@ -223,7 +223,7 @@ namespace PERQemu.CPU
 				VideoController.Instance.Clock();
 
 				// Clock the IO here, since it's an otherwise blown cycle
-				if ((_clocks & IOFudge) == 0)
+				if ((_clocks % IOFudge) == 0)
 				{
 					_ioBus.Clock();
 				}
@@ -302,7 +302,7 @@ namespace PERQemu.CPU
 			DoWriteBack(uOp);
 
 			// Clock IO devices every N cycles (fudged, this is ugly).
-			if ((_clocks & IOFudge) == 0)
+			if ((_clocks % IOFudge) == 0)
 			{
 				_ioBus.Clock();
 			}
