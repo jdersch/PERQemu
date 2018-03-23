@@ -1,8 +1,5 @@
 #!/usr/bin/perl -w
 #
-# $Id: makerom.pl,v 1.2 2017/03/18 20:07:13 skeezics Exp $
-# $Source: /home/skeezics/perq/shared/PERQemu-source/PERQemu/PROM/RCS/makerom.pl,v $
-#
 # makerom - a quick and dirty hack to build the rom files
 #
 # usage:
@@ -55,7 +52,6 @@ while (<>) {
 
 print STDERR "end of input reached, writing table...";
 
-foreach $i ( 0 .. $hi - 1 ) { print chr($table[$i]); }
+foreach $i ( 0 .. $hi ) { print chr($table[$i]); }
 
 print STDERR "($hi) done.\n";
-

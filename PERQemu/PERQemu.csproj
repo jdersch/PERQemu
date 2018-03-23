@@ -489,7 +489,7 @@
     <None Include="Docs\z80 docs\z80link.pas" />
     <None Include="Docs\z80 docs\z80script.pas" />
     <None Include="Docs\z80 docs\z80talker.pas" />
-    <Compile Include="Memory\QueueController.cs">
+    <Compile Include="Memory\MemoryController.cs">
       <SubType>Code</SubType>
     </Compile>
     <None Include="PROM\boot.bin">
@@ -509,6 +509,14 @@
     <None Include="PROM\rti02.rom" />
     <None Include="PROM\t1bootrom.rom" />
     <None Include="Scripts\debug.scr" />
+    <None Include="PROM\bkm16emu.rom">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\makebkm.pl" />
+    <None Include="PROM\makerom.pl" />
+    <None Include="PROM\edge_table.txt" />
+    <None Include="PROM\mask_table.txt" />
+    <None Include="PROM\memstate_table.txt" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />

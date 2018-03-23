@@ -1,0 +1,293 @@
+BKM16 Emulated ROM input table
+
+This is a workalike ROM synthesized to emulate the PERQ's
+BKM16.2/GMV02 PROMs, central to the memory state machine on
+the CPU board.  The "bookmark" PROM tracks the execution
+of memory cycles and their intricate timing requirements.
+Here we cheat and don't actually produce a bookmark value
+in the same way, but use the cycle type, state and time
+(T-state) values to the same effect, but with far fewer
+input bits and thus a more compact table.  We use several
+of the otherwise unused bits in the 4-bit cycle type for
+those situations (RasterOp, primarily) where overlapped
+requests require different (and more complicated) timings.
+
+Feed this through "makebkm.pl" to produce the 256-byte ROM image.
+
+key:                                state:
+    T	Tstate                      00 idle/invalid
+    PA	Proc Abort flag             01 waitT3
+    ST	Start (Recognize)           02 waitT2
+    CO	Complete (Retire)           03 running
+    VA	Valid (MDIValid/MDONeeded)
+    IDX	Word index (0..3)
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+000    none     idle      0  |   0  0  0  0  0   idle
+001    none     idle      1  |   0  0  0  0  0   idle
+002    none     idle      2  |   0  0  0  0  0   idle
+003    none     idle      3  |   0  0  0  0  0   idle
+004    none     waitT3    0  |   0  0  0  0  0   invalid
+005    none     waitT3    1  |   0  0  0  0  0   invalid
+006    none     waitT3    2  |   0  0  0  0  0   invalid
+007    none     waitT3    3  |   0  0  0  0  0   invalid
+008    none     waitT2    0  |   0  0  0  0  0   invalid
+009    none     waitT2    1  |   0  0  0  0  0   invalid
+00a    none     waitT2    2  |   0  0  0  0  0   invalid
+00b    none     waitT2    3  |   0  0  0  0  0   invalid
+00c    none     running   0  |   0  0  0  0  0   invalid
+00d    none     running   1  |   0  0  0  0  0   invalid
+00e    none     running   2  |   0  0  0  0  0   invalid
+00f    none     running   3  |   0  0  0  0  0   invalid
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+010    ferop4R  idle      0  |   0  0  0  0  0   invalid
+011    ferop4R  idle      1  |   0  0  0  0  0   invalid
+012    ferop4R  idle      2  |   0  0  0  0  0   invalid
+013    ferop4R  idle      3  |   0  0  0  0  0   invalid
+014    ferop4R  waitT3    0  |   0  0  0  0  0   invalid
+015    ferop4R  waitT3    1  |   0  0  0  0  0   invalid
+016    ferop4R  waitT3    2  |   0  0  0  0  0   invalid
+017    ferop4R  waitT3    3  |   0  0  0  0  0   invalid
+018    ferop4R  waitT2    0  |   0  0  0  1  1   waitT2
+019    ferop4R  waitT2    1  |   0  0  1  1  0   waitT2
+01a    ferop4R  waitT2    2  |   0  0  0  1  3   waitT2
+01b    ferop4R  waitT2    3  |   0  0  0  1  2   running
+01c    ferop4R  running   0  |   0  0  0  1  1   running
+01d    ferop4R  running   1  |   0  0  1  1  0   idle
+01e    ferop4R  running   2  |   0  0  0  1  3   running
+01f    ferop4R  running   3  |   0  1  0  1  2   waitT2
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+020    strop4R  idle      0  |   0  1  0  0  0   running
+021    strop4R  idle      1  |   0  0  0  0  0   invalid
+022    strop4R  idle      2  |   0  0  0  0  0   invalid
+023    strop4R  idle      3  |   0  0  0  0  0   invalid
+024    strop4R  waitT3    0  |   0  0  0  0  0   invalid
+025    strop4R  waitT3    1  |   0  0  0  0  0   invalid
+026    strop4R  waitT3    2  |   0  0  0  0  0   invalid
+027    strop4R  waitT3    3  |   0  0  0  0  0   invalid
+028    strop4R  waitT2    0  |   0  0  0  0  0   invalid
+029    strop4R  waitT2    1  |   0  0  0  0  0   invalid
+02a    strop4R  waitT2    2  |   0  0  0  0  0   invalid
+02b    strop4R  waitT2    3  |   0  0  0  0  0   invalid
+02c    strop4R  running   0  |   0  0  1  1  0   idle
+02d    strop4R  running   1  |   0  0  0  1  3   running
+02e    strop4R  running   2  |   0  0  0  1  2   running
+02f    strop4R  running   3  |   0  0  0  1  1   running
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+030    ferop4   idle      0  |   0  0  0  0  0   invalid
+031    ferop4   idle      1  |   0  0  0  0  0   invalid
+032    ferop4   idle      2  |   0  0  0  0  0   invalid
+033    ferop4   idle      3  |   0  0  0  0  0   invalid
+034    ferop4   waitT3    0  |   0  0  0  0  0   invalid
+035    ferop4   waitT3    1  |   0  0  0  0  0   invalid
+036    ferop4   waitT3    2  |   0  0  0  0  0   invalid
+037    ferop4   waitT3    3  |   0  0  0  0  0   invalid
+038    ferop4   waitT2    0  |   0  0  0  1  2   waitT2
+039    ferop4   waitT2    1  |   0  0  1  1  3   waitT2
+03a    ferop4   waitT2    2  |   0  0  0  1  0   waitT2
+03b    ferop4   waitT2    3  |   0  0  0  1  1   running
+03c    ferop4   running   0  |   0  0  0  1  2   running
+03d    ferop4   running   1  |   0  0  1  1  3   idle
+03e    ferop4   running   2  |   0  0  0  1  0   running
+03f    ferop4   running   3  |   0  1  0  1  1   waitT2
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+040    strop4   idle      0  |   0  1  0  0  0   running
+041    strop4   idle      1  |   0  0  0  0  0   invalid
+042    strop4   idle      2  |   0  0  0  0  0   invalid
+043    strop4   idle      3  |   0  0  0  0  0   invalid
+044    strop4   waitT3    0  |   0  0  0  0  0   invalid
+045    strop4   waitT3    1  |   0  0  0  0  0   invalid
+046    strop4   waitT3    2  |   0  0  0  0  0   invalid
+047    strop4   waitT3    3  |   0  0  0  0  0   invalid
+048    strop4   waitT2    0  |   0  0  0  0  0   invalid
+049    strop4   waitT2    1  |   0  0  0  0  0   invalid
+04a    strop4   waitT2    2  |   0  0  0  0  0   invalid
+04b    strop4   waitT2    3  |   0  0  0  0  0   invalid
+04c    strop4   running   0  |   0  0  1  1  3   idle
+04d    strop4   running   1  |   0  0  0  1  0   running
+04e    strop4   running   2  |   0  0  0  1  1   running
+04f    strop4   running   3  |   0  0  0  1  2   running
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+060    indfetch idle      0  |   0  0  0  0  0   invalid
+061    indfetch idle      1  |   0  0  0  0  0   invalid
+062    indfetch idle      2  |   0  0  0  0  0   invalid
+063    indfetch idle      3  |   0  0  0  0  0   invalid
+064    indfetch waitT3    0  |   0  0  0  0  0   invalid
+065    indfetch waitT3    1  |   0  0  0  0  0   invalid
+066    indfetch waitT3    2  |   0  0  0  0  0   invalid
+067    indfetch waitT3    3  |   0  0  0  0  0   invalid
+068    indfetch waitT2    0  |   0  0  0  0  0   invalid
+069    indfetch waitT2    1  |   0  0  0  0  0   invalid
+06a    indfetch waitT2    2  |   0  0  0  0  0   invalid
+06b    indfetch waitT2    3  |   0  0  0  0  0   invalid
+06c    indfetch running   0  |   1  1  1  1  0   waitT3
+06d    indfetch running   1  |   1  1  1  1  0   waitT3
+06e    indfetch running   2  |   1  1  0  1  0   running
+06f    indfetch running   3  |   0  1  1  1  0   waitT2
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+070    indfet4  idle      0  |   0  0  0  0  0   invalid
+071    indfet4  idle      1  |   0  0  0  0  0   invalid
+072    indfet4  idle      2  |   0  0  0  0  0   invalid
+073    indfet4  idle      3  |   0  0  0  0  0   invalid
+074    indfet4  waitT3    0  |   0  0  0  0  0   invalid
+075    indfet4  waitT3    1  |   0  0  0  0  0   invalid
+076    indfet4  waitT3    2  |   0  0  0  0  0   invalid
+077    indfet4  waitT3    3  |   0  0  0  0  0   invalid
+078    indfet4  waitT2    0  |   0  0  0  0  0   invalid
+079    indfet4  waitT2    1  |   0  0  0  0  0   invalid
+07a    indfet4  waitT2    2  |   0  0  0  0  0   invalid
+07b    indfet4  waitT2    3  |   0  0  0  0  0   invalid
+07c    indfet4  running   0  |   1  1  0  1  2   running
+07d    indfet4  running   1  |   1  1  1  1  3   waitT3
+07e    indfet4  running   2  |   0  0  0  1  0   running
+07f    indfet4  running   3  |   0  0  0  1  1   running
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+080    fetch4R  idle      0  |   1  1  0  0  0   waitT3
+081    fetch4R  idle      1  |   1  1  0  0  0   waitT3
+082    fetch4R  idle      2  |   1  1  0  0  0   waitT3
+083    fetch4R  idle      3  |   0  1  0  0  0   waitT2
+084    fetch4R  waitT3    0  |   0  0  0  0  0   invalid
+085    fetch4R  waitT3    1  |   1  1  0  0  0   waitT3
+086    fetch4R  waitT3    2  |   1  1  0  0  0   waitT3
+087    fetch4R  waitT3    3  |   0  1  0  0  0   waitT2
+088    fetch4R  waitT2    0  |   0  0  0  0  0   waitT2
+089    fetch4R  waitT2    1  |   0  0  0  0  0   running
+08a    fetch4R  waitT2    2  |   0  0  0  0  0   invalid
+08b    fetch4R  waitT2    3  |   0  0  0  0  0   invalid
+08c    fetch4R  running   0  |   0  0  0  1  1   running
+08d    fetch4R  running   1  |   0  0  1  1  0   idle
+08e    fetch4R  running   2  |   0  0  0  1  3   running
+08f    fetch4R  running   3  |   0  0  0  1  2   running
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+090    store4R  idle      0  |   1  1  0  0  0   waitT3
+091    store4R  idle      1  |   1  1  0  0  0   waitT3
+092    store4R  idle      2  |   1  1  0  0  0   waitT3
+093    store4R  idle      3  |   0  1  0  0  0   running
+094    store4R  waitT3    0  |   0  0  0  0  0   invalid
+095    store4R  waitT3    1  |   1  1  0  0  0   waitT3
+096    store4R  waitT3    2  |   1  1  0  0  0   waitT3
+097    store4R  waitT3    3  |   0  1  0  0  0   running
+098    store4R  waitT2    0  |   0  0  0  0  0   invalid
+099    store4R  waitT2    1  |   0  0  0  0  0   invalid
+09a    store4R  waitT2    2  |   0  0  0  0  0   invalid
+09b    store4R  waitT2    3  |   0  0  0  0  0   invalid
+09c    store4R  running   0  |   0  0  0  1  3   running
+09d    store4R  running   1  |   0  0  0  1  2   running
+09e    store4R  running   2  |   0  0  0  1  1   running
+09f    store4R  running   3  |   0  0  1  1  0   idle
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+0a0    fetch4   idle      0  |   1  1  0  0  0   waitT3
+0a1    fetch4   idle      1  |   1  1  0  0  0   waitT3
+0a2    fetch4   idle      2  |   1  1  0  0  0   waitT3
+0a3    fetch4   idle      3  |   0  1  0  0  0   waitT2
+0a4    fetch4   waitT3    0  |   0  0  0  0  0   invalid
+0a5    fetch4   waitT3    1  |   1  1  0  0  0   waitT3
+0a6    fetch4   waitT3    2  |   1  1  0  0  0   waitT3
+0a7    fetch4   waitT3    3  |   0  1  0  0  0   waitT2
+0a8    fetch4   waitT2    0  |   0  0  0  0  0   waitT2
+0a9    fetch4   waitT2    1  |   0  0  0  0  0   running
+0aa    fetch4   waitT2    2  |   0  0  0  0  0   invalid
+0ab    fetch4   waitT2    3  |   0  1  0  0  0   waitT2
+0ac    fetch4   running   0  |   0  0  0  1  2   running
+0ad    fetch4   running   1  |   0  0  1  1  3   idle
+0ae    fetch4   running   2  |   0  0  0  1  0   running
+0af    fetch4   running   3  |   0  0  0  1  1   running
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+0b0    store4   idle      0  |   1  1  0  0  0   waitT3
+0b1    store4   idle      1  |   1  1  0  0  0   waitT3
+0b2    store4   idle      2  |   1  1  0  0  0   waitT3
+0b3    store4   idle      3  |   0  1  0  0  0   running
+0b4    store4   waitT3    0  |   0  0  0  0  0   invalid
+0b5    store4   waitT3    1  |   1  1  0  0  0   waitT3
+0b6    store4   waitT3    2  |   1  1  0  0  0   waitT3
+0b7    store4   waitT3    3  |   0  1  0  0  0   running
+0b8    store4   waitT2    0  |   0  0  0  0  0   invalid
+0b9    store4   waitT2    1  |   0  0  0  0  0   invalid
+0ba    store4   waitT2    2  |   0  0  0  0  0   invalid
+0bb    store4   waitT2    3  |   0  0  0  0  0   invalid
+0bc    store4   running   0  |   0  0  0  1  0   running
+0bd    store4   running   1  |   0  0  0  1  1   running
+0be    store4   running   2  |   0  0  0  1  2   running
+0bf    store4   running   3  |   0  0  1  1  3   idle
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+0c0    fetch2   idle      0  |   1  1  0  0  0   waitT3
+0c1    fetch2   idle      1  |   1  1  0  0  0   waitT3
+0c2    fetch2   idle      2  |   1  1  0  0  0   waitT3
+0c3    fetch2   idle      3  |   0  1  0  0  0   waitT2
+0c4    fetch2   waitT3    0  |   0  0  0  0  0   invalid
+0c5    fetch2   waitT3    1  |   1  1  0  0  0   waitT3
+0c6    fetch2   waitT3    2  |   1  1  0  0  0   waitT3
+0c7    fetch2   waitT3    3  |   0  1  0  0  0   waitT2
+0c8    fetch2   waitT2    0  |   0  0  0  0  0   waitT2
+0c9    fetch2   waitT2    1  |   0  0  0  0  0   running
+0ca    fetch2   waitT2    2  |   0  0  0  0  0   invalid
+0cb    fetch2   waitT2    3  |   0  0  0  0  0   invalid
+0cc    fetch2   running   0  |   0  0  0  0  0   idle
+0cd    fetch2   running   1  |   0  0  0  0  0   idle
+0ce    fetch2   running   2  |   0  0  0  1  0   running
+0cf    fetch2   running   3  |   0  0  1  1  1   idle
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+0d0    store2   idle      0  |   1  1  0  0  0   waitT3
+0d1    store2   idle      1  |   1  1  0  0  0   waitT3
+0d2    store2   idle      2  |   1  1  0  0  0   waitT3
+0d3    store2   idle      3  |   0  1  0  0  0   running
+0d4    store2   waitT3    0  |   0  0  0  0  0   invalid
+0d5    store2   waitT3    1  |   1  1  0  0  0   waitT3
+0d6    store2   waitT3    2  |   1  1  0  0  0   waitT3
+0d7    store2   waitT3    3  |   0  1  0  0  0   running
+0d8    store2   waitT2    0  |   0  0  0  0  0   invalid
+0d9    store2   waitT2    1  |   0  0  0  0  0   invalid
+0da    store2   waitT2    2  |   0  0  0  0  0   invalid
+0db    store2   waitT2    3  |   0  0  0  0  0   invalid
+0dc    store2   running   0  |   0  0  0  1  0   running
+0dd    store2   running   1  |   0  0  1  1  1   idle
+0de    store2   running   2  |   0  0  0  0  0   idle
+0df    store2   running   3  |   0  0  0  0  0   idle
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+0e0    fetch    idle      0  |   1  1  0  0  0   waitT3
+0e1    fetch    idle      1  |   1  1  0  0  0   waitT3
+0e2    fetch    idle      2  |   1  1  0  0  0   waitT3
+0e3    fetch    idle      3  |   0  1  0  0  0   waitT2
+0e4    fetch    waitT3    0  |   0  0  0  0  0   invalid
+0e5    fetch    waitT3    1  |   1  1  0  0  0   waitT3
+0e6    fetch    waitT3    2  |   1  1  0  0  0   waitT3
+0e7    fetch    waitT3    3  |   0  1  0  0  0   waitT2
+0e8    fetch    waitT2    0  |   0  0  0  0  0   waitT2
+0e9    fetch    waitT2    1  |   0  0  0  0  0   running
+0ea    fetch    waitT2    2  |   0  0  0  0  0   invalid
+0eb    fetch    waitT2    3  |   0  1  0  0  0   waitT2
+0ec    fetch    running   0  |   0  0  0  1  0   running
+0ed    fetch    running   1  |   0  0  1  1  0   idle
+0ee    fetch    running   2  |   0  0  0  1  0   running
+0ef    fetch    running   3  |   0  0  0  1  0   running
+
+addr   cycle    state     T  |  PA ST CO VA IDX  state
+0f0    store    idle      0  |   1  1  0  0  0   waitT2
+0f1    store    idle      1  |   1  1  0  0  0   waitT2
+0f2    store    idle      2  |   0  1  0  0  0   running
+0f3    store    idle      3  |   1  1  0  0  0   waitT2
+0f4    store    waitT3    0  |   0  0  0  0  0   invalid
+0f5    store    waitT3    1  |   0  0  0  0  0   invalid
+0f6    store    waitT3    2  |   0  0  0  0  0   invalid
+0f7    store    waitT3    3  |   0  0  0  0  0   invalid
+0f8    store    waitT2    0  |   1  1  0  0  0   waitT2
+0f9    store    waitT2    1  |   1  1  0  0  0   waitT2
+0fa    store    waitT2    2  |   0  1  0  0  0   running
+0fb    store    waitT2    3  |   0  0  0  0  0   invalid
+0fc    store    running   0  |   0  0  0  0  0   idle
+0fd    store    running   1  |   0  0  0  0  0   idle
+0fe    store    running   2  |   0  0  0  0  0   idle
+0ff    store    running   3  |   0  0  1  1  0   idle

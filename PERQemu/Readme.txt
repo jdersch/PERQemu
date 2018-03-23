@@ -1,5 +1,6 @@
 PERQemu Source - Readme
 
+V1.3 - 3/11/2018 - skeezics
 V1.2 - 3/18/2017 - skeezics
 V1.1 - 9/21/2014 - skeezics
 V1.0 - 6/01/2013 - jdersch
@@ -46,7 +47,15 @@ the show-stopping bugs (emulation crashes) and visual glitches (artifacts on scr
 pleased to report that this RasterOp is 99.9% there -- only one remaining puzzle in one
 particular scenario that should be fixable with a small ROM update.  At this point the next
 performance optimization for RasterOp (and overall emulation speed) will come from tuning
-the Memory implementation.  Numerous other little changes are detailed elsewhere.
+the Memory implementation, although there may be some further tuning to remove dynamic
+memory allocations and reduce overhead.  Numerous other little changes are detailed elsewhere.
+
+The 1.3 update does, in fact, comprise the Memory rewrite.  Drawing inspiration from the
+hardware, all of the complex timing is now managed by a state machine driven by a new ROM.
+This has drastically reduced the amount of GC overhead and given a decent performance boost!
+As part of this, the CPU can now be single-stepped through microinstructions that abort due
+to memory holds, which is an aid to debugging (if you like single-stepping through microcode
+as much as I do).
 
 In addition, I spent quite a bit of time on a few cosmetic cleanups of all the source files
 for more consistency in style, comments, etc.  This will be the first version of the code
@@ -64,6 +73,7 @@ I too would be thrilled for any feedback you care to send my way:  skeezicsb@gma
 1.2 Version History
 -------------------
 
+This update is the first pushed to GitHub, corresponding to PERQemu 0.4.2.12.
 This is the third "source release," corresponding to PERQemu 0.4.2.
 The second corresponded to PERQemu version 0.4.0.
 The first corresponded to PERQemu version 0.3.x.
@@ -174,9 +184,7 @@ reasonably functional and stable (though there may still be issues):
   basically just streams bits through the Z80 SIO in 32-byte chunks through a Motorola
   MC3417 CVSD chip, which has lots of other features that they never had the time or
   inclination to exploit. For emulation it'd be terribly cool to at least get sound output
-  working; the next step would be to allow for sound input too. (In the talking SIGGRAPH
-  demo, they recorded the voiceover using a microphone wired to some kind of jury-rigged
-  input on the PERQ!)  This is way, way down at the end of the priority list...
+  working.
 
 
 - Printing.  Emulating the Canon CX would be pretty neat (and not altogether difficult.)
@@ -215,6 +223,12 @@ is available at this time.  Would VERY MUCH like to track down a copy.
 FLEX is a complete unknown, as it's unclear if anyone anywhere in the world still has a
 copy of this obscure (mythical?) operating system.  Hello, UK?
 
+Accent S4 does not track the mouse, making it very difficult to use SAPPHIRE, the window
+manager.  It would be awesome if CMU stepped up with a copy of the old /usr/spice tree
+from their tape archives.  [It may be necessary to disable Kriz Tablet support to force
+use of the GPIB/Bitpad?  Both options work in POS, so it's a mystery why Tracker fails
+in S4.  Anyone out there have "SapphTracker.Pas"?]
+
 If anyone has any other software that ran on the PERQ-1 and does not run successfully
 under PERQemu, send us a copy and we'll find out why!
 
@@ -249,8 +263,8 @@ subordinate tasks:
     - The "Instruction" class caches instruction decoding to make things a bit faster.
     - The "Memory" class (\Memory\Memory.cs) implements the PERQ's memory store and
       memory state machine.
-    - The "QueueController" class (\Memory\QueueController.cs) provides separate memory
-      input and output queues support the overlapped Fetch/Store required by RasterOp.
+    - The "MemoryController" class (\Memory\MemoryController.cs) provides separate memory
+      input and output queues to support the overlapped Fetch/Store required by RasterOp.
     - The "RasterOp" class (\Memory\RasterOp.cs) is the "real" RasterOp that emulates
       the hardware datapath.
 
@@ -371,3 +385,10 @@ extracted from the disks on Bitsavers, a few disassemblies I started, and a few 
 and ends.  These can be very useful for reverse-engineering the behavior of hardware. [Note:
 much of this culled from the source tarball; should curate a nice collection of sources and
 documentation as an optional add-in package.]
+
+
+3.7 Miscellany
+--------------
+
+With the shift to GitHub and more active collaboration happening, this file should be split
+into a ChangeLog, TODO, and more static README, undoing the mess I've made of this. [skz]

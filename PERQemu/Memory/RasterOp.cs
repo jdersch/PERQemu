@@ -1,4 +1,4 @@
-// rasterop.cs - Copyright 2006-2017 Josh Dersch (derschjo@gmail.com)
+// rasterop.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -23,6 +23,7 @@ using PERQemu.Debugger;
 
 using System;
 using System.IO;
+using System.Text;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Security.Permissions;
@@ -184,6 +185,8 @@ namespace PERQemu.Memory
 #if DEBUG
             _ropDebug = false;
 #endif
+			// Move this to the constructor after debugging so it doesn't get
+			// run on every reset (which is handy for making tweaks while debugging)
             LoadRasterOpROMs();
 
 #if TRACING_ENABLED
@@ -1116,7 +1119,7 @@ namespace PERQemu.Memory
         /// </summary>
         private ROpWord FetchNextWord()
         {
-            ROpWord w = new ROpWord();
+			ROpWord w = new ROpWord();
 
             if (MemoryBoard.Instance.MDIValid)
             {
