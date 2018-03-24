@@ -1,4 +1,4 @@
-// z80system.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// z80system.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -29,7 +29,7 @@ namespace PERQemu.IO.Z80.IOB
 
     public enum PERQtoZ80Message
     {
-        Invalid = 0x0,      // "Old Z80 Output message numbers" (oioz80.mic)
+        Invalid = 0x0,
         RS232 = 0x1,
         FloppyCommand = 0x2,
         GPIBCommand = 0x3,
@@ -87,10 +87,10 @@ namespace PERQemu.IO.Z80.IOB
     {
         private Z80System()
         {
-            _messageData = new byte[256];
-            _outputFifo = new Queue<byte>(256);
             _inputFifo = new Queue<byte>(256);
+            _outputFifo = new Queue<byte>(256);
             _devices = new List<IZ80Device>(16);
+
             _floppyDisk = new FloppyController();
             _keyboard = new Keyboard();
             _gpib = new GPIB();
@@ -107,17 +107,16 @@ namespace PERQemu.IO.Z80.IOB
             _running = false;
         }
 
-        public static Z80System Instance
+        private void BuildDeviceList()
         {
-            get { return _instance; }
-        }
-
-        /// <summary>
-        /// Elapsed clock cycles for the Z80 (~2.456Mhz).
-        /// </summary>
-        public int Clocks()
-        {
-            return _clocks;
+            _devices.Clear();
+            _devices.Add(_floppyDisk);
+            _devices.Add(_keyboard);
+            _devices.Add(_gpib);
+            _devices.Add(_tablet);
+            _devices.Add(_rs232);
+            _devices.Add(_speech);
+            _devices.Add(_clockDev);
         }
 
         public void Reset()
@@ -136,7 +135,18 @@ namespace PERQemu.IO.Z80.IOB
             // All devices are ready
             _deviceReadyState = ReadyFlags.Z80 | ReadyFlags.Floppy | ReadyFlags.GPIB |
                                 ReadyFlags.RS232 | ReadyFlags.Seek | ReadyFlags.Speech;
+
             _dataReadyInterruptRequested = false;
+        }
+
+        public static Z80System Instance
+        {
+            get { return _instance; }
+        }
+
+        public int Clocks()
+        {
+            return _clocks;
         }
 
         public void LoadFloppyDisk(string path)
@@ -175,8 +185,8 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Corresponds to IOB port 41.
-        /// The PERQ1 microcode uses port 41 to control both the hard drive and the Z80.
+        /// Corresponds to IOB port 0xc1 (octal 301).
+        /// The PERQ1 microcode uses port c1 to control both the hard drive and the Z80.
         /// The lower 5 bits are hard disk control flags.
         ///
         /// From sysb.mic:
@@ -220,8 +230,8 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Corresponds to IOB port 47
         /// Sends data to the Z80.
+        /// Corresponds to IOB port 0xc7 (octal 307).
         ///
         ///  The IOB schematic (p. 49 of the PDF, "IOA DECODE") sheds some light on the Z80 "input"
         ///  interrupt.  This is actually labeled as "Z80 READY INT L" (meaning it's active Low)
@@ -414,18 +424,12 @@ namespace PERQemu.IO.Z80.IOB
                         Trace.Log(LogType.Z80State,
                                  "Z80 Message type is {0}, transitioning to Message state.", _messageType);
 #endif
-#if DEBUG
-                    if (data == 0xb)
-                    {
-                        Console.WriteLine("HEY, MESSAGE TYPE IS GETSTATUS.");
-                    }
-#endif
                     _state = MessageParseState.Message;
                     break;
 
                 case MessageParseState.Message:
-					// The IOB's message format ("Old Z80") is really really annoying to parse, especially as
-					// compared to that of the CIO/EIO board ("New Z80").  Once we've gotten the message type,
+                    // The IOB's message format ("Old Z80") is really really annoying to parse, especially as
+                    // compared to that of the CIO/EIO board ("New Z80").  Once we've gotten the message type,
                     // the length of the message is dependent on the type of the message sent.  Some have fixed
                     // lengths, some are variable.  Basically this requires a state machine for each individual
                     // message.  Or I could make this code really tangled.
@@ -523,11 +527,6 @@ namespace PERQemu.IO.Z80.IOB
                             }
                             break;
 
-                        case PERQtoZ80Message.GetStatus:
-                            GetStatus(data);
-                            _state = MessageParseState.WaitingForSOM;
-                            break;
-
                         case PERQtoZ80Message.SetClockStatus:
                             if (_clockDev.RunStateMachine(_messageType, data))
                             {
@@ -538,6 +537,11 @@ namespace PERQemu.IO.Z80.IOB
                                              "Clock message complete.  Returning to WaitingForSOM state.");
 #endif
                             }
+                            break;
+
+                        case PERQtoZ80Message.GetStatus:
+                            GetStatus(data);
+                            _state = MessageParseState.WaitingForSOM;
                             break;
 
                         default:
@@ -582,20 +586,6 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Sends the status change message.
-        /// </summary>
-        private void SendStatusChange()
-        {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Sending Z80 device status change message {0}.", _deviceReadyState);
-#endif
-            _outputFifo.Enqueue(Z80System.SOM);             // SOM
-            _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
-            _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
-        }
-
-        /// <summary>
         /// Puts the specified device into the ready state.
         /// </summary>
         private void SetReadyState(ReadyFlags device)
@@ -604,7 +594,7 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Ready state for {0} set.  ReadyState now {1}.", device, _deviceReadyState);
+                Trace.Log(LogType.Z80State, "Ready state for {0} set.", device);
 #endif
         }
 
@@ -650,8 +640,7 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Busy state for {0} set (delay={1}).  ReadyState now {2}.",
-                          device, delay, _deviceReadyState);
+                Trace.Log(LogType.Z80State, "Busy state for {0} set (delay={1}).", device, delay);
 #endif
             // Force a status change in the Ready->Busy transition (RefreshReadyState
             // only catches the Busy->Ready change)
@@ -659,26 +648,33 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
+        /// Sends the status change message.
+        /// </summary>
+        private void SendStatusChange()
+        {
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.Z80State, "Sending Z80 device ready status: {0}.", _deviceReadyState);
+#endif
+            _outputFifo.Enqueue(Z80System.SOM);             // SOM
+            _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);    // TODO: BYTE COUNT?
+            _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
+        }
+
+        /// <summary>
         /// Calls subdevices to retrieve status based on the requested flags.  This
-        /// is a one-byte command (no count byte) and should always return true.  But
-        /// it never seems to get called!  Somethin's wrong somewheres...
+        /// is a one-byte command (no count byte).
         /// </summary>
         private void GetStatus(byte requested)
         {
-            Console.WriteLine("GetStatus: {0}", requested);		// TODO: uh, these should be traces or #if DEBUG
+            Console.WriteLine("GetStatus: data={0}", requested);  // FIXME
 
             for (int i = 1; i <= 256; i = (i << 1))
             {
                 if ((requested & i) != 0)
                 {
-                    Console.WriteLine("Checking: {0}", i);      // fixme WHY isn't GetStatus ever called!?!?
                     switch ((DeviceStatus)i)
                     {
-                        // Hmm.  According to PerqIO.Pas, Tablet Status isn't used.  Sigh.
-                        case DeviceStatus.Tablet:
-                            _tablet.GetStatus(ref _outputFifo);
-                            break;
-
                         case DeviceStatus.RS232:
                             _rs232.GetStatus(ref _outputFifo);
                             break;
@@ -693,28 +689,17 @@ namespace PERQemu.IO.Z80.IOB
 
                         // This is likely extraneous, but it's part of the spec.
                         case DeviceStatus.Z80:
-                            Console.WriteLine("Z80 GetStatus bit set");		// fixme
+                            Console.WriteLine("Z80 GetStatus bit set");     // fixme
                             break;
 
                         default:
-                            Console.WriteLine("Unhandled GetStatus type {0}", (DeviceStatus)i);	// fixme
+                            Console.WriteLine("Unhandled GetStatus type {0}", (DeviceStatus)i); // fixme
                             break;
                     }
                 }
             }
         }
 
-        private void BuildDeviceList()
-        {
-            _devices.Clear();
-            _devices.Add(_floppyDisk);
-            _devices.Add(_keyboard);
-            _devices.Add(_gpib);
-            _devices.Add(_tablet);
-            _devices.Add(_rs232);
-            _devices.Add(_speech);
-            _devices.Add(_clockDev);
-        }
 
         private enum MessageParseState
         {
@@ -748,9 +733,11 @@ namespace PERQemu.IO.Z80.IOB
             Z80 = 0x80              // "Ready flag"
         }
 
+        // Start of (most) messages sent from PERQ CPU <==> the Z80.
+        public static readonly byte SOM = 0x6b;
 
-        public static readonly byte SOM = 0x6b;         // Start of (most) messages sent from PERQ CPU <==> the Z80.
-        public static readonly int Frequency = 2456700; // IOB Z80's clock rate, ~ 2.5Mhz
+        // IOB Z80's clock rate, ~ 2.5Mhz
+        public static readonly int Frequency = 2456700;
 
         // Whether the Z80 has been started or not
         private bool _running;
@@ -759,8 +746,7 @@ namespace PERQemu.IO.Z80.IOB
         private int _clocks;
 
         private MessageParseState _state;
-        private PERQtoZ80Message  _messageType;
-        private byte[] _messageData;
+        private PERQtoZ80Message _messageType;
         private ReadyFlags _deviceReadyState;
         private int[] _deviceBusyClocks = new int[256];
         private bool _dataReadyInterruptRequested;

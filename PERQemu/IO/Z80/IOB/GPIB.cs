@@ -101,13 +101,30 @@ namespace PERQemu.IO.Z80.IOB
                             }
                             break;
 
-                        default:
+                        case GPIBCommand.WriteData:
+                        case GPIBCommand.WriteDataEOI:
+                            if (_standby && _iTalk)
+                            {
 #if TRACING_ENABLED
-                            if (Trace.TraceOn)
-                                Trace.Log(LogType.GPIB, "Command data {0}:{1:x2}", _cmdIndex, value);
+                                if (Trace.TraceOn)
+                                    Trace.Log(LogType.GPIB, "GPIB Write data {0}:{1:x2}", _cmdIndex, value);
 #endif
-                            DispatchGroupCommand(value);
+                                // Pass the data through to the device
+                                GPIBBus.Instance.Write(_listener, value);
+                            }
+                            else
+                            {
+#if TRACING_ENABLED
+                                if (Trace.TraceOn)
+                                    Trace.Log(LogType.GPIB, "GPIB Auxiliary Command data {0}:{1:x2}", _cmdIndex, value);
+#endif
+                                // Interpret the data as a group command
+                                DispatchGroupCommand(value);
+                            }
                             break;
+
+                        default:
+                            throw new InvalidOperationException(String.Format("Bad GPIB Command {0}"));
                     }
 
                     _cmdIndex++;
@@ -138,7 +155,7 @@ namespace PERQemu.IO.Z80.IOB
         public void Poll(ref Queue<byte> fifo)
         {
             // If we are not listening, we return nothing and clear our FIFO
-            if (!_listen)
+            if (!_iListen)
             {
                 _busFifo.Clear();
             }
@@ -212,21 +229,22 @@ namespace PERQemu.IO.Z80.IOB
                     break;
 
                 case AuxiliaryCommand.lon:
-                    _listen = cs;
+                    _iListen = cs;
                     break;
 
                 case AuxiliaryCommand.ton:
-                    _talk = cs;
+                    _iTalk = cs;
+                    break;
+
+                case AuxiliaryCommand.gts:
+                    _standby = cs;
                     break;
             }
         }
 
         /// <summary>
         /// Interprets command data bytes which contain group commands (including the setting
-        /// of talker/listener addresses).  These are "broadcast" to all devices on the bus,
-        /// which essentially acts as an enable/disable for the BitPad.  If we ever implement
-        /// another device, like a printer or a big ol' HP disk drive, this is how they'll
-        /// share the bus.  I think.  If it lets Accent track the damn mouse I'll be thrilled...
+        /// of talker/listener addresses).  These are "broadcast" to all devices on the bus.
         /// </summary>
         private void DispatchGroupCommand(byte value)
         {
@@ -273,7 +291,7 @@ namespace PERQemu.IO.Z80.IOB
                         if (Trace.TraceOn)
                             Trace.Log(LogType.GPIB, "GPIB Listen Address Group 'unlisten' command received");
 #endif
-                        _listen = false;    // Unlisten the controller (as with lon=false?)
+                        _iListen = false;    // Unlisten the controller (as with lon=false?)
                     }
                     else
                     {
@@ -294,7 +312,7 @@ namespace PERQemu.IO.Z80.IOB
                         if (Trace.TraceOn)
                             Trace.Log(LogType.GPIB, "GPIB Talker Address Group 'untalk' command received");
 #endif
-                        _talk = false;    // Untalk the controller too (same as ton=false?)
+                        _iTalk = false;    // Untalk the controller too (same as ton=false?)
                     }
                     else
                     {
@@ -316,7 +334,6 @@ namespace PERQemu.IO.Z80.IOB
 #endif
                     break;
             }
-
         }
 
         /// <summary>
@@ -348,8 +365,8 @@ namespace PERQemu.IO.Z80.IOB
 
         private void ResetGPIB()
         {
-            _listen = false;
-            _talk = false;
+            _iListen = false;
+            _iTalk = false;
             _listener = 0x1f;   // nobody
             _talker = 0x1f;     // nobody
         }
@@ -465,8 +482,9 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         // GPIB-specific flags
-        private bool _listen;
-        private bool _talk;
+        private bool _iListen;
+        private bool _iTalk;
+        private bool _standby;
 
         private byte _listener;
         private byte _talker;

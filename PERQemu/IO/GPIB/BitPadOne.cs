@@ -107,8 +107,10 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         public void Poll(ref Queue<byte> fifo)
         {
-            if (!_talking)
+            if (!_talking || Display.Display.Instance.MouseOffTablet)
             {
+                // Unlike the Kriz, the BitPad does not send updates if off the tablet.
+                // So bail here to allow relative mode to work... kind of...
                 return;
             }
 
