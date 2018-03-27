@@ -25,8 +25,6 @@ using System;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
-using System.Security.Permissions;
 
 namespace PERQemu.Memory
 {
@@ -106,60 +104,8 @@ namespace PERQemu.Memory
     /// to feed quad words through the shifter/combiner to move rectangular regions of memory
     /// very quickly.
     /// </summary>
-    public sealed class RasterOp : ISerializable
+    public sealed class RasterOp
     {
-
-#region Serialization
-
-        [SecurityPermissionAttribute(SecurityAction.LinkDemand,
-         Flags = SecurityPermissionFlag.SerializationFormatter)]
-        void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
-        {
-            info.AddValue("state", _state);
-            info.AddValue("phase", _phase);
-            info.AddValue("latchOn", _latchOn);
-            info.AddValue("enabled", _enabled);
-            info.AddValue("extraSource", _extraSrcWord);
-            info.AddValue("direction", _direction);
-            info.AddValue("function", _function);
-            info.AddValue("widthInWords", _widthExtraWords);
-            info.AddValue("widthExtraBits", _widthExtraBits);
-            info.AddValue("destBitOffset", _destBitOffset);
-            info.AddValue("destWordPosition", _destWordPosition);
-            info.AddValue("srcBitOffset", _srcBitOffset);
-            info.AddValue("srcWordPosition", _srcWordPosition);
-            info.AddValue("srcFifo", _srcFifo);
-            info.AddValue("destFifo", _destFifo);
-        }
-
-        private RasterOp(SerializationInfo info, StreamingContext context)
-        {
-            _state = (State)info.GetInt32("state");
-            _phase = (Phase)info.GetInt32("phase");
-            _latchOn = info.GetBoolean("latchOn");
-            _enabled = info.GetBoolean("enabled");
-            _extraSrcWord = info.GetBoolean("extraSource");
-            _direction = (Direction)info.GetInt32("direction");
-            _function = (Function)info.GetInt32("function");
-            _widthExtraWords = info.GetInt32("widthInWords");
-            _widthExtraBits = info.GetInt32("widthExtraBits");
-            _destBitOffset = info.GetInt32("destBitOffset");
-            _destWordPosition = info.GetInt32("destWordPosition");
-            _srcBitOffset = info.GetInt32("srcBitOffset");
-            _srcWordPosition = info.GetInt32("srcWordPosition");
-            _srcFifo = (Queue<ROpWord>)info.GetValue("srcFifo", typeof(Queue<ROpWord>));
-            _destFifo = (Queue<ROpWord>)info.GetValue("destFifo", typeof(Queue<ROpWord>));
-
-            // TODO: when de-serializing, can I just call LoadRasterOpROMs() and not have to
-            // save and restore those?  they're read-only...  probably a TON of work to go
-            // through the entire emulator and update/debug all of the serialization stuff,
-            // which i've probably trashed utterly and completely.  sigh.
-
-            _instance = this;
-        }
-
-#endregion
-
         private RasterOp()
         {
             _ropShifter = new Shifter();            // Our own private Idaho
@@ -185,8 +131,8 @@ namespace PERQemu.Memory
 #if DEBUG
             _ropDebug = false;
 #endif
-			// Move this to the constructor after debugging so it doesn't get
-			// run on every reset (which is handy for making tweaks while debugging)
+            // Move this to the constructor after debugging so it doesn't get
+            // run on every reset (which is handy for making tweaks while debugging)
             LoadRasterOpROMs();
 
 #if TRACING_ENABLED
@@ -199,7 +145,7 @@ namespace PERQemu.Memory
             get { return _enabled; }
         }
 
-#region Debugging
+        #region Debugging
 
 #if DEBUG
         public bool Debug
@@ -304,12 +250,12 @@ namespace PERQemu.Memory
         }
 #endif
 
-#endregion
+        #endregion
 
         /// <summary>
-        /// Sets the RasterOp Control Register, enabling or disabling the RasterOp hardware.
-        /// Is used to set the "phase" of the action, determine the direction of the transfer,
-        /// and sync the RasterOp state clock with the Memory state.
+        /// Sets the RasterOp Control Register, enabling or disabling the RasterOp
+        /// hardware.  Is used to set the "phase" of the action, determine the direction
+        /// of the transfer, and sync the RasterOp state clock with the Memory state.
         /// </summary>
         /// <param name="value"></param>
         public void CntlRasterOp(int value)
@@ -426,14 +372,14 @@ namespace PERQemu.Memory
             _destWordPosition = (value & 0x30) >> 4;
             _destBitOffset = (value & 0xf);
 
-//#if TRACING_ENABLED
-//            // Ugh, since the PERQ doesn't really have a NOOP, the assembler builds an
-//            // instruction that does a dummy assignment to this register... which means
-//            // a massive amount of spurious log spewage.
-//            if (Trace.TraceOn)
-//                Trace.Log(LogType.RasterOp, "DstRasterOp:  Func={0} WordPos={1} BitOffset={2}",
-//                                                _function, _destWordPosition, _destBitOffset);
-//#endif
+            //#if TRACING_ENABLED
+            //            // Ugh, since the PERQ doesn't really have a NOOP, the assembler builds an
+            //            // instruction that does a dummy assignment to this register... which means
+            //            // a massive amount of spurious log spewage.
+            //            if (Trace.TraceOn)
+            //                Trace.Log(LogType.RasterOp, "DstRasterOp:  Func={0} WordPos={1} BitOffset={2}",
+            //                                                _function, _destWordPosition, _destBitOffset);
+            //#endif
         }
 
         /// <summary>
@@ -559,9 +505,9 @@ namespace PERQemu.Memory
         }
 
         /// <summary>
-        /// Aligns and combines the Source and Destination words to produce a RasterOp result word.
-        /// Called during DestFetch as each word arrives to avoid complications from the delay in
-        /// the overlapped Fetch/Store cycle.
+        /// Aligns and combines the Source and Destination words to produce a RasterOp
+        /// result word.  Called during DestFetch as each word arrives to avoid
+        /// complications from the delay in the overlapped Fetch/Store cycle.
         /// </summary>
         private ROpWord ComputeResult(ROpWord dest)
         {
@@ -579,15 +525,15 @@ namespace PERQemu.Memory
             // alignment has come.  Admiral Ackbar will explain the plan of attack:
             //
             // 1.   At the start of a scanline, our source FIFO is aligned and the
-            //        half-pipeline register is "primed".  This means we should be
-            //        guaranteed to have at least the first edge word in the FIFO;
+            //      half-pipeline register is "primed".  This means we should be
+            //      guaranteed to have at least the first edge word in the FIFO;
             // 2.   If the source spans the quad but the destination doesn't (or
-            //        vice versa), we have to account for the "two edges into one"
-            //        problem - pull in the extra source word (source L+R -> dest B)
-            //        or hold the source word one extra cycle (dest L+R <- source B);
-            // 3.    In all other modes, we should be able to just pop the next word
-            //         so the FIFOs move in lock step (while in the source region), he
-            //        said, handwaving furiously.
+            //      vice versa), we have to account for the "two edges into one"
+            //      problem - pull in the extra source word (source L+R -> dest B)
+            //      or hold the source word one extra cycle (dest L+R <- source B);
+            // 3.   In all other modes, we should be able to just pop the next word
+            //      so the FIFOs move in lock step (while in the source region), he
+            //      said, handwaving furiously.
             //
             // The RSC03 ROM tells the hardware how to cope with the source FIFO; here
             // we use a lookup table to deal with all the complicated edge alignment
@@ -598,7 +544,7 @@ namespace PERQemu.Memory
             // Look at the destination word to find our edges and set the _leftOver flag
             switch (dest.Mask)
             {
-                // Outside the first edge: return dest unmodified, and don't touch the source FIFO
+                // Outside the first edge: return dest unmodified, don't touch the source FIFO
                 case CombinerFlags.DontMask:
                     return dest;
 
@@ -609,7 +555,7 @@ namespace PERQemu.Memory
                     {
                         src = _srcFifo.Dequeue();
 #if DEBUG
-                        src.Mask = SrcWordMask(src.Index);      // for debugging, not necessary otherwise
+                        src.Mask = SrcWordMask(src.Index);  // for debugging, not necessary otherwise
 #endif
 #if TRACING_ENABLED
                         if (Trace.TraceOn)
@@ -624,13 +570,13 @@ namespace PERQemu.Memory
                     {
                         src = _srcFifo.Dequeue();
 #if DEBUG
-                        src.Mask = SrcWordMask(src.Index);      // for debugging, not necessary otherwise
+                        src.Mask = SrcWordMask(src.Index);  // for debugging, not necessary otherwise
 #endif
                     }
                     catch (InvalidOperationException)
                     {
 #if DEBUG
-                        Console.WriteLine("Source FIFO empty at Full word!");    // continuing will probably fail...
+                        Console.WriteLine("Source FIFO empty at Full word!");   // continuing will probably fail...
 #else
                         throw new InvalidOperationException("Source FIFO empty and Result expected");
 #endif
@@ -638,8 +584,11 @@ namespace PERQemu.Memory
                     break;
 
                 // Left edge: flag the beginning or end of the update region
+                // Right edge: opposite of left, flag the other end :-)
                 case CombinerFlags.LeftEdge:
-                    _leftOver = (_direction == Direction.LeftToRight ? false : true);
+                case CombinerFlags.RightEdge:
+                    _leftOver = (dest.Mask == CombinerFlags.LeftEdge && _direction == Direction.RightToLeft) ||
+                                (dest.Mask == CombinerFlags.RightEdge && _direction == Direction.LeftToRight);
 
                     if (_srcFifo.Count > 0)
                     {
@@ -649,7 +598,7 @@ namespace PERQemu.Memory
                     }
                     else if (_leftOver && (_extraSrcWord || _xOffset > 0))
                     {
-                        // At the end of a line, moving RightToLeft, we are peeking forward
+                        // At the end of a line (either direction) we are peeking forward
                         // but have run out of source words.  In this case we copy the half-
                         // pipeline register (in essence, not popping the second edge word)
                         // to provide enough bits to complete the line.
@@ -658,33 +607,7 @@ namespace PERQemu.Memory
                     else
                     {
 #if DEBUG
-                        Console.WriteLine("Source FIFO empty at LeftEdge word!");   // continuing will probably fail...
-#else
-                        throw new InvalidOperationException("Source FIFO empty and Result expected");
-#endif
-                    }
-                    break;
-
-                // Right edge: opposite of left, flag the other end :-)
-                case CombinerFlags.RightEdge:
-                    _leftOver = (_direction == Direction.LeftToRight ? true : false);
-
-                    if (_srcFifo.Count > 0)
-                    {
-                        src = _srcFifo.Peek();
-                        src.Mask = SrcWordMask(src.Index);
-                        e = GetEdgeStrategy(dest.Mask, src.Mask);
-                    }
-                    else if (_leftOver && (_extraSrcWord || _xOffset > 0))
-                    {
-                        // At the end of a line and out of source words
-                        // TODO: it sure looks like I could combine the L+R edge cases
-                        // and eliminate some code duplication... just the _leftOver test differs?
-                        src = _halfPipe;
-                    }
-                    else {
-#if DEBUG
-                        Console.WriteLine("Source FIFO empty at RightEdge word!");    // continuing will probably fail...
+                        Console.WriteLine("Source FIFO empty at {0} word!", dest.Mask);   // continuing will probably fail...
 #else
                         throw new InvalidOperationException("Source FIFO empty and Result expected");
 #endif
@@ -693,7 +616,7 @@ namespace PERQemu.Memory
 
                 // Both edges in one word
                 case CombinerFlags.Both:
-                    _leftOver = true;                           // But... but... it's false too!  Ow, my head.
+                    _leftOver = true;       // But... but... it's false too!  Ow, my head.
 
                     try
                     {
@@ -749,14 +672,16 @@ namespace PERQemu.Memory
                 if (_direction == Direction.LeftToRight)
                 {
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: Result xtra (hi): {0:x4}", _halfPipe);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.RasterOp, "RasterOp: Result xtra (hi): {0:x4}", _halfPipe);
 #endif
                     _ropShifter.Shift(src.Data, _halfPipe.Data);
                 }
                 else
                 {
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: Result xtra (lo): {0:x4}", _halfPipe);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.RasterOp, "RasterOp: Result xtra (lo): {0:x4}", _halfPipe);
 #endif
                     _ropShifter.Shift(_halfPipe.Data, src.Data);
                 }
@@ -774,7 +699,8 @@ namespace PERQemu.Memory
             }
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: Result aligned:  {0:x4}", aligned);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.RasterOp, "RasterOp: Result aligned:  {0:x4}", aligned);
 #endif
             #endregion
 
@@ -800,7 +726,7 @@ namespace PERQemu.Memory
                     break;
 
                 default:
-                    combined = dest.Data;       // This can't actually happen (silence a warning)
+                    combined = dest.Data;   // This can't actually happen (silence a warning)
                     break;
             }
 
@@ -1024,10 +950,10 @@ namespace PERQemu.Memory
 #if DEBUG
             if (result == EdgeStrategy.Unknown)
                 Console.WriteLine("==> Unknown edge strategy {0:x3}! <==", lookup);    // Draw attention for debugging...
+                                                                                       // should probably throw an exception in the release version... 
 #endif
             return result;
         }
-
 
         /// <summary>
         /// Drop extra source words outside of the update region when searching for
@@ -1064,7 +990,7 @@ namespace PERQemu.Memory
 
         /// <summary>
         /// Drop extra words from the Source FIFO that are outside the update region.
-        /// Called in SrcFetch if _leftOver is true.  [could inline this in Clock()]
+        /// Called in SrcFetch if _leftOver is true.
         /// </summary>
         private void ClearExtraSrcWords()
         {
@@ -1112,14 +1038,13 @@ namespace PERQemu.Memory
             }
         }
 
-
         /// <summary>
         /// Populates and returns a ROpWord with the address, index and data
         /// of the current memory word (but throws an error if MDI is invalid).
         /// </summary>
         private ROpWord FetchNextWord()
         {
-			ROpWord w = new ROpWord();
+            ROpWord w = new ROpWord();
 
             if (MemoryBoard.Instance.MDIValid)
             {
@@ -1142,9 +1067,9 @@ namespace PERQemu.Memory
             return w;
         }
 
-
         /// <summary>
-        /// Masks and combines a source and destination word according to the current RasterOp function.
+        /// Masks and combines a source and destination word according to the current
+        /// RasterOp function.
         /// </summary>
         /// <param name="dstWord">Destination</param>
         /// <param name="srcWord">Source</param>
@@ -1337,8 +1262,9 @@ namespace PERQemu.Memory
         private ushort _rightEdgeMask;
         private ushort _bothEdgesMask;
 
-        // Our own Shifter, so that we don't have to guess about the state of the CPU's shifter
-        // (used by an interrupt routine during pauses, for example) and reprogram it every cycle
+        // Our own Shifter, so that we don't have to guess about the state of
+        // the CPU's shifter (used by an interrupt routine during pauses, for
+        // example) and reprogram it every cycle
         private Shifter _ropShifter;
 
         // The "half-pipeline register"
@@ -1347,17 +1273,19 @@ namespace PERQemu.Memory
         // Source words FIFO
         private Queue<ROpWord> _srcFifo;
 
-        // This does not actually exist in the real hardware.  This is sort of a handwavy stand-in
-        // for the memory pipeline.  Result words are queued in here during the RasterOp cycle
-        // and pulled out when a Store operation is pending.
+        // This does not actually exist in the real hardware.  This is sort of a
+        // handwavy stand-in for the memory pipeline.  Result words are queued
+        // here during the RasterOp cycle and pulled out when a Store is pending.
         private Queue<ROpWord> _destFifo;
 
-        // Mask lookup table:  This is a synthesized table roughly analogous to the PERQ RDS00 PROM,
-        // returning a CombinerMask to mark words flowing through the source and destination FIFOs.
+        // Mask lookup table:  This is a synthesized table roughly analogous to
+        // the PERQ RDS00 PROM, returning a CombinerMask to mark words flowing
+        // through the source and destination FIFOs.
         private CombinerFlags[] _rdsTable;
 
-        // Edge lookup table:  Encodes edge processing rules for aligning the source words, sort of
-        // what the RSC03 PROM does with the mysterious "EVEN/ODD" stuff, but slightly less obtuse.
+        // Edge lookup table:  Encodes edge processing rules for aligning the
+        // source words, sort of what the RSC03 PROM does with the mysterious
+        // "EVEN/ODD" stuff, but slightly less abstruse.
         private EdgeStrategy[] _rscTable;
 
 #if DEBUG

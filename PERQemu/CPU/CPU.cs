@@ -1518,8 +1518,8 @@ namespace PERQemu.CPU
 			// RASTOP == 102, LINE == 241 in the POS F Q-Code set; YMMV!
 			if (_rasterOp.Debug && next == 102)
 			{
-				ShowEStack();
-				PERQSystem.Instance.Break();
+                ShowEStack();
+                PERQSystem.Instance.Break();
 			}
 #endif
 
@@ -1943,17 +1943,6 @@ namespace PERQemu.CPU
             _rasterOp.ShowRegs();
         }
 
-        //[DebugFunction("save rasterop tables", "Write out text dumps of the RDS and RSC tables")]
-        //private void SaveRopTables()
-        //{
-        //    _rasterOp.SaveRopTables();
-        //}
-
-        //[DebugFunction("sync display", "Force a screen update")]
-        //private void DumpDisplay(uint addr)
-        //{
-        //    VideoController.Instance.DebugDumpScreen((int)addr);
-        //}
 #endif
 
         #endregion
