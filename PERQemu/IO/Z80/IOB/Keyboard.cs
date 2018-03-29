@@ -1,4 +1,4 @@
-// keyboard.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// keyboard.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -127,6 +127,17 @@ namespace PERQemu.IO.Z80.IOB
             _kbdInput = new Queue<byte>();
         }
 
+        public ReadyFlags BusyBit
+        {
+            get { return 0; }           // Keyboard doesn't have a Ready bit
+        }
+
+        public int BusyClocks
+        {
+            get { return 0; }           // Keyboard can always be polled
+            set { int dummy = value; }
+        }
+
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
         {
             bool retVal = false;
@@ -149,7 +160,8 @@ namespace PERQemu.IO.Z80.IOB
 
                 default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled keyboard message {0}", message);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unhandled keyboard message {0}", message);
 #endif
                     break;
             }
@@ -162,7 +174,8 @@ namespace PERQemu.IO.Z80.IOB
             _enabled = (_messageData[1] != 0);
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.Z80State, "Keyboard enabled state set to {0}", _enabled);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.Z80State, "Keyboard enabled state set to {0}", _enabled);
 #endif
         }
 

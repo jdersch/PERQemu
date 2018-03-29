@@ -37,6 +37,17 @@ namespace PERQemu.IO.Z80.IOB
             _lastTick = 0;
         }
 
+        public ReadyFlags BusyBit
+        {
+            get { return 0; }           // Clock doesn't maintain Ready status
+        }
+
+        public int BusyClocks
+        {
+            get { return 0; }           // Clock device is never busy
+            set { int dummy = value; }
+        }
+
         public bool RunStateMachine(PERQtoZ80Message message,  byte value)
         {
             bool retVal = false;
@@ -75,6 +86,7 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Poll(ref Queue<byte> fifo)
         {
+            // Is this never called?  Is this never enabled?  Is this only on the PERQ 2/EIO?
             if (_enabled)
             {
                 int tickInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);

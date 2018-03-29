@@ -60,6 +60,7 @@ namespace PERQemu.IO.GPIB
             _lastUpdate = 0;
             _talking = false;
             _listening = false;
+            _firstPoll = true;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -82,6 +83,8 @@ namespace PERQemu.IO.GPIB
             if (_talking)
             {
                 _lastUpdate = 0;    // Reset counter so we don't start sampling immediately
+                _firstPoll = true;  // HACK: our first message will be a LF only, to prime
+                                    // the Pascal code state machine...
             }
         }
 
@@ -151,19 +154,37 @@ namespace PERQemu.IO.GPIB
             if (((x != _lastX || y != _lastY || button != _lastButton) ||
                  (_lastUpdate++ > _sampleRate)) && fifo.Count == 0)
             {
-                WriteIntAsStringToQueue(x, ref fifo);
-                fifo.Enqueue(_delimiter1);  // separator (')
-                WriteIntAsStringToQueue(y, ref fifo);
-                fifo.Enqueue(_delimiter1);  // separator
-                fifo.Enqueue(_buttonMapping[button]);
-                fifo.Enqueue(_delimiter2);  // LF                 
+                if (_firstPoll)
+                {
+                    fifo.Enqueue(_delimiter2);
+                    _firstPoll = false;
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.GPIB, "BitPadOne: first poll, sending LF only!");
+#endif
+                }
+                else
+                {
+                    WriteIntAsStringToQueue(x, ref fifo);
+                    fifo.Enqueue(_delimiter1);  // separator (')
+                    WriteIntAsStringToQueue(y, ref fifo);
+                    fifo.Enqueue(_delimiter1);  // separator
+                    fifo.Enqueue(_buttonMapping[button]);
+                    fifo.Enqueue(_delimiter2);  // LF                 
 
 #if TRACING_ENABLED
-                // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
-                             x, y, button, _lastUpdate);
+                    // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
+                    if (Trace.TraceOn)
+                    {
+                        Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
+                                 x, y, button, _lastUpdate);
+#if DEBUG
+                        PERQSystem.Instance.Break();
 #endif
+                    }
+#endif
+                }
+
                 _lastX = x;
                 _lastY = y;
                 _lastButton = button;
@@ -228,6 +249,7 @@ namespace PERQemu.IO.GPIB
         private byte _myAddress;
         private bool _talking;
         private bool _listening;
+        private bool _firstPoll;
 
         private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
                                                    0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };

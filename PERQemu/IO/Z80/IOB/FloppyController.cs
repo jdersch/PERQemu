@@ -1,4 +1,4 @@
-// floppycontroller.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// floppycontroller.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -40,14 +40,26 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Reset()
         {
-            _messageIndex = 0;
             _messageData = new byte[256];
+            _messageIndex = 0;
+            _busyClocks = 0;
             _cylinder = 0;
             _head = 0;
 
             // There are at most 7 bytes in the NEC result registers
             _necStatus = new byte[7];
             _necStatusLength = 7;
+        }
+
+        public ReadyFlags BusyBit
+        {
+            get { return ReadyFlags.Floppy; }
+        }
+
+        public int BusyClocks
+        {
+            get { return _busyClocks; }
+            set { _busyClocks = value; }
         }
 
         public void LoadImage(string path)
@@ -124,7 +136,12 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Poll(ref Queue<byte> fifo)
         {
-
+            // TODO: Would really like to move the actual command execution here, so
+            // that we can set our "busy" flag when the command is accepted, then
+            // send our data and reset our ready flag after the timer fires.  It just
+            // seems more correct/elegant to have the data produced by Poll(), but I
+            // am not so invested to spend the time on that now.  Maybe when I hack in
+            // the "pfd header" code a refactor will be in order...
         }
 
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
@@ -153,7 +170,7 @@ namespace PERQemu.IO.Z80.IOB
                     {
                         _messageIndex = 0;
                         SetFloppyStatus();
-                        retVal = true; // done with message
+                        retVal = true;      // Done with message
                     }
                     break;
 
@@ -175,7 +192,8 @@ namespace PERQemu.IO.Z80.IOB
 
                 default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled floppy message {0}", message);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unhandled floppy message {0}", message);
 #endif
                     break;
             }
@@ -232,13 +250,15 @@ namespace PERQemu.IO.Z80.IOB
             int[] ints = new int[0x3000];
             int intscount = 0;
 
+            _busyClocks = 128;      // Busy for a "reasonable" amount of time...
+
             for (int sectorCount = 0; sectorCount < 96; sectorCount++)
             {
                 // Add start of message:
                 // We're sending 128 bytes (1 sector) at a time
                 Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
                 Z80System.Instance.FIFO.Enqueue(0x13);      // Valid boot data
-                Z80System.Instance.FIFO.Enqueue((byte)_disk.DiskGeometry.SectorSize); // # of bytes in this message
+                Z80System.Instance.FIFO.Enqueue((byte)_disk.DiskGeometry.SectorSize); // byte count
 
                 Sector s = _disk.GetSector(cylinder, track, sector);
 
@@ -289,7 +309,8 @@ namespace PERQemu.IO.Z80.IOB
             }
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Boot Checksum is {0:x4}", checksum & 0xffff);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.Warnings, "Boot Checksum is {0:x4}", checksum & 0xffff);
 #endif
         }
 
@@ -300,7 +321,6 @@ namespace PERQemu.IO.Z80.IOB
                 Trace.Log(LogType.FloppyDisk, "Setting floppy status to Density {0}, Heads {1} IE {2}",
                                               _messageData[1], _messageData[2], _messageData[3]);
 #endif
-
             switch (_messageData[1])
             {
                 case 0:
@@ -320,6 +340,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
                     break;
             }
+
+            _busyClocks = 2;    // Short busy
         }
 
         public void GetStatus(ref Queue<byte> fifo)
@@ -403,6 +425,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
+            if (!error) _busyClocks = 10;   // Floppy seeks are s l o w, but for now just fake it
+
             // Message out format:
             //  SOM
             //  0x11 (floppy done)
@@ -455,6 +479,8 @@ namespace PERQemu.IO.Z80.IOB
                                                   _cylinder, _head, sec);
 #endif
             }
+
+            if (!error) _busyClocks = (int)_disk.DiskGeometry.SectorSize;    // Busy based on byte count...
 
             // Message format is:
             //  SOM
@@ -550,6 +576,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
+            if (!error) _busyClocks = count;    // Busy based on byte count...
+
             // Read the sector in.
             Sector sectorData = _disk.GetSector(cyl, head, sec - 1);
 
@@ -629,6 +657,8 @@ namespace PERQemu.IO.Z80.IOB
                                                   _cylinder, _head, sec);
 #endif
             }
+
+            if (!error) _busyClocks = (int)_disk.DiskGeometry.SectorSize;    // Busy based on byte count...
 
             // Read the sector in.
             Sector sectorData = _disk.GetSector(cyl, head, sec - 1);
@@ -762,6 +792,8 @@ namespace PERQemu.IO.Z80.IOB
 
         private byte[] _necStatus;
         private int _necStatusLength;
+
+        private int _busyClocks;
 
         private PhysicalDisk.PhysicalDisk _disk;
         private bool _loaded;

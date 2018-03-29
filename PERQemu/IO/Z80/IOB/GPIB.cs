@@ -41,6 +41,8 @@ namespace PERQemu.IO.Z80.IOB
     {
         public GPIB()
         {
+            _busFifo = new Queue<byte>(128);
+
             Reset();
         }
 
@@ -50,9 +52,21 @@ namespace PERQemu.IO.Z80.IOB
             _cmdIndex = 0;
             _cmdData = new byte[32];
             _registers = new byte[8];
-            _busFifo = new Queue<byte>(128);
+            _busFifo.Clear();
+            _busyClocks = 0;
 
             ResetGPIB();
+        }
+
+        public ReadyFlags BusyBit
+        {
+            get { return ReadyFlags.GPIB; }
+        }
+            
+        public int BusyClocks
+        {
+            get { return _busyClocks; }
+            set { _busyClocks = value; }
         }
 
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
@@ -140,6 +154,11 @@ namespace PERQemu.IO.Z80.IOB
 #endif
                         retVal = true;
                         _messageIndex = 0;
+
+                        // Set our busy timer based on the command length... Pretty short, since
+                        // register writes shouldn't take more than a cycle or two... transmitting
+                        // data on the bus should take longer... this is kinda silly.
+                        _busyClocks = _cmdLength * 2;
                     }
                     break;
             }
@@ -154,10 +173,19 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         public void Poll(ref Queue<byte> fifo)
         {
-            // If we are not listening, we return nothing and clear our FIFO
+            // If we are not listening, we return nothing and clear our FIFO.
+            // (There's no need to allow other talkers and listeners to communicate
+            // with each other -- BitPad to PERQ or PERQ to printer is enough. :-)
             if (!_iListen)
             {
-                _busFifo.Clear();
+                if (_busFifo.Count > 0)
+                {
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.GPIB, "GPIB: Poll() but controller is not listening; queue cleared ({0} bytes)", _busFifo.Count);
+#endif
+                    _busFifo.Clear();
+                }
             }
             else
             {
@@ -190,11 +218,9 @@ namespace PERQemu.IO.Z80.IOB
             switch (register)
             {
                 case GPIBWriteRegister.InterruptMask0:
-                    _registers[(int)register] |= 0x30;     // The Z80 sets the BI, BO bits automatically
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.GPIB, "GPIB InterruptMask0 set {0:x2} ({1:x2})",
-                                  _registers[(int)register], value);
+                        Trace.Log(LogType.GPIB, "GPIB InterruptMask0 set to {0:x2}", value);
 #endif
                     break;
 
@@ -492,10 +518,13 @@ namespace PERQemu.IO.Z80.IOB
         private byte[] _registers;
 
         private Queue<byte> _busFifo;
+
         private byte[] _cmdData;
         private int _cmdIndex = 0;
         private GPIBCommand _cmdType;
         private int _cmdLength;
         private int _messageIndex;
+
+        private int _busyClocks;
     }
 }

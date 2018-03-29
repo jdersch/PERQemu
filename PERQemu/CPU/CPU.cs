@@ -23,1042 +23,1045 @@ using PERQemu.IO;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 using PERQemu.Display;
+#if DEBUG
+using PERQemu.IO.Z80.IOB;
+#endif
 
 namespace PERQemu.CPU
 {
 
-	/// <summary>
-	/// PERQ hardware interrupts, listed in order of priority.
-	/// </summary>
-	[Flags]
-	public enum InterruptType
-	{
-		None = 0x00,
-		Z80DataOutReady = 0x01,
-		Y = 0x02,
-		HardDisk = 0x04,
-		Network = 0x08,
-		Z80DataInReady = 0x10,
-		LineCounter = 0x20,
-		X = 0x40,
-		Parity = 0x80,
-	}
+    /// <summary>
+    /// PERQ hardware interrupts, listed in order of priority.
+    /// </summary>
+    [Flags]
+    public enum InterruptType
+    {
+        None = 0x00,
+        Z80DataOutReady = 0x01,
+        Y = 0x02,
+        HardDisk = 0x04,
+        Network = 0x08,
+        Z80DataInReady = 0x10,
+        LineCounter = 0x20,
+        X = 0x40,
+        Parity = 0x80,
+    }
 
-	/// <summary>
-	/// Implements a PERQ 1 4K or 16K CPU (depending on the SIXTEEN_K compiler flag).  Since we only ever
-	/// need one of these, and to simplify communication with other devices (interrupt requests, etc.)
-	/// this is a singleton.
-	///
-	/// There are some aspects that could be factored out of this class (for example the boot ROM logic).
-	/// </summary>    
-	public sealed class PERQCpu
-	{
-		private PERQCpu()
-		{
-			// Load the boot ROM
-			LoadBootRom(Paths.BuildPROMPath("boot.bin"));
+    /// <summary>
+    /// Implements a PERQ 1 4K or 16K CPU (depending on the SIXTEEN_K compiler flag).  Since we only ever
+    /// need one of these, and to simplify communication with other devices (interrupt requests, etc.)
+    /// this is a singleton.
+    ///
+    /// There are some aspects that could be factored out of this class (for example the boot ROM logic).
+    /// </summary>    
+    public sealed class PERQCpu
+    {
+        private PERQCpu()
+        {
+            // Load the boot ROM
+            LoadBootRom(Paths.BuildPROMPath("boot.bin"));
 
-			// Create CPU components
-			_alu = new ALU();
-			_shifter = new Shifter();
+            // Create CPU components
+            _alu = new ALU();
+            _shifter = new Shifter();
 #if SIXTEEN_K
-			_mqShifter = new Shifter();
+            _mqShifter = new Shifter();
 #endif
-			_rasterOp = RasterOp.Instance;
-			_memory = MemoryBoard.Instance;
-			_ioBus = IOBus.Instance;
+            _rasterOp = RasterOp.Instance;
+            _memory = MemoryBoard.Instance;
+            _ioBus = IOBus.Instance;
 
-			Reset();
-		}
+            Reset();
+        }
 
-		/// <summary>
-		/// Returns the singleton instance of this class.
-		/// </summary>
-		public static PERQCpu Instance
-		{
-			get { return _instance; }
-		}
+        /// <summary>
+        /// Returns the singleton instance of this class.
+        /// </summary>
+        public static PERQCpu Instance
+        {
+            get { return _instance; }
+        }
 
-		/// <summary>
-		/// Elapsed clock cycles.
-		/// </summary>
-		public long Clocks
-		{
-			get { return _clocks; }
-			set { _clocks = value; }
-		}
+        /// <summary>
+        /// Elapsed clock cycles.
+        /// </summary>
+        public long Clocks
+        {
+            get { return _clocks; }
+            set { _clocks = value; }
+        }
 
-		// "Real" clock speed in cycles/sec (based on 170ns cycle time).  Approx. 5.88Mhz.
-		public static readonly int Frequency = 5882353;
+        // "Real" clock speed in cycles/sec (based on 170ns cycle time).  Approx. 5.88Mhz.
+        public static readonly int Frequency = 5882353;
 
-		//
-		// Z80/IO board sampling factor.  The PERQ was roughly 2.4x faster in clock rate
-		// than the Z80 on the IOB, but clocking our fake Z80 even every other cycle is a
-		// lot of overhead.  Make this more explicit and tunable here (8-16 is a pretty
-		// good range?) and expose it so the "clock" hardware can simulate the 60Hz line
-		// frequency "jiffy clock" more accurately.  Cuz why not.
-		//
-		public static readonly int IOFudge = 8;
+        //
+        // Z80/IO board sampling factor.  The PERQ was roughly 2.4x faster in clock rate
+        // than the Z80 on the IOB, but clocking our fake Z80 even every other cycle is a
+        // lot of overhead.  Make this more explicit and tunable here (8-16 is a pretty
+        // good range?) and expose it so the "clock" hardware can simulate the 60Hz line
+        // frequency "jiffy clock" more accurately.  Cuz why not.
+        //
+        public static readonly int IOFudge = 8;
 
-		/// <summary>
-		/// Reset the CPU, clear the writable control store and re-enable the boot ROM.
-		/// </summary>
-		public void Reset()
-		{
-			_romEnabled = true;
-			_interruptFlag = InterruptType.None;
+        /// <summary>
+        /// Reset the CPU, clear the writable control store and re-enable the boot ROM.
+        /// </summary>
+        public void Reset()
+        {
+            _romEnabled = true;
+            _interruptFlag = InterruptType.None;
 
-			_clocks = 0;
-			_dds = 0;
-			_iod = 0;
-			_bpc = 0;
-			_lastBmux = 0;
-			_wcsHold = false;
-			_incrementBPC = false;
-			_victim = 0xffff;
-			_stackPointer = 0;
-			_pc.Value = 0;
-			_s.Value = 0;
-			_mq = 0;
+            _clocks = 0;
+            _dds = 0;
+            _iod = 0;
+            _bpc = 0;
+            _lastBmux = 0;
+            _wcsHold = false;
+            _incrementBPC = false;
+            _victim = 0xffff;
+            _stackPointer = 0;
+            _pc.Value = 0;
+            _s.Value = 0;
+            _mq = 0;
 #if SIXTEEN_K
-			_registerBase = 0;
-			_mqEnabled = false;
-			_lateWriteback = false;
+            _registerBase = 0;
+            _mqEnabled = false;
+            _lateWriteback = false;
 #endif
 
 #if TRACING_ENABLED
-			_lastPC = 0;
+            _lastPC = 0;
 #endif
-			_oldALURegisters = new ALURegisterFile();
+            _oldALURegisters = new ALURegisterFile();
 
-			// Clear microcode
-			for (int i = 0; i < _microcode.Length; i++)
-			{
-				_microcodeCache[i] = null;
-				_microcode[i] = 0;
-			}
+            // Clear microcode
+            for (int i = 0; i < _microcode.Length; i++)
+            {
+                _microcodeCache[i] = null;
+                _microcode[i] = 0;
+            }
 
-			// Clear registers
-			for (int i = 0; i < _r.Length; i++)
-			{
-				_r[i] = 0;
-			}
+            // Clear registers
+            for (int i = 0; i < _r.Length; i++)
+            {
+                _r[i] = 0;
+            }
 
-			// Clear Estack
-			for (int i = 0; i < _stack.Length; i++)
-			{
-				_stack[i] = 0;
-			}
+            // Clear Estack
+            for (int i = 0; i < _stack.Length; i++)
+            {
+                _stack[i] = 0;
+            }
 
-			_callStack.Clear();
-			_callStack.Reset();
+            _callStack.Clear();
+            _callStack.Reset();
 
-			_alu.Reset();
-			_rasterOp.Reset();
-			_memory.Reset();
-			_ioBus.Reset();
+            _alu.Reset();
+            _rasterOp.Reset();
+            _memory.Reset();
+            _ioBus.Reset();
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn) Trace.Log(LogType.CpuState, "CPU: Reset.");
+            if (Trace.TraceOn) Trace.Log(LogType.CpuState, "CPU: Reset.");
 #endif
-		}
+        }
 
 
-		/// <summary>
-		/// Executes a single microinstruction and runs associated hardware for one cycle.
-		/// </summary>
-		public RunState Execute(RunState currentState)
-		{
-			// Decode the next instruction
-			Instruction uOp = GetInstruction(PC);
+        /// <summary>
+        /// Executes a single microinstruction and runs associated hardware for one cycle.
+        /// </summary>
+        public RunState Execute(RunState currentState)
+        {
+            // Decode the next instruction
+            Instruction uOp = GetInstruction(PC);
 
-			_clocks++;
+            _clocks++;
 
-			// Clock the memory state machine and set up any pending fetches
-			_memory.Tick(uOp.MemoryRequest);
+            // Clock the memory state machine and set up any pending fetches
+            _memory.Tick(uOp.MemoryRequest);
 
-			//
-			// Several conditions may stall the processor:
-			//  1.  In the T0 & T1 after any Fetch, attempting to access MDI or MDX causes
-			//      the processor to stall, but other instructions may run in those cycles;
-			//  2.  The memory system may assert a "hold" if the IO or DMA is accessing
-			//      memory; we don't actually enforce that, yet, but the "wait" may be set
-			//      for stores issued in the wrong cycle;
-			//  3.  WCS writes actually take two cycles to execute; we fake one wait state
-			//      here with the _wcsHold boolean.
-			// If any of those conditions are true we "abort" the current instruction until
-			// the correct cycle comes around.
-			//
-			bool abort = (_wcsHold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid));
+            //
+            // Several conditions may stall the processor:
+            //  1.  In the T0 & T1 after any Fetch, attempting to access MDI or MDX causes
+            //      the processor to stall, but other instructions may run in those cycles;
+            //  2.  The memory system may assert a "hold" if the IO or DMA is accessing
+            //      memory; we don't actually enforce that, yet, but the "wait" may be set
+            //      for stores issued in the wrong cycle;
+            //  3.  WCS writes actually take two cycles to execute; we fake one wait state
+            //      here with the _wcsHold boolean.
+            // If any of those conditions are true we "abort" the current instruction until
+            // the correct cycle comes around.
+            //
+            bool abort = (_wcsHold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid));
 
-			if (abort)
-			{
-				// We're waiting for the next T3 or T2 cycle to come around on the guitar is
-				// what we're doing.  We can't cheat and skip the wait states, as RasterOp
-				// depends on T-state cycling through each word during overlapped fetch/stores.
+            if (abort)
+            {
+                // We're waiting for the next T3 or T2 cycle to come around on the guitar is
+                // what we're doing.  We can't cheat and skip the wait states, as RasterOp
+                // depends on T-state cycling through each word during overlapped fetch/stores.
 #if TRACING_ENABLED
-				if (Trace.TraceOn)
-					Trace.Log(LogType.MemoryState,
-						"CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
-						_memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _wcsHold);
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.MemoryState,
+                        "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
+                        _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _wcsHold);
 #endif
 #if DEBUG
-				// This should never actually happen!  The CPU should never stall during a
-				// raster operation with properly debugged microcode (the timing of the memory
-				// ops is _very_ precise).  There IS an explicit Fetch to resynchronize the
-				// RasterOp state machine upon return from an interrupt - but the Enabled flag
-				// should not actually be set at that point!  Empirically this only happens
-				// when an exception in RasterOp throws off the cycle, but we're hosed at that
-				// point anyway.  Can remove this when satisfied that debugging is complete.
-				if (_rasterOp.Enabled)
-				{
-					Console.WriteLine("\t** CPU abort while RasterOp enabled?");
-					currentState = RunState.Debug;
-				}
+                // This should never actually happen!  The CPU should never stall during a
+                // raster operation with properly debugged microcode (the timing of the memory
+                // ops is _very_ precise).  There IS an explicit Fetch to resynchronize the
+                // RasterOp state machine upon return from an interrupt - but the Enabled flag
+                // should not actually be set at that point!  Empirically this only happens
+                // when an exception in RasterOp throws off the cycle, but we're hosed at that
+                // point anyway.  Can remove this when satisfied that debugging is complete.
+                if (_rasterOp.Enabled)
+                {
+                    Console.WriteLine("\t** CPU abort while RasterOp enabled?");
+                    currentState = RunState.Debug;
+                }
 #endif
 
-				// On aborts, no memory writes occur - no Tock()                    
+                // On aborts, no memory writes occur - no Tock()                    
 
-				// Clock video
-				VideoController.Instance.Clock();
+                // Clock video
+                VideoController.Instance.Clock();
 
-				// Clock the IO here, since it's an otherwise blown cycle
-				if ((_clocks % IOFudge) == 0)
-				{
-					_ioBus.Clock();
-				}
+                // Clock the IO here, since it's an otherwise blown cycle
+                if ((_clocks % IOFudge) == 0)
+                {
+                    _ioBus.Clock();
+                }
 
-				// WCS writes take two cycles to run on the real hardware, but just
-				// one cycle here -- enough to screw up memory timing during the loop
-				// when microcode is being loaded!  Clear the hold flag to continue.
-				_wcsHold = false;
+                // WCS writes take two cycles to run on the real hardware, but just
+                // one cycle here -- enough to screw up memory timing during the loop
+                // when microcode is being loaded!  Clear the hold flag to continue.
+                _wcsHold = false;
 
-				// So we can single step through aborts for debugging
-				if (currentState == RunState.SingleStep)
-				{
-					return RunState.Debug;
-				}
-				return currentState;
-			}
+                // So we can single step through aborts for debugging
+                if (currentState == RunState.SingleStep)
+                {
+                    return RunState.Debug;
+                }
+                return currentState;
+            }
 
-			//
-			// Run the microinstruction
-			//
+            //
+            // Run the microinstruction
+            //
 
 #if TRACING_ENABLED
-			// This is a very expensive log, so only call it if we have to
-			if (Trace.TraceOn && (LogType.Instruction & Trace.TraceLevel) != 0)
-			{
-				Trace.Log(LogType.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
-			}
+            // This is a very expensive log, so only call it if we have to
+            if (Trace.TraceOn && (LogType.Instruction & Trace.TraceLevel) != 0)
+            {
+                Trace.Log(LogType.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
+            }
 
-			// Catch cases where the CPU is looping forever
-			if (_lastPC == PC &&
-				uOp.CND == Condition.True &&
-				uOp.JMP == JumpOperation.Goto)
-			{
-				throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x5}", PC));
-			}
+            // Catch cases where the CPU is looping forever
+            if (_lastPC == PC &&
+                uOp.CND == Condition.True &&
+                uOp.JMP == JumpOperation.Goto)
+            {
+                throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x5}", PC));
+            }
 #endif
 
-			// If the last instruction was NextOp or NextInst, increment BPC at the start of this instruction
-			if (_incrementBPC)
-			{
-				_bpc++;
-				_incrementBPC = false;
+            // If the last instruction was NextOp or NextInst, increment BPC at the start of this instruction
+            if (_incrementBPC)
+            {
+                _bpc++;
+                _incrementBPC = false;
 
 #if TRACING_ENABLED
-				if (Trace.TraceOn) Trace.Log(LogType.OpFile, "OpFile: BPC incremented to {0:x1}", BPC);
+                if (Trace.TraceOn) Trace.Log(LogType.OpFile, "OpFile: BPC incremented to {0:x1}", BPC);
 #endif
-			}
+            }
 
-			// Latch the ALU registers from the last micro-op before we do this instruction's
-			// ALU operation since we need them for conditional jumps later.
-			_oldALURegisters = _alu.Registers;
+            // Latch the ALU registers from the last micro-op before we do this instruction's
+            // ALU operation since we need them for conditional jumps later.
+            _oldALURegisters = _alu.Registers;
 
-			// Now decode and execute the actual instruction:
+            // Now decode and execute the actual instruction:
 
-			// Select ALU inputs
-			int bmux = _lastBmux = GetBmuxInput(uOp);
-			int amux = GetAmuxInput(uOp);
+            // Select ALU inputs
+            int bmux = _lastBmux = GetBmuxInput(uOp);
+            int amux = GetAmuxInput(uOp);
 
 #if SIXTEEN_K
-			// Reset the late writeback flag
-			_lateWriteback = false;
+            // Reset the late writeback flag
+            _lateWriteback = false;
 
-			// If the hardware multiply unit is enabled, check and possibly modify the ALU op
-			if (_mqEnabled)
-			{
-				DoMulDivALUOp(amux, bmux, _mq, uOp.ALU);
-			}
-			else
+            // If the hardware multiply unit is enabled, check and possibly modify the ALU op
+            if (_mqEnabled)
+            {
+                DoMulDivALUOp(amux, bmux, _mq, uOp.ALU);
+            }
+            else
 #endif
-			{
-				// Do ALU operation
-				_alu.DoALUOp(amux, bmux, uOp.ALU);
-			}
+            {
+                // Do ALU operation
+                _alu.DoALUOp(amux, bmux, uOp.ALU);
+            }
 
-			// Do writeback if W bit is set
-			DoWriteBack(uOp);
+            // Do writeback if W bit is set
+            DoWriteBack(uOp);
 
-			// Clock IO devices every N cycles (fudged, this is ugly).
-			if ((_clocks % IOFudge) == 0)
-			{
-				_ioBus.Clock();
-			}
+            // Clock IO devices every N cycles (fudged, this is ugly).
+            if ((_clocks % IOFudge) == 0)
+            {
+                _ioBus.Clock();
+            }
 
-			// RasterOp in progress?
-			if (_rasterOp.Enabled)
-			{
-				// Clock the RasterOp pipeline
-				_rasterOp.Clock();
+            // RasterOp in progress?
+            if (_rasterOp.Enabled)
+            {
+                // Clock the RasterOp pipeline
+                _rasterOp.Clock();
 
-				// Do any pending RasterOp stores (supercede the ALU) if a
-				// memory operation is in progress.
-				if (MemoryBoard.Instance.MDONeeded)
-				{
-					_memory.Tock(_rasterOp.Result());
-				}
-			}
-			else
-			{
-				// Do any pending memory operations based on the last ALU result
-				_memory.Tock((ushort)_alu.Registers.R);
-			}
+                // Do any pending RasterOp stores (supercede the ALU) if a
+                // memory operation is in progress.
+                if (MemoryBoard.Instance.MDONeeded)
+                {
+                    _memory.Tock(_rasterOp.Result());
+                }
+            }
+            else
+            {
+                // Do any pending memory operations based on the last ALU result
+                _memory.Tock((ushort)_alu.Registers.R);
+            }
 
-			// Always clock video (used for system timing by some OSes)
-			VideoController.Instance.Clock();
+            // Always clock video (used for system timing by some OSes)
+            VideoController.Instance.Clock();
 
-			// Execute whatever function this op calls for
-			DispatchFunction(uOp);
+            // Execute whatever function this op calls for
+            DispatchFunction(uOp);
 
 #if SIXTEEN_K
-			// Some SFs might change R; see if we need to write that back...
-			if (_lateWriteback)
-			{
-				DoWriteBack(uOp);
-			}
+            // Some SFs might change R; see if we need to write that back...
+            if (_lateWriteback)
+            {
+                DoWriteBack(uOp);
+            }
 #endif
 
 #if TRACING_ENABLED
-			_lastPC = PC;
-			_lastInstruction = uOp;
+            _lastPC = PC;
+            _lastInstruction = uOp;
 #endif
 
-			// Jump to where we need to go...
-			DispatchJump(uOp);
+            // Jump to where we need to go...
+            DispatchJump(uOp);
 
-			// And we're done.  Handle debugging state, if any
-			if (currentState == RunState.SingleStep)
-			{
-				return RunState.Debug;
-			}
+            // And we're done.  Handle debugging state, if any
+            if (currentState == RunState.SingleStep)
+            {
+                return RunState.Debug;
+            }
 
-			// If we're debugging one Qcode at a time and we just finished one, break now
-			if (_incrementBPC && currentState == RunState.RunInst)
-			{
-				return RunState.Debug;
-			}
+            // If we're debugging one Qcode at a time and we just finished one, break now
+            if (_incrementBPC && currentState == RunState.RunInst)
+            {
+                return RunState.Debug;
+            }
 
-			return currentState;
-		}
+            return currentState;
+        }
 
-		#region Getters and setters
-		/// <summary>
-		/// Returns the CPU's DDS register
-		/// </summary>
-		[DebugProperty("dds")]
-		public int DDS
-		{
-			get { return _dds; }
-		}
+        #region Getters and setters
+        /// <summary>
+        /// Returns the CPU's DDS register
+        /// </summary>
+        [DebugProperty("dds")]
+        public int DDS
+        {
+            get { return _dds; }
+        }
 
-		/// <summary>
-		/// Ensures 4 bits of _bpc, for convenience.
-		/// </summary>
-		[DebugProperty("bpc")]
-		public int BPC
-		{
-			get { return _bpc & 0xf; }
-		}
+        /// <summary>
+        /// Ensures 4 bits of _bpc, for convenience.
+        /// </summary>
+        [DebugProperty("bpc")]
+        public int BPC
+        {
+            get { return _bpc & 0xf; }
+        }
 
-		/// <summary>
-		/// Indicates whether the Opfile is empty or not,
-		/// based on bit 4 of BPC.
-		/// </summary>
-		public bool OpFileEmpty
-		{
-			get { return (BPC & 0x8) != 0; }
-		}
+        /// <summary>
+        /// Indicates whether the Opfile is empty or not,
+        /// based on bit 4 of BPC.
+        /// </summary>
+        public bool OpFileEmpty
+        {
+            get { return (BPC & 0x8) != 0; }
+        }
 
-		/// <summary>
-		/// The Victim Latch
-		/// </summary>
-		[DebugProperty("victim")]
-		public ushort Victim
-		{
-			get { return _victim; }
-		}
+        /// <summary>
+        /// The Victim Latch
+        /// </summary>
+        [DebugProperty("victim")]
+        public ushort Victim
+        {
+            get { return _victim; }
+        }
 
-		/// <summary>
-		/// The uState register
-		/// </summary>
-		[DebugProperty("ustate")]
-		public int MicrostateRegister
-		{
-			get
-			{
-				return
-					(BPC & 0xf) |
-					(_alu.Registers.Ovf ? 0x0010 : 0x0) |
-					(_alu.Registers.Eql ? 0x0020 : 0x0) |
-					(_alu.Registers.Cry ? 0x0040 : 0x0) |
-					(_alu.Registers.Lss ? 0x0080 : 0x0) |
-					(_stackPointer != 0 ? 0x0200 : 0x0) |
-					((((~_lastBmux) >> 16) & 0xf) << 12);
-			}
-		}
+        /// <summary>
+        /// The uState register
+        /// </summary>
+        [DebugProperty("ustate")]
+        public int MicrostateRegister
+        {
+            get
+            {
+                return
+                    (BPC & 0xf) |
+                    (_alu.Registers.Ovf ? 0x0010 : 0x0) |
+                    (_alu.Registers.Eql ? 0x0020 : 0x0) |
+                    (_alu.Registers.Cry ? 0x0040 : 0x0) |
+                    (_alu.Registers.Lss ? 0x0080 : 0x0) |
+                    (_stackPointer != 0 ? 0x0200 : 0x0) |
+                    ((((~_lastBmux) >> 16) & 0xf) << 12);
+            }
+        }
 
-		/// <summary>
-		/// The Microcode PC, either 12 or 14 bits depending on the CPU.
-		/// </summary>
-		[DebugProperty("pc")]
-		public ushort PC
-		{
-			get { return _pc.Value; }
-			set { _pc.Value = value; }
-		}
+        /// <summary>
+        /// The Microcode PC, either 12 or 14 bits depending on the CPU.
+        /// </summary>
+        [DebugProperty("pc")]
+        public ushort PC
+        {
+            get { return _pc.Value; }
+            set { _pc.Value = value; }
+        }
 
-		/// <summary>
-		/// The current interrupt status.
-		/// </summary>
-		[DebugProperty("int")]
-		public InterruptType InterruptFlag
-		{
-			get { return _interruptFlag; }
-		}
+        /// <summary>
+        /// The current interrupt status.
+        /// </summary>
+        [DebugProperty("int")]
+        public InterruptType InterruptFlag
+        {
+            get { return _interruptFlag; }
+        }
 
-		/// <summary>
-		/// Raises the specified interrupt
-		/// </summary>
-		[DebugFunction("raise interrupt")]
-		public void RaiseInterrupt(InterruptType i)
-		{
-			_interruptFlag |= i;
+        /// <summary>
+        /// Raises the specified interrupt
+        /// </summary>
+        [DebugFunction("raise interrupt")]
+        public void RaiseInterrupt(InterruptType i)
+        {
+            _interruptFlag |= i;
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.Interrupt, "Interrupt flag {0} raised, active interrupts now {1}", i, _interruptFlag);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.Interrupt, "Interrupt flag {0} raised, active interrupts now {1}", i, _interruptFlag);
 #endif
-		}
+        }
 
-		/// <summary>
-		/// Clears the specified interrupt, if set.
-		/// </summary>
-		[DebugFunction("clear interrupt")]
-		public void ClearInterrupt(InterruptType i)
-		{
+        /// <summary>
+        /// Clears the specified interrupt, if set.
+        /// </summary>
+        [DebugFunction("clear interrupt")]
+        public void ClearInterrupt(InterruptType i)
+        {
 #if TRACING_ENABLED
-			if ((_interruptFlag & ~i) != _interruptFlag)
-			{
-				if (Trace.TraceOn)
-					Trace.Log(LogType.Interrupt, "Interrupt flag {0} cleared, active interrupts now {1}", i, _interruptFlag & ~i);
-			}
+            if ((_interruptFlag & ~i) != _interruptFlag)
+            {
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Interrupt, "Interrupt flag {0} cleared, active interrupts now {1}", i, _interruptFlag & ~i);
+            }
 #endif
-			_interruptFlag &= ~i;
-		}
+            _interruptFlag &= ~i;
+        }
 
-		/// <summary>
-		/// The CPU's microcode store (4 or 16K)
-		/// </summary>
-		[DebugProperty("ucode")]
-		public ulong[] Microcode
-		{
-			get { return _microcode; }
-		}
+        /// <summary>
+        /// The CPU's microcode store (4 or 16K)
+        /// </summary>
+        [DebugProperty("ucode")]
+        public ulong[] Microcode
+        {
+            get { return _microcode; }
+        }
 
-		/// <summary>
-		/// The CPU's XY registers
-		/// </summary>
-		[DebugProperty("r")]
-		public int[] R
-		{
-			get { return _r; }
-		}
+        /// <summary>
+        /// The CPU's XY registers
+        /// </summary>
+        [DebugProperty("r")]
+        public int[] R
+        {
+            get { return _r; }
+        }
 
-		/// <summary>
-		/// The CPU's expression stack
-		/// </summary>
-		[DebugProperty("estk")]
-		public int[] EStack
-		{
-			get { return _stack; }
-		}
+        /// <summary>
+        /// The CPU's expression stack
+        /// </summary>
+        [DebugProperty("estk")]
+        public int[] EStack
+        {
+            get { return _stack; }
+        }
 
-		/// <summary>
-		/// The expression stack pointer
-		/// </summary>
-		[DebugProperty("estkptr")]
-		public int EStackPointer
-		{
-			get { return _stackPointer; }
-			set { _stackPointer = value; }
-		}
+        /// <summary>
+        /// The expression stack pointer
+        /// </summary>
+        [DebugProperty("estkptr")]
+        public int EStackPointer
+        {
+            get { return _stackPointer; }
+            set { _stackPointer = value; }
+        }
 
-		/// <summary>
-		/// The Am2910 call stack
-		/// </summary>
-		public CallStack CallStack
-		{
-			get { return _callStack; }
-		}
-		#endregion
+        /// <summary>
+        /// The Am2910 call stack
+        /// </summary>
+        public CallStack CallStack
+        {
+            get { return _callStack; }
+        }
+        #endregion
 
-		#region CPU Helper functions
-		/// <summary>
-		/// Reads the instruction from the microcode store (or ROM) at the given address.
-		/// </summary>
-		/// <param name="address"></param>
-		/// <returns>The microinstruction to execute</returns>
-		public Instruction GetInstruction(ushort address)
-		{
-			// Return the precomputed microcode, unless it has yet to be cached
-			if (_microcodeCache[address] == null)
-			{
-				ulong word;
+        #region CPU Helper functions
+        /// <summary>
+        /// Reads the instruction from the microcode store (or ROM) at the given address.
+        /// </summary>
+        /// <param name="address"></param>
+        /// <returns>The microinstruction to execute</returns>
+        public Instruction GetInstruction(ushort address)
+        {
+            // Return the precomputed microcode, unless it has yet to be cached
+            if (_microcodeCache[address] == null)
+            {
+                ulong word;
 
-				if (_romEnabled)
-				{
-					if (address < 0x200)
-					{
-						word = _rom[address];
-					}
-					else
-					{
-						word = _microcode[address];
-					}
-				}
-				else
-				{
-					word = _microcode[address];
-				}
+                if (_romEnabled)
+                {
+                    if (address < 0x200)
+                    {
+                        word = _rom[address];
+                    }
+                    else
+                    {
+                        word = _microcode[address];
+                    }
+                }
+                else
+                {
+                    word = _microcode[address];
+                }
 
-				_microcodeCache[address] = new Instruction(word, address);
-			}
+                _microcodeCache[address] = new Instruction(word, address);
+            }
 
-			return _microcodeCache[address];
-		}
+            return _microcodeCache[address];
+        }
 
-		/// <summary>
-		/// Selects the proper AMUX input for the specified instruction
-		/// </summary>
-		/// <param name="uOp"></param>
-		/// <returns>AMUX input</returns>
-		private int GetAmuxInput(Instruction uOp)
-		{
-			int amux = 0;
+        /// <summary>
+        /// Selects the proper AMUX input for the specified instruction
+        /// </summary>
+        /// <param name="uOp"></param>
+        /// <returns>AMUX input</returns>
+        private int GetAmuxInput(Instruction uOp)
+        {
+            int amux = 0;
 
-			// Select AMUX input
-			switch (uOp.A)
-			{
-				case AField.Shifter:
-					_shifter.Shift(_oldALURegisters.R);
-					amux = _shifter.ShifterOutput;
-					break;
+            // Select AMUX input
+            switch (uOp.A)
+            {
+                case AField.Shifter:
+                    _shifter.Shift(_oldALURegisters.R);
+                    amux = _shifter.ShifterOutput;
+                    break;
 
-				case AField.NextOp:
-					if (OpFileEmpty)
-					{
-						// Only latch if victim is empty (0xffff indicates an unset victim...)
-						if (_victim == 0xffff)
-						{
+                case AField.NextOp:
+                    if (OpFileEmpty)
+                    {
+                        // Only latch if victim is empty (0xffff indicates an unset victim...)
+                        if (_victim == 0xffff)
+                        {
 #if SIXTEEN_K
-							// 16K CPU - All 14 bits saved, according to VFY 2.x...
-							_victim = _pc.Value;
+                            // 16K CPU - All 14 bits saved, according to VFY 2.x...
+                            _victim = _pc.Value;
 #else
                             // 4K CPU - Only the low 12 bits count for the victim latch
                             _victim = _pc.Lo;
 #endif
 #if TRACING_ENABLED
-							if (Trace.TraceOn) Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _victim);
+                            if (Trace.TraceOn) Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _victim);
 #endif
-						}
-					}
+                        }
+                    }
 
-					amux = _memory.OpFile[BPC];
+                    amux = _memory.OpFile[BPC];
 #if TRACING_ENABLED
-					if (Trace.TraceOn) Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
+                    if (Trace.TraceOn) Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
 #endif
-					_incrementBPC = true;   // Increment bpc at the beginning of the next instruction
-					break;
+                    _incrementBPC = true;   // Increment bpc at the beginning of the next instruction
+                    break;
 
-				case AField.IOD:
-					amux = _iod;
-					break;
+                case AField.IOD:
+                    amux = _iod;
+                    break;
 
-				case AField.MDI:
-					amux = _memory.MDI;
-					break;
+                case AField.MDI:
+                    amux = _memory.MDI;
+                    break;
 
-				case AField.MDX:
-					amux = (_memory.MDI & 0xf) << 16;
-					break;
+                case AField.MDX:
+                    amux = (_memory.MDI & 0xf) << 16;
+                    break;
 
-				case AField.UState:
-					amux = MicrostateRegister;
-					break;
+                case AField.UState:
+                    amux = MicrostateRegister;
+                    break;
 
-				case AField.XYRegister:
+                case AField.XYRegister:
 #if SIXTEEN_K
-					if (uOp.X < 0x40)
-					{
-						amux = _r[uOp.X | _registerBase];   // Or-in Base register (16K only)
-					}
-					else
+                    if (uOp.X < 0x40)
+                    {
+                        amux = _r[uOp.X | _registerBase];   // Or-in Base register (16K only)
+                    }
+                    else
 #endif
-					{
-						amux = _r[uOp.X];
-					}
-					break;
+                    {
+                        amux = _r[uOp.X];
+                    }
+                    break;
 
-				case AField.TOS:
-					amux = _stack[_stackPointer];
-					break;
+                case AField.TOS:
+                    amux = _stack[_stackPointer];
+                    break;
 
-				default:
-					throw new UnimplementedInstructionException(String.Format("Unimplemented AMUX {0}", uOp.A));
-			}
+                default:
+                    throw new UnimplementedInstructionException(String.Format("Unimplemented AMUX {0}", uOp.A));
+            }
 
-			return amux;
-		}
+            return amux;
+        }
 
-		/// <summary>
-		/// Selects the proper BMUX input for the specified instruction
-		/// </summary>
-		/// <param name="uOp"></param>
-		/// <returns>BMUX input</returns>
-		private int GetBmuxInput(Instruction uOp)
-		{
-			int bmux = 0;
+        /// <summary>
+        /// Selects the proper BMUX input for the specified instruction
+        /// </summary>
+        /// <param name="uOp"></param>
+        /// <returns>BMUX input</returns>
+        private int GetBmuxInput(Instruction uOp)
+        {
+            int bmux = 0;
 
-			// Select BMUX input
-			if (uOp.B == 0)
-			{
+            // Select BMUX input
+            if (uOp.B == 0)
+            {
 #if SIXTEEN_K
-				if (uOp.Y < 0x40)
-				{
-					bmux = _r[uOp.Y | _registerBase];   // Or-in Base register (16K only)
-				}
-				else
+                if (uOp.Y < 0x40)
+                {
+                    bmux = _r[uOp.Y | _registerBase];   // Or-in Base register (16K only)
+                }
+                else
 #endif
-				{
-					bmux = _r[uOp.Y];
-				}
-			}
-			else
-			{
-				bmux = uOp.BMuxInput;
-			}
+                {
+                    bmux = _r[uOp.Y];
+                }
+            }
+            else
+            {
+                bmux = uOp.BMuxInput;
+            }
 
-			return bmux;
-		}
+            return bmux;
+        }
 
-		/// <summary>
-		/// If W bit set, write R back to the register file.
-		/// </summary>
-		/// <param name="uOp"></param>
-		private void DoWriteBack(Instruction uOp)
-		{
-			// Do it if the W (write) bit is set.
-			// We ASSUME that the assembler sets W for R := (MQ | Victim) phrases...
-			if (uOp.W == 1)
-			{
+        /// <summary>
+        /// If W bit set, write R back to the register file.
+        /// </summary>
+        /// <param name="uOp"></param>
+        private void DoWriteBack(Instruction uOp)
+        {
+            // Do it if the W (write) bit is set.
+            // We ASSUME that the assembler sets W for R := (MQ | Victim) phrases...
+            if (uOp.W == 1)
+            {
 #if SIXTEEN_K
-				if (uOp.X < 0x40)
-				{
-					_r[uOp.X | _registerBase] = _alu.Registers.R;   // Or-in Base register (16K only)
+                if (uOp.X < 0x40)
+                {
+                    _r[uOp.X | _registerBase] = _alu.Registers.R;   // Or-in Base register (16K only)
 
 #if TRACING_ENABLED
-					if (Trace.TraceOn)
-						Trace.Log(LogType.RegisterAssignment, "R|RBase{0:x2}={1:x5}{2}",
-							uOp.X | _registerBase, _alu.Registers.R, _lateWriteback ? " (Late)" : "");
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.RegisterAssignment, "R|RBase{0:x2}={1:x5}{2}",
+                            uOp.X | _registerBase, _alu.Registers.R, _lateWriteback ? " (Late)" : "");
 #endif
-				}
-				else
+                }
+                else
 #endif
-				{
-					_r[uOp.X] = _alu.Registers.R;
+                {
+                    _r[uOp.X] = _alu.Registers.R;
 #if TRACING_ENABLED
-					if (Trace.TraceOn)
-						Trace.Log(LogType.RegisterAssignment, "R{0:x2}={1:x5}", uOp.X, _alu.Registers.R);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.RegisterAssignment, "R{0:x2}={1:x5}", uOp.X, _alu.Registers.R);
 #endif
-				}
-			}
-		}
+                }
+            }
+        }
 
 #if SIXTEEN_K
-		/// <summary>
-		/// Dark magick to set up and execute the correct ALU op for a Multiply or Divide step.
-		/// </summary>
-		/// <param name="mdr"></param>
-		/// <param name="curOp"></param>
-		private void DoMulDivALUOp(int amux, int bmux, int mdr, ALUOperation curOp)
-		{
-			ALUOperation modOp = curOp;
+        /// <summary>
+        /// Dark magick to set up and execute the correct ALU op for a Multiply or Divide step.
+        /// </summary>
+        /// <param name="mdr"></param>
+        /// <param name="curOp"></param>
+        private void DoMulDivALUOp(int amux, int bmux, int mdr, ALUOperation curOp)
+        {
+            ALUOperation modOp = curOp;
 #if TRACING_ENABLED
-			int test = 0;
+            int test = 0;
 
-			if (Trace.TraceOn)
-				Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  mdr ={0:x5} amux={1:x5} bmux={2:x5} op={3}",
-										  mdr, amux, bmux, curOp);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  mdr ={0:x5} amux={1:x5} bmux={2:x5} op={3}",
+                                          mdr, amux, bmux, curOp);
 #endif
-			if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
-			{
-				switch (_rasterOp.MulDivInst)
-				{
-					case MulDivCommand.Off:
-						// Should never happen!
+            if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
+            {
+                switch (_rasterOp.MulDivInst)
+                {
+                    case MulDivCommand.Off:
+                        // Should never happen!
 #if TRACING_ENABLED
-						test = mdr;		// If we're debugging, fall through... 
-						break;
+                        test = mdr;     // If we're debugging, fall through... 
+                        break;
 #else
 						throw new InvalidOperationException("DoMulDivALUOp called with MulDivInst=OFF!?");
 #endif
 
-					case MulDivCommand.UnsignedDivide:
-						//
-						// For a divide step, shift the MSB of the quotient (MQ<15> from the last cycle)
-						// into the LSB of the remainder (SHIFT<0> here, already shifted by amux select).
-						// Later DispatchFunction() will shift the quotient in MQ and apply the computed Q0 bit.
-						//
-						int bit = (mdr & 0x8000) >> 15;             // save MQ<15> from last cycle
-						amux = ((amux & 0xffffe) | bit);            // xfer it into SHIFT<0> (current amux input)
+                    case MulDivCommand.UnsignedDivide:
+                        //
+                        // For a divide step, shift the MSB of the quotient (MQ<15> from the last cycle)
+                        // into the LSB of the remainder (SHIFT<0> here, already shifted by amux select).
+                        // Later DispatchFunction() will shift the quotient in MQ and apply the computed Q0 bit.
+                        //
+                        int bit = (mdr & 0x8000) >> 15;             // save MQ<15> from last cycle
+                        amux = ((amux & 0xffffe) | bit);            // xfer it into SHIFT<0> (current amux input)
 
-						//
-						// Next, examine the sign bit from the PREVIOUS cycle's result (R<15>) to determine
-						// if the current op should be an addition or subtraction (of the remainder).  Only
-						// do this if the current op is add/sub (first use of DivideStep is a shift).
-						//
-						if ((_oldALURegisters.R & 0x8000) != 0)     // was sign of previous R + or -?
-						{
-							modOp = ALUOperation.AplusB;
-						}
-						else
-						{
-							modOp = ALUOperation.AminusB;
-						}
+                        //
+                        // Next, examine the sign bit from the PREVIOUS cycle's result (R<15>) to determine
+                        // if the current op should be an addition or subtraction (of the remainder).  Only
+                        // do this if the current op is add/sub (first use of DivideStep is a shift).
+                        //
+                        if ((_oldALURegisters.R & 0x8000) != 0)     // was sign of previous R + or -?
+                        {
+                            modOp = ALUOperation.AplusB;
+                        }
+                        else
+                        {
+                            modOp = ALUOperation.AminusB;
+                        }
 #if TRACING_ENABLED
-						test = (_oldALURegisters.R & 0x8000) >> 15;
+                        test = (_oldALURegisters.R & 0x8000) >> 15;
 #endif
-						break;
+                        break;
 
-					case MulDivCommand.UnsignedMultiply:
-					case MulDivCommand.SignedMultiply:
-						//
-						// For a multiply, check the LSB of the multiplier (current MQ register);
-						// if set, do an add, else pass thru unmolested.  This happens before the
-						// MQ is shifted in DispatchFunction().
-						//
-						if ((mdr & 0x1) == 1)
-						{
-							modOp = ALUOperation.AplusB;
-						}
-						else
-						{
-							modOp = ALUOperation.A;
-						}
+                    case MulDivCommand.UnsignedMultiply:
+                    case MulDivCommand.SignedMultiply:
+                        //
+                        // For a multiply, check the LSB of the multiplier (current MQ register);
+                        // if set, do an add, else pass thru unmolested.  This happens before the
+                        // MQ is shifted in DispatchFunction().
+                        //
+                        if ((mdr & 0x1) == 1)
+                        {
+                            modOp = ALUOperation.AplusB;
+                        }
+                        else
+                        {
+                            modOp = ALUOperation.A;
+                        }
 #if TRACING_ENABLED
-						test = mdr & 0x1;
+                        test = mdr & 0x1;
 #endif
-						break;
-				}
-			}
+                        break;
+                }
+            }
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT test={0:x5} amux={1:x5} bmux={2:x5} op={3}",
-										  test, amux, bmux, modOp);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT test={0:x5} amux={1:x5} bmux={2:x5} op={3}",
+                                          test, amux, bmux, modOp);
 #endif
-			_alu.DoALUOp(amux, bmux, modOp);    // Do it! (with our possibly modified op and amux input)
-		}
+            _alu.DoALUOp(amux, bmux, modOp);    // Do it! (with our possibly modified op and amux input)
+        }
 #endif
 
-		/// <summary>
-		/// Dispatches function and special function operations based on the instruction
-		/// </summary>
-		/// <param name="uOp"></param>
-		private void DispatchFunction(Instruction uOp)
-		{
-			switch (uOp.F)
-			{
-				case 0x0:
-				case 0x2:   // Special Functions
+        /// <summary>
+        /// Dispatches function and special function operations based on the instruction
+        /// </summary>
+        /// <param name="uOp"></param>
+        private void DispatchFunction(Instruction uOp)
+        {
+            switch (uOp.F)
+            {
+                case 0x0:
+                case 0x2:   // Special Functions
 
-					// Calculate shifter output when F=2
-					if (uOp.F == 0x2)
-					{
+                    // Calculate shifter output when F=2
+                    if (uOp.F == 0x2)
+                    {
 #if TRACING_ENABLED
-						if (Trace.TraceOn) Trace.Log(LogType.Shifter, "ShiftOnZ");
+                        if (Trace.TraceOn) Trace.Log(LogType.Shifter, "ShiftOnZ");
 #endif
-						_shifter.SetShifterCommand(uOp.Z);
-					}
+                        _shifter.SetShifterCommand(uOp.Z);
+                    }
 
-					switch (uOp.SF)
-					{
-						case 0x0:   // LongConstant
-									// Taken care of when the BMUX is selected
-							break;
+                    switch (uOp.SF)
+                    {
+                        case 0x0:   // LongConstant
+                                    // Taken care of when the BMUX is selected
+                            break;
 
-						case 0x1:   // ShiftOnR
-							if (uOp.F == 0)
-							{
+                        case 0x1:   // ShiftOnR
+                            if (uOp.F == 0)
+                            {
 #if TRACING_ENABLED
-								if (Trace.TraceOn) Trace.Log(LogType.Shifter, "ShiftOnR");
+                                if (Trace.TraceOn) Trace.Log(LogType.Shifter, "ShiftOnR");
 #endif
-								_shifter.SetShifterCommand(~(_alu.Registers.R));
-							}
-							break;
+                                _shifter.SetShifterCommand(~(_alu.Registers.R));
+                            }
+                            break;
 
-						case 0x2:   // StackReset
-							StackReset();
-							break;
+                        case 0x2:   // StackReset
+                            StackReset();
+                            break;
 
-						case 0x3:   // TOS := (R)
+                        case 0x3:   // TOS := (R)
 #if TRACING_ENABLED
-							if (Trace.TraceOn) Trace.Log(LogType.EStack, "TOS set to {0:x5}", _alu.Registers.R);
+                            if (Trace.TraceOn) Trace.Log(LogType.EStack, "TOS set to {0:x5}", _alu.Registers.R);
 #endif
-							_stack[_stackPointer] = _alu.Registers.R;
-							break;
+                            _stack[_stackPointer] = _alu.Registers.R;
+                            break;
 
-						case 0x4:   // Push
-							StackPush(_alu.Registers.R);
-							break;
+                        case 0x4:   // Push
+                            StackPush(_alu.Registers.R);
+                            break;
 
-						case 0x5:   // Pop
-							StackPop();
-							break;
+                        case 0x5:   // Pop
+                            StackPop();
+                            break;
 
-						case 0x6:   // CntlRasterOp := (Z)
-							_rasterOp.CntlRasterOp(uOp.Z);
-							break;
+                        case 0x6:   // CntlRasterOp := (Z)
+                            _rasterOp.CntlRasterOp(uOp.Z);
+                            break;
 
-						case 0x7:   // SrcRasterOp := (R)
-							_rasterOp.SrcRasterOp(_alu.Registers.R);
-							break;
+                        case 0x7:   // SrcRasterOp := (R)
+                            _rasterOp.SrcRasterOp(_alu.Registers.R);
+                            break;
 
-						case 0x8:   // DstRasterOp := (R)
-							_rasterOp.DstRasterOp(_alu.Registers.R);
-							break;
+                        case 0x8:   // DstRasterOp := (R)
+                            _rasterOp.DstRasterOp(_alu.Registers.R);
+                            break;
 
-						case 0x9:   // WidRasterOp := (R)
-							_rasterOp.WidRasterOp(_alu.Registers.R);
+                        case 0x9:   // WidRasterOp := (R)
+                            _rasterOp.WidRasterOp(_alu.Registers.R);
 #if SIXTEEN_K
-							//
-							// The hardware multiply/divide support is enabled or disabled by setting the
-							// upper two bits in the WidRasterOp register.  Oof.  Due to the order in which
-							// ALU and Dispatch ops are done, we'll set an enable flag here to minimize the
-							// ugly interactions between ALU, CPU and RasterOp.
-							//
-							// Enabling the MulDiv unit sets the MQ shifter control word.
-							//
-							switch (_rasterOp.MulDivInst)       // taken from WidRasterOp reg bits <7:6>
-							{
-								case MulDivCommand.Off:
+                            //
+                            // The hardware multiply/divide support is enabled or disabled by setting the
+                            // upper two bits in the WidRasterOp register.  Oof.  Due to the order in which
+                            // ALU and Dispatch ops are done, we'll set an enable flag here to minimize the
+                            // ugly interactions between ALU, CPU and RasterOp.
+                            //
+                            // Enabling the MulDiv unit sets the MQ shifter control word.
+                            //
+                            switch (_rasterOp.MulDivInst)       // taken from WidRasterOp reg bits <7:6>
+                            {
+                                case MulDivCommand.Off:
 #if TRACING_ENABLED
-									if (Trace.TraceOn && _mqEnabled) Trace.Log(LogType.MulDiv, "MulDiv unit disabled.");
+                                    if (Trace.TraceOn && _mqEnabled) Trace.Log(LogType.MulDiv, "MulDiv unit disabled.");
 #endif
-									_mqEnabled = false;
-									break;
+                                    _mqEnabled = false;
+                                    break;
 
-								case MulDivCommand.UnsignedDivide:
+                                case MulDivCommand.UnsignedDivide:
 #if TRACING_ENABLED
-									if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv enabled: Divide");
+                                    if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv enabled: Divide");
 #endif
-									_mqShifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
-									_mqEnabled = true;
-									break;
+                                    _mqShifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
+                                    _mqEnabled = true;
+                                    break;
 
-								case MulDivCommand.UnsignedMultiply:
-								case MulDivCommand.SignedMultiply:
+                                case MulDivCommand.UnsignedMultiply:
+                                case MulDivCommand.SignedMultiply:
 #if TRACING_ENABLED
-									if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv enabled: Multiply");
+                                    if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv enabled: Multiply");
 #endif
-									_mqShifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
-									_mqEnabled = true;
-									break;
-							}
+                                    _mqShifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
+                                    _mqEnabled = true;
+                                    break;
+                            }
 #endif
-							break;
+                            break;
 
-						case 0xa:   // LoadOp
-							_memory.LoadOpFile();
+                        case 0xa:   // LoadOp
+                            _memory.LoadOpFile();
 
-							if (_romEnabled)
-							{
-								_romEnabled = false;        // OpFile load disables ROM
+                            if (_romEnabled)
+                            {
+                                _romEnabled = false;        // OpFile load disables ROM
 
-								// And since we've disabled the ROM, we ought just
-								// for good measure to invalidate the microcode cache.
-								for (int i = 0; i < 512; i++)
-								{
-									_microcodeCache[i] = null;
-								}
-							}
-							break;
+                                // And since we've disabled the ROM, we ought just
+                                // for good measure to invalidate the microcode cache.
+                                for (int i = 0; i < 512; i++)
+                                {
+                                    _microcodeCache[i] = null;
+                                }
+                            }
+                            break;
 
-						case 0xb:   // BPC := (R)
-							_bpc = _alu.Registers.R & 0xf;  // bottom 4 bits of R
+                        case 0xb:   // BPC := (R)
+                            _bpc = _alu.Registers.R & 0xf;  // bottom 4 bits of R
 #if TRACING_ENABLED
-							if (Trace.TraceOn) Trace.Log(LogType.OpFile, "BPC set to {0:x1}", BPC);
+                            if (Trace.TraceOn) Trace.Log(LogType.OpFile, "BPC set to {0:x1}", BPC);
 #endif
-							break;
+                            break;
 
-						case 0xc:   // WCSL
-							WriteControlStore(ControlStoreWord.Low, (ushort)_oldALURegisters.R);
-							break;
+                        case 0xc:   // WCSL
+                            WriteControlStore(ControlStoreWord.Low, (ushort)_oldALURegisters.R);
+                            break;
 
-						case 0xd:   // WCSM
-							WriteControlStore(ControlStoreWord.Middle, (ushort)_oldALURegisters.R);
-							break;
+                        case 0xd:   // WCSM
+                            WriteControlStore(ControlStoreWord.Middle, (ushort)_oldALURegisters.R);
+                            break;
 
-						case 0xe:   // WCSH
-							WriteControlStore(ControlStoreWord.High, (ushort)_oldALURegisters.R);
-							break;
+                        case 0xe:   // WCSH
+                            WriteControlStore(ControlStoreWord.High, (ushort)_oldALURegisters.R);
+                            break;
 
-						case 0xf:   // IOB function
-							if (uOp.F == 0x0)
-							{
-								// This is Input if the msb of Z is unset, Output otherwise
-								if (uOp.IsIOInput)
-								{
-									// Input
-									_iod = _ioBus.IORead(uOp.IOPort);
-								}
-								else
-								{
-									// Output
-									_ioBus.IOWrite(uOp.IOPort, _alu.Registers.R);
-								}
-							}
-							break;
+                        case 0xf:   // IOB function
+                            if (uOp.F == 0x0)
+                            {
+                                // This is Input if the msb of Z is unset, Output otherwise
+                                if (uOp.IsIOInput)
+                                {
+                                    // Input
+                                    _iod = _ioBus.IORead(uOp.IOPort);
+                                }
+                                else
+                                {
+                                    // Output
+                                    _ioBus.IOWrite(uOp.IOPort, _alu.Registers.R);
+                                }
+                            }
+                            break;
 
-						default:
-							throw new UnimplementedInstructionException(
-								String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
-					}
-					break;
+                        default:
+                            throw new UnimplementedInstructionException(
+                                String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                    }
+                    break;
 
-				case 0x1:   // Store / Extended functions
-					switch (uOp.SF)
-					{
+                case 0x1:   // Store / Extended functions
+                    switch (uOp.SF)
+                    {
 #if SIXTEEN_K
-						case 0x0:   // (R) := Victim Latch
-							_alu.SetR(_victim);
-							_lateWriteback = true;
+                        case 0x0:   // (R) := Victim Latch
+                            _alu.SetR(_victim);
+                            _lateWriteback = true;
 #if TRACING_ENABLED
-							if (Trace.TraceOn)
-								Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _victim);
+                            if (Trace.TraceOn)
+                                Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _victim);
 #endif
-							_victim = 0xffff;       // do NOT set PC, but DO clear the latch
-							break;
+                            _victim = 0xffff;       // do NOT set PC, but DO clear the latch
+                            break;
 
-						case 0x1:   // Multiply / DivideStep
+                        case 0x1:   // Multiply / DivideStep
 #if TRACING_ENABLED
-							if (Trace.TraceOn)
-								Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x5} R={1:x5} R<15>={2}",
-														  _mq, _alu.Registers.R, ((_alu.Registers.R & 0x8000) >> 15));
+                            if (Trace.TraceOn)
+                                Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x5} R={1:x5} R<15>={2}",
+                                                          _mq, _alu.Registers.R, ((_alu.Registers.R & 0x8000) >> 15));
 #endif
-							//
-							// For the hardware assisted Multiply/Divide steps, we've already done the ALU op
-							// on the high word of the product or quotient during the ALU execution above;
-							// here we take care of the low word in the MQ register.
-							//
-							switch (_rasterOp.MulDivInst)
-							{
-								case MulDivCommand.Off:
-									// Should never happen...
-									throw new InvalidOperationException("MulDiv error: step SF while not enabled??");
+                            //
+                            // For the hardware assisted Multiply/Divide steps, we've already done the ALU op
+                            // on the high word of the product or quotient during the ALU execution above;
+                            // here we take care of the low word in the MQ register.
+                            //
+                            switch (_rasterOp.MulDivInst)
+                            {
+                                case MulDivCommand.Off:
+                                    // Should never happen...
+                                    throw new InvalidOperationException("MulDiv error: step SF while not enabled??");
 
-								case MulDivCommand.UnsignedDivide:
-									//
-									// For one division step:
-									//  1. Shift MQ left one bit;
-									//  2. Save the complement of the MSB from R into the LSB of MQ.
-									//
-									// Thar be dragons here:
-									//   ONLY complement the LSB if the ALU op was an add or subtract; this covers
-									//   the setup step where the initial left shift is done but no Q0 bit computation
-									//   is needed.  The 16K ALU does this based on ArithX/ArithY, the MDINSTR bits
-									//   and some PAL logic; here we're just cheating.  (It's a no-win; either we peek
-									//   at the ALU op here, or the ALU has to reach into the MQ reg...)
-									//
-									if ((uOp.ALU == ALUOperation.AplusB) || (uOp.ALU == ALUOperation.AminusB))
-									{
-										_mqShifter.Shift(_mq);
-										_mq = _mqShifter.ShifterOutput | (~((_alu.Registers.R & 0x8000) >> 15) & 0x1);
-									}
+                                case MulDivCommand.UnsignedDivide:
+                                    //
+                                    // For one division step:
+                                    //  1. Shift MQ left one bit;
+                                    //  2. Save the complement of the MSB from R into the LSB of MQ.
+                                    //
+                                    // Thar be dragons here:
+                                    //   ONLY complement the LSB if the ALU op was an add or subtract; this covers
+                                    //   the setup step where the initial left shift is done but no Q0 bit computation
+                                    //   is needed.  The 16K ALU does this based on ArithX/ArithY, the MDINSTR bits
+                                    //   and some PAL logic; here we're just cheating.  (It's a no-win; either we peek
+                                    //   at the ALU op here, or the ALU has to reach into the MQ reg...)
+                                    //
+                                    if ((uOp.ALU == ALUOperation.AplusB) || (uOp.ALU == ALUOperation.AminusB))
+                                    {
+                                        _mqShifter.Shift(_mq);
+                                        _mq = _mqShifter.ShifterOutput | (~((_alu.Registers.R & 0x8000) >> 15) & 0x1);
+                                    }
 #if TRACING_ENABLED
-									else
-									{
-										if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv step: Q0 bit skipped");
-									}
+                                    else
+                                    {
+                                        if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv step: Q0 bit skipped");
+                                    }
 #endif
-									break;
+                                    break;
 
-								case MulDivCommand.UnsignedMultiply:
-								case MulDivCommand.SignedMultiply:
-									//
-									// For one multiplication step:
-									//  1. Shift MQ right one bit;
-									//  2. Save the LSB from the current R into the MSB of MQ.
-									//
-									_mqShifter.Shift(_mq);
-									_mq = _mqShifter.ShifterOutput | ((_alu.Registers.R & 0x1) << 15);
-									break;
-							}
+                                case MulDivCommand.UnsignedMultiply:
+                                case MulDivCommand.SignedMultiply:
+                                    //
+                                    // For one multiplication step:
+                                    //  1. Shift MQ right one bit;
+                                    //  2. Save the LSB from the current R into the MSB of MQ.
+                                    //
+                                    _mqShifter.Shift(_mq);
+                                    _mq = _mqShifter.ShifterOutput | ((_alu.Registers.R & 0x1) << 15);
+                                    break;
+                            }
 #if TRACING_ENABLED
-							if (Trace.TraceOn)
-								Trace.Log(LogType.MulDiv, "MulDiv step: MQ out={0:x5} MQ<0>={1}", _mq, (_mq & 0x1));
+                            if (Trace.TraceOn)
+                                Trace.Log(LogType.MulDiv, "MulDiv step: MQ out={0:x5} MQ<0>={1}", _mq, (_mq & 0x1));
 #endif
-							break;
+                            break;
 
-						case 0x2:   // Load multiplier / dividend
-							_mq = (_alu.Registers.R & 0xffff);      // MQ register is 16 bits wide
+                        case 0x2:   // Load multiplier / dividend
+                            _mq = (_alu.Registers.R & 0xffff);      // MQ register is 16 bits wide
 #if TRACING_ENABLED
-							if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv load: MQ={0:x4}", _mq);
+                            if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv load: MQ={0:x4}", _mq);
 #endif
-							break;
+                            break;
 
-						case 0x3:   // Load base register (not R)
-							_registerBase = (byte)(~_alu.Registers.R);
-							break;
+                        case 0x3:   // Load base register (not R)
+                            _registerBase = (byte)(~_alu.Registers.R);
+                            break;
 
-						case 0x4:   // (R) := product or quotient
-							_alu.SetR(_mq & 0xffff);
-							_lateWriteback = true;
+                        case 0x4:   // (R) := product or quotient
+                            _alu.SetR(_mq & 0xffff);
+                            _lateWriteback = true;
 #if TRACING_ENABLED
-							if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv read: MQ={0:x4}", _mq);
+                            if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv read: MQ={0:x4}", _mq);
 #endif
-							break;
+                            break;
 
-						case 0x5:   // Push long constant
-							StackPush(uOp.LongConstant);
-							break;
+                        case 0x5:   // Push long constant
+                            StackPush(uOp.LongConstant);
+                            break;
 
-						case 0x6:   // Address input (MA) := Shift
-							_shifter.Shift(_oldALURegisters.R);
+                        case 0x6:   // Address input (MA) := Shift
+                            _shifter.Shift(_oldALURegisters.R);
 
-							//
-							// We hack in the NIA value into the decoded (cached) Instruction's "Next" field.
-							// This should always work since the Next field's value is never normally used
-							// for this type of instruction.
-							//
-							uOp.NextAddress = (ushort)(_shifter.ShifterOutput & 0x3fff);
-							break;
+                            //
+                            // We hack in the NIA value into the decoded (cached) Instruction's "Next" field.
+                            // This should always work since the Next field's value is never normally used
+                            // for this type of instruction.
+                            //
+                            uOp.NextAddress = (ushort)(_shifter.ShifterOutput & 0x3fff);
+                            break;
 
-						case 0x7:   // Leap address generation
-									// This is handled by CalcAddress
-							break;
+                        case 0x7:   // Leap address generation
+                                    // This is handled by CalcAddress
+                            break;
 #else
                         //
                         // In the original 4K CPU, these special functions don't exist and are ignored.
@@ -1081,784 +1084,785 @@ namespace PERQemu.CPU
                             break;
 #endif
 
-						case 0x8:   // Fetch4R
-						case 0x9:   // Store4R
-						case 0xa:   // Fetch4
-						case 0xb:   // Store4
-						case 0xc:   // Fetch2
-						case 0xd:   // Store2
-						case 0xe:   // Fetch
-						case 0xf:   // Store
-							_memory.RequestMemoryCycle(_clocks, _alu.Registers.R, uOp.MemoryRequest);
-							break;
+                        case 0x8:   // Fetch4R
+                        case 0x9:   // Store4R
+                        case 0xa:   // Fetch4
+                        case 0xb:   // Store4
+                        case 0xc:   // Fetch2
+                        case 0xd:   // Store2
+                        case 0xe:   // Fetch
+                        case 0xf:   // Store
+                            _memory.RequestMemoryCycle(_clocks, _alu.Registers.R, uOp.MemoryRequest);
+                            break;
 
-						default:
-							throw new UnimplementedInstructionException(
-								String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
-					}
-					break;
+                        default:
+                            throw new UnimplementedInstructionException(
+                                String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                    }
+                    break;
 
-				case 0x3:   // Long jump
-							// Handled in DispatchJump
-					break;
+                case 0x3:   // Long jump
+                            // Handled in DispatchJump
+                    break;
 
-				default:
-					throw new UnimplementedInstructionException(
-						String.Format("Unimplemented Function {0:x1}", uOp.F));
-			}
-		}
+                default:
+                    throw new UnimplementedInstructionException(
+                        String.Format("Unimplemented Function {0:x1}", uOp.F));
+            }
+        }
 
-		/// <summary>
-		/// Jumps based on the condition flags
-		/// </summary>
-		/// <param name="uOp"></param>
-		private void DispatchJump(Instruction uOp)
-		{
-			bool conditionSatisfied = false;
+        /// <summary>
+        /// Jumps based on the condition flags
+        /// </summary>
+        /// <param name="uOp"></param>
+        private void DispatchJump(Instruction uOp)
+        {
+            bool conditionSatisfied = false;
 
-			// Do jump operation based on ALU flags from the last instruction
-			switch (uOp.CND)
-			{
-				case Condition.True:
-					conditionSatisfied = true;
-					break;
+            // Do jump operation based on ALU flags from the last instruction
+            switch (uOp.CND)
+            {
+                case Condition.True:
+                    conditionSatisfied = true;
+                    break;
 
-				case Condition.False:
-					conditionSatisfied = false;
-					break;
+                case Condition.False:
+                    conditionSatisfied = false;
+                    break;
 
-				case Condition.IntrPend:
-					conditionSatisfied = _interruptFlag != InterruptType.None;
-					break;
+                case Condition.IntrPend:
+                    conditionSatisfied = _interruptFlag != InterruptType.None;
+                    break;
 
-				case Condition.Carry19:
-					conditionSatisfied = _oldALURegisters.Carry19 == 0;
-					break;
+                case Condition.Carry19:
+                    conditionSatisfied = _oldALURegisters.Carry19 == 0;
+                    break;
 
-				case Condition.BPC3:
-					conditionSatisfied = OpFileEmpty;
-					break;
+                case Condition.BPC3:
+                    conditionSatisfied = OpFileEmpty;
+                    break;
 
-				case Condition.Odd:
-					conditionSatisfied = (_oldALURegisters.R & 0x1) != 0;
-					break;
+                case Condition.Odd:
+                    conditionSatisfied = (_oldALURegisters.R & 0x1) != 0;
+                    break;
 
-				case Condition.ByteSign:
-					conditionSatisfied = (_oldALURegisters.R & 0x80) != 0;
-					break;
+                case Condition.ByteSign:
+                    conditionSatisfied = (_oldALURegisters.R & 0x80) != 0;
+                    break;
 
-				case Condition.Neq:
-					conditionSatisfied = _oldALURegisters.Neq;
-					break;
+                case Condition.Neq:
+                    conditionSatisfied = _oldALURegisters.Neq;
+                    break;
 
-				case Condition.Leq:
-					conditionSatisfied = _oldALURegisters.Leq;
-					break;
+                case Condition.Leq:
+                    conditionSatisfied = _oldALURegisters.Leq;
+                    break;
 
-				case Condition.Lss:
-					conditionSatisfied = _oldALURegisters.Lss;
-					break;
+                case Condition.Lss:
+                    conditionSatisfied = _oldALURegisters.Lss;
+                    break;
 
-				case Condition.Ovf:
-					conditionSatisfied = _oldALURegisters.Ovf;
-					break;
+                case Condition.Ovf:
+                    conditionSatisfied = _oldALURegisters.Ovf;
+                    break;
 
-				case Condition.Carry15:
-					conditionSatisfied = _oldALURegisters.Cry;
-					break;
+                case Condition.Carry15:
+                    conditionSatisfied = _oldALURegisters.Cry;
+                    break;
 
-				case Condition.Eql:
-					conditionSatisfied = _oldALURegisters.Eql;
-					break;
+                case Condition.Eql:
+                    conditionSatisfied = _oldALURegisters.Eql;
+                    break;
 
-				case Condition.Gtr:
-					conditionSatisfied = _oldALURegisters.Gtr;
-					break;
+                case Condition.Gtr:
+                    conditionSatisfied = _oldALURegisters.Gtr;
+                    break;
 
-				case Condition.Geq:
-					conditionSatisfied = _oldALURegisters.Geq;
-					break;
+                case Condition.Geq:
+                    conditionSatisfied = _oldALURegisters.Geq;
+                    break;
 
-				default:
-					throw new UnimplementedInstructionException(String.Format("Unimplemented Condition {0}", uOp.CND));
-			}
+                default:
+                    throw new UnimplementedInstructionException(String.Format("Unimplemented Condition {0}", uOp.CND));
+            }
 
-			// Dispatch jump action
-			switch (uOp.JMP)
-			{
-				case JumpOperation.JumpZero:
-					_pc.Value = 0;
-					_callStack.Reset();
-					break;
+            // Dispatch jump action
+            switch (uOp.JMP)
+            {
+                case JumpOperation.JumpZero:
+                    _pc.Value = 0;
+                    _callStack.Reset();
+                    break;
 
-				case JumpOperation.Call:
-					if (conditionSatisfied)
-					{
-						_callStack.PushFull((ushort)(_pc.Value + 1));
-						_pc.Value = uOp.NextAddress;
-					}
-					else
-					{
-						_pc.Lo++;
-					}
-					break;
+                case JumpOperation.Call:
+                    if (conditionSatisfied)
+                    {
+                        _callStack.PushFull((ushort)(_pc.Value + 1));
+                        _pc.Value = uOp.NextAddress;
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                    }
+                    break;
 
-				case JumpOperation.NextInstReviveVictim:
-					if (uOp.H == 0)
-					{
-						DoNextInst(uOp);
-					}
-					else
-					{
-						// Revive the victim; unset victim latch
-						if (_victim == 0xffff)
-						{
-							throw new InvalidOperationException("Revive from unset victim latch!");
-						}
+                case JumpOperation.NextInstReviveVictim:
+                    if (uOp.H == 0)
+                    {
+                        DoNextInst(uOp);
+                    }
+                    else
+                    {
+                        // Revive the victim; unset victim latch
+                        if (_victim == 0xffff)
+                        {
+                            throw new InvalidOperationException("Revive from unset victim latch!");
+                        }
 #if SIXTEEN_K
-						// On 16K CPU, Victim restores all 14 bits -- according to VFY 2.0!?
-						_pc.Value = _victim;
+                        // On 16K CPU, Victim restores all 14 bits -- according to VFY 2.0!?
+                        _pc.Value = _victim;
 #else
                         // Only the low 12 bits are changed
                         _pc.Lo = _victim;
 #endif
 #if TRACING_ENABLED
-						if (Trace.TraceOn) Trace.Log(LogType.CpuState, "PC restored from victim ({0:x4})", _victim);
+                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "PC restored from victim ({0:x4})", _victim);
 #endif
-						_victim = 0xffff;
-					}
-					break;
+                        _victim = 0xffff;
+                    }
+                    break;
 
-				case JumpOperation.Goto:
-					if (conditionSatisfied)
-					{
-						_pc.Value = uOp.NextAddress;
-					}
-					else
-					{
-						_pc.Lo++;
-					}
-					break;
+                case JumpOperation.Goto:
+                    if (conditionSatisfied)
+                    {
+                        _pc.Value = uOp.NextAddress;
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                    }
+                    break;
 
-				case JumpOperation.PushLoad:
+                case JumpOperation.PushLoad:
 #if TRACING_ENABLED
-					if (Trace.TraceOn)
-						Trace.Log(LogType.CpuState, "PushLoad: cond={0} S={1:x4}", conditionSatisfied, uOp.NextAddress);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.CpuState, "PushLoad: cond={0} S={1:x4}", conditionSatisfied, uOp.NextAddress);
 #endif
-					if (conditionSatisfied)
-					{
-						_s.Value = uOp.NextAddress;
-						_pc.Lo++;
-						_callStack.PushLo(_pc.Lo);
-					}
-					else
-					{
-						_pc.Lo++;
-						_callStack.PushLo(_pc.Lo);
-					}
-					break;
+                    if (conditionSatisfied)
+                    {
+                        _s.Value = uOp.NextAddress;
+                        _pc.Lo++;
+                        _callStack.PushLo(_pc.Lo);
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                        _callStack.PushLo(_pc.Lo);
+                    }
+                    break;
 
-				case JumpOperation.CallS:
-					_callStack.PushFull((ushort)(_pc.Value + 1));
-					_pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
-					break;
+                case JumpOperation.CallS:
+                    _callStack.PushFull((ushort)(_pc.Value + 1));
+                    _pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
+                    break;
 
-				case JumpOperation.VectorDispatch:
-					if (conditionSatisfied)
-					{
-						if (uOp.H == 0)
-						{
-							// Vector
-							_pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (InterruptPriority() << 2));
-						}
-						else
-						{
-							// Dispatch
-							_shifter.Shift(_oldALURegisters.R);
-							_pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (((~_shifter.ShifterOutput) & 0xf) << 2));
-						}
+                case JumpOperation.VectorDispatch:
+                    if (conditionSatisfied)
+                    {
+                        if (uOp.H == 0)
+                        {
+                            // Vector
+                            _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (InterruptPriority() << 2));
+                        }
+                        else
+                        {
+                            // Dispatch
+                            _shifter.Shift(_oldALURegisters.R);
+                            _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (((~_shifter.ShifterOutput) & 0xf) << 2));
+                        }
 #if TRACING_ENABLED
-						if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Dispatch to {0:x4}", _pc);
+                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Dispatch to {0:x4}", _pc);
 #endif
-					}
-					else
-					{
-						_pc.Lo++;
-					}
-					break;
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                    }
+                    break;
 
-				case JumpOperation.GotoS:
-					_pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
-					break;
+                case JumpOperation.GotoS:
+                    _pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
+                    break;
 
-				case JumpOperation.RepeatLoop:
-					if (_s.Lo != 0)
-					{
-						_pc.Lo = _callStack.TopLo();
-						_s.Lo--;
-					}
-					else
-					{
-						_pc.Lo++;
-						_callStack.PopLo();
-					}
-					break;
+                case JumpOperation.RepeatLoop:
+                    if (_s.Lo != 0)
+                    {
+                        _pc.Lo = _callStack.TopLo();
+                        _s.Lo--;
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                        _callStack.PopLo();
+                    }
+                    break;
 
-				case JumpOperation.Repeat:
-					if (_s.Lo != 0)
-					{
+                case JumpOperation.Repeat:
+                    if (_s.Lo != 0)
+                    {
 #if TRACING_ENABLED
-						if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Repeat S={0:x4}", _s);
+                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Repeat S={0:x4}", _s);
 #endif
-						_pc.Lo = uOp.NextAddress;
-						_s.Lo--;
-					}
-					else
-					{
+                        _pc.Lo = uOp.NextAddress;
+                        _s.Lo--;
+                    }
+                    else
+                    {
 #if TRACING_ENABLED
-						if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Repeat done.", _s);
+                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Repeat done.", _s);
 #endif
-						_pc.Lo++;
-					}
-					break;
+                        _pc.Lo++;
+                    }
+                    break;
 
-				case JumpOperation.Return:
-					if (conditionSatisfied)
-					{
-						_pc.Value = _callStack.PopFull();
-					}
-					else
-					{
-						_pc.Lo++;
-					}
-					break;
+                case JumpOperation.Return:
+                    if (conditionSatisfied)
+                    {
+                        _pc.Value = _callStack.PopFull();
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                    }
+                    break;
 
-				case JumpOperation.JumpPop:
-					if (conditionSatisfied)
-					{
-						if (uOp.H != 0)
-						{
-							_callStack.PopFull();       // LeapPop (16K only?)
-						}
-						else
-						{
-							_callStack.PopLo();
-						}
-						_pc.Value = uOp.NextAddress;
-					}
-					else
-					{
-						_pc.Lo++;
-					}
-					break;
+                case JumpOperation.JumpPop:
+                    if (conditionSatisfied)
+                    {
+                        if (uOp.H != 0)
+                        {
+                            _callStack.PopFull();       // LeapPop (16K only?)
+                        }
+                        else
+                        {
+                            _callStack.PopLo();
+                        }
+                        _pc.Value = uOp.NextAddress;
+                    }
+                    else
+                    {
+                        _pc.Lo++;
+                    }
+                    break;
 
-				case JumpOperation.LoadS:
-					_s.Value = uOp.NextAddress;
-					_pc.Lo++;
+                case JumpOperation.LoadS:
+                    _s.Value = uOp.NextAddress;
+                    _pc.Lo++;
 #if TRACING_ENABLED
-					if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Load S={0:x4}", _s);
+                    if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Load S={0:x4}", _s);
 #endif
-					break;
+                    break;
 
-				case JumpOperation.Loop:
-					if (conditionSatisfied)
-					{
-						_pc.Lo++;
-						_callStack.PopLo();  // ?
-					}
-					else
-					{
-						_pc.Lo = _callStack.TopLo();
-					}
-					break;
+                case JumpOperation.Loop:
+                    if (conditionSatisfied)
+                    {
+                        _pc.Lo++;
+                        _callStack.PopLo();  // ?
+                    }
+                    else
+                    {
+                        _pc.Lo = _callStack.TopLo();
+                    }
+                    break;
 
-				case JumpOperation.Next:
-					_pc.Lo++;
-					break;
+                case JumpOperation.Next:
+                    _pc.Lo++;
+                    break;
 
-				case JumpOperation.ThreeWayBranch:
-					if (conditionSatisfied)
-					{
-						if (_s.Lo != 0)
-						{
-							_pc.Lo++;
-							_callStack.PopLo();
-							_s.Lo--;
-						}
-						else
-						{
-							_pc.Lo++;
-							_callStack.PopLo();
-						}
-					}
-					else
-					{
-						if (_s.Lo != 0)
-						{
-							_pc.Lo = _callStack.TopLo();
-							_s.Lo--;
-						}
-						else
-						{
-							_pc.Value = uOp.NextAddress;
-							_callStack.PopLo();
-						}
-					}
-					break;
+                case JumpOperation.ThreeWayBranch:
+                    if (conditionSatisfied)
+                    {
+                        if (_s.Lo != 0)
+                        {
+                            _pc.Lo++;
+                            _callStack.PopLo();
+                            _s.Lo--;
+                        }
+                        else
+                        {
+                            _pc.Lo++;
+                            _callStack.PopLo();
+                        }
+                    }
+                    else
+                    {
+                        if (_s.Lo != 0)
+                        {
+                            _pc.Lo = _callStack.TopLo();
+                            _s.Lo--;
+                        }
+                        else
+                        {
+                            _pc.Value = uOp.NextAddress;
+                            _callStack.PopLo();
+                        }
+                    }
+                    break;
 
-				default:
-					throw new UnimplementedInstructionException(String.Format("Unhandled Jump type {0}", uOp.JMP));
-			}
-		}
+                default:
+                    throw new UnimplementedInstructionException(String.Format("Unhandled Jump type {0}", uOp.JMP));
+            }
+        }
 
-		/// <summary>
-		/// Writes a 16 bit subword of a 48 bit microcode controlstore word to the store.
-		/// This is complicated by the fact that the bit mapping from the ALU output to
-		/// the controlstore is all scrambled up.
-		///
-		/// This is not a very efficient routine.  But it doesn't get executed very frequently
-		/// (usually only at OS load) so I'm going to leave it alone for now.
-		/// </summary>
-		/// <param name="word"></param>
-		/// <param name="data"></param>
-		private void WriteControlStore(ControlStoreWord word, ushort data)
-		{
-			// Get the current microcode word
-			ulong cs = _microcode[_s.Value];
+        /// <summary>
+        /// Writes a 16 bit subword of a 48 bit microcode controlstore word to the store.
+        /// This is complicated by the fact that the bit mapping from the ALU output to
+        /// the controlstore is all scrambled up.
+        ///
+        /// This is not a very efficient routine.  But it doesn't get executed very frequently
+        /// (usually only at OS load) so I'm going to leave it alone for now.
+        /// </summary>
+        /// <param name="word"></param>
+        /// <param name="data"></param>
+        private void WriteControlStore(ControlStoreWord word, ushort data)
+        {
+            // Get the current microcode word
+            ulong cs = _microcode[_s.Value];
 
-			_microcode[_s.Value] = UnscrambleControlStoreWord(cs, word, data);
+            _microcode[_s.Value] = UnscrambleControlStoreWord(cs, word, data);
 
-			// Invalidate cache for this instruction
-			_microcodeCache[_s.Value] = null;
+            // Invalidate cache for this instruction
+            _microcodeCache[_s.Value] = null;
 
-			// Set the hold bit to inject a wait state
-			_wcsHold = true;
-
-#if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.MicrocodeStore,
-					"Wrote {0},{1:x4} at control store {2:x4} -- now contains {3:x12}",
-					word, data, _s.Value, _microcode[_s.Value]);
-#endif
-		}
-
-		private ulong UnscrambleControlStoreWord(ulong current, ControlStoreWord word, ushort data)
-		{
-			// We write the inverse of the data (outputs are active low)
-			data = (ushort)(~data);
-
-			switch (word)
-			{
-				case ControlStoreWord.Low:
-					current = SetBits(data, current,
-						new int[] { 24, 25, 22, 27, 23, 29, 30, 31, 8, 9, 10, 11, 12, 13, 14, 15 });
-					break;
-
-				case ControlStoreWord.Middle:
-					current = SetBits(data, current,
-						new int[] { 16, 17, 18, 19, 20, 21, 26, 28, 0, 1, 2, 3, 4, 5, 6, 7 });
-					break;
-
-				case ControlStoreWord.High:
-					// The high word corresponds directly to the data being written,
-					// it's just shifted over 32 bits.  Yay.
-					current = (ulong)((current & 0x0000ffffffff) | (ulong)(data) << 32);
-					break;
-			}
-
-			return current;
-		}
-
-		/// <summary>
-		/// Sets a series of bits in the 48-bit destination word from a 16-bit source word.
-		/// </summary>
-		/// <param name="sourceWord"></param>
-		/// <param name="destWord"></param>
-		/// <param name="destBits"></param>
-		/// <returns></returns>
-		private ulong SetBits(ulong sourceWord, ulong destWord, int[] destBits)
-		{
-			for (int sourceBit = 0; sourceBit < destBits.Length; sourceBit++)
-			{
-				// Get the bit value from the source word
-				ulong bitValue = (sourceWord >> sourceBit) & 0x1;
-
-				// Frob that into the destination word at its magical location
-				destWord = (destWord & ~((ulong)0x1 << destBits[sourceBit])) | ((ulong)bitValue << destBits[sourceBit]);
-			}
-
-			return destWord;
-		}
-
-		/// <summary>
-		/// Increment the BPC and update the program counter.  Also a convenient place
-		/// to put hooks for RasterOp debugging...
-		/// </summary>
-		/// <param name="uOp"></param>
-		private void DoNextInst(Instruction uOp)
-		{
-			byte next = _memory.OpFile[BPC];
+            // Set the hold bit to inject a wait state
+            _wcsHold = true;
 
 #if TRACING_ENABLED
-			Trace.TraceLevel &= (~LogType.Instruction);
-			if (Trace.TraceOn)
-				Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
-					QCode.QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, BPC);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MicrocodeStore,
+                    "Wrote {0},{1:x4} at control store {2:x4} -- now contains {3:x12}",
+                    word, data, _s.Value, _microcode[_s.Value]);
+#endif
+        }
+
+        private ulong UnscrambleControlStoreWord(ulong current, ControlStoreWord word, ushort data)
+        {
+            // We write the inverse of the data (outputs are active low)
+            data = (ushort)(~data);
+
+            switch (word)
+            {
+                case ControlStoreWord.Low:
+                    current = SetBits(data, current,
+                        new int[] { 24, 25, 22, 27, 23, 29, 30, 31, 8, 9, 10, 11, 12, 13, 14, 15 });
+                    break;
+
+                case ControlStoreWord.Middle:
+                    current = SetBits(data, current,
+                        new int[] { 16, 17, 18, 19, 20, 21, 26, 28, 0, 1, 2, 3, 4, 5, 6, 7 });
+                    break;
+
+                case ControlStoreWord.High:
+                    // The high word corresponds directly to the data being written,
+                    // it's just shifted over 32 bits.  Yay.
+                    current = (ulong)((current & 0x0000ffffffff) | (ulong)(data) << 32);
+                    break;
+            }
+
+            return current;
+        }
+
+        /// <summary>
+        /// Sets a series of bits in the 48-bit destination word from a 16-bit source word.
+        /// </summary>
+        /// <param name="sourceWord"></param>
+        /// <param name="destWord"></param>
+        /// <param name="destBits"></param>
+        /// <returns></returns>
+        private ulong SetBits(ulong sourceWord, ulong destWord, int[] destBits)
+        {
+            for (int sourceBit = 0; sourceBit < destBits.Length; sourceBit++)
+            {
+                // Get the bit value from the source word
+                ulong bitValue = (sourceWord >> sourceBit) & 0x1;
+
+                // Frob that into the destination word at its magical location
+                destWord = (destWord & ~((ulong)0x1 << destBits[sourceBit])) | ((ulong)bitValue << destBits[sourceBit]);
+            }
+
+            return destWord;
+        }
+
+        /// <summary>
+        /// Increment the BPC and update the program counter.  Also a convenient place
+        /// to put hooks for RasterOp debugging...
+        /// </summary>
+        /// <param name="uOp"></param>
+        private void DoNextInst(Instruction uOp)
+        {
+            byte next = _memory.OpFile[BPC];
+
+#if TRACING_ENABLED
+            Trace.TraceLevel &= (~LogType.Instruction);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
+                    QCode.QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, BPC);
 #endif
 
 #if DEBUG
-			// Catch RASTEROP (or LINE) Q-code and dump stack, for debugging...
-			// RASTOP == 102, LINE == 241 in the POS F Q-Code set; YMMV!
-			if (_rasterOp.Debug && next == 102)
-			{
+            // Catch RASTEROP (or LINE) Q-code and dump stack, for debugging...
+            // RASTOP == 102, LINE == 241 in the POS F Q-Code set; YMMV!
+            if (_rasterOp.Debug && next == 102)
+            {
                 ShowEStack();
                 PERQSystem.Instance.Break();
-			}
+            }
 #endif
 
 #if SIXTEEN_K
-			_pc.Lo = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
+            _pc.Lo = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
 #else
             _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
 #endif
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn) Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", PC);
+            if (Trace.TraceOn) Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", PC);
 #endif
 
-			_incrementBPC = true;
-		}
+            _incrementBPC = true;
+        }
 
-		/// <summary>
-		/// Implements the behavior of the CPU's interrupt priority encoder.
-		/// </summary>
-		/// <returns></returns>
-		private int InterruptPriority()
-		{
-			if (_interruptFlag != 0)
-			{
-				for (int i = 7; i >= 0; i--)
-				{
-					if ((((int)_interruptFlag) & ((0x1) << i)) != 0)
-					{
-						return i;
-					}
-				}
-			}
+        /// <summary>
+        /// Implements the behavior of the CPU's interrupt priority encoder.
+        /// </summary>
+        /// <returns></returns>
+        private int InterruptPriority()
+        {
+            if (_interruptFlag != 0)
+            {
+                for (int i = 7; i >= 0; i--)
+                {
+                    if ((((int)_interruptFlag) & ((0x1) << i)) != 0)
+                    {
+                        return i;
+                    }
+                }
+            }
 
-			return 0;
-		}
+            return 0;
+        }
 
-		#endregion CPU Helper Functions
+        #endregion CPU Helper Functions
 
-		#region Boot ROM functions
+        #region Boot ROM functions
 
-		/// <summary>
-		/// Loads the boot ROM from a file on disk and descrambles it.
-		/// This currently expects a ROM built by PRQMIC, from microcode
-		/// sources, not an actual ROM dump from the PERQ.
-		/// </summary>
-		/// <param name="path"></param>
-		private void LoadBootRom(string path)
-		{
-			FileStream fs = new FileStream(path, FileMode.Open);
+        /// <summary>
+        /// Loads the boot ROM from a file on disk and descrambles it.
+        /// This currently expects a ROM built by PRQMIC, from microcode
+        /// sources, not an actual ROM dump from the PERQ.
+        /// </summary>
+        /// <param name="path"></param>
+        private void LoadBootRom(string path)
+        {
+            FileStream fs = new FileStream(path, FileMode.Open);
 
-			// Read all 512 scrambled instruction words in...
-			for (ushort i = 0; i < 512; i++)
-			{
-				ushort addr = 0;
-				ulong word = ReadMicrocodeWord(fs, out addr);
+            // Read all 512 scrambled instruction words in...
+            for (ushort i = 0; i < 512; i++)
+            {
+                ushort addr = 0;
+                ulong word = ReadMicrocodeWord(fs, out addr);
 
-				// The only address outside of range should be the last (which has addr 0xffff)
-				if (addr < 512)
-				{
-					_rom[addr] = word;
-				}
-			}
-			fs.Close();
+                // The only address outside of range should be the last (which has addr 0xffff)
+                if (addr < 512)
+                {
+                    _rom[addr] = word;
+                }
+            }
+            fs.Close();
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Read boot rom from {0}.", path);
+            if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Read boot rom from {0}.", path);
 #endif
-		}
+        }
 
-		/// <summary>
-		/// Reads a 48-bit word in from the given stream.
-		/// </summary>
-		/// <param name="fs"></param>
-		/// <returns></returns>
-		private ulong ReadMicrocodeWord(FileStream fs, out ushort addr)
-		{
-			ulong word = 0;
+        /// <summary>
+        /// Reads a 48-bit word in from the given stream.
+        /// </summary>
+        /// <param name="fs"></param>
+        /// <returns></returns>
+        private ulong ReadMicrocodeWord(FileStream fs, out ushort addr)
+        {
+            ulong word = 0;
 
-			// Read the address, low bits first
-			addr = (ushort)(fs.ReadByte());
-			addr = (ushort)((addr | ((ushort)fs.ReadByte() << 8)));
+            // Read the address, low bits first
+            addr = (ushort)(fs.ReadByte());
+            addr = (ushort)((addr | ((ushort)fs.ReadByte() << 8)));
 
-			// Read the instruction one byte at a time, low bits first
-			word = (word | ((ulong)(fs.ReadByte()) << 0));      // silence an annoying warning
-			word = (word | ((ulong)(fs.ReadByte()) << 8));
-			word = (word | ((ulong)(fs.ReadByte()) << 16));
-			word = (word | ((ulong)(fs.ReadByte()) << 24));
-			word = (word | ((ulong)(fs.ReadByte()) << 32));
-			word = (word | ((ulong)(fs.ReadByte()) << 40));
+            // Read the instruction one byte at a time, low bits first
+            word = (word | ((ulong)(fs.ReadByte()) << 0));      // silence an annoying warning
+            word = (word | ((ulong)(fs.ReadByte()) << 8));
+            word = (word | ((ulong)(fs.ReadByte()) << 16));
+            word = (word | ((ulong)(fs.ReadByte()) << 24));
+            word = (word | ((ulong)(fs.ReadByte()) << 32));
+            word = (word | ((ulong)(fs.ReadByte()) << 40));
 
-			return word;
-		}
+            return word;
+        }
 
-		#endregion Boot ROM functions
+        #endregion Boot ROM functions
 
-		#region Special Function Helpers
+        #region Special Function Helpers
 
-		/// <summary>
-		/// Reset the expression stack (EStack).
-		/// </summary>
-		private void StackReset()
-		{
-			_stackPointer = 0;
+        /// <summary>
+        /// Reset the expression stack (EStack).
+        /// </summary>
+        private void StackReset()
+        {
+            _stackPointer = 0;
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn) Trace.Log(LogType.EStack, "EStack: Reset.");
+            if (Trace.TraceOn) Trace.Log(LogType.EStack, "EStack: Reset.");
 #endif
-			// Resetting the stack increments the diagnostic display
-			IncrementDDS();
-		}
+            // Resetting the stack increments the diagnostic display
+            IncrementDDS();
+        }
 
-		/// <summary>
-		/// Push a 20-bit value onto the EStack.
-		/// </summary>
-		private void StackPush(int value)
-		{
-			_stackPointer++;
+        /// <summary>
+        /// Push a 20-bit value onto the EStack.
+        /// </summary>
+        private void StackPush(int value)
+        {
+            _stackPointer++;
 
-			// Check for stack overflow.  According to the PERQ documentation, behavior
-			// in this state is undefined.  However, _real_ code seems to be buggy (i.e.
-			// leaks pops/pushes) and depends on the EStack pointer wrapping around.
-			// (For example, PERQMan's random number generator microcode does one too few
-			// pops before returning...)
-			if (_stackPointer > 15)
-			{
+            // Check for stack overflow.  According to the PERQ documentation, behavior
+            // in this state is undefined.  However, _real_ code seems to be buggy (i.e.
+            // leaks pops/pushes) and depends on the EStack pointer wrapping around.
+            // (For example, PERQMan's random number generator microcode does one too few
+            // pops before returning...)
+            if (_stackPointer > 15)
+            {
 #if TRACING_ENABLED
-				if (Trace.TraceOn) Trace.Log(LogType.Errors, "EStack overflow!");
+                if (Trace.TraceOn) Trace.Log(LogType.Errors, "EStack overflow!");
 #endif
-				_stackPointer = 0;
-			}
+                _stackPointer = 0;
+            }
 
-			_stack[_stackPointer] = value;
-
-#if TRACING_ENABLED
-			if (Trace.TraceOn)
-			{
-				Trace.Log(LogType.EStack, "Estack: Pushed {0:x5}. Pointer now {1:x1}.", value, _stackPointer);
-				PrintStack();
-			}
-#endif
-		}
-
-		/// <summary>
-		/// Pop a 20-bit value from the EStack.
-		/// </summary>
-		private void StackPop()
-		{
-			_stackPointer--;
-
-			// Check for stack underflow.  According to the PERQ documentation, behavior
-			// in this state is undefined.  See StackPush().
-			if (_stackPointer < 0)
-			{
-#if TRACING_ENABLED
-				if (Trace.TraceOn) Trace.Log(LogType.Errors, "EStack underflow!");
-#endif
-				_stackPointer = 15;
-			}
+            _stack[_stackPointer] = value;
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-			{
-				Trace.Log(LogType.EStack, "EStack: Popped.  Pointer now {0:x1}", _stackPointer);
-				PrintStack();
-			}
+            if (Trace.TraceOn)
+            {
+                Trace.Log(LogType.EStack, "Estack: Pushed {0:x5}. Pointer now {1:x1}.", value, _stackPointer);
+                PrintStack();
+            }
 #endif
-		}
+        }
+
+        /// <summary>
+        /// Pop a 20-bit value from the EStack.
+        /// </summary>
+        private void StackPop()
+        {
+            _stackPointer--;
+
+            // Check for stack underflow.  According to the PERQ documentation, behavior
+            // in this state is undefined.  See StackPush().
+            if (_stackPointer < 0)
+            {
+#if TRACING_ENABLED
+                if (Trace.TraceOn) Trace.Log(LogType.Errors, "EStack underflow!");
+#endif
+                _stackPointer = 15;
+            }
 
 #if TRACING_ENABLED
-		private void PrintStack()
-		{
-			Trace.Log(LogType.EStack, "EStack contents:");
-
-			for (int i = _stackPointer; i >= 0; i--)
-			{
-				Trace.Log(LogType.EStack, "{0} - {1:x5}", i, _stack[i]);
-			}
-		}
+            if (Trace.TraceOn)
+            {
+                Trace.Log(LogType.EStack, "EStack: Popped.  Pointer now {0:x1}", _stackPointer);
+                PrintStack();
+            }
 #endif
-
-		/// <summary>
-		/// Increments the DDS (diagnostic counter)
-		/// </summary>
-		private void IncrementDDS()
-		{
-			_dds++;
+        }
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn) Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
+        private void PrintStack()
+        {
+            Trace.Log(LogType.EStack, "EStack contents:");
+
+            for (int i = _stackPointer; i >= 0; i--)
+            {
+                Trace.Log(LogType.EStack, "{0} - {1:x5}", i, _stack[i]);
+            }
+        }
 #endif
 
-			// TODO: This should be moved elsewhere
-			Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
+        /// <summary>
+        /// Increments the DDS (diagnostic counter)
+        /// </summary>
+        private void IncrementDDS()
+        {
+            _dds++;
+
+#if TRACING_ENABLED
+            if (Trace.TraceOn) Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
+#endif
+
+            // TODO: This should be moved elsewhere
+            Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
 #if DEBUG
-			// TEMPORARY FOR MEMORY DEBUGGING
-			//if (_dds == 198) PERQSystem.Instance.Break();
+            // TEMPORARY FOR MEMORY DEBUGGING
+            //if (_dds == 198) PERQSystem.Instance.Break();
 #endif
-		}
+        }
 
-		#endregion Special Function Helpers
+        #endregion Special Function Helpers
 
-		#region Debugger Commands
+        #region Debugger Commands
 
-		[DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ current PC)")]
-		private void DisassembleMicrocode()
-		{
-			DisassembleMicrocode(_pc.Value, 16);
-		}
+        [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ current PC)")]
+        private void DisassembleMicrocode()
+        {
+            DisassembleMicrocode(_pc.Value, 16);
+        }
 
-		[DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr])")]
-		private void DisassembleMicrocode(ushort startAddress)
-		{
-			DisassembleMicrocode(startAddress, 16);
-		}
+        [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr])")]
+        private void DisassembleMicrocode(ushort startAddress)
+        {
+            DisassembleMicrocode(startAddress, 16);
+        }
 
-		[DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr, len])")]
-		private void DisassembleMicrocode(ushort startAddress, ushort length)
-		{
-			ushort endAddr = (ushort)(startAddress + length);
+        [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr, len])")]
+        private void DisassembleMicrocode(ushort startAddress, ushort length)
+        {
+            ushort endAddr = (ushort)(startAddress + length);
 
-			if (startAddress >= PERQCpu.Instance.Microcode.Length ||
-				endAddr >= PERQCpu.Instance.Microcode.Length)
-			{
-				Console.WriteLine("Argument out of range -- must be between 0 and {0}", PERQCpu.Instance.Microcode.Length);
-				return;
-			}
+            if (startAddress >= PERQCpu.Instance.Microcode.Length ||
+                endAddr >= PERQCpu.Instance.Microcode.Length)
+            {
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", PERQCpu.Instance.Microcode.Length);
+                return;
+            }
 
-			// Disassemble microcode
-			for (ushort i = startAddress; i < endAddr; i++)
-			{
-				string line = Disassembler.Disassemble(i, PERQCpu.Instance.GetInstruction(i));
-				Console.WriteLine(line);
-			}
-		}
+            // Disassemble microcode
+            for (ushort i = startAddress; i < endAddr; i++)
+            {
+                string line = Disassembler.Disassemble(i, PERQCpu.Instance.GetInstruction(i));
+                Console.WriteLine(line);
+            }
+        }
 
-		[DebugFunction("load microcode", "Loads the specified microcode file into the PERQ's writable control store")]
-		private void LoadMicrocode(string ucodeFile)
-		{
-			try
-			{
-				FileStream fs = new FileStream(ucodeFile, FileMode.Open);
-				bool done = false;
+        [DebugFunction("load microcode", "Loads the specified microcode file into the PERQ's writable control store")]
+        private void LoadMicrocode(string ucodeFile)
+        {
+            try
+            {
+                FileStream fs = new FileStream(ucodeFile, FileMode.Open);
+                bool done = false;
 
-				// Read instruction words in...
-				while (!done)
-				{
-					ushort addr = 0;
-					ulong word = ReadMicrocodeWord(fs, out addr);
+                // Read instruction words in...
+                while (!done)
+                {
+                    ushort addr = 0;
+                    ulong word = ReadMicrocodeWord(fs, out addr);
 
-					// The only address outside of range should be the last (which has addr 0xffff)
-					if (addr != 0xffff)
-					{
-						Console.Write("{0:x} ", addr);
-						_microcode[addr] = word;
-						_microcodeCache[addr] = null;
-					}
-					else
-					{
-						done = true;
-					}
-				}
-				fs.Close();
+                    // The only address outside of range should be the last (which has addr 0xffff)
+                    if (addr != 0xffff)
+                    {
+                        Console.Write("{0:x} ", addr);
+                        _microcode[addr] = word;
+                        _microcodeCache[addr] = null;
+                    }
+                    else
+                    {
+                        done = true;
+                    }
+                }
+                fs.Close();
 
-				_romEnabled = false;
+                _romEnabled = false;
 
-				Console.WriteLine("\nMicrocode loaded, boot ROM disabled.");
-			}
-			catch (Exception e)
-			{
-				Console.WriteLine("Unable to load microcode from {0}, error: {1}", ucodeFile, e.Message);
-			}
-		}
+                Console.WriteLine("\nMicrocode loaded, boot ROM disabled.");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to load microcode from {0}, error: {1}", ucodeFile, e.Message);
+            }
+        }
 
-		[DebugFunction("jump", "Set next microinstruction address")]
-		private void JumpTo(ushort nextPC)
-		{
-			if (nextPC <= 0 || nextPC > Microcode.Length)
-			{
-				Console.WriteLine("Address outside of range 0..{1}; PC not modified.", Microcode.Length);
-			}
-			else {
-				_pc.Value = nextPC;
-			}
-		}
+        [DebugFunction("jump", "Set next microinstruction address")]
+        private void JumpTo(ushort nextPC)
+        {
+            if (nextPC <= 0 || nextPC > Microcode.Length)
+            {
+                Console.WriteLine("Address outside of range 0..{1}; PC not modified.", Microcode.Length);
+            }
+            else
+            {
+                _pc.Value = nextPC;
+            }
+        }
 
-		[DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr])")]
-		private void ShowMemory(uint startAddress)
-		{
-			ShowMemory(startAddress, 64);
-		}
+        [DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr])")]
+        private void ShowMemory(uint startAddress)
+        {
+            ShowMemory(startAddress, 64);
+        }
 
-		[DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr, len])")]
-		private void ShowMemory(uint startAddress, uint length)
-		{
-			uint endAddr = (uint)(startAddress + length);
+        [DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr, len])")]
+        private void ShowMemory(uint startAddress, uint length)
+        {
+            uint endAddr = (uint)(startAddress + length);
 
-			if (startAddress >= MemoryBoard.Instance.Memory.Length ||
-				endAddr - 8 >= MemoryBoard.Instance.Memory.Length)
-			{
-				Console.WriteLine("Argument out of range -- must be between 0 and {0}", MemoryBoard.Instance.Memory.Length);
-				return;
-			}
+            if (startAddress >= MemoryBoard.Instance.Memory.Length ||
+                endAddr - 8 >= MemoryBoard.Instance.Memory.Length)
+            {
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", MemoryBoard.Instance.Memory.Length);
+                return;
+            }
 
-			ushort[] mem = MemoryBoard.Instance.Memory;
+            ushort[] mem = MemoryBoard.Instance.Memory;
 
-			// Dump the memory to screen
-			for (uint i = startAddress; i < endAddr; i += 8)
-			{
-				StringBuilder line = new StringBuilder();
+            // Dump the memory to screen
+            for (uint i = startAddress; i < endAddr; i += 8)
+            {
+                StringBuilder line = new StringBuilder();
 
-				line.AppendFormat(
-					"{0:x5}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
-					i, mem[i], mem[i + 1], mem[i + 2], mem[i + 3], mem[i + 4], mem[i + 5], mem[i + 6], mem[i + 7]);
+                line.AppendFormat(
+                    "{0:x5}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
+                    i, mem[i], mem[i + 1], mem[i + 2], mem[i + 3], mem[i + 4], mem[i + 5], mem[i + 6], mem[i + 7]);
 
-				for (uint j = i; j < i + 8; j++)
-				{
-					// Build ascii representation...
-					char high = (char)((mem[j] & 0xff00) >> 8);
-					char low = (char)((mem[j] & 0xff));
+                for (uint j = i; j < i + 8; j++)
+                {
+                    // Build ascii representation...
+                    char high = (char)((mem[j] & 0xff00) >> 8);
+                    char low = (char)((mem[j] & 0xff));
 
-					if (!Debugger.Debugger.IsPrintable(high))
-					{
-						high = '.';
-					}
+                    if (!Debugger.Debugger.IsPrintable(high))
+                    {
+                        high = '.';
+                    }
 
-					if (!Debugger.Debugger.IsPrintable(low))
-					{
-						low = '.';
-					}
+                    if (!Debugger.Debugger.IsPrintable(low))
+                    {
+                        low = '.';
+                    }
 
-					line.AppendFormat("{0}{1}", low, high);
-				}
+                    line.AppendFormat("{0}{1}", low, high);
+                }
 
-				Console.WriteLine(line.ToString());
-			}
-		}
+                Console.WriteLine(line.ToString());
+            }
+        }
 
 #if DEBUG
-		[DebugFunction("show memstate", "Dump the memory controller state")]
-		private void ShowMemQueues()
-		{
-			MemoryBoard.Instance.DumpQueues();
-		}
+        [DebugFunction("show memstate", "Dump the memory controller state")]
+        private void ShowMemQueues()
+        {
+            MemoryBoard.Instance.DumpQueues();
+        }
 #endif
 
-		[DebugFunction("show opfile", "Displays the contents of the opcode file")]
+        [DebugFunction("show opfile", "Displays the contents of the opcode file")]
         private void ShowOpfile()
         {
             Console.WriteLine("BPC={0}. Opfile Contents:", PERQCpu.Instance.BPC);
@@ -1935,9 +1939,30 @@ namespace PERQemu.CPU
         {
             _rasterOp.ShowRegs();
         }
-
 #endif
 
+#if DEBUG
+        [DebugFunction("show z80 state", "Display current Z80 device ready state")]
+        private void ShowZ80State()
+        {
+            Console.WriteLine("Z80 clock: {0}", Z80System.Instance.Clocks());
+            Z80System.Instance.ShowReadyState();
+        }
+
+        [DebugFunction("show z80 registers", "Display current Z80 protocol register contents")]
+        private void ShowZ80Regs()
+        {
+            Console.WriteLine("Z80-to-PERQ protocol state:");
+            Console.WriteLine("\tIOTmp      R[80]={0:x5}\tIOTmp1    R[81]={1:x5}", _r[0x80], _r[0x81]);
+            Console.WriteLine("\tZ80Tmp     R[88]={0:x5}\tZ80State  R[89]={1:x5}", _r[0x88], _r[0x89]);
+            Console.WriteLine("\tZ80Byte    R[87]={0:x5}\tZ80IDev   R[8A]={1:x5}", _r[0x87], _r[0x8a]);
+            Console.WriteLine("\tZ80IBytCnt R[8B]={0:x5}\tZ80ICmd   R[8C]={1:x5}", _r[0x8b], _r[0x8c]);
+            Console.WriteLine("\tZ80IIocb   R[8D]={0:x5}\tZ80Status R[95]={1:x5}", _r[0x8d], _r[0x95]);
+            Console.WriteLine("Circular buffer temporaries:");
+            Console.WriteLine("\tIOLen      R[B0]={0:x5}\tIOChar    R[B3]={1:x5}", _r[0xb0], _r[0xb3]);
+            Console.WriteLine("\tIORdPtr    R[B1]={0:x5}\tIOWrPtr   R[B2]={1:x5}", _r[0xb1], _r[0xb2]);
+        }
+#endif
         #endregion
 
 

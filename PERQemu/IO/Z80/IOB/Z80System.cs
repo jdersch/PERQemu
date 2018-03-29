@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
 using System.Security.Permissions;
 
 using PERQemu.CPU;
@@ -69,6 +68,17 @@ namespace PERQemu.IO.Z80.IOB
         FloppyBootData = 0x13,
     }
 
+    [Flags]
+    public enum ReadyFlags     // "Bits in Ready Flag Byte" per v87.z80
+    {
+        RS232 = 0x1,
+        Speech = 0x2,
+        Floppy = 0x4,
+        GPIB = 0x8,
+        Seek = 0x10,
+        Z80 = 0x80             // "Change in Ready State"
+    }
+            
     /// <summary>
     /// Represents an IOB Z80 subsystem.  This currently simulates the behavior
     /// of the Z80 system, but does not actually _emulate_ it.  The PERQ1 and PERQ1A
@@ -91,6 +101,7 @@ namespace PERQemu.IO.Z80.IOB
             _outputFifo = new Queue<byte>(256);
             _devices = new List<IZ80Device>(16);
 
+            _hardDiskSeek = new HardDiskSeekControl();
             _floppyDisk = new FloppyController();
             _keyboard = new Keyboard();
             _gpib = new GPIB();
@@ -110,6 +121,7 @@ namespace PERQemu.IO.Z80.IOB
         private void BuildDeviceList()
         {
             _devices.Clear();
+            _devices.Add(_hardDiskSeek);
             _devices.Add(_floppyDisk);
             _devices.Add(_keyboard);
             _devices.Add(_gpib);
@@ -132,9 +144,8 @@ namespace PERQemu.IO.Z80.IOB
             // Clear output fifo
             _outputFifo.Clear();
 
-            // All devices are ready
-            _deviceReadyState = ReadyFlags.Z80 | ReadyFlags.Floppy | ReadyFlags.GPIB |
-                                ReadyFlags.RS232 | ReadyFlags.Seek | ReadyFlags.Speech;
+            // The Z80 is always ready for action!
+            _deviceReadyState = ReadyFlags.Z80;
 
             _dataReadyInterruptRequested = false;
         }
@@ -225,7 +236,7 @@ namespace PERQemu.IO.Z80.IOB
 #endif
                 _running = true;
                 Reset();
-                SendStatusChange();
+                //SendStatusChange();   // Sent in our first Clock() by RefreshReadyState()?
             }
         }
 
@@ -344,7 +355,7 @@ namespace PERQemu.IO.Z80.IOB
             //
             for (int i = 0; i < _devices.Count; i++)
             {
-                if (_deviceBusyClocks[i] == 0)      // Are we busy?
+                if (_devices[i].BusyClocks == 0)      // Are we busy?
                 {
                     _devices[i].Poll(ref _outputFifo);
                 }
@@ -428,120 +439,55 @@ namespace PERQemu.IO.Z80.IOB
                     break;
 
                 case MessageParseState.Message:
+                    //
                     // The IOB's message format ("Old Z80") is really really annoying to parse, especially as
                     // compared to that of the CIO/EIO board ("New Z80").  Once we've gotten the message type,
                     // the length of the message is dependent on the type of the message sent.  Some have fixed
                     // lengths, some are variable.  Basically this requires a state machine for each individual
-                    // message.  Or I could make this code really tangled.
+                    // message... so we just hand the bytes off to the target device and let it cope its own way. :)
+                    //
+                    bool done = false;
+
                     switch (_messageType)
                     {
                         case PERQtoZ80Message.SetKeyboardStatus:
-                            if (_keyboard.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "Keyboard message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _keyboard.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.SetFloppyStatus:
                         case PERQtoZ80Message.FloppyCommand:
                         case PERQtoZ80Message.FloppyBoot:
-                            if (_floppyDisk.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-                                SetBusyState(ReadyFlags.Floppy);
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "Floppy message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _floppyDisk.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.HardDriveSeek:
-                            if (HardDisk.ShugartDiskController.Instance.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-                                SetBusyState(ReadyFlags.Seek);
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "Seek message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _hardDiskSeek.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.GPIBCommand:
-                            if (_gpib.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-                                SetBusyState(ReadyFlags.GPIB);
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "GPIB message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _gpib.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.SetTabletStatus:
-                            if (_tablet.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "Tablet message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _tablet.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.SetRS232Status:
                         case PERQtoZ80Message.RS232:
-                            if (_rs232.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-                                SetBusyState(ReadyFlags.RS232);
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "RS232 message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _rs232.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.Speech:
-                            if (_speech.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-                                SetBusyState(ReadyFlags.Speech);
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "Speech message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _speech.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.SetClockStatus:
-                            if (_clockDev.RunStateMachine(_messageType, data))
-                            {
-                                _state = MessageParseState.WaitingForSOM;
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.Z80State,
-                                             "Clock message complete.  Returning to WaitingForSOM state.");
-#endif
-                            }
+                            done = _clockDev.RunStateMachine(_messageType, data);
                             break;
 
                         case PERQtoZ80Message.GetStatus:
                             GetStatus(data);
-                            _state = MessageParseState.WaitingForSOM;
+                            done = true;
                             break;
 
                         default:
@@ -549,7 +495,17 @@ namespace PERQemu.IO.Z80.IOB
                             if (Trace.TraceOn)
                                 Trace.Log(LogType.Warnings, "Unhandled Z80 message type {0}", _messageType);
 #endif
+                            // oof.  do we just bail here?  wait for som?
                             break;
+                    }
+
+                    if (done)
+                    {
+                        _state = MessageParseState.WaitingForSOM;
+#if TRACING_ENABLED
+                        if (Trace.TraceOn)
+                            Trace.Log(LogType.Z80State, "{0} message complete.  Returning to WaitingForSOM state.", _messageType);
+#endif
                     }
                     break;
 
@@ -563,89 +519,31 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         private void RefreshReadyState()
         {
-            bool statusChange = false;
+            ReadyFlags oldFlags = _deviceReadyState;
+            _deviceReadyState = ReadyFlags.Z80;         // Z80 is always available...
 
-            // This is slow and terrible.
-            for (int i = 0; i < (int)ReadyFlags.Seek + 1; i++)
+            for (int i = 0; i < _devices.Count; i++)
             {
-                if (_deviceBusyClocks[i] != 0)
+                if (_devices[i].BusyBit != 0)           // Skip devices without a Ready state
                 {
-                    _deviceBusyClocks[i]--;
-                    if (_deviceBusyClocks[i] == 0)
+                    if (_devices[i].BusyClocks != 0)    // If they're busy, clock 'em
                     {
-                        statusChange = true;
-                        SetReadyState((ReadyFlags)i);
+                        _devices[i].BusyClocks--;
+                    }
+
+                    if (_devices[i].BusyClocks == 0)    // If they aren't busy now, set Ready bit
+                    {
+                        _deviceReadyState |= _devices[i].BusyBit;
                     }
                 }
             }
 
-            if (statusChange)
+            if (oldFlags != _deviceReadyState)          // If something changed, tell the PERQ
             {
                 SendStatusChange();
             }
         }
 
-        /// <summary>
-        /// Puts the specified device into the ready state.
-        /// </summary>
-        private void SetReadyState(ReadyFlags device)
-        {
-            _deviceReadyState |= device;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Ready state for {0} set.", device);
-#endif
-        }
-
-        /// <summary>
-        /// Puts the specified device into the busy state.
-        /// TODO: For fun, come up with a way to specify a delay based on the
-        /// actual command given; for a seek, figure the track-to-track delay
-        /// based on how far we're seeking.  For a simple configuration command
-        /// (writing registers, for example) keep the delay very short.
-        /// </summary>
-        private void SetBusyState(ReadyFlags device)
-        {
-            int delay;
-
-            _deviceReadyState &= (~device);
-
-            switch (device)
-            {
-                // Most disk commands would run in the millisecond range... several thousand
-                // clock cycles at least, but that's silly here.
-                case ReadyFlags.Floppy:
-                case ReadyFlags.Seek:
-                    delay = 100;        // Scale it back orders of magnitude.
-                    break;
-
-                // GPIB spec goes up to 1MB/sec, but that's well beyond our needs or the
-                // old Z80's capacity. BitPad updates @ 2800 chars/sec == ~262 Z80 clocks/char.
-                case ReadyFlags.GPIB:
-                    delay = 26;         // Can't wait all day...
-                    break;
-
-                // At 9600 baud (960cps) we'd spin around 760 simulated Z80 clocks/char.
-                case ReadyFlags.RS232:
-                    delay = 76;         // Keep things a little peppier.
-                    break;
-
-                default:
-                    delay = 50;         // Speech isn't really implemented yet anyway...
-                    break;
-            }
-
-            _deviceBusyClocks[(int)device] = delay;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Busy state for {0} set (delay={1}).", device, delay);
-#endif
-            // Force a status change in the Ready->Busy transition (RefreshReadyState
-            // only catches the Busy->Ready change)
-            SendStatusChange();
-        }
 
         /// <summary>
         /// Sends the status change message.
@@ -657,7 +555,7 @@ namespace PERQemu.IO.Z80.IOB
                 Trace.Log(LogType.Z80State, "Sending Z80 device ready status: {0}.", _deviceReadyState);
 #endif
             _outputFifo.Enqueue(Z80System.SOM);             // SOM
-            _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);    // TODO: BYTE COUNT?
+            _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
             _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
         }
 
@@ -667,7 +565,7 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         private void GetStatus(byte requested)
         {
-            Console.WriteLine("GetStatus: data={0}", requested);  // FIXME
+            Console.WriteLine("GetStatus: data={0}", requested);  // FIXME once debugged...
 
             for (int i = 1; i <= 256; i = (i << 1))
             {
@@ -700,6 +598,24 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+#if DEBUG
+        public void ShowReadyState()
+        {
+            Console.WriteLine("Z80 Device Status:");
+            for (int i = 0; i < _devices.Count; i++)
+            {
+                if (_devices[i].BusyBit != 0)       // Skip devices that don't maintain a busy flag
+                {
+                    Console.Write("\t{0} is ", _devices[i].BusyBit);
+                    if (_devices[i].BusyClocks != 0)
+                        Console.WriteLine("busy ({0} ticks).", _devices[i].BusyClocks);
+                    else
+                        Console.WriteLine("ready.");
+                }
+            }
+            Console.WriteLine("--> Check: {0}", _deviceReadyState);
+        }
+#endif
 
         private enum MessageParseState
         {
@@ -709,16 +625,6 @@ namespace PERQemu.IO.Z80.IOB
             Message
         }
 
-        [Flags]
-        private enum ReadyFlags     // "Bits in Ready Flag Byte" per v87.z80
-        {
-            RS232 = 0x1,
-            Speech = 0x2,
-            Floppy = 0x4,
-            GPIB = 0x8,
-            Seek = 0x10,
-            Z80 = 0x80              // "Change in Ready flags"
-        }
 
         [Flags]
         private enum DeviceStatus   // "Bits in Status Request Byte" per v87.z80
@@ -748,11 +654,11 @@ namespace PERQemu.IO.Z80.IOB
         private MessageParseState _state;
         private PERQtoZ80Message _messageType;
         private ReadyFlags _deviceReadyState;
-        private int[] _deviceBusyClocks = new int[256];
         private bool _dataReadyInterruptRequested;
 
         // Devices:
         private List<IZ80Device> _devices;
+        private HardDiskSeekControl _hardDiskSeek;
         private FloppyController _floppyDisk;
         private Keyboard _keyboard;
         private GPIB _gpib;

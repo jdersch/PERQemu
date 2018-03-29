@@ -50,6 +50,17 @@ namespace PERQemu.IO.Z80.IOB
 #endif
         }
 
+        public ReadyFlags BusyBit
+        {
+            get { return 0; }           // Tablet doesn't have a Ready bit
+        }
+
+        public int BusyClocks
+        {
+            get { return 0; }           // Tablet can always be polled
+            set { int dummy = value; }
+        }
+
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
         {
             bool retVal = false;
