@@ -341,7 +341,7 @@ namespace PERQemu.IO.Z80.IOB
                     break;
             }
 
-            _busyClocks = 2;    // Short busy
+            _busyClocks = 5;    // Short busy
         }
 
         public void GetStatus(ref Queue<byte> fifo)
@@ -425,7 +425,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
-            if (!error) _busyClocks = 10;   // Floppy seeks are s l o w, but for now just fake it
+            // Floppy seeks are s l o w, but for now just fake it
+            _busyClocks = (error ? 5 : 20);
 
             // Message out format:
             //  SOM
@@ -480,7 +481,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
-            if (!error) _busyClocks = (int)_disk.DiskGeometry.SectorSize;    // Busy based on byte count...
+            // Set our busy time based on byte count... should be way longer...
+            _busyClocks = (error ? 5 : (int)_disk.DiskGeometry.SectorSize);
 
             // Message format is:
             //  SOM
@@ -576,7 +578,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
-            if (!error) _busyClocks = count;    // Busy based on byte count...
+            // Busy based on byte count...
+            _busyClocks = (error ? 5 : count);
 
             // Read the sector in.
             Sector sectorData = _disk.GetSector(cyl, head, sec - 1);
@@ -658,7 +661,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
-            if (!error) _busyClocks = (int)_disk.DiskGeometry.SectorSize;    // Busy based on byte count...
+            // Formatting should take way longer...
+            _busyClocks = (error ? 5 : (int)_disk.DiskGeometry.SectorSize);
 
             // Read the sector in.
             Sector sectorData = _disk.GetSector(cyl, head, sec - 1);

@@ -101,7 +101,7 @@ namespace PERQemu.IO.Z80.IOB
                         _messageIndex = 0;
                         SetRS232Status();
                         retVal = true;      // Done with message
-                        _busyClocks = 2;    // Short busy cycle
+                        _busyClocks = 4;    // Short busy cycle
                     }
                     break;
 
@@ -114,7 +114,7 @@ namespace PERQemu.IO.Z80.IOB
                         _messageIndex = 0;
                         WriteRS232();
                         retVal = true;
-                        _busyClocks = 2 * _messageData[0];   // Busy based on amt of data
+                        _busyClocks = 4 * _messageData[0];   // Busy based on amt of data
                     }
                     break;
 

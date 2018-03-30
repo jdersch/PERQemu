@@ -63,7 +63,14 @@ namespace PERQemu.IO.Z80.IOB
             //  byte 0 = seek count
             HardDisk.ShugartDiskController.Instance.DoMultipleSeek(data);
 
-            _busyClocks = 5 * data;     // Should be 1.83ms per step :-)
+            // In "normal step mode", there should be a minimum of 1ms per step!
+            // In "buffered" mode, pulses are accumulated in a counter at a faster
+            // rate, then a 16-step acceleration curve is used to move the heads
+            // at the hardware's nominal rate.  Note that a 20ms settle time is
+            // required after any seek before a read/write operation!  That's a
+            // busy time of around 14,700 Z80 cycles, so obviously we aren't going
+            // to run our emulation at those glacial speeds... :-)
+            _busyClocks = 10 * data;
 
             _seekInProgress = true;
 

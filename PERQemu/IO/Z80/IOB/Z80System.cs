@@ -61,7 +61,7 @@ namespace PERQemu.IO.Z80.IOB
         VoltageData = 0xc,
         VoltageStatus = 0xd,
         ClockStatus = 0xe,
-        GPIBStatus = 0xf,      // Is this really "missing" in POS D/F IO.micro!?
+        GPIBStatus = 0xf,
         FloppyStatus = 0x10,
         FloppyDone = 0x11,
         FloppyBootError = 0x12,
@@ -75,10 +75,10 @@ namespace PERQemu.IO.Z80.IOB
         Speech = 0x2,
         Floppy = 0x4,
         GPIB = 0x8,
-        Seek = 0x10,
-        Z80 = 0x80             // "Change in Ready State"
+        Seek = 0x10
+        //Z80 = 0x80             // "Change in Ready State"
     }
-            
+
     /// <summary>
     /// Represents an IOB Z80 subsystem.  This currently simulates the behavior
     /// of the Z80 system, but does not actually _emulate_ it.  The PERQ1 and PERQ1A
@@ -128,7 +128,7 @@ namespace PERQemu.IO.Z80.IOB
             _devices.Add(_tablet);
             _devices.Add(_rs232);
             _devices.Add(_speech);
-            _devices.Add(_clockDev);
+            // _devices.Add(_clockDev);     // Unused; see comments in Clock.cs
         }
 
         public void Reset()
@@ -144,8 +144,8 @@ namespace PERQemu.IO.Z80.IOB
             // Clear output fifo
             _outputFifo.Clear();
 
-            // The Z80 is always ready for action!
-            _deviceReadyState = ReadyFlags.Z80;
+            // Clear the device ready state
+            _deviceReadyState = 0;
 
             _dataReadyInterruptRequested = false;
         }
@@ -235,8 +235,7 @@ namespace PERQemu.IO.Z80.IOB
                     Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
 #endif
                 _running = true;
-                Reset();
-                //SendStatusChange();   // Sent in our first Clock() by RefreshReadyState()?
+                Reset();            // Status change sent in our first Clock() by RefreshReadyState()
             }
         }
 
@@ -346,11 +345,6 @@ namespace PERQemu.IO.Z80.IOB
             _clocks++;
 
             //
-            // Count down our busy timers, and if any devices come ready send an update
-            //
-            RefreshReadyState();
-
-            //
             // Handle output first: Poll devices for new data.
             //
             for (int i = 0; i < _devices.Count; i++)
@@ -383,6 +377,13 @@ namespace PERQemu.IO.Z80.IOB
             {
                 PERQCpu.Instance.RaiseInterrupt(InterruptType.Z80DataInReady);
             }
+
+            //
+            // Count down our busy timers, and if any devices come ready send an update.
+            // We'll do this here so that the Status change message will come before the
+            // data at the next Poll().
+            //
+            RefreshReadyState();
         }
 
         /// <summary>
@@ -495,7 +496,8 @@ namespace PERQemu.IO.Z80.IOB
                             if (Trace.TraceOn)
                                 Trace.Log(LogType.Warnings, "Unhandled Z80 message type {0}", _messageType);
 #endif
-                            // oof.  do we just bail here?  wait for som?
+                            // Oof.  Do we just bail here?  Wait for SOM?  Shouldn't ever happen, now
+                            // that we cover every message in the old protocol?
                             break;
                     }
 
@@ -520,11 +522,11 @@ namespace PERQemu.IO.Z80.IOB
         private void RefreshReadyState()
         {
             ReadyFlags oldFlags = _deviceReadyState;
-            _deviceReadyState = ReadyFlags.Z80;         // Z80 is always available...
+            _deviceReadyState = 0;
 
             for (int i = 0; i < _devices.Count; i++)
             {
-                if (_devices[i].BusyBit != 0)           // Skip devices without a Ready state
+                if (_devices[i].BusyBit != 0)           // Skip devices without a Ready bit
                 {
                     if (_devices[i].BusyClocks != 0)    // If they're busy, clock 'em
                     {
@@ -540,7 +542,7 @@ namespace PERQemu.IO.Z80.IOB
 
             if (oldFlags != _deviceReadyState)          // If something changed, tell the PERQ
             {
-                SendStatusChange();
+                SendStatusChange();                     // TODO Inline that here, only 1 caller
             }
         }
 
@@ -552,7 +554,7 @@ namespace PERQemu.IO.Z80.IOB
         {
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Sending Z80 device ready status: {0}.", _deviceReadyState);
+                Trace.Log(LogType.Z80State, "Sending Z80 device ready status @ {0}: {1}.", _clocks, _deviceReadyState);
 #endif
             _outputFifo.Enqueue(Z80System.SOM);             // SOM
             _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
@@ -565,8 +567,10 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         private void GetStatus(byte requested)
         {
-            Console.WriteLine("GetStatus: data={0}", requested);  // FIXME once debugged...
-
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.Z80State, "GetStatus: data={0}", requested);
+#endif
             for (int i = 1; i <= 256; i = (i << 1))
             {
                 if ((requested & i) != 0)
@@ -576,6 +580,15 @@ namespace PERQemu.IO.Z80.IOB
                         case DeviceStatus.RS232:
                             _rs232.GetStatus(ref _outputFifo);
                             break;
+
+                        case DeviceStatus.Tablet:
+                            _tablet.GetStatus(ref _outputFifo);
+                            break;
+
+                        // Keyboard has no GetStatus method, but has a bit in DeviceStatus?
+                        // Voltage (Speech) has no GetStatus method either
+                        // Clock has no GetStatus method, and I've never seen it enabled...
+                        // If any of these is ever set, we'll see the error on the console. :-/
 
                         case DeviceStatus.Floppy:
                             _floppyDisk.GetStatus(ref _outputFifo);

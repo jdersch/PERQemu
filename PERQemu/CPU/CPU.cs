@@ -572,27 +572,29 @@ namespace PERQemu.CPU
                 case AField.NextOp:
                     if (OpFileEmpty)
                     {
-                        // Only latch if victim is empty (0xffff indicates an unset victim...)
+                        // Only latch if Victim is empty (0xffff indicates an unset Victim...)
                         if (_victim == 0xffff)
                         {
 #if SIXTEEN_K
                             // 16K CPU - All 14 bits saved, according to VFY 2.x...
                             _victim = _pc.Value;
 #else
-                            // 4K CPU - Only the low 12 bits count for the victim latch
+                            // 4K CPU - Only the low 12 bits count for the Victim latch
                             _victim = _pc.Lo;
 #endif
 #if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _victim);
+                            if (Trace.TraceOn)
+                                Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _victim);
 #endif
                         }
                     }
 
                     amux = _memory.OpFile[BPC];
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
 #endif
-                    _incrementBPC = true;   // Increment bpc at the beginning of the next instruction
+                    _incrementBPC = true;   // Increment BPC at the beginning of the next instruction
                     break;
 
                 case AField.IOD:
@@ -1794,7 +1796,7 @@ namespace PERQemu.CPU
         {
             if (nextPC <= 0 || nextPC > Microcode.Length)
             {
-                Console.WriteLine("Address outside of range 0..{1}; PC not modified.", Microcode.Length);
+                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", Microcode.Length);
             }
             else
             {

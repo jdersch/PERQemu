@@ -23,6 +23,18 @@ using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80.IOB
 {
+    /// <summary>
+    /// This device does not appear to be used by POS D, F or Accent S4.  There
+    /// are two possibilities: the old "Stanley tablet" -- trackpad device!? --
+    /// was never shipped as a product, though references to it are sprinkled here
+    /// and there in the code.  Second, a "microcycle clock" (micro_second_ clock?)
+    /// was part of the 3Mbit Ethernet board, but since we don't (yet?) emulate that
+    /// the probe of the E3 control register fails and thus the clock device is
+    /// never enabled.  There is relatively little overhead incurred by leaving
+    /// this in the Z80 device list (an empty Poll() each Z80 cycle) but we could
+    /// probably safely leave clockDev out entirely for now.  It may eventually be
+    /// part of 3Mbit Ethernet support?
+    /// </summary>
     public sealed class Clock : IZ80Device
     {
         public Clock()
@@ -75,7 +87,8 @@ namespace PERQemu.IO.Z80.IOB
 
                 default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled clock message {0}", message);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unhandled clock message {0}", message);
 #endif
                     break;
             }
@@ -86,7 +99,6 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Poll(ref Queue<byte> fifo)
         {
-            // Is this never called?  Is this never enabled?  Is this only on the PERQ 2/EIO?
             if (_enabled)
             {
                 int tickInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);
@@ -104,7 +116,7 @@ namespace PERQemu.IO.Z80.IOB
 
         public bool Enabled
         {
-            get { return _enabled; }
+            get { return _enabled; }        // Should be a GetStatus()?  Unused
         }
 
         private byte[] _messageData;

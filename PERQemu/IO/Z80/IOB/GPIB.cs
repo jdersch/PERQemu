@@ -158,7 +158,7 @@ namespace PERQemu.IO.Z80.IOB
                         // Set our busy timer based on the command length... Pretty short, since
                         // register writes shouldn't take more than a cycle or two... transmitting
                         // data on the bus should take longer... this is kinda silly.
-                        _busyClocks = _cmdLength * 2;
+                        _busyClocks = _cmdLength * 4;
                     }
                     break;
             }

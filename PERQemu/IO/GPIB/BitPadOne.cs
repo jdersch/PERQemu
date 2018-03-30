@@ -178,9 +178,6 @@ namespace PERQemu.IO.GPIB
                     {
                         Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
                                  x, y, button, _lastUpdate);
-#if DEBUG
-                        PERQSystem.Instance.Break();
-#endif
                     }
 #endif
                 }
