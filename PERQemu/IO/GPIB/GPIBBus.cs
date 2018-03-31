@@ -1,4 +1,4 @@
-﻿// gpibbus.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+﻿// gpibbus.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //  
 // This file is part of PERQemu.
 //
@@ -73,17 +73,17 @@ namespace PERQemu.IO.GPIB
             }
         }
 
-		/// <summary>
-		/// Write a byte of data to the specified device on the bus (which should be selected as the listener!)
-		/// </summary>
+        /// <summary>
+        /// Write a byte to the specified device on the bus (which should be selected as the listener!)
+        /// </summary>
         public void Write(byte deviceId, byte value)
         {
             if (_deviceDispatch[deviceId] == null)
-            {                
+            {
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
                     Trace.Log(LogType.Warnings, "No device is registered for GPIB ID {0:x2} write ({1:x2})",
-                              deviceId, value);             
+                              deviceId, value);
 #endif
                 return;
             }
@@ -97,37 +97,33 @@ namespace PERQemu.IO.GPIB
             _deviceDispatch[deviceId].Write(value);
         }
 
-		/// <summary>
-		/// When the controller receives a Talk Address Group command, send out the address
-		/// to let our attached devices know who's the new talker.
-		/// </summary>
-		public void BroadcastTalker(byte addr)
-		{
-			for (int i = 0; i < _devices.Count; i++)
-			{
-				_devices[i].SetTalker(addr);
-			}
-		}
-
-		/// <summary>
-		/// Broadcasts the new listener address in response to a Listen Address Group command.
-		/// </summary>
-		public void BroadcastListener(byte addr)
-		{
-			for (int i = 0; i < _devices.Count; i++)
-			{
-				_devices[i].SetListener(addr);
-			}
-		}
+        /// <summary>
+        /// When the controller receives a Talk Address Group command, send out the address
+        /// to let our attached devices know who's the new talker.
+        /// </summary>
+        public void BroadcastTalker(byte addr)
+        {
+            for (int i = 0; i < _devices.Count; i++)
+            {
+                _devices[i].SetTalker(addr);
+            }
+        }
 
         /// <summary>
-        /// Dispatch table for device IO
+        /// Broadcasts the new listener address in response to a Listen Address Group command.
         /// </summary>
+        public void BroadcastListener(byte addr)
+        {
+            for (int i = 0; i < _devices.Count; i++)
+            {
+                _devices[i].SetListener(addr);
+            }
+        }
+
+        // Dispatch table for device IO
         private IGPIBDevice[] _deviceDispatch;
 
-        /// <summary>
-        /// The devices attached to the bus
-        /// </summary>
+        // The devices attached to the bus
         private List<IGPIBDevice> _devices;
 
         private static GPIBBus _instance = new GPIBBus();

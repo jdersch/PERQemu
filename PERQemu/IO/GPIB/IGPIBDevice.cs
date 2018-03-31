@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace PERQemu.IO.GPIB
 {
@@ -34,15 +33,15 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         void Reset();
 
-		/// <summary>
-		/// Sets the talker address.
-		/// </summary>
-		void SetTalker(byte address);
+        /// <summary>
+        /// Sets the talker address.
+        /// </summary>
+        void SetTalker(byte address);
 
-		/// <summary>
-		/// Sets the listener address.
-		/// </summary>
-		void SetListener(byte address);
+        /// <summary>
+        /// Sets the listener address.
+        /// </summary>
+        void SetListener(byte address);
 
         /// <summary>
 		/// Polls the GPIB device for data (if we're the talker).
@@ -52,7 +51,6 @@ namespace PERQemu.IO.GPIB
         /// <summary>
 		/// Does a write to the device (if we're the listener).
         /// </summary>        
-        /// <param name="value"></param>
         void Write(byte value);
     }
 }

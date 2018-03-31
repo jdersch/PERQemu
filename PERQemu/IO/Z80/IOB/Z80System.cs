@@ -18,7 +18,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Security.Permissions;
 
 using PERQemu.CPU;
 using PERQemu.IO.SerialDevices;
@@ -69,29 +68,27 @@ namespace PERQemu.IO.Z80.IOB
     }
 
     [Flags]
-    public enum ReadyFlags     // "Bits in Ready Flag Byte" per v87.z80
+    public enum ReadyFlags
     {
-        RS232 = 0x1,
-        Speech = 0x2,
-        Floppy = 0x4,
-        GPIB = 0x8,
-        Seek = 0x10
-        //Z80 = 0x80             // "Change in Ready State"
+        RS232 = 0x1,            // "Bits in Ready Flag Byte" per v87.z80
+        Speech = 0x2,           //
+        Floppy = 0x4,           // Only the low 5 bits are actually communicated
+        GPIB = 0x8,             // from the Z80 to the PERQ in a status change
+        Seek = 0x10             // message; the microcode uses the other bits.
     }
 
     /// <summary>
-    /// Represents an IOB Z80 subsystem.  This currently simulates the behavior
-    /// of the Z80 system, but does not actually _emulate_ it.  The PERQ1 and PERQ1A
-    /// had no way to upload code to the Z80 so this is sufficient but kinda lame.
-    /// At some point it would be nifty to actually emulate the Z80 here, for accuracy
-    /// and to allow emulating a PERQ 2.  There are also significant differences between
-    /// the 1's Z80 and the 2's Z80 (the 2 added DMA support for floppy access,
-    /// doesn't support the hard disk, etc.)
-    ///
-    /// So if I do add PERQ2 support, this will need some serious refactoring.
-    ///
-    /// The Z80 system controls the PERQ's hard/floppy disk, serial ports, speech,
-    /// GPIB, keyboard, clock and pointer devices.
+    /// Represents an IOB Z80 subsystem running the "old Z80" protocol (corresponding
+    /// to the V8.7 ROMs).  The Z80 system controls the PERQ's hard/floppy disk, serial
+    /// port, speech, GPIB, keyboard, clock and pointer devices.
+    /// 
+    /// This currently simulates the behavior of the Z80 system, but does not actually
+    /// _emulate_ it.  The PERQ1 and PERQ1A had no way to upload code to the Z80 so this
+    /// is sufficient but kinda lame.  At some point it would be nifty to actually emulate
+    /// the Z80 here, for accuracy and to allow emulating a PERQ 2.  There are significant
+    /// differences between the 1's Z80 and the 2's Z80 (the 2 added DMA support for
+    /// floppy access, doesn't support the hard disk, etc.) so if I do add PERQ2 support,
+    /// this will need some serious refactoring.
     /// </summary>
     public sealed class Z80System
     {
@@ -542,10 +539,9 @@ namespace PERQemu.IO.Z80.IOB
 
             if (oldFlags != _deviceReadyState)          // If something changed, tell the PERQ
             {
-                SendStatusChange();                     // TODO Inline that here, only 1 caller
+                SendStatusChange();                     // TODO Inline that here, only 1 caller now
             }
         }
-
 
         /// <summary>
         /// Sends the status change message.

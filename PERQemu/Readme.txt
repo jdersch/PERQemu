@@ -55,7 +55,7 @@ hardware, all of the complex timing is now managed by a state machine driven by 
 This has drastically reduced the amount of GC overhead and given a decent performance boost!
 As part of this, the CPU can now be single-stepped through microinstructions that abort due
 to memory holds, which is an aid to debugging (if you like single-stepping through microcode
-as much as I do).
+as much as I do).  And the last obvious RasterOp glitch was, in fact, fixed with a ROM update!
 
 In addition, I spent quite a bit of time on a few cosmetic cleanups of all the source files
 for more consistency in style, comments, etc.  This will be the first version of the code
@@ -109,9 +109,6 @@ reasonably functional and stable (though there may still be issues):
 
 - RasterOp - 99% complete.  The newest cycle-accurate emulation, working with the new
   Memory implementation, is enabled by default.  The old "fake" RasterOp code is gone.
-  There may be one elusive edge case that is not handled properly (graphical glitch that
-  does not produce diagnostics or crash the emulator, but is noticeable in certain rare
-  circumstances.)
 
     RasterOp still lives in the \Memory directory, though it probably ought to
     be in \CPU.  Two new text files and a small Perl script are included in the
@@ -134,7 +131,7 @@ reasonably functional and stable (though there may still be issues):
     This is implemented by code under \Display.
 
 
-- Z80 Subsystem - 95% complete.  Currently only a simulation of the real thing; as this is
+- Z80 Subsystem - 97% complete.  Currently only a simulation of the real thing; as this is
   completely transparent (the PERQ1 can't upload custom software to the Z80 so a simulation
   is sufficient) a full emulation of the Z80 hardware is very low on my list of priorities
   (but it would be nice to have for accuracy's sake).
@@ -148,8 +145,12 @@ reasonably functional and stable (though there may still be issues):
         - RS232 - \IO\Z80\IOB\RS232.cs, as well as actual device interfaces under
           \IO\SerialDevices.
         - "Kriz" Tablet.  \IO\Z80\IOB\Tablet.cs
-        - GPIB.  (Very basic at the moment, and probably incorrect in many ways)
-          \IO\Z80\IOB\GPIB.cs
+        - GPIB - Has been fleshed out a bit, as it now supports talker/listener
+          selection, and can discriminate between command bytes and data bytes
+          passed on to bus devices (allowing for printers or other GPIB devices
+          to both read and write on the bus now).  Only the Summagraphics BitPadOne
+          graphics tablet is fully implemented.  \IO\Z80\IOB\GPIB.cs is the Z80
+          side; \IO\GPIB\* is the bus and BitPad client code.
         - Speech (sound chip).  Basically a stub.  \IO\Z80\IOB\Speech.cs
 
 
@@ -225,9 +226,9 @@ copy of this obscure (mythical?) operating system.  Hello, UK?
 
 Accent S4 does not track the mouse, making it very difficult to use SAPPHIRE, the window
 manager.  It would be awesome if CMU stepped up with a copy of the old /usr/spice tree
-from their tape archives.  [It may be necessary to disable Kriz Tablet support to force
-use of the GPIB/Bitpad?  Both options work in POS, so it's a mystery why Tracker fails
-in S4.  Anyone out there have "SapphTracker.Pas"?]
+from their tape archives.  [Despite exhaustive and painstaking efforts, the mystery of
+why Tracker fails to display or move the cursor in S4 is unsolved.  Anyone out there
+have "SapphTracker.Pas"?]
 
 If anyone has any other software that ran on the PERQ-1 and does not run successfully
 under PERQemu, send us a copy and we'll find out why!
