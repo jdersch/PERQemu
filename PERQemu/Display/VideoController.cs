@@ -1,4 +1,4 @@
-// videocontroller.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// videocontroller.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -19,7 +19,6 @@
 using System;
 using PERQemu.Memory;
 using PERQemu.IO;
-using System.Runtime.Serialization;
 using PERQemu.CPU;
 
 namespace PERQemu.Display
@@ -28,11 +27,7 @@ namespace PERQemu.Display
     /// Implements functionality for the PERQ's video controller.
     /// </summary>
     public sealed class VideoController : IIODevice
-    {        
-        public static VideoController Instance
-        {
-            get { return _instance; }
-        }
+    {
 
         private VideoController()
         {
@@ -41,10 +36,9 @@ namespace PERQemu.Display
 
         public void Reset()
         {
-            _crtSignals = CRTSignals.LandscapeDisplay;  // Is this inverted? Or optimistic?
+            _crtSignals = CRTSignals.LandscapeDisplay;
             _state = VideoState.VisibleScanline;
             _scanLine = 0;
-            _vBlankScanLine = 0;
             _displayAddress = 0;
             _cursorAddress = 0;
             _cursorX = 0;
@@ -52,12 +46,17 @@ namespace PERQemu.Display
             _cursorFunc = CursorFunction.AndCursor;
             _lineCounter = 0;
             _lineCounterInit = 0;
-            _crtSignals = CRTSignals.None;
+            _lineCountOverflow = false;
             _cycle = 0;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Display, "Video Controller: Reset.");
 #endif
+        }
+
+        public static VideoController Instance
+        {
+            get { return _instance; }
         }
 
         public bool HandlesPort(byte ioPort)
@@ -71,30 +70,29 @@ namespace PERQemu.Display
             return false;
         }
 
-        /// <summary>
-        /// Does a read from the given port
-        /// </summary>
-        /// <param name="ioPort"></param>
-        /// <returns></returns>
+
         public int IORead(byte ioPort)
         {
             switch (ioPort)
             {
                 case 0x65:   // Read CRT signals
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "Read CRT signals, returned {0}", _crtSignals);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Display, "Read CRT signals, returned {0}", _crtSignals);
 #endif
                     return (int)_crtSignals;
 
                 case 0x66:   // Read Hi address parity (unimplemented)
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "STUB: Read Hi address parity, returned 0.");
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Display, "STUB: Read Hi address parity, returned 0.");
 #endif
                     return 0x0;
 
                 case 0x67:   // Read Low address parity (unimplemented)
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "STUB: Read Low address parity, returned 0.");
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Display, "STUB: Read Low address parity, returned 0.");
 #endif
                     return 0x0;
 
@@ -104,11 +102,7 @@ namespace PERQemu.Display
             }
         }
 
-        /// <summary>
-        /// Does a write to the given port
-        /// </summary>
-        /// <param name="ioPort"></param>
-        /// <param name="value"></param>
+
         public void IOWrite(byte ioPort, int value)
         {
             switch (ioPort)
@@ -122,13 +116,14 @@ namespace PERQemu.Display
                     //   6:0    2's complement of N
                     _lineCounterInit = 128 - (value & 0x7f);
                     _lineCounter = _lineCounterInit;
+                    _lineCountOverflow = false;
 
                     // Clear interrupt
-                    PERQCpu.Instance.ClearInterrupt(PERQemu.CPU.InterruptType.LineCounter);
+                    PERQCpu.Instance.ClearInterrupt(InterruptType.LineCounter);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Display, "Line counter set to {0} scanlines. (write was {1:x4}",
+                        Trace.Log(LogType.Display, "Line counter set to {0} scanlines. (write was {1:x4})",
                                                    _lineCounterInit, value);
 #endif
                     break;
@@ -140,7 +135,7 @@ namespace PERQemu.Display
                     //  15:4    address >> 4
                     //   3:2    address bits 21:20 on cards > 2 MB
                     //   1:0    not used
-                    _displayAddress = value << 4;   // TODO: need more logic for > 2mb
+                    _displayAddress = value << 4;   // TODO: need more logic for .25mb or > 2mb
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -154,7 +149,8 @@ namespace PERQemu.Display
                     _cursorAddress = value << 4;
 
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "Cursor Address Register set to {0:x4}", value);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Display, "Cursor Address Register set to {0:x5}", _cursorAddress);
 #endif
                     break;
 
@@ -174,6 +170,10 @@ namespace PERQemu.Display
                     if ((_videoStatus & StatusRegister.EnableCursor) != 0)
                     {
                         _cursorY = _scanLine;
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Tablet, "Cursor Y set to {0:x4}", _cursorY);
+#endif
                     }
 
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
@@ -184,7 +184,8 @@ namespace PERQemu.Display
                     }
 
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "Video status port set to {0}", _videoStatus);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Display, "Video status port set to {0}", _videoStatus);
 #endif
                     break;
 
@@ -193,25 +194,28 @@ namespace PERQemu.Display
                     // Cursor X Position (344 W)
                     //  15:8    not used
                     //   7:0    ~C
-
-                    // Cursor X position is only specifiable in 8-pixel offsets (moving the cursor within those
-                    // 8 pixels is actually done in software by shifting the cursor bitmap to match.  Fun.
-                    _cursorX = (int)((240 - (value & 0xff)) * 8);
+                    //
+                    // Cursor X position is only specifiable in 8-pixel offsets
+                    // (moving the cursor within those 8 pixels is actually done
+                    // in software by shifting the cursor bitmap to match.  Fun.
+                    //_cursorX = (int)((240 - (value & 0xff)) * 8);
+                    _cursorX = (int)(240 - (value & 0xff));
 
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "Cursor X set to {0:x4}", value);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Tablet, "Cursor X set to {0:x4}", _cursorX);
 #endif
                     break;
 
                 default:
                     throw new UnhandledIORequestException(
-                        String.Format("Unhandled Memory IO Write to port {0:x2}, data {0:x4}", ioPort, value));
+                        String.Format("Unhandled Memory IO Write to port {0:x2}, data {1:x4}", ioPort, value));
             }
         }
 
+
         public void Clock()
         {
-            bool lineCounterHit = false;
             _cycle++;
 
             switch (_state)
@@ -230,11 +234,11 @@ namespace PERQemu.Display
                     {
                         _cycle = 0;
                         _scanLine++;
-                        _lineCounter--;
+                        if (_lineCounter > 0) _lineCounter--;
 
                         if (_scanLine > 1023)
                         {
-                            _state = VideoState.VBlankScanline;
+                            _state = VideoState.VBlankScanline; // Could be driven by the microcode?
                             Display.Instance.Refresh();
                         }
                         else
@@ -248,13 +252,10 @@ namespace PERQemu.Display
                     if (_cycle > _scanLineCycles)
                     {
                         _cycle = 0;
-                        _vBlankScanLine++;
-                        _lineCounter--;
+                        if (_lineCounter > 0) _lineCounter--;
 
-                        if (_vBlankScanLine > 20)   // XXX "20"?
+                        if (_lineCounter == 0)              // Trust what the microcode set
                         {
-                            _vBlankScanLine = 0;
-                            _cycle = 0;
                             _scanLine = 0;
                             _state = VideoState.VisibleScanline;
                         }
@@ -262,27 +263,32 @@ namespace PERQemu.Display
                     break;
             }
 
-            // Trigger an interrupt if the line counter is set and
-            // has been reduced to 0.
+            // Trigger an interrupt if the line counter is set and has reached 0.
             if (_lineCounter == 0 && _lineCounterInit > 0)
             {
-                _lineCounter = _lineCounterInit;
-                lineCounterHit = true;
-
-                if (ParityInterruptsEnabled)    // XXX parity interrupt?
+                if (ParityInterruptsEnabled && !_lineCountOverflow)     // Just trigger it once...
                 {
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt.");
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt.");
 #endif
-                    PERQemu.CPU.PERQCpu.Instance.RaiseInterrupt(PERQemu.CPU.InterruptType.LineCounter);
+                    PERQCpu.Instance.RaiseInterrupt(InterruptType.LineCounter);
                 }
-            }
+
+                // Set our flag; this will be reset when _lineCounterInit is reloaded
+                _lineCountOverflow = true;
+           }
+
+            // The LineCounterOverflow status bit in the CRT Signals register should mirror our
+            // interrupt status; don't just raise it for the one cycle when we hit zero, but
+            // leave it set until the line counter is reset by an IOWrite.  Accent specifically
+            // checks for this bit!
 
             _crtSignals =
                 CRTSignals.LandscapeDisplay |
+                (_lineCountOverflow ? CRTSignals.LineCounterOverflow : CRTSignals.None) |
                 (_state == VideoState.VBlankScanline ? CRTSignals.VerticalSync : CRTSignals.None) |
-                (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None) |
-                (lineCounterHit ? CRTSignals.LineCounterOverflow : CRTSignals.None);
+                (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None);
         }
 
         private bool CursorEnabled
@@ -325,7 +331,7 @@ namespace PERQemu.Display
             // Calc the starting address of this line of the cursor data.
             int cursorAddress = ((_cursorAddress << 1) + (_scanLine - _cursorY) * 8);
 
-            int cursorStartByte = _cursorX >> 3;
+            int cursorStartByte = _cursorX;
             int backgroundStartByte = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES + (_displayAddress << 1);
             int screenAddress = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES;
 
@@ -364,8 +370,6 @@ namespace PERQemu.Display
         /// <summary>
         /// Transforms the display word based on the current Cursor function
         /// </summary>
-        /// <param name="word"></param>
-        /// <returns></returns>
         private ushort TransformDisplayWord(ushort word)
         {
             switch (_cursorFunc)
@@ -383,8 +387,6 @@ namespace PERQemu.Display
         /// <summary>
         /// Transforms the cursor byte based on the current Cursor function and the display bytes.
         /// </summary>
-        /// <param name="word"></param>
-        /// <returns></returns>
         private byte TransformCursorByte(byte dispWord, byte cursWord)
         {
             switch (_cursorFunc)
@@ -427,7 +429,7 @@ namespace PERQemu.Display
             LineCounterOverflow = 0x10,
             Unused1 = 0x20,
             Unused2 = 0x40,
-            LandscapeDisplay = 0x80
+            LandscapeDisplay = 0x80         // set=Portrait, clear=Landscape!
         }
 
         [Flags]
@@ -497,26 +499,35 @@ namespace PERQemu.Display
         /// -----
         /// 1012 pixel clocks
         ///
-        /// Horizontal - landscape monitor
+        /// Horizontal - landscape monitor (not yet implemented)
         /// 1280 pixels displayed
         /// 422 blank
         /// -----
         /// 1702 pixel clocks
         ///
-        /// Perq master clock = 64.78824 MHz = portrait pixel clock
-        /// memory cycle = 680 nsec = 4.4  clocks
+        /// Perq master clock = 5.89Mhz = ~170ns.  For emulation purposes, this is the rate that
+        /// dictates how often our VideoController Clock() is called, so:
+        /// 
+        /// Portrait pixel clock = 64.78824 MHz = 15.44ns -> ~11:1 clock ratio = 92 cpu clocks/line
+        /// Visible part of each scan line = 768 bit times * 15.44ns / 11 = ~70 pixel clocks
+        /// Horizontal retrace per scan line = 244 bit times * 15.44ns / 11 = ~22 pixel clocks
         ///
-        /// landscape pixel clock = 108.962 MHz
-        /// memory cycle = 680 nsec = 7.4 pixel clocks
+        /// Landscape pixel clock = 108.962 MHz = 9.1ns -> ~18.5:1 clock ratio = 92 cpu clocks/line!
+        /// Visible part of scan line = 1280 bit times * 9.1ns / 18.5 = ~70 pixel clocks
+        /// Horizontal retrace = 422 bit times * 9.1ns / 18.5 = ~22 pixel clocks
+        /// 
+        /// Vertical retrace is accounted for by the microcode setting up two bands totalling 43 lines.
+        /// Because these are part of the normal interrupt service routine, we don't need to track our
+        /// own vertical retrace timer; _vBlankCycles can be removed.
         /// </summary>
         private int _cycle;
 
-        private const int _scanLineCycles = 100;    // 174?
-        private const int _hBlankCycles = 6;        // guess
-        private const int _vBlankCycles = 4 * (_scanLineCycles + _hBlankCycles);  // 43 lines for blanking
+        private const int _scanLineCycles = 70;
+        private const int _hBlankCycles = 22;
+        private const int _vBlankCycles = 4 * (_scanLineCycles + _hBlankCycles); // Unused
 
         /// <summary>
-        /// Various handy display constants
+        /// Various handy portrait display constants
         /// </summary>
         public static int PERQ_DISPLAYWIDTH = 768;
         public static int PERQ_DISPLAYWIDTH_IN_WORDS = 48;
@@ -525,19 +536,18 @@ namespace PERQemu.Display
 
         private VideoState _state;
         private int _scanLine;
-        private int _vBlankScanLine;
+        private int _lineCounterInit;
+        private bool _lineCountOverflow;
 
         // IO registers
         private int _lineCounter;
+        private CRTSignals _crtSignals;
         private StatusRegister _videoStatus;
         private int _displayAddress;
         private int _cursorAddress;
         private int _cursorX;
         private int _cursorY;
         private CursorFunction _cursorFunc;
-
-        private int _lineCounterInit;
-        private CRTSignals _crtSignals;
 
         private static VideoController _instance = new VideoController();
     }
