@@ -1,4 +1,4 @@
-// disassembler.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// disassembler.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -334,7 +334,7 @@ namespace PERQemu.Debugger
                             break;
 
                         case 0xf:       // IOB function
-                            function += String.Format("IOB({0:x2})", (byte)(~uOp.Z));
+                            function += String.Format("IOB({0:x2})", uOp.IOPort);
                             break;
                     }
                     break;

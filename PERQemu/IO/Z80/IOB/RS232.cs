@@ -68,9 +68,8 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Sets the device to use for the serial port.
+        /// Sets the host device to use for the serial port.
         /// </summary>
-        /// <param name="fs"></param>
         public void SetDevice(ISerialDevice device)
         {
             if (device == null)
@@ -91,12 +90,14 @@ namespace PERQemu.IO.Z80.IOB
             switch (message)
             {
                 case PERQtoZ80Message.SetRS232Status:
-                    // 4 bytes for RS232 status:
+                    // Up to 4 bytes for RS232 status:
                     //  byte 0 = 3 (msg length)
                     //  byte 1 = enable/disable
                     //  byte 2 = clock rate
                     //  byte 3 = settings
-                    if (_messageIndex > 3)
+                    // Note that a 1-byte enable/disable message shouldn't 
+                    // change the other settings, probably...
+                    if (_messageIndex > 1 + _messageData[0])
                     {
                         _messageIndex = 0;
                         SetRS232Status();
@@ -233,134 +234,138 @@ namespace PERQemu.IO.Z80.IOB
                 }
             }
 
-            // Set baud rate
-            switch (_messageData[2])
+            // If our message included the additional bytes, update settings:
+            if (_messageData[0] > 1)
             {
-                case 0x1:
-                    _serialDevice.BaudRate = 9600;
-                    break;
+                // Set baud rate
+                switch (_messageData[2])
+                {
+                    case 0x1:
+                        _serialDevice.BaudRate = 9600;
+                        break;
 
-                case 0x2:
-                    _serialDevice.BaudRate = 4800;
-                    break;
+                    case 0x2:
+                        _serialDevice.BaudRate = 4800;
+                        break;
 
-                case 0x4:
-                    _serialDevice.BaudRate = 2400;
-                    break;
+                    case 0x4:
+                        _serialDevice.BaudRate = 2400;
+                        break;
 
-                case 0x8:
-                    _serialDevice.BaudRate = 1200;
-                    break;
+                    case 0x8:
+                        _serialDevice.BaudRate = 1200;
+                        break;
 
-                case 0x10:
-                    _serialDevice.BaudRate = 600;
-                    break;
+                    case 0x10:
+                        _serialDevice.BaudRate = 600;
+                        break;
 
-                case 0x20:
-                    _serialDevice.BaudRate = 300;
-                    break;
+                    case 0x20:
+                        _serialDevice.BaudRate = 300;
+                        break;
 
-                case 0x40:
-                    _serialDevice.BaudRate = 150;
-                    break;
+                    case 0x40:
+                        _serialDevice.BaudRate = 150;
+                        break;
 
-                case 0x57:      // Yes, this seems odd, but there you are.  110 baud is 0x57.  Not 0x80.
-                    _serialDevice.BaudRate = 110;
-                    break;
+                    case 0x57:      // Yes, this seems odd, but there you are.  110 baud is 0x57.  Not 0x80.
+                        _serialDevice.BaudRate = 110;
+                        break;
 
-                default:
+                    default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled baud rate setting {0}", _messageData[2]);
+                        if (Trace.TraceOn)
+                            Trace.Log(LogType.Warnings, "Unhandled baud rate setting {0}", _messageData[2]);
 #endif
-                    break;
-            }
+                        break;
+                }
 
-            // Set parity
-            int parity = _messageData[3] & 0x3;
-            switch (parity)
-            {
-                case 0:
-                    _serialDevice.Parity = Parity.None;
-                    break;
-
-                case 1:
-                    _serialDevice.Parity = Parity.Odd;
-                    break;
-
-                case 3:
-                    _serialDevice.Parity = Parity.Even;
-                    break;
-
-                default:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled parity setting {0}", parity);
-#endif
-                    break;
-            }
-
-            int stopBits = (_messageData[3] & 0x6) >> 2;
-
-            try
-            {
-                switch (stopBits)
+                // Set parity
+                int parity = _messageData[3] & 0x3;
+                switch (parity)
                 {
                     case 0:
-                        _serialDevice.StopBits = StopBits.None;
+                        _serialDevice.Parity = Parity.None;
                         break;
 
                     case 1:
-                        _serialDevice.StopBits = StopBits.One;
-                        break;
-
-                    case 2:
-                        _serialDevice.StopBits = StopBits.OnePointFive;
+                        _serialDevice.Parity = Parity.Odd;
                         break;
 
                     case 3:
-                        _serialDevice.StopBits = StopBits.Two;
+                        _serialDevice.Parity = Parity.Even;
+                        break;
+
+                    default:
+#if TRACING_ENABLED
+                        if (Trace.TraceOn)
+                            Trace.Log(LogType.Warnings, "Unhandled parity setting {0}", parity);
+#endif
                         break;
                 }
-            }
-            catch
-            {
+
+                int stopBits = (_messageData[3] & 0x6) >> 2;
+
+                try
+                {
+                    switch (stopBits)
+                    {
+                        case 0:
+                            _serialDevice.StopBits = StopBits.None;
+                            break;
+
+                        case 1:
+                            _serialDevice.StopBits = StopBits.One;
+                            break;
+
+                        case 2:
+                            _serialDevice.StopBits = StopBits.OnePointFive;
+                            break;
+
+                        case 3:
+                            _serialDevice.StopBits = StopBits.Two;
+                            break;
+                    }
+                }
+                catch
+                {
 #if TRACING_ENABLED
-                if (Trace.TraceOn)
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings,
+                                  "Stop bits setting of {0} not available on physical hardware.  Assuming one stop bit.",
+                                   stopBits);
+#endif
+                    _serialDevice.StopBits = StopBits.One;
+                }
+
+                int transmitBits = (_messageData[3] & 0x30) >> 4;
+                int receiveBits = (_messageData[3] & 0x60) >> 6;
+
+#if TRACING_ENABLED
+                if (Trace.TraceOn && transmitBits != receiveBits)
                     Trace.Log(LogType.Warnings,
-                              "Stop bits setting of {0} not available on physical hardware.  Assuming one stop bit.",
-                               stopBits);
-#endif
-                _serialDevice.StopBits = StopBits.One;
-            }
-
-            int transmitBits = (_messageData[3] & 0x30) >> 4;
-            int receiveBits = (_messageData[3] & 0x60) >> 6;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn && transmitBits != receiveBits)
-                Trace.Log(LogType.Warnings,
-                         "Transmit bits {0} != Receive bits {1}, unsupported on physical hardware.  Assuming data bits of {2}",
-                          transmitBits, receiveBits, transmitBits);
+                             "Transmit bits {0} != Receive bits {1}, unsupported on physical hardware.  Assuming data bits of {2}",
+                              transmitBits, receiveBits, transmitBits);
 #endif
 
-            switch (transmitBits)
-            {
-                case 0:
-                    _serialDevice.DataBits = 5;
-                    break;
+                switch (transmitBits)
+                {
+                    case 0:
+                        _serialDevice.DataBits = 5;
+                        break;
 
-                case 1:
-                    _serialDevice.DataBits = 7;
-                    break;
+                    case 1:
+                        _serialDevice.DataBits = 7;
+                        break;
 
-                case 2:
-                    _serialDevice.DataBits = 6;
-                    break;
+                    case 2:
+                        _serialDevice.DataBits = 6;
+                        break;
 
-                case 3:
-                    _serialDevice.DataBits = 8;
-                    break;
+                    case 3:
+                        _serialDevice.DataBits = 8;
+                        break;
+                }
             }
 
 #if TRACING_ENABLED
