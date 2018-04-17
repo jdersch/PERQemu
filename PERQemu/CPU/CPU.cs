@@ -19,12 +19,15 @@
 using System;
 using System.IO;
 using System.Text;
+
 using PERQemu.IO;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 using PERQemu.Display;
+
 #if DEBUG
 using PERQemu.IO.Z80.IOB;
+using System.Collections.Generic;
 #endif
 
 namespace PERQemu.CPU
@@ -267,6 +270,11 @@ namespace PERQemu.CPU
             // If the last instruction was NextOp or NextInst, increment BPC at the start of this instruction
             if (_incrementBPC)
             {
+#if DEBUG
+                // save last op file byte in the trace buffer
+                if (_opTrace.Count >= 255) _opTrace.Dequeue();      // don't grow without bound...
+                _opTrace.Enqueue(_memory.OpFile[_bpc]);             // save the op byte we just read
+#endif
                 _bpc++;
                 _incrementBPC = false;
 
@@ -368,7 +376,7 @@ namespace PERQemu.CPU
 
         #region Getters and setters
         /// <summary>
-        /// Returns the CPU's DDS register
+        /// Returns the current DDS value.  (Not really a register, but useful! :-)
         /// </summary>
         [DebugProperty("dds")]
         public int DDS
@@ -395,7 +403,7 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// The Victim Latch
+        /// The Victim Latch.
         /// </summary>
         [DebugProperty("victim")]
         public ushort Victim
@@ -404,7 +412,7 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// The uState register
+        /// The uState register.
         /// </summary>
         [DebugProperty("ustate")]
         public int MicrostateRegister
@@ -442,7 +450,7 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Raises the specified interrupt
+        /// Raises the specified interrupt.
         /// </summary>
         [DebugFunction("raise interrupt")]
         public void RaiseInterrupt(InterruptType i)
@@ -472,7 +480,7 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// The CPU's microcode store (4 or 16K)
+        /// The CPU's microcode store (4 or 16K).
         /// </summary>
         [DebugProperty("ucode")]
         public ulong[] Microcode
@@ -481,16 +489,34 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// The CPU's XY registers
+        /// The ALU's last result register "R".
         /// </summary>
         [DebugProperty("r")]
-        public int[] R
+        public int R
         {
-            get { return _r; }
+            get { return _alu.Registers.R; }
         }
 
         /// <summary>
-        /// The CPU's expression stack
+        /// The Multiply/Divide MQ register.
+        /// </summary>
+        [DebugProperty("mq")]
+        public int MQ
+        {
+            get { return _mq; }
+        }
+
+        /// <summary>
+        /// The most recent word on the IO data bus.
+        /// </summary>
+        [DebugProperty("iod")]
+        public int IOD
+        {
+            get { return _iod; }
+        }
+
+        /// <summary>
+        /// The CPU's expression stack.
         /// </summary>
         [DebugProperty("estk")]
         public int[] EStack
@@ -499,7 +525,7 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// The expression stack pointer
+        /// The expression stack pointer.
         /// </summary>
         [DebugProperty("estkptr")]
         public int EStackPointer
@@ -509,7 +535,7 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// The Am2910 call stack
+        /// The Am2910 call stack.
         /// </summary>
         public CallStack CallStack
         {
@@ -699,6 +725,16 @@ namespace PERQemu.CPU
 #endif
                 }
             }
+#if DEBUG
+            //if (uOp.X == 0xbd || (uOp.X == 0xbe && _lastPC != 0x0d1b))              // FIXME here for accent mouse debug (watch for assignment to VidCursX register)
+            //{
+            //    Console.WriteLine("Write to cursor X,Y registers: R{0:x2} <-- {1:x4}", uOp.X, _alu.Registers.R);
+            //    Console.WriteLine("Previous, current instructions:");
+            //    Console.WriteLine("\t{0}", Disassembler.Disassemble(_lastPC, _lastInstruction));
+            //    Console.WriteLine("\t{0}", Disassembler.Disassemble(PC, uOp));
+            //    PERQSystem.Instance.Break();
+            //}
+#endif
         }
 
 #if SIXTEEN_K
@@ -1519,6 +1555,12 @@ namespace PERQemu.CPU
                 ShowEStack();
                 PERQSystem.Instance.Break();
             }
+
+            // Accent KOPS #5 == PSGetCB
+            //if (next == 253 && _memory.OpFile[BPC + 1] == 5)
+            //{
+            //    PERQSystem.Instance.Break();
+            //}
 #endif
 
 #if SIXTEEN_K
@@ -1655,7 +1697,6 @@ namespace PERQemu.CPU
             if (Trace.TraceOn)
             {
                 Trace.Log(LogType.EStack, "Estack: Pushed {0:x5}. Pointer now {1:x1}.", value, _stackPointer);
-                PrintStack();
             }
 #endif
         }
@@ -1681,22 +1722,9 @@ namespace PERQemu.CPU
             if (Trace.TraceOn)
             {
                 Trace.Log(LogType.EStack, "EStack: Popped.  Pointer now {0:x1}", _stackPointer);
-                PrintStack();
             }
 #endif
         }
-
-#if TRACING_ENABLED
-        private void PrintStack()
-        {
-            Trace.Log(LogType.EStack, "EStack contents:");
-
-            for (int i = _stackPointer; i >= 0; i--)
-            {
-                Trace.Log(LogType.EStack, "{0} - {1:x5}", i, _stack[i]);
-            }
-        }
-#endif
 
         /// <summary>
         /// Increments the DDS (diagnostic counter)
@@ -1738,17 +1766,17 @@ namespace PERQemu.CPU
         {
             ushort endAddr = (ushort)(startAddress + length);
 
-            if (startAddress >= PERQCpu.Instance.Microcode.Length ||
-                endAddr >= PERQCpu.Instance.Microcode.Length)
+            if (startAddress >= _microcode.Length ||
+                endAddr >= _microcode.Length)
             {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", PERQCpu.Instance.Microcode.Length);
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _microcode.Length);
                 return;
             }
 
             // Disassemble microcode
             for (ushort i = startAddress; i < endAddr; i++)
             {
-                string line = Disassembler.Disassemble(i, PERQCpu.Instance.GetInstruction(i));
+                string line = Disassembler.Disassemble(i, GetInstruction(i));
                 Console.WriteLine(line);
             }
         }
@@ -1794,14 +1822,43 @@ namespace PERQemu.CPU
         [DebugFunction("jump", "Set next microinstruction address")]
         private void JumpTo(ushort nextPC)
         {
-            if (nextPC <= 0 || nextPC > Microcode.Length)
+            if (nextPC <= 0 || nextPC > _microcode.Length)
             {
-                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", Microcode.Length);
+                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _microcode.Length);
             }
             else
             {
                 _pc.Value = nextPC;
             }
+        }
+
+        [DebugFunction("show cpu registers", "Displays the values of the CPU registers")]
+        public void ShowPC()
+        {
+            Console.WriteLine("\nPC={0:x4} BPC={1:x1} Victim={2:x4} DDS={3} UState={4:x2} Interrupt={5}",
+                              PC, BPC, Victim, DDS, MicrostateRegister, InterruptFlag);
+        }
+
+        [DebugFunction("show xy register", "Displays the values of the XY registers")]
+        private void ShowRegister()
+        {
+            for (int reg = 0; reg < 256; reg++)
+            {
+                Console.Write("R[{0:x2}]={1:x5}{2}", reg, _r[reg],
+                              ((reg + 1) % 4 == 0) ? "\n" : "\t");
+            }
+            Console.WriteLine();
+        }
+
+        [DebugFunction("show xy register", "Displays the value of the specified XY register [0..255]")]
+        private void ShowRegister(ushort reg)
+        {
+            if (reg > 255)
+            {
+                Console.WriteLine("Argument out of range -- must be between 0 and 255");
+                return;
+            }
+            Console.WriteLine("R[{0:x2}]={1:x5}", reg, _r[reg]);
         }
 
         [DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr])")]
@@ -1829,8 +1886,7 @@ namespace PERQemu.CPU
             {
                 StringBuilder line = new StringBuilder();
 
-                line.AppendFormat(
-                    "{0:x5}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
+                line.AppendFormat("{0:x5}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
                     i, mem[i], mem[i + 1], mem[i + 2], mem[i + 3], mem[i + 4], mem[i + 5], mem[i + 6], mem[i + 7]);
 
                 for (uint j = i; j < i + 8; j++)
@@ -1862,12 +1918,25 @@ namespace PERQemu.CPU
         {
             MemoryBoard.Instance.DumpQueues();
         }
+
+
+        [DebugFunction("show trace", "Dump the contents of the opcode trace buffer")]
+        private void ShowOpTrace()
+        {
+            Console.WriteLine("OpFile trace buffer ({0} bytes):", _opTrace.Count);
+
+            while (_opTrace.Count > 0)
+            {
+                byte op = _opTrace.Dequeue();   // clear data as we print... too lazy to set up an iterator.
+                Console.WriteLine("{0}: {1}={2}", _opTrace.Count, op, QCode.QCodeHelper.GetQCodeFromOpCode(op).Mnemonic);
+            }
+        }
 #endif
 
         [DebugFunction("show opfile", "Displays the contents of the opcode file")]
         private void ShowOpfile()
         {
-            Console.WriteLine("BPC={0}. Opfile Contents:", PERQCpu.Instance.BPC);
+            Console.WriteLine("BPC={0}. Opfile Contents:", BPC);
 
             for (int i = 0; i < 8; i++)
             {
@@ -1878,11 +1947,11 @@ namespace PERQemu.CPU
         [DebugFunction("show estack", "Displays the contents of the expression stack")]
         private void ShowEStack()
         {
-            Console.WriteLine("EStack Pointer={0}.  Contents:", PERQCpu.Instance.EStackPointer);
+            Console.WriteLine("EStack Pointer={0}.  Contents:", _stackPointer);
 
-            for (int i = 0; i <= PERQCpu.Instance.EStackPointer; i++)
+            for (int i = 0; i < 16; i++)
             {
-                Console.WriteLine("{0}: {1:x5}", i, PERQCpu.Instance.EStack[i]);
+                Console.WriteLine("{0} {1:00}: {2:x5}", (i == _stackPointer ? "=>" : "  "), i, _stack[i]);
             }
         }
 
@@ -1941,9 +2010,7 @@ namespace PERQemu.CPU
         {
             _rasterOp.ShowRegs();
         }
-#endif
 
-#if DEBUG
         [DebugFunction("show z80 state", "Display current Z80 device ready state")]
         private void ShowZ80State()
         {
@@ -1954,15 +2021,29 @@ namespace PERQemu.CPU
         [DebugFunction("show z80 registers", "Display current Z80 protocol register contents")]
         private void ShowZ80Regs()
         {
+            // These are for Accent S4, probably wrong for POS!
             Console.WriteLine("Z80-to-PERQ protocol state:");
             Console.WriteLine("\tIOTmp      R[80]={0:x5}\tIOTmp1    R[81]={1:x5}", _r[0x80], _r[0x81]);
+            Console.WriteLine("\tIOPhysAdr  R[82]={0:x5}\tIODevTab  R[86]={1:x5}", _r[0x82], _r[0x86]);
             Console.WriteLine("\tZ80Tmp     R[88]={0:x5}\tZ80State  R[89]={1:x5}", _r[0x88], _r[0x89]);
-            Console.WriteLine("\tZ80Byte    R[87]={0:x5}\tZ80IDev   R[8A]={1:x5}", _r[0x87], _r[0x8a]);
-            Console.WriteLine("\tZ80IBytCnt R[8B]={0:x5}\tZ80ICmd   R[8C]={1:x5}", _r[0x8b], _r[0x8c]);
-            Console.WriteLine("\tZ80IIocb   R[8D]={0:x5}\tZ80Status R[95]={1:x5}", _r[0x8d], _r[0x95]);
+            Console.WriteLine("\tZ80Byte    R[87]={0:x5}\tZ80IDev   R[8a]={1:x5}", _r[0x87], _r[0x8a]);
+            Console.WriteLine("\tZ80IBytCnt R[8b]={0:x5}\tZ80ICmd   R[8c]={1:x5}", _r[0x8b], _r[0x8c]);
+            Console.WriteLine("\tZ80IIocb   R[8d]={0:x5}\tZ80Status R[95]={1:x5}", _r[0x8d], _r[0x95]);
             Console.WriteLine("Circular buffer temporaries:");
-            Console.WriteLine("\tIOLen      R[B0]={0:x5}\tIOChar    R[B3]={1:x5}", _r[0xb0], _r[0xb3]);
-            Console.WriteLine("\tIORdPtr    R[B1]={0:x5}\tIOWrPtr   R[B2]={1:x5}", _r[0xb1], _r[0xb2]);
+            Console.WriteLine("\tIOLen      R[b0]={0:x5}\tIOChar    R[b3]={1:x5}", _r[0xb0], _r[0xb3]);
+            Console.WriteLine("\tIORdPtr    R[b1]={0:x5}\tIOWrPtr   R[b2]={1:x5}", _r[0xb1], _r[0xb2]);
+        }
+
+        [DebugFunction("show video registers", "Display current video controller register contents")]
+        private void ShowVideoRegs()
+        {
+            // Accent S4 (and possibly later), but not POS!
+            Console.WriteLine("Accent video registers:");
+            Console.WriteLine("\tVidScreen  R[b6]={0:x5}\tVidCursor   R[b7]={1:x5}", _r[0xb6], _r[0xb7]);
+            Console.WriteLine("\tVidScans   R[b5]={0:x5}\tVidLCnt     R[bf]={1:x5}", _r[0xb5], _r[0xbf]);
+            Console.WriteLine("\tVidCount   R[b9]={0:x5}\tVidNext     R[ba]={1:x5}", _r[0xb9], _r[0xba]);
+            Console.WriteLine("\tVidCntrl   R[bb]={0:x5}\tVidBack     R[bc]={1:x5}", _r[0xbb], _r[0xbc]);
+            Console.WriteLine("\tVidCurTop  R[bd]={0:x5}\tVidCurByte  R[be]={1:x5}", _r[0xbd], _r[0xbe]);
         }
 #endif
         #endregion
@@ -2025,6 +2106,11 @@ namespace PERQemu.CPU
         // Byte Program Counter
         private int _bpc;
         private bool _incrementBPC;
+
+#if DEBUG
+        // Qcode trace buffer for debugging
+        private Queue<byte> _opTrace = new Queue<byte>(256);
+#endif
 
         // Diagnostic counter
         private int _dds;

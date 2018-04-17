@@ -132,10 +132,10 @@ namespace PERQemu.Display
 
                     // Display Addr (341 W) Address of first pixel on display. Must be a
                     // multiple of 256 words.
-                    //  15:4    address >> 4
-                    //   3:2    address bits 21:20 on cards > 2 MB
+                    //  15:4    address >> 4 for .5-2MB boards; address >> 1 for old 256K boards
+                    //   3:2    address bits 21:20 on cards > 2 MB (not yet supported)
                     //   1:0    not used
-                    _displayAddress = value << 4;   // TODO: need more logic for .25mb or > 2mb
+                    _displayAddress = (MemoryBoard.Instance.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -146,7 +146,7 @@ namespace PERQemu.Display
                 case 0xe2:  // Load cursor address
 
                     // Same format as display addr.
-                    _cursorAddress = value << 4;
+                    _cursorAddress = (MemoryBoard.Instance.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -172,7 +172,7 @@ namespace PERQemu.Display
                         _cursorY = _scanLine;
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Cursor Y set to {0:x4}", _cursorY);
+                        Trace.Log(LogType.Tablet, "Cursor Y set to {0}", _cursorY);
 #endif
                     }
 
@@ -193,7 +193,7 @@ namespace PERQemu.Display
 
                     // Cursor X Position (344 W)
                     //  15:8    not used
-                    //   7:0    ~C
+                    //   7:0    240 - X
                     //
                     // Cursor X position is only specifiable in 8-pixel offsets
                     // (moving the cursor within those 8 pixels is actually done
@@ -203,7 +203,7 @@ namespace PERQemu.Display
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Cursor X set to {0:x4}", _cursorX);
+                        Trace.Log(LogType.Tablet, "Cursor X set to {0} (value={1})", _cursorX, value);
 #endif
                     break;
 
@@ -238,7 +238,7 @@ namespace PERQemu.Display
 
                         if (_scanLine > 1023)
                         {
-                            _state = VideoState.VBlankScanline; // Could be driven by the microcode?
+                            _state = VideoState.VBlankScanline; // Microcode drives this; redundant?
                             Display.Instance.Refresh();
                         }
                         else
@@ -331,7 +331,7 @@ namespace PERQemu.Display
             // Calc the starting address of this line of the cursor data.
             int cursorAddress = ((_cursorAddress << 1) + (_scanLine - _cursorY) * 8);
 
-            int cursorStartByte = _cursorX;
+            int cursorStartByte = _cursorX; // >> 3;
             int backgroundStartByte = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES + (_displayAddress << 1);
             int screenAddress = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES;
 

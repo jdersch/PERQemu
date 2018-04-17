@@ -64,6 +64,11 @@ namespace PERQemu.Memory
 #endif
 		}
 
+        public int MemSize
+        {
+            get { return _memSize; }
+        }
+
 		public ushort[] Memory
 		{
 			get { return _memory; }
@@ -286,6 +291,12 @@ namespace PERQemu.Memory
 #if TRACING_ENABLED
 			if (Trace.TraceOn)
 				Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
+            
+            if ((address >= 0x754f3 && address <= 0x75557) && PERQCpu.Instance.DDS > 151)
+            {
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Tablet, "Read from GPIB circular buffer: {0:x5} --> {1:x4}", address, data);
+            }
 #endif
 			return data;
 		}
@@ -300,9 +311,17 @@ namespace PERQemu.Memory
 #if TRACING_ENABLED
 			if (Trace.TraceOn)
 				Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
+
+            // Accent mouse tracking debugging.  this is gruesome.
+            if (address == 0x754f1 && PERQCpu.Instance.DDS > 151)
+            {
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Tablet, "Advanced tablet buffer {0} pointer: {1:x4}", address == 0x754f1 ? "Read" : "Write", data);
+            }
 #endif
-			// Clip address to memsize range and write
-			_memory[address & _memSizeMask] = data;
+
+            // Clip address to memsize range and write
+            _memory[address & _memSizeMask] = data;
 		}
 
 		/// <summary>
@@ -353,6 +372,12 @@ namespace PERQemu.Memory
 
 
         // TODO: Memory board size should be configurable at runtime.
+        // For the PERQ 1, the original "quarter meg" board was 256KB (128KW).  Some
+        // "half meg" boards existed (512KB/256KW) but were rare; the most common was
+        // the 1MB/512KW using 64K RAMs.  Some very rare 2MB/1MW boards used piggyback
+        // 128Kb RAMs; the landscape boards used 256Kb RAMs.  It'd be cool to support
+        // 'em all -- along with the "multi-meg" board (4MB, and possibly 8MB!) that
+        // was available only with the incredibly rare 24-bit T4 machines.
 #if TWO_MEG
         private const int _memSize     = 0x100000;  // 2MB == 1MW
         private const int _memSizeMask = 0x0fffff;  // i.e., full 20 bits

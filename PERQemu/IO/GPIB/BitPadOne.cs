@@ -23,10 +23,10 @@ using System.Collections.Generic;
 
 namespace PERQemu.IO.GPIB
 {
-    //
-    // Implements an emulation of a Summagraphics BitPadOne tablet.
-    // This is used as a pointing device.
-    //
+    ///<summary>
+    /// Implements an emulation of a Summagraphics BitPadOne tablet.
+    /// This is used as a pointing device.
+    ///</summary>
     public class BitPadOne : IGPIBDevice
     {
         public BitPadOne()
@@ -42,7 +42,7 @@ namespace PERQemu.IO.GPIB
             // configuration of IO board types; the EIO ran the Z80 at 4Mhz, faster
             // than the older IOB @ 2.45Mhz, so the IO "fudge" might change.  This
             // is very silly.)
-            _sampleRate = (PERQCpu.Frequency / 100) / PERQCpu.IOFudge;
+            _sampleRate = (PERQCpu.Frequency / 60) / PERQCpu.IOFudge;
 
             Reset();
         }
@@ -54,13 +54,9 @@ namespace PERQemu.IO.GPIB
 
         public void Reset()
         {
-            _lastX = -1;
-            _lastY = -1;
-            _lastButton = -1;
             _lastUpdate = 0;
             _talking = false;
             _listening = false;
-            _firstPoll = true;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -83,8 +79,6 @@ namespace PERQemu.IO.GPIB
             if (_talking)
             {
                 _lastUpdate = 0;    // Reset counter so we don't start sampling immediately
-                _firstPoll = true;  // HACK: our first message will be a LF only, to prime
-                                    // the Pascal code state machine...
             }
         }
 
@@ -151,40 +145,23 @@ namespace PERQemu.IO.GPIB
             // However, Accent (in particular) seems unhappy if the queue overflows, so
             // temper our update rate by checking that the fifo is empty before sending.
             //
-            if (((x != _lastX || y != _lastY || button != _lastButton) ||
-                 (_lastUpdate++ > _sampleRate)) && fifo.Count == 0)
+            if ((_lastUpdate++ > _sampleRate) && fifo.Count == 0)
             {
-                if (_firstPoll)
-                {
-                    fifo.Enqueue(_delimiter2);
-                    _firstPoll = false;
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.GPIB, "BitPadOne: first poll, sending LF only!");
-#endif
-                }
-                else
-                {
-                    WriteIntAsStringToQueue(x, ref fifo);
-                    fifo.Enqueue(_delimiter1);  // separator (')
-                    WriteIntAsStringToQueue(y, ref fifo);
-                    fifo.Enqueue(_delimiter1);  // separator
-                    fifo.Enqueue(_buttonMapping[button]);
-                    fifo.Enqueue(_delimiter2);  // LF                 
+                WriteIntAsStringToQueue(x, ref fifo);
+                fifo.Enqueue(_delimiter1);  // separator (')
+                WriteIntAsStringToQueue(y, ref fifo);
+                fifo.Enqueue(_delimiter1);  // separator
+                fifo.Enqueue(_buttonMapping[button]);
+                fifo.Enqueue(_delimiter2);  // LF                 
 
 #if TRACING_ENABLED
-                    // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
-                    if (Trace.TraceOn)
-                    {
-                        Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
-                                 x, y, button, _lastUpdate);
-                    }
-#endif
+                // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
+                if (Trace.TraceOn)
+                {
+                    Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
+                             x, y, button, _lastUpdate);
                 }
-
-                _lastX = x;
-                _lastY = y;
-                _lastButton = button;
+#endif
                 _lastUpdate = 0;
             }
         }
@@ -237,16 +214,12 @@ namespace PERQemu.IO.GPIB
             button = (byte)Display.Display.Instance.MouseButton;
         }
 
-        private int _lastX;
-        private int _lastY;
-        private int _lastButton;
         private int _lastUpdate;
         private int _sampleRate;
 
         private byte _myAddress;
         private bool _talking;
         private bool _listening;
-        private bool _firstPoll;
 
         private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
                                                    0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
