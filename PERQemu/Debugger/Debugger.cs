@@ -191,7 +191,7 @@ namespace PERQemu.Debugger
         {
             _nextState = RunState.Debug;
 
-            if (message != String.Empty && message != null)
+            if (!string.IsNullOrEmpty(message))
             {
                 Console.WriteLine(message);
             }
@@ -257,7 +257,7 @@ namespace PERQemu.Debugger
                     }
                     else
                     {
-						ExecuteLine("step");	// why not just this?
+                        ExecuteLine("step");	// why not just this?
                         //// no entry defaults to single-step (this is ugly)
                         //List<MethodInfo> methods = _commandRoot.FindSubNodeByName("step").Methods;
                         //InvokeDebugMethod(methods, null);
@@ -337,7 +337,7 @@ namespace PERQemu.Debugger
             ParameterInfo[] parameterInfo = method.GetParameters();
             object[] invokeParams;
 
-            if (args == null )
+            if (args == null)
             {
                 invokeParams = null;
             }
@@ -550,8 +550,8 @@ namespace PERQemu.Debugger
 
             if (property.PropertyType == typeof(Int32[]))
             {
-               Int32[] array = (Int32[])property.GetValue(instance, null);
-               Console.WriteLine("{0:x8}", array[arrayIndex]);
+                Int32[] array = (Int32[])property.GetValue(instance, null);
+                Console.WriteLine("{0:x8}", array[arrayIndex]);
             }
             else
             {
@@ -763,7 +763,7 @@ namespace PERQemu.Debugger
             return current.Methods;
         }
 
-        private void PrintStatus()
+        public void PrintStatus()           // FIXME go back to private after debugging
         {
             PERQCpu.Instance.ShowPC();
 
@@ -806,27 +806,27 @@ namespace PERQemu.Debugger
             _nextState = RunState.Exit;
         }
 
-/*
-        private void SetBreakpoint(string[] args)
-        {
+        /*
+                private void SetBreakpoint(string[] args)
+                {
 
-        }
+                }
 
-        private void ClearBreakpoint(string[] args)
-        {
+                private void ClearBreakpoint(string[] args)
+                {
 
-        }
+                }
 
-        private void ToggleBreakpoint(string[] args)
-        {
+                private void ToggleBreakpoint(string[] args)
+                {
 
-        }
+                }
 
-        private void ShowBreakpoints(string[] args)
-        {
+                private void ShowBreakpoints(string[] args)
+                {
 
-        }
-*/
+                }
+        */
 
 #if TRACING_ENABLED
         [DebugFunction("set logging", "Enables logging for the specified event types")]
@@ -851,7 +851,7 @@ namespace PERQemu.Debugger
         [DebugFunction("show variables", "Shows debugger variables and their descriptions.")]
         private void ShowVariables()
         {
-            foreach(DebuggerVariable var in _variableList)
+            foreach (DebuggerVariable var in _variableList)
             {
                 Console.WriteLine("{0} - {1}", var.Name, var.Description);
             }

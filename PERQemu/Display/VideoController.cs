@@ -49,6 +49,8 @@ namespace PERQemu.Display
             _lineCountOverflow = false;
             _cycle = 0;
 
+            _lastX = _lastY = -1;       // FIXME extra debugging
+
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Display, "Video Controller: Reset.");
 #endif
@@ -128,7 +130,7 @@ namespace PERQemu.Display
 #endif
                     break;
 
-                case 0xe1:  // Display address register
+                case 0xe1:  // Load display address register
 
                     // Display Addr (341 W) Address of first pixel on display. Must be a
                     // multiple of 256 words.
@@ -143,9 +145,9 @@ namespace PERQemu.Display
 #endif
                     break;
 
-                case 0xe2:  // Load cursor address
+                case 0xe2:  // Load cursor address register
 
-                    // Same format as display addr.
+                    // Same format as display address
                     _cursorAddress = (MemoryBoard.Instance.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
@@ -171,16 +173,21 @@ namespace PERQemu.Display
                     {
                         _cursorY = _scanLine;
 #if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Cursor Y set to {0}", _cursorY);
+                        if (Trace.TraceOn && _cursorY != _lastY)
+                            Trace.Log(LogType.Tablet, "Cursor Y set to {0}", _cursorY);
+                        _lastY = _cursorY;
 #endif
                     }
 
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
                     {
                         _scanLine = 0;
-                        _cycle = 0;
                         _state = VideoState.VBlankScanline;
+                    }
+
+                    if ((_videoStatus & StatusRegister.EnableDisplay) != 0)
+                    {
+                        _state = VideoState.VisibleScanline;
                     }
 
 #if TRACING_ENABLED
@@ -189,7 +196,7 @@ namespace PERQemu.Display
 #endif
                     break;
 
-                case 0xe4:   // Load cursor X position
+                case 0xe4:  // Load cursor X position
 
                     // Cursor X Position (344 W)
                     //  15:8    not used
@@ -198,12 +205,12 @@ namespace PERQemu.Display
                     // Cursor X position is only specifiable in 8-pixel offsets
                     // (moving the cursor within those 8 pixels is actually done
                     // in software by shifting the cursor bitmap to match.  Fun.
-                    //_cursorX = (int)((240 - (value & 0xff)) * 8);
                     _cursorX = (int)(240 - (value & 0xff));
 
 #if TRACING_ENABLED
-                    if (Trace.TraceOn)
+                    if (Trace.TraceOn && _cursorX != _lastX)
                         Trace.Log(LogType.Tablet, "Cursor X set to {0} (value={1})", _cursorX, value);
+                    _lastX = _cursorX;
 #endif
                     break;
 
@@ -236,9 +243,15 @@ namespace PERQemu.Display
                         _scanLine++;
                         if (_lineCounter > 0) _lineCounter--;
 
-                        if (_scanLine > 1023)
+                        if (_scanLine > _lastVisibleScanLine)
                         {
-                            _state = VideoState.VBlankScanline; // Microcode drives this; redundant?
+                            // Usually the microcode drives vertical blanking through
+                            // the control register; but during bootup it sometimes lets
+                            // the display run free, ignoring Vblank, but setting the
+                            // Enable bit so that memory refresh happens.  Here we just
+                            // force the state change so the display doesn't appear to
+                            // freeze up...
+                            _state = VideoState.VBlankScanline;
                             Display.Instance.Refresh();
                         }
                         else
@@ -256,28 +269,27 @@ namespace PERQemu.Display
 
                         if (_lineCounter == 0)              // Trust what the microcode set
                         {
-                            _scanLine = 0;
                             _state = VideoState.VisibleScanline;
                         }
                     }
                     break;
             }
 
-            // Trigger an interrupt if the line counter is set and has reached 0.
+            // Trigger an interrupt if the line counter is set and has reached 0
             if (_lineCounter == 0 && _lineCounterInit > 0)
             {
                 if (ParityInterruptsEnabled && !_lineCountOverflow)     // Just trigger it once...
                 {
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt.");
+                        Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt @ scanline {0}", _scanLine);
 #endif
                     PERQCpu.Instance.RaiseInterrupt(InterruptType.LineCounter);
                 }
 
                 // Set our flag; this will be reset when _lineCounterInit is reloaded
                 _lineCountOverflow = true;
-           }
+            }
 
             // The LineCounterOverflow status bit in the CRT Signals register should mirror our
             // interrupt status; don't just raise it for the one cycle when we hit zero, but
@@ -308,15 +320,25 @@ namespace PERQemu.Display
 
         public void RenderScanline()
         {
-            if (_scanLine < 0)
+            int renderLine = _scanLine;
+
+            // The PERQ video driver could run free when the microcode was ignoring
+            // interrupts, producing a visual display of a rolling retrace across the
+            // entire height of the tube.  It'd be fun to simulate that for accuracy's
+            // sake, but for now just mod the value so it remains in the visible range.
+            if (_scanLine < 0 || _scanLine > _lastVisibleScanLine)
             {
-                return;
+                renderLine = _scanLine % PERQ_DISPLAYHEIGHT;
             }
 
+#if TRACING_ENABLED
+            bool logState = Trace.TraceOn;
+            Trace.TraceOn = false;              // FIXME cut down the spewage for debugging
+#endif
             for (int x = 0; x < PERQ_DISPLAYWIDTH_IN_WORDS; x++)
             {
-                int dataAddress = _scanLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
-                int screenAddress = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
+                int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
+                int screenAddress = renderLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
                 Display.Instance.DrawWord(screenAddress, TransformDisplayWord(MemoryBoard.Instance.FetchWord(dataAddress)));
             }
 
@@ -324,21 +346,23 @@ namespace PERQemu.Display
             {
                 RenderCursorLine();
             }
+
+#if TRACING_ENABLED
+            Trace.TraceOn = logState;
+#endif
         }
 
         private void RenderCursorLine()
         {
-            // Calc the starting address of this line of the cursor data.
+            // Calc the starting address of this line of the cursor data
             int cursorAddress = ((_cursorAddress << 1) + (_scanLine - _cursorY) * 8);
 
-            int cursorStartByte = _cursorX; // >> 3;
+            int cursorStartByte = _cursorX;
             int backgroundStartByte = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES + (_displayAddress << 1);
             int screenAddress = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES;
 
-            // We draw 8 bytes (4 words) of horizontal cursor data
-            // combined with the background data on that line based on the current
-            // cursor function.
-
+            // We draw 8 bytes (4 words) of horizontal cursor data combined with
+            // the background data on that line based on the current cursor function.
             for (int x = cursorStartByte; x < cursorStartByte + 8 && x < PERQ_DISPLAYWIDTH_IN_BYTES; x++)
             {
                 if (x >= 0)
@@ -368,7 +392,7 @@ namespace PERQemu.Display
         }
 
         /// <summary>
-        /// Transforms the display word based on the current Cursor function
+        /// Transforms the display word based on the current Cursor function.
         /// </summary>
         private ushort TransformDisplayWord(ushort word)
         {
@@ -483,6 +507,14 @@ namespace PERQemu.Display
         };
 
         /// <summary>
+        /// Various handy portrait display constants
+        /// </summary>
+        public static int PERQ_DISPLAYWIDTH = 768;
+        public static int PERQ_DISPLAYWIDTH_IN_WORDS = 48;
+        public static int PERQ_DISPLAYWIDTH_IN_BYTES = 96;
+        public static int PERQ_DISPLAYHEIGHT = 1024;
+
+        /// <summary>
         /// Elapsed cycles, used for display timing.
         /// These are based on the below information, rounded to the
         /// nearest cycle (so they're not 100% accurate)
@@ -525,14 +557,7 @@ namespace PERQemu.Display
         private const int _scanLineCycles = 70;
         private const int _hBlankCycles = 22;
         private const int _vBlankCycles = 4 * (_scanLineCycles + _hBlankCycles); // Unused
-
-        /// <summary>
-        /// Various handy portrait display constants
-        /// </summary>
-        public static int PERQ_DISPLAYWIDTH = 768;
-        public static int PERQ_DISPLAYWIDTH_IN_WORDS = 48;
-        public static int PERQ_DISPLAYWIDTH_IN_BYTES = 96;
-        public static int PERQ_DISPLAYHEIGHT = 1024;
+        private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
 
         private VideoState _state;
         private int _scanLine;
@@ -548,6 +573,9 @@ namespace PERQemu.Display
         private int _cursorX;
         private int _cursorY;
         private CursorFunction _cursorFunc;
+
+        private int _lastX;
+        private int _lastY;
 
         private static VideoController _instance = new VideoController();
     }

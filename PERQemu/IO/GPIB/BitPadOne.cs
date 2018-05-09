@@ -34,15 +34,21 @@ namespace PERQemu.IO.GPIB
             // The PERQ expects the factory default device address of 010 (octal)
             _myAddress = 8;
 
-            // How many samples/sec? Account for the IO "fudge factor".  In reality,
-            // the BitPad sends 200/sec by default; POS averages every four samples
-            // for an effective tracking rate of 50 per second.  Let's try this at a
-            // more reasonable speed to reduce overhead a bit.  Season to taste.
+            //
+            // How many samples/sec? The factory default is continuous streaming
+            // at 200/sec, but the ICL T2 Service Guide suggests that they change
+            // it to 40 samples/sec.  POS averages every four samples to smooth
+            // the tablet data and reduce jitter, so the effective rate is 1/4 the
+            // BitPad's hardware setting.  Maybe PNX doesn't use the same averaging
+            // strategy?  In any case, choose a speed that balances overhead with
+            // responsiveness.
+            //
             // (NB: computed, not constant, since we may someday offer on-the-fly
             // configuration of IO board types; the EIO ran the Z80 at 4Mhz, faster
             // than the older IOB @ 2.45Mhz, so the IO "fudge" might change.  This
             // is very silly.)
-            _sampleRate = (PERQCpu.Frequency / 60) / PERQCpu.IOFudge;
+            //
+            _sampleRate = (PERQCpu.Frequency / 40) / PERQCpu.IOFudge;
 
             Reset();
         }
@@ -58,6 +64,8 @@ namespace PERQemu.IO.GPIB
             _talking = false;
             _listening = false;
 
+            _firstPoll = false;
+
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
@@ -65,8 +73,8 @@ namespace PERQemu.IO.GPIB
         }
 
         /// <summary>
-        /// If the controller selects our address as the talker, enable sending tablet updates.
-        /// Otherwise, don't send any response to Poll()s.
+        /// If the controller selects our address as the talker, enable sending tablet
+        /// updates.  Otherwise, don't send any response to Poll()s.
         /// </summary>
         public void SetTalker(byte address)
         {
@@ -98,9 +106,8 @@ namespace PERQemu.IO.GPIB
         }
 
         /// <summary>
-        /// Sends a mouse position update.  Only queues updates if we're the current GPIB talker,
-        /// if the current GPIB fifo is empty, if the position has changed (or it hasn't but we've
-        /// not sent one recently and our sample timer has gone off).
+        /// Sends a mouse position update.  Only queues updates if we're the current GPIB
+        /// talker, if the current GPIB fifo is empty, and our sample timer has gone off.
         /// </summary>
         public void Poll(ref Queue<byte> fifo)
         {
@@ -134,49 +141,52 @@ namespace PERQemu.IO.GPIB
             GetTabletPos(out x, out y, out button);
 
             //
-            // The PERQ expects a steady stream of updates from the BitPad, typically
-            // set by hardware switches to the factory default 200 samples/sec(!), so
-            // even if the mouse hasn't moved we need to send an update.  POS, at least,
-            // does some smoothing by averaging several samples, so our emulated pointer
-            // is very jerky if updates are too far between.  Play with the _sampleRate
-            // constant to find a reasonable balance between smooth operation and too
-            // much overhead (keep in mind the IOFudge factor).
-            //
-            // However, Accent (in particular) seems unhappy if the queue overflows, so
-            // temper our update rate by checking that the fifo is empty before sending.
+            // The PERQ expects a steady stream of updates from the BitPad when the
+            // puck or cursor is on the tablet, so send an update even if the mouse
+            // hasn't moved.  However, Accent will complain if the queue overflows
+            // too often, so temper our update rate by checking that the fifo is
+            // empty before sending.
             //
             if ((_lastUpdate++ > _sampleRate) && fifo.Count == 0)
             {
                 WriteIntAsStringToQueue(x, ref fifo);
                 fifo.Enqueue(_delimiter1);  // separator (')
                 WriteIntAsStringToQueue(y, ref fifo);
-                fifo.Enqueue(_delimiter1);  // separator
+                fifo.Enqueue(_delimiter1);  // separator (')
                 fifo.Enqueue(_buttonMapping[button]);
                 fifo.Enqueue(_delimiter2);  // LF                 
 
 #if TRACING_ENABLED
                 // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
                 if (Trace.TraceOn)
-                {
                     Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
-                             x, y, button, _lastUpdate);
+                                        x, y, button, _lastUpdate);
+
+                if (!_firstPoll)        // FIXME debug
+                {
+                    _firstPoll = true;
+                    PERQSystem.Instance.Break();
                 }
 #endif
                 _lastUpdate = 0;
             }
         }
 
+        /// <summary>
+        /// Handle writes to the BitPad.  This would make sense if the user could
+        /// set it for remote configuration, which the hardware can do, but the
+        /// PERQ never enabled that or supported it.
+        /// </summary>
         public void Write(byte b)
         {
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2}){1}", b,
-                          (_listening ? "." : " but la-la-la-I-can't-hear-you!"));
+                Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2})!?", b);
 #endif
         }
 
         /// <summary>
-        /// Sends the x, y integer coordinates as four ASCII digit strings.
+        /// Sends the X, Y integer coordinates as four ASCII digit strings.
         /// Because THAT's efficient, 200 times a second.
         /// </summary>
         private void WriteIntAsStringToQueue(int i, ref Queue<byte> fifo)
@@ -190,25 +200,26 @@ namespace PERQemu.IO.GPIB
         }
 
         /// <summary>
-        /// Get the mouse X, Y positions from the display and translate them into the range
-        /// of the BitPadOne tablet.
+        /// Get the mouse X, Y positions from the display and translate them into
+        /// the range of the BitPadOne tablet.
         /// </summary>
         private void GetTabletPos(out int x, out int y, out byte button)
         {
             //
-            // Since we're using the emulated display area as the tablet surface, there are certain ranges
-            // (mostly in the X axis) that we can't reach.  We may want to investigate some other means of
-            // tablet manipulation for the emulator to make this possible.  (Hey, might be fun to support
+            // Since we're using the emulated display area as the tablet surface,
+            // there are certain ranges (mostly in the X axis) that we can't reach.
+            // We may want to investigate some other means of tablet manipulation
+            // for the emulator to make this possible.  (Hey, might be fun to support
             // an RS232 BitPadOne on the host PC...)
             //
-            // Note also that unlike the Kriz tablet, the BitPadOne does not report "puck off tablet" status.
+            // Note also that unlike the Kriz tablet, the BitPadOne does not report
+            // "puck off tablet" status, but it does stop transmitting in that case;
+            // POS G at least has code to detect that.
             // 
-
+            // Calculate Y and X positions.  The offsets tacked onto the end are based on
+            // playing around with the interface, not on solid data and could be incorrect.
             //
-            // Calc y and x positions.  The offsets tacked onto the end are based on playing around with the
-            // interface, not on solid data and could be incorrect.
-            //
-            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY) * 2 + 82;
+            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY) * 2 + 80;
             x = (Display.Display.Instance.MouseX) * 2 + 74;
 
             button = (byte)Display.Display.Instance.MouseButton;
@@ -221,9 +232,11 @@ namespace PERQemu.IO.GPIB
         private bool _talking;
         private bool _listening;
 
+        private bool _firstPoll;
+
         private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
                                                    0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
-        private const byte _delimiter1 = (byte)'\'';
-        private const byte _delimiter2 = 0xa;           // LF
+        private const byte _delimiter1 = 0x27;      // '
+        private const byte _delimiter2 = 0x0a;      // LF
     }
 }

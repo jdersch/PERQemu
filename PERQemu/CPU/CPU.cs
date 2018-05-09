@@ -180,6 +180,8 @@ namespace PERQemu.CPU
 
             _clocks++;
 
+            if (Trace.TraceOn && ((Trace.TraceLevel & LogType.Optimization) != 0) && currentState != RunState.SingleStep) Debugger.Debugger.Instance.PrintStatus();
+
             // Clock the memory state machine and set up any pending fetches
             _memory.Tick(uOp.MemoryRequest);
 
@@ -724,17 +726,23 @@ namespace PERQemu.CPU
                         Trace.Log(LogType.RegisterAssignment, "R{0:x2}={1:x5}", uOp.X, _alu.Registers.R);
 #endif
                 }
-            }
 #if DEBUG
-            //if (uOp.X == 0xbd || (uOp.X == 0xbe && _lastPC != 0x0d1b))              // FIXME here for accent mouse debug (watch for assignment to VidCursX register)
-            //{
-            //    Console.WriteLine("Write to cursor X,Y registers: R{0:x2} <-- {1:x4}", uOp.X, _alu.Registers.R);
-            //    Console.WriteLine("Previous, current instructions:");
-            //    Console.WriteLine("\t{0}", Disassembler.Disassemble(_lastPC, _lastInstruction));
-            //    Console.WriteLine("\t{0}", Disassembler.Disassemble(PC, uOp));
-            //    PERQSystem.Instance.Break();
-            //}
+                if (uOp.X == 0xbd || (uOp.X == 0xbe && _lastPC != 0x0d1b))              // FIXME here for accent mouse debug (watch for assignment to VidCursX register)
+                {
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Tablet, "Write to cursor X,Y registers: R{0:x2} <-- {1:x4}", uOp.X, _alu.Registers.R);
+                    //Console.WriteLine("Previous, current instructions:");
+                    //Console.WriteLine("\t{0}", Disassembler.Disassemble(_lastPC, _lastInstruction));
+                    //Console.WriteLine("\t{0}", Disassembler.Disassemble(PC, uOp));
+                    if (uOp.X == 0xbe && _alu.Registers.R == 0xfa)
+                    {
+                        PERQSystem.Instance.Break();
+                    }
+                }
+
+                if (uOp.X == 0xb7 && _alu.Registers.R != 0) Trace.TraceLevel |= LogType.Optimization;   // FIXME turn on full tracing when the Cursor Address Reg gets set (getting close)
 #endif
+            }
         }
 
 #if SIXTEEN_K
@@ -763,7 +771,7 @@ namespace PERQemu.CPU
                         test = mdr;     // If we're debugging, fall through... 
                         break;
 #else
-						throw new InvalidOperationException("DoMulDivALUOp called with MulDivInst=OFF!?");
+                        throw new InvalidOperationException("DoMulDivALUOp called with MulDivInst=OFF!?");
 #endif
 
                     case MulDivCommand.UnsignedDivide:
@@ -1550,17 +1558,18 @@ namespace PERQemu.CPU
 #if DEBUG
             // Catch RASTEROP (or LINE) Q-code and dump stack, for debugging...
             // RASTOP == 102, LINE == 241 in the POS F Q-Code set; YMMV!
-            if (_rasterOp.Debug && next == 102)
+            //if (_rasterOp.Debug && next == 102)
+            //{
+            //    ShowEStack();
+            //    PERQSystem.Instance.Break();
+            //}
+
+            // Accent KOPS #5 == PSGetCB
+            if (_rasterOp.Debug && next == 253 && _memory.OpFile[BPC + 1] == 5)
             {
                 ShowEStack();
                 PERQSystem.Instance.Break();
             }
-
-            // Accent KOPS #5 == PSGetCB
-            //if (next == 253 && _memory.OpFile[BPC + 1] == 5)
-            //{
-            //    PERQSystem.Instance.Break();
-            //}
 #endif
 
 #if SIXTEEN_K
@@ -1739,10 +1748,6 @@ namespace PERQemu.CPU
 
             // TODO: This should be moved elsewhere
             Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
-#if DEBUG
-            // TEMPORARY FOR MEMORY DEBUGGING
-            //if (_dds == 198) PERQSystem.Instance.Break();
-#endif
         }
 
         #endregion Special Function Helpers
@@ -1766,8 +1771,7 @@ namespace PERQemu.CPU
         {
             ushort endAddr = (ushort)(startAddress + length);
 
-            if (startAddress >= _microcode.Length ||
-                endAddr >= _microcode.Length)
+            if (startAddress >= _microcode.Length || endAddr >= _microcode.Length)
             {
                 Console.WriteLine("Argument out of range -- must be between 0 and {0}", _microcode.Length);
                 return;
@@ -1872,14 +1876,13 @@ namespace PERQemu.CPU
         {
             uint endAddr = (uint)(startAddress + length);
 
-            if (startAddress >= MemoryBoard.Instance.Memory.Length ||
-                endAddr - 8 >= MemoryBoard.Instance.Memory.Length)
+            if (startAddress >= _memory.MemSize || endAddr - 8 >= _memory.MemSize)
             {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", MemoryBoard.Instance.Memory.Length);
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _memory.MemSize - 1);
                 return;
             }
 
-            ushort[] mem = MemoryBoard.Instance.Memory;
+            ushort[] mem = _memory.Memory;
 
             // Dump the memory to screen
             for (uint i = startAddress; i < endAddr; i += 8)
@@ -1919,6 +1922,66 @@ namespace PERQemu.CPU
             MemoryBoard.Instance.DumpQueues();
         }
 
+        [DebugFunction("show watched", "Dump the list of watched memory addresses")]
+        private void ShowMemWatched()
+        {
+            // ugh.  quick and dirty hack for debugging
+            bool[] watching = _memory.Watching;
+
+            Console.WriteLine("Watched memory addresses:");
+
+            for (int i = 0; i < _memory.MemSize; i++)
+            {
+                if (watching[i]) { Console.Write("{0:x4}\t", i); }
+            }
+            Console.WriteLine();
+        }
+
+        [DebugFunction("set watched", "Watch for changes to memory (['addr'])")]
+        private void WatchMem(uint startAddress)
+        {
+            WatchMem(startAddress, 0);
+        }
+
+        [DebugFunction("set watched", "Watch for changes to memory ([addr, len])")]
+        private void WatchMem(uint startAddress, uint length)
+        {
+            uint endAddr = (uint)(startAddress + length);
+
+            if (startAddress >= _memory.MemSize || endAddr >= _memory.MemSize)
+            {
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _memory.MemSize - 1);
+                return;
+            }
+
+            for (uint a = startAddress; a < endAddr; a++)
+            {
+                _memory.SetWatchedAddress(a, true);
+            }
+        }
+
+        [DebugFunction("clear watched", "Clear memory watchpoint (['addr'])")]
+        private void UnWatchMem(uint startAddress)
+        {
+            UnWatchMem(startAddress, 0);
+        }
+
+        [DebugFunction("clear watched", "Clear memory watchpoint([addr, len])")]
+        private void UnWatchMem(uint startAddress, uint length)
+        {
+            uint endAddr = (uint)(startAddress + length);
+
+            if (startAddress >= _memory.MemSize || endAddr >= _memory.MemSize)
+            {
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _memory.MemSize - 1);
+                return;
+            }
+
+            for (uint a = startAddress; a < endAddr; a++)
+            {
+                _memory.SetWatchedAddress(a, false);
+            }
+        }
 
         [DebugFunction("show trace", "Dump the contents of the opcode trace buffer")]
         private void ShowOpTrace()
@@ -2029,6 +2092,7 @@ namespace PERQemu.CPU
             Console.WriteLine("\tZ80Byte    R[87]={0:x5}\tZ80IDev   R[8a]={1:x5}", _r[0x87], _r[0x8a]);
             Console.WriteLine("\tZ80IBytCnt R[8b]={0:x5}\tZ80ICmd   R[8c]={1:x5}", _r[0x8b], _r[0x8c]);
             Console.WriteLine("\tZ80IIocb   R[8d]={0:x5}\tZ80Status R[95]={1:x5}", _r[0x8d], _r[0x95]);
+            Console.WriteLine("\tIOTabBuf   R[8e]={0:x5}", _r[0x8e]);   // Kriz tablet data buffer... used by GPIB too?
             Console.WriteLine("Circular buffer temporaries:");
             Console.WriteLine("\tIOLen      R[b0]={0:x5}\tIOChar    R[b3]={1:x5}", _r[0xb0], _r[0xb3]);
             Console.WriteLine("\tIORdPtr    R[b1]={0:x5}\tIOWrPtr   R[b2]={1:x5}", _r[0xb1], _r[0xb2]);

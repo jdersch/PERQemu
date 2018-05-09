@@ -50,7 +50,7 @@ namespace PERQemu.Debugger
                 // Read one keystroke from the console...
                 ConsoleKeyInfo key = Console.ReadKey(true);
 
-                //Parse special chars...
+                // Parse special chars...
                 switch (key.Key)
                 {
                     case ConsoleKey.Escape:     // Clear input
@@ -332,7 +332,7 @@ namespace PERQemu.Debugger
                 }
             }
 
-            if ( match == null )
+            if (match == null)
             {
                 // No exact match.  Try a substring match.
                 // If we have an unambiguous match then we can complete it automatically.
@@ -366,7 +366,7 @@ namespace PERQemu.Debugger
             {
                 // If we reach this point then no matches are available.  Return the tokens we have...
                 StringBuilder sb = new StringBuilder();
-                for(int i=0;i<tokens.Count;i++)
+                for(int i = 0; i < tokens.Count; i++)
                 {
                     if (i < tokens.Count - 1)
                     {

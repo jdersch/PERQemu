@@ -25,7 +25,9 @@ namespace PERQemu.IO.Z80.IOB
 {
 
     /// <summary>
-    /// Implements Kriz Tablet functionality.
+    /// Implements Kriz Tablet functionality.  This was an electromagnetic ranging
+    /// tablet designed by 3RCC engineer Stan Kriz (U.S. Patent #4455451!).  Came
+    /// in portrait and landscape variants; for now we only emulate the portrait.
     /// </summary>
     public sealed class Tablet : IZ80Device
     {
@@ -41,9 +43,10 @@ namespace PERQemu.IO.Z80.IOB
             _lastButton = -1;
             _enabled = false;
             _messageIndex = 0;
-
-            _jiffyInterval = ((PERQCpu.Frequency / 60) / PERQCpu.IOFudge);
             _pollCount = 0;
+
+            // Set for 60 updates/sec.
+            _jiffyInterval = ((PERQCpu.Frequency / 60) / PERQCpu.IOFudge);
 
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
@@ -153,7 +156,7 @@ namespace PERQemu.IO.Z80.IOB
             // The high bit of X indicates that any button is pressed.
             //
 
-            // Calc y and x positions:
+            // Calc Y and X positions:
             y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY + 64);
             x = (Display.Display.Instance.MouseX + 64);
 
