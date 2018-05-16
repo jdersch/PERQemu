@@ -763,7 +763,7 @@ namespace PERQemu.Debugger
             return current.Methods;
         }
 
-        public void PrintStatus()           // FIXME go back to private after debugging
+        private void PrintStatus()
         {
             PERQCpu.Instance.ShowPC();
 

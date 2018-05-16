@@ -32,7 +32,6 @@ using System.Collections.Generic;
 
 namespace PERQemu.CPU
 {
-
     /// <summary>
     /// PERQ hardware interrupts, listed in order of priority.
     /// </summary>
@@ -51,11 +50,12 @@ namespace PERQemu.CPU
     }
 
     /// <summary>
-    /// Implements a PERQ 1 4K or 16K CPU (depending on the SIXTEEN_K compiler flag).  Since we only ever
-    /// need one of these, and to simplify communication with other devices (interrupt requests, etc.)
-    /// this is a singleton.
+    /// Implements a PERQ 1 4K or 16K CPU (depending on the SIXTEEN_K compiler flag).
+    /// Since we only ever need one of these, and to simplify communication with other
+    /// devices (interrupt requests, etc.) this is a singleton.
     ///
-    /// There are some aspects that could be factored out of this class (for example the boot ROM logic).
+    /// There are some aspects that could be factored out of this class (like the DDS
+    /// and boot ROM logic).
     /// </summary>    
     public sealed class PERQCpu
     {
@@ -179,9 +179,6 @@ namespace PERQemu.CPU
 
             _clocks++;
 
-            // FIXME debugging
-            if (Trace.TraceOn && ((Trace.TraceLevel & LogType.Optimization) != 0) && currentState != RunState.SingleStep) Debugger.Debugger.Instance.PrintStatus();
-
             // Clock the memory state machine and set up any pending fetches
             _memory.Tick(uOp.MemoryRequest);
 
@@ -209,20 +206,6 @@ namespace PERQemu.CPU
                     Trace.Log(LogType.MemoryState,
                         "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
                         _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _wcsHold);
-#endif
-#if DEBUG
-                // This should never actually happen!  The CPU should never stall during a
-                // raster operation with properly debugged microcode (the timing of the memory
-                // ops is _very_ precise).  There IS an explicit Fetch to resynchronize the
-                // RasterOp state machine upon return from an interrupt - but the Enabled flag
-                // should not actually be set at that point!  Empirically this only happens
-                // when an exception in RasterOp throws off the cycle, but we're hosed at that
-                // point anyway.  Can remove this when satisfied that debugging is complete.
-                if (_rasterOp.Enabled)
-                {
-                    Console.WriteLine("\t** CPU abort while RasterOp enabled?");
-                    currentState = RunState.Debug;
-                }
 #endif
 
                 // On aborts, no memory writes occur - no Tock()                    
@@ -272,11 +255,6 @@ namespace PERQemu.CPU
             // If the last instruction was NextOp or NextInst, increment BPC at the start of this instruction
             if (_incrementBPC)
             {
-#if DEBUG
-                // save last op file byte in the trace buffer
-                if (_opTrace.Count >= 255) _opTrace.Dequeue();      // don't grow without bound...
-                _opTrace.Enqueue(_memory.OpFile[_bpc]);             // save the op byte we just read
-#endif
                 _bpc++;
                 _incrementBPC = false;
 
@@ -296,7 +274,7 @@ namespace PERQemu.CPU
             int amux = GetAmuxInput(uOp);
 
 #if SIXTEEN_K
-            // If the hardware multiply unit is enabled, check and possibly modify the ALU op
+            // If the hardware multiply unit is enabled, run the (possibly modified) ALU op
             if (_mqEnabled)
             {
                 DoMulDivALUOp(amux, bmux, _mq, uOp.ALU);
@@ -311,7 +289,7 @@ namespace PERQemu.CPU
             // Do writeback if W bit is set
             DoWriteBack(uOp);
 
-            // Clock IO devices every N cycles (fudged, this is ugly).
+            // Clock IO devices every N cycles (fudged, this is ugly)
             if ((_clocks % IOFudge) == 0)
             {
                 _ioBus.Clock();
@@ -688,7 +666,6 @@ namespace PERQemu.CPU
         /// <summary>
         /// If W bit set, write R back to the register file.
         /// </summary>
-        /// <param name="uOp"></param>
         private void DoWriteBack(Instruction uOp)
         {
             // Do it if the W (write) bit is set.
@@ -715,53 +692,31 @@ namespace PERQemu.CPU
                         Trace.Log(LogType.RegisterAssignment, "R{0:x2}={1:x5}", uOp.X, _alu.Registers.R);
 #endif
                 }
-#if DEBUG
-                if (uOp.X == 0xbd || (uOp.X == 0xbe && _lastPC != 0x0d1b))              // FIXME here for accent mouse debug (watch for assignment to VidCursX register)
-                {
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Write to cursor X,Y registers: R{0:x2} <-- {1:x4}", uOp.X, _alu.Registers.R);
-                    //Console.WriteLine("Previous, current instructions:");
-                    //Console.WriteLine("\t{0}", Disassembler.Disassemble(_lastPC, _lastInstruction));
-                    //Console.WriteLine("\t{0}", Disassembler.Disassemble(PC, uOp));
-                    if (uOp.X == 0xbe && _alu.Registers.R == 0xfa)
-                    {
-                        //PERQSystem.Instance.Break();
-                    }
-                }
-
-                //if (uOp.X == 0xb7 && _alu.Registers.R != 0) Trace.TraceLevel |= LogType.Optimization;   // FIXME turn on full tracing when the Cursor Address Reg gets set (getting close)
-#endif
             }
         }
 
 #if SIXTEEN_K
         /// <summary>
-        /// Dark magick to set up and execute the correct ALU op for a Multiply or Divide step.
+        /// Dark magick to modify the ALU op if necessary for a Multiply or Divide step.
+        /// Modifies the Amux and ALU op inputs as needed and runs the ALU; later the
+        /// special function select updates the MQ register appropriately.
         /// </summary>
-        /// <param name="mdr"></param>
-        /// <param name="curOp"></param>
-        private void DoMulDivALUOp(int amux, int bmux, int mdr, ALUOperation curOp)
+        private void DoMulDivALUOp(int amux, int bmux, int mdReg, ALUOperation curOp)
         {
             ALUOperation modOp = curOp;
-#if TRACING_ENABLED
-            int test = 0;
 
+#if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  mdr ={0:x5} amux={1:x5} bmux={2:x5} op={3}",
-                                          mdr, amux, bmux, curOp);
+                Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  op={0} amux={1:x5} mq={2:x4}", curOp, amux, mdReg);
 #endif
+            
             if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
             {
                 switch (_rasterOp.MulDivInst)
                 {
                     case MulDivCommand.Off:
                         // Should never happen!
-#if TRACING_ENABLED
-                        test = mdr;     // If we're debugging, fall through... 
-                        break;
-#else
                         throw new InvalidOperationException("DoMulDivALUOp called with MulDivInst=OFF!?");
-#endif
 
                     case MulDivCommand.UnsignedDivide:
                         //
@@ -769,7 +724,7 @@ namespace PERQemu.CPU
                         // into the LSB of the remainder (SHIFT<0> here, already shifted by amux select).
                         // Later DispatchFunction() will shift the quotient in MQ and apply the computed Q0 bit.
                         //
-                        int bit = (mdr & 0x8000) >> 15;             // save MQ<15> from last cycle
+                        int bit = (mdReg & 0x8000) >> 15;           // save MQ<15> from last cycle
                         amux = ((amux & 0xffffe) | bit);            // xfer it into SHIFT<0> (current amux input)
 
                         //
@@ -785,9 +740,6 @@ namespace PERQemu.CPU
                         {
                             modOp = ALUOperation.AminusB;
                         }
-#if TRACING_ENABLED
-                        test = (_oldALURegisters.R & 0x8000) >> 15;
-#endif
                         break;
 
                     case MulDivCommand.UnsignedMultiply:
@@ -797,7 +749,7 @@ namespace PERQemu.CPU
                         // if set, do an add, else pass thru unmolested.  This happens before the
                         // MQ is shifted in DispatchFunction().
                         //
-                        if ((mdr & 0x1) == 1)
+                        if ((mdReg & 0x1) == 1)
                         {
                             modOp = ALUOperation.AplusB;
                         }
@@ -805,19 +757,17 @@ namespace PERQemu.CPU
                         {
                             modOp = ALUOperation.A;
                         }
-#if TRACING_ENABLED
-                        test = mdr & 0x1;
-#endif
                         break;
                 }
             }
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT test={0:x5} amux={1:x5} bmux={2:x5} op={3}",
-                                          test, amux, bmux, modOp);
+                Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT op={0} amux={1:x5}", modOp, amux);
 #endif
-            _alu.DoALUOp(amux, bmux, modOp);    // Do it! (with our possibly modified op and amux input)
+            
+            // Execute the updated ALU op
+            _alu.DoALUOp(amux, bmux, modOp);
         }
 #endif
 
@@ -1536,33 +1486,14 @@ namespace PERQemu.CPU
                 Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
                     QCode.QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, BPC);
 #endif
-#if DEBUG
-            // Catch RASTEROP (or LINE) Q-code and dump stack, for debugging...
-            // RASTOP == 102, LINE == 241 in the POS F Q-Code set; YMMV!
-            //if (_rasterOp.Debug && next == 102) && dest addr = 0x69000 -- accent cursor buffer
-            //{
-            //    ShowEStack();
-            //    PERQSystem.Instance.Break();
-            //}
-
-            // Accent mouse debugging
-            //if (_rasterOp.Debug && (next == 253 && _memory.OpFile[BPC + 1] == 5) ||     // Accent KOPS #5 == PSGetCB
-            //                       (next == 103 && _stack[1] == 1))                     // STARTIO WriteReg
-            //{
-            //    ShowEStack();
-            //    PERQSystem.Instance.Break();
-            //}
-#endif
 #if SIXTEEN_K
             _pc.Lo = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
 #else
             _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
 #endif
-
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", PC);
 #endif
-
             _incrementBPC = true;
         }
 
@@ -1629,7 +1560,7 @@ namespace PERQemu.CPU
             addr = (ushort)((addr | ((ushort)fs.ReadByte() << 8)));
 
             // Read the instruction one byte at a time, low bits first
-            word = (word | ((ulong)(fs.ReadByte()) << 0));      // silence an annoying warning
+            word = (ulong)(fs.ReadByte());
             word = (word | ((ulong)(fs.ReadByte()) << 8));
             word = (word | ((ulong)(fs.ReadByte()) << 16));
             word = (word | ((ulong)(fs.ReadByte()) << 24));
@@ -1896,10 +1827,10 @@ namespace PERQemu.CPU
                         low = '.';
                     }
 
-                    line.AppendFormat("{0}{1}", high, low);
+                    line.AppendFormat("{0}{1}", low, high);     // Reversed so strings read right :)
                 }
 
-                Console.WriteLine(line.ToString());
+                Console.WriteLine(line);
             }
         }
 
@@ -1943,79 +1874,6 @@ namespace PERQemu.CPU
         private void ShowMemQueues()
         {
             MemoryBoard.Instance.DumpQueues();
-        }
-
-        [DebugFunction("show watched", "Dump the list of watched memory addresses")]
-        private void ShowMemWatched()
-        {
-            // ugh.  quick and dirty hack for debugging
-            bool[] watching = _memory.Watching;
-
-            Console.WriteLine("Watched memory addresses:");
-
-            for (int i = 0; i < _memory.MemSize; i++)
-            {
-                if (watching[i]) { Console.Write("{0:x4}\t", i); }
-            }
-            Console.WriteLine();
-        }
-
-        [DebugFunction("set watched", "Watch for changes to memory (['addr'])")]
-        private void WatchMem(uint startAddress)
-        {
-            WatchMem(startAddress, 0);
-        }
-
-        [DebugFunction("set watched", "Watch for changes to memory ([addr, len])")]
-        private void WatchMem(uint startAddress, uint length)
-        {
-            uint endAddr = (uint)(startAddress + length);
-
-            if (startAddress >= _memory.MemSize || endAddr >= _memory.MemSize)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _memory.MemSize - 1);
-                return;
-            }
-
-            for (uint a = startAddress; a < endAddr; a++)
-            {
-                _memory.SetWatchedAddress(a, true);
-            }
-        }
-
-        [DebugFunction("clear watched", "Clear memory watchpoint (['addr'])")]
-        private void UnWatchMem(uint startAddress)
-        {
-            UnWatchMem(startAddress, 0);
-        }
-
-        [DebugFunction("clear watched", "Clear memory watchpoint([addr, len])")]
-        private void UnWatchMem(uint startAddress, uint length)
-        {
-            uint endAddr = (uint)(startAddress + length);
-
-            if (startAddress >= _memory.MemSize || endAddr >= _memory.MemSize)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _memory.MemSize - 1);
-                return;
-            }
-
-            for (uint a = startAddress; a < endAddr; a++)
-            {
-                _memory.SetWatchedAddress(a, false);
-            }
-        }
-
-        [DebugFunction("show trace", "Dump the contents of the opcode trace buffer")]
-        private void ShowOpTrace()
-        {
-            Console.WriteLine("OpFile trace buffer ({0} bytes):", _opTrace.Count);
-
-            while (_opTrace.Count > 0)
-            {
-                byte op = _opTrace.Dequeue();   // clear data as we print... too lazy to set up an iterator.
-                Console.WriteLine("{0}: {1}={2}", _opTrace.Count, op, QCode.QCodeHelper.GetQCodeFromOpCode(op).Mnemonic);
-            }
         }
 #endif
 
@@ -2103,35 +1961,6 @@ namespace PERQemu.CPU
             Console.WriteLine("Z80 clock: {0}", Z80System.Instance.Clocks());
             Z80System.Instance.ShowReadyState();
         }
-
-        [DebugFunction("show z80 registers", "Display current Z80 protocol register contents")]
-        private void ShowZ80Regs()
-        {
-            // These are for Accent S4, probably wrong for POS!
-            Console.WriteLine("Z80-to-PERQ protocol state:");
-            Console.WriteLine("\tIOTmp      R[80]={0:x5}\tIOTmp1    R[81]={1:x5}", _r[0x80], _r[0x81]);
-            Console.WriteLine("\tIOPhysAdr  R[82]={0:x5}\tIODevTab  R[86]={1:x5}", _r[0x82], _r[0x86]);
-            Console.WriteLine("\tZ80Tmp     R[88]={0:x5}\tZ80State  R[89]={1:x5}", _r[0x88], _r[0x89]);
-            Console.WriteLine("\tZ80Byte    R[87]={0:x5}\tZ80IDev   R[8a]={1:x5}", _r[0x87], _r[0x8a]);
-            Console.WriteLine("\tZ80IBytCnt R[8b]={0:x5}\tZ80ICmd   R[8c]={1:x5}", _r[0x8b], _r[0x8c]);
-            Console.WriteLine("\tZ80IIocb   R[8d]={0:x5}\tZ80Status R[95]={1:x5}", _r[0x8d], _r[0x95]);
-            Console.WriteLine("\tIOTabBuf   R[8e]={0:x5}", _r[0x8e]);   // Kriz tablet data buffer... used by GPIB too?
-            Console.WriteLine("Circular buffer temporaries:");
-            Console.WriteLine("\tIOLen      R[b0]={0:x5}\tIOChar    R[b3]={1:x5}", _r[0xb0], _r[0xb3]);
-            Console.WriteLine("\tIORdPtr    R[b1]={0:x5}\tIOWrPtr   R[b2]={1:x5}", _r[0xb1], _r[0xb2]);
-        }
-
-        [DebugFunction("show video registers", "Display current video controller register contents")]
-        private void ShowVideoRegs()
-        {
-            // Accent S4 (and possibly later), but not POS!
-            Console.WriteLine("Accent video registers:");
-            Console.WriteLine("\tVidScreen  R[b6]={0:x5}\tVidCursor   R[b7]={1:x5}", _r[0xb6], _r[0xb7]);
-            Console.WriteLine("\tVidScans   R[b5]={0:x5}\tVidLCnt     R[bf]={1:x5}", _r[0xb5], _r[0xbf]);
-            Console.WriteLine("\tVidCount   R[b9]={0:x5}\tVidNext     R[ba]={1:x5}", _r[0xb9], _r[0xba]);
-            Console.WriteLine("\tVidCntrl   R[bb]={0:x5}\tVidBack     R[bc]={1:x5}", _r[0xbb], _r[0xbc]);
-            Console.WriteLine("\tVidCurTop  R[bd]={0:x5}\tVidCurByte  R[be]={1:x5}", _r[0xbd], _r[0xbe]);
-        }
 #endif
         #endregion
 
@@ -2193,11 +2022,6 @@ namespace PERQemu.CPU
         // Byte Program Counter
         private int _bpc;
         private bool _incrementBPC;
-
-#if DEBUG
-        // Qcode trace buffer for debugging
-        private Queue<byte> _opTrace = new Queue<byte>(256);
-#endif
 
         // Diagnostic counter
         private int _dds;

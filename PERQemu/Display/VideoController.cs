@@ -49,8 +49,6 @@ namespace PERQemu.Display
             _lineCountOverflow = false;
             _cycle = 0;
 
-            _lastX = _lastY = -1;       // FIXME extra debugging
-
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Display, "Video Controller: Reset.");
 #endif
@@ -71,7 +69,6 @@ namespace PERQemu.Display
 
             return false;
         }
-
 
         public int IORead(byte ioPort)
         {
@@ -103,7 +100,6 @@ namespace PERQemu.Display
                         String.Format("Unhandled Memory IO Read from port {0:x2}", ioPort));
             }
         }
-
 
         public void IOWrite(byte ioPort, int value)
         {
@@ -173,9 +169,8 @@ namespace PERQemu.Display
                     {
                         _cursorY = _scanLine;
 #if TRACING_ENABLED
-                        if (Trace.TraceOn && _cursorY != _lastY)
+                        if (Trace.TraceOn)
                             Trace.Log(LogType.Tablet, "Cursor Y set to {0}", _cursorY);
-                        _lastY = _cursorY;
 #endif
                     }
 
@@ -208,9 +203,8 @@ namespace PERQemu.Display
                     _cursorX = (int)(240 - (value & 0xff));
 
 #if TRACING_ENABLED
-                    if (Trace.TraceOn && _cursorX != _lastX)
+                    if (Trace.TraceOn)
                         Trace.Log(LogType.Tablet, "Cursor X set to {0} (value={1})", _cursorX, value);
-                    _lastX = _cursorX;
 #endif
                     break;
 
@@ -219,7 +213,6 @@ namespace PERQemu.Display
                         String.Format("Unhandled Memory IO Write to port {0:x2}, data {1:x4}", ioPort, value));
             }
         }
-
 
         public void Clock()
         {
@@ -331,10 +324,6 @@ namespace PERQemu.Display
                 renderLine = _scanLine % PERQ_DISPLAYHEIGHT;
             }
 
-#if TRACING_ENABLED
-            bool logState = Trace.TraceOn;
-            Trace.TraceOn = false;              // FIXME cut down the spewage for debugging
-#endif
             for (int x = 0; x < PERQ_DISPLAYWIDTH_IN_WORDS; x++)
             {
                 int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
@@ -346,10 +335,6 @@ namespace PERQemu.Display
             {
                 RenderCursorLine();
             }
-
-#if TRACING_ENABLED
-            Trace.TraceOn = logState;
-#endif
         }
 
         private void RenderCursorLine()
@@ -573,9 +558,6 @@ namespace PERQemu.Display
         private int _cursorX;
         private int _cursorY;
         private CursorFunction _cursorFunc;
-
-        private int _lastX;
-        private int _lastY;
 
         private static VideoController _instance = new VideoController();
     }

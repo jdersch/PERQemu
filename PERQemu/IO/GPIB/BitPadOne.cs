@@ -125,7 +125,9 @@ namespace PERQemu.IO.GPIB
             //
             // Where XXXX/YYYY are X,Y coordinates in plain ASCII, ranging from
             // 0000-2200; D1 is configured to be "," (a *$!%#! COMMA) and D2 is a
-            // Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual.)
+            // Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual,
+            // which clearly and INCORRECTLY shows D1 as a single quote mark.)
+            //
             // The delimiters and the range (switching between US/Metric) can
             // be configured on the BitPadOne itself, but the PERQ software
             // seems to require at least that D2 is LF (D1 can be any non-numeric

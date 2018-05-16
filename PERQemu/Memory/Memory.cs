@@ -40,10 +40,6 @@ namespace PERQemu.Memory
         public void Reset()
         {
             _memory = new ushort[_memSize];
-#if DEBUG
-            _watchedAddr = new bool[_memSize];
-            for (int i = 0; i < _memSize; i++) { _watchedAddr[i] = false; }
-#endif
 
             _mdiQueue = new MemoryController("MDI");
             _mdoQueue = new MemoryController("MDO");
@@ -65,24 +61,6 @@ namespace PERQemu.Memory
 #endif
         }
 
-#if DEBUG
-        public void SetWatchedAddress(uint a, bool b)
-        {
-            if (a > _memSize)
-            {
-                Console.WriteLine("Address out of range.");
-            }
-            else
-            {
-                _watchedAddr[a] = b;
-            }
-        }
-
-        public bool[] Watching
-        {
-            get { return _watchedAddr; }
-        }
-#endif
         public int MemSize
         {
             get { return _memSize; }
@@ -303,16 +281,6 @@ namespace PERQemu.Memory
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
-#if DEBUG
-            if (PERQCpu.Instance.DDS > 199)
-            {
-                if (_watchedAddr[address & _memSizeMask])       // FIXME extra debugging
-                {
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Read from watched address: {0:x5} --> {1:x4} ({2})", address, data, data);
-                }
-            }
-#endif
 #endif
             return data;
         }
@@ -325,16 +293,6 @@ namespace PERQemu.Memory
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
-#if DEBUG
-            if (PERQCpu.Instance.DDS > 199)
-            {
-                if (_watchedAddr[address & _memSizeMask])
-                {
-                    if (Trace.TraceOn)      // show hex and dec to see if any interesting data pops out -- like the accumulated x or y values...
-                        Trace.Log(LogType.Tablet, "Write to watched address: {0:x5} <-- {1:x4} ({2})", address, data, data);
-                }
-            }
-#endif
 #endif
             // Clip address to memsize range and write
             _memory[address & _memSizeMask] = data;
@@ -404,10 +362,6 @@ namespace PERQemu.Memory
         /// The PERQ memory array.
         /// </summary>
         private ushort[] _memory;
-
-#if DEBUG
-        private bool[] _watchedAddr;      // if true, log access to this address  FIXME
-#endif
 
         /// <summary>
         /// The opfile.  This probably belongs to the CPU, but since it's loaded

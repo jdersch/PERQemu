@@ -514,13 +514,15 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Updates the ready state for busy devices.
+        /// Updates the ready state for busy devices, and sends a status update
+        /// to the PERQ if something has changed.
         /// </summary>
         private void RefreshReadyState()
         {
             ReadyFlags oldFlags = _deviceReadyState;
             _deviceReadyState = 0;
 
+            // Run our busy clocks and set new ready state
             for (int i = 0; i < _devices.Count; i++)
             {
                 if (_devices[i].BusyBit != 0)           // Skip devices without a Ready bit
@@ -537,25 +539,20 @@ namespace PERQemu.IO.Z80.IOB
                 }
             }
 
-            if (oldFlags != _deviceReadyState)          // If something changed, tell the PERQ
+            // If something changed, tell the PERQ
+            if (oldFlags != _deviceReadyState)
             {
-                SendStatusChange();                     // TODO Inline that here, only 1 caller now
-            }
-        }
-
-        /// <summary>
-        /// Sends the status change message.
-        /// </summary>
-        private void SendStatusChange()
-        {
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "Sending Z80 device ready status @ {0}: {1}.", _clocks, _deviceReadyState);
+                Trace.Log(LogType.Z80State, "Sending Z80 device ready status @ {0}: {1}.",
+                                            _clocks, _deviceReadyState);
 #endif
             _outputFifo.Enqueue(Z80System.SOM);             // SOM
             _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
             _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
+            }
         }
+
 
         /// <summary>
         /// Calls subdevices to retrieve status based on the requested flags.  This
