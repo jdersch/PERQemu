@@ -38,9 +38,6 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Reset()
         {
-            _lastX = -1;
-            _lastY = -1;
-            _lastButton = -1;
             _enabled = false;
             _messageIndex = 0;
             _pollCount = 0;
@@ -125,9 +122,6 @@ namespace PERQemu.IO.Z80.IOB
                         Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
                                                      x, y, button, jiffies);
 #endif
-                    _lastX = x;
-                    _lastY = y;
-                    _lastButton = button;
                     _pollCount = 0;
                 }
             }
@@ -185,9 +179,7 @@ namespace PERQemu.IO.Z80.IOB
 #endif
         }
 
-        private int _lastX;
-        private int _lastY;
-        private int _lastButton;
+
         private bool _enabled;
         private int _messageIndex;
 

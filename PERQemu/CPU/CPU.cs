@@ -129,7 +129,6 @@ namespace PERQemu.CPU
 #if SIXTEEN_K
             _registerBase = 0;
             _mqEnabled = false;
-            _lateWriteback = false;
 #endif
 
 #if TRACING_ENABLED
@@ -180,6 +179,7 @@ namespace PERQemu.CPU
 
             _clocks++;
 
+            // FIXME debugging
             if (Trace.TraceOn && ((Trace.TraceLevel & LogType.Optimization) != 0) && currentState != RunState.SingleStep) Debugger.Debugger.Instance.PrintStatus();
 
             // Clock the memory state machine and set up any pending fetches
@@ -296,9 +296,6 @@ namespace PERQemu.CPU
             int amux = GetAmuxInput(uOp);
 
 #if SIXTEEN_K
-            // Reset the late writeback flag
-            _lateWriteback = false;
-
             // If the hardware multiply unit is enabled, check and possibly modify the ALU op
             if (_mqEnabled)
             {
@@ -344,14 +341,6 @@ namespace PERQemu.CPU
 
             // Execute whatever function this op calls for
             DispatchFunction(uOp);
-
-#if SIXTEEN_K
-            // Some SFs might change R; see if we need to write that back...
-            if (_lateWriteback)
-            {
-                DoWriteBack(uOp);
-            }
-#endif
 
 #if TRACING_ENABLED
             _lastPC = PC;
@@ -422,7 +411,7 @@ namespace PERQemu.CPU
             get
             {
                 return
-                    (BPC & 0xf) |
+                    BPC |
                     (_alu.Registers.Ovf ? 0x0010 : 0x0) |
                     (_alu.Registers.Eql ? 0x0020 : 0x0) |
                     (_alu.Registers.Cry ? 0x0040 : 0x0) |
@@ -713,8 +702,8 @@ namespace PERQemu.CPU
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.RegisterAssignment, "R|RBase{0:x2}={1:x5}{2}",
-                            uOp.X | _registerBase, _alu.Registers.R, _lateWriteback ? " (Late)" : "");
+                        Trace.Log(LogType.RegisterAssignment, "R|RBase{0:x2}={1:x5}",
+                            uOp.X | _registerBase, _alu.Registers.R);
 #endif
                 }
                 else
@@ -736,11 +725,11 @@ namespace PERQemu.CPU
                     //Console.WriteLine("\t{0}", Disassembler.Disassemble(PC, uOp));
                     if (uOp.X == 0xbe && _alu.Registers.R == 0xfa)
                     {
-                        PERQSystem.Instance.Break();
+                        //PERQSystem.Instance.Break();
                     }
                 }
 
-                if (uOp.X == 0xb7 && _alu.Registers.R != 0) Trace.TraceLevel |= LogType.Optimization;   // FIXME turn on full tracing when the Cursor Address Reg gets set (getting close)
+                //if (uOp.X == 0xb7 && _alu.Registers.R != 0) Trace.TraceLevel |= LogType.Optimization;   // FIXME turn on full tracing when the Cursor Address Reg gets set (getting close)
 #endif
             }
         }
@@ -1003,7 +992,7 @@ namespace PERQemu.CPU
 #if SIXTEEN_K
                         case 0x0:   // (R) := Victim Latch
                             _alu.SetR(_victim);
-                            _lateWriteback = true;
+                            DoWriteBack(uOp);       // late writeback
 #if TRACING_ENABLED
                             if (Trace.TraceOn)
                                 Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _victim);
@@ -1084,7 +1073,7 @@ namespace PERQemu.CPU
 
                         case 0x4:   // (R) := product or quotient
                             _alu.SetR(_mq & 0xffff);
-                            _lateWriteback = true;
+                            DoWriteBack(uOp);                       // late writeback
 #if TRACING_ENABLED
                             if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv read: MQ={0:x4}", _mq);
 #endif
@@ -1158,9 +1147,8 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Jumps based on the condition flags
+        /// Jumps based on the condition flags.
         /// </summary>
-        /// <param name="uOp"></param>
         private void DispatchJump(Instruction uOp)
         {
             bool conditionSatisfied = false;
@@ -1461,15 +1449,8 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Writes a 16 bit subword of a 48 bit microcode controlstore word to the store.
-        /// This is complicated by the fact that the bit mapping from the ALU output to
-        /// the controlstore is all scrambled up.
-        ///
-        /// This is not a very efficient routine.  But it doesn't get executed very frequently
-        /// (usually only at OS load) so I'm going to leave it alone for now.
+        /// Writes a 16-bit subword of a 48-bit microcode instruction to the control store.
         /// </summary>
-        /// <param name="word"></param>
-        /// <param name="data"></param>
         private void WriteControlStore(ControlStoreWord word, ushort data)
         {
             // Get the current microcode word
@@ -1491,6 +1472,13 @@ namespace PERQemu.CPU
 #endif
         }
 
+        /// <summary>
+        /// Unscrambles a control store word.  This is complicated by the fact that
+        /// the bit mapping from the ALU output to the controlstore is all scrambled up.
+        ///
+        /// This is not a very efficient routine.  But it doesn't get executed very frequently
+        /// (usually only at OS load) so I'm going to leave it alone for now.
+        /// </summary>
         private ulong UnscrambleControlStoreWord(ulong current, ControlStoreWord word, ushort data)
         {
             // We write the inverse of the data (outputs are active low)
@@ -1521,10 +1509,6 @@ namespace PERQemu.CPU
         /// <summary>
         /// Sets a series of bits in the 48-bit destination word from a 16-bit source word.
         /// </summary>
-        /// <param name="sourceWord"></param>
-        /// <param name="destWord"></param>
-        /// <param name="destBits"></param>
-        /// <returns></returns>
         private ulong SetBits(ulong sourceWord, ulong destWord, int[] destBits)
         {
             for (int sourceBit = 0; sourceBit < destBits.Length; sourceBit++)
@@ -1540,10 +1524,8 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Increment the BPC and update the program counter.  Also a convenient place
-        /// to put hooks for RasterOp debugging...
+        /// Increment the BPC and update the program counter.
         /// </summary>
-        /// <param name="uOp"></param>
         private void DoNextInst(Instruction uOp)
         {
             byte next = _memory.OpFile[BPC];
@@ -1554,24 +1536,23 @@ namespace PERQemu.CPU
                 Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
                     QCode.QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, BPC);
 #endif
-
 #if DEBUG
             // Catch RASTEROP (or LINE) Q-code and dump stack, for debugging...
             // RASTOP == 102, LINE == 241 in the POS F Q-Code set; YMMV!
-            //if (_rasterOp.Debug && next == 102)
+            //if (_rasterOp.Debug && next == 102) && dest addr = 0x69000 -- accent cursor buffer
             //{
             //    ShowEStack();
             //    PERQSystem.Instance.Break();
             //}
 
-            // Accent KOPS #5 == PSGetCB
-            if (_rasterOp.Debug && next == 253 && _memory.OpFile[BPC + 1] == 5)
-            {
-                ShowEStack();
-                PERQSystem.Instance.Break();
-            }
+            // Accent mouse debugging
+            //if (_rasterOp.Debug && (next == 253 && _memory.OpFile[BPC + 1] == 5) ||     // Accent KOPS #5 == PSGetCB
+            //                       (next == 103 && _stack[1] == 1))                     // STARTIO WriteReg
+            //{
+            //    ShowEStack();
+            //    PERQSystem.Instance.Break();
+            //}
 #endif
-
 #if SIXTEEN_K
             _pc.Lo = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
 #else
@@ -1588,7 +1569,6 @@ namespace PERQemu.CPU
         /// <summary>
         /// Implements the behavior of the CPU's interrupt priority encoder.
         /// </summary>
-        /// <returns></returns>
         private int InterruptPriority()
         {
             if (_interruptFlag != 0)
@@ -1614,7 +1594,6 @@ namespace PERQemu.CPU
         /// This currently expects a ROM built by PRQMIC, from microcode
         /// sources, not an actual ROM dump from the PERQ.
         /// </summary>
-        /// <param name="path"></param>
         private void LoadBootRom(string path)
         {
             FileStream fs = new FileStream(path, FileMode.Open);
@@ -1634,15 +1613,13 @@ namespace PERQemu.CPU
             fs.Close();
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Read boot rom from {0}.", path);
+            if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Read boot ROM from {0}.", path);
 #endif
         }
 
         /// <summary>
         /// Reads a 48-bit word in from the given stream.
         /// </summary>
-        /// <param name="fs"></param>
-        /// <returns></returns>
         private ulong ReadMicrocodeWord(FileStream fs, out ushort addr)
         {
             ulong word = 0;
@@ -1704,9 +1681,7 @@ namespace PERQemu.CPU
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-            {
-                Trace.Log(LogType.EStack, "Estack: Pushed {0:x5}. Pointer now {1:x1}.", value, _stackPointer);
-            }
+                Trace.Log(LogType.EStack, "Estack: Pushed {0:x5}, pointer now {1}", value, _stackPointer);
 #endif
         }
 
@@ -1729,9 +1704,7 @@ namespace PERQemu.CPU
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-            {
-                Trace.Log(LogType.EStack, "EStack: Popped.  Pointer now {0:x1}", _stackPointer);
-            }
+                Trace.Log(LogType.EStack, "EStack: Popped, pointer now {0}", _stackPointer);
 #endif
         }
 
@@ -1865,6 +1838,21 @@ namespace PERQemu.CPU
             Console.WriteLine("R[{0:x2}]={1:x5}", reg, _r[reg]);
         }
 
+#if DEBUG
+        [DebugFunction("set xy register", "Change the value of an XY register")]
+        private void SetRegister(ushort reg, uint val)
+        {
+            if (reg > 255)
+            {
+                Console.WriteLine("Argument out of range -- must be between 0 and 255");
+                return;
+            }
+            _r[reg] = (int)(val & 0xffff);     // clip to 20 bits
+
+            Console.WriteLine("R[{0:x2}]={1:x5} (dec {2})", reg, _r[reg], _r[reg]);
+        }
+#endif
+
         [DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr])")]
         private void ShowMemory(uint startAddress)
         {
@@ -1884,7 +1872,7 @@ namespace PERQemu.CPU
 
             ushort[] mem = _memory.Memory;
 
-            // Dump the memory to screen
+            // Format and display 8 words per line
             for (uint i = startAddress; i < endAddr; i += 8)
             {
                 StringBuilder line = new StringBuilder();
@@ -1908,7 +1896,7 @@ namespace PERQemu.CPU
                         low = '.';
                     }
 
-                    line.AppendFormat("{0}{1}", low, high);
+                    line.AppendFormat("{0}{1}", high, low);
                 }
 
                 Console.WriteLine(line.ToString());
@@ -1916,6 +1904,41 @@ namespace PERQemu.CPU
         }
 
 #if DEBUG
+        [DebugFunction("find memory", "Find a specific value in the PERQ's memory")]
+        private void FindMemory(ushort val)
+        {
+            FindMemory(0, val);
+        }
+
+        [DebugFunction("find memory", "Find a specific value in the PERQ's memory [@start, val]")]
+        private void FindMemory(uint startAddress, ushort val)
+        {
+            if (startAddress >= _memory.MemSize)
+            {
+                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", _memory.MemSize - 1);
+                return;
+            }
+
+            ushort[] mem = _memory.Memory;
+
+            for (uint i = startAddress; i < _memory.MemSize; i++)
+            {
+                if (mem[i] == val) ShowMemory((i & 0xffffc), 4);        // show the quadword
+            }
+        }
+
+        [DebugFunction("set memory", "Write a specific value in the PERQ's memory")]
+        private void SetMemory(uint address, ushort val)
+        {
+            if (address >= _memory.MemSize)
+            {
+                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", _memory.MemSize - 1);
+                return;
+            }
+
+            _memory.StoreWord((int)address, val);
+        }
+
         [DebugFunction("show memstate", "Dump the memory controller state")]
         private void ShowMemQueues()
         {
@@ -2209,7 +2232,6 @@ namespace PERQemu.CPU
 #if SIXTEEN_K
         private Shifter _mqShifter;
         private bool _mqEnabled;
-        private bool _lateWriteback;
 #endif
 
         // Memory card reference

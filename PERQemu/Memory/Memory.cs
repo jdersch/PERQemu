@@ -50,8 +50,8 @@ namespace PERQemu.Memory
 
             _Tstate = 0;
             _mdi = 0;
-            _wait = false;          // Stalls the CPU for requests issued in the wrong cycle
-            _hold = false;          // Locks out the IO system at the request of the CPU (not implemented)
+            _wait = false;
+            _hold = false;
 
             _loadOpFile = false;
 
@@ -68,7 +68,7 @@ namespace PERQemu.Memory
 #if DEBUG
         public void SetWatchedAddress(uint a, bool b)
         {
-            if (a < 0 || a > _memSize)
+            if (a > _memSize)
             {
                 Console.WriteLine("Address out of range.");
             }
@@ -302,7 +302,7 @@ namespace PERQemu.Memory
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
+                Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
 #if DEBUG
             if (PERQCpu.Instance.DDS > 199)
             {
@@ -324,7 +324,7 @@ namespace PERQemu.Memory
         {
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
+                Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
 #if DEBUG
             if (PERQCpu.Instance.DDS > 199)
             {
@@ -380,7 +380,7 @@ namespace PERQemu.Memory
         private MemoryController _mdoQueue;		// Queue for Store requests
 
         private int _Tstate;                // Current T-state
-        private int _madr;                  // Address of word currently on MDI (helpful in debugging RasterOp)
+        private int _madr;                  // Address of word currently on MDI
         private ushort _mdi;                // Result of most recent fetch
         private bool _wait;                 // True if CPU has to wait for memory
         private bool _hold;                 // True if IO hold asserted (not implemented)

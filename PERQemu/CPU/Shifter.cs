@@ -1,4 +1,4 @@
-// shifter.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// shifter.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -24,13 +24,14 @@ namespace PERQemu.CPU
 {
     public sealed class Shifter
     {
-        public Shifter()
-        {
-        }
-
         static Shifter()
         {
             BuildShifterTable();
+        }
+
+        public ushort ShifterOutput
+        {
+            get { return _shifterOutput; }
         }
 
         /// <summary>
@@ -67,20 +68,9 @@ namespace PERQemu.CPU
         /// <summary>
         /// Applies shifter logic to the given input word.
         /// </summary>
-        /// <param name="input"></param>
         public void Shift(int input)
         {
-            DoShift(input, input);
-        }
-
-        /// <summary>
-        /// Applies shifter logic to the given input words.
-        /// </summary>
-        /// <param name="low"></param>
-        /// <param name="high"></param>
-        public void Shift(int low, int high)
-        {
-            DoShift(low, high);
+            Shift(input, input);
         }
 
         /// <summary>
@@ -89,9 +79,7 @@ namespace PERQemu.CPU
         /// specify two separate input words is used by RasterOp's "half word
         /// pipeline."
         /// </summary>
-        /// <param name="low"></param>
-        /// <param name="high"></param>
-        private void DoShift(int low, int high)
+        public void Shift(int low, int high)
         {
             uint d;
 
@@ -101,8 +89,8 @@ namespace PERQemu.CPU
                     _shifterOutput = (ushort)(low << _shifterParams.ShiftAmount);
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Shifter, "Left shift by {0}: in={1}{2} out={3}",
-                                                   _shifterParams.ShiftAmount, high, low, _shifterOutput);
+                        Trace.Log(LogType.Shifter, "Left shift by {0}: in={1:x4} out={2:x4}",
+                                                   _shifterParams.ShiftAmount, low, _shifterOutput);
 #endif
                     break;
 
@@ -110,8 +98,8 @@ namespace PERQemu.CPU
                     _shifterOutput = (ushort)((low & 0x0ffff) >> _shifterParams.ShiftAmount);    // logical, not arithmetic.
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Shifter, "Right shift by {0}: in={1}{2} out={3}",
-                                                   _shifterParams.ShiftAmount, high, low, _shifterOutput);
+                        Trace.Log(LogType.Shifter, "Right shift by {0}: in={1:x4} out={2:x4}",
+                                                   _shifterParams.ShiftAmount, low, _shifterOutput);
 #endif
                     break;
 
@@ -120,7 +108,7 @@ namespace PERQemu.CPU
                     _shifterOutput = (ushort)(0xffff & (d >> _shifterParams.ShiftAmount));
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Shifter, "Rotate by {0}: in={1}{2} out={3}",
+                        Trace.Log(LogType.Shifter, "Rotate by {0}: in={1:x4}{2:x4} out={3:x4}",
                                                    _shifterParams.ShiftAmount, high, low, _shifterOutput);
 #endif
                     break;
@@ -130,16 +118,11 @@ namespace PERQemu.CPU
                     _shifterOutput = (ushort)(((d >> _shifterParams.ShiftAmount)) & _shifterParams.ShiftMask);
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Shifter, "Field mask {0} rotated by {1}",
-                                                   _shifterParams.ShiftMask, _shifterParams.ShiftAmount);
+                        Trace.Log(LogType.Shifter, "Field mask {0} rotated by {1} out={2:x4}",
+                                                   _shifterParams.ShiftMask, _shifterParams.ShiftAmount, _shifterOutput);
 #endif
-                break;
+                    break;
             }
-        }
-
-        public ushort ShifterOutput
-        {
-            get { return _shifterOutput; }
         }
 
         /// <summary>
@@ -181,10 +164,7 @@ namespace PERQemu.CPU
             }
         }
 
-        // Shifter output
-        private ushort _shifterOutput;
-        private ShifterTableEntry _shifterParams;
-        
+
         private struct ShifterTableEntry
         {
             public ShifterCommand Command;
@@ -192,7 +172,9 @@ namespace PERQemu.CPU
             public int ShiftMask;
         }
 
-        private static ShifterTableEntry[] _shifterTable;        
+        private ushort _shifterOutput;
+        private ShifterTableEntry _shifterParams;
+        private static ShifterTableEntry[] _shifterTable;
     }
 }
 
