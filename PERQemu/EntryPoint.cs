@@ -62,7 +62,7 @@ namespace PERQemu
         {
             Version currentVersion = Assembly.GetCallingAssembly().GetName().Version;
             Console.WriteLine("PERQemu v{0}.{1}.{2} ('As the sparks fly upwards.')",
-                              currentVersion.Major, currentVersion.Minor, currentVersion.Revision);
+                              currentVersion.Major, currentVersion.Minor, currentVersion.Build);
             Console.WriteLine("Copyright (c) 2006-2018, J. Dersch (derschjo@gmail.com).");
             Console.WriteLine("                     and S. Boondoggle (skeezicsb@gmail.com).");
             Console.WriteLine("Type 'go' to start the machine; hit 'tab' key for a list of command completions.");
