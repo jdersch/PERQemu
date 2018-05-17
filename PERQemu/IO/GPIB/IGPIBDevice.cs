@@ -44,12 +44,12 @@ namespace PERQemu.IO.GPIB
         void SetListener(byte address);
 
         /// <summary>
-		/// Polls the GPIB device for data (if we're the talker).
+        /// Polls the GPIB device for data (if we're the talker).
         /// </summary>
         void Poll(ref Queue<byte> fifo);
 
         /// <summary>
-		/// Does a write to the device (if we're the listener).
+        /// Does a write to the device (if we're the listener).
         /// </summary>        
         void Write(byte value);
     }
