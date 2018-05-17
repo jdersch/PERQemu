@@ -248,7 +248,7 @@ Under the \CPU directory you'll find the implementation of the main PERQ CPU.  I
 familiar with it I seriously suggest reading through the following documents on Bitsavers:
 
     http://bitsavers.trailing-edge.com/pdf/perq/PERQ_CPU_Tech_Ref.pdf
-    http://bitsavers.trailing-edge.com/pdf/perq/pos_G5/PERQ_uProgRefMan.pdf
+    http://bitsavers.trailing-edge.com/pdf/perq/pos_G5/PERQ_uProgRefMan_Mar84.pdf
 
 The former describes the hardware in intimate detail (and was written by a supergenius PERQ
 fanatic madman), and the latter describes the microcode in detail.  In a nutshell, the PERQ
