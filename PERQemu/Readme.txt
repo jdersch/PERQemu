@@ -1,5 +1,6 @@
 PERQemu Source - Readme
 
+V1.4 - 5/15/2018 - skeezics
 V1.3 - 3/11/2018 - skeezics
 V1.2 - 3/18/2017 - skeezics
 V1.1 - 9/21/2014 - skeezics
@@ -55,15 +56,17 @@ hardware, all of the complex timing is now managed by a state machine driven by 
 This has drastically reduced the amount of GC overhead and given a decent performance boost!
 As part of this, the CPU can now be single-stepped through microinstructions that abort due
 to memory holds, which is an aid to debugging (if you like single-stepping through microcode
-as much as I do).
+as much as I do).  And the last obvious RasterOp glitch was, in fact, fixed with a ROM update!
 
-In addition, I spent quite a bit of time on a few cosmetic cleanups of all the source files
-for more consistency in style, comments, etc.  This will be the first version of the code
-posted on Github.  I'm still a C# newbie, so be kind.  I built this code under both Visual
-Studio 2010 (WinXP Pro 64-bit) and MonoDevelop (Mac OS X) from a shared NetApp repository
-using DOS-style line endings; there may be a few formatting differences but the project was
-compatible with and opened just fine in both environments.  I have not attempted to build
-a 64-bit version of PERQemu, however.
+What I'm calling the 1.4 update was a month-long effort to fix a single comma which prevented
+mouse tracking from working in Accent S4.  It's a long story. 
+
+I've built this project under both Visual Studio 2010 (WinXP Pro 64-bit) and MonoDevelop
+(Mac OS X) from a shared NetApp repository using DOS-style line endings; there may be a few
+formatting differences but the project was compatible with and opened just fine in both
+environments.  [After an "upgrade" to Xamarin Studio Community and the shift to Github,
+updated files now generate huge diffs based on whitespace -- tabs to spaces expansion --
+which it seems to apply at random.  Sigh.]
 
 I too would be thrilled for any feedback you care to send my way:  skeezicsb@gmail.com.
 
@@ -73,8 +76,9 @@ I too would be thrilled for any feedback you care to send my way:  skeezicsb@gma
 1.2 Version History
 -------------------
 
-This update is the first pushed to GitHub, corresponding to PERQemu 0.4.2.12.
-This is the third "source release," corresponding to PERQemu 0.4.2.
+This update fixes a single comma, corresponding to PERQemu 0.4.3.
+The fourth update was the first pushed to GitHub, corresponding to PERQemu 0.4.2.12.
+The third "source release" corresponded to PERQemu 0.4.2.
 The second corresponded to PERQemu version 0.4.0.
 The first corresponded to PERQemu version 0.3.x.
 
@@ -107,11 +111,8 @@ reasonably functional and stable (though there may still be issues):
     This is implemented by code in the \Memory directory.
 
 
-- RasterOp - 99% complete.  The newest cycle-accurate emulation, working with the new
+- RasterOp - 99.9% complete.  The newest cycle-accurate emulation, working with the new
   Memory implementation, is enabled by default.  The old "fake" RasterOp code is gone.
-  There may be one elusive edge case that is not handled properly (graphical glitch that
-  does not produce diagnostics or crash the emulator, but is noticeable in certain rare
-  circumstances.)
 
     RasterOp still lives in the \Memory directory, though it probably ought to
     be in \CPU.  Two new text files and a small Perl script are included in the
@@ -126,15 +127,14 @@ reasonably functional and stable (though there may still be issues):
     for the control logic, and \PhysicalDisk for the actual media emulation.
 
 
-- Display - 99% complete.  Timing is not right, but not that noticable.  One obvious lingering
-  bug involves mouse tracking, where the Y value is sometimes off (the pointer appears
-  several pixels below where the actual hotspot is).  [I think I have accidentally fixed the
-  Y value glitch. Don't ask me how.]
+- Display - 99% complete.  The emulator trusts the microcode to set the correct video
+  register values to account for horizontal and vertical refresh timing, and it appears
+  to be accurate for POS, Accent and PNX.  Only the portrait display is offered (for now).
 
     This is implemented by code under \Display.
 
 
-- Z80 Subsystem - 95% complete.  Currently only a simulation of the real thing; as this is
+- Z80 Subsystem - 97% complete.  Currently only a simulation of the real thing; as this is
   completely transparent (the PERQ1 can't upload custom software to the Z80 so a simulation
   is sufficient) a full emulation of the Z80 hardware is very low on my list of priorities
   (but it would be nice to have for accuracy's sake).
@@ -148,8 +148,12 @@ reasonably functional and stable (though there may still be issues):
         - RS232 - \IO\Z80\IOB\RS232.cs, as well as actual device interfaces under
           \IO\SerialDevices.
         - "Kriz" Tablet.  \IO\Z80\IOB\Tablet.cs
-        - GPIB.  (Very basic at the moment, and probably incorrect in many ways)
-          \IO\Z80\IOB\GPIB.cs
+        - GPIB - Has been fleshed out a bit, as it now supports talker/listener
+          selection, and can discriminate between command bytes and data bytes
+          passed on to bus devices (allowing for printers or other GPIB devices
+          to both read and write on the bus now).  Only the Summagraphics BitPadOne
+          graphics tablet is fully implemented.  \IO\Z80\IOB\GPIB.cs is the Z80
+          side; \IO\GPIB\* is the bus and BitPad client code.
         - Speech (sound chip).  Basically a stub.  \IO\Z80\IOB\Speech.cs
 
 
@@ -223,11 +227,12 @@ is available at this time.  Would VERY MUCH like to track down a copy.
 FLEX is a complete unknown, as it's unclear if anyone anywhere in the world still has a
 copy of this obscure (mythical?) operating system.  Hello, UK?
 
-Accent S4 does not track the mouse, making it very difficult to use SAPPHIRE, the window
-manager.  It would be awesome if CMU stepped up with a copy of the old /usr/spice tree
-from their tape archives.  [It may be necessary to disable Kriz Tablet support to force
-use of the GPIB/Bitpad?  Both options work in POS, so it's a mystery why Tracker fails
-in S4.  Anyone out there have "SapphTracker.Pas"?]
+Accent S4 now tracks the mouse, though it takes a little getting used to since it runs
+in relative mode.  To simulate mouse "swipes" you have to use the Alt (or Command on
+Mac) key to tell PERQemu the mouse is "off tablet", reposition, then release the key to
+start tracking again.  It's a little clumsy at first.  [Accent sources would still be
+hugely appreciated...]
+
 
 If anyone has any other software that ran on the PERQ-1 and does not run successfully
 under PERQemu, send us a copy and we'll find out why!
@@ -243,7 +248,7 @@ Under the \CPU directory you'll find the implementation of the main PERQ CPU.  I
 familiar with it I seriously suggest reading through the following documents on Bitsavers:
 
     http://bitsavers.trailing-edge.com/pdf/perq/PERQ_CPU_Tech_Ref.pdf
-    http://bitsavers.trailing-edge.com/pdf/perq/PERQ_uProgRefMan.pdf
+    http://bitsavers.trailing-edge.com/pdf/perq/pos_G5/PERQ_uProgRefMan_Mar84.pdf
 
 The former describes the hardware in intimate detail (and was written by a supergenius PERQ
 fanatic madman), and the latter describes the microcode in detail.  In a nutshell, the PERQ
@@ -391,4 +396,5 @@ documentation as an optional add-in package.]
 --------------
 
 With the shift to GitHub and more active collaboration happening, this file should be split
-into a ChangeLog, TODO, and more static README, undoing the mess I've made of this. [skz]
+into a ChangeLog, TODO, and more static README, undoing the mess I've made of this. [I'm
+putting this on my to-do list before the next update, 'cuz this is getting out of hand. skz]

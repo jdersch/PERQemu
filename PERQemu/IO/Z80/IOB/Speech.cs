@@ -1,4 +1,4 @@
-// speech.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// speech.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -34,8 +34,20 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Reset()
         {
-            _messageIndex = 0;
             _messageData = new byte[64];
+            _messageIndex = 0;
+            _busyClocks = 0;
+        }
+
+        public ReadyFlags BusyBit
+        {
+            get { return ReadyFlags.Speech; }
+        }
+
+        public int BusyClocks
+        {
+            get { return _busyClocks; }
+            set { _busyClocks = value; }
         }
 
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
@@ -56,12 +68,17 @@ namespace PERQemu.IO.Z80.IOB
                         _messageIndex = 0;
                         MakeSound();
                         retVal = true;
+
+                        // At 8KHz, figure ~ 90 Z80 clocks/byte... but set our
+                        // "busy" time to something a little more reasonable
+                        _busyClocks = 10 * _messageData[0];
                     }
                     break;
 
                 default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled Speech message {0}", message);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unhandled Speech message {0}", message);
 #endif
                     break;
             }
@@ -83,11 +100,12 @@ namespace PERQemu.IO.Z80.IOB
         {
             int dataLength = _messageData[0];
 
-            // Console.WriteLine("*** beep ***");
+            // Console.WriteLine("*** beep ***");   // Does ^G (ASCII BEL) work on Windows?
         }
 
         private byte[] _messageData;
         private int _messageIndex;
+        private int _busyClocks;
         private bool _enabled = false;
     }
 }

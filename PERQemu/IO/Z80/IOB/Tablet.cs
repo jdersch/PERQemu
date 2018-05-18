@@ -1,4 +1,4 @@
-// tablet.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// tablet.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -25,7 +25,9 @@ namespace PERQemu.IO.Z80.IOB
 {
 
     /// <summary>
-    /// Implements Kriz Tablet functionality.
+    /// Implements Kriz Tablet functionality.  This was an electromagnetic ranging
+    /// tablet designed by 3RCC engineer Stan Kriz (U.S. Patent #4455451!).  Came
+    /// in portrait and landscape variants; for now we only emulate the portrait.
     /// </summary>
     public sealed class Tablet : IZ80Device
     {
@@ -36,18 +38,27 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Reset()
         {
-            _lastX = -1;
-            _lastY = -1;
-            _lastButton = -1;
             _enabled = false;
             _messageIndex = 0;
+            _pollCount = 0;
 
-            _jiffyInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);    // Essentially a constant...
-            _pollCount = _jiffyInterval - PERQCpu.IOFudge - 1;                  // Force an update on next Poll()
+            // Set for 60 updates/sec.
+            _jiffyInterval = ((PERQCpu.Frequency / 60) / PERQCpu.IOFudge);
 
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
 #endif
+        }
+
+        public ReadyFlags BusyBit
+        {
+            get { return 0; }           // Tablet doesn't have a Ready bit
+        }
+
+        public int BusyClocks
+        {
+            get { return 0; }           // Tablet can always be polled
+            set { int dummy = value; }
         }
 
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
@@ -67,7 +78,7 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "--> Tablet message: {0}\tdata: {1:x}\tenabled: {2}",
+                Trace.Log(LogType.Tablet, "Tablet: message {0} data={1:x} enabled={2}",
                                           message, value, _enabled);
 #endif
             return retVal;
@@ -89,13 +100,10 @@ namespace PERQemu.IO.Z80.IOB
                 if (_pollCount >= _jiffyInterval)
                 {
                     int jiffies = (_pollCount / _jiffyInterval);
-#if TRACING_ENABLED
-                    //if (Trace.TraceOn)
-                    //    Trace.Log(LogType.Tablet, "--> Tablet: jiffies since last Poll: {0} (interval {1})", jiffies, _jiffyInterval);
-#endif
                     int x = 0;
                     int y = 0;
                     int button = Display.Display.Instance.MouseButton;
+
                     GetTabletPos(out x, out y, button);
 
                     fifo.Enqueue(Z80System.SOM);
@@ -104,25 +112,28 @@ namespace PERQemu.IO.Z80.IOB
                     fifo.Enqueue((byte)(x >> 8));   // X high
                     fifo.Enqueue((byte)y);          // Y low
                     fifo.Enqueue((byte)(y >> 8));   // Y high
-                    fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last message, according to perqz80.doc)
-                                                    // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
-                                                    // maintenance moved to the video interrupt instead.
-                    _lastX = x;
-                    _lastY = y;
-                    _lastButton = button;
+                    fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last
+                                                    // message, according to perqz80.doc)
+
+                    // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
+                    // maintenance moved to the video interrupt instead.
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
+                                                     x, y, button, jiffies);
+#endif
                     _pollCount = 0;
                 }
             }
         }
 
+        /// <summary>
+        /// Get the mouse X, Y positions from the display and translate them into the range
+        /// of the Kriz tablet. Coordinate translation based on tweaking, not solid data...
+        /// </summary>
         private void GetTabletPos(out int x, out int y, int button)
         {
-            // Get the X & Y position from the display and translate them into the range
-            // of the Kriz tablet
-            // TODO: There seem to be two modes: absolute and relative positioning;
-            // not sure how they both work.  Only absolute is implemented.
-            // Coordinate translation based on tweaking, not solid data...
-
+            //
             // From the Z80 disassembly (v87.z80):
             // ;   Tab1<7:0> = low X
             // ;   Tab2<3:0> = high X
@@ -137,8 +148,9 @@ namespace PERQemu.IO.Z80.IOB
             //
             // In summary: the upper 3 bits of Y are the three buttons
             // The high bit of X indicates that any button is pressed.
+            //
 
-            // Calc y and x positions:
+            // Calc Y and X positions:
             y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY + 64);
             x = (Display.Display.Instance.MouseX + 64);
 
@@ -163,13 +175,11 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "--> Tablet message: GetStatus\tenabled: {0}", _enabled);
+                Trace.Log(LogType.Tablet, "Tablet: GetStatus() returns enabled={0}", _enabled);
 #endif
         }
 
-        private int _lastX;
-        private int _lastY;
-        private int _lastButton;
+
         private bool _enabled;
         private int _messageIndex;
 

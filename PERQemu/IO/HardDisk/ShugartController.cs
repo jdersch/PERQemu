@@ -1,4 +1,4 @@
-// shugartcontroller.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// shugartcontroller.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -18,12 +18,10 @@
 
 using PERQemu.CPU;
 using PERQemu.PhysicalDisk;
-using PERQemu.IO.Z80.IOB;
 using PERQemu.Memory;
 
 using System;
 using System.IO;
-using System.Runtime.Serialization;
 using System.Security.Permissions;
 
 namespace PERQemu.IO.HardDisk
@@ -88,29 +86,6 @@ namespace PERQemu.IO.HardDisk
             }
         }
 
-        /// <summary>
-        /// This is the Z80 portion of the hard disk controller, which seems out of place here.
-        /// The Z80 can take control of stepping the heads in whatever direction the drive is currently
-        /// set up to move in.
-        /// </summary>
-        /// <param name="message"></param>
-        /// <param name="data"></param>
-        /// <returns></returns>
-        public bool RunStateMachine(Z80.IOB.PERQtoZ80Message message, byte data)
-        {
-            // One byte for Seek:
-            //  byte 0 = seek count
-            DoMultipleSeek(data);
-
-            // Send completion message:
-            //  SOM
-            //  0xa (seek done)
-            Z80System.Instance.FIFO.Enqueue(Z80.IOB.Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue(0xa);
-
-            return true;
-        }
-
         public int ReadStatus()
         {
             // Reading status DOES NOT clear pending interrupts.
@@ -129,7 +104,8 @@ namespace PERQemu.IO.HardDisk
         {
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.HardDisk, "Shugart command data: {0:x4}", data);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.HardDisk, "Shugart command data: {0:x4}", data);
 #endif
             // Note:  Most of the info gleaned about the Shugart controller register behavior is from
             // sysb.micro source.
@@ -140,7 +116,8 @@ namespace PERQemu.IO.HardDisk
             Command command = (Command)(data & 0x7);
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
 #endif
 
             switch (command)
@@ -350,11 +327,12 @@ namespace PERQemu.IO.HardDisk
             }
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
 #endif
         }
 
-        private void DoMultipleSeek(int cylCount)
+        public void DoMultipleSeek(int cylCount)
         {
             if ((_seekData & 0x8) == 0)
             {
@@ -366,7 +344,8 @@ namespace PERQemu.IO.HardDisk
             }
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
 #endif
         }
 

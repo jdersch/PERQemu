@@ -191,7 +191,7 @@ namespace PERQemu.Debugger
         {
             _nextState = RunState.Debug;
 
-            if (message != String.Empty && message != null)
+            if (!string.IsNullOrEmpty(message))
             {
                 Console.WriteLine(message);
             }
@@ -257,7 +257,7 @@ namespace PERQemu.Debugger
                     }
                     else
                     {
-						ExecuteLine("step");	// why not just this?
+                        ExecuteLine("step");	// why not just this?
                         //// no entry defaults to single-step (this is ugly)
                         //List<MethodInfo> methods = _commandRoot.FindSubNodeByName("step").Methods;
                         //InvokeDebugMethod(methods, null);
@@ -337,7 +337,7 @@ namespace PERQemu.Debugger
             ParameterInfo[] parameterInfo = method.GetParameters();
             object[] invokeParams;
 
-            if (args == null )
+            if (args == null)
             {
                 invokeParams = null;
             }
@@ -550,8 +550,8 @@ namespace PERQemu.Debugger
 
             if (property.PropertyType == typeof(Int32[]))
             {
-               Int32[] array = (Int32[])property.GetValue(instance, null);
-               Console.WriteLine("{0:x8}", array[arrayIndex]);
+                Int32[] array = (Int32[])property.GetValue(instance, null);
+                Console.WriteLine("{0:x8}", array[arrayIndex]);
             }
             else
             {
@@ -765,13 +765,7 @@ namespace PERQemu.Debugger
 
         private void PrintStatus()
         {
-            Console.WriteLine("\nPC={0:x4} BPC={1:x1} Victim={2:x4} DDS={3} UState={4:x2} Interrupt={5}",
-                   PERQCpu.Instance.PC,
-                   PERQCpu.Instance.BPC,
-                   PERQCpu.Instance.Victim,
-                   PERQCpu.Instance.DDS,
-                   PERQCpu.Instance.MicrostateRegister,
-                   PERQCpu.Instance.InterruptFlag);
+            PERQCpu.Instance.ShowPC();
 
             Console.WriteLine("ucode {0}",
                         Disassembler.Disassemble(PERQCpu.Instance.PC, PERQCpu.Instance.GetInstruction(PERQCpu.Instance.PC)));
@@ -806,7 +800,6 @@ namespace PERQemu.Debugger
             _nextState = RunState.Reset;
         }
 
-
         [DebugFunction("exit", "Leaves the emulator.  Any disk state not saved will be lost.")]
         private void Exit()
         {
@@ -814,72 +807,26 @@ namespace PERQemu.Debugger
         }
 
         /*
-        [DebugFunction("show xy register", "Displays the value of the specified XY register")]
-        private void ShowRegister()
-        {
-            for (int reg = 0; reg < 256; reg++)
-            {
-                Console.Write("R{0:x2}={1:x5}\t", reg, PERQCpu.Instance.R[reg]);
-
-                if (reg !=0 && (reg % 8) == 0)
+                private void SetBreakpoint(string[] args)
                 {
-                    Console.WriteLine();
+
                 }
-            }
 
-            Console.WriteLine();
-        }
+                private void ClearBreakpoint(string[] args)
+                {
 
-        [DebugFunction("show xy register", "Displays the value of the specified XY register")]
-        private void ShowRegister(ushort reg)
-        {
-            if (reg > 255)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and 255");
-                return;
-            }
+                }
 
-            Console.WriteLine("R{0:x2}={1:x5}", reg, PERQCpu.Instance.R[reg]);
-        }
+                private void ToggleBreakpoint(string[] args)
+                {
 
-        [DebugFunction("show cpu register", "Displays the values of the CPU registers")]
-        private void ShowPC()
-        {
-            Console.WriteLine("\nPC={0:x4} BPC={1:x1} Victim={2:x4} DDS={3} UState={4:x2} Interrupt={5}",
-                    PERQCpu.Instance.PC,
-                    PERQCpu.Instance.BPC,
-                    PERQCpu.Instance.Victim,
-                    PERQCpu.Instance.DDS,
-                    PERQCpu.Instance.MicrostateRegister,
-                    PERQCpu.Instance.InterruptFlag);
-        }
+                }
 
-        private void SetRegister(string[] args)
-        {
+                private void ShowBreakpoints(string[] args)
+                {
 
-        }
+                }
         */
-
-        private void SetBreakpoint(string[] args)
-        {
-
-        }
-
-        private void ClearBreakpoint(string[] args)
-        {
-
-        }
-
-        private void ToggleBreakpoint(string[] args)
-        {
-
-        }
-
-        private void ShowBreakpoints(string[] args)
-        {
-
-        }
-
 
 #if TRACING_ENABLED
         [DebugFunction("set logging", "Enables logging for the specified event types")]
@@ -904,7 +851,7 @@ namespace PERQemu.Debugger
         [DebugFunction("show variables", "Shows debugger variables and their descriptions.")]
         private void ShowVariables()
         {
-            foreach(DebuggerVariable var in _variableList)
+            foreach (DebuggerVariable var in _variableList)
             {
                 Console.WriteLine("{0} - {1}", var.Name, var.Description);
             }

@@ -16,15 +16,12 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.CPU;
-#if DEBUG
-using PERQemu.Debugger;
-#endif
-
 using System;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
+
+using PERQemu.CPU;
 
 namespace PERQemu.Memory
 {
@@ -39,14 +36,6 @@ namespace PERQemu.Memory
         }
     }
 
-    /// <summary>
-    /// The direction of a RasterOp fetch/store.
-    /// </summary>
-    public enum Direction
-    {
-        LeftToRight,
-        RightToLeft
-    }
 
     /// <summary>
     /// Mask bits computed by the hardware that affect the operation
@@ -114,11 +103,8 @@ namespace PERQemu.Memory
             _halfPipe = new ROpWord();              // 1 word, for overlap
             _rdsTable = new CombinerFlags[512];     // 9 bit index
             _rscTable = new EdgeStrategy[128];      // 7 bit index
-        }
 
-        public static RasterOp Instance
-        {
-            get { return _instance; }
+            LoadRasterOpROMs();
         }
 
         public void Reset()
@@ -131,126 +117,20 @@ namespace PERQemu.Memory
 #if DEBUG
             _ropDebug = false;
 #endif
-            // Move this to the constructor after debugging so it doesn't get
-            // run on every reset (which is handy for making tweaks while debugging)
-            LoadRasterOpROMs();
-
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: Reset.");
 #endif
+        }
+
+        public static RasterOp Instance
+        {
+            get { return _instance; }
         }
 
         public bool Enabled
         {
             get { return _enabled; }
         }
-
-        #region Debugging
-
-#if DEBUG
-        public bool Debug
-        {
-            get { return _ropDebug; }
-            set { _ropDebug = value; }
-        }
-
-        public void SaveRopTables()
-        {
-            StringBuilder sb = new StringBuilder();
-
-            sb.AppendLine("key:\tphase dir dwp wid idx\tresult\n");
-            for (var i = 0; i < 512; i++)
-            {
-                sb.AppendFormat("{0:x3}\t  {1}    {2}   {3}   {4}   {5}\t{6}\n", i,
-                                ((i & 0x180) >> 7),             // phase
-                                ((i & 0x040) >> 6),             // direction
-                                ((i & 0x030) >> 4),             // destwordpos
-                                ((i & 0x00c) >> 2),             // widextraword
-                                (i & 0x003),                    // index
-                                (CombinerFlags)_rdsTable[i]);   // result
-            }
-
-            using (StreamWriter outfile = new StreamWriter(Paths.BuildPROMPath("mask_table.txt")))
-            {
-                outfile.Write(sb.ToString());
-            }
-            Console.WriteLine("Wrote RDS table.");
-
-            sb.Remove(0, sb.Length);    // uh, sb = ""? sb.Clear()?
-            sb.AppendLine("key:\tdir dst src  lo  xflg\tresult\n");
-            for (var i = 0; i < 128; i++)
-            {
-                sb.AppendFormat("{0:x3}\t {1}   {2}   {3}   {4}   {5}\t{6}\n", i,
-                                ((i & 0x40) >> 6),              // direction
-                                ((i & 0x30) >> 4),              // dst mask
-                                ((i & 0x0c) >> 2),              // src mask
-                                ((i & 0x02) >> 1),              // leftover
-                                (i & 0x01),                    // xtrasrcword && xoffset
-                                (EdgeStrategy)_rscTable[i]);    // result
-            }
-
-            using (StreamWriter outfile = new StreamWriter(Paths.BuildPROMPath("edge_table.txt")))
-            {
-                outfile.Write(sb.ToString());
-            }
-            Console.WriteLine("Wrote RSC table.");
-        }
-
-        public void ShowState()
-        {
-            Console.WriteLine("RasterOp debugging is {0}.", _ropDebug);
-            Console.WriteLine("RasterOp enabled is {0}.", _enabled);
-            if (_enabled)
-            {
-                Console.WriteLine("\tState={0} Phase={1} Clock=T{2}",
-                                 _state, _phase, MemoryBoard.Instance.TState);
-                if (_setupDone)
-                {
-                    Console.WriteLine("\txOffset={0} lastSrc={1} srcAligned={2} LeftOver={3}",
-                                     _xOffset, _lastSrcPosition, _srcNeedsAligned, _leftOver);
-                    Console.WriteLine("\tMasks: Left={0:x4} Right={1:x4} Full={2:x4}",
-                                    _leftEdgeMask, _rightEdgeMask, _bothEdgesMask);
-                }
-            }
-        }
-
-        public void ShowFifos()
-        {
-            Console.WriteLine("Half pipeline register: {0}", _halfPipe);
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-            {
-                DumpFifo("Source FIFO:\n", _srcFifo);
-                DumpFifo("Destination FIFO:\n", _destFifo);
-            }
-            else
-            {
-                Console.WriteLine("Enable logging to show contents of FIFOs");
-            }
-#else
-            Console.WriteLine("Tracing must be enabled.");
-#endif
-        }
-
-        public void ShowRegs()
-        {
-            Console.WriteLine("CtlRasterOp:  {0}\n\tPhase={1} Dir={2} XtraSrcWord={3} Latch={4}",
-                             (_enabled ? "Enabled" : "Disabled"), _phase, _direction, _extraSrcWord, _latchOn);
-            Console.WriteLine("SrcRasterOp:  Func={0} WordPos={1} BitOffset={2}",
-                              _function, _srcWordPosition, _srcBitOffset);
-            Console.WriteLine("DstRasterOp:  Func={0} WordPos={1} BitOffset={2}",
-                              _function, _destWordPosition, _destBitOffset);
-#if SIXTEEN_K
-            Console.WriteLine("WidRasterOp:  XtraWords={0} XtraBits={1} MulDiv={2}",
-                              _widthExtraWords, _widthExtraBits, _muldivInst);
-#else
-            Console.WriteLine("WidRasterOp:  XtraWords={0} XtraBits={1}",
-                              _widthExtraWords, _widthExtraBits);
-#endif
-        }
-#endif
-
-        #endregion
 
         /// <summary>
         /// Sets the RasterOp Control Register, enabling or disabling the RasterOp
@@ -372,14 +252,14 @@ namespace PERQemu.Memory
             _destWordPosition = (value & 0x30) >> 4;
             _destBitOffset = (value & 0xf);
 
-            //#if TRACING_ENABLED
-            //            // Ugh, since the PERQ doesn't really have a NOOP, the assembler builds an
-            //            // instruction that does a dummy assignment to this register... which means
-            //            // a massive amount of spurious log spewage.
-            //            if (Trace.TraceOn)
-            //                Trace.Log(LogType.RasterOp, "DstRasterOp:  Func={0} WordPos={1} BitOffset={2}",
-            //                                                _function, _destWordPosition, _destBitOffset);
-            //#endif
+#if TRACING_ENABLED
+            // Ugh, since the PERQ doesn't really have a NOOP, the assembler builds an
+            // instruction that does a dummy assignment to this register... which means
+            // a massive amount of spurious log spewage.
+            //if (Trace.TraceOn)
+            //    Trace.Log(LogType.RasterOp, "DstRasterOp:  Func={0} WordPos={1} BitOffset={2}",
+            //                                 _function, _destWordPosition, _destBitOffset);
+#endif
         }
 
         /// <summary>
@@ -499,7 +379,8 @@ namespace PERQemu.Memory
             dest = _destFifo.Dequeue();
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: Returning result word: {0:x4}", dest.Data);
+            if (Trace.TraceOn)
+                Trace.Log(LogType.RasterOp, "RasterOp: Returning result word: {0:x4}", dest.Data);
 #endif
             return dest.Data;
         }
@@ -739,11 +620,8 @@ namespace PERQemu.Memory
 
 
             // For debugging, we return the ROpWord, updated with the combined result.
-            // At some point when this is fully debugged, I'll probably convert the dest
-            // FIFO to a simple queue of ushorts and just pass back the results.  That's
-            // more like the hardware, actually... no "dest fifo" at all, but with each
-            // stage (shifter, combiner, result) making up the difference in timing of
-            // the overlapped fetch/store cycle.
+            // At some point when this is fully debugged, the dest FIFO could be a
+            // simple queue of ushorts, which could improve efficiency.
             dest.Data = combined;
             return dest;
         }
@@ -876,9 +754,39 @@ namespace PERQemu.Memory
                     break;
 
                 default:
-                    throw new InvalidOperationException(String.Format("Unexpected state {0} in phase {1} NextState", _state, _phase));
+                    throw new InvalidOperationException(
+                        String.Format("Unexpected state {0} in phase {1} NextState", _state, _phase));
             }
             return next;
+        }
+
+        /// <summary>
+        /// Populates and returns a ROpWord with the address, index and data
+        /// of the current memory word (but throws an error if MDI is invalid).
+        /// </summary>
+        private ROpWord FetchNextWord()
+        {
+            ROpWord w = new ROpWord();
+
+            if (MemoryBoard.Instance.MDIValid)
+            {
+                // The microcode calculates the addresses and initiates fetches;
+                // we just pluck the next incoming word off the MDI.
+                w.Address = MemoryBoard.Instance.MADR;
+                w.Index = MemoryBoard.Instance.MIndex;
+                w.Data = MemoryBoard.Instance.MDI;
+            }
+            else
+            {
+#if DEBUG
+                // For debugging we just try to continue, but we're pretty hosed at this point...
+                Console.WriteLine("RasterOp: FetchNextWord while MDI was invalid!");
+                w.Clear();
+#else
+		        throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
+#endif
+            }
+            return w;
         }
 
         /// <summary>
@@ -948,9 +856,9 @@ namespace PERQemu.Memory
                 Trace.Log(LogType.RasterOp, "RasterOp: EdgeStrategy lookup {0:x3} --> {1}", lookup, result);
 #endif
 #if DEBUG
+            // Draw attention for debugging; should throw an exception in release version...
             if (result == EdgeStrategy.Unknown)
-                Console.WriteLine("==> Unknown edge strategy {0:x3}! <==", lookup);    // Draw attention for debugging...
-                                                                                       // should probably throw an exception in the release version... 
+                Console.WriteLine("==> Unknown edge strategy {0:x3}! <==", lookup);
 #endif
             return result;
         }
@@ -981,7 +889,8 @@ namespace PERQemu.Memory
                 if (_srcNeedsAligned)
                 {
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: --> Dropping leading word ({0})", w.Mask);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.RasterOp, "RasterOp: --> Dropping leading word ({0})", w.Mask);
 #endif
                     _srcFifo.Dequeue();
                 }
@@ -1036,35 +945,6 @@ namespace PERQemu.Memory
                     }
                 }
             }
-        }
-
-        /// <summary>
-        /// Populates and returns a ROpWord with the address, index and data
-        /// of the current memory word (but throws an error if MDI is invalid).
-        /// </summary>
-        private ROpWord FetchNextWord()
-        {
-            ROpWord w = new ROpWord();
-
-            if (MemoryBoard.Instance.MDIValid)
-            {
-                // The microcode calculates the addresses and initiates fetches;
-                // we just pluck the next incoming word off the MDI.
-                w.Address = MemoryBoard.Instance.MADR;
-                w.Index = MemoryBoard.Instance.MIndex;
-                w.Data = MemoryBoard.Instance.MDI;
-            }
-            else
-            {
-#if DEBUG
-                // For debugging we just try to continue, but we're pretty hosed at this point...
-                Console.WriteLine("RasterOp: FetchNextWord while MDI was invalid!");
-                w.Clear();
-#else
-                throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
-#endif
-            }
-            return w;
         }
 
         /// <summary>
@@ -1153,10 +1033,72 @@ namespace PERQemu.Memory
         }
 
 
+        #region Debugging
+
+#if DEBUG
+        public bool Debug
+        {
+            get { return _ropDebug; }
+            set { _ropDebug = value; }
+        }
+
+        public void ShowState()
+        {
+            Console.WriteLine("RasterOp debugging is {0}.", _ropDebug);
+            Console.WriteLine("RasterOp enabled is {0}.", _enabled);
+            if (_enabled)
+            {
+                Console.WriteLine("\tState={0} Phase={1} Clock=T{2}",
+                                 _state, _phase, MemoryBoard.Instance.TState);
+                if (_setupDone)
+                {
+                    Console.WriteLine("\txOffset={0} lastSrc={1} srcAligned={2} LeftOver={3}",
+                                     _xOffset, _lastSrcPosition, _srcNeedsAligned, _leftOver);
+                    Console.WriteLine("\tMasks: Left={0:x4} Right={1:x4} Full={2:x4}",
+                                    _leftEdgeMask, _rightEdgeMask, _bothEdgesMask);
+                }
+            }
+        }
+
+        public void ShowRegs()
+        {
+            Console.WriteLine("CtlRasterOp:  {0}\n\tPhase={1} Dir={2} XtraSrcWord={3} Latch={4}",
+                             (_enabled ? "Enabled" : "Disabled"), _phase, _direction, _extraSrcWord, _latchOn);
+            Console.WriteLine("SrcRasterOp:  Func={0} WordPos={1} BitOffset={2}",
+                              _function, _srcWordPosition, _srcBitOffset);
+            Console.WriteLine("DstRasterOp:  Func={0} WordPos={1} BitOffset={2}",
+                              _function, _destWordPosition, _destBitOffset);
+#if SIXTEEN_K
+            Console.WriteLine("WidRasterOp:  XtraWords={0} XtraBits={1} MulDiv={2}",
+                              _widthExtraWords, _widthExtraBits, _muldivInst);
+#else
+            Console.WriteLine("WidRasterOp:  XtraWords={0} XtraBits={1}",
+                              _widthExtraWords, _widthExtraBits);
+#endif
+        }
+
+        public void ShowFifos()
+        {
+            Console.WriteLine("Half pipeline register: {0}", _halfPipe);
 #if TRACING_ENABLED
+            if (Trace.TraceOn)
+            {
+                DumpFifo("Source FIFO:\n", _srcFifo);
+                DumpFifo("Destination FIFO:\n", _destFifo);
+            }
+            else
+            {
+                Console.WriteLine("Enable logging to show contents of FIFOs");
+            }
+#else
+            Console.WriteLine("Tracing must be enabled.");
+#endif
+        }
+
         // This is an expensive debugging aid...
         private void DumpFifo(String line, Queue<ROpWord> q)
         {
+#if TRACING_ENABLED
             if (Trace.TraceOn)
             {
                 if (q.Count > 0)
@@ -1174,9 +1116,17 @@ namespace PERQemu.Memory
                 }
                 Trace.Log(LogType.RasterOp, line);
             }
+#endif
         }
 #endif
+        #endregion
 
+
+        public enum Direction
+        {
+            LeftToRight,
+            RightToLeft
+        }
 
         private enum Function
         {
@@ -1220,6 +1170,7 @@ namespace PERQemu.Memory
             Unknown = 7
         }
 
+
         // RasterOp state
         private State _state;
         private Phase _phase;
@@ -1262,9 +1213,7 @@ namespace PERQemu.Memory
         private ushort _rightEdgeMask;
         private ushort _bothEdgesMask;
 
-        // Our own Shifter, so that we don't have to guess about the state of
-        // the CPU's shifter (used by an interrupt routine during pauses, for
-        // example) and reprogram it every cycle
+        // Our own Shifter (cheating; the hardware has only one)
         private Shifter _ropShifter;
 
         // The "half-pipeline register"
