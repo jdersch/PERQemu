@@ -170,7 +170,7 @@ namespace PERQemu.Display
                         _cursorY = _scanLine;
 #if TRACING_ENABLED
                         if (Trace.TraceOn)
-                            Trace.Log(LogType.Tablet, "Cursor Y set to {0}", _cursorY);
+                            Trace.Log(LogType.Display, "Cursor Y set to {0}", _cursorY);
 #endif
                     }
 
@@ -204,7 +204,7 @@ namespace PERQemu.Display
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Cursor X set to {0} (value={1})", _cursorX, value);
+                        Trace.Log(LogType.Display, "Cursor X set to {0} (value={1})", _cursorX, value);
 #endif
                     break;
 

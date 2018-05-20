@@ -160,8 +160,8 @@ namespace PERQemu.IO.GPIB
 #if TRACING_ENABLED
                 // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
                 if (Trace.TraceOn)
-                    Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} update={3}",
-                                        x, y, button, _lastUpdate);
+                    Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} ({3}) update={4}",
+                                               x, y, button, (char)_buttonMapping[button], _lastUpdate);
 #endif
                 _lastUpdate = 0;
             }
@@ -227,8 +227,8 @@ namespace PERQemu.IO.GPIB
         private bool _talking;
         private bool _listening;
 
-        private readonly byte[] _buttonMapping = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-                                                   0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
+        private readonly byte[] _buttonMapping = { 0x30, 0x32, 0x31, 0x33, 0x38, 0x35, 0x36, 0x37,
+                                                   0x34, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
         private const byte _delimiter1 = 0x2c;      // ,
         private const byte _delimiter2 = 0x0a;      // LF
     }

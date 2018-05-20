@@ -231,6 +231,20 @@ namespace PERQemu.Display
             _mouseY = e.Y;
         }
 
+        /// <summary>
+        /// Map the host mouse buttons to the Kriz tablet (passed straight through).
+        /// The GPIB BitPad does its own mapping, since the four-button puck has a
+        /// slightly strange layout.  Here's the chart:
+        ///
+        ///     host        Kriz        BitPad
+        /// 0x8 XButton1    n/a         0x4 blue    or: alt+right
+        /// 0x4 Right       0x4 right   0x8 green
+        /// 0x2 Middle      0x2 middle  0x1 yellow  or: alt+left
+        /// 0x1 Left        0x1 left    0x2 white
+        /// 
+        /// If we emulated the 1-button stylus or the 16-button mega puck we'd have
+        /// to monkey with the mappings, but this is complicated enough...
+        /// </summary>
         void OnMouseDown(object sender, MouseEventArgs e)
         {
             switch (e.Button)
@@ -239,16 +253,16 @@ namespace PERQemu.Display
                     _mouseButton = 0x8;
                     break;
 
-                case MouseButtons.Middle:
-                    _mouseButton = 0x4;
+                case MouseButtons.Right:
+                    _mouseButton = _mouseAltButton ? 0x8 : 0x4;
                     break;
 
-                case MouseButtons.Right:
-                    _mouseButton = _mouseAltButton ? 0x8 : 0x2;
+                case MouseButtons.Middle:
+                    _mouseButton = 0x2;
                     break;
 
                 case MouseButtons.Left:
-                    _mouseButton = _mouseAltButton ? 0x4 : 0x1;
+                    _mouseButton = _mouseAltButton ? 0x2 : 0x1;
                     break;
             }
         }
@@ -378,9 +392,9 @@ namespace PERQemu.Display
             // The following allow special modifiers that make Kriz tablet / BitPadOne tablet
             // manipulation using a standard PC mouse easier:
             //  - If Alt is held down, the Kriz tablet is put into "puck off tablet" mode
-            //    which allows relative mode to work better (though it's still pretty clumsy.)
-            //  - If Ctrl is held down, The Left mouse button simulates Kriz/GPIB button 3 (instead of 1)
-            //    and the Right mouse button simulates GPIB button 4 (instead of 2)
+            //    which allows relative mode to work better (though it's still pretty clumsy)
+            //  - If Ctrl is held down, The Left mouse button simulates Kriz/GPIB middle button
+            //    and the Right mouse button simulates GPIB button 4 (blue; n/a on Kriz)
             //
             if (e.Alt)
             {
