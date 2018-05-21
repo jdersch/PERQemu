@@ -119,7 +119,7 @@ oct     hex     name            function                            source
 042     22      ReadData        read link data                      (diagnostic)
 045     25      RdLnkReg        read link prom register             (diagnostic)
 204     84/04   LineCount*      load canon lines-per-band reg       Canon.MicroMac
-204     84/04   StrDataSnd*     load stremaer data                  tsio
+204     84/04   StrDataSnd*     load streamer data                  tsio
 205     85/05   CanonCntl       5-bit canon control port            Canon.MicroMac
 206     86/06   StrControl      load streamer control               tsio
 210     88/08   E10OWrUSCR      load usec clock control             ioe10
@@ -161,7 +161,7 @@ versa.  Microcode would need some kind of interlock, like the E3/disk thing.  Si
 
 iob address
 oct     hex     name            function                            source
-160     70      ioClock         read clock?                         iopas.dfs
+160     70      ioClock         read microsecond clock              iopas.dfs
 171     79      E3RdRecWdCnt    read recv word count register       ioe3
 173     7B      E3RdCSR         read network ctrl status reg        ioe3
 175     7D      E3RdXmtWdCnt    read xmit word count register       ioe3
@@ -202,8 +202,6 @@ Multibus microcode only supported the EIO; uses DMA setup registers 300, 324:327
 IOB(0) is a weird special case: it only explicitly occurs in multibus/tape/micro/iorwregs.micro.
 Accent literally modifies the microinstruction to read or write any IO register (part of the
 kernel debugger).  So this is likely just a stand-in so the microassembler won't flag an error.
-(The modified instruction sets the Z field the register to be read/written; the same trick is used
-to modify the X/Y fields to read and write registers in the debugger.  Wild.  Does PERQemu handle
-this correctly?  Do we invalidate the microinstruction cache when a WCSHi/Mid/Low instruction is
-executed?)
+The modified instruction sets the Z field the register to be read/written; the same trick is used
+to modify the X/Y fields to read and write registers in the debugger.  Wild.
 

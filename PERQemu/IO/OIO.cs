@@ -73,10 +73,19 @@ namespace PERQemu.IO
         /// <returns></returns>
         public int IORead(byte ioPort)
         {
-            int retVal = 0xff;
+            int retVal = 0xffff;        // Return -1?  Assume IO devices are active low?
 
             switch (ioPort)
             {
+                case 0x06:
+                case 0x07:  // lo, hi Ethernet bit counter
+                    retVal = 0;   // always return 0 for now?
+                    break;
+
+                case 0x0f:  // fake Ethernet status register
+                    retVal = (_fakeEtherCSR == 0x20 ? 0x4 : 0x8);   // if reset, return done; else busy?
+                    break;
+
                 case 0x20:  // PERQlink input status port
                     retVal = _link.ReadCommandStatus();
                     break;
@@ -93,7 +102,6 @@ namespace PERQemu.IO
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Warnings, "Unhandled OIO Read from port {0:x2}.", ioPort);
 #endif
-                    retVal = 0xff;
                     break;
             }
 
@@ -109,6 +117,10 @@ namespace PERQemu.IO
         {
             switch (ioPort)
             {
+                case 0x99:  // fake Ethernet control register
+                    _fakeEtherCSR = value;
+                    break;
+
                 case 0xa1:  // PERQlink output status
                     _link.WriteCommandStatus(value);
                     break;
@@ -186,8 +198,12 @@ namespace PERQemu.IO
             // Streamer ports (TODO: not yet implemented)
             0x0d,   // 015 StrStat: read streamer state
             0x0e,   // 016 StrDataRcv: read streamer data
-         // 0x84,   // 204 StrDataSnd: load streamer data[*] Conflicts with Canon
+         // 0x84,   // 204 StrDataSnd: load streamer data[*] Conflicts with Canon!
             0x86    // 206 StrCntrl: load streamer control
         };
+
+        // fake Ethernet control register
+        private int _fakeEtherCSR;
+
     }
 }

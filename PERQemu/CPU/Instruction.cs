@@ -101,9 +101,7 @@ namespace PERQemu.CPU
                         if (Trace.TraceOn)
                             Trace.Log(LogType.Warnings,
                                     "Leap specified, not implemented on the 4K CPU.  Jumped to {0:x4} instead, not {1:x4}",
-                                    NextAddress,
-                                    (ushort)((NotZ) | ((0xff & (~Y)) << 8)) & 0x3fff)
-                            );
+                                    NextAddress, (ushort)((NotZ) | ((0xff & (~Y)) << 8)) & 0x3fff);
 #endif
 #endif
                     }

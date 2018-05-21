@@ -1,4 +1,4 @@
-// iz80device.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// iz80device.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -27,5 +27,15 @@ namespace PERQemu.IO.Z80.IOB
         void Poll(ref Queue<byte> fifo);
 
         void Reset();
+
+        ReadyFlags BusyBit
+        {
+            get;
+        }
+
+        int BusyClocks
+        {
+            get; set;
+        }
     }
 }

@@ -1,4 +1,4 @@
-// debuggerprompt.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// debuggerprompt.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -50,7 +50,7 @@ namespace PERQemu.Debugger
                 // Read one keystroke from the console...
                 ConsoleKeyInfo key = Console.ReadKey(true);
 
-                //Parse special chars...
+                // Parse special chars...
                 switch (key.Key)
                 {
                     case ConsoleKey.Escape:     // Clear input
@@ -128,8 +128,15 @@ namespace PERQemu.Debugger
             // Done.  Add to history if input is non-empty
             if (_input != string.Empty)
             {
-                _commandHistory.Add(_input);
+                // Reset our index to the last command saved
                 HistoryIndex = _commandHistory.Count - 1;
+
+                // If same as the last command, don't add the repeats...
+                if (HistoryIndex == 0 || _input != _commandHistory[HistoryIndex])
+                {
+                    _commandHistory.Add(_input);
+                    HistoryIndex = _commandHistory.Count - 1;
+                }
             }
 
             return _input;
@@ -226,24 +233,27 @@ namespace PERQemu.Debugger
 
         private void HistoryPrev()
         {
-            HistoryIndex--;
-
             if (HistoryIndex < _commandHistory.Count)
             {
                 _input = _commandHistory[HistoryIndex];
                 TextPosition = _input.Length;
             }
+            HistoryIndex--;
         }
 
         private void HistoryNext()
         {
-            HistoryIndex++;
-
-            if (HistoryIndex < _commandHistory.Count)
+            // Already at the last command or haven't entered one yet?
+            if (_commandHistory.Count == 0 || HistoryIndex == _commandHistory.Count - 1)
             {
-                _input = _commandHistory[HistoryIndex];
-                TextPosition = _input.Length;
+                _input = string.Empty;      // reset command line
             }
+            else
+            {
+                HistoryIndex++;
+                _input = _commandHistory[HistoryIndex];
+            }
+            TextPosition = _input.Length;
         }
 
         private void MoveToBeginning()
@@ -332,7 +342,7 @@ namespace PERQemu.Debugger
                 }
             }
 
-            if ( match == null )
+            if (match == null)
             {
                 // No exact match.  Try a substring match.
                 // If we have an unambiguous match then we can complete it automatically.
@@ -366,7 +376,7 @@ namespace PERQemu.Debugger
             {
                 // If we reach this point then no matches are available.  Return the tokens we have...
                 StringBuilder sb = new StringBuilder();
-                for(int i=0;i<tokens.Count;i++)
+                for(int i = 0; i < tokens.Count; i++)
                 {
                     if (i < tokens.Count - 1)
                     {

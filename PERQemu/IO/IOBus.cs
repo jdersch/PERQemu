@@ -91,12 +91,14 @@ namespace PERQemu.IO
 
         public void IOWrite(byte ioPort, int value)
         {
+            value &= 0xffff;    // IOD is 16 bits wide; trim upper bits from 20 (or 24 :-) bit registers
+
             if (_deviceDispatch[ioPort] == null)
             {
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
                     Trace.Log(LogType.Warnings,
-                             "No device registered for IO port {0:x2} write ({1:x2})", ioPort, value);
+                             "No device registered for IO port {0:x2} write ({1:x4})", ioPort, value);
 #endif
                 return;
             }
