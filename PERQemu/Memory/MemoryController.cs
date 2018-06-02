@@ -18,516 +18,520 @@
 
 using System;
 using System.IO;
-#if DEBUG
-using System.Diagnostics;
-#endif
 
 using PERQemu.CPU;
 
 namespace PERQemu.Memory
 {
-	
-	public enum MemoryState
-	{
-		Idle = 0,
-		WaitForT3,
-		WaitForT2,
-		Running
-	}
+
+    public enum MemoryState
+    {
+        Idle = 0,
+        WaitForT3,
+        WaitForT2,
+        Running
+    }
 
 
-	/// <summary>
-	/// Represents a request to the memory subsystem.
-	/// </summary>
-	public struct MemoryRequest
-	{
-		public void Clear()
-		{
-			_reqID = -1;
-			_startAddr = -1;
-			_cycleType = MemoryCycle.None;
-			_bookmark = 0;
-			_active = false;
-		}
+    /// <summary>
+    /// Represents a request to the memory subsystem.
+    /// </summary>
+    public struct MemoryRequest
+    {
+        public void Clear()
+        {
+            _reqID = -1;
+            _startAddr = -1;
+            _cycleType = MemoryCycle.None;
+            _bookmark = 0;
+            _active = false;
+        }
 
-		public override string ToString()
-		{
-			return String.Format("ID={0} addr={1:x5} cycle={2} bookmark={3} active={4}",
-								 _reqID, _startAddr, _cycleType, _bookmark, _active);
-		}
+        public override string ToString()
+        {
+            return String.Format("ID={0} addr={1:x5} cycle={2} bookmark={3} active={4}",
+                                 _reqID, _startAddr, _cycleType, _bookmark, _active);
+        }
 
-		public long RequestID
-		{
-			get { return _reqID; }
-			set { _reqID = value; }
-		}
+        public long RequestID
+        {
+            get { return _reqID; }
+            set { _reqID = value; }
+        }
 
-		public int StartAddress
-		{
-			get { return _startAddr; }
-			set { _startAddr = value; }
-		}
+        public int StartAddress
+        {
+            get { return _startAddr; }
+            set { _startAddr = value; }
+        }
 
-		public MemoryCycle CycleType
-		{
-			get { return _cycleType; }
-			set { _cycleType = value; }
-		}
+        public MemoryCycle CycleType
+        {
+            get { return _cycleType; }
+            set { _cycleType = value; }
+        }
 
-		public int Bookmark
-		{
-			get { return _bookmark; }
-			set { _bookmark = value; }
-		}
+        public int Bookmark
+        {
+            get { return _bookmark; }
+            set { _bookmark = value; }
+        }
 
-		public bool Active
-		{
-			get { return _active; }
-			set { _active = value; }
-		}
+        public bool Active
+        {
+            get { return _active; }
+            set { _active = value; }
+        }
 
-		private long _reqID;
-		private int _startAddr;
-		private MemoryCycle _cycleType;
-		private int _bookmark;
-		private bool _active;
-	}
-
-
-	/// <summary>
-	/// A bookmark value comprises a set of flags, a word index, and next state value.  These are
-	/// read from the BKM16 ROM and are consulted each cycle to drive the memory state machine.
-	/// </summary>
-	public struct BookmarkEntry
-	{
-		public BookmarkEntry(byte result)
-		{
-			Abort = ((result & 0x80) != 0);
-			Recognize = ((result & 0x40) != 0);
-			Complete = ((result & 0x20) != 0);
-			Valid = ((result & 0x10) != 0);
-			Index = (int)(result & 0x0c) >> 2;
-			NextState = (MemoryState)(result & 0x03);
-		}
-
-		public override string ToString()
-		{
-			return string.Format("PA={0} ST={1} CO={2} VA={3} idx={4} next={5}",
-								Abort, Recognize, Complete, Valid, Index, NextState);
-		}
-
-		public bool Abort;
-		public bool Recognize;
-		public bool Complete;
-		public bool Valid;
-		public int Index;
-		public MemoryState NextState;
-	}
+        private long _reqID;
+        private int _startAddr;
+        private MemoryCycle _cycleType;
+        private int _bookmark;
+        private bool _active;
+    }
 
 
-	/// <summary>
-	/// Object to keep track of the Memory board's input and output queues.  Instantiating one
-	/// each for Stores and Fetches dramatically simplifies the overlapping quad-word read/write
-	/// cycles used by RasterOp.  The MemoryController handles all of the arcane timing requirements,
-	/// generates CPU Wait (and IO Hold eventually) states when necessary, and calculates the address
-	/// for the appropriate word in the quad as each request executes.
-	/// </summary>
-	public class MemoryController
-	{
-		public MemoryController(string name)
-		{
-			_name = name;
-			_bkmTable = new BookmarkEntry[256];
+    /// <summary>
+    /// A bookmark value comprises a set of flags, a word index, and next state value.
+    /// These are read from the BKM16 ROM and are consulted each cycle to drive the
+    /// memory state machine.
+    /// </summary>
+    public struct BookmarkEntry
+    {
+        public BookmarkEntry(byte result)
+        {
+            Abort = ((result & 0x80) != 0);
+            Recognize = ((result & 0x40) != 0);
+            Complete = ((result & 0x20) != 0);
+            Valid = ((result & 0x10) != 0);
+            Index = (int)(result & 0x0c) >> 2;
+            NextState = (MemoryState)(result & 0x03);
+        }
 
-			LoadBookmarkROM();
+        public override string ToString()
+        {
+            return string.Format("PA={0} ST={1} CO={2} VA={3} idx={4} next={5}",
+                                Abort, Recognize, Complete, Valid, Index, NextState);
+        }
 
-			Reset();
-		}
-
-		public void Reset()
-		{
-			_state = _nextState = MemoryState.Idle;
-			_bookmark = _nextBookmark = 0;
-
-			_current = new MemoryRequest();
-			_current.Clear();
-
-			_pending = new MemoryRequest();
-			_pending.Clear();
-
-			_address = -1;
-			_index = 0;
-			_wait = false;
-			_valid = false;
-
-#if TRACING_ENABLED
-			if (Trace.TraceOn) Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
-#endif
-		}
-
-		public bool Wait
-		{
-			get { return _wait; }
-		}
-
-		public bool Valid
-		{
-			get { return _valid; }
-		}
-
-		public int Address
-		{
-			get { return _address; }
-		}
-
-		public int WordIndex
-		{
-			get { return _index; }
-		}
-
-		public MemoryCycle Cycle
-		{
-			get { return _current.CycleType; }
-		}
-
-		public MemoryState State
-		{
-			get { return _state; }
-		}
-
-		private int Tstate
-		{
-			get { return MemoryBoard.Instance.TState; }     // too lazy to type this over and over
-		}
+        public bool Abort;
+        public bool Recognize;
+        public bool Complete;
+        public bool Valid;
+        public int Index;
+        public MemoryState NextState;
+    }
 
 
-		/// <summary>
-		/// Clocks this memory queue's state machine, setting flags appropriately for the current
-		/// running request, or setting up for the next one.  Called from Memory.Tick(), this
-		/// executes at the top of the microcycle, so it may abort the current instruction if a 
-		/// new request is issued at the wrong time.
-		/// </summary>
-		public void Clock(MemoryCycle nextCycle)
-		{
-#if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-						 _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
-#endif
-			// Update the current op
-			Recognize();
+    /// <summary>
+    /// Object to keep track of the Memory board's input and output queues.  Instantiating
+    /// one each for Stores and Fetches dramatically simplifies the overlapping quad-word
+    /// read/write cycles used by RasterOp.  The MemoryController handles all of the arcane
+    /// timing requirements, generates CPU Wait (and IO Hold eventually?) states when needed,
+    /// and calculates the address for the appropriate word in the quad as each request executes.
+    /// </summary>
+    public class MemoryController
+    {
+        public MemoryController(string name)
+        {
+            _name = name;
+            _bkmTable = new BookmarkEntry[256];
 
-			// Update state and set flags for this cycle
-			RunStateMachine();
+            LoadBookmarkROM();
 
-			// Update bookmarks for the next cycle
-			UpdateBookmarks(nextCycle);
+            Reset();
+        }
+
+        public void Reset()
+        {
+            _state = _nextState = MemoryState.Idle;
+            _bookmark = _nextBookmark = 0;
+
+            _current = new MemoryRequest();
+            _current.Clear();
+
+            _pending = new MemoryRequest();
+            _pending.Clear();
+
+            _address = -1;
+            _index = 0;
+            _wait = false;
+            _valid = false;
 
 #if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-						 _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+            if (Trace.TraceOn) Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
 #endif
-		}
+        }
+
+        public bool Wait
+        {
+            get { return _wait; }
+        }
+
+        public bool Valid
+        {
+            get { return _valid; }
+        }
+
+        public int Address
+        {
+            get { return _address; }
+        }
+
+        public int WordIndex
+        {
+            get { return _index; }
+        }
+
+        public MemoryCycle Cycle
+        {
+            get { return _current.CycleType; }
+        }
+
+        public MemoryState State
+        {
+            get { return _state; }
+        }
+
+        private int Tstate
+        {
+            get { return MemoryBoard.Instance.TState; }     // too lazy to type this over and over
+        }
 
 
-		/// <summary>
-		/// Accept a new memory request (at the bottom of the CPU cycle, after R is computed).  Because
-		/// the CPU now aborts until the correct cycle when issuing new memory operations, we simply
-		/// latch the new request and let the state machine mechanism do all the right magic at the
-		/// next Clock().
-		/// </summary>
-		public void Request(long id, int startAddr, MemoryCycle cycleType)
-		{
+        /// <summary>
+        /// Clocks this memory queue's state machine, setting flags appropriately for
+        /// the current running request, or setting up for the next one.  Called from
+        /// Memory.Tick(), this executes at the top of the microcycle, so it may abort 
+        /// the current instruction if a new request is issued at the wrong time.
+        /// </summary>
+        public void Clock(MemoryCycle nextCycle)
+        {
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+#endif
+            // Update the current op
+            Recognize();
+
+            // Update state and set flags for this cycle
+            RunStateMachine();
+
+            // Update bookmarks for the next cycle
+            UpdateBookmarks(nextCycle);
+
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+#endif
+        }
+
+
+        /// <summary>
+        /// Accept a new memory request (at the bottom of the CPU cycle, after R is
+        /// computed).  Because the CPU now aborts until the correct cycle when issuing
+        /// new memory operations, we simply latch the new request and let the state
+        /// machine mechanism do all the right magic at the next Clock().
+        /// </summary>
+        public void Request(long id, int startAddr, MemoryCycle cycleType)
+        {
 #if DEBUG
-			if (_pending.Active)
-				Console.WriteLine("{0} queue: ** new Request() when _pending already Active?", _name);
+            if (_pending.Active)
+                Console.WriteLine("{0} queue: ** new Request() when _pending already Active?", _name);
 #endif
-			_pending.RequestID = id;
-			_pending.StartAddress = startAddr;
-			_pending.CycleType = cycleType;
+            _pending.RequestID = id;
+            _pending.StartAddress = startAddr;
+            _pending.CycleType = cycleType;
 
-			_pending.Active = true;
-			_pending.Bookmark = _nextBookmark;
-		}
+            _pending.Active = true;
+            _pending.Bookmark = _nextBookmark;
+        }
 
 
-		/// <summary>
-		/// If the current op is complete and a pending op is ready, promote it.
-		/// </summary>
-		private void Recognize()
-		{
-			if (_pending.Active && !_current.Active)
-			{
-				_current = _pending;
-				_bookmark = _current.Bookmark;
+        /// <summary>
+        /// If the current op is complete and a pending op is ready, promote it.
+        /// </summary>
+        private void Recognize()
+        {
+            if (_pending.Active && !_current.Active)
+            {
+                _current = _pending;
+                _bookmark = _current.Bookmark;
 #if TRACING_ENABLED
-				if (Trace.TraceOn)
-					Trace.Log(LogType.MemoryState, "{0} queue: Recognized {1}", _name, _current);
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.MemoryState, "{0} queue: Recognized {1}", _name, _current);
 #endif
-				_pending.Clear();
-			}
-		}
+                _pending.Clear();
+            }
+        }
 
-		/// <summary>
-		/// Update the current state of the controller, and computes the address and index of
-		/// the current op if applicable.
-		/// </summary>
-		private void RunStateMachine()
-		{
-			BookmarkEntry flags;
+        /// <summary>
+        /// Update the current state of the controller, and computes the address and
+        /// index of the current op if applicable.
+        /// </summary>
+        private void RunStateMachine()
+        {
+            BookmarkEntry flags;
 
-			// Bump the state
-			_state = _nextState;
+            // Bump the state
+            _state = _nextState;
 
-			// Get the flags for the current bookmark
-			flags = GetBookmarkEntry(_bookmark, _state);
+            // Get the flags for the current bookmark
+            flags = GetBookmarkEntry(_bookmark, _state);
 
-			// Set the wait and next state based on the current flags
-			_wait = flags.Abort;
-			_nextState = flags.NextState;
+            // Set the wait and next state based on the current flags
+            _wait = flags.Abort;
+            _nextState = flags.NextState;
 
-			// If we need to read or write this cycle, compute the address for this word
-			_valid = flags.Valid;
+            // If reading or writing this cycle, compute the address for this word
+            _valid = flags.Valid;
 
-			if (_valid)
-			{
-				_index = flags.Index;
+            if (_valid)
+            {
+                _index = flags.Index;
 
-				switch (_current.CycleType)
-				{
-					case MemoryCycle.Fetch4R:
-					case MemoryCycle.Fetch4:
-					case MemoryCycle.Store4R:
-					case MemoryCycle.Store4:
-						_address = (_current.StartAddress & 0xffffc) + _index;
+                switch (_current.CycleType)
+                {
+                    case MemoryCycle.Fetch4R:
+                    case MemoryCycle.Fetch4:
+                    case MemoryCycle.Store4R:
+                    case MemoryCycle.Store4:
+                        _address = (_current.StartAddress & 0xffffc) + _index;
 
-						break;
+                        break;
 
-					case MemoryCycle.Fetch2:
-					case MemoryCycle.Store2:
-						_address = (_current.StartAddress & 0xffffe) + _index;
-						break;
+                    case MemoryCycle.Fetch2:
+                    case MemoryCycle.Store2:
+                        _address = (_current.StartAddress & 0xffffe) + _index;
+                        break;
 
-					default:
-						_address = _current.StartAddress;
-						break;
-				}
-			}
+                    default:
+                        _address = _current.StartAddress;
+                        break;
+                }
+            }
 
-			// If this is the last word in a cycle, retire the current op
-			if (flags.Complete)
-			{
+            // If this is the last word in a cycle, retire the current op
+            if (flags.Complete)
+            {
 #if TRACING_ENABLED
-				if (Trace.TraceOn)
-					Trace.Log(LogType.MemoryState, "{0} queue: Retired {1}", _name, _current);
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.MemoryState, "{0} queue: Retired {1}", _name, _current);
 #endif
-				_current.Clear();
-				_bookmark = 0;
-			}
-		}
+                _current.Clear();
+                _bookmark = 0;
+            }
+        }
 
-		/// <summary>
-		/// Sets bookmarks for the next cycle, and modifies the current cycle if necessary.
-		/// WARNING: THIS IS WHERE THE SAUSAGE IS MADE.
-		/// </summary>
-		private void UpdateBookmarks(MemoryCycle nextCycle)
-		{
-			if (nextCycle == MemoryCycle.None)
-			{
-				// If no active or pending op, reset our bookmark
-				if (!_current.Active && !_pending.Active)
-				{
-					_bookmark = 0;
-				}
-			}
-			else
-			{
-				// This microinstruction specifies a new memory request: initialize the next bookmark value
-				// based on the request type
-				int book = (int)nextCycle;
+        /// <summary>
+        /// Sets bookmarks for the next cycle, and modifies the current one if necessary.
+        /// WARNING: THIS IS WHERE THE SAUSAGE IS MADE.
+        /// </summary>
+        private void UpdateBookmarks(MemoryCycle nextCycle)
+        {
+            if (nextCycle == MemoryCycle.None)
+            {
+                // If no active or pending op, reset our bookmark
+                if (!_current.Active && !_pending.Active)
+                {
+                    _bookmark = 0;
+                }
+            }
+            else
+            {
+                // This microinstruction specifies a new memory request: initialize
+                // the next bookmark value based on the request type
+                int book = (int)nextCycle;
 
-				// 
-				// Special cases for RasterOp
-				//
-				if (RasterOp.Instance.Enabled)
-				{
-					if (Tstate == 0)
-					{
-						// First: we're allowed to issue Store4/4R in T0, ahead of the usual T3.  So we tweak
-						// the cycle type to index the bookmark ROM with the modified timings.
-						if (nextCycle == MemoryCycle.Store4R)
-						{
-							book = 0x2;         // "RopStore4R"
-						}
-						else if (nextCycle == MemoryCycle.Store4)
-						{
-							book = 0x4;         // "RopStore4"
-						}
-					}
-					else if (Tstate == 3)
-					{
-						//
-						// Second: Fetch4/4Rs are issued back-to-back (in the correct t3) but must NOT introduce
-						// the possible CPU aborts of a WaitT2 state -- MDI must remain valid AND the index values
-						// must count down correctly for the operation in progress, so that after the t0,t1
-						// complete the next op's four words arrive in the four subsequent Tstates.  This
-						// introduces two additional fake cycle types, as with the special case above.  Ugh..
-						//
-						if (_current.CycleType == MemoryCycle.Fetch4R && nextCycle == MemoryCycle.Fetch4R)
-						{
-							_bookmark = book = 0x1;		// "RopFetch4R"
-						}
-						else if (_current.CycleType == MemoryCycle.Fetch4 && nextCycle == MemoryCycle.Fetch4)
-						{
-							_bookmark = book = 0x3;  	// "RopFetch4"
-						}
-					}
-				}
+                // 
+                // Special cases for RasterOp
+                //
+                if (RasterOp.Instance.Enabled)
+                {
+                    if (Tstate == 0)
+                    {
+                        // First: we're allowed to issue Store4/4R in T0, ahead of the
+                        // usual T3.  So we tweak the cycle type to index the bookmark
+                        // ROM with the modified timings.
+                        if (nextCycle == MemoryCycle.Store4R)
+                        {
+                            book = 0x2;         // "RopStore4R"
+                        }
+                        else if (nextCycle == MemoryCycle.Store4)
+                        {
+                            book = 0x4;         // "RopStore4"
+                        }
+                    }
+                    else if (Tstate == 3)
+                    {
+                        //
+                        // Second: Fetch4/4Rs are issued back-to-back (in the correct t3)
+                        // but must NOT introduce the possible CPU abort of a WaitT2 state;
+                        // MDI must remain valid AND the index values must count down correctly
+                        // for the operation in progress, so that after the t0,t1 complete the
+                        // next op's four words arrive in the four subsequent Tstates.  This
+                        // introduces two additional fake cycle types, as with the case above.  Ugh..
+                        //
+                        if (_current.CycleType == MemoryCycle.Fetch4R && nextCycle == MemoryCycle.Fetch4R)
+                        {
+                            _bookmark = book = 0x1;     // "RopFetch4R"
+                        }
+                        else if (_current.CycleType == MemoryCycle.Fetch4 && nextCycle == MemoryCycle.Fetch4)
+                        {
+                            _bookmark = book = 0x3;     // "RopFetch4"
+                        }
+                    }
+                }
 
-				// For the RasterOp special cases, use the modified bookmark for the entire cycle
-				_nextBookmark = book;
+                // For RasterOp special cases, use the modified bookmark for the entire cycle
+                _nextBookmark = book;
 
-				//
-				// Special cases for indirect or overlapped Fetches (non-RasterOp)
-				//
-				if (MemoryBoard.Instance.IsFetch(nextCycle))
-				{
-					//
-					// Back-to-back Fetch or Fetch2 requests present unique timing challenges (and allow a small
-					// performance boost by eliminating some wait states).  To accommodate this with as little
-					// embarrassment as possible, we use a transitional bookmark value to cover the overlap.
-					// For a Fetch, this may terminate the op early, invalidating one or more time slots where
-					// MDI is valid (and forcing a CPU wait so that incorrect data is not returned).  In other
-					// cases we have to let the current op retire normally but drop immediately into a WaitT2
-					// (rather than WaitT3) for the new op.  There's no pretty way to deal with this...
-					//
-					// Gory details in the comments at the bottom, but look away now for "plausible deniability".
-					//
-					if (_current.CycleType == MemoryCycle.Fetch || _current.CycleType == MemoryCycle.Fetch2)
-					{
-						book = 0x6;                     // "IndFetch" covers the overlap...
-						_bookmark = book;               // ...force immediate switch for the (t2,t3)...
-						_nextBookmark = (int)nextCycle; // ...but switch back to the real cycle type in Request()
-					}
-					else if (_current.CycleType == MemoryCycle.Fetch4 && !RasterOp.Instance.Enabled)
-					{
-						book = 0x7;                     // "IndFetch4" is for the specific case of a RefillOp
-						_bookmark = book;               // followed immediately by another Fetch; can't clobber the
-						_nextBookmark = (int)nextCycle; // last index word, or the last two OpFile bytes are screwed
-					}
-				}
+                //
+                // Special cases for indirect or overlapped Fetches (non-RasterOp)
+                //
+                if (MemoryBoard.Instance.IsFetch(nextCycle))
+                {
+                    //
+                    // Back-to-back Fetch or Fetch2 requests present unique timing challenges
+                    // (and allow a small performance boost by eliminating some wait states).
+                    // To accommodate this with as little embarrassment as possible, we use a
+                    // transitional bookmark value to cover the overlap. For a Fetch, this may
+                    // terminate the op early, invalidating one or more time slots where MDI is
+                    // valid (and forcing a CPU wait so that incorrect data is not returned).
+                    // In other cases we have to let the current op retire normally but drop
+                    // immediately into a WaitT2 (rather than WaitT3) for the new op.  There's
+                    // no pretty way to deal with this...
+                    //
+                    // Gory details in the comments below.  Look away now for "plausible deniability".
+                    //
+                    if (_current.CycleType == MemoryCycle.Fetch || _current.CycleType == MemoryCycle.Fetch2)
+                    {
+                        book = 0x6;                     // "IndFetch" covers the overlap...
+                        _bookmark = book;               // ...force immediate switch for the (t2,t3)...
+                        _nextBookmark = (int)nextCycle; // ...but switch back to the real cycle type in Request()
+                    }
+                    else if (_current.CycleType == MemoryCycle.Fetch4 && !RasterOp.Instance.Enabled)
+                    {
+                        book = 0x7;                     // "IndFetch4" is for the specific case of a RefillOp
+                        _bookmark = book;               // followed immediately by another Fetch; can't clobber the
+                        _nextBookmark = (int)nextCycle; // last index word, or the last two OpFile bytes are screwed
+                    }
+                }
 
-				// Get a new set of flags -- these may modify the current cycle!
-				BookmarkEntry flags = GetBookmarkEntry(book, _nextState);
-
-#if DEBUG
-				// If the Recognize flag is not set, we're really out in left field...
-				// ... but all of this can go away entirely once things are fully debugged.
-				if (!flags.Recognize)
-				{
-					Console.WriteLine("-->\t{0} queue: Recognize not set for new {1} request in T{2}!", _name, nextCycle, Tstate);
-
-					// If the Abort flag isn't set either, our BKM16 ROM is buggy; force an
-					// abort and just hope for the best?
-					if (!flags.Abort)
-					{
-						Console.WriteLine("-->\tForced abort in T{0} due to new request in wrong cycle.", Tstate);
-						Console.WriteLine("\tFlags: {0}", flags);
-						DumpQueue();
-						flags.Abort = true;
-						// PERQSystem.Instance.Break();
-					}
-				}
-#endif
-
-				// If the done flag is set, retire the current op (may be early, if a Fetch is overlapped)
-				if (flags.Complete)
-				{
-#if TRACING_ENABLED
-					if (Trace.TraceOn)
-						Trace.Log(LogType.MemoryState, "{0} queue: Terminated {1}", _name, _current);
-#endif
-					_current.Clear();
-				}
-
-				// Set the wait and next state based on the new flags
-				_wait = flags.Abort;
-				_nextState = flags.NextState;
-			}
-		}
-
-
-		/// <summary>
-		/// Gets the bookmark for a particular cycle type.
-		/// </summary>
-		private BookmarkEntry GetBookmarkEntry(int book, MemoryState state)
-		{
-			//
-			// Index into the "bookmark" table:
-			//		bits	value
-			//		7:4		bookmark (cycle type)
-			//		3:2		current state
-			//		1:0		current Tstate
-			//
-			int lookup = (((int)book & 0x0f) << 4) | ((int)state << 2) | Tstate;
-#if TRACING_ENABLED
-			if (Trace.TraceOn)
-				Trace.Log(LogType.MemoryState, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
-#endif
-			return _bkmTable[lookup];
-		}
-
-
-		/// <summary>
-		/// Load the BKM16 ROM image from disk.
-		/// </summary>
-		private void LoadBookmarkROM()
-		{
-			// BKM is a lookup table with an 8-bit index, returning an 8-bit value
-			FileStream fs = new FileStream(Paths.BuildPROMPath("bkm16emu.rom"), FileMode.Open);
-
-			for (int i = 0; i < 256; i++)
-			{
-				// Split the result byte into fields once, rather than on every lookup :-)
-				_bkmTable[i] = new BookmarkEntry((byte)fs.ReadByte());
-			}
-			fs.Close();
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Initialized BKM ROM lookup table.");
-#endif
-		}
-
+                // Get a new set of flags -- these may modify the current cycle!
+                BookmarkEntry flags = GetBookmarkEntry(book, _nextState);
 
 #if DEBUG
-		/// <summary>
-		/// Dumps the current controller state and request slots. Quick and dirty debugging aid.
-		/// </summary>
-		public void DumpQueue()
-		{
-			Console.WriteLine("{0} queue:\tstate: wait={1} valid={2} index={3} addr={4:x5}",
-			                  _name, _wait, _valid, _index, _address);
-			Console.WriteLine("\t\tcurrent: {0}", _current);
-			Console.WriteLine("\t\tpending: {0}", _pending);
-		}
+                // If the Recognize flag is not set, we're really out in left field...
+                // ... but all of this can go away entirely once things are fully debugged.
+                if (!flags.Recognize)
+                {
+                    Console.WriteLine("-->\t{0} queue: Recognize not set for new {1} request in T{2}!", _name, nextCycle, Tstate);
+
+                    // If the Abort flag isn't set either, our BKM16 ROM is buggy; force an
+                    // abort and just hope for the best?
+                    if (!flags.Abort)
+                    {
+                        Console.WriteLine("-->\tForced abort in T{0} due to new request in wrong cycle.", Tstate);
+                        Console.WriteLine("\tFlags: {0}", flags);
+                        DumpQueue();
+                        flags.Abort = true;
+                        // PERQSystem.Instance.Break();
+                    }
+                }
+#endif
+
+                // If the done flag is set, retire the current op (may be early,
+                // if a Fetch is overlapped)
+                if (flags.Complete)
+                {
+#if TRACING_ENABLED
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.MemoryState, "{0} queue: Terminated {1}", _name, _current);
+#endif
+                    _current.Clear();
+                }
+
+                // Set the wait and next state based on the new flags
+                _wait = flags.Abort;
+                _nextState = flags.NextState;
+            }
+        }
+
+
+        /// <summary>
+        /// Gets the bookmark for a particular cycle type.
+        /// </summary>
+        private BookmarkEntry GetBookmarkEntry(int book, MemoryState state)
+        {
+            //
+            // Index into the "bookmark" table:
+            //		bits	value
+            //		7:4		bookmark (cycle type)
+            //		3:2		current state
+            //		1:0		current Tstate
+            //
+            int lookup = (((int)book & 0x0f) << 4) | ((int)state << 2) | Tstate;
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.MemoryState, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
+#endif
+            return _bkmTable[lookup];
+        }
+
+
+        /// <summary>
+        /// Load the BKM16 ROM image from disk.
+        /// </summary>
+        private void LoadBookmarkROM()
+        {
+            // BKM is a lookup table with an 8-bit index, returning an 8-bit value
+            FileStream fs = new FileStream(Paths.BuildPROMPath("bkm16emu.rom"), FileMode.Open);
+
+            for (int i = 0; i < 256; i++)
+            {
+                // Split the result byte into fields once, rather than on every lookup :-)
+                _bkmTable[i] = new BookmarkEntry((byte)fs.ReadByte());
+            }
+            fs.Close();
+
+#if TRACING_ENABLED
+            if (Trace.TraceOn)
+                Trace.Log(LogType.EmuState, "Initialized BKM ROM lookup table.");
+#endif
+        }
+
+
+#if DEBUG
+        /// <summary>
+        /// Dumps the current controller state and request slots. Quick and dirty debugging aid.
+        /// </summary>
+        public void DumpQueue()
+        {
+            Console.WriteLine("{0} queue:\tstate: wait={1} valid={2} index={3} addr={4:x5}",
+                              _name, _wait, _valid, _index, _address);
+            Console.WriteLine("\t\tcurrent: {0}", _current);
+            Console.WriteLine("\t\tpending: {0}", _pending);
+        }
 #endif
 
         private string _name;
         private MemoryState _state;
         private MemoryState _nextState;
 
-		private MemoryRequest _current;
-		private MemoryRequest _pending;
+        private MemoryRequest _current;
+        private MemoryRequest _pending;
 
         private int _address;
         private int _index;
-		private bool _wait;
-		private bool _valid;
+        private bool _wait;
+        private bool _valid;
 
-		private int _bookmark;
-		private int _nextBookmark;
-		private BookmarkEntry[] _bkmTable;
+        private int _bookmark;
+        private int _nextBookmark;
+        private BookmarkEntry[] _bkmTable;
     }
 }
 

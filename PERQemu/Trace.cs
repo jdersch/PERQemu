@@ -1,4 +1,4 @@
-// trace.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// trace.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -30,7 +30,7 @@ namespace PERQemu
         None =              0x0,
         Errors =            0x1,
         Warnings =          0x2,
-        DDS =               0x4,
+        DDS =               0x4,            // could be reassigned
         EmuState =          0x8,
         CpuState =          0x10,
         AluState =          0x20,
@@ -41,20 +41,20 @@ namespace PERQemu
         MicrocodeStore =    0x400,
         Shifter =           0x800,
         HardDisk =          0x1000,
-        MemoryFetch =       0x2000,         // consolidate
+        MemoryFetch =       0x2000,         // consolidate?
         MemoryStore =       0x4000,         // -> Canon?
         FloppyDisk =        0x8000,
         OpFile =            0x10000,
         Interrupt =         0x20000,
         Display =           0x40000,
-        QCode =             0x80000,
+        QCode =             0x80000,        // could be synonym for OpFile, reused?
         EStack =            0x100000,
         RasterOp =          0x200000,
         GPIB =              0x400000,
         Optimization =      0x800000,       // currently unused ... -> Ethernet?
         Speech =            0x1000000,
         RS232 =             0x2000000,
-        Tablet =            0x4000000,      // currently unused ...
+        Tablet =            0x4000000,
         Link =              0x8000000,
         Instruction =       0x10000000,
         Keyboard =          0x20000000,
@@ -112,7 +112,6 @@ namespace PERQemu
         /// <summary>
         /// Selects a color for the given trace type.
         /// </summary>
-        /// <param name="level"></param>
         private static void SetColor(LogType level)
         {
             ConsoleColor color = ConsoleColor.Gray;

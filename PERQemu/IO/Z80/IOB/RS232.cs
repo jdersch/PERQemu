@@ -1,4 +1,4 @@
-// rs232.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// rs232.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -43,10 +43,22 @@ namespace PERQemu.IO.Z80.IOB
             get { return _serialDevice.Port; }
         }
 
+        public ReadyFlags BusyBit
+        {
+            get { return ReadyFlags.RS232; }
+        }
+
+        public int BusyClocks
+        {
+            get { return _busyClocks; }
+            set { _busyClocks = value; }
+        }
+
         public void Reset()
         {
-            _messageIndex = 0;
             _messageData = new byte[32];
+            _messageIndex = 0;
+            _busyClocks = 0;
             _enabled = false;
 
             if (_serialDevice != null)
@@ -56,9 +68,8 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Sets the device to use for the serial port.
+        /// Sets the host device to use for the serial port.
         /// </summary>
-        /// <param name="fs"></param>
         public void SetDevice(ISerialDevice device)
         {
             if (device == null)
@@ -69,7 +80,7 @@ namespace PERQemu.IO.Z80.IOB
             _serialDevice = device;
         }
 
-        public bool RunStateMachine(PERQtoZ80Message message,  byte value)
+        public bool RunStateMachine(PERQtoZ80Message message, byte value)
         {
             bool retVal = false;
 
@@ -79,16 +90,19 @@ namespace PERQemu.IO.Z80.IOB
             switch (message)
             {
                 case PERQtoZ80Message.SetRS232Status:
-                    // 4 bytes for RS232 status:
+                    // Up to 4 bytes for RS232 status:
                     //  byte 0 = 3 (msg length)
                     //  byte 1 = enable/disable
                     //  byte 2 = clock rate
                     //  byte 3 = settings
-                    if (_messageIndex > 3)
+                    // Note that a 1-byte enable/disable message shouldn't 
+                    // change the other settings, probably...
+                    if (_messageIndex > 1 + _messageData[0])
                     {
                         _messageIndex = 0;
                         SetRS232Status();
                         retVal = true;      // Done with message
+                        _busyClocks = 4;    // Short busy cycle
                     }
                     break;
 
@@ -101,12 +115,14 @@ namespace PERQemu.IO.Z80.IOB
                         _messageIndex = 0;
                         WriteRS232();
                         retVal = true;
+                        _busyClocks = 4 * _messageData[0];   // Busy based on amt of data
                     }
                     break;
 
                 default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled RS232 message {0}", message);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unhandled RS232 message {0}", message);
 #endif
                     break;
             }
@@ -121,21 +137,21 @@ namespace PERQemu.IO.Z80.IOB
                 _pollCount++;
 
                 //
-                // So, this is interesting.  We can't write the data out to the PERQ as fast as we want.
-                // Certain OSes (POS, for example) don't know how to deal with a sudden influx
-                // of serial data, and will just drop it on the floor.  (I should confirm this,
-                // but I assume that on the PERQ side of things, the OS has a tiny circular buffer
-                // that the ISR continually fills with data from the Z80 -- and if the OS doesn't grab data
-                // out of it soon enough, it just gets overwritten.)  Basically, there's no notion of flow
-                // control on the PERQ<->Z80 communication link as far as I can tell.  (Later versions of POS
-                // may have dealt with this more elegantly.)
+                // So, this is interesting.  We can't write the data out to the PERQ as fast as we
+                // want. Certain OSes (POS, for example) don't know how to deal with a sudden influx
+                // of serial data, and will just drop it on the floor.  (I should confirm this, but
+                // I assume that on the PERQ side of things, the OS has a tiny circular buffer that
+                // the ISR continually fills with data from the Z80 -- and if the OS doesn't grab data
+                // out of it soon enough, it just gets overwritten.)  Basically, there's no notion of
+                // flow control on the PERQ<->Z80 communication link as far as I can tell.  (Later
+                // versions of POS may have dealt with this more elegantly.)
                 //
-                // So we have to pace ourselves here and only write data every so often (basically limiting
-                // ourselves to what a REAL 9600 baud connection would provide).  This makes the RSX file
-                // transfer backdoor kinda slow.
+                // So we have to pace ourselves here and only write data every so often (basically
+                // limiting ourselves to what a REAL 9600 baud connection would provide).  This makes
+                // the RSX file transfer backdoor kinda slow.
                 //
-                // The wonderful magic number '400' below was unscientifically produced by testing out
-                // RSX transfers with various values until they stoppped dropping data, then
+                // The wonderful magic number '400' below was unscientifically produced by testing
+                // out RSX transfers with various values until they stoppped dropping data, then
                 // adding 100 for insurance.
                 //
                 if (_pollCount > 400)
@@ -155,7 +171,8 @@ namespace PERQemu.IO.Z80.IOB
                     // We can send at most 16 characters per message.  We choose to send only
                     // 1 at a time.  This is mostly a hack to make the FilePort serial sink work
                     // better with POS's RSX code.  At any rate, it's unlikely that this will cause
-                    // any serious performance problems.
+                    // any serious performance problems. TODO: revisit this, based on the new
+                    // ready/busy strategy...
                     //
                     int charsToWrite = Math.Min(_serialDevice.ByteCount, 1);
 
@@ -194,7 +211,8 @@ namespace PERQemu.IO.Z80.IOB
                 catch
                 {
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unable to open physical serial port.");
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unable to open physical serial port.");
 #endif
                 }
             }
@@ -210,138 +228,144 @@ namespace PERQemu.IO.Z80.IOB
                 catch
                 {
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unable to close physical serial port.");
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unable to close physical serial port.");
 #endif
                 }
             }
 
-            // Set baud rate
-            switch (_messageData[2])
+            // If our message included the additional bytes, update settings:
+            if (_messageData[0] > 1)
             {
-                case 0x1:
-                    _serialDevice.BaudRate = 9600;
-                    break;
+                // Set baud rate
+                switch (_messageData[2])
+                {
+                    case 0x1:
+                        _serialDevice.BaudRate = 9600;
+                        break;
 
-                case 0x2:
-                    _serialDevice.BaudRate = 4800;
-                    break;
+                    case 0x2:
+                        _serialDevice.BaudRate = 4800;
+                        break;
 
-                case 0x4:
-                    _serialDevice.BaudRate = 2400;
-                    break;
+                    case 0x4:
+                        _serialDevice.BaudRate = 2400;
+                        break;
 
-                case 0x8:
-                    _serialDevice.BaudRate = 1200;
-                    break;
+                    case 0x8:
+                        _serialDevice.BaudRate = 1200;
+                        break;
 
-                case 0x10:
-                    _serialDevice.BaudRate = 600;
-                    break;
+                    case 0x10:
+                        _serialDevice.BaudRate = 600;
+                        break;
 
-                case 0x20:
-                    _serialDevice.BaudRate = 300;
-                    break;
+                    case 0x20:
+                        _serialDevice.BaudRate = 300;
+                        break;
 
-                case 0x40:
-                    _serialDevice.BaudRate = 150;
-                    break;
+                    case 0x40:
+                        _serialDevice.BaudRate = 150;
+                        break;
 
-                case 0x57:      // Yes, this seems odd, but there you are.  110 baud is 0x57.  Not 0x80.
-                    _serialDevice.BaudRate = 110;
-                    break;
+                    case 0x57:      // Yes, this seems odd, but there you are.  110 baud is 0x57.  Not 0x80.
+                        _serialDevice.BaudRate = 110;
+                        break;
 
-                default:
+                    default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled baud rate setting {0}", _messageData[2]);
+                        if (Trace.TraceOn)
+                            Trace.Log(LogType.Warnings, "Unhandled baud rate setting {0}", _messageData[2]);
 #endif
-                    break;
-            }
+                        break;
+                }
 
-            // Set parity
-            int parity = _messageData[3] & 0x3;
-            switch (parity)
-            {
-                case 0:
-                    _serialDevice.Parity = Parity.None;
-                    break;
-
-                case 1:
-                    _serialDevice.Parity = Parity.Odd;
-                    break;
-
-                case 3:
-                    _serialDevice.Parity = Parity.Even;
-                    break;
-
-                default:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled parity setting {0}", parity);
-#endif
-                    break;
-            }
-
-            int stopBits = (_messageData[3] & 0x6) >> 2;
-
-            try
-            {
-                switch (stopBits)
+                // Set parity
+                int parity = _messageData[3] & 0x3;
+                switch (parity)
                 {
                     case 0:
-                        _serialDevice.StopBits = StopBits.None;
+                        _serialDevice.Parity = Parity.None;
                         break;
 
                     case 1:
-                        _serialDevice.StopBits = StopBits.One;
-                        break;
-
-                    case 2:
-                        _serialDevice.StopBits = StopBits.OnePointFive;
+                        _serialDevice.Parity = Parity.Odd;
                         break;
 
                     case 3:
-                        _serialDevice.StopBits = StopBits.Two;
+                        _serialDevice.Parity = Parity.Even;
+                        break;
+
+                    default:
+#if TRACING_ENABLED
+                        if (Trace.TraceOn)
+                            Trace.Log(LogType.Warnings, "Unhandled parity setting {0}", parity);
+#endif
                         break;
                 }
-            }
-            catch
-            {
+
+                int stopBits = (_messageData[3] & 0x6) >> 2;
+
+                try
+                {
+                    switch (stopBits)
+                    {
+                        case 0:
+                            _serialDevice.StopBits = StopBits.None;
+                            break;
+
+                        case 1:
+                            _serialDevice.StopBits = StopBits.One;
+                            break;
+
+                        case 2:
+                            _serialDevice.StopBits = StopBits.OnePointFive;
+                            break;
+
+                        case 3:
+                            _serialDevice.StopBits = StopBits.Two;
+                            break;
+                    }
+                }
+                catch
+                {
 #if TRACING_ENABLED
-                if (Trace.TraceOn)
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings,
+                                  "Stop bits setting of {0} not available on physical hardware.  Assuming one stop bit.",
+                                   stopBits);
+#endif
+                    _serialDevice.StopBits = StopBits.One;
+                }
+
+                int transmitBits = (_messageData[3] & 0x30) >> 4;
+                int receiveBits = (_messageData[3] & 0x60) >> 6;
+
+#if TRACING_ENABLED
+                if (Trace.TraceOn && transmitBits != receiveBits)
                     Trace.Log(LogType.Warnings,
-                              "Stopbits setting of {0} not available on physical hardware.  Assuming One stop bit.",
-                               stopBits);
-#endif
-                _serialDevice.StopBits = StopBits.One;
-            }
-
-            int transmitBits = (_messageData[3] & 0x30) >> 4;
-            int receiveBits = (_messageData[3] & 0x60) >> 6;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn && transmitBits != receiveBits)
-                Trace.Log(LogType.Warnings,
-                         "Transmit bits {0} != Receive bits {1}, unsupported on physical hardware.  Assuming data bits of {2}",
-                          transmitBits, receiveBits, transmitBits);
+                             "Transmit bits {0} != Receive bits {1}, unsupported on physical hardware.  Assuming data bits of {2}",
+                              transmitBits, receiveBits, transmitBits);
 #endif
 
-            switch (transmitBits)
-            {
-                case 0:
-                    _serialDevice.DataBits = 5;
-                    break;
+                switch (transmitBits)
+                {
+                    case 0:
+                        _serialDevice.DataBits = 5;
+                        break;
 
-                case 1:
-                    _serialDevice.DataBits = 7;
-                    break;
+                    case 1:
+                        _serialDevice.DataBits = 7;
+                        break;
 
-                case 2:
-                    _serialDevice.DataBits = 6;
-                    break;
+                    case 2:
+                        _serialDevice.DataBits = 6;
+                        break;
 
-                case 3:
-                    _serialDevice.DataBits = 8;
-                    break;
+                    case 3:
+                        _serialDevice.DataBits = 8;
+                        break;
+                }
             }
 
 #if TRACING_ENABLED
@@ -367,14 +391,15 @@ namespace PERQemu.IO.Z80.IOB
             catch
             {
 #if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Write to physical serial port failed.");
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Warnings, "Write to physical serial port failed.");
 #endif
             }
         }
 
         public void GetStatus(ref Queue<byte> fifo)
         {
-            // Return current tablet status (per Z80 v8.7):
+            // Return current RS232 status (per Z80 v8.7):
             fifo.Enqueue(Z80System.SOM);
             fifo.Enqueue((byte)Z80toPERQMessage.RS232Status);   // Reply <7>
             fifo.Enqueue(0x3);                                  // Byte count
@@ -384,15 +409,16 @@ namespace PERQemu.IO.Z80.IOB
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "--> RS232 message: GetStatus\tenabled: {0}", _enabled);
+                Trace.Log(LogType.Tablet, "RS232: GetStatus() returns enabled={0}", _enabled);
 #endif
         }
 
         private ISerialDevice _serialDevice;
-        private const string _defaultPort = "COM1";
+        private const string _defaultPort = "COM1";		// TODO: set platform-appropriate default
         private byte[] _messageData;
         private int _messageIndex;
         private int _pollCount;
+        private int _busyClocks;
         private bool _enabled = false;
     }
 }
