@@ -314,6 +314,7 @@ namespace PERQemu.CPU
                     _memory.Tock((ushort)_alu.Registers.R);
                 }
             }
+
             // Always clock video (used for system timing by some OSes)
             VideoController.Instance.Clock();
 
@@ -1542,6 +1543,7 @@ namespace PERQemu.CPU
                 }
             }
 #endif
+
         }
 
         /// <summary>

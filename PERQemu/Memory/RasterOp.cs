@@ -18,7 +18,10 @@
 
 using System;
 using System.IO;
-usingspace PERQemu.Memory
+
+using PERQemu.CPU;
+
+namespace PERQemu.Memory
 {
 
     public class PowerOffException : Exception
