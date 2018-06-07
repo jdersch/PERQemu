@@ -348,9 +348,9 @@ namespace PERQemu.Display
 
             // We draw 8 bytes (4 words) of horizontal cursor data combined with
             // the background data on that line based on the current cursor function.
-            for (int x = cursorStartByte; x < cursorStartByte + 8 && x < PERQ_DISPLAYWIDTH_IN_BYTES; x++)
+            for (int x = cursorStartByte; x < cursorStartByte + 8; x++)
             {
-                if (x >= 0)
+                if (x >= 0 && x < PERQ_DISPLAYWIDTH_IN_BYTES)
                 {
                     byte backgroundByte = GetByte(backgroundStartByte + x);
                     byte cursorByte = GetByte(cursorAddress + (x - cursorStartByte));

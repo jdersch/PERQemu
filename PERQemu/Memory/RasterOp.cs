@@ -18,12 +18,7 @@
 
 using System;
 using System.IO;
-using System.Text;
-using System.Collections.Generic;
-
-using PERQemu.CPU;
-
-namespace PERQemu.Memory
+usingspace PERQemu.Memory
 {
 
     public class PowerOffException : Exception
@@ -137,13 +132,9 @@ namespace PERQemu.Memory
         /// hardware.  Is used to set the "phase" of the action, determine the direction
         /// of the transfer, and sync the RasterOp state clock with the Memory state.
         /// </summary>
-        /// <param name="value"></param>
         public void CntlRasterOp(int value)
         {
-            bool saveExtraSrcWord = _extraSrcWord;      // Save in case we bail early...
-            Direction saveDirection = _direction;       // ...and this too.  Sigh.
-
-            _latchOn = (value & 0x40) != 0;             // Used by the hardware, no real use here
+            _latchOn = (value & 0x40) != 0;
             _extraSrcWord = (value & 0x20) != 0;
             _phase = (Phase)((value & 0x1c) >> 2);
             _enabled = (value & 0x2) != 0;
@@ -151,49 +142,42 @@ namespace PERQemu.Memory
 
             if (_enabled)
             {
-                #region SorryIasked
-                //
-                // CntlRasterOp is always called in T1, two cycles ahead of a Fetch/Fetch4R.
-                // I have no idea what the real hardware does if this rule is violated; probably
-                // random bad things, no doubt.  This is true in every version of the RasterOp
-                // microcode that I've been able to study.
-                //
-                // For our purposes this means that the first state transition happens in the next
-                // cycle (T2), but four cycles from the T2 when dest or source fetch data appears
-                // on MDI.  Due to this latency, the Idle phase actually happens at the beginning
-                // of the three-quad cycle, not at the end (as illustrated in Tony Duell's CPU Tech
-                // Reference).  We force this by setting initial state to SrcFetch.  Yeah, I know.
-                //
-                #endregion
-                _state = State.SrcFetch;
-
+                // Call Setup to pre-compute masks and program the shifter.  If we're starting
+                // a new transfer it will set the _setupDone flag, so if we're changing phase
+                // or returning from an interrupt when the datapath was switched off (rather
+                // than paused) the call is safe (a no-op).
                 Setup();
+
+                // CntlRasterOp is always called in T1, two cycles ahead of the Fetch/Fetch4R
+                // which starts the source-dest-idle cycle.  This means that state transitions
+                // happen in the next machine cycle (T2), four cycles from the T2 when dest or
+                // source fetch data appears on MDI.  Due to this latency, here the Idle phase
+                // actually happens at the beginning of the three-quad cycle, not at the end
+                // (as illustrated in Tony Duell's CPU Tech Reference).  We force this by
+                // setting initial state to SrcFetch.  Yeah, I know.
+                _state = State.SrcFetch;
             }
             else
             {
-                if (MemoryBoard.Instance.MDONeeded && _destFifo.Count > 0)
+                // The enabled bit is turned off, so set our state to Off.  At this point we
+                // just might be pausing for an interrupt, or the transfer is complete.
+                _state = State.Off;
+
+                // If the latch bit is set we're pausing for a video interrupt; otherwise,
+                // we're taking a general interrupt, or the transfer is done (no way to tell).
+                // Note that the "microcode bailed early" condition no longer applies, since
+                // at this point the destination FIFO contains all four result words and the
+                // active Store4/4R will complete regardless of our _enabled flag.  Sweet!
+                if (!_latchOn)
                 {
-                    // Ugh. The microcode bailed on us before the destination words were all
-                    // written! Reassert the enabled flag and set a special final state until
-                    // we're actually finished.  Inelegant, but effective...
-                    _enabled = true;
-                    _extraSrcWord = saveExtraSrcWord;   // Restore saved values
-                    _direction = saveDirection;         // for final flush
-                    _state = State.Off;
-                    _phase = Phase.Done;
-                }
-                else
-                {
-                    // No output pending; either we're really done, or pausing for an interrupt.
-                    _state = State.Off;
                     _setupDone = false;
                 }
             }
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.RasterOp, "CtlRasterOp:  {0}\n\tPhase={1} Dir={2} XtraSrcWord={3} Latch={4}",
-                          (_enabled ? "Enabled" : "Disabled"), _phase, _direction, _extraSrcWord, _latchOn);
+                Trace.Log(LogType.RasterOp, "CtlRasterOp:  {0} ({1:x2})\n\tPhase={2} Dir={3} XtraSrcWord={4} Latch={5}",
+                          (_enabled ? "Enabled" : "Disabled"), value, _phase, _direction, _extraSrcWord, _latchOn);
             DumpFifo("Source FIFO:\n", _srcFifo);
             DumpFifo("Destination FIFO:\n", _destFifo);
 #endif
@@ -203,7 +187,6 @@ namespace PERQemu.Memory
         /// Sets the RasterOp Width register, and clears the source and destination word FIFOs.
         /// In the 16K CPU, the two upper bits also control the Multiply/Divide unit.
         /// </summary>
-        /// <param name="value"></param>
         public void WidRasterOp(int value)
         {
 
@@ -245,7 +228,6 @@ namespace PERQemu.Memory
         /// <summary>
         /// Loads the RasterOp Destination register.
         /// </summary>
-        /// <param name="value"></param>
         public void DstRasterOp(int value)
         {
             _function = (Function)(((int)_function & 0x4) | (((~value) & 0xc0) >> 6));
@@ -265,7 +247,6 @@ namespace PERQemu.Memory
         /// <summary>
         /// Loads the RasterOp Source register.  Upper bit also controls the PERQ1 power supply!
         /// </summary>
-        /// <param name="value"></param>
         public void SrcRasterOp(int value)
         {
             _function = (Function)(((int)_function & 0x3) | (((~value) & 0x40) >> 4));
@@ -301,10 +282,10 @@ namespace PERQemu.Memory
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.RasterOp, "RasterOp: Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
-                                            _phase, _state, MemoryBoard.Instance.TState, _srcNeedsAligned, _leftOver);
+                Trace.Log(LogType.RasterOp,
+                          "RasterOp: Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
+                          _phase, _state, MemoryBoard.Instance.TState, _srcNeedsAligned, _leftOver);
 #endif
-
             switch (_state)
             {
                 case State.Idle:
@@ -317,11 +298,6 @@ namespace PERQemu.Memory
                     break;
 
                 case State.DestFetch:
-#if DEBUG
-                    // FirstSource, XtraSource skip the DestFetch state, should never get here!
-                    if (_phase == Phase.FirstSource || _phase == Phase.XtraSource)
-                        throw new InvalidOperationException(String.Format("Unexpected state {0} during {1}", _state, _phase));
-#endif
 
                     // Fetch the dest word, set its mask and queue the result!
                     w = FetchNextWord();
@@ -345,6 +321,11 @@ namespace PERQemu.Memory
                     _srcFifo.Enqueue(w);
 #if TRACING_ENABLED
                     DumpFifo("Source FIFO:\n", _srcFifo);
+                    if (_srcFifo.Count > 8)
+                    {
+                        Console.WriteLine("** Runaway source fifo!?");
+                        PERQSystem.Instance.Break();
+                    }
 #endif
                     break;
 
@@ -354,29 +335,39 @@ namespace PERQemu.Memory
                     // still being written out, and a fetch of the start of the next line is
                     // in progress (but is being ignored).  We queue up those words to avoid
                     // draining the source queue while destination words are still being written.
-                    _srcFifo.Enqueue(FetchNextWord());
+                    //_srcFifo.Enqueue(FetchNextWord());
+#if DEBUG
+                    Console.WriteLine("** State=Off in RasterOp Clock()");
+#endif
                     break;
             }
         }
 
         /// <summary>
+        /// Return true if there are result words waiting to be written, regardless
+        /// of our internal state.  This eliminates the "microcode bailed early" hack!
+        /// </summary>
+        public bool ResultReady
+        {
+            get { return (_destFifo.Count > 0); }
+        }
+
+        /// <summary>
         /// Gets the next word from the result queue.  Expected to be called only if
-        /// a Store4/4R cycle is currently in progress..
+        /// a Store4/4R cycle is currently in progress.
         /// </summary>
         public ushort Result()
         {
             ROpWord dest;
-#if DEBUG            
-            // A few sanity checks, until things are debugged...
-            if (!_enabled && _state != State.Off)
-                throw new InvalidOperationException("Result needed while RasterOp disabled");
 
-            if (_destFifo.Count < 1)
+            try
+            {
+                dest = _destFifo.Dequeue();
+            }
+            catch
+            {
                 throw new InvalidOperationException("Destination FIFO empty and result needed");
-#endif
-
-            // Get the destination word
-            dest = _destFifo.Dequeue();
+            }
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -392,8 +383,8 @@ namespace PERQemu.Memory
         /// </summary>
         private ROpWord ComputeResult(ROpWord dest)
         {
-            ROpWord src = dest;                         // initialize to silence the Xamarin compiler...
-            EdgeStrategy e = EdgeStrategy.NoPopNoPeek;  // assume nothing!  irrelevant in non-edge cases anyway
+            ROpWord src = dest;                         // init to silence the Xamarin compiler...
+            EdgeStrategy e = EdgeStrategy.NoPopNoPeek;  // assume nothing!  n/a in non-edge cases anyway
             ushort aligned, combined;
 
 #if TRACING_ENABLED
@@ -722,6 +713,9 @@ namespace PERQemu.Memory
                         // Done waiting for the Destination Fifo to drain; really disable now
                         _enabled = false;
                         _setupDone = false;
+#if DEBUG
+                        Console.WriteLine("** Disabling on dest empty in NextState()");
+#endif
                     }
                     break;
 
@@ -780,10 +774,10 @@ namespace PERQemu.Memory
             {
 #if DEBUG
                 // For debugging we just try to continue, but we're pretty hosed at this point...
-                Console.WriteLine("RasterOp: FetchNextWord while MDI was invalid!");
+                Console.WriteLine("RasterOp: FetchNextWord in {0} while MDI was invalid!", _state);
                 w.Clear();
 #else
-		        throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
+	            throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
 #endif
             }
             return w;

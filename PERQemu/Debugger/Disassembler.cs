@@ -297,8 +297,8 @@ namespace PERQemu.Debugger
                             function += "Pop";
                             break;
 
-                        case 0x6:       // CtrlRstOp := (R)
-                            function += "CtrlRstOp := (R)";
+                        case 0x6:       // CtrlRstOp := (Z)
+                            function += "CtrlRstOp := (Z)";
                             break;
 
                         case 0x7:       // SrcRasterOp := (R)

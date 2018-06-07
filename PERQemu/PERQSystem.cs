@@ -107,12 +107,15 @@ namespace PERQemu
                             _state = RunState.Debug;
                             _debugMessage = "The PERQ has powered itself off.  Use the 'reset' command to restart the PERQ.";
                         }
-                       catch (Exception e)
+                        catch (Exception e)
                         {
                             // The emulation has hit a serious error.
                             // Enter the debugger.
                             _state = RunState.Debug;
                             _debugMessage = String.Format("Break due to internal emulation error: {0}.  System state may be inconsistent.", e.Message);
+#if DEBUG
+                            Console.WriteLine(Environment.StackTrace);
+#endif
                         }
                         break;
 

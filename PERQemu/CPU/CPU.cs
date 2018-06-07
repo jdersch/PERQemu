@@ -295,25 +295,25 @@ namespace PERQemu.CPU
                 _ioBus.Clock();
             }
 
-            // RasterOp in progress?
+            // If enabled, clock the RasterOp pipeline
             if (_rasterOp.Enabled)
             {
-                // Clock the RasterOp pipeline
                 _rasterOp.Clock();
+            }
 
-                // Do any pending RasterOp stores (supercede the ALU) if a
-                // memory operation is in progress.
-                if (MemoryBoard.Instance.MDONeeded)
+            // Is a memory store operation in progress?  Pending RasterOp stores
+            // supercede the ALU; otherwise write the last ALU result
+            if (MemoryBoard.Instance.MDONeeded)
+            {
+                if (_rasterOp.ResultReady)
                 {
                     _memory.Tock(_rasterOp.Result());
                 }
+                else
+                {
+                    _memory.Tock((ushort)_alu.Registers.R);
+                }
             }
-            else
-            {
-                // Do any pending memory operations based on the last ALU result
-                _memory.Tock((ushort)_alu.Registers.R);
-            }
-
             // Always clock video (used for system timing by some OSes)
             VideoController.Instance.Clock();
 
@@ -464,6 +464,15 @@ namespace PERQemu.CPU
         public int R
         {
             get { return _alu.Registers.R; }
+        }
+
+        /// <summary>
+        /// The base register for indexing XY.
+        /// </summary>
+        [DebugProperty("rbase")]
+        public byte RegisterBase
+        {
+            get { return _registerBase; }
         }
 
         /// <summary>
@@ -709,7 +718,7 @@ namespace PERQemu.CPU
             if (Trace.TraceOn)
                 Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  op={0} amux={1:x5} mq={2:x4}", curOp, amux, mdReg);
 #endif
-            
+
             if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
             {
                 switch (_rasterOp.MulDivInst)
@@ -765,7 +774,7 @@ namespace PERQemu.CPU
             if (Trace.TraceOn)
                 Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT op={0} amux={1:x5}", modOp, amux);
 #endif
-            
+
             // Execute the updated ALU op
             _alu.DoALUOp(amux, bmux, modOp);
         }
@@ -1495,6 +1504,44 @@ namespace PERQemu.CPU
             if (Trace.TraceOn) Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", PC);
 #endif
             _incrementBPC = true;
+
+#if DEBUG
+            if (_rasterOp.Debug)
+            {
+                // About to execute RASTOP in the Fonted Char window...
+                //if (next == 102 && _stack[3] == 0x16)
+                if (next == 102)
+                {
+                    foo = 102;
+
+                    SetRopLogging();
+
+                    // save a copy of the Estack
+                    for (int i = 0; i < 16; i++)
+                    {
+                        _saveStack[i] = _stack[i];
+                    }
+                    ShowEStack();
+                    if (_stack[2] == 0)
+                    {
+                        Console.WriteLine("** Zero-width RasterOp called!");
+                        PERQSystem.Instance.Break();
+                    }
+                    else
+                    {
+                        Console.WriteLine("** New RasterOp called:");
+                    }
+                }
+                else if (foo == 102 && next != 102)
+                {
+                    // Finished executing the RASTOP, turn off logging
+                    foo = 0;
+                    ShowRopRegs();
+                    ShowRopState();
+                    ClearRopLogging();
+                }
+            }
+#endif
         }
 
         /// <summary>
@@ -1917,7 +1964,7 @@ namespace PERQemu.CPU
         {
 #if TRACING_ENABLED
             // Bundled all these for convenience...
-            Trace.TraceLevel |= (LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
+            Trace.TraceLevel |= (LogType.RasterOp | LogType.CpuState | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
             //Trace.TraceLevel |= LogType.RasterOp;
 #endif
         }
@@ -1953,6 +2000,13 @@ namespace PERQemu.CPU
         private void ShowRopRegs()
         {
             _rasterOp.ShowRegs();
+#if DEBUG
+            Console.WriteLine("\nSaved Estack:");
+            for (int i = 0; i < _saveStack.Length; i++)
+            {
+                Console.WriteLine("{0} {1:00}: {2:x5}", (i == _stackPointer ? "=>" : "  "), i, _saveStack[i]);
+            }
+#endif
         }
 
         [DebugFunction("show z80 state", "Display current Z80 device ready state")]
@@ -2016,7 +2070,7 @@ namespace PERQemu.CPU
 
 #if SIXTEEN_K
         // Base register
-        private int _registerBase;
+        private byte _registerBase;
 #endif
 
         // Byte Program Counter
@@ -2047,7 +2101,10 @@ namespace PERQemu.CPU
 
         // RasterOp
         private RasterOp _rasterOp;
-
+#if DEBUG
+        private int foo;                        // FIXME remove after debugging
+        private int[] _saveStack = new int[16]; // snapshot of Estack for rop debug
+#endif
         // Multiplier Quotient register ("MQ") only exists in the 16K CPU, but some
         // microcode (VFY 2.x, e.g.) tries to write/read from MQ to test for WCS size
         // on the fly.  So we define MQ for both CPU types, but essentially treat it
