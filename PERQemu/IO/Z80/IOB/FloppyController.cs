@@ -62,6 +62,7 @@ namespace PERQemu.IO.Z80.IOB
             set { _busyClocks = value; }
         }
 
+
         public void LoadImage(string path)
         {
             // If path is non-null, we load the image;
@@ -114,6 +115,7 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+
         public void SaveImage(string path)
         {
             if (_disk != null && _loaded)
@@ -128,11 +130,13 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+
         public void UnloadImage()
         {
             _disk = null;
             _loaded = false;
         }
+
 
         public void Poll(ref Queue<byte> fifo)
         {
@@ -144,12 +148,20 @@ namespace PERQemu.IO.Z80.IOB
             // the "pfd header" code a refactor will be in order...
         }
 
+
         public bool RunStateMachine(PERQtoZ80Message message, byte value)
         {
             bool retVal = false;
 
             _messageData[_messageIndex] = value;
             _messageIndex++;
+#if DEBUG
+            if (_messageIndex > 255)
+            {
+                Console.WriteLine("** Floppy message too large!  index={0}, value={1:x2}",
+                                  _messageIndex, value);
+            }
+#endif
 
             switch (message)
             {
@@ -204,7 +216,6 @@ namespace PERQemu.IO.Z80.IOB
         /// <summary>
         /// Returns a FIFO with the boot sector data in it.
         /// </summary>
-        /// <returns></returns>
         private void Boot()
         {
 #if TRACING_ENABLED
@@ -227,11 +238,11 @@ namespace PERQemu.IO.Z80.IOB
             // 55 AA, if not it's not a boot sector
             Sector boot = _disk.GetSector(1, 0, 0);
 
-            if (boot.ReadByte(0) != 0x55 ||
-                boot.ReadByte(1) != 0xaa)
+            if (boot.ReadByte(0) != 0x55 || boot.ReadByte(1) != 0xaa)
             {
 #if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Disk does not appear to be bootable.");
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Warnings, "Disk does not appear to be bootable.");
 #endif
 
                 // Return invalid boot data message
@@ -247,10 +258,10 @@ namespace PERQemu.IO.Z80.IOB
             ushort checksumWord = 0;
             bool checksumBit = false;
 
-            int[] ints = new int[0x3000];
+            int[] ints = new int[0x3000];   // This seems excessive.  How is it sized?
             int intscount = 0;
 
-            _busyClocks = 128;      // Busy for a "reasonable" amount of time...
+            _busyClocks = 128;              // Busy for a "reasonable" amount of time...
 
             for (int sectorCount = 0; sectorCount < 96; sectorCount++)
             {
@@ -314,6 +325,7 @@ namespace PERQemu.IO.Z80.IOB
 #endif
         }
 
+
         private void SetFloppyStatus()
         {
 #if TRACING_ENABLED
@@ -344,6 +356,7 @@ namespace PERQemu.IO.Z80.IOB
             _busyClocks = 5;    // Short busy
         }
 
+
         public void GetStatus(ref Queue<byte> fifo)
         {
             // Floppy GetStatus looks like:
@@ -361,6 +374,7 @@ namespace PERQemu.IO.Z80.IOB
             }
         }
 
+
         private void DoFloppyCommand()
         {
             byte head = _messageData[0];
@@ -374,7 +388,6 @@ namespace PERQemu.IO.Z80.IOB
                 Trace.Log(LogType.FloppyDisk, "Floppy command is {0}, cyl/head/sec {1}/{2}/{3}",
                                                command, cyl, head, sec);
 #endif
-
             switch (command)
             {
                 case FloppyCommand.Seek:
@@ -395,15 +408,17 @@ namespace PERQemu.IO.Z80.IOB
 
                 default:
 #if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Warnings, "Unhandled floppy command {0}", command);
+                    if (Trace.TraceOn)
+                        Trace.Log(LogType.Warnings, "Unhandled floppy command {0}", command);
 #endif
                     break;
             }
         }
 
+
         public void Seek(byte head, byte cyl, byte sec)
         {
-            _head = (head == 0) ? 0 : 1;        // TODO: we're ignoring the device # here...
+            _head = (head == 0) ? 0 : 1;
             _cylinder = cyl;
 
             bool error = false;
@@ -426,7 +441,7 @@ namespace PERQemu.IO.Z80.IOB
             }
 
             // Floppy seeks are s l o w, but for now just fake it
-            _busyClocks = (error ? 5 : 20);
+            _busyClocks = (error ? 5 : 25);
 
             // Message out format:
             //  SOM
@@ -441,7 +456,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatusLength = 2;
 
             StatusRegister0 reg0 =
-                StatusRegister0.FlpUnit0 |                      // TODO: we always assume device 0.
+                StatusRegister0.FlpUnit0 |
                 (head == 0 ? 0 : StatusRegister0.FlpHead) |
                 (_loaded ? 0 : StatusRegister0.FlpNotReady) |
                 (0) |                                           // Equipment check
@@ -453,9 +468,10 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[1] = (byte)cyl;
         }
 
+
         private void Read(byte head, byte cyl, byte sec)
         {
-            head = (head == 0) ? (byte)0 : (byte)1;             // TODO: we're ignoring the device # here...
+            head = (head == 0) ? (byte)0 : (byte)1;
             bool error = false;
 
             if (!_loaded ||
@@ -519,7 +535,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatusLength = 7;
 
             StatusRegister0 reg0 =
-                StatusRegister0.FlpUnit0 |                      // TODO: we always assume device 0.
+                StatusRegister0.FlpUnit0 |
                 (head == 0 ? 0 : StatusRegister0.FlpHead) |
                 (_loaded ? 0 : StatusRegister0.FlpNotReady) |
                 (0) |                                           // Equipment check
@@ -550,9 +566,10 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[6] = _disk != null ? (byte)_disk.DiskGeometry.SectorSize : (byte)0;
         }
 
+
         private void Write(byte head, byte cyl, byte sec, int count)
         {
-            head = (head == 0) ? (byte)0 : (byte)1;             // TODO: we're ignoring the device # here...
+            head = (head == 0) ? (byte)0 : (byte)1;
             bool error = false;
 
             if (!_loaded ||
@@ -603,7 +620,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatusLength = 7;
 
             StatusRegister0 reg0 =
-                StatusRegister0.FlpUnit0 |                      // TODO: always unit 0. SL1 pin is NC on the hardware :-(
+                StatusRegister0.FlpUnit0 |
                 (head == 0 ? 0 : StatusRegister0.FlpHead) |
                 (_loaded ? 0 : StatusRegister0.FlpNotReady) |
                 (0) |                                           // Equipment check
@@ -634,9 +651,10 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[6] = _disk != null ? (byte)_disk.DiskGeometry.SectorSize : (byte)0;
         }
 
+
         private void Format(byte head, byte cyl, byte sec)
         {
-            head = (head == 0) ? (byte)0 : (byte)1;             // TODO: we're ignoring the device # here...
+            head = (head == 0) ? (byte)0 : (byte)1;
             bool error = false;
 
             if (!_loaded ||
@@ -686,7 +704,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatusLength = 7;
 
             StatusRegister0 reg0 =
-                StatusRegister0.FlpUnit0 |                      // TODO: we always assume device 0.
+                StatusRegister0.FlpUnit0 |
                 (head == 0 ? 0 : StatusRegister0.FlpHead) |
                 (_loaded ? 0 : StatusRegister0.FlpNotReady) |
                 (0) |                                           // Equipment check
@@ -719,9 +737,9 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         /// <summary>
-        /// Returns the density of the loaded disk (NOT necessarily the density that the PERQ has specified.)
+        /// Returns the density of the loaded disk (NOT necessarily the density
+        /// that the PERQ has specified.)
         /// </summary>
-        /// <returns></returns>
         private Density GetDiskDensity()
         {
             if (_disk == null)
@@ -759,7 +777,7 @@ namespace PERQemu.IO.Z80.IOB
         private enum StatusRegister0
         {
             FlpUnit0            = 0x1,
-            FlpUnit1            = 0x2,
+            FlpUnit1            = 0x2,      // Sadly, this pin is NC on the PERQ
             FlpHead             = 0x4,
             FlpNotReady         = 0x8,
             FlpEquipChk         = 0x10,

@@ -1509,41 +1509,39 @@ namespace PERQemu.CPU
 #if DEBUG
             if (_rasterOp.Debug)
             {
-                // About to execute RASTOP in the Fonted Char window...
-                //if (next == 102 && _stack[3] == 0x16)
-                if (next == 102)
+                // In Qcode V3, RASTOP == 102, LINE == 241
+                if (next == 241)
                 {
-                    foo = 102;
+                    foo = 241;
 
                     SetRopLogging();
 
                     // save a copy of the Estack
-                    for (int i = 0; i < 16; i++)
-                    {
-                        _saveStack[i] = _stack[i];
-                    }
+                    //for (int i = 0; i < 16; i++)
+                    //{
+                    //    _saveStack[i] = _stack[i];
+                    //}
                     ShowEStack();
-                    if (_stack[2] == 0)
+                    //if (_stack[2] == 0)
+                    //{
+                    //    Console.WriteLine("** Zero-width RasterOp called!");
+                    PERQSystem.Instance.Break();
+                    //}
+                    //else
                     {
-                        Console.WriteLine("** Zero-width RasterOp called!");
-                        PERQSystem.Instance.Break();
-                    }
-                    else
-                    {
-                        Console.WriteLine("** New RasterOp called:");
+                        Console.WriteLine("** LINE op:");
                     }
                 }
-                else if (foo == 102 && next != 102)
+                else if (foo == 241 && next != 241)
                 {
-                    // Finished executing the RASTOP, turn off logging
+                    // Finished executing the LINE, turn off logging
                     foo = 0;
-                    ShowRopRegs();
-                    ShowRopState();
+                    //ShowRopRegs();
+                    //ShowRopState();
                     ClearRopLogging();
                 }
             }
 #endif
-
         }
 
         /// <summary>
@@ -1966,7 +1964,7 @@ namespace PERQemu.CPU
         {
 #if TRACING_ENABLED
             // Bundled all these for convenience...
-            Trace.TraceLevel |= (LogType.RasterOp | LogType.CpuState | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
+            Trace.TraceLevel |= (LogType.RegisterAssignment | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
             //Trace.TraceLevel |= LogType.RasterOp;
 #endif
         }
@@ -1981,7 +1979,7 @@ namespace PERQemu.CPU
         private void ClearRopLogging()
         {
 #if TRACING_ENABLED
-            Trace.TraceLevel &= ~(LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
+            Trace.TraceLevel &= ~(LogType.RegisterAssignment | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
             //Trace.TraceLevel &= ~LogType.RasterOp;
 #endif
         }
