@@ -325,24 +325,11 @@ namespace PERQemu.Memory
                     _srcFifo.Enqueue(w);
 #if TRACING_ENABLED
                     DumpFifo("Source FIFO:\n", _srcFifo);
-                    if (_srcFifo.Count > 8)
-                    {
-                        Console.WriteLine("** Runaway source fifo!?");
-                        PERQSystem.Instance.Break();
-                    }
 #endif
                     break;
 
                 case State.Off:
-
-                    // If we get here, the microcode has bailed out while the last quad word is
-                    // still being written out, and a fetch of the start of the next line is
-                    // in progress (but is being ignored).  We queue up those words to avoid
-                    // draining the source queue while destination words are still being written.
-                    //_srcFifo.Enqueue(FetchNextWord());
-#if DEBUG
-                    Console.WriteLine("** State=Off in RasterOp Clock()");
-#endif
+                    // Nothing to do; should never happen
                     break;
             }
         }
@@ -712,15 +699,16 @@ namespace PERQemu.Memory
             switch (_state)
             {
                 case State.Off:
+#if DEBUG
+                    // Old "microcode bailed early" hack -- should never happen now
                     if (!MemoryBoard.Instance.MDONeeded || _destFifo.Count == 0)
                     {
                         // Done waiting for the Destination Fifo to drain; really disable now
                         _enabled = false;
                         _setupDone = false;
-#if DEBUG
                         Console.WriteLine("** Disabling on dest empty in NextState()");
-#endif
                     }
+#endif
                     break;
 
                 case State.Idle:
