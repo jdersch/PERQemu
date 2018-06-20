@@ -527,7 +527,7 @@
     <Content Include="Docs\z80 docs\z80ram_addr.txt" />
     <Content Include="Docs\z80 docs\z80rom_addr.txt" />
     <Content Include="PERQemu.ico" />
-    <Content Include="Readme.txt">
+    <Content Include="Readme-source.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
