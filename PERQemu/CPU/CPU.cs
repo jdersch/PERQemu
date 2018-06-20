@@ -467,6 +467,7 @@ namespace PERQemu.CPU
             get { return _alu.Registers.R; }
         }
 
+#if SIXTEEN_K 
         /// <summary>
         /// The base register for indexing XY.
         /// </summary>
@@ -475,6 +476,7 @@ namespace PERQemu.CPU
         {
             get { return _registerBase; }
         }
+#endif
 
         /// <summary>
         /// The Multiply/Divide MQ register.
@@ -1505,43 +1507,6 @@ namespace PERQemu.CPU
             if (Trace.TraceOn) Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", PC);
 #endif
             _incrementBPC = true;
-
-#if DEBUG
-            if (_rasterOp.Debug)
-            {
-                // In Qcode V3, RASTOP == 102, LINE == 241
-                if (next == 241)
-                {
-                    foo = 241;
-
-                    SetRopLogging();
-
-                    // save a copy of the Estack
-                    //for (int i = 0; i < 16; i++)
-                    //{
-                    //    _saveStack[i] = _stack[i];
-                    //}
-                    ShowEStack();
-                    //if (_stack[2] == 0)
-                    //{
-                    //    Console.WriteLine("** Zero-width RasterOp called!");
-                    PERQSystem.Instance.Break();
-                    //}
-                    //else
-                    {
-                        Console.WriteLine("** LINE op:");
-                    }
-                }
-                else if (foo == 241 && next != 241)
-                {
-                    // Finished executing the LINE, turn off logging
-                    foo = 0;
-                    //ShowRopRegs();
-                    //ShowRopState();
-                    ClearRopLogging();
-                }
-            }
-#endif
         }
 
         /// <summary>
@@ -1964,8 +1929,7 @@ namespace PERQemu.CPU
         {
 #if TRACING_ENABLED
             // Bundled all these for convenience...
-            Trace.TraceLevel |= (LogType.RegisterAssignment | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
-            //Trace.TraceLevel |= LogType.RasterOp;
+            Trace.TraceLevel |= (LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
 #endif
         }
 
@@ -1979,8 +1943,7 @@ namespace PERQemu.CPU
         private void ClearRopLogging()
         {
 #if TRACING_ENABLED
-            Trace.TraceLevel &= ~(LogType.RegisterAssignment | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
-            //Trace.TraceLevel &= ~LogType.RasterOp;
+            Trace.TraceLevel &= ~(LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
 #endif
         }
 
@@ -2000,13 +1963,6 @@ namespace PERQemu.CPU
         private void ShowRopRegs()
         {
             _rasterOp.ShowRegs();
-#if DEBUG
-            Console.WriteLine("\nSaved Estack:");
-            for (int i = 0; i < _saveStack.Length; i++)
-            {
-                Console.WriteLine("{0} {1:00}: {2:x5}", (i == _stackPointer ? "=>" : "  "), i, _saveStack[i]);
-            }
-#endif
         }
 
         [DebugFunction("show z80 state", "Display current Z80 device ready state")]
@@ -2101,10 +2057,7 @@ namespace PERQemu.CPU
 
         // RasterOp
         private RasterOp _rasterOp;
-#if DEBUG
-        private int foo;                        // FIXME remove after debugging
-        private int[] _saveStack = new int[16]; // snapshot of Estack for rop debug
-#endif
+
         // Multiplier Quotient register ("MQ") only exists in the 16K CPU, but some
         // microcode (VFY 2.x, e.g.) tries to write/read from MQ to test for WCS size
         // on the fly.  So we define MQ for both CPU types, but essentially treat it
