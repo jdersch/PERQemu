@@ -1,0 +1,530 @@
+
+If you are one of the six people left on the planet who care about the old PERQ,
+AND you want to run PERQemu on the Mac... well, you're a rare and magnificent jewel
+of a human being.  I salute you, and apologize for the pain you are about to
+endure (though, like me, you're probably used to it by now)...
+
+This is a rewritten keyboard handler for Mono to allow PERQemu to run on the Mac.
+
+In short, it actually maps the apple virtual key ids to the windows vkeys, which
+for some godforsaken reason have no bearing on reality in the default Mono build.
+Because the PERQ could distinguish shifted versus unshifted control keys, here I
+map ^A to the letter A with the control modifier bit set, NOT to the ASCII \001,
+which had all sorts of hilariously broken behavior.  Pressing the SHIFT keys sent
+^P.  Pressing CTRL (by itself) sent a ^Q.  Madness.
+
+This patch was first developed on Mono 2.10.x/MacOS X 10.5.8/PPC; essentially the
+exact same patch (with maybe a few line number changes) also applied to Mono 4.6.x/
+MacOS X 10.10.5/Intel so it's clear this hasn't been touched in a long time.
+
+	Please note:
+	I make ABSOLUTELY NO WARRANTIES as to whether this code will work with any
+	other Mono application besides PERQemu!!
+
+	Also note:
+	If anyone reading this has a simpler solution or wants to figure out how to
+	get this patch properly tested and integrated into Mono itself, I'm all ears.
+	I tried years ago, but it just wasn't the hill I wanted to die on...
+
+To build and install:
+
+	Unpack yer Mono source tarball or zip or whatnot;
+
+	Locate KeyboardHandler.cs and rename it; it should be in
+		mono-n.n.n/mcs/class/Managed.Windows.Forms/System.Windows.Forms.CarbonInternal
+
+	Strip out these comments and drop this file in as KeyboardHandler.cs;
+
+	Get some coffee while "make" grinds it out.
+
+If you're the type who already has a Mono source tree unpacked and laying about (hey,
+I don't judge, we got all kinds), you can just update the one DLL this changes into
+your /Library directly.  It'll be sumpthin like
+
+	cd /Library/Frameworks/Mono.framework/Libraries/mono/gac/System.Windows.Forms
+	sudo cp /path/to/mono-n.n.n/mcs/class/lib/net_4_0/System.Windows.Forms.dll ./4.0.0.0__blah/
+
+	(Good idea to back up your original one first, naturally.)
+
+Here's from my machine:
+
+/Library/Frameworks/Mono.framework/Versions/4.6.1/lib/mono/gac/System.Windows.Forms/4.0.0.0__b77a5c561934e089/
+total 16896
+-rwxr-xr-x  1 root  admin  3050496 Jul 23  2017 System.Windows.Forms.dll*
+-rw-r--r--  1 root  admin  1229821 Jul 23  2017 System.Windows.Forms.dll.mdb
+-rw-r--r--  1 root  admin  1312594 Sep 23  2016 System.Windows.Forms.dll.mdb.orig
+-rwxr-xr-x  1 root  admin  3051008 Sep 23  2016 System.Windows.Forms.dll.orig*
+
+Of course you can just "make install" the whole shebang if you're feeling saucy.  That
+way you won't screw up any other apps that use the same version of Mono on your machine,
+if any.  Put that version in your $PATH and "mono --version" to confirm, then boot up
+PERQemu and bask in the glow.
+
+If you have questions or difficulties, contact me directly at skeezicsb@gmail.com.
+Please don't bug Josh Dersch about this, since this mess is entirely my own and he's
+busy enough as it is. :-)
+
+Share and enjoy!
+
+-------- >8 snip -------- >8 snip -------- >8 snip --------
+
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+// 
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Copyright (c) 2007 Novell, Inc.
+//
+// Authors:
+//  Geoff Norton (gnorton@novell.com)
+//
+//
+using System;
+using System.Collections;
+using System.Text;
+using System.Globalization;
+using System.Runtime.InteropServices;
+
+namespace System.Windows.Forms.CarbonInternal {
+	internal class KeyboardHandler : EventHandlerBase, IEventHandler {
+		internal const uint kEventRawKeyDown = 1;
+		internal const uint kEventRawKeyRepeat = 2;
+		internal const uint kEventRawKeyUp = 3;
+		internal const uint kEventRawKeyModifiersChanged = 4;
+		internal const uint kEventHotKeyPressed = 5;
+		internal const uint kEventHotKeyReleased = 6;
+
+		internal const uint kEventParamKeyMacCharCodes = 1801676914;
+		internal const uint kEventParamKeyCode = 1801678692;
+		internal const uint kEventParamKeyModifiers = 1802334052;
+		internal const uint kEventTextInputUnicodeForKeyEvent = 2;
+		internal const uint kEventParamTextInputSendText = 1953723512;
+
+		internal const uint typeChar = 1413830740;
+		internal const uint typeUInt32 = 1835100014;
+		internal const uint typeUnicodeText = 1970567284;
+
+		// enum from Carbon Events.h:
+		internal const uint activeFlagBit	= 0;    // activate? (activateEvt and mouseDown)
+		internal const uint btnStateBit		= 7;    // state of button?
+		internal const uint cmdKeyBit		= 8;    // command key down?
+		internal const uint shiftKeyBit		= 9;    // shift key down?
+		internal const uint alphaLockBit	= 10;   // alpha lock down?
+		internal const uint optionKeyBit	= 11;   // option key down?
+		internal const uint controlKeyBit	= 12;   // control key down?
+		internal const uint rightShiftKeyBit	= 13;   // right shift key down?
+		internal const uint rightOptionKeyBit	= 14;   // right Option key down?
+		internal const uint rightControlKeyBit	= 15;   // right Control key down?
+
+		internal const int kmTabMax = 15;		// (i.e. rightControlKeyBit)
+		internal const int kmTabSize = 32;		// size of the modifier table
+
+		internal static byte [] key_modifier_table;	// state of the modifier keys
+		internal static byte [] mac_to_win_vkey_table;	// raw mac virtual keys -> windows vkeys
+
+		internal static bool translate_modifier = false;
+
+		internal string ComposedString;
+
+		static KeyboardHandler () {
+
+			//
+			// a straight one-to-one mapping of/ apple's virtual key ids to windows vkeys.
+			// apple's symbolic constants are in the carbon framework's Events.h.  this leaves
+			// modifier keys to be processed by the consumers (including shifted chars).  but
+			// we pass through the "unicode" char that macos gives us unmodified, so apps using
+			// using the "char" code (KeyPress event) instead of the "key" code (KeyDown event)
+			// will get shift processing for free.  PERQemu only cares about the former...
+			//
+			// notes:
+			// keys codes that are never generated by the mac are mapped to 0x00; keys that exist
+			// but are unused in this implementation send 0xFC (Keys.NoName).  change those (or any
+			// mapping) to 0x00 to prevent generating a key event (like the old key_filter_table).
+			// some of the function keys are consumed by macosx and aren't passed to mono, but i
+			// set up the mapping anyway.
+			//
+			mac_to_win_vkey_table = new byte [256] {
+				0x41,	// 0x00 = kVK_ANSI_A = Keys.A
+				0x53,	// 0x01 = kVK_ANSI_S = Keys.S
+				0x44,	// 0x02 = kVK_ANSI_D = Keys.D
+				0x46,	// 0x03 = kVK_ANSI_F = Keys.F
+				0x48,	// 0x04 = kVK_ANSI_H = Keys.H
+				0x47,	// 0x05 = kVK_ANSI_G = Keys.G
+				0x5A,	// 0x06 = kVK_ANSI_Z = Keys.Z
+				0x58,	// 0x07 = kVK_ANSI_X = Keys.X
+				0x43,	// 0x08 = kVK_ANSI_C = Keys.C
+				0x56,	// 0x09 = kVK_ANSI_V = Keys.V
+				0x00,	// 0x0A = <none>
+				0x42,	// 0x0B = kVK_ANSI_B = Keys.B
+				0x51,	// 0x0C = kVK_ANSI_Q = Keys.Q
+				0x57,	// 0x0D = kVK_ANSI_W = Keys.W
+				0x45,	// 0x0E = kVK_ANSI_E = Keys.E
+				0x52,	// 0x0F = kVK_ANSI_R = Keys.R
+				0x59,	// 0x10 = kVK_ANSI_Y = Keys.Y
+				0x54,	// 0x11 = kVK_ANSI_T = Keys.T
+				0x31,	// 0x12 = kVK_ANSI_1 = Keys.D1
+				0x32,	// 0x13 = kVK_ANSI_2 = Keys.D2
+				0x33,	// 0x14 = kVK_ANSI_3 = Keys.D3
+				0x34,	// 0x15 = kVK_ANSI_4 = Keys.D4
+				0x36,	// 0x16 = kVK_ANSI_6 = Keys.D6
+				0x35,	// 0x17 = kVK_ANSI_5 = Keys.D5
+				0xBB,	// 0x18 = kVK_ANSI_Equal = Keys.Oemplus
+				0x39,	// 0x19 = kVK_ANSI_9 = Keys.D9
+				0x37,	// 0x1A = kVK_ANSI_7 = Keys.D7
+				0xBD,	// 0x1B = kVK_ANSI_Minus = Keys.OemMinus
+				0x38,	// 0x1C = kVK_ANSI_8 = Keys.D8
+				0x30,	// 0x1D = kVK_ANSI_0 = Keys.D0
+				0xDD,	// 0x1E = kVK_ANSI_RightBracket = Keys.OemCloseBrackets
+				0x4F,	// 0x1F = kVK_ANSI_O = Keys.O
+				0x55,	// 0x20 = kVK_ANSI_U = Keys.U
+				0xDB,	// 0x21 = kVK_ANSI_LeftBracket = Keys.OemOpenBracket
+				0x49,	// 0x22 = kVK_ANSI_I = Keys.I
+				0x50,	// 0x23 = kVK_ANSI_P = Keys.P
+				0x0D,	// 0x24 = kVK_Return = Keys.Return
+				0x4C,	// 0x25 = kVK_ANSI_L = Keys.L
+				0x4A,	// 0x26 = kVK_ANSI_J = Keys.J
+				0xDE,	// 0x27 = kVK_ANSI_Quote = Keys.OemQuotes
+				0x4B,	// 0x28 = kVK_ANSI_K = Keys.K
+				0xBA,	// 0x29 = kVK_ANSI_Semicolon = Keys.OemSemicolon
+				0xDC,	// 0x2A = kVK_ANSI_Backslash = Keys.OemPipe 	(not 0xE2, OemBackslash)
+				0xBC,	// 0x2B = kVK_ANSI_Comma = Keys.Oemcomma
+				0xBF,	// 0x2C = kVK_ANSI_Slash = Keys.OemQuestion
+				0x4E,	// 0x2D = kVK_ANSI_N = Keys.N
+				0x4D,	// 0x2E = kVK_ANSI_M = Keys.M
+				0xBE,	// 0x2F = kVK_ANSI_Period = Keys.OemPeriod
+				0x09,	// 0x30 = kVK_Tab = Keys.Tab
+				0x20,	// 0x31 = kVK_Space = Keys.Space
+				0xC0,	// 0x32 = kVK_ANSI_Grave = Keys.Oemtilde
+				0x08,	// 0x33 = kVK_Delete = Keys.Back	(map to BackSpace; use ForwardDelete for Delete)
+				0x00,	// 0x34 = <none>
+				0x1B,	// 0x35 = kVK_Escape = Keys.Escape
+				0x00,	// 0x36 = <none>
+				0x12,	// 0x37 = kVK_Command = Keys.Menu		(closest approximation?)
+				0x10,	// 0x38 = kVK_Shift = Keys.Shift
+				0x14,	// 0x39 = kVK_CapsLock = Keys.CapsLock		(aka Keys.Capital)
+				0xFC,	// 0x3A = kVK_Option = Keys.NoName		(unused)
+				0x11,	// 0x3B = kVK_Control = Keys.ControlKey		(not same as Keys.LControlKey?)
+				0xA1,	// 0x3C = kVK_RightShift = Keys.RShiftKey
+				0xFC,	// 0x3D = kVK_RightOption = Keys.NoName		(unused)
+				0xA3,	// 0x3E = kVK_RightControl = Keys.RControlKey
+				0xFC,	// 0x3F = kVK_Function = Keys.NoName		(unused)
+				0x80,	// 0x40 = kVK_F17 = Keys.F17			(not present on mac keyboards)
+				0x6E,	// 0x41 = kVK_ANSI_KeypadDecimal = Keys.Decimal
+				0x00,	// 0x42 = <none>
+				0x6A,	// 0x43 = kVK_ANSI_KeypadMultiply = Keys.Multiply
+				0x00,	// 0x44 = <none>
+				0x6B,	// 0x45 = kVK_ANSI_KeypadPlus = Keys.Add
+				0x00,	// 0x46 = <none>
+				0xFE,	// 0x47 = kVK_ANSI_KeypadClear = Keys.OemClear	(or 0x0C, Keys.Clear?? :-()
+				0xAF,	// 0x48 = kVK_VolumeUp = Keys.VolumeUp
+				0xAE,	// 0x49 = kVK_VolumeDown = Keys.VolumeDown
+				0xAD,	// 0x4A = kVK_Mute = Keys.VolumeMute
+				0x6F,	// 0x4B = kVK_ANSI_KeypadDivide = Keys.Divide
+				0x0D,	// 0x4C = kVK_ANSI_KeypadEnter = Keys.Enter
+				0x00,	// 0x4D = <none>
+				0x6D,	// 0x4E = kVK_ANSI_KeypadMinus = Keys.Subtract
+				0x81,	// 0x4F = kVK_F18 = Keys.F18			(not present on mac keyboards)
+				0x82,	// 0x50 = kVK_F19 = Keys.F19			(not present on mac keyboards)
+				0xBB,	// 0x51 = kVK_ANSI_KeypadEquals = Keys.Oemplus ???
+				0x60,	// 0x52 = kVK_ANSI_Keypad0 = Keys.NumPad0
+				0x61,	// 0x53 = kVK_ANSI_Keypad1 = Keys.NumPad1
+				0x62,	// 0x54 = kVK_ANSI_Keypad2 = Keys.NumPad2
+				0x63,	// 0x55 = kVK_ANSI_Keypad3 = Keys.NumPad3
+				0x64,	// 0x56 = kVK_ANSI_Keypad4 = Keys.NumPad4
+				0x65,	// 0x57 = kVK_ANSI_Keypad5 = Keys.NumPad5
+				0x66,	// 0x58 = kVK_ANSI_Keypad6 = Keys.NumPad6
+				0x67,	// 0x59 = kVK_ANSI_Keypad7 = Keys.NumPad7
+				0x83,	// 0x5A = kVK_F20 = Keys.F20			(not present on mac keyboards)
+				0x68,	// 0x5B = kVK_ANSI_Keypad8 = Keys.NumPad8
+				0x69,	// 0x5C = kVK_ANSI_Keypad9 = Keys.NumPad9
+				0x00,	// 0x5D = <none>
+				0x00,	// 0x5E = <none>
+				0x00,	// 0x5F = <none>
+				0x74,	// 0x60 = kVK_F5 = Keys.F5
+				0x75,	// 0x61 = kVK_F6 = Keys.F6
+				0x76,	// 0x62 = kVK_F7 = Keys.F7
+				0x72,	// 0x63 = kVK_F3 = Keys.F3
+				0x77,	// 0x64 = kVK_F8 = Keys.F8
+				0x78,	// 0x65 = kVK_F9 = Keys.F9		(used by macosx)
+				0x00,	// 0x66 = <none>
+				0x7A,	// 0x67 = kVK_F11 = Keys.F11		(used by macosx)
+				0x00,	// 0x68 = <none>
+				0x7C,	// 0x69 = kVK_F13 = Keys.F13
+				0x7F,	// 0x6A = kVK_F16 = Keys.F16
+				0x7D,	// 0x6B = kVK_F14 = Keys.F14		(used by macosx)
+				0x00,	// 0x6C = <none>
+				0x79,	// 0x6D = kVK_F10 = Keys.F10		(used by macosx)
+				0x00,	// 0x6E = <none>
+				0x7B,	// 0x6F = kVK_F12 = Keys.F12		(used by macosx)
+				0x00,	// 0x70 = <none>
+				0x7E,	// 0x71 = kVK_F15 = Keys.F15		(used by macosx)
+				0x2F,	// 0x72 = kVK_Help = Keys.Help
+				0x24,	// 0x73 = kVK_Home = Keys.Home
+				0x21,	// 0x74 = kVK_PageUp = Keys.PageUp
+				0x2E,	// 0x75 = kVK_ForwardDelete = Keys.Delete
+				0x73,	// 0x76 = kVK_F4 = Keys.F4
+				0x23,	// 0x77 = kVK_End = Keys.End
+				0x71,	// 0x78 = kVK_F2 = Keys.F2
+				0x22,	// 0x79 = kVK_PageDown = Keys.PageDown
+				0x70,	// 0x7A = kVK_F1 = Keys.F1
+				0x25,	// 0x7B = kVK_LeftArrow = Keys.Left
+				0x27,	// 0x7C = kVK_RightArrow = Keys.Right
+				0x28,	// 0x7D = kVK_DownArrow = Keys.Down
+				0x26,	// 0x7E = kVK_UpArrow = Keys.Up
+				0x00,	// 0x7F = <none>
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0x80 .. 0x87
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0x88 .. 0x8F
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0x90 .. 0x97
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0x98 .. 0x9F
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xA0 .. 0xA7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xA8 .. 0xAF
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xB0 .. 0xB7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xB8 .. 0xBF
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xC0 .. 0xC7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xC8 .. 0xCF
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xD0 .. 0xD7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xD8 .. 0xDF
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xE0 .. 0xE7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xE8 .. 0xEF
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// 0xF0 .. 0xF7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	// 0xF8 .. 0xFF
+			};
+
+			// the key modifier table is a state table of the possible modifier keys
+			// apple currently only goes up to 1 << 15 keys, we've extended this to 32
+			// bytes as thats the size that apple uses
+			key_modifier_table = new byte [kmTabSize];
+		}
+
+		internal KeyboardHandler (XplatUICarbon driver) : base (driver) {}
+
+		private void ModifierToVirtualKey (int i, ref MSG msg, bool down) {
+			msg.hwnd = XplatUICarbon.FocusWindow;
+
+			if (i == shiftKeyBit || i == rightShiftKeyBit) {
+				msg.message = (down ? Msg.WM_KEYDOWN : Msg.WM_KEYUP);
+				msg.wParam = (IntPtr) VirtualKeys.VK_SHIFT;
+				msg.lParam = IntPtr.Zero;
+				return;
+			}
+			if (i == controlKeyBit || i == rightControlKeyBit) {
+				msg.message = (down ? Msg.WM_KEYDOWN : Msg.WM_KEYUP);
+				msg.wParam = (IntPtr) VirtualKeys.VK_CONTROL;
+				msg.lParam = IntPtr.Zero;
+				return;
+			}
+			if (i == cmdKeyBit) {
+				msg.message = (down ? Msg.WM_SYSKEYDOWN : Msg.WM_SYSKEYUP);
+				msg.wParam = (IntPtr) VirtualKeys.VK_MENU;
+				msg.lParam = new IntPtr (0x20000000);
+				return;
+			}
+			if (i == alphaLockBit) {
+				msg.message = (down ? Msg.WM_SYSKEYDOWN : Msg.WM_SYSKEYUP);
+				msg.wParam = (IntPtr) VirtualKeys.VK_CAPITAL;
+				msg.lParam = IntPtr.Zero;
+				return;
+			}
+
+			return;
+		}
+
+		public void ProcessModifiers (IntPtr eventref, ref MSG msg) {
+			// we get notified when modifiers change, but not specifically what changed
+			UInt32 modifiers = 0;
+
+			GetEventParameter (eventref, kEventParamKeyModifiers, typeUInt32, IntPtr.Zero, (uint)Marshal.SizeOf (typeof (UInt32)), IntPtr.Zero, ref modifiers);
+
+			for (int i = 0; i < kmTabMax; i++) {
+				if (key_modifier_table [i] == 0x01 && (modifiers & (1 << i)) == 0) {
+					ModifierToVirtualKey (i, ref msg, false);
+					key_modifier_table [i] = 0x00;
+					return;
+				} else if (key_modifier_table [i] == 0x00 && (modifiers & (1 << i)) == (1 << i)) {
+					ModifierToVirtualKey (i, ref msg, true);
+					key_modifier_table [i] = 0x01;
+					return;
+				}
+			}
+
+			return;
+		}
+
+		public void ProcessText (IntPtr eventref, ref MSG msg) {
+			UInt32 size = 0;
+			IntPtr buffer = IntPtr.Zero;
+			byte [] bdata;
+
+			// get the size of the unicode buffer
+			GetEventParameter (eventref, kEventParamTextInputSendText, typeUnicodeText, IntPtr.Zero, 0, ref size, IntPtr.Zero);
+
+			buffer = Marshal.AllocHGlobal ((int) size);
+			bdata = new byte [size];
+
+			// get the actual text buffer
+			GetEventParameter (eventref, kEventParamTextInputSendText, typeUnicodeText, IntPtr.Zero, size, IntPtr.Zero, buffer);
+
+			Marshal.Copy (buffer, bdata, 0, (int) size);
+			Marshal.FreeHGlobal (buffer);
+
+			if (size == 1) {
+				msg.message = Msg.WM_CHAR;
+				msg.wParam = BitConverter.IsLittleEndian ? (IntPtr) bdata [0] : (IntPtr) bdata [size-1];
+				msg.lParam = IntPtr.Zero;
+				msg.hwnd = XplatUICarbon.FocusWindow;
+			} else {
+				msg.message = Msg.WM_IME_COMPOSITION;
+				Encoding enc = BitConverter.IsLittleEndian ? Encoding.Unicode : Encoding.BigEndianUnicode;
+				ComposedString = enc.GetString (bdata);
+				msg.hwnd = XplatUICarbon.FocusWindow;
+			}
+		}
+
+		public void ProcessKeyPress (IntPtr eventref, ref MSG msg) {
+			byte charCode = 0;
+			byte winKeyCode = 0;
+			uint macKeyCode = 0;
+
+			GetEventParameter (eventref, kEventParamKeyMacCharCodes, typeChar, IntPtr.Zero, (uint)Marshal.SizeOf (typeof (byte)), IntPtr.Zero, ref charCode);
+			GetEventParameter (eventref, kEventParamKeyCode, typeUInt32, IntPtr.Zero, (uint)Marshal.SizeOf (typeof (uint)), IntPtr.Zero, ref macKeyCode);
+
+			winKeyCode = mac_to_win_vkey_table [macKeyCode];	// get raw mac key -> raw win vkey
+			msg.lParam = (IntPtr) charCode;				// whatever macos gives us
+			msg.wParam = (IntPtr) winKeyCode;			// translated mac->win keycode
+			msg.hwnd = XplatUICarbon.FocusWindow;
+		}
+
+		public bool ProcessEvent (IntPtr callref, IntPtr eventref, IntPtr handle, uint kind, ref MSG msg) {
+                        uint klass = EventHandler.GetEventClass (eventref);
+			bool result = true;
+
+			if (klass == EventHandler.kEventClassTextInput) {
+				switch (kind) {
+					case kEventTextInputUnicodeForKeyEvent:
+						ProcessText (eventref, ref msg);
+						break;
+					default:
+						Console.WriteLine ("WARNING: KeyboardHandler.ProcessEvent default handler for kEventClassTextInput should not be reached");
+						break;
+				}
+			} else if (klass == EventHandler.kEventClassKeyboard) {
+				switch (kind) {
+					case kEventRawKeyDown:
+					case kEventRawKeyRepeat:
+						msg.message = Msg.WM_KEYDOWN;
+						ProcessKeyPress (eventref, ref msg);
+						break;
+					case kEventRawKeyUp:
+						msg.message = Msg.WM_KEYUP;
+						ProcessKeyPress (eventref, ref msg);
+						break;
+					case kEventRawKeyModifiersChanged:
+						ProcessModifiers (eventref, ref msg);
+						break;
+					default:
+						Console.WriteLine ("WARNING: KeyboardHandler.ProcessEvent default handler for kEventClassKeyboard should not be reached");
+						break;
+				}
+			} else {
+				Console.WriteLine ("WARNING: KeyboardHandler.ProcessEvent default handler for kEventClassTextInput should not be reached");
+			}
+
+			return result;
+		}
+
+		public bool TranslateMessage (ref MSG msg) {
+			bool res = false;
+ 
+			if (msg.message >= Msg.WM_KEYFIRST && msg.message <= Msg.WM_KEYLAST)
+				res = true;
+			
+			if (msg.message != Msg.WM_KEYDOWN &&
+			    msg.message != Msg.WM_SYSKEYDOWN &&
+			    msg.message != Msg.WM_KEYUP &&
+			    msg.message != Msg.WM_SYSKEYUP &&
+			    msg.message != Msg.WM_CHAR &&
+			    msg.message != Msg.WM_SYSCHAR) 
+				return res;
+
+			if (key_modifier_table [cmdKeyBit] == 0x01 &&
+			    key_modifier_table [controlKeyBit] == 0x00 &&
+			    key_modifier_table [rightControlKeyBit] == 0x00) {
+				if (msg.message == Msg.WM_KEYDOWN) {
+					msg.message = Msg.WM_SYSKEYDOWN;
+				} else if (msg.message == Msg.WM_CHAR) {
+					msg.message = Msg.WM_SYSCHAR;
+					translate_modifier = true;
+				} else if (msg.message == Msg.WM_KEYUP) {
+					msg.message = Msg.WM_SYSKEYUP;
+				} else {
+					return res;
+				}
+
+				msg.lParam = new IntPtr (0x20000000);
+			} else if (msg.message == Msg.WM_SYSKEYUP && translate_modifier && msg.wParam == (IntPtr) 18) { /* XXX */
+				msg.message = Msg.WM_KEYUP;
+				
+				msg.lParam = IntPtr.Zero;
+				translate_modifier = false;
+			}
+
+			return res;
+		}
+
+		internal Keys ModifierKeys {
+			get {
+				Keys keys = Keys.None;
+				if (key_modifier_table [shiftKeyBit] == 0x01 ||
+				    key_modifier_table [rightShiftKeyBit] == 0x01) {
+					keys |= Keys.Shift;
+				}
+				if (key_modifier_table [controlKeyBit] == 0x01 ||
+				    key_modifier_table [rightControlKeyBit] == 0x01) {
+					keys |= Keys.Control;
+				}
+				if (key_modifier_table [cmdKeyBit] == 0x01) {
+					keys |= Keys.Alt;
+				}
+				return keys;
+			}
+		}
+
+		[DllImport ("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
+		static extern int GetEventParameter (IntPtr eventref, uint name, uint type, IntPtr outtype, uint size, ref UInt32 outsize, IntPtr data);
+		[DllImport ("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
+		static extern int GetEventParameter (IntPtr eventref, uint name, uint type, IntPtr outtype, uint size, IntPtr outsize, IntPtr data);
+		[DllImport ("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
+		static extern int GetEventParameter (IntPtr eventref, uint name, uint type, IntPtr outtype, uint size, IntPtr outsize, ref byte data);
+		[DllImport ("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
+		static extern int GetEventParameter (IntPtr eventref, uint name, uint type, IntPtr outtype, uint size, IntPtr outsize, ref UInt32 data);
+	}
+
+	/* not actually used anywhere? */
+	/* internal enum KeyboardModifiers : uint {
+		activeFlag		= 1 << activeFlagBit,
+		btnState		= 1 << btnStateBit,
+		cmdKey			= 1 << cmdKeyBit,
+		shiftKey		= 1 << shiftKeyBit,
+		alphaLock		= 1 << alphaLockBit,
+		optionKey		= 1 << optionKeyBit,
+		controlKey		= 1 << controlKeyBit,
+		rightShiftKey		= 1 << rightShiftKeyBit,
+		rightOptionKey		= 1 << rightOptionKeyBit,
+		rightControlKey		= 1 << rightControlKeyBit
+	}; */
+
+}

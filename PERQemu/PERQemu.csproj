@@ -519,6 +519,11 @@
     <None Include="PROM\mask_table.txt" />
     <None Include="PROM\memstate_table.txt" />
     <None Include="Docs\NewIOPorts.txt" />
+    <None Include="Readme-source.txt" />
+    <Content Include="Readme.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Include="Docs\KeyboardHandler.cs.Mac" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
@@ -527,9 +532,6 @@
     <Content Include="Docs\z80 docs\z80ram_addr.txt" />
     <Content Include="Docs\z80 docs\z80rom_addr.txt" />
     <Content Include="PERQemu.ico" />
-    <Content Include="Readme-source.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
