@@ -107,9 +107,9 @@ The first corresponded to PERQemu version 0.3.x.
 The following hardware has been implemented in the emulator to an extent that
 it is reasonably functional and stable (though there may still be issues):
 
-- PERQ 4K CPU - 99.9% complete.  Everything seems to work, all diagnostics pass.
+- PERQ 4K CPU - Complete.  Everything seems to work, all diagnostics pass.
 
-- PERQ 16K CPU - 99.9% complete.  Mulstep/Divstep is complete, but testing has
+- PERQ 16K CPU - Complete.  Mulstep/Divstep is complete, but testing has
   not been what you'd call "exhaustive."  Single-precision multiplication and
   division works, though there is no code (in POS D or F, anyway) using the
   Mul/Div unit.  It is unknown at this point if early versions of Accent or PNX
@@ -119,7 +119,7 @@ it is reasonably functional and stable (though there may still be issues):
     support is toggled by the "SIXTEEN_K" conditional compilation symbol.
 
 
-- Memory - 99.9% complete.  The default memory board provides 1MB (.5MW) of RAM.
+- Memory - Complete.  The default memory board provides 1MB (.5MW) of RAM.
   You can increase this to 2MB (1MW, the maximum supported) by enabling the
   "TWO_MEG" conditional compilation symbol, which is enabled by default in all
   release builds.  The PERQ could run with as little as .5MB (.25MW) but unless
@@ -131,7 +131,7 @@ it is reasonably functional and stable (though there may still be issues):
     in the \PROM directory.
 
 
-- RasterOp - 99.9% complete.  The newest cycle-accurate emulation, working with
+- RasterOp - Complete.  The newest cycle-accurate emulation, working with
   the new Memory implementation, is enabled by default.  The old "fake" RasterOp
   code is gone.
 
@@ -149,7 +149,7 @@ it is reasonably functional and stable (though there may still be issues):
     for the actual media emulation.
 
 
-- Display - 99% complete.  The emulator trusts the microcode to set the correct
+- Display - Complete.  The emulator trusts the microcode to set the correct
   video register values to account for horizontal and vertical refresh timing,
   and it appears to be accurate for POS, Accent and PNX.  Only the portrait
   display is offered (for now).
@@ -157,11 +157,11 @@ it is reasonably functional and stable (though there may still be issues):
     This is implemented by code under \Display.
 
 
-- Z80 Subsystem - 97% complete.  Currently only a simulation of the real thing;
-  as this is completely transparent (the PERQ1 can't upload custom software to
-  the Z80 so a simulation is sufficient) a full emulation of the Z80 hardware
-  is very low on my list of priorities (but it would be nice to have for
-  accuracy's sake, and to enable PERQ-2 emulation).
+- Z80 Subsystem - Mostly complete.  Mostly.  Currently only a simulation of the
+  real thing; as this is completely transparent (the PERQ1 can't upload custom
+  software to the Z80 so a simulation is sufficient) a full emulation of the Z80
+  hardware is very low on my list of priorities (but it would be nice to have
+  for accuracy's sake, and to enable PERQ-2 emulation).
 
     This is implemented by a huge wad of code under \IO\Z80.  This deserves its
     own section, really.  Subdevices that are implemented are:

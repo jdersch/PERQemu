@@ -1742,9 +1742,9 @@ namespace PERQemu.CPU
         [DebugFunction("jump", "Set next microinstruction address")]
         private void JumpTo(ushort nextPC)
         {
-            if (nextPC <= 0 || nextPC > _microcode.Length)
+            if (nextPC < 0 || nextPC >= _microcode.Length)
             {
-                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _microcode.Length);
+                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _microcode.Length - 1);
             }
             else
             {

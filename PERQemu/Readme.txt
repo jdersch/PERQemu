@@ -406,26 +406,25 @@ floppy drive banging away on floppy boots... :-)
 The following hardware has been implemented in the emulator to an extent that
 it is reasonably functional (though there may still be issues):
 
-- PERQ 4K CPU - 99.9% complete.  Everything seems to work, all diagnostics
-  pass and it works enough to allow POS to boot.  The last 0.1% is for the
-  remaining bugs of which I'm sure there are more than a few.
+- PERQ 4K CPU - Complete.  Everything seems to work, all diagnostics pass
+  and it works enough to allow POS to boot.
   
-- PERQ 16K CPU - 99.9% complete.  Mulstep/Divstep is implemented but not
+- PERQ 16K CPU - Complete.  Mulstep/Divstep is implemented but not
   exhaustively tested.  Pretty sure we've got this nailed.
   
-- Memory and RasterOp - 99% complete.  Though in daily use and run through a
+- Memory and RasterOp - Complete.  Though in daily use and run through a
   fairly rigorous variety of tests, three different OSes and every bit of
   working software I can get my hands on, there's just the tiniest lingering
   doubt that a weird edge case may still crop up.  However, both Memory and
-  RasterOp are now state-machine driven and small tweaks to the ROM images
-  have been able to correct those when they're (painstakingly) identified.
+  RasterOp are now table driven and small tweaks to the ROM images have been
+  able to correct those when they're (painstakingly) identified.
   
 - Hard and Floppy disk - 95% complete.  Enough is implemented to allow 
   bringing up an "empty" hard disk with a new POS install from floppy images.
   Double-density floppy support is notably spotty, and there are some very
   low-level utilities that aren't fooled by our emulation, so work is ongoing.
 
-- Keyboard - 100% complete.  Except for a HUGE CAVEAT FOR MacOS/Mono USERS:
+- Keyboard - 99% complete.  Except for a HUGE CAVEAT FOR MacOS/Mono USERS:
 
     The Mac OS X keyboard driver for Mono is utterly broken for our
     purposes; I could not divine any way to update its mapping at a
@@ -434,16 +433,19 @@ it is reasonably functional (though there may still be issues):
     a PowerPC under 10.5.8 (Mono 2.10.x), the exact same patch still
     applies to Mono 4.6.x on MacOS X Yosemite/Intel.  Obviously nobody
     has looked at that code in years, or PERQemu just has requirements
-    that nobody else running Mono on a Mac has ever run across, ever.
+    that nobody else running Mono on a Mac has ever run across, ever.  :-|
 
     The fix, if you feel like sitting through a rebuild of Mono (or
     trying to pester the right people in the right place to get this
     applied to the actual Mono distribution?) is included in my fork
     of PERQemu at
         https://github.com/skeezicsb/PERQemu/Docs/KeyboardHandler.cs.Mac
-   
-- Display and hardware cursor - 100% complete.  The streamlined code lets the
-  the microcode drive the vertical blanking, and the last of the mouse Y-pos
+
+    Currently caps lock is problematic and can get out of sync with the host.
+    This is a minor inconvenience but it's on the bug list...
+
+- Display and hardware cursor - Complete.  The streamlined code trusts the
+  microcode to drive the vertical blanking, and the last of the mouse Y-pos
   artifacts are gone.
 
 - Z80 Subsystem - 85% complete.  Currently only a simulation of the real 
@@ -452,16 +454,17 @@ it is reasonably functional (though there may still be issues):
   the Z80 hardware is very low on my list of priorities (but it would be nice 
   to have for accuracy's sake, or to allow PERQ-2 emulation).
    
-- RS232 - 100% complete.  Talks to a real serial port on the host (where 
+- RS232 - Complete.  Talks to a real serial port on the host (where 
   available).  Software running under emulation can control the physical
   port.
    
-- "Kriz" Tablet.  100% complete.  Any software that requires a pointing device
-  should function, though apps that require 4 buttons may be limited.  Though
-  these were rarely connected to a PERQ-1, they were supported -- and are FAR
-  more efficient for the OS to handle than the BitPadOne's ASCII-serial data
-  format so we enable them by default.  Note that Accent S4 only uses the GPIB
-  tablet; PNX is untried at this point.  In POS F, you can actually choose
+- Tablets (Kriz and GPIB).  Complete.  Any software that requires a pointing
+  device should function with either input device selected.  (See note above
+  regarding button mapping between the 4-button GPIB and 3-button Kriz mice.)
+  Though the Kriz tablets were rarely connected to a PERQ-1, they were supported
+  and are FAR more efficient for the OS to handle than the BitPadOne's ASCII-
+  serial data format so we enable them by default.  Note that Accent S4 only
+  uses the GPIB tablet; PNX is untried at this point.  In POS F, you can choose
   which one to use with a switch to LOGIN (or in your login profile):
         LOGIN /TABLETTYPE=BITPAD    selects GPIB
         LOGIN /TABLETTYPE=TABLET    selects Kriz
