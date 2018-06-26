@@ -524,6 +524,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="Docs\KeyboardHandler.cs.Mac" />
+    <None Include="Disks\d6.phd" />
+    <None Include="Disks\d6orig.phd" />
+    <None Include="Disks\f1.phd" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
