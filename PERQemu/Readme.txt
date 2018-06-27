@@ -71,7 +71,7 @@ is quite fast as the emulation is currently not particularly swift.
 If you've gotten this far you've unpacked the Zip archive and you have a 
 directory containing the emulator executable, PERQemu.exe.
 
-There are two subdirectories:
+There are three subdirectories:
 
     Disks - Contains disk images that the emulator can access:
 
@@ -81,7 +81,7 @@ There are two subdirectories:
         - f1.phd: A disk containing a more or less complete installation
               of POS F.1, including source, documentation, the Pascal
               compiler and a number of games, demos, and applications.
-              This was created from scratch from images on Bitsavers.
+              This was created from floppy images on Bitsavers.
 
         - f15.phd: A disk containing the first new POS release in
               over 30 years, built from scratch from a comprehensive
@@ -93,6 +93,8 @@ There are two subdirectories:
         - f15dev.phd: Same as f15.phd, but with all of the source
               code and development tools included.  A fascinating look
               at a complete operating system from the 1980s.
+
+    Floppies - Currently contains all of the floppy images for POS F.15.
 
     PROM  - Contains dumps of PERQ ROMs necessary for operation.
 
@@ -144,7 +146,7 @@ system being booted!  When the boot is complete, the DDS will typically show:
     Accent: 400 (1MB of memory) or 450 (2MB)
 
 The PERQ does its best to fool you into thinking it's broken, showing wierd
-noise or patterns on the display until it finally enables the video interrupt
+noise or patterns on the screen until it finally enables the video interrupt
 and the OS takes over the display.  Because we don't emulate the 2-3 minute
 "warm-up" time that the old Shugart hard drives required, most hard disk boots
 will complete in just a few seconds.  If your PERQ really is stuck, consult
@@ -170,7 +172,7 @@ Full POS documentation can be found on Bitsavers at
 
     http://www.bitsavers.org/pdf/perq/PERQ_SysSWRefManual_Feb1982.pdf
     
-(also in sys:user>doc> in the F.1 hard disk image, or :boot>docs in F.15)
+(also in sys:user>doc> in the F.1 hard disk image, or :boot>docs> in F.15)
     
 Interaction with POS is through the command-line interpreter called the
 Shell.  Here are some basic commands to get you started:
@@ -245,7 +247,7 @@ In the included D.6 disk image, an early release of the Accent OS from CMU
 is available too.  Accent is the forerunner of Mach, the kernel which was
 the basis for NeXTstep, which became MacOS X.  This version, S4, is an
 amazing and rare find, as it pre-dates the official S5 and S6 releases from
-Three Rivers/PERQ Systems in late 1984/early 1985.
+Three Rivers/PERQ Systems in late 1984-early 1985.
 
 To boot Accent, either type "set bootchar z" or wait for the DDS to read 151
 and hit the z key.  Accent's startup sequence is different, and this early
@@ -271,7 +273,7 @@ SAPPHIRE, the window manager, has a bunch of commands and some on-line help.
 All window manager commands are prefixed by Ctrl-Del, then a letter.  Until
 you're familiar with it, Ctrl-Del h for help brings up a command summary.
 There are also pop-up menus, and the icons change depending on what SAPPHIRE
-wants you to do (make a window, move a window, etc).  So to stop a program
+wants you to do (make a window, move a window, etc).  To interrupt a program
 in Accent, use Ctrl-Del c, or Ctrl-Del k for added oomph.
 
 Note that the mouse in Accent is in relative mode, which is awkward to emulate
@@ -280,13 +282,12 @@ and relocate the host's mouse, then release.  The PERQ will compute relative
 movement based on the direction of the next swipe, not the absolute coordinates
 in the window.  You'll catch on with a few tries. :-)
 
-Button, button, who's got the button?  Accent S4 only supports the 4-button
-BitPad puck, though I think they try to map things to match the 3-button Kriz
-puck.  If you have a 3-button mouse, left-middle-right should be mapped
-appropriately.  For a two-button mouse, Ctrl-Left simulates the third button;
-Ctrl-Right simulates the fourth PERQ button.  If you had a BitPad with a stylus
-(one button) or are using an old Apple one-button mouse, I just don't know what
-to tell ya...
+Button, button, who's got the button?  Accent S4 only enables the 4-button
+BitPad puck, though it maps the buttons to match the 3-button Kriz puck.  If
+you have a 3-button mouse, left-middle-right should be mapped appropriately.
+For a two-button mouse, Ctrl-Left simulates the third button; Ctrl-Right
+simulates the fourth PERQ button.  If you are using an old one-button Apple
+mouse, I just don't know what to tell ya...
 
 There is no clean way to log out of Accent, so the best way to make sure you
 flush buffers to disk (if you want to save your work) is to type "trap" at
@@ -310,11 +311,12 @@ PNX, another unfortunately named PERQ operating system, was a very early Unix
 V7/System III mashup that included an in-kernel window manager - possibly one
 of the first Unix variants to do so.  This was primarily run on PERQs in the
 UK, where PNX was developed by ICL.  Because the on-disk format is based on
-the Unix filesystem, it cannot co-reside on a disk with POS or Accent.  PNX
-also used their own language interpreter, running an instruction set more
-favorable to C than the original PERQ Q-codes.  However, PERQemu's debugger
-cannot accurately disassemble C-codes, since we don't currently have access
-to any PNX source code or documentation.
+the Unix filesystem, it cannot co-reside on a disk with POS or Accent (which
+share a common underlying filesystem layout).  PNX also used its own language
+interpreter, running an instruction set more favorable to C than the original
+PERQ Q-codes.  However, PERQemu's debugger cannot accurately disassemble PNX
+C-codes, since we don't currently have access to any PNX source code or
+documentation.
 
 Watch this space.
 
@@ -388,6 +390,7 @@ To load a disk image, use the LOAD FLOPPY/LOAD HARDDISK command from the
 debugger.
 
 To save a disk image, use the SAVE FLOPPY/SAVE HARDDISK command (go figure).
+You (currently) have to specify the pathname each time you save.
 
 To create a blank disk, use the CREATE FLOPPY/CREATE HARDDISK command.  This
 creates a blank, in-memory image of a disk.  You MUST save this image if you
