@@ -328,12 +328,16 @@ namespace PERQemu.Display
             {
                 int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
                 int screenAddress = renderLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
+
                 Display.Instance.DrawWord(screenAddress, TransformDisplayWord(MemoryBoard.Instance.FetchWord(dataAddress)));
             }
 
             if (CursorEnabled)
             {
-                RenderCursorLine();
+                if (_scanLine >= 0 && _scanLine <= _lastVisibleScanLine)
+                {
+                    RenderCursorLine();
+                }
             }
         }
 
@@ -348,16 +352,14 @@ namespace PERQemu.Display
 
             // We draw 8 bytes (4 words) of horizontal cursor data combined with
             // the background data on that line based on the current cursor function.
-            for (int x = cursorStartByte; x < cursorStartByte + 8 && x < PERQ_DISPLAYWIDTH_IN_BYTES; x++)
+            for (int x = cursorStartByte; x < cursorStartByte + 8; x++)
             {
-                if (x >= 0)
+                if (x >= 0 && x < PERQ_DISPLAYWIDTH_IN_BYTES)
                 {
                     byte backgroundByte = GetByte(backgroundStartByte + x);
                     byte cursorByte = GetByte(cursorAddress + (x - cursorStartByte));
 
-                    byte transformedByte = TransformCursorByte(backgroundByte, cursorByte);
-
-                    Display.Instance.DrawByte(screenAddress + x, transformedByte);
+                    Display.Instance.DrawByte(screenAddress + x, TransformCursorByte(backgroundByte, cursorByte));
                 }
             }
         }

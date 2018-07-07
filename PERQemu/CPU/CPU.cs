@@ -295,23 +295,24 @@ namespace PERQemu.CPU
                 _ioBus.Clock();
             }
 
-            // RasterOp in progress?
+            // If enabled, clock the RasterOp pipeline
             if (_rasterOp.Enabled)
             {
-                // Clock the RasterOp pipeline
                 _rasterOp.Clock();
+            }
 
-                // Do any pending RasterOp stores (supercede the ALU) if a
-                // memory operation is in progress.
-                if (MemoryBoard.Instance.MDONeeded)
+            // Is a memory store operation in progress?  Pending RasterOp stores
+            // supercede the ALU; otherwise write the last ALU result
+            if (MemoryBoard.Instance.MDONeeded)
+            {
+                if (_rasterOp.ResultReady)
                 {
                     _memory.Tock(_rasterOp.Result());
                 }
-            }
-            else
-            {
-                // Do any pending memory operations based on the last ALU result
-                _memory.Tock((ushort)_alu.Registers.R);
+                else
+                {
+                    _memory.Tock((ushort)_alu.Registers.R);
+                }
             }
 
             // Always clock video (used for system timing by some OSes)
@@ -465,6 +466,17 @@ namespace PERQemu.CPU
         {
             get { return _alu.Registers.R; }
         }
+
+#if SIXTEEN_K 
+        /// <summary>
+        /// The base register for indexing XY.
+        /// </summary>
+        [DebugProperty("rbase")]
+        public byte RegisterBase
+        {
+            get { return _registerBase; }
+        }
+#endif
 
         /// <summary>
         /// The Multiply/Divide MQ register.
@@ -709,7 +721,7 @@ namespace PERQemu.CPU
             if (Trace.TraceOn)
                 Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  op={0} amux={1:x5} mq={2:x4}", curOp, amux, mdReg);
 #endif
-            
+
             if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
             {
                 switch (_rasterOp.MulDivInst)
@@ -765,7 +777,7 @@ namespace PERQemu.CPU
             if (Trace.TraceOn)
                 Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT op={0} amux={1:x5}", modOp, amux);
 #endif
-            
+
             // Execute the updated ALU op
             _alu.DoALUOp(amux, bmux, modOp);
         }
@@ -1730,9 +1742,9 @@ namespace PERQemu.CPU
         [DebugFunction("jump", "Set next microinstruction address")]
         private void JumpTo(ushort nextPC)
         {
-            if (nextPC <= 0 || nextPC > _microcode.Length)
+            if (nextPC < 0 || nextPC >= _microcode.Length)
             {
-                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _microcode.Length);
+                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _microcode.Length - 1);
             }
             else
             {
@@ -1918,7 +1930,6 @@ namespace PERQemu.CPU
 #if TRACING_ENABLED
             // Bundled all these for convenience...
             Trace.TraceLevel |= (LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
-            //Trace.TraceLevel |= LogType.RasterOp;
 #endif
         }
 
@@ -1933,7 +1944,6 @@ namespace PERQemu.CPU
         {
 #if TRACING_ENABLED
             Trace.TraceLevel &= ~(LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
-            //Trace.TraceLevel &= ~LogType.RasterOp;
 #endif
         }
 
@@ -2016,7 +2026,7 @@ namespace PERQemu.CPU
 
 #if SIXTEEN_K
         // Base register
-        private int _registerBase;
+        private byte _registerBase;
 #endif
 
         // Byte Program Counter

@@ -31,7 +31,7 @@ key:
 00e   0   0   3   1   0  Unknown
 00f   0   0   3   1   1  Unknown
 010   0   1   0   0   0  Unknown
-011   0   1   0   0   1  Unknown
+011   0   1   0   0   1  NoPopNoPeek
 012   0   1   0   1   0  Unknown
 013   0   1   0   1   1  Unknown
 014   0   1   1   0   0  PopNoPeek
