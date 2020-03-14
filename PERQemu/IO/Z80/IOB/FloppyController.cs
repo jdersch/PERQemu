@@ -655,10 +655,9 @@ namespace PERQemu.IO.Z80.IOB
             _busyClocks = error ? 5 : sectorSize;
 
             //
-            // TODO: this is incorrect.   FloppyDisk should support formatting arbitrary sectors,
-            // it just needs some reworking.  This will likely work because the PERQ's unlikely to
-            // format just a single sector, but if it ever did, this code would wipe out all the other
-            // data on the track.
+            // Note:
+            // Even though the message includes a sector number, we're really formatting an entire track.
+            // (the controller can only format an entire track at a time).
             //
             _disk.FormatTrack(_setFormat, cyl, head, 26, sectorSize);
 
