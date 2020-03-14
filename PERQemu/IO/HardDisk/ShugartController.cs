@@ -364,7 +364,7 @@ namespace PERQemu.IO.HardDisk
         private void ReadBlock()
         {
             // Read the sector from the disk...
-            Sector sectorData = _disk.GetSector(_cylinder, _head, _sector);
+            HardDiskSector sectorData = _disk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -398,7 +398,7 @@ namespace PERQemu.IO.HardDisk
         /// </summary>
         private void WriteBlock(bool writeHeader)
         {
-            Sector sectorData = new Sector(_cylinder, _head, _sector, _disk.DiskGeometry);
+            HardDiskSector sectorData = new HardDiskSector(_cylinder, _head, _sector, _disk.DiskGeometry);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -422,7 +422,7 @@ namespace PERQemu.IO.HardDisk
             else
             {
                 // Keep the original header data.
-                Sector origSector = _disk.GetSector(_cylinder, _head, _sector);
+                HardDiskSector origSector = _disk.GetSector(_cylinder, _head, _sector);
                 origSector.Header.CopyTo(sectorData.Header, 0);
             }
 
@@ -444,7 +444,7 @@ namespace PERQemu.IO.HardDisk
         /// </summary>
         private void FormatBlock()
         {
-            Sector sectorData = new Sector(_cylinder, _head, _sector, _disk.DiskGeometry);
+            HardDiskSector sectorData = new HardDiskSector(_cylinder, _head, _sector, _disk.DiskGeometry);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);

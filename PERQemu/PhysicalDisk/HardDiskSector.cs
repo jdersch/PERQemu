@@ -25,9 +25,9 @@ namespace PERQemu.PhysicalDisk
     /// Represents a physical disk sector, which is where the actual
     /// data lives.  Woo!
     /// </summary>
-    public sealed class Sector
+    public sealed class HardDiskSector
     {
-        public Sector(int cylID, int trackID, int sectorID, DiskGeometry geometry)
+        public HardDiskSector(int cylID, int trackID, int sectorID, DiskGeometry geometry)
         {
             if (sectorID < 0)
             {
@@ -68,16 +68,13 @@ namespace PERQemu.PhysicalDisk
         /// <param name="fs"></param>
         public void Load(FileStream fs)
         {
-            if (_geometry.HasBlockHeader)
-            {
-                // Read the sector status (good/bad)
-                _sectorBad = fs.ReadByte() == 1;
+            // Read the sector status (good/bad)
+            _sectorBad = fs.ReadByte() == 1;
 
-                // Read the header data
-                if (fs.Read(_rawHeader, 0, 16) != 16)
-                {
-                    throw new InvalidOperationException("Out of data when reading sector header.");
-                }
+            // Read the header data
+            if (fs.Read(_rawHeader, 0, 16) != 16)
+            {
+                throw new InvalidOperationException("Out of data when reading sector header.");
             }
 
             // Read the sector data
@@ -95,14 +92,11 @@ namespace PERQemu.PhysicalDisk
         /// <param name="fs"></param>
         public void Save(FileStream fs)
         {
-            if (_geometry.HasBlockHeader)
-            {
-                // Write the bad sector flag
-                fs.WriteByte(_sectorBad ? (byte)1 : (byte)0);
+            // Write the bad sector flag
+            fs.WriteByte(_sectorBad ? (byte)1 : (byte)0);
 
-                // Write the header data
-                fs.Write(_rawHeader, 0, 16);
-            }
+            // Write the header data
+            fs.Write(_rawHeader, 0, 16);
 
             // Write the sector data
             fs.Write(_sectorData, 0, (int)_geometry.SectorSize);
@@ -116,14 +110,6 @@ namespace PERQemu.PhysicalDisk
             }
 
             return _sectorData[offset];
-        }
-
-        public bool IsFloppySector
-        {
-            get
-            {
-                return !_geometry.HasBlockHeader; // HACK!
-            }
         }
 
         private bool _sectorBad;
