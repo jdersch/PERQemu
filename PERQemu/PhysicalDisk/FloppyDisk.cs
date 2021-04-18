@@ -296,6 +296,17 @@ namespace PERQemu.PhysicalDisk
                 throw new InvalidOperationException("Invalid header data for track.");
             }
 
+            // Sector count should be 26 for normal PERQ floppies; post a warning if not.
+            // This can happen on tracks with missing sector data.
+            if (_sectorCount != 26)
+            {
+#if TRACING_ENABLED
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.FloppyDisk, "Cylinder {0} head {1} has only {2} sectors.", 
+                        _cylinder, _head, _sectorCount);
+#endif
+            }
+
             _sectorSize = _sectorSizes[sectorSizeIndex];
 
             bCylMap = (_head & 0x80) != 0;
@@ -326,7 +337,7 @@ namespace PERQemu.PhysicalDisk
             //
             // Read the sector data in.
             //
-            _sectors = new Sector[_sectorCount];
+            _sectors = new Sector[_sectorCount];      // TODO: we always assume 26 sectors regardless of what the IMD file has in it.
             for (int i = 0; i < _sectorCount; i++)
             {
                 SectorRecordType type = (SectorRecordType)s.ReadByte();

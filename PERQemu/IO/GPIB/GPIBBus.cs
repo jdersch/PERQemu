@@ -23,7 +23,7 @@ namespace PERQemu.IO.GPIB
 {
     public sealed class GPIBBus
     {
-        private GPIBBus()
+        public GPIBBus(PERQSystem system)
         {
             _deviceDispatch = new IGPIBDevice[16];
             _devices = new List<IGPIBDevice>(16);
@@ -34,13 +34,8 @@ namespace PERQemu.IO.GPIB
             // ever expect to support.  (Actually, the POS Print command supports
             // at least one GPIB-connected printer... dot-matrix baby!)
             //
-            AddDevice(new BitPadOne());
+            AddDevice(new BitPadOne(system));
             Reset();
-        }
-
-        public static GPIBBus Instance
-        {
-            get { return _instance; }
         }
 
         public void Reset()
@@ -125,7 +120,5 @@ namespace PERQemu.IO.GPIB
 
         // The devices attached to the bus
         private List<IGPIBDevice> _devices;
-
-        private static GPIBBus _instance = new GPIBBus();
     }
 }

@@ -55,7 +55,7 @@ namespace PERQemu
 
         private void CreateSystem()
         {
-            _system = PERQSystem.Instance;
+            _system = new PERQSystem();
         }
 
         private void PrintBanner()

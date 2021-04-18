@@ -17,14 +17,11 @@
 //
 
 using System;
-using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
 using PERQemu.CPU;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
-using PERQemu.IO.Z80.IOB;
-using PERQemu.IO.HardDisk;
+using PERQemu.IO;
 
 namespace PERQemu
 {
@@ -47,20 +44,24 @@ namespace PERQemu
     /// </summary>
     public sealed class PERQSystem
     {
-        private PERQSystem()
+        public PERQSystem()
         {
+            _memoryBoard = new MemoryBoard(this);
+            _iob = new IOB(this);
+            _oio = new OIO();
+            _display = new Display.Display(this);
+            _videoController = new Display.VideoController(this);
+
+            _perqCPU = new PERQCpu(this);
+
             // Start off debugging
             _state = RunState.Debug;
-        }
-
-        public static PERQSystem Instance
-        {
-            get { return _instance; }
+            _debugger = new Debugger.Debugger(this);
         }
 
         public void Shutdown()
         {
-            Display.Display.Instance.Shutdown();
+            _display.Shutdown();
         }
 
         public void Execute(string[] args)
@@ -92,7 +93,7 @@ namespace PERQemu
                     case RunState.RunInst:
                         try
                         {
-                            RunState nextState = PERQCpu.Instance.Execute(_state);
+                            RunState nextState = _perqCPU.Execute(_state);
 
                             // If we were broken into during execution, we should honor it.
                             if (_state != RunState.Debug)
@@ -121,11 +122,11 @@ namespace PERQemu
 
                     case RunState.Debug:
                         // Enter the debugger.  On return from debugger, switch to the specified state
-                        _state = PERQemu.Debugger.Debugger.Instance.Enter(_debugMessage);
+                        _state = _debugger.Enter(_debugMessage);
                         break;
 
                     case RunState.DebugScript:
-                        _state = PERQemu.Debugger.Debugger.Instance.RunScript(args[0]);
+                        _state = _debugger.RunScript(args[0]);
                         break;
 
                     case RunState.Pause:
@@ -134,7 +135,7 @@ namespace PERQemu
                         break;
 
                     case RunState.Reset:
-                        PERQCpu.Instance.Reset();
+                        _perqCPU.Reset();
                         _state = RunState.Debug;
                         _debugMessage = "";
                         break;
@@ -154,14 +155,49 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Static.  Allows overriding the default OS boot character.
+        /// Allows overriding the default OS boot character.
         /// (This is a key that, when held down at boot time will cause the PERQ microcode to
         /// select a different OS to boot.)
         /// </summary>
-        public static byte BootChar
+        public byte BootChar
         {
             get { return _bootChar; }
             set { _bootChar = value; }
+        }
+
+        public PERQCpu CPU
+        {
+            get { return _perqCPU; }
+        }
+
+        public MemoryBoard MemoryBoard
+        {
+            get { return _memoryBoard; }
+        }
+
+        public IOB IOB
+        {
+            get { return _iob; }
+        }
+
+        public OIO OIO
+        {
+            get { return _oio; }
+        }
+
+        public Display.Display Display
+        {
+            get { return _display; }
+        }
+
+        public Display.VideoController VideoController
+        {
+            get { return _videoController; }
+        }
+
+        public Debugger.Debugger Debugger
+        {
+            get { return _debugger; }
         }
 
         #region Debugger Commands
@@ -188,7 +224,7 @@ namespace PERQemu
                     throw new ArgumentOutOfRangeException("Invalid device name. Expected COMn: or RSX:");
                 }
 
-                Z80System.Instance.SetSerialPort(dev);
+                _iob.Z80System.SetSerialPort(dev);
             }
             catch (Exception e)
             {
@@ -199,13 +235,13 @@ namespace PERQemu
         [DebugFunction("show rs232", "Displays the current rs232 device")]
         private void ShowSerialPort()
         {
-            Console.WriteLine("RS232 port is set to {0}", Z80System.Instance.GetSerialPort());
+            Console.WriteLine("RS232 port is set to {0}", _iob.Z80System.GetSerialPort());
         }
 
         [DebugFunction("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
         private void CreateFloppyDisk()
         {
-            Z80System.Instance.LoadFloppyDisk(null);
+            _iob.Z80System.LoadFloppyDisk(null);
             Console.WriteLine("Created.");
         }
 
@@ -214,7 +250,7 @@ namespace PERQemu
         {
             try
             {
-                Z80System.Instance.LoadFloppyDisk(imagePath);
+                _iob.Z80System.LoadFloppyDisk(imagePath);
                 Console.WriteLine("Loaded.");
             }
             catch (Exception e)
@@ -226,7 +262,7 @@ namespace PERQemu
         [DebugFunction("unload floppy", "Unmounts a floppy disk image")]
         private void UnloadFloppy()
         {
-            Z80System.Instance.UnloadFloppyDisk();
+            _iob.Z80System.UnloadFloppyDisk();
         }
 
         [DebugFunction("save floppy", "Saves the current in memory floppy disk to an image file")]
@@ -234,7 +270,7 @@ namespace PERQemu
         {
             try
             {
-                Z80System.Instance.SaveFloppyDisk(imagePath);
+                _iob.Z80System.SaveFloppyDisk(imagePath);
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)
@@ -246,7 +282,7 @@ namespace PERQemu
         [DebugFunction("create harddisk", "Creates and mounts a new, unformatted hard disk image")]
         private void CreateHardDisk()
         {
-            ShugartDiskController.Instance.LoadImage(null);
+            _iob.ShugartDiskController.LoadImage(null);
             Console.WriteLine("Created.");
         }
 
@@ -255,7 +291,7 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.IO.HardDisk.ShugartDiskController.Instance.LoadImage(imagePath);
+                _iob.ShugartDiskController.LoadImage(imagePath);
                 Console.WriteLine("Loaded.");
             }
             catch (Exception e)
@@ -269,7 +305,7 @@ namespace PERQemu
         {
             try
             {
-                ShugartDiskController.Instance.SaveImage(imagePath);
+                _iob.ShugartDiskController.SaveImage(imagePath);
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)
@@ -284,7 +320,7 @@ namespace PERQemu
             string outputPath = filePath + ".jpg";
             try
             {
-                Display.Display.Instance.SaveScreenshot(outputPath);
+                _display.SaveScreenshot(outputPath);
             }
             catch (Exception e)
             {
@@ -317,8 +353,13 @@ namespace PERQemu
         private RunState _state;
         private string _debugMessage;
         private static byte _bootChar;
-
-        private static PERQSystem _instance = new PERQSystem();
+        private PERQCpu _perqCPU;
+        private MemoryBoard _memoryBoard;
+        private IOB _iob;
+        private OIO _oio;
+        private Display.Display _display;
+        private Display.VideoController _videoController;
+        private Debugger.Debugger _debugger;
     }
 }
 

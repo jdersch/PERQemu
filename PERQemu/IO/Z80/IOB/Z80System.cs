@@ -90,22 +90,24 @@ namespace PERQemu.IO.Z80.IOB
     /// floppy access, doesn't support the hard disk, etc.) so if I do add PERQ2 support,
     /// this will need some serious refactoring.
     /// </summary>
-    public sealed class Z80System
+    public sealed class Z80System : IZ80System
     {
-        private Z80System()
+        public Z80System(PERQSystem system)
         {
+            _system = system;
+
             _inputFifo = new Queue<byte>(256);
             _outputFifo = new Queue<byte>(256);
             _devices = new List<IZ80Device>(16);
 
-            _hardDiskSeek = new HardDiskSeekControl();
-            _floppyDisk = new FloppyController();
-            _keyboard = new Keyboard();
-            _gpib = new GPIB();
-            _tablet = new Tablet();
+            _hardDiskSeek = new HardDiskSeekControl(system);
+            _floppyDisk = new FloppyController(this);
+            _keyboard = new Keyboard(system);
+            _gpib = new GPIB(system);
+            _tablet = new Tablet(system);
             _rs232 = new RS232();
             _speech = new Speech();
-            _clockDev = new Clock();
+            _clockDev = new Clock(system);
 
             BuildDeviceList();
 
@@ -145,11 +147,6 @@ namespace PERQemu.IO.Z80.IOB
             _deviceReadyState = 0;
 
             _dataReadyInterruptRequested = false;
-        }
-
-        public static Z80System Instance
-        {
-            get { return _instance; }
         }
 
         public int Clocks()
@@ -269,7 +266,7 @@ namespace PERQemu.IO.Z80.IOB
                 if (Trace.TraceOn)
                     Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
 #endif
-                PERQCpu.Instance.ClearInterrupt(InterruptType.Z80DataInReady);
+                _system.CPU.ClearInterrupt(InterruptType.Z80DataInReady);
                 _dataReadyInterruptRequested = false;
             }
             else
@@ -313,7 +310,7 @@ namespace PERQemu.IO.Z80.IOB
                 // This serves to shut off interrupts even when the Z80 is "off" (see
                 // SysB code snippet above); normally our Clock() handles it.
                 //
-                PERQCpu.Instance.ClearInterrupt(InterruptType.Z80DataOutReady);
+                _system.CPU.ClearInterrupt(InterruptType.Z80DataOutReady);
 
 #if TRACING_ENABLED
                 if (Trace.TraceOn && _running)  // Don't whine needlessly :-)
@@ -355,11 +352,11 @@ namespace PERQemu.IO.Z80.IOB
             // If we have data available in the FIFO we'll interrupt...
             if (_outputFifo.Count > 0)
             {
-                PERQCpu.Instance.RaiseInterrupt(InterruptType.Z80DataOutReady);
+                _system.CPU.RaiseInterrupt(InterruptType.Z80DataOutReady);
             }
             else
             {
-                PERQCpu.Instance.ClearInterrupt(InterruptType.Z80DataOutReady);
+                _system.CPU.ClearInterrupt(InterruptType.Z80DataOutReady);
             }
 
             //
@@ -372,7 +369,7 @@ namespace PERQemu.IO.Z80.IOB
             //
             if (_inputFifo.Count == 0 && _dataReadyInterruptRequested)
             {
-                PERQCpu.Instance.RaiseInterrupt(InterruptType.Z80DataInReady);
+                _system.CPU.RaiseInterrupt(InterruptType.Z80DataInReady);
             }
 
             //
@@ -679,6 +676,6 @@ namespace PERQemu.IO.Z80.IOB
         // FIFO for Z80 data in (from PERQ)
         private Queue<byte> _inputFifo;
 
-        private static Z80System _instance = new Z80System();
+        private PERQSystem _system;
     }
 }

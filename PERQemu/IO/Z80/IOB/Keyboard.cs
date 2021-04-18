@@ -16,7 +16,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.CPU;
 
 using System;
 using System.Collections.Generic;
@@ -115,8 +114,10 @@ namespace PERQemu.IO.Z80.IOB
     
     public sealed class Keyboard : IZ80Device
     {
-        public Keyboard()
+        public Keyboard(PERQSystem system)
         {
+            _system = system;
+
             Reset();
         }
 
@@ -206,7 +207,7 @@ namespace PERQemu.IO.Z80.IOB
             //
             // Special case: Hack for bootchar to make it easier to override at startup.
             //
-            if (PERQSystem.BootChar != 0 && _enabled && PERQCpu.Instance.DDS < 154 && fifo.Count < 1)
+            if (_system.BootChar != 0 && _enabled && _system.CPU.DDS < 154 && fifo.Count < 1)
             {
                 _bootCharThrottle++;
 
@@ -214,7 +215,7 @@ namespace PERQemu.IO.Z80.IOB
                 {
                     fifo.Enqueue(Z80System.SOM);                        // SOM
                     fifo.Enqueue((byte)Z80toPERQMessage.KeyboardData);  // Keyboard char message type
-                    fifo.Enqueue(PERQSystem.BootChar);                  // Data
+                    fifo.Enqueue(_system.BootChar);                  // Data
 
                     _bootCharThrottle = 0;
                 }
@@ -231,5 +232,7 @@ namespace PERQemu.IO.Z80.IOB
         private byte[] _messageData;
         private int _messageIndex;
         private int _bootCharThrottle;
+
+        private PERQSystem _system;
     }
 }

@@ -59,8 +59,10 @@ namespace PERQemu.CPU
     /// </summary>    
     public sealed class PERQCpu
     {
-        private PERQCpu()
+        public PERQCpu(PERQSystem system)
         {
+            _system = system;
+
             // Load the boot ROM
             LoadBootRom(Paths.BuildPROMPath("boot.bin"));
 
@@ -70,19 +72,11 @@ namespace PERQemu.CPU
 #if SIXTEEN_K
             _mqShifter = new Shifter();
 #endif
-            _rasterOp = RasterOp.Instance;
-            _memory = MemoryBoard.Instance;
-            _ioBus = IOBus.Instance;
+            _rasterOp = new RasterOp(system);
+            _memory = system.MemoryBoard;
+            _ioBus = new IOBus(system);
 
             Reset();
-        }
-
-        /// <summary>
-        /// Returns the singleton instance of this class.
-        /// </summary>
-        public static PERQCpu Instance
-        {
-            get { return _instance; }
         }
 
         /// <summary>
@@ -168,7 +162,6 @@ namespace PERQemu.CPU
 #endif
         }
 
-
         /// <summary>
         /// Executes a single microinstruction and runs associated hardware for one cycle.
         /// </summary>
@@ -208,10 +201,10 @@ namespace PERQemu.CPU
                         _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _wcsHold);
 #endif
 
-                // On aborts, no memory writes occur - no Tock()                    
+                // On aborts, no memory writes occur - no Tock()
 
                 // Clock video
-                VideoController.Instance.Clock();
+                _system.VideoController.Clock();
 
                 // Clock the IO here, since it's an otherwise blown cycle
                 if ((_clocks % IOFudge) == 0)
@@ -289,6 +282,8 @@ namespace PERQemu.CPU
             // Do writeback if W bit is set
             DoWriteBack(uOp);
 
+            // Clock IO devices
+            // TODO: this needs to be done differently for Z80 emulation
             // Clock IO devices every N cycles (fudged, this is ugly)
             if ((_clocks % IOFudge) == 0)
             {
@@ -303,7 +298,7 @@ namespace PERQemu.CPU
 
             // Is a memory store operation in progress?  Pending RasterOp stores
             // supercede the ALU; otherwise write the last ALU result
-            if (MemoryBoard.Instance.MDONeeded)
+            if (_system.MemoryBoard.MDONeeded)
             {
                 if (_rasterOp.ResultReady)
                 {
@@ -316,7 +311,7 @@ namespace PERQemu.CPU
             }
 
             // Always clock video (used for system timing by some OSes)
-            VideoController.Instance.Clock();
+            _system.VideoController.Clock();
 
             // Execute whatever function this op calls for
             DispatchFunction(uOp);
@@ -521,6 +516,11 @@ namespace PERQemu.CPU
         public CallStack CallStack
         {
             get { return _callStack; }
+        }
+
+        public RasterOp RasterOp
+        {
+            get { return _rasterOp; }
         }
         #endregion
 
@@ -1885,7 +1885,7 @@ namespace PERQemu.CPU
         [DebugFunction("show memstate", "Dump the memory controller state")]
         private void ShowMemQueues()
         {
-            MemoryBoard.Instance.DumpQueues();
+            _system.MemoryBoard.DumpQueues();
         }
 #endif
 
@@ -1896,7 +1896,7 @@ namespace PERQemu.CPU
 
             for (int i = 0; i < 8; i++)
             {
-                Console.WriteLine("{0}: {1:x2}", i, MemoryBoard.Instance.OpFile[i]);
+                Console.WriteLine("{0}: {1:x2}", i, _system.MemoryBoard.OpFile[i]);
             }
         }
 
@@ -1968,8 +1968,8 @@ namespace PERQemu.CPU
         [DebugFunction("show z80 state", "Display current Z80 device ready state")]
         private void ShowZ80State()
         {
-            Console.WriteLine("Z80 clock: {0}", Z80System.Instance.Clocks());
-            Z80System.Instance.ShowReadyState();
+            Console.WriteLine("Z80 clock: {0}", ((Z80System)(_system.IOB.Z80System)).Clocks());
+            //_system.IOB.Z80System.ShowReadyState();
         }
 #endif
         #endregion
@@ -2077,6 +2077,6 @@ namespace PERQemu.CPU
         // IO bus reference
         private IOBus _ioBus;
 
-        private static PERQCpu _instance = new PERQCpu();
+        private PERQSystem _system;
     }
 }

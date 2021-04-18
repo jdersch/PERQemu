@@ -31,14 +31,9 @@ namespace PERQemu.HostInterface
     /// </summary>
     public sealed class KeyboardMap
     {
-        private KeyboardMap()
+        public KeyboardMap()
         {
             Reset();
-        }
-
-        public static KeyboardMap Instance
-        {
-            get { return _instance; }
         }
 
         public void Reset()
@@ -256,8 +251,6 @@ namespace PERQemu.HostInterface
         // Have to catch/test for CAPS LOCK status ourselves, and maintain local state.  Ugh.
         private bool _lockCaps;
         private bool _lockNums;
-
-        private static KeyboardMap _instance = new KeyboardMap();
     }
 }
 

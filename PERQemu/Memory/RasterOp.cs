@@ -94,8 +94,10 @@ namespace PERQemu.Memory
     /// </summary>
     public sealed class RasterOp
     {
-        private RasterOp()
+        public RasterOp(PERQSystem system)
         {
+            _system = system;
+
             _ropShifter = new Shifter();            // Our own private Idaho
             _srcFifo = new Queue<ROpWord>(16);      // 4 quads (hardware limit)
             _destFifo = new Queue<ROpWord>(4);      // 1 quad
@@ -119,11 +121,6 @@ namespace PERQemu.Memory
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.RasterOp, "RasterOp: Reset.");
 #endif
-        }
-
-        public static RasterOp Instance
-        {
-            get { return _instance; }
         }
 
         public bool Enabled
@@ -288,7 +285,7 @@ namespace PERQemu.Memory
             if (Trace.TraceOn)
                 Trace.Log(LogType.RasterOp,
                           "RasterOp: Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
-                          _phase, _state, MemoryBoard.Instance.TState, _srcNeedsAligned, _leftOver);
+                          _phase, _state, _system.MemoryBoard.TState, _srcNeedsAligned, _leftOver);
 #endif
             switch (_state)
             {
@@ -690,7 +687,7 @@ namespace PERQemu.Memory
             // which may (at the end of the cycle) specify a phase change.  This means we can
             // complete the current quad-word cycle without concern for the next phase change
             // harshing our mellow.
-            int _stateClock = MemoryBoard.Instance.TState;
+            int _stateClock = _system.MemoryBoard.TState;
 
             State next = _state;
 
@@ -701,7 +698,7 @@ namespace PERQemu.Memory
                 case State.Off:
 #if DEBUG
                     // Old "microcode bailed early" hack -- should never happen now
-                    if (!MemoryBoard.Instance.MDONeeded || _destFifo.Count == 0)
+                    if (!_system.MemoryBoard.MDONeeded || _destFifo.Count == 0)
                     {
                         // Done waiting for the Destination Fifo to drain; really disable now
                         _enabled = false;
@@ -754,13 +751,13 @@ namespace PERQemu.Memory
         {
             ROpWord w = new ROpWord();
 
-            if (MemoryBoard.Instance.MDIValid)
+            if (_system.MemoryBoard.MDIValid)
             {
                 // The microcode calculates the addresses and initiates fetches;
                 // we just pluck the next incoming word off the MDI.
-                w.Address = MemoryBoard.Instance.MADR;
-                w.Index = MemoryBoard.Instance.MIndex;
-                w.Data = MemoryBoard.Instance.MDI;
+                w.Address = _system.MemoryBoard.MADR;
+                w.Index = _system.MemoryBoard.MIndex;
+                w.Data = _system.MemoryBoard.MDI;
             }
             else
             {
@@ -1035,7 +1032,7 @@ namespace PERQemu.Memory
             if (_enabled)
             {
                 Console.WriteLine("\tState={0} Phase={1} Clock=T{2}",
-                                 _state, _phase, MemoryBoard.Instance.TState);
+                                 _state, _phase, _system.MemoryBoard.TState);
                 if (_setupDone)
                 {
                     Console.WriteLine("\txOffset={0} lastSrc={1} srcAligned={2} LeftOver={3}",
@@ -1223,12 +1220,12 @@ namespace PERQemu.Memory
         // "EVEN/ODD" stuff, but slightly less abstruse.
         private EdgeStrategy[] _rscTable;
 
+        private PERQSystem _system;
+
 #if DEBUG
         // Temporary debug switch
         private bool _ropDebug;
 #endif
-
-        private static RasterOp _instance = new RasterOp();
     }
 }
 

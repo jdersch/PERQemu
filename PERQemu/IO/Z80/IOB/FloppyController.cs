@@ -34,8 +34,9 @@ namespace PERQemu.IO.Z80.IOB
     public sealed class FloppyController : IZ80Device
     {
 
-        public FloppyController()
+        public FloppyController(Z80System z80System)
         {
+            _z80System = z80System;
             _loaded = false;
             Reset();
         }
@@ -194,8 +195,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
 
                 // Return invalid boot message
-                Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
-                Z80System.Instance.FIFO.Enqueue(0x12);      // Error during boot
+                _z80System.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
+                _z80System.FIFO.Enqueue(0x12);      // Error during boot
                 return;
             }
 
@@ -211,8 +212,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
 
                 // Return invalid boot data message
-                Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
-                Z80System.Instance.FIFO.Enqueue(0x12);      // Error during boot
+                _z80System.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
+                _z80System.FIFO.Enqueue(0x12);      // Error during boot
             }
 
             int cylinder = 1;
@@ -233,16 +234,16 @@ namespace PERQemu.IO.Z80.IOB
                 Sector s = _disk.GetSector(cylinder, track, sector);
                 // Add start of message:
                 // We're sending 128 bytes (1 sector) at a time
-                Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
-                Z80System.Instance.FIFO.Enqueue(0x13);      // Valid boot data
-                Z80System.Instance.FIFO.Enqueue((byte)s.Data.Length); // byte count
+                _z80System.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
+                _z80System.FIFO.Enqueue(0x13);      // Valid boot data
+                _z80System.FIFO.Enqueue((byte)s.Data.Length); // byte count
 
                 
 
                 for (int b = 0; b < s.Data.Length; b++)
                 {
                     byte data = s.Data[b];
-                    Z80System.Instance.FIFO.Enqueue(data);  // Data byte
+                    _z80System.FIFO.Enqueue(data);  // Data byte
 
                     if (!checksumBit)
                     {
@@ -413,9 +414,9 @@ namespace PERQemu.IO.Z80.IOB
             //  SOM
             //  0x11 (floppy done)
             //  0 for success, 1 for failure.
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
-            Z80System.Instance.FIFO.Enqueue(error ? (byte)1 : (byte)0);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
+            _z80System.FIFO.Enqueue(error ? (byte)1 : (byte)0);
 
             // Set up the NEC status registers.
             // 2 registers for a seek operation
@@ -469,16 +470,16 @@ namespace PERQemu.IO.Z80.IOB
             //  0 for success, 1 for error
             //  byte count
             //  data
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyData);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyData);
 
             Sector sector = null;
 
             if (error)
             {
-                Z80System.Instance.FIFO.Enqueue(1);     // Indicate an error
-                Z80System.Instance.FIFO.Enqueue(1);     // Length (can't use 0 as the PERQ interprets that as 256)
-                Z80System.Instance.FIFO.Enqueue(0);     // Bogus data
+                _z80System.FIFO.Enqueue(1);     // Indicate an error
+                _z80System.FIFO.Enqueue(1);     // Length (can't use 0 as the PERQ interprets that as 256)
+                _z80System.FIFO.Enqueue(0);     // Bogus data
                 _busyClocks = 5;
             }
             else
@@ -486,8 +487,8 @@ namespace PERQemu.IO.Z80.IOB
                 // Read the sector in
                 sector = _disk.GetSector(cyl, head, sec - 1);
 
-                Z80System.Instance.FIFO.Enqueue(0);     // No error
-                Z80System.Instance.FIFO.Enqueue((byte)sector.Data.Length);  // A full sector
+                _z80System.FIFO.Enqueue(0);     // No error
+                _z80System.FIFO.Enqueue((byte)sector.Data.Length);  // A full sector
 
                 // Set our busy time based on byte count... should be way longer...
                 _busyClocks = (int)sector.Data.Length;
@@ -495,7 +496,7 @@ namespace PERQemu.IO.Z80.IOB
                 for (int b = 0; b < sector.Data.Length; b++)
                 {
                     byte data = sector.Data[b];
-                    Z80System.Instance.FIFO.Enqueue(data);
+                    _z80System.FIFO.Enqueue(data);
                 }
             }
 
@@ -515,7 +516,7 @@ namespace PERQemu.IO.Z80.IOB
             // TODO: if cyl,head,sec are out of range, bad things will happen.
 
             StatusRegister1 reg1 =
-                (_setFormat != sector.Format ? StatusRegister1.FlpMissAddr : 0 ) |  // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister1.FlpMissAddr : 0 ) |  // Missing address mark
                 (0) |                                                                   // Not writeable
                 (0) |                                                                   // No data
                 (0) |                                                                   // Overrun
@@ -523,7 +524,7 @@ namespace PERQemu.IO.Z80.IOB
                 (_disk != null && sec > _disk.GetTrack(cyl, head).SectorCount ? StatusRegister1.FlpEndCylinder : 0); // end of cyl
 
             StatusRegister2 reg2 =
-                (_setFormat != sector.Format ? StatusRegister2.FlpDataMissAddr : 0) |  // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister2.FlpDataMissAddr : 0) |  // Missing address mark
                 (0) |                                                                   // Bad cylinder
                 (0) |                                                                   // Wrong cylinder
                 (0);                                                                    // Data error in data
@@ -534,7 +535,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[3] = (byte)cyl;
             _necStatus[4] = (byte)head;
             _necStatus[5] = (byte)sec;
-            _necStatus[6] = _disk != null ? (byte)sector.Data.Length : (byte)0;
+            _necStatus[6] = _disk != null && sector != null ? (byte)sector.Data.Length : (byte)0;
         }
 
 
@@ -582,9 +583,9 @@ namespace PERQemu.IO.Z80.IOB
             //  SOM
             //  0x11 (floppy done)
             //  0 for success, 1 for failure.
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
-            Z80System.Instance.FIFO.Enqueue(error ? (byte)1 : (byte)0);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
+            _z80System.FIFO.Enqueue(error ? (byte)1 : (byte)0);
 
             // Set up the NEC status registers.
             // 7 registers for a write operation
@@ -600,7 +601,7 @@ namespace PERQemu.IO.Z80.IOB
                 (0);                                            // Same (high bit not set for our purposes)
 
             StatusRegister1 reg1 =
-                (_setFormat != sector.Format ? StatusRegister1.FlpMissAddr : 0) |   // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister1.FlpMissAddr : 0) |   // Missing address mark
                 (0) |                                                                   // Not writeable
                 (0) |                                                                   // No data
                 (0) |                                                                   // Overrun
@@ -608,7 +609,7 @@ namespace PERQemu.IO.Z80.IOB
                 (_disk != null && sec > _disk.GetTrack(cyl, head).SectorCount ? StatusRegister1.FlpEndCylinder : 0); // End of cyl
 
             StatusRegister2 reg2 =
-                (_setFormat != sector.Format ? StatusRegister2.FlpDataMissAddr : 0) | // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister2.FlpDataMissAddr : 0) | // Missing address mark
                 (0) |                                                                   // Bad cylinder
                 (0) |                                                                   // Wrong cylinder
                 (0);                                                                    // Data error in data
@@ -619,7 +620,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[3] = (byte)cyl;
             _necStatus[4] = (byte)head;
             _necStatus[5] = (byte)sec;
-            _necStatus[6] = _disk != null ? (byte)sector.Data.Length : (byte)0;
+            _necStatus[6] = _disk != null && sector != null ? (byte)sector.Data.Length : (byte)0;
         }
 
 
@@ -665,9 +666,9 @@ namespace PERQemu.IO.Z80.IOB
             //  SOM
             //  0x11 (floppy done)
             //  0 for success, 1 for failure.
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
-            Z80System.Instance.FIFO.Enqueue(error ? (byte)1 : (byte)0);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
+            _z80System.FIFO.Enqueue(error ? (byte)1 : (byte)0);
 
             // Set up the NEC status registers.
             // 7 registers for a format operation
@@ -776,5 +777,7 @@ namespace PERQemu.IO.Z80.IOB
 
         private byte[] _messageData;
         private int _messageIndex;
+
+        private Z80System _z80System;
     }
 }

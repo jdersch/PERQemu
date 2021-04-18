@@ -18,7 +18,6 @@
 
 using PERQemu.CPU;
 
-using System;
 using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80.IOB
@@ -31,8 +30,9 @@ namespace PERQemu.IO.Z80.IOB
     /// </summary>
     public sealed class Tablet : IZ80Device
     {
-        public Tablet()
+        public Tablet(PERQSystem system)
         {
+            _system = system;
             Reset();
         }
 
@@ -102,7 +102,7 @@ namespace PERQemu.IO.Z80.IOB
                     int jiffies = (_pollCount / _jiffyInterval);
                     int x = 0;
                     int y = 0;
-                    int button = Display.Display.Instance.MouseButton;
+                    int button = _system.Display.MouseButton;
 
                     GetTabletPos(out x, out y, button);
 
@@ -151,15 +151,15 @@ namespace PERQemu.IO.Z80.IOB
             //
 
             // Calc Y and X positions:
-            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY + 64);
-            x = (Display.Display.Instance.MouseX + 64);
+            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64);
+            x = (_system.Display.MouseX + 64);
 
             // Mix in the button data:
-            y = (y & 0x1fff) | ((Display.Display.Instance.MouseButton) << 13);
-            x = (x & 0x7ff) | (Display.Display.Instance.MouseButton == 0 ? 0x8000 : 0x0000);
+            y = (y & 0x1fff) | ((_system.Display.MouseButton) << 13);
+            x = (x & 0x7ff) | (_system.Display.MouseButton == 0 ? 0x8000 : 0x0000);
 
             // And set the mouse-off-tablet bit if necessary
-            if (Display.Display.Instance.MouseOffTablet)
+            if (_system.Display.MouseOffTablet)
             {
                 x |= 0x4000;
             }
@@ -185,5 +185,7 @@ namespace PERQemu.IO.Z80.IOB
 
         private int _jiffyInterval;
         private int _pollCount;
+
+        private PERQSystem _system;
     }
 }

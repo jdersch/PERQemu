@@ -29,8 +29,9 @@ namespace PERQemu.Display
     public sealed class VideoController : IIODevice
     {
 
-        private VideoController()
+        public VideoController(PERQSystem system)
         {
+            _system = system;
             Reset();
         }
 
@@ -52,11 +53,6 @@ namespace PERQemu.Display
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Display, "Video Controller: Reset.");
 #endif
-        }
-
-        public static VideoController Instance
-        {
-            get { return _instance; }
         }
 
         public bool HandlesPort(byte ioPort)
@@ -117,7 +113,7 @@ namespace PERQemu.Display
                     _lineCountOverflow = false;
 
                     // Clear interrupt
-                    PERQCpu.Instance.ClearInterrupt(InterruptType.LineCounter);
+                    _system.CPU.ClearInterrupt(InterruptType.LineCounter);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -133,7 +129,7 @@ namespace PERQemu.Display
                     //  15:4    address >> 4 for .5-2MB boards; address >> 1 for old 256K boards
                     //   3:2    address bits 21:20 on cards > 2 MB (not yet supported)
                     //   1:0    not used
-                    _displayAddress = (MemoryBoard.Instance.MemSize < 0x40000 ? value << 1 : value << 4);
+                    _displayAddress = (_system.MemoryBoard.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -144,7 +140,7 @@ namespace PERQemu.Display
                 case 0xe2:  // Load cursor address register
 
                     // Same format as display address
-                    _cursorAddress = (MemoryBoard.Instance.MemSize < 0x40000 ? value << 1 : value << 4);
+                    _cursorAddress = (_system.MemoryBoard.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -245,7 +241,7 @@ namespace PERQemu.Display
                             // force the state change so the display doesn't appear to
                             // freeze up...
                             _state = VideoState.VBlankScanline;
-                            Display.Instance.Refresh();
+                            _system.Display.Refresh();
                         }
                         else
                         {
@@ -277,7 +273,7 @@ namespace PERQemu.Display
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt @ scanline {0}", _scanLine);
 #endif
-                    PERQCpu.Instance.RaiseInterrupt(InterruptType.LineCounter);
+                    _system.CPU.RaiseInterrupt(InterruptType.LineCounter);
                 }
 
                 // Set our flag; this will be reset when _lineCounterInit is reloaded
@@ -329,7 +325,7 @@ namespace PERQemu.Display
                 int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
                 int screenAddress = renderLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
 
-                Display.Instance.DrawWord(screenAddress, TransformDisplayWord(MemoryBoard.Instance.FetchWord(dataAddress)));
+                _system.Display.DrawWord(screenAddress, TransformDisplayWord(_system.MemoryBoard.FetchWord(dataAddress)));
             }
 
             if (CursorEnabled)
@@ -359,14 +355,14 @@ namespace PERQemu.Display
                     byte backgroundByte = GetByte(backgroundStartByte + x);
                     byte cursorByte = GetByte(cursorAddress + (x - cursorStartByte));
 
-                    Display.Instance.DrawByte(screenAddress + x, TransformCursorByte(backgroundByte, cursorByte));
+                    _system.Display.DrawByte(screenAddress + x, TransformCursorByte(backgroundByte, cursorByte));
                 }
             }
         }
 
         private byte GetByte(int byteAligned)
         {
-            ushort word = MemoryBoard.Instance.FetchWord(byteAligned >> 1);
+            ushort word = _system.MemoryBoard.FetchWord(byteAligned >> 1);
 
             if ((byteAligned % 2) == 0)
             {
@@ -561,6 +557,6 @@ namespace PERQemu.Display
         private int _cursorY;
         private CursorFunction _cursorFunc;
 
-        private static VideoController _instance = new VideoController();
+        private PERQSystem _system;
     }
 }

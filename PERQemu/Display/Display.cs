@@ -16,7 +16,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.IO.Z80.IOB;
 using PERQemu.HostInterface;
 
 using System;
@@ -37,14 +36,10 @@ namespace PERQemu.Display
     /// </summary>
     public sealed class Display
     {
-        private Display()
+        public Display(PERQSystem system)
         {
+            _system = system;
             Initialize();
-        }
-
-        public static Display Instance
-        {
-            get { return _instance; }
         }
 
         public void Refresh()
@@ -151,7 +146,7 @@ namespace PERQemu.Display
             _displayData = new byte[DISPLAY_BUFFER_SIZE];
 
             // Set up .NET/Mono host keyboard -> PERQ mapping
-            _keymap = KeyboardMap.Instance;
+            _keymap = new KeyboardMap();
 
             _clickFlag = false;
             _mouseButton = 0x0;
@@ -363,7 +358,7 @@ namespace PERQemu.Display
                     // Provide a key to jump into the debugger when focus is on the PERQ,
                     // rather than select the console and hit ^C.
                     e.Handled = true;
-                    PERQSystem.Instance.Break();
+                    _system.Break();
                     break;
 
                 default:
@@ -377,7 +372,7 @@ namespace PERQemu.Display
                 perqCode = _keymap.getKeyMapping(e);
                 if (perqCode != 0)
                 {
-                    Z80System.Instance.Keyboard.QueueInput(perqCode);   // Ship it!
+                    _system.IOB.Z80System.Keyboard.QueueInput(perqCode);   // Ship it!
                     e.Handled = true;
                 }
             }
@@ -478,7 +473,7 @@ namespace PERQemu.Display
         // Keyboard map (.NET/Mono -> PERQ)
         private KeyboardMap _keymap;
 
-        private static Display _instance = new Display();
+        private PERQSystem _system;
     }
 }
 

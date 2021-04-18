@@ -27,22 +27,18 @@ namespace PERQemu.Memory
     /// </summary>
     public sealed class MemoryBoard
     {
-        private MemoryBoard()
+        public MemoryBoard(PERQSystem system)
         {
+            _system = system;
             Reset();
-        }
-
-        public static MemoryBoard Instance
-        {
-            get { return _instance; }
         }
 
         public void Reset()
         {
             _memory = new ushort[_memSize];
 
-            _mdiQueue = new MemoryController("MDI");
-            _mdoQueue = new MemoryController("MDO");
+            _mdiQueue = new MemoryController(_system, "MDI");
+            _mdoQueue = new MemoryController(_system, "MDO");
 
             _Tstate = 0;
             _mdi = 0;
@@ -372,6 +368,6 @@ namespace PERQemu.Memory
 
         private bool _loadOpFile;
 
-        private static MemoryBoard _instance = new MemoryBoard();
+        private PERQSystem _system;
     }
 }

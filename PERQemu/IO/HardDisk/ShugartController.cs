@@ -22,7 +22,6 @@ using PERQemu.Memory;
 
 using System;
 using System.IO;
-using System.Security.Permissions;
 
 namespace PERQemu.IO.HardDisk
 {
@@ -31,16 +30,12 @@ namespace PERQemu.IO.HardDisk
     /// </summary>
     public sealed class ShugartDiskController
     {
-        private ShugartDiskController()
+        public ShugartDiskController(PERQSystem system)
         {
+            _system = system;
             Reset();
             LoadImage(null);
-        }
-
-        public static ShugartDiskController Instance
-        {
-            get { return _instance; }
-        }
+        }        
 
         public void Reset()
         {
@@ -81,7 +76,7 @@ namespace PERQemu.IO.HardDisk
                 if (_busyTime == 0)
                 {
                     _controllerStatus = Status.Done;
-                    PERQCpu.Instance.RaiseInterrupt(InterruptType.HardDisk);
+                    _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
                 }
             }
         }
@@ -90,7 +85,6 @@ namespace PERQemu.IO.HardDisk
         {
             // Reading status DOES NOT clear pending interrupts.
             // (See behavior in disktest.mic)
-            // PERQCpu.Instance.ClearInterrupt(InterruptType.HardDisk);
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -124,7 +118,7 @@ namespace PERQemu.IO.HardDisk
             {
                 case Command.Idle:
                     // Clear any pending interrupts.
-                    PERQCpu.Instance.ClearInterrupt(InterruptType.HardDisk);
+                    _system.CPU.ClearInterrupt(InterruptType.HardDisk);
                     break;
 
                 case Command.Reset:
@@ -305,7 +299,7 @@ namespace PERQemu.IO.HardDisk
                     DoSingleSeek();
                     _seekComplete = 1;
                     _seekState = SeekState.WaitForStepSet;
-                    PERQCpu.Instance.RaiseInterrupt(InterruptType.HardDisk);
+                    _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -374,13 +368,13 @@ namespace PERQemu.IO.HardDisk
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
                 int word = sectorData.Data[i] | (sectorData.Data[i+1] << 8);
-                MemoryBoard.Instance.StoreWord(dataAddr + (i >> 1), (ushort)word);
+                _system.MemoryBoard.StoreWord(dataAddr + (i >> 1), (ushort)word);
             }
 
             for (int i = 0; i < sectorData.Header.Length; i += 2)
             {
                 int word = sectorData.Header[i] | (sectorData.Header[i+1] << 8);
-                MemoryBoard.Instance.StoreWord(headerAddr + (i >> 1), (ushort)word);
+                _system.MemoryBoard.StoreWord(headerAddr + (i >> 1), (ushort)word);
             }
 
 #if TRACING_ENABLED
@@ -405,7 +399,7 @@ namespace PERQemu.IO.HardDisk
 
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
-                int word = Memory.MemoryBoard.Instance.FetchWord(dataAddr + (i >> 1));
+                int word = _system.MemoryBoard.FetchWord(dataAddr + (i >> 1));
                 sectorData.Data[i] = (byte)(word & 0xff);
                 sectorData.Data[i+1] = (byte)((word & 0xff00) >> 8);
             }
@@ -414,7 +408,7 @@ namespace PERQemu.IO.HardDisk
             {
                 for (int i = 0; i < sectorData.Header.Length; i += 2)
                 {
-                    int word = Memory.MemoryBoard.Instance.FetchWord(headerAddr + (i >> 1));
+                    int word = _system.MemoryBoard.FetchWord(headerAddr + (i >> 1));
                     sectorData.Header[i] = (byte)(word & 0xff);
                     sectorData.Header[i+1] = (byte)((word & 0xff00) >> 8);
                 }
@@ -451,7 +445,7 @@ namespace PERQemu.IO.HardDisk
 
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
-                int word = Memory.MemoryBoard.Instance.FetchWord(dataAddr + (i >> 1));
+                int word = _system.MemoryBoard.FetchWord(dataAddr + (i >> 1));
                 sectorData.Data[i] = (byte)(word & 0xff);
                 sectorData.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
@@ -459,7 +453,7 @@ namespace PERQemu.IO.HardDisk
             // Write the new header data...
             for (int i = 0; i < sectorData.Header.Length; i += 2)
             {
-                int word = Memory.MemoryBoard.Instance.FetchWord(headerAddr + (i >> 1));
+                int word = _system.MemoryBoard.FetchWord(headerAddr + (i >> 1));
                 sectorData.Header[i] = (byte)(word & 0xff);
                 sectorData.Header[i+1] = (byte)((word & 0xff00) >> 8);
             }
@@ -576,7 +570,7 @@ namespace PERQemu.IO.HardDisk
         private int _busyTime;
         private int _clocks;
 
-        private static ShugartDiskController _instance = new ShugartDiskController();
+        private PERQSystem _system;
 
         private enum SeekState
         {

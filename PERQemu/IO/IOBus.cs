@@ -40,22 +40,17 @@ namespace PERQemu.IO
     /// </summary>
     public sealed class IOBus
     {
-        private IOBus()
+        public IOBus(PERQSystem system)
         {
             _deviceDispatch = new IIODevice[256];
             _devices = new List<IIODevice>(16);
 
             // Attach devices
-            AddDevice(VideoController.Instance);
-            AddDevice(new IOB());
-            AddDevice(new OIO());
+            AddDevice(system.VideoController);
+            AddDevice(system.IOB);
+            AddDevice(system.OIO);
 
             Reset();
-        }
-
-        public static IOBus Instance
-        {
-            get { return _instance; }
         }
 
         public void Reset()
@@ -176,7 +171,5 @@ namespace PERQemu.IO
         /// The devices attached to the bus
         /// </summary>
         private List<IIODevice> _devices;
-
-        private static IOBus _instance = new IOBus();
     }
 }

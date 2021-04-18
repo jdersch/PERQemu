@@ -170,17 +170,13 @@ namespace PERQemu.Debugger
     /// </summary>
     public class Debugger
     {
-        private Debugger()
+        public Debugger(PERQSystem system)
         {
             BuildCommandTree();
             BuildVariableList();
 
             _debuggerPrompt = new DebuggerPrompt(_commandRoot);
-        }
-
-        public static Debugger Instance
-        {
-            get { return _instance; }
+            _system = system;
         }
 
         /// <summary>
@@ -257,10 +253,7 @@ namespace PERQemu.Debugger
                     }
                     else
                     {
-                        ExecuteLine("step");	// why not just this?
-                        //// no entry defaults to single-step (this is ugly)
-                        //List<MethodInfo> methods = _commandRoot.FindSubNodeByName("step").Methods;
-                        //InvokeDebugMethod(methods, null);
+                        ExecuteLine("step");
                     }
                 }
                 catch (Exception e)
@@ -419,7 +412,7 @@ namespace PERQemu.Debugger
 
             //
             // If we've made it THIS far, then we were able to parse all the commands into what they should be.
-            // Invoke the method on the static instance exposed by the class.
+            // Invoke the method on the instance exposed by PERQSystem.
             //
             object instance = GetInstanceFromMethod(method);
 
@@ -428,16 +421,40 @@ namespace PERQemu.Debugger
 
         private object GetInstanceFromProperty(PropertyInfo property)
         {
-            Type instanceType = property.DeclaringType;
-            PropertyInfo instance = instanceType.GetProperty("Instance");
-            return instance.GetValue(null, null);
+            // Grab the object instance from the System.
+            // TODO: would be nice to have a more dynamic way to do this.
+            switch (property.DeclaringType.Name)
+            {
+                case "Debugger":
+                    return _system.Debugger;
+
+                case "PERQCpu":
+                    return _system.CPU;
+
+                case "PERQSystem":
+                    return _system;
+            }
+
+            return null;
         }
 
         private object GetInstanceFromMethod(MethodInfo method)
         {
-            Type instanceType = method.DeclaringType;
-            PropertyInfo property = instanceType.GetProperty("Instance");
-            return property.GetValue(null, null);
+            // Grab the object instance from the System.
+            // TODO: would be nice to have a more dynamic way to do this.
+            switch (method.DeclaringType.Name)
+            {
+                case "Debugger":
+                    return _system.Debugger;
+
+                case "PERQCpu":
+                    return _system.CPU;
+
+                case "PERQSystem":
+                    return _system;
+            }
+
+            return null;
         }
 
         private object EvaluateExpression(string command)
@@ -765,15 +782,15 @@ namespace PERQemu.Debugger
 
         private void PrintStatus()
         {
-            PERQCpu.Instance.ShowPC();
+            _system.CPU.ShowPC();
 
             Console.WriteLine("ucode {0}",
-                        Disassembler.Disassemble(PERQCpu.Instance.PC, PERQCpu.Instance.GetInstruction(PERQCpu.Instance.PC)));
+                        Disassembler.Disassemble(_system.CPU.PC, _system.CPU.GetInstruction(_system.CPU.PC)));
 
             Console.WriteLine("inst  {0:x2}-{1} (@BPC {2})",
-                        MemoryBoard.Instance.OpFile[PERQCpu.Instance.BPC],
-                        QCode.QCodeHelper.GetQCodeFromOpCode(MemoryBoard.Instance.OpFile[PERQCpu.Instance.BPC]).Mnemonic,
-                        PERQCpu.Instance.BPC);
+                        _system.MemoryBoard.OpFile[_system.CPU.BPC],
+                        QCode.QCodeHelper.GetQCodeFromOpCode(_system.MemoryBoard.OpFile[_system.CPU.BPC]).Mnemonic,
+                        _system.CPU.BPC);
         }
 
         [DebugFunction("go", "Starts or continues execution of the PERQ.")]
@@ -1025,7 +1042,7 @@ namespace PERQemu.Debugger
 
         private RunState _nextState;
 
-        private static Debugger _instance = new Debugger();
+        private PERQSystem _system;
     }
 }
 

@@ -132,8 +132,9 @@ namespace PERQemu.Memory
     /// </summary>
     public class MemoryController
     {
-        public MemoryController(string name)
+        public MemoryController(PERQSystem system, string name)
         {
+            _system = system;
             _name = name;
             _bkmTable = new BookmarkEntry[256];
 
@@ -195,7 +196,7 @@ namespace PERQemu.Memory
 
         private int Tstate
         {
-            get { return MemoryBoard.Instance.TState; }     // too lazy to type this over and over
+            get { return _system.MemoryBoard.TState; }     // too lazy to type this over and over
         }
 
 
@@ -348,7 +349,7 @@ namespace PERQemu.Memory
                 // 
                 // Special cases for RasterOp
                 //
-                if (RasterOp.Instance.Enabled)
+                if (_system.CPU.RasterOp.Enabled)
                 {
                     if (Tstate == 0)
                     {
@@ -391,7 +392,7 @@ namespace PERQemu.Memory
                 //
                 // Special cases for indirect or overlapped Fetches (non-RasterOp)
                 //
-                if (MemoryBoard.Instance.IsFetch(nextCycle))
+                if (_system.MemoryBoard.IsFetch(nextCycle))
                 {
                     //
                     // Back-to-back Fetch or Fetch2 requests present unique timing challenges
@@ -412,7 +413,7 @@ namespace PERQemu.Memory
                         _bookmark = book;               // ...force immediate switch for the (t2,t3)...
                         _nextBookmark = (int)nextCycle; // ...but switch back to the real cycle type in Request()
                     }
-                    else if (_current.CycleType == MemoryCycle.Fetch4 && !RasterOp.Instance.Enabled)
+                    else if (_current.CycleType == MemoryCycle.Fetch4 && !_system.CPU.RasterOp.Enabled)
                     {
                         book = 0x7;                     // "IndFetch4" is for the specific case of a RefillOp
                         _bookmark = book;               // followed immediately by another Fetch; can't clobber the
@@ -438,7 +439,6 @@ namespace PERQemu.Memory
                         Console.WriteLine("\tFlags: {0}", flags);
                         DumpQueue();
                         flags.Abort = true;
-                        // PERQSystem.Instance.Break();
                     }
                 }
 #endif
@@ -532,6 +532,8 @@ namespace PERQemu.Memory
         private int _bookmark;
         private int _nextBookmark;
         private BookmarkEntry[] _bkmTable;
+
+        private PERQSystem _system;
     }
 }
 
