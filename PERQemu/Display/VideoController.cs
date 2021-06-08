@@ -210,7 +210,7 @@ namespace PERQemu.Display
             }
         }
 
-        public void Clock()
+        public uint Clock()
         {
             _cycle++;
 
@@ -232,7 +232,7 @@ namespace PERQemu.Display
                         _scanLine++;
                         if (_lineCounter > 0) _lineCounter--;
 
-                        if (_scanLine > _lastVisibleScanLine)
+                        if (_scanLine == _lastVisibleScanLine - 1)
                         {
                             // Usually the microcode drives vertical blanking through
                             // the control register; but during bootup it sometimes lets
@@ -290,6 +290,8 @@ namespace PERQemu.Display
                 (_lineCountOverflow ? CRTSignals.LineCounterOverflow : CRTSignals.None) |
                 (_state == VideoState.VBlankScanline ? CRTSignals.VerticalSync : CRTSignals.None) |
                 (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None);
+
+            return 1;
         }
 
         private bool CursorEnabled

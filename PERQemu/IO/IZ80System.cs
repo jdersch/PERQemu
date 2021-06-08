@@ -31,10 +31,13 @@ namespace PERQemu.IO
     public interface IZ80System
     {
         void Reset();
-        void Clock();
-        void LoadStatus(int status);
-        void LoadData(int data);
+        uint Clock();
+        void WriteStatus(int status);
+        void WriteData(int data);
         int ReadData();
+
+        // Debugging stuff
+        void ShowZ80State();
 
         // TODO: the rest of likely really belong in IOB eventually
         void LoadFloppyDisk(string path);

@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 
 using PERQemu.CPU;
+using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO.Z80.IOB
@@ -149,6 +150,11 @@ namespace PERQemu.IO.Z80.IOB
             _dataReadyInterruptRequested = false;
         }
 
+        public void ShowZ80State()
+        {
+            // Nothing here.
+        }
+
         public int Clocks()
         {
             return _clocks;
@@ -211,7 +217,7 @@ namespace PERQemu.IO.Z80.IOB
         /// particular the order of those instructions: we still have to look at the on/off flag
         /// even if the Z80 isn't "running"!
         /// </summary>
-        public void LoadStatus(int data)
+        public void WriteStatus(int data)
         {
             if (data == 0x80 && _running)
             {
@@ -246,7 +252,7 @@ namespace PERQemu.IO.Z80.IOB
         ///  NAND gate.  So -- if the PERQ sets IOD 8 high with a write, and there is no pending PERQ->
         ///  Z80 request, Z80 READY INT L will be low (triggered).
         /// </summary>
-        public void LoadData(int data)
+        public void WriteData(int data)
         {
 
 #if TRACING_ENABLED
@@ -329,11 +335,11 @@ namespace PERQemu.IO.Z80.IOB
         /// Those cases are handled in Load/ReadData, with some duplication of the code here.  But
         /// it's silly to Poll all the attached devices during cycles when the Z80 is off.
         /// </summary>
-        public void Clock()
+        public uint Clock()
         {
             if (!_running)
             {
-                return;
+                return 1;
             }
 
             _clocks++;
@@ -378,6 +384,9 @@ namespace PERQemu.IO.Z80.IOB
             // data at the next Poll().
             //
             RefreshReadyState();
+
+            // just make up a number
+            return 8;
         }
 
         /// <summary>

@@ -127,6 +127,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Conversion.cs" />
+    <Compile Include="Debugger\DebuggableAttribute.cs" />
+    <Compile Include="Debugger\Z80Debugger.cs" />
     <Compile Include="HostInterface\KeyboardMap.cs" />
     <Compile Include="CPU\ALU.cs" />
     <Compile Include="CPU\CallStack.cs" />
@@ -156,6 +159,9 @@
     <Compile Include="IO\Z80\IOB\Keyboard.cs" />
     <Compile Include="IO\Z80\IOB\RS232.cs" />
     <Compile Include="IO\Z80_new\IOBBus.cs" />
+    <Compile Include="IO\Z80_new\IZ80Device.cs" />
+    <Compile Include="IO\Z80_new\NECuPD765A.cs" />
+    <Compile Include="IO\Z80_new\PERQFifo.cs" />
     <Compile Include="IO\Z80_new\Z80System.cs" />
     <Compile Include="Memory\RasterOp.cs" />
     <Compile Include="EntryPoint.cs" />
@@ -175,6 +181,7 @@
     <Compile Include="PhysicalDisk\ShugartDisk.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="QCode\QCode.cs" />
+    <Compile Include="Scheduler.cs" />
     <Compile Include="Trace.cs" />
     <Compile Include="IO\Z80\IOB\HardDiskSeekControl.cs" />
   </ItemGroup>
@@ -538,6 +545,9 @@
     <None Include="PROM\memstate_table.txt" />
     <None Include="Docs\NewIOPorts.txt" />
     <None Include="Readme-source.txt" />
+    <Content Include="PROM\pz80.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Readme.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

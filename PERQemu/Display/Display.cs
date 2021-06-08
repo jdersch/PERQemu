@@ -86,7 +86,7 @@ namespace PERQemu.Display
 
         private void SyncRefreshInternal()
         {
-            _dispBox.Invalidate();
+            _dispBox.Refresh();
         }
 
         public void DrawWord(int displayAddress, ushort word)

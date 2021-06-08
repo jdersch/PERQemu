@@ -31,6 +31,7 @@ namespace PERQemu
         Run = 0,
         SingleStep,
         RunInst,
+        RunZ80Inst,
         Debug,
         DebugScript,
         Reset,
@@ -46,6 +47,8 @@ namespace PERQemu
     {
         public PERQSystem()
         {
+            _scheduler = new Scheduler();
+
             _memoryBoard = new MemoryBoard(this);
             _iob = new IOB(this);
             _oio = new OIO();
@@ -91,9 +94,29 @@ namespace PERQemu
                     case RunState.Run:
                     case RunState.SingleStep:
                     case RunState.RunInst:
+                    case RunState.RunZ80Inst:
                         try
                         {
-                            RunState nextState = _perqCPU.Execute(_state);
+                            // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                            // the number of microinstructions equivalent to that wall-clock time.
+                            uint clocks = _iob.Clock();
+
+                            // TODO: Fudge the PERQ ratio here, need to work out the actual math.
+                            clocks = (uint)(clocks * 2.4);
+
+                            RunState nextState = _state;
+                            do
+                            {
+                                _scheduler.Clock();
+                                nextState = _perqCPU.Execute(_state);
+                                clocks--;
+                            } while (nextState == _state && clocks > 0);
+
+                            // Drop back into debugging mode after running a single Z80 instruction.
+                            if (_state == RunState.RunZ80Inst)
+                            {
+                                _state = RunState.Debug;
+                            }
 
                             // If we were broken into during execution, we should honor it.
                             if (_state != RunState.Debug)
@@ -135,7 +158,7 @@ namespace PERQemu
                         break;
 
                     case RunState.Reset:
-                        _perqCPU.Reset();
+                        Reset();
                         _state = RunState.Debug;
                         _debugMessage = "";
                         break;
@@ -163,6 +186,11 @@ namespace PERQemu
         {
             get { return _bootChar; }
             set { _bootChar = value; }
+        }
+
+        public Scheduler Scheduler
+        {
+            get { return _scheduler; }
         }
 
         public PERQCpu CPU
@@ -199,6 +227,8 @@ namespace PERQemu
         {
             get { return _debugger; }
         }
+
+        
 
         #region Debugger Commands
 
@@ -346,13 +376,22 @@ namespace PERQemu
             {
                 Console.WriteLine("unset");
             }
-        }       
+        }
 
         #endregion
+
+        private void Reset()
+        {
+            _scheduler.Reset();
+            _perqCPU.Reset();
+
+            // TODO: anything else here need to be reset?
+        }
 
         private RunState _state;
         private string _debugMessage;
         private static byte _bootChar;
+        private Scheduler _scheduler;
         private PERQCpu _perqCPU;
         private MemoryBoard _memoryBoard;
         private IOB _iob;

@@ -108,7 +108,7 @@ namespace PERQemu.IO
             {
                 case 0xc1:  // Shugart command/control register & Z80 status register
                     _hardDiskController.LoadCommandRegister(value);
-                    _z80System.LoadStatus(value);
+                    _z80System.WriteStatus(value);
                     break;
 
                 case 0xc2:  // Shugart Head register
@@ -116,7 +116,7 @@ namespace PERQemu.IO
                     break;
 
                 case 0xc7:  // Z80 data port
-                    _z80System.LoadData(value);
+                    _z80System.WriteData(value);
                     break;
 
                 case 0xc8:  // Shugart Cylinder/Sector register
@@ -165,10 +165,11 @@ namespace PERQemu.IO
         /// <summary>
         /// Clocks subdevices
         /// </summary>
-        public void Clock()
+        public uint Clock()
         {
+            // TODO: HardDiskController no longer needs to be clocked here once new Z80 is in place and working.
             _hardDiskController.Clock();
-            _z80System.Clock();
+            return _z80System.Clock();
         }
 
         private HardDisk.ShugartDiskController _hardDiskController;

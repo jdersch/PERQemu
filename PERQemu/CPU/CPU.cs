@@ -206,12 +206,6 @@ namespace PERQemu.CPU
                 // Clock video
                 _system.VideoController.Clock();
 
-                // Clock the IO here, since it's an otherwise blown cycle
-                if ((_clocks % IOFudge) == 0)
-                {
-                    _ioBus.Clock();
-                }
-
                 // WCS writes take two cycles to run on the real hardware, but just
                 // one cycle here -- enough to screw up memory timing during the loop
                 // when microcode is being loaded!  Clear the hold flag to continue.
@@ -281,14 +275,6 @@ namespace PERQemu.CPU
 
             // Do writeback if W bit is set
             DoWriteBack(uOp);
-
-            // Clock IO devices
-            // TODO: this needs to be done differently for Z80 emulation
-            // Clock IO devices every N cycles (fudged, this is ugly)
-            if ((_clocks % IOFudge) == 0)
-            {
-                _ioBus.Clock();
-            }
 
             // If enabled, clock the RasterOp pipeline
             if (_rasterOp.Enabled)

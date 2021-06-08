@@ -23,6 +23,7 @@ namespace PERQemu
 {
     class EntryPoint
     {
+        [STAThread]
         static void Main(string[] args)
         {
             EntryPoint p = new EntryPoint();

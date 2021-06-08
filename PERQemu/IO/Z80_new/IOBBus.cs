@@ -30,9 +30,21 @@ namespace PERQemu.IO.Z80_new
     /// </summary>
     public class IOBIOBus : IMemory
     {
-        public IOBIOBus()
+        public IOBIOBus(Z80System system)
         {
+            _devices = new IZ80Device[Size];
+            _z80System = system;
+        }
 
+        public void Reset()
+        {
+            foreach(IZ80Device device in _devices)
+            {
+                if (device != null)
+                {
+                    device.Reset();
+                }
+            }
         }
 
         //
@@ -40,8 +52,15 @@ namespace PERQemu.IO.Z80_new
         //
         public byte this[int address] 
         { 
-            get { return 0; }
-            set { }
+            get 
+            {
+                return ReadPort(address);
+            }
+
+            set 
+            {
+                WritePort(address, value);
+            }
         }
 
         public int Size 
@@ -55,6 +74,69 @@ namespace PERQemu.IO.Z80_new
         //
         // Implementation
         //
+        public void RegisterDevice(IZ80Device device)
+        {
+            foreach(ushort portAddress in device.Ports)
+            {
+                if (_devices[portAddress] != null)
+                {
+                    throw new InvalidOperationException(
+                        String.Format("Z80 I/O Port conflict: Device {0} already registered at port 0x{1}",
+                        _devices[portAddress], portAddress));
+                }
+                else
+                {
+                    _devices[portAddress] = device;
+                    _z80System.CPU.RegisterInterruptSource(device);
+                }
+            }
+        }
+
+        private byte ReadPort(int port)
+        {
+            IZ80Device device = _devices[port];
+            byte value = 0;
+            if (device != null)
+            {
+                value = device.Read((byte)port);
+#if TRACING_ENABLED
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} ({1}), returning 0x{2:x}", port, device.Name, value);
+#endif
+            }
+            else
+            {
+#if TRACING_ENABLED
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} unhandled, returning 0.", port);
+#endif
+            }
+
+            return value;
+        }
+
+        private void WritePort(int port, byte value)
+        {
+            IZ80Device device = _devices[port];
+            if (device != null)
+            {
+                device.Write((byte)port, value);
+#if TRACING_ENABLED
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Z80State, "Z80 Port Write of 0x{0:x} to 0x{1:x} ({2})", value, port, device.Name);
+#endif
+            }
+            else
+            {
+#if TRACING_ENABLED
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Z80State, "Z80 Port Write of 0x{0:x} to 0x{1:x} unhandled, returning 0.", value, port);
+#endif
+            }
+        }
+
+        private IZ80Device[] _devices;
+        private Z80System _z80System;
     }
 
     /// <summary>
@@ -96,7 +178,7 @@ namespace PERQemu.IO.Z80_new
             }
             else if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
             {
-                return _ram[address];
+                return _ram[address - RAM_ADDRESS];
             }
             else
             {
@@ -109,7 +191,7 @@ namespace PERQemu.IO.Z80_new
         {
             if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
             {
-                _ram[address] = value;
+                _ram[address - RAM_ADDRESS] = value;
             }
             else
             {

@@ -250,10 +250,12 @@ namespace PERQemu.Debugger
                     if (command != String.Empty)
                     {
                         ExecuteLine(command);
+                        _lastCommand = command;
                     }
-                    else
+                    else if (!string.IsNullOrWhiteSpace(_lastCommand))
                     {
-                        ExecuteLine("step");
+                        Console.WriteLine("Repeating: {0}", _lastCommand);
+                        ExecuteLine(_lastCommand);
                     }
                 }
                 catch (Exception e)
@@ -433,6 +435,9 @@ namespace PERQemu.Debugger
 
                 case "PERQSystem":
                     return _system;
+
+                case "Z80System":
+                    return _system.IOB.Z80System;
             }
 
             return null;
@@ -452,6 +457,9 @@ namespace PERQemu.Debugger
 
                 case "PERQSystem":
                     return _system;
+
+                case "Z80System":
+                    return _system.IOB.Z80System;
             }
 
             return null;
@@ -782,6 +790,7 @@ namespace PERQemu.Debugger
 
         private void PrintStatus()
         {
+            _system.IOB.Z80System.ShowZ80State();
             _system.CPU.ShowPC();
 
             Console.WriteLine("ucode {0}",
@@ -809,6 +818,12 @@ namespace PERQemu.Debugger
         private void Inst()
         {
             _nextState = RunState.RunInst;
+        }
+
+        [DebugFunction("z80step", "Runs the PERQ for one Z80 instruction.")]
+        private void Z80Step()
+        {
+            _nextState = RunState.RunZ80Inst;
         }
 
         [DebugFunction("reset", "Resets the PERQ.")]
@@ -957,6 +972,7 @@ namespace PERQemu.Debugger
                     typeof(PERQSystem),
                     typeof(PERQCpu),
                     typeof(Z80System),
+                    typeof(IO.Z80_new.Z80System),
                     typeof(Debugger) };
 
             foreach (Type type in debugTypes)
@@ -1039,6 +1055,7 @@ namespace PERQemu.Debugger
         private DebuggerCommand _commandRoot;
         private List<DebuggerCommand> _commandList;
         private static List<DebuggerVariable> _variableList;
+        private string _lastCommand;
 
         private RunState _nextState;
 
