@@ -35,11 +35,23 @@ namespace PERQemu.IO.Z80_new
             _fdc = new NECuPD765A(system);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
+            _z80ctc = new Z80CTC(0x90, system.Scheduler);
             _bus = new IOBIOBus(this);
-
+            _seekControl = new HardDiskSeekControl(system);
+            _keyboard = new Keyboard();
+            _tms9914a = new TMS9914A();
+            _ioReg1 = new IOReg1(_z80ToPerqFifo);
+            _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc);
+            
             _bus.RegisterDevice(_fdc);
             _bus.RegisterDevice(_perqToZ80Fifo);
             _bus.RegisterDevice(_z80ToPerqFifo);
+            _bus.RegisterDevice(_z80ctc);
+            _bus.RegisterDevice(_seekControl);
+            _bus.RegisterDevice(_keyboard);
+            _bus.RegisterDevice(_tms9914a);
+            _bus.RegisterDevice(_ioReg1);
+            _bus.RegisterDevice(_ioReg3);
 
             _z80Debugger = new Z80Debugger();
 
@@ -199,14 +211,20 @@ namespace PERQemu.IO.Z80_new
 
         public Queue<byte> FIFO { get; }
 
-        public Keyboard Keyboard { get { return null; } }
+        public IKeyboard Keyboard { get { return _keyboard; } }
 
         private PERQSystem _system;
         private Z80Processor _cpu;
         private IOBIOBus _bus;
+        private IOReg1 _ioReg1;
+        private IOReg3 _ioReg3;
         private NECuPD765A _fdc;
         private PERQToZ80FIFO _perqToZ80Fifo;
         private Z80ToPERQFIFO _z80ToPerqFifo;
+        private Z80CTC _z80ctc;
+        private HardDiskSeekControl _seekControl;
+        private Keyboard _keyboard;
+        private TMS9914A _tms9914a;
 
         private Z80Debugger _z80Debugger;
 

@@ -51,7 +51,7 @@ namespace PERQemu
         EStack =            0x100000,
         RasterOp =          0x200000,
         GPIB =              0x400000,
-        Optimization =      0x800000,       // currently unused ... -> Ethernet?
+        Z80FIFO =           0x800000,
         Speech =            0x1000000,
         RS232 =             0x2000000,
         Tablet =            0x4000000,
@@ -159,6 +159,10 @@ namespace PERQemu
                 case LogType.Z80State:
                 case LogType.Display:
                     color = ConsoleColor.DarkCyan;
+                    break;
+
+                case LogType.Z80FIFO:
+                    color = ConsoleColor.DarkRed;
                     break;
 
                 case LogType.Link:

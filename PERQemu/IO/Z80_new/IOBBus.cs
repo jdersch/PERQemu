@@ -95,7 +95,7 @@ namespace PERQemu.IO.Z80_new
         private byte ReadPort(int port)
         {
             IZ80Device device = _devices[port];
-            byte value = 0;
+            byte value = 0xff;
             if (device != null)
             {
                 value = device.Read((byte)port);
@@ -108,7 +108,7 @@ namespace PERQemu.IO.Z80_new
             {
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} unhandled, returning 0.", port);
+                    Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} unhandled, returning 0xff.", port);
 #endif
             }
 
@@ -184,6 +184,7 @@ namespace PERQemu.IO.Z80_new
             {
                 // throw for now so I can see what's going on
                 throw new InvalidOperationException(String.Format("Unexpected memory read at address 0x{0:x}.", address));
+                //return 0xff;
             }
         }
 

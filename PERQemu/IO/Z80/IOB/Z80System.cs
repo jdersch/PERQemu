@@ -190,7 +190,7 @@ namespace PERQemu.IO.Z80.IOB
             get { return _outputFifo; }
         }
 
-        public Keyboard Keyboard
+        public IKeyboard Keyboard
         {
             get { return _keyboard; }
         }

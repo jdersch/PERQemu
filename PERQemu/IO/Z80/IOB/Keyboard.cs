@@ -112,7 +112,7 @@ namespace PERQemu.IO.Z80.IOB
         Ctrl = 2
     }
     
-    public sealed class Keyboard : IZ80Device
+    public sealed class Keyboard : IZ80Device, IKeyboard
     {
         public Keyboard(PERQSystem system)
         {

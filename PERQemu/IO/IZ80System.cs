@@ -46,6 +46,14 @@ namespace PERQemu.IO
         void SetSerialPort(ISerialDevice dev);
         string GetSerialPort();
         Queue<byte> FIFO { get; }
-        Keyboard Keyboard { get; }
+        IKeyboard Keyboard { get; }
+    }
+
+    /// <summary>
+    /// This is also temporary during new Z80 construction
+    /// </summary>
+    public interface IKeyboard
+    {
+        void QueueInput(byte key);
     }
 }

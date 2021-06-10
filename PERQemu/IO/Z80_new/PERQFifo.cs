@@ -31,7 +31,7 @@ namespace PERQemu.IO.Z80_new
 
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80->PERQ FIFO read {0:x2}, {1:x4} items left in queue.",
+                    Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO read {0:x2}, {1:x4} items left in queue.",
                                                 value, _fifo.Count);
 #endif
             }
@@ -52,15 +52,17 @@ namespace PERQemu.IO.Z80_new
             return value;
         }
 
-        public string Name { get { return "Z80->PERQ FIFO"; } }
+        public string Name => "Z80->PERQ FIFO";
 
-        public byte[] Ports { get { return _ports; } }
+        public byte[] Ports => _ports;
 
-        public bool IntLineIsActive { get { return false; } }   // Never interrupts
+        public bool IntLineIsActive => false;    // Never interrupts
 
-        public byte? ValueOnDataBus { get { return null; } }    // As above
+        public byte? ValueOnDataBus => null;     // As above
 
         public event EventHandler NmiInterruptPulse;
+
+        public bool IsReady { get => true; }        // Always true for now since we provide an "infinite" FIFO.
 
         public byte Read(byte portAddress)
         {
@@ -74,7 +76,7 @@ namespace PERQemu.IO.Z80_new
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State,
+                Trace.Log(LogType.Z80FIFO,
                           "Z80->PERQ FIFO enqueued byte {0:x2}, {1} items in queue.",
                           value, _fifo.Count);
 #endif
@@ -106,18 +108,25 @@ namespace PERQemu.IO.Z80_new
         public void Reset()
         {
             _fifo = new Queue<byte>();
-            _interruptEnabled = false;
+            _interruptsEnabled = false;
+            _interruptActive = false;
         }
 
         public bool DataReadyInterruptRequested;
 
-        public string Name { get { return "PERQ->Z80 FIFO"; } }
+        public string Name => "PERQ->Z80 FIFO";
 
-        public byte[] Ports { get { return _ports; } }
+        public byte[] Ports => _ports;
 
-        public bool IntLineIsActive { get { return _interruptEnabled; } }
+        public bool IntLineIsActive => _interruptActive;
 
-        public byte? ValueOnDataBus { get { return 0x20; } } // PRQVEC
+        public byte? ValueOnDataBus => 0x20; // PRQVEC
+
+        public bool InterruptsEnabled 
+        { 
+            get => _interruptsEnabled;
+            set => _interruptsEnabled = value;
+        }
 
         public event EventHandler NmiInterruptPulse;
 
@@ -125,7 +134,7 @@ namespace PERQemu.IO.Z80_new
         {
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State,
+                Trace.Log(LogType.Z80FIFO,
                           "PERQ->Z80 FIFO enqueued byte {0:x2}, {1} items in queue.",
                           value, _fifo.Count);
 #endif
@@ -133,22 +142,26 @@ namespace PERQemu.IO.Z80_new
             _fifo.Enqueue(value);
 
             // Interrupt the Z80 to let it know we have data to be read.
-            _interruptEnabled = true;
+            _interruptActive = _interruptsEnabled;
         }
 
         public byte Read(byte portAddress)
         {
             if (_fifo.Count == 0)
             {
-                // Hopefully this never happens.
-                throw new InvalidOperationException("Z80 Read from empty PERQ->Z80 FIFO.");
+#if TRACING_ENABLED
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Z80FIFO,
+                              "PERQ->Z80 FIFO read from empty fifo, returning 0.");
+#endif
+                return 0;
             }
 
             byte value = _fifo.Dequeue();
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State,
+                Trace.Log(LogType.Z80FIFO,
                           "PERQ->Z80 FIFO dequeued byte {0:x2}, {1} items left in queue.",
                           value, _fifo.Count);
 #endif
@@ -164,7 +177,7 @@ namespace PERQemu.IO.Z80_new
                 {
                     _system.CPU.RaiseInterrupt(InterruptType.Z80DataInReady);
                 }
-                _interruptEnabled = false;
+                _interruptActive = false;
             }
 
             return value;
@@ -179,7 +192,8 @@ namespace PERQemu.IO.Z80_new
 
         private PERQSystem _system;
         private Queue<byte> _fifo;
-        private bool _interruptEnabled;
+        private bool _interruptsEnabled;
+        private bool _interruptActive;
 
         private byte[] _ports =
         {

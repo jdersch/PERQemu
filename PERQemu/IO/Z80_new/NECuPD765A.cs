@@ -7,11 +7,12 @@ namespace PERQemu.IO.Z80_new
 {
     public class NECuPD765A : IZ80Device
     {
+        // TODO: Ctor should take base I/O address
         public NECuPD765A(PERQSystem system)
         {
             _system = system;
-            _commandData = new Stack<byte>();
-            _statusData = new Stack<byte>();
+            _commandData = new Queue<byte>();
+            _statusData = new Queue<byte>();
 
             _commands = new CommandData[]
             {
@@ -25,11 +26,11 @@ namespace PERQemu.IO.Z80_new
                 new CommandData(Command.ScanEqual, 0x1f, 8, StubExecutor),
                 new CommandData(Command.ScanLowOrEqual, 0x1f, 8, StubExecutor),
                 new CommandData(Command.Recalibrate, 0xff, 1, RecalibrateExecutor),
-                new CommandData(Command.SenseInterruptStatus, 0xff, 1, StubExecutor),
+                new CommandData(Command.SenseInterruptStatus, 0xff, 1, SenseInterruptStatusExecutor),
                 new CommandData(Command.Specify, 0xff, 2, StubExecutor),
                 new CommandData(Command.SenseDriveStatus, 0xff, 1, StubExecutor),
                 new CommandData(Command.ScanHighOrEqual, 0x1f, 8, StubExecutor),
-                new CommandData(Command.Seek, 0xff, 2, StubExecutor),
+                new CommandData(Command.Seek, 0xff, 2, SeekExecutor),
             };
 
             Reset();
@@ -37,6 +38,7 @@ namespace PERQemu.IO.Z80_new
 
         public void Reset()
         {
+            _interruptsEnabled = false;
             _interruptActive = false;
             _status = Status.RQM;
             _state = State.Command;
@@ -44,13 +46,19 @@ namespace PERQemu.IO.Z80_new
             _statusData.Clear();
         }
 
-        public string Name { get { return "uPD765A FDC"; } }
+        public string Name => "uPD765A FDC";
 
-        public byte[] Ports { get { return _ports; } }
+        public byte[] Ports => _ports;
 
-        public bool IntLineIsActive { get { return _interruptActive; } }
+        public bool IntLineIsActive => _interruptActive;
 
-        public byte? ValueOnDataBus { get { return 0x24; } } // FLPVEC
+        public byte? ValueOnDataBus => 0x24; // FLPVEC
+
+        public bool InterruptsEnabled
+        {
+            get => _interruptsEnabled;
+            set => _interruptsEnabled = value;
+        }
 
         public byte Read(byte portAddress)
         {
@@ -68,7 +76,7 @@ namespace PERQemu.IO.Z80_new
                         // Read result data
                         if (_statusData.Count > 0)
                         {
-                            byte value = _statusData.Pop();
+                            byte value = _statusData.Dequeue();
 
                             if (_statusData.Count == 0)
                             {
@@ -147,7 +155,7 @@ namespace PERQemu.IO.Z80_new
             // Store the command data away, reset bits 6 and 7 of the status register,
             // and queue a workitem to set the bits.
             // If this is the last byte of the command, commence execution.
-            _commandData.Push(value);
+            _commandData.Enqueue(value);
 
             _status &= (~Status.DIO & ~Status.RQM);
 
@@ -176,7 +184,25 @@ namespace PERQemu.IO.Z80_new
         private void RecalibrateExecutor(ulong skewNsec, object context)
         {            
             // TODO: actually do something
-            _interruptActive = true;
+            _interruptActive = _interruptsEnabled;
+            FinishCommand();
+        }
+
+        private void SeekExecutor(ulong skewNsec, object context)
+        {
+            // TODO: actually do something
+            _interruptActive = _interruptsEnabled;
+            FinishCommand();
+        }
+
+        private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
+        {
+            // Return ST0 and PCN, and clear the interrupt active flag
+            _interruptActive = false;
+
+            _statusData.Enqueue(0x20);    // ST0 (SEEK END)
+            _statusData.Enqueue(1);       // PCN
+
             FinishCommand();
         }
 
@@ -200,12 +226,13 @@ namespace PERQemu.IO.Z80_new
 
         private PERQSystem _system;
 
+        private bool _interruptsEnabled;
         private bool _interruptActive;
         private Status _status;
         private State _state;
         private CommandData _currentCommand;
-        private Stack<byte> _commandData;
-        private Stack<byte> _statusData;
+        private Queue<byte> _commandData;
+        private Queue<byte> _statusData;
 
 
         // From v87.z80:

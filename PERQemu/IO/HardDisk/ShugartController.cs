@@ -309,7 +309,7 @@ namespace PERQemu.IO.HardDisk
             }
         }
 
-        private void DoSingleSeek()
+        public void DoSingleSeek()
         {
             if ((_seekData & 0x8) == 0)
             {
