@@ -309,6 +309,8 @@ namespace PERQemu.Display
             get { return (_videoStatus & StatusRegister.EnableParityInterrupts) != StatusRegister.EnableParityInterrupts; }
         }
 
+        private ushort[] _scanlineData = new ushort[PERQ_DISPLAYWIDTH_IN_WORDS];
+
         public void RenderScanline()
         {
             int renderLine = _scanLine;
@@ -327,9 +329,12 @@ namespace PERQemu.Display
                 int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
                 int screenAddress = renderLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
 
-                _system.Display.DrawWord(screenAddress, TransformDisplayWord(_system.MemoryBoard.FetchWord(dataAddress)));
+                _scanlineData[x] = TransformDisplayWord(_system.MemoryBoard.FetchWord(dataAddress));
             }
 
+            _system.Display.DrawScanline(renderLine, _scanlineData);
+
+            // TODO: make this part of the above rather than doing it... stupidly.
             if (CursorEnabled)
             {
                 if (_scanLine >= 0 && _scanLine <= _lastVisibleScanLine)

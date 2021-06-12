@@ -51,6 +51,8 @@ namespace PERQemu.IO.HardDisk
 
         public void Clock()
         {
+            // TODO: Rewrite this to use the Scheduler
+
             ClockSeek();
 
             _trackZero = (_physCylinder == 0 ? 1 : 0);

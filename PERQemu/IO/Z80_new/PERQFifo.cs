@@ -118,7 +118,7 @@ namespace PERQemu.IO.Z80_new
 
         public byte[] Ports => _ports;
 
-        public bool IntLineIsActive => _interruptActive;
+        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
 
         public byte? ValueOnDataBus => 0x20; // PRQVEC
 
@@ -142,7 +142,7 @@ namespace PERQemu.IO.Z80_new
             _fifo.Enqueue(value);
 
             // Interrupt the Z80 to let it know we have data to be read.
-            _interruptActive = _interruptsEnabled;
+            _interruptActive = true;
         }
 
         public byte Read(byte portAddress)
@@ -152,7 +152,7 @@ namespace PERQemu.IO.Z80_new
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
                     Trace.Log(LogType.Z80FIFO,
-                              "PERQ->Z80 FIFO read from empty fifo, returning 0.");
+                              "PERQ->Z80 FIFO read from empty fifo (int active {0}), returning 0.", _interruptActive);
 #endif
                 return 0;
             }

@@ -24,7 +24,7 @@ namespace PERQemu.IO.Z80_new
 
         public byte[] Ports => _ports;
 
-        public bool IntLineIsActive => _interruptActive;
+        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
 
         public byte? ValueOnDataBus => 0x28; //KBDVEC
 
@@ -39,7 +39,7 @@ namespace PERQemu.IO.Z80_new
         public void QueueInput(byte key)
         {
             _lastKeycode = key;
-            _interruptActive = true; // _interruptsEnabled;
+            _interruptActive = true;
         }
 
         public byte Read(byte portAddress)

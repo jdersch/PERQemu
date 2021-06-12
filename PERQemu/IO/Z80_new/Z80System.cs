@@ -23,6 +23,7 @@ using PERQemu.IO.SerialDevices;
 using PERQemu.IO.Z80.IOB;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace PERQemu.IO.Z80_new
 {
@@ -101,6 +102,26 @@ namespace PERQemu.IO.Z80_new
                 return 4; // nice round fudged number to fill time
             }
         }
+
+        public void RunAsynchronously()
+        {
+            _asyncThread = new Thread(AsyncThread);
+            _asyncThread.Start();
+        }
+
+        private void AsyncThread()
+        {
+            while(true)
+            {
+                // TODO: are there other options for this z80 class for execution?
+                if (_running)
+                {
+                    _cpu.ExecuteNextInstruction();
+                }
+            }
+        }
+
+        private Thread _asyncThread;
 
         /// <summary>
         /// Sends data to the Z80.

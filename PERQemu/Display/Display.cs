@@ -22,6 +22,9 @@ using System;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Drawing.Imaging;
+using SDL2;
+using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace PERQemu.Display
 {
@@ -44,77 +47,49 @@ namespace PERQemu.Display
 
         public void Refresh()
         {
-            // Lazy init the display on first refresh.
-            if (_display == null)
+            //
+            // Send a render event to the SDL message loop so that things
+            // will get drawn.
+            //
+            SDL.SDL_PushEvent(ref _renderEvent);
+        }
+
+        public void DrawScanline(int scanline, ushort[] scanlineData)
+        {
+            int rgbIndex = scanline * _displayWidth;
+
+            for (int i = 0; i < scanlineData.Length; i++)
             {
-                StartDisplayThread();
-
-                // Wait for the display thread to finish initialization.
-                _initDoneEvent.WaitOne();
+                ushort w = scanlineData[i];
+                for (int bit = 15; bit >= 0; bit--)
+                {
+                    uint color = (w & (1 << bit)) == 0 ? 0xff000000 : 0xffffffff;
+                    _32bppDisplayBuffer[rgbIndex++] = (int)(color);
+                }
             }
-
-            // Might be nice to make this configurable, or add frameskipping, etc...
-            if (Environment.ProcessorCount == 1)
-            {
-                // We force the display to refresh here.  This waits until the display is
-                // done blitting before returning.  On single CPU systems, it makes no sense
-                // to render on a separate thread, as it offers no improvement.
-                SyncRefresh();
-                System.Threading.Thread.Sleep(0);
-            }
-            else
-            {
-                // If we have more than one CPU at our disposal, we can blit asynchronously.
-                // This means the video is slightly out of sync with the CPU, but this is
-                // rarely an important issue (and makes a pretty decent perf gain).
-                AsyncRefresh();
-                System.Threading.Thread.Sleep(0);
-            }
-        }
-
-        private delegate void RenderDelegate();
-
-        public void SyncRefresh()
-        {
-            _display.Invoke(new RenderDelegate(SyncRefreshInternal));
-        }
-
-        public void AsyncRefresh()
-        {
-            _display.BeginInvoke(new RenderDelegate(SyncRefreshInternal));
-        }
-
-        private void SyncRefreshInternal()
-        {
-            _dispBox.Refresh();
-        }
-
-        public void DrawWord(int displayAddress, ushort word)
-        {
-            _displayData[displayAddress] = (byte)((word & 0xff00) >> 8);
-            _displayData[displayAddress + 1] = (byte)(word & 0xff);
         }
 
         public void DrawByte(int displayAddress, byte b)
         {
-            _displayData[displayAddress] = b;
+            int rgbIndex = displayAddress * 8;
+
+            for (int bit = 7; bit >= 0; bit--)
+            {
+                uint color = (b & (1 << bit)) == 0 ? 0xff000000 : 0xffffffff;
+                _32bppDisplayBuffer[rgbIndex++] = (int)(color);
+            }
         }
 
         public void SaveScreenshot(string path)
         {
             EncoderParameters p = new EncoderParameters(1);
             p.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 100L);
-            _buffer.Save(path, GetEncoderForFormat(ImageFormat.Jpeg), p);
+            //_buffer.Save(path, GetEncoderForFormat(ImageFormat.Jpeg), p);
         }
 
         public void Shutdown()
         {
-            // Check if inited here; prevents a small annoyance if program exited before display
-            // inited (FIXME: sometimes still whines about a cross-thread call...)
-            if (_display != null)
-            {
-                _display.Close();
-            }
+            _sdlRunning = false;
         }
 
         public int MouseX
@@ -139,77 +114,218 @@ namespace PERQemu.Display
 
         private void Initialize()
         {
-            // Initialize our event, used to wait for initialization as well as screen refresh.
-            _initDoneEvent = new System.Threading.AutoResetEvent(false);
-
-            // Create byte array for display data
-            _displayData = new byte[DISPLAY_BUFFER_SIZE];
+            _textureLock = new ReaderWriterLockSlim();
 
             // Set up .NET/Mono host keyboard -> PERQ mapping
             _keymap = new KeyboardMap();
 
             _clickFlag = false;
-            _mouseButton = 0x0;
+            _mouseButton = 0x0;           
+            
+            //
+            // Kick off our SDL message loop.
+            //
+            _sdlThread = new Thread(SDLMessageLoopThread);
+            _sdlThread.Start();
         }
 
-        private void StartDisplayThread()
+        private void SDLMessageLoopThread()
         {
-            _displayThread = new System.Threading.Thread(new System.Threading.ThreadStart(DisplayThread));
-            _displayThread.Start();
+            // Start up SDL
+            InitializeSDL();
+
+            _sdlRunning = true;
+
+            while (_sdlRunning)
+            {
+                SDL.SDL_Event e;
+
+                //
+                // Run main message loop
+                //
+                while (SDL.SDL_WaitEvent(out e) != 0)
+                {
+                    if (e.type == SDL.SDL_EventType.SDL_QUIT)
+                    {
+                        _sdlRunning = false;
+                        break;
+                    }
+                    else
+                    {
+                        SDLMessageHandler(e);
+                    }
+                }
+
+                SDL.SDL_Delay(0);
+            }
+
+            //
+            // Shut things down nicely.
+            //
+            if (_sdlRenderer != IntPtr.Zero)
+            {
+                SDL.SDL_DestroyRenderer(_sdlRenderer);
+                _sdlRenderer = IntPtr.Zero;
+            }
+
+            if (_sdlWindow != IntPtr.Zero)
+            {
+                SDL.SDL_DestroyWindow(_sdlWindow);
+                _sdlWindow = IntPtr.Zero;
+            }
+
+            SDL.SDL_Quit();
         }
 
-        private void DisplayThread()
+        private void SDLMessageHandler(SDL.SDL_Event e)
         {
-            _display = new Form();
-            _display.CreateControl();
-            _display.BackColor = Color.Black;
-            _display.Text = "PERQ";
-            _display.ControlBox = false;
-            _display.ClientSize = new Size(VideoController.PERQ_DISPLAYWIDTH, VideoController.PERQ_DISPLAYHEIGHT);
-            _display.SizeGripStyle = SizeGripStyle.Hide;
-            _display.WindowState = FormWindowState.Normal;
-            _display.KeyPreview = true;
-            _display.KeyUp += new KeyEventHandler(OnKeyUp);
-            _display.KeyDown += new KeyEventHandler(OnKeyDown);
-            _display.MouseWheel += new MouseEventHandler(OnMouseWheel);
+            //
+            // Handle current messages.  This executes in the UI context.
+            //            
+            switch (e.type)
+            {
+                case SDL.SDL_EventType.SDL_USEREVENT:
+                    // This should always be the case since we only define one
+                    // user event, but just to be truly pedantic...
+                    if (e.user.type == _renderEventType)
+                    {
+                        RenderDisplay();
+                    }
+                    break;
 
-            _buffer = new Bitmap(VideoController.PERQ_DISPLAYWIDTH,
-                                 VideoController.PERQ_DISPLAYHEIGHT,
-                                 PixelFormat.Format1bppIndexed);
+                
+                case SDL.SDL_EventType.SDL_MOUSEMOTION:
+                    OnMouseMove(e.motion.x, e.motion.y);
+                    break;
 
-            _dispBox = new PictureBox();
-            _dispBox.Image = _buffer;
-            _dispBox.Size = new Size(VideoController.PERQ_DISPLAYWIDTH, VideoController.PERQ_DISPLAYHEIGHT);
-            _dispBox.Cursor = Cursors.Cross;
-            _dispBox.Paint += new PaintEventHandler(OnPaint);
-            _dispBox.MouseDown += new MouseEventHandler(OnMouseDown);
-            _dispBox.MouseUp += new MouseEventHandler(OnMouseUp);
-            _dispBox.MouseMove += new MouseEventHandler(OnMouseMove);
+                case SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN:
+                    OnMouseDown(e.button.button);
+                    break;
 
-            _display.Controls.Add(_dispBox);
+                case SDL.SDL_EventType.SDL_MOUSEBUTTONUP:
+                    OnMouseUp(e.button.button);
+                    break; 
+                
+                case SDL.SDL_EventType.SDL_KEYDOWN:
+                    OnKeyDown(e.key.keysym.sym);
+                    break;
 
-            _displayRect = new Rectangle(0, 0, VideoController.PERQ_DISPLAYWIDTH, VideoController.PERQ_DISPLAYHEIGHT);
+                case SDL.SDL_EventType.SDL_KEYUP:
+                    OnKeyUp(e.key.keysym.sym);
+                    break;
+                
+                default:
+                    break;
+            }
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Display thread started, display initialized.");
-#endif
-
-            _display.Shown += new EventHandler(OnDisplayShown);
-
-            // And show the window on this thread.
-            _display.ShowDialog();
         }
 
-        void OnDisplayShown(object sender, EventArgs e)
+        private void RenderDisplay()
         {
-            // Signal that we're done initializing the dialog.
-            _initDoneEvent.Set();
+            //
+            // Stuff the display data into the display texture
+            //
+
+            IntPtr textureBits = IntPtr.Zero;
+            int pitch = 0;
+            SDL.SDL_LockTexture(_displayTexture, IntPtr.Zero, out textureBits, out pitch);
+
+            Marshal.Copy(_32bppDisplayBuffer, 0, textureBits, _32bppDisplayBuffer.Length);
+
+            SDL.SDL_UnlockTexture(_displayTexture);
+
+            //
+            // Render the display texture to the renderer
+            //
+            SDL.SDL_RenderCopy(_sdlRenderer, _displayTexture, IntPtr.Zero, IntPtr.Zero);
+
+            //
+            // And show it to us.
+            //
+            SDL.SDL_RenderPresent(_sdlRenderer);
+        }
+
+
+        private void InitializeSDL()
+        {
+            int retVal;
+
+            SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
+
+            // Get SDL humming
+            if ((retVal = SDL.SDL_Init(SDL.SDL_INIT_EVERYTHING)) < 0)
+            {
+                throw new InvalidOperationException(String.Format("SDL_Init failed.  Error {0:x}", retVal));
+            }
+
+            // 
+            if (SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "0") == SDL.SDL_bool.SDL_FALSE)
+            {
+                throw new InvalidOperationException("SDL_SetHint failed to set scale quality.");
+            }
+
+            _sdlWindow = SDL.SDL_CreateWindow(
+                "PERQ", 
+                SDL.SDL_WINDOWPOS_UNDEFINED, 
+                SDL.SDL_WINDOWPOS_UNDEFINED, 
+                768, 
+                1024, 
+                SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN);
+
+            if (_sdlWindow == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("SDL_CreateWindow failed.");
+            }
+
+            _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
+            if (_sdlRenderer == IntPtr.Zero)
+            {
+                // Fall back to software
+                _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
+
+                if (_sdlRenderer == IntPtr.Zero)
+                {
+                    // Still no luck.
+                    throw new InvalidOperationException("SDL_CreateRenderer failed.");
+                }
+            }
+
+            CreateDisplayTexture(false);
+
+            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x00, 0x00, 0x00, 0xff);
+
+            // Register a User event for rendering.
+            _renderEventType = SDL.SDL_RegisterEvents(1);
+            _renderEvent = new SDL.SDL_Event();
+            _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
+        }
+
+        private void CreateDisplayTexture(bool filter)
+        {
+            _textureLock.EnterWriteLock();
+            SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, filter ? "linear" : "nearest");
+
+            _displayTexture = SDL.SDL_CreateTexture(
+                _sdlRenderer,
+                SDL.SDL_PIXELFORMAT_ARGB8888,
+                (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
+                _displayWidth,
+                _displayHeight);
+
+            if (_displayTexture == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("SDL_CreateTexture failed.");
+            }
+
+            SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND);
+            _textureLock.ExitWriteLock();
         }
 
         void OnMouseWheel(object sender, MouseEventArgs e)
         {
             _clickFlag = e.Delta > 0;
 
+            /*
             if (_clickFlag)
             {
                 _dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;
@@ -218,12 +334,13 @@ namespace PERQemu.Display
             {
                 _dispBox.Top = 0;
             }
+            */
         }
 
-        void OnMouseMove(object sender, MouseEventArgs e)
+        void OnMouseMove(int x, int y)
         {
-            _mouseX = e.X;
-            _mouseY = e.Y;
+            _mouseX = x;
+            _mouseY = y;
         }
 
         /// <summary>
@@ -240,29 +357,29 @@ namespace PERQemu.Display
         /// If we emulated the 1-button stylus or the 16-button mega puck we'd have
         /// to monkey with the mappings, but this is complicated enough...
         /// </summary>
-        void OnMouseDown(object sender, MouseEventArgs e)
+        void OnMouseDown(byte button)
         {
-            switch (e.Button)
+            switch (button)
             {
-                case MouseButtons.XButton1:
-                    _mouseButton = 0x8;
+                case 4:
+                    _mouseButton = 0x8;                     // XButton
                     break;
 
-                case MouseButtons.Right:
-                    _mouseButton = _mouseAltButton ? 0x8 : 0x4;
+                case 3:
+                    _mouseButton = _ctrl ? 0x8 : 0x4;       // Right
                     break;
 
-                case MouseButtons.Middle:
-                    _mouseButton = 0x2;
+                case 2:
+                    _mouseButton = 0x2;                     // Middle
                     break;
 
-                case MouseButtons.Left:
-                    _mouseButton = _mouseAltButton ? 0x2 : 0x1;
+                case 1:
+                    _mouseButton = _ctrl ? 0x2 : 0x1;       // Left
                     break;
             }
         }
 
-        void OnMouseUp(object sender, MouseEventArgs e)
+        void OnMouseUp(byte button)
         {
             _mouseButton = 0x0;
         }
@@ -272,115 +389,81 @@ namespace PERQemu.Display
         /// Key translation is then done, and applicable results are queued on the Z80
         /// keyboard input buffer.
         /// </summary>
-        void OnKeyDown(object sender, KeyEventArgs e)
+        void OnKeyDown(SDL.SDL_Keycode keycode)
         {
             byte perqCode = 0;
 
             //
-            // Handle any keys that may affect the Form itself, and are not passed
+            // Handle any keys that may affect the Window itself, and are not passed
             // to the PERQ.
             //
-            switch (e.KeyCode)
+            bool handled = false;
+            switch (keycode)
             {
                 // Allow Home/PageUp and End/PageDown keys to scroll the display.
                 // Useful on laptop touchpads which don't simulate (or mice that
                 // don't have) scroll wheels.
-                case Keys.Home:
-                case Keys.PageUp:
-                    _dispBox.Top = 0;
-                    e.Handled = true;
+                case SDL.SDL_Keycode.SDLK_HOME:
+                case SDL.SDL_Keycode.SDLK_PAGEUP:
+                    //_dispBox.Top = 0;                    
+                    handled = true;
                     break;
 
-                case Keys.End:
-                case Keys.PageDown:
-                    _dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;
-                    e.Handled = true;
-                    break;
-
-                // Catch the PrintScreen button and initiate a snapshot of the PERQ screen.
-                // Would be cool if this could pause the emulator, snap the window, then offer
-                // a standard save dialog to store the file...
-                case Keys.PrintScreen:
-                    Console.WriteLine("PrintScreen called - not yet implemented");
+                case SDL.SDL_Keycode.SDLK_END:
+                case SDL.SDL_Keycode.SDLK_PAGEDOWN:
+                    //_dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;                    
+                    handled = true;
                     break;
 
                 // Toggle the "lock" keys... this needs work.
-                case Keys.CapsLock:
-                case Keys.NumLock:
-                case Keys.Scroll:
-                    _keymap.setLockKeyState(e.KeyCode);
-                    e.Handled = true;
+                case SDL.SDL_Keycode.SDLK_CAPSLOCK:
+                case SDL.SDL_Keycode.SDLK_NUMLOCKCLEAR:
+                case SDL.SDL_Keycode.SDLK_SCROLLLOCK:
+                    _keymap.SetLockKeyState(keycode);
+                    handled = true;
                     break;
 
                 // Quirks: On Windows, the Control, Shift and Alt keys repeat when held down even
                 // briefly.  The PERQ never needs to receive a plain modifier key event like that;
                 // it's just a lot of noise, so skip the mapping step and quietly handle them here
                 // (though they are still checked below for mouse options).
-                case Keys.ShiftKey:
-                case Keys.ControlKey:
-                    #region GoryDetails
-                    //
-                    // ** Ugly Hack Alert **
-                    // Oh, but it gets better: on the very broken Mac WinForms port, control
-                    // characters in KeyDown events don't have the KeyCode of the key pressed -
-                    // they're mapped for some insanely stupid reason to 1..26.  (From the Mono
-                    // source this appears to be deliberate.  Seriously.)
-                    //
-                    // That means pressing the Shift or Control keys *by themselves* would get
-                    // passed to the PERQ as valid control characters [bonks head on desk].  It
-                    // _appears_ that the way to distinguish between a Ctrl-<char> sequence and
-                    // a plain ControlKey (or ShiftKey) event is that the KeyValue does not equal
-                    // the KeyCode (enum) value.  getKeyMapping() attempts to work that mess out;
-                    // here we just strip out the unadorned events.
-                    //
-                    // Nope, that was hopeless.  Rewrote the Mac Mono keyboard input routine.
-                    // Will include the patch with the distribution for any Mac users out there...
-                    //
-                    #endregion
-                    if (e.KeyValue == (int)e.KeyCode)
-                    {
-                        e.Handled = true;   // Extraneous Shift- or Control-key event - ignore
-                    }
-                    else
-                    {
-                        e.Handled = false;  // Mac hack - this is probably a real Ctrl- or Ctrl-Shift- char.
-                    }
+                case SDL.SDL_Keycode.SDLK_LSHIFT:
+                case SDL.SDL_Keycode.SDLK_RSHIFT:
+                    _shift = true;
+                    handled = true;
                     break;
 
-                case Keys.Alt:
-                case Keys.Menu:
+                case SDL.SDL_Keycode.SDLK_LCTRL:
+                case SDL.SDL_Keycode.SDLK_RCTRL:
+                    _ctrl = true;
+                    handled = true;
+                    break;
+
+                case SDL.SDL_Keycode.SDLK_LALT:
+                case SDL.SDL_Keycode.SDLK_RALT:
+                case SDL.SDL_Keycode.SDLK_MENU:
                     // Since the PERQ doesn't _have_ an "Alt" key, just ignore these entirely?
-                    e.Handled = true;
+                    handled = true;
                     break;
 
-                case Keys.Pause:            // Windows keyboards
-                case Keys.F8:               // Create a Mac equivalent...
+                case SDL.SDL_Keycode.SDLK_PAUSE:            // Windows keyboards
+                case SDL.SDL_Keycode.SDLK_F8:               // Create a Mac equivalent...
                     // Provide a key to jump into the debugger when focus is on the PERQ,
                     // rather than select the console and hit ^C.
-                    e.Handled = true;
                     _system.Break();
-                    break;
-
-                default:
-                    e.Handled = false;
+                    handled = true;
                     break;
             }
 
             // If the key wasn't handled above, let's see if we can get the ASCII equivalent.
-            if (!e.Handled)
+            if (!handled)
             {
-                perqCode = _keymap.getKeyMapping(e);
+                perqCode = _keymap.GetKeyMapping(keycode, _shift, _ctrl);
                 if (perqCode != 0)
                 {
                     _system.IOB.Z80System.Keyboard.QueueInput(perqCode);   // Ship it!
-                    e.Handled = true;
+                    handled = true;
                 }
-            }
-
-            if (e.Handled)
-            {
-                // Prevent this from being handled by OnKeyPress.
-                e.SuppressKeyPress = true;
             }
 
             //
@@ -391,6 +474,8 @@ namespace PERQemu.Display
             //  - If Ctrl is held down, The Left mouse button simulates Kriz/GPIB middle button
             //    and the Right mouse button simulates GPIB button 4 (blue; n/a on Kriz)
             //
+
+            /*
             if (e.Alt)
             {
                 _mouseOffTablet = true;
@@ -400,6 +485,7 @@ namespace PERQemu.Display
             {
                 _mouseAltButton = true;
             }
+            */
         }
 
         /// <summary>
@@ -407,8 +493,22 @@ namespace PERQemu.Display
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        void OnKeyUp(object sender, KeyEventArgs e)
+        void OnKeyUp(SDL.SDL_Keycode keycode)
         {
+            switch(keycode)
+            {
+                case SDL.SDL_Keycode.SDLK_LSHIFT:
+                case SDL.SDL_Keycode.SDLK_RSHIFT:
+                    _shift = false;
+                    break;
+
+                case SDL.SDL_Keycode.SDLK_LCTRL:
+                case SDL.SDL_Keycode.SDLK_RCTRL:
+                    _ctrl = false;
+                    break;
+            }
+
+            /*
             // Reset mouse tweaks if modifier keys are released
             if (!e.Alt)
             {
@@ -419,16 +519,7 @@ namespace PERQemu.Display
             {
                 _mouseAltButton = false;
             }
-        }
-
-        private void OnPaint(object sender, PaintEventArgs e)
-        {
-            BitmapData data = _buffer.LockBits(_displayRect, ImageLockMode.WriteOnly, PixelFormat.Format1bppIndexed);
-
-            IntPtr ptr = data.Scan0;
-            System.Runtime.InteropServices.Marshal.Copy(_displayData, 0, ptr, _displayData.Length);
-
-            _buffer.UnlockBits(data);
+            */
         }
 
         private ImageCodecInfo GetEncoderForFormat(ImageFormat format)
@@ -445,20 +536,20 @@ namespace PERQemu.Display
             return null;
         }
 
+        //
+        // Display data
+        //
 
-        private int DISPLAY_BUFFER_SIZE = (VideoController.PERQ_DISPLAYHEIGHT *
-                                           VideoController.PERQ_DISPLAYWIDTH_IN_BYTES);
+        //
+        // Buffer for rendering pixels.  SDL doesn't support 1bpp pixel formats, so to keep things simple we use
+        // an array of ints and a 32bpp format.  What's a few extra bits between friends.
+        //
+        private int[] _32bppDisplayBuffer = new int[(_displayWidth * _displayHeight)];
+        private delegate void DisplayDelegate();
+        private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
 
-        // Bitmap data (from the PERQ's memory buffer)
-        private byte[] _displayData;
-
-        // Display
-        private Form _display;
-        private Bitmap _buffer;
-        private PictureBox _dispBox;
-        private Rectangle _displayRect;
-        private System.Threading.Thread _displayThread;
-        private System.Threading.AutoResetEvent _initDoneEvent;
+        private const int _displayWidth = 768;
+        private const int _displayHeight = 1024;
 
         // Mouse
         private int _mouseX;
@@ -470,10 +561,29 @@ namespace PERQemu.Display
         private bool _mouseOffTablet;
         private bool _mouseAltButton;
 
-        // Keyboard map (.NET/Mono -> PERQ)
+        // Keyboard Stuff
+        private bool _shift;
+        private bool _ctrl;
         private KeyboardMap _keymap;
 
         private PERQSystem _system;
+
+        //
+        // SDL
+        //
+        private IntPtr _sdlWindow = IntPtr.Zero;
+        private IntPtr _sdlRenderer = IntPtr.Zero;
+
+        // Rendering textures
+        private IntPtr _displayTexture = IntPtr.Zero;
+        private ReaderWriterLockSlim _textureLock;
+
+        // Events and stuff
+        private UInt32 _renderEventType;
+        private SDL.SDL_Event _renderEvent;
+
+        private Thread _sdlThread;
+        private bool _sdlRunning;
     }
 }
 

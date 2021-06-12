@@ -50,7 +50,7 @@ namespace PERQemu.IO.Z80_new
 
         public byte[] Ports => _ports;
 
-        public bool IntLineIsActive => _interruptActive;
+        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
 
         public byte? ValueOnDataBus => 0x24; // FLPVEC
 
@@ -184,14 +184,14 @@ namespace PERQemu.IO.Z80_new
         private void RecalibrateExecutor(ulong skewNsec, object context)
         {            
             // TODO: actually do something
-            _interruptActive = _interruptsEnabled;
+            _interruptActive = true;
             FinishCommand();
         }
 
         private void SeekExecutor(ulong skewNsec, object context)
         {
             // TODO: actually do something
-            _interruptActive = _interruptsEnabled;
+            _interruptActive = true;
             FinishCommand();
         }
 
