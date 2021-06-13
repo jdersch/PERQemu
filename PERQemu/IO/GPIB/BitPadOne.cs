@@ -150,7 +150,7 @@ namespace PERQemu.IO.GPIB
             // too often, so temper our update rate by checking that the fifo is
             // empty before sending.
             //
-            if ((_lastUpdate++ > _sampleRate) && fifo.Count == 0)
+            if (fifo.Count == 0)
             {
                 WriteIntAsStringToQueue(x, ref fifo);
                 fifo.Enqueue(_delimiter1);

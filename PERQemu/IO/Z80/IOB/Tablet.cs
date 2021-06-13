@@ -40,11 +40,6 @@ namespace PERQemu.IO.Z80.IOB
         {
             _enabled = false;
             _messageIndex = 0;
-            _pollCount = 0;
-
-            // Set for 60 updates/sec.
-            _jiffyInterval = ((PERQCpu.Frequency / 60) / PERQCpu.IOFudge);
-
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
 #endif
@@ -86,8 +81,6 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Poll(ref Queue<byte> fifo)
         {
-            _pollCount++;
-
             if (_enabled && fifo.Count == 0)
             {
                 //
@@ -97,33 +90,28 @@ namespace PERQemu.IO.Z80.IOB
                 // message within a certain timeout period.  We periodically send tablet
                 // information every few polls...
                 //
-                if (_pollCount >= _jiffyInterval)
-                {
-                    int jiffies = (_pollCount / _jiffyInterval);
-                    int x = 0;
-                    int y = 0;
-                    int button = _system.Display.MouseButton;
+                int x = 0;
+                int y = 0;
+                int button = _system.Display.MouseButton;
 
-                    GetTabletPos(out x, out y, button);
+                GetTabletPos(out x, out y, button);
 
-                    fifo.Enqueue(Z80System.SOM);
-                    fifo.Enqueue((byte)Z80toPERQMessage.TabletData);
-                    fifo.Enqueue((byte)x);          // X low
-                    fifo.Enqueue((byte)(x >> 8));   // X high
-                    fifo.Enqueue((byte)y);          // Y low
-                    fifo.Enqueue((byte)(y >> 8));   // Y high
-                    fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last
-                                                    // message, according to perqz80.doc)
+                fifo.Enqueue(Z80System.SOM);
+                fifo.Enqueue((byte)Z80toPERQMessage.TabletData);
+                fifo.Enqueue((byte)x);          // X low
+                fifo.Enqueue((byte)(x >> 8));   // X high
+                fifo.Enqueue((byte)y);          // Y low
+                fifo.Enqueue((byte)(y >> 8));   // Y high
+                fifo.Enqueue((byte)1);          // (1/60th sec clocks since last
+                                                // message, according to perqz80.doc)
 
-                    // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
-                    // maintenance moved to the video interrupt instead.
+                // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
+                // maintenance moved to the video interrupt instead.
 #if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
-                                                     x, y, button, jiffies);
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
+                                                    x, y, button, jiffies);
 #endif
-                    _pollCount = 0;
-                }
             }
         }
 
@@ -183,8 +171,6 @@ namespace PERQemu.IO.Z80.IOB
         private bool _enabled;
         private int _messageIndex;
 
-        private int _jiffyInterval;
-        private int _pollCount;
 
         private PERQSystem _system;
     }

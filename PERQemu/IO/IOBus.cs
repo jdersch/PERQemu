@@ -22,7 +22,6 @@ using PERQemu.Display;
 
 namespace PERQemu.IO
 {
-
     public class UnhandledIORequestException : Exception
     {
         public UnhandledIORequestException(string message)
@@ -71,17 +70,6 @@ namespace PERQemu.IO
             _devices.Add(device);
 
             UpdateDispatchTable(device);
-        }
-
-        /// <summary>
-        /// Clocks any devices attached to the IOBus to allow them to run for one cycle
-        /// </summary>
-        public void Clock()
-        {
-            for(int i = 0; i < _devices.Count; i++)
-            {
-                _devices[i].Clock();
-            }
         }
 
         public void IOWrite(byte ioPort, int value)

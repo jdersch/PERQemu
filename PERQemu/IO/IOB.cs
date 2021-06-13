@@ -167,8 +167,6 @@ namespace PERQemu.IO
         /// </summary>
         public uint Clock()
         {
-            // TODO: HardDiskController no longer needs to be clocked here once new Z80 is in place and working.
-            _hardDiskController.Clock();
             return _z80System.Clock();
         }
 

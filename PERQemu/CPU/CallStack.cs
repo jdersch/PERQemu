@@ -100,7 +100,10 @@ namespace PERQemu.CPU
         /// </summary>
         public void PushLo(ushort address)
         {
-            if (_cStackPointerLo < _cStackLimit) { _cStackPointerLo++; }
+            if (_cStackPointerLo < _cStackLimit) 
+            { 
+                _cStackPointerLo++; 
+            }
 
             _cStackLo[_cStackPointerLo] = (ushort)(address & 0xfff);
 
@@ -122,7 +125,10 @@ namespace PERQemu.CPU
                 Trace.Log(LogType.CpuState, _cStackPointerLo, "Popped {0:x5} from call stack (lo).", address);
 #endif
 
-            if (_cStackPointerLo > 0) { _cStackPointerLo--; }
+            if (_cStackPointerLo > 0) 
+            { 
+                _cStackPointerLo--; 
+            }
 
             return address;
         }
@@ -144,8 +150,15 @@ namespace PERQemu.CPU
         /// </summary>
         public void PushFull(ushort address)
         {
-            if (_cStackPointerLo < _cStackLimit) { _cStackPointerLo++; }
-            if (_cStackPointerHi < _cStackLimit) { _cStackPointerHi++; }
+            if (_cStackPointerLo < _cStackLimit) 
+            { 
+                _cStackPointerLo++; 
+            }
+
+            if (_cStackPointerHi < _cStackLimit) 
+            { 
+                _cStackPointerHi++; 
+            }
 
             _cStackLo[_cStackPointerLo] = (ushort)(address & 0xfff);
             _cStackHi[_cStackPointerHi] = (ushort)(address & 0x3000);
@@ -169,8 +182,15 @@ namespace PERQemu.CPU
                 Trace.Log(LogType.CpuState, _cStackPointerLo, "Popped {0:x5} from call stack.", address);
 #endif
 
-            if (_cStackPointerLo > 0) { _cStackPointerLo--; }
-            if (_cStackPointerHi > 0) { _cStackPointerHi--; }
+            if (_cStackPointerLo > 0) 
+            { 
+                _cStackPointerLo--; 
+            }
+
+            if (_cStackPointerHi > 0) 
+            { 
+                _cStackPointerHi--; 
+            }
 
             return address;
         }

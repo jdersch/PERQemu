@@ -18,7 +18,7 @@
 
 using System;
 using System.IO;
-
+using System.Runtime.CompilerServices;
 using PERQemu.CPU;
 
 namespace PERQemu.Memory
@@ -36,28 +36,37 @@ namespace PERQemu.Memory
     /// <summary>
     /// Represents a request to the memory subsystem.
     /// </summary>
-    public struct MemoryRequest
+    public class MemoryRequest
     {
+        public MemoryRequest()
+        {
+            Clear();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
+#if TRACING_ENABLED
             _reqID = -1;
+#endif
             _startAddr = -1;
             _cycleType = MemoryCycle.None;
             _bookmark = 0;
             _active = false;
         }
 
+#if TRACING_ENABLED
         public override string ToString()
         {
             return String.Format("ID={0} addr={1:x5} cycle={2} bookmark={3} active={4}",
                                  _reqID, _startAddr, _cycleType, _bookmark, _active);
         }
-
         public long RequestID
         {
             get { return _reqID; }
             set { _reqID = value; }
         }
+#endif
 
         public int StartAddress
         {
@@ -83,7 +92,9 @@ namespace PERQemu.Memory
             set { _active = value; }
         }
 
+#if TRACING_ENABLED
         private long _reqID;
+#endif
         private int _startAddr;
         private MemoryCycle _cycleType;
         private int _bookmark;
@@ -96,7 +107,7 @@ namespace PERQemu.Memory
     /// These are read from the BKM16 ROM and are consulted each cycle to drive the
     /// memory state machine.
     /// </summary>
-    public struct BookmarkEntry
+    public class BookmarkEntry
     {
         public BookmarkEntry(byte result)
         {
@@ -149,10 +160,7 @@ namespace PERQemu.Memory
             _bookmark = _nextBookmark = 0;
 
             _current = new MemoryRequest();
-            _current.Clear();
-
             _pending = new MemoryRequest();
-            _pending.Clear();
 
             _address = -1;
             _index = 0;
@@ -229,7 +237,7 @@ namespace PERQemu.Memory
 #endif
         }
 
-
+#if TRACING_ENABLED
         /// <summary>
         /// Accept a new memory request (at the bottom of the CPU cycle, after R is
         /// computed).  Because the CPU now aborts until the correct cycle when issuing
@@ -249,16 +257,41 @@ namespace PERQemu.Memory
             _pending.Active = true;
             _pending.Bookmark = _nextBookmark;
         }
+#else
+        /// <summary>
+        /// Accept a new memory request (at the bottom of the CPU cycle, after R is
+        /// computed).  Because the CPU now aborts until the correct cycle when issuing
+        /// new memory operations, we simply latch the new request and let the state
+        /// machine mechanism do all the right magic at the next Clock().
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Request(int startAddr, MemoryCycle cycleType)
+        {
+#if DEBUG
+            if (_pending.Active)
+                Console.WriteLine("{0} queue: ** new Request() when _pending already Active?", _name);
+#endif
+            _pending.StartAddress = startAddr;
+            _pending.CycleType = cycleType;
+
+            _pending.Active = true;
+            _pending.Bookmark = _nextBookmark;
+        }
+#endif
 
 
         /// <summary>
         /// If the current op is complete and a pending op is ready, promote it.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Recognize()
         {
             if (_pending.Active && !_current.Active)
             {
+                // Swap current with pending.
+                MemoryRequest old = _current;
                 _current = _pending;
+                _pending = old;
                 _bookmark = _current.Bookmark;
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
@@ -272,15 +305,16 @@ namespace PERQemu.Memory
         /// Update the current state of the controller, and computes the address and
         /// index of the current op if applicable.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RunStateMachine()
         {
-            BookmarkEntry flags;
+            
 
             // Bump the state
             _state = _nextState;
 
             // Get the flags for the current bookmark
-            flags = GetBookmarkEntry(_bookmark, _state);
+            BookmarkEntry flags = GetBookmarkEntry(_bookmark, _state);
 
             // Set the wait and next state based on the current flags
             _wait = flags.Abort;
@@ -330,6 +364,7 @@ namespace PERQemu.Memory
         /// Sets bookmarks for the next cycle, and modifies the current one if necessary.
         /// WARNING: THIS IS WHERE THE SAUSAGE IS MADE.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void UpdateBookmarks(MemoryCycle nextCycle)
         {
             if (nextCycle == MemoryCycle.None)
@@ -464,6 +499,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Gets the bookmark for a particular cycle type.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private BookmarkEntry GetBookmarkEntry(int book, MemoryState state)
         {
             //

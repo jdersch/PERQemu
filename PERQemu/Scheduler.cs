@@ -1,5 +1,6 @@
 ﻿
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu
 {
@@ -81,6 +82,7 @@ namespace PERQemu
             _currentTimeNsec = 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock()
         {
             //
@@ -129,13 +131,15 @@ namespace PERQemu
             }
         }
 
+        public static ulong TimeStepNsec => _timeStepNsec;
+
         private ulong _currentTimeNsec;
 
         private SchedulerQueue _schedule;
 
         // 170 nsec is approximately one PERQ CPU clock cycle and is the time-base for
         // the scheduler.
-        private const ulong _timeStepNsec = 170;
+        private static readonly ulong _timeStepNsec = 170;
     }
 
     /// <summary>
@@ -151,6 +155,7 @@ namespace PERQemu
 
         public Event Top
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 return _top;
@@ -162,6 +167,7 @@ namespace PERQemu
             return _queue.Contains(e);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Push(Event e)
         {
             // Degenerate case:  list is empty or new entry is earlier than the head of the list.
@@ -195,6 +201,7 @@ namespace PERQemu
             _queue.AddLast(e);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Event Pop()
         {           
             Event e = _top;
@@ -210,7 +217,7 @@ namespace PERQemu
             if (_queue.Contains(e))
             {
                 _queue.Remove(e);
-                _top = _queue.First.Value;
+                _top = _queue.First != null ? _queue.First.Value : null;
             }           
         }
 

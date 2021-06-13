@@ -21,6 +21,7 @@ using System.IO;
 using System.Collections.Generic;
 
 using PERQemu.CPU;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu.Memory
 {
@@ -57,6 +58,7 @@ namespace PERQemu.Memory
     /// A memory word in the RasterOp datapath, augmented with debugging info
     /// (tracks the source address of a given word).
     /// </summary>
+    /// TODO: can this be made a class (might improve perf)
     public struct ROpWord
     {
         public ROpWord(int addr, int idx, ushort val)
@@ -133,6 +135,7 @@ namespace PERQemu.Memory
         /// hardware.  Is used to set the "phase" of the action, determine the direction
         /// of the transfer, and sync the RasterOp state clock with the Memory state.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CntlRasterOp(int value)
         {
             _latchOn = (value & 0x40) != 0;
@@ -188,6 +191,7 @@ namespace PERQemu.Memory
         /// Sets the RasterOp Width register, and clears the source and destination word FIFOs.
         /// In the 16K CPU, the two upper bits also control the Multiply/Divide unit.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WidRasterOp(int value)
         {
 
@@ -229,6 +233,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Loads the RasterOp Destination register.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DstRasterOp(int value)
         {
             _function = (Function)(((int)_function & 0x4) | (((~value) & 0xc0) >> 6));
@@ -248,6 +253,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Loads the RasterOp Source register.  Upper bit also controls the PERQ1 power supply!
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SrcRasterOp(int value)
         {
             _function = (Function)(((int)_function & 0x3) | (((~value) & 0x40) >> 4));
@@ -344,6 +350,7 @@ namespace PERQemu.Memory
         /// Gets the next word from the result queue.  Expected to be called only if
         /// a Store4/4R cycle is currently in progress.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort Result()
         {
             ROpWord dest;
@@ -369,6 +376,7 @@ namespace PERQemu.Memory
         /// result word.  Called during DestFetch as each word arrives to avoid
         /// complications from the delay in the overlapped Fetch/Store cycle.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ROpWord ComputeResult(ROpWord dest)
         {
             ROpWord src = dest;                         // init to silence the Xamarin compiler...
@@ -681,6 +689,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Returns the next RasterOp state, determined by the current phase and Memory Tstate.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private State NextState()
         {
             // RasterOp is clocked after the Memory "tick", but before the DispatchFunction
@@ -747,6 +756,7 @@ namespace PERQemu.Memory
         /// Populates and returns a ROpWord with the address, index and data
         /// of the current memory word (but throws an error if MDI is invalid).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ROpWord FetchNextWord()
         {
             ROpWord w = new ROpWord();
@@ -777,6 +787,7 @@ namespace PERQemu.Memory
         /// </summary>
         /// <param name="index">Destination word index 0..3</param>
         /// <returns>Combiner mask value</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private CombinerFlags DestWordMask(int index)
         {
             // Create the 9-bit index into the RDS ROM lookup table
@@ -801,6 +812,7 @@ namespace PERQemu.Memory
         /// </summary>
         /// <param name="index">Source word index 0..3</param>
         /// <returns>Combiner mask value</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private CombinerFlags SrcWordMask(int index)
         {
             // Create a 9-bit index into the RDS ROM lookup tablee
@@ -824,6 +836,7 @@ namespace PERQemu.Memory
         /// Return the operation(s) to perform at the beginning or end of a
         /// scan line, given a dest and source word.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EdgeStrategy GetEdgeStrategy(CombinerFlags dstMask, CombinerFlags srcMask)
         {
             int lookup = (((int)_direction << 6) |
@@ -853,6 +866,7 @@ namespace PERQemu.Memory
         /// is true and the _srcFifo is not empty.  [could just inline this in Clock()
         /// and save a funtion call]
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ClearLeadingSrcWords()
         {
             // We only need to align the first edge in a Begin phase; else no-op
@@ -884,6 +898,7 @@ namespace PERQemu.Memory
         /// Drop extra words from the Source FIFO that are outside the update region.
         /// Called in SrcFetch if _leftOver is true.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ClearExtraSrcWords()
         {
             // We only need to clear after the second edge in an End/Clear phase
@@ -938,6 +953,7 @@ namespace PERQemu.Memory
         /// <param name="srcWord">Source</param>
         /// <param name="mask">Bitmask</param>
         /// <returns>The combined word</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort Combine(ushort dstWord, ushort srcWord, ushort mask)
         {
             switch (_function)

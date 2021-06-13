@@ -148,6 +148,9 @@ namespace PERQemu.IO.Z80.IOB
             _deviceReadyState = 0;
 
             _dataReadyInterruptRequested = false;
+
+            // Kick off the periodic poll worker (if we're running)
+            Z80Poll();
         }
 
         public void ShowZ80State()
@@ -337,9 +340,14 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         public uint Clock()
         {
+            return 1;
+        }
+
+        public void Z80Poll()
+        { 
             if (!_running)
             {
-                return 1;
+                return;
             }
 
             _clocks++;
@@ -385,8 +393,8 @@ namespace PERQemu.IO.Z80.IOB
             //
             RefreshReadyState();
 
-            // just make up a number
-            return 8;
+            // Do this again in a bit.
+            _system.Scheduler.Schedule(_pollIntervalNsec, (skew, context) => { Z80Poll(); });
         }
 
         /// <summary>
@@ -395,19 +403,18 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         private void ParseInputFifo()
         {
-            if (_inputFifo.Count == 0)
+            while (_inputFifo.Count > 0)
             {
-                return;
-            }
 
-            byte data = _inputFifo.Dequeue();
 
-            switch (_state)
-            {
-                case MessageParseState.WaitingForSOM:
-                    if (data == SOM)
-                    {
-                        _state = MessageParseState.MessageType;
+                byte data = _inputFifo.Dequeue();
+
+                switch (_state)
+                {
+                    case MessageParseState.WaitingForSOM:
+                        if (data == SOM)
+                        {
+                            _state = MessageParseState.MessageType;
 #if TRACING_ENABLED
                         if (Trace.TraceOn)
                             Trace.Log(LogType.Z80State, "Byte was SOM, transitioning to MessageType state.");
@@ -429,93 +436,94 @@ namespace PERQemu.IO.Z80.IOB
                             Trace.Log(LogType.Z80State,
                                      "Non-SOM byte sent to Z80 subsystem while waiting for SOM: {0:x2}", data);
 #endif
-                    }
-                    break;
+                        }
+                        break;
 
-                case MessageParseState.MessageType:
-                    _messageType = (PERQtoZ80Message)data;
+                    case MessageParseState.MessageType:
+                        _messageType = (PERQtoZ80Message)data;
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Z80State,
                                  "Z80 Message type is {0}, transitioning to Message state.", _messageType);
 #endif
-                    _state = MessageParseState.Message;
-                    break;
+                        _state = MessageParseState.Message;
+                        break;
 
-                case MessageParseState.Message:
-                    //
-                    // The IOB's message format ("Old Z80") is really really annoying to parse, especially as
-                    // compared to that of the CIO/EIO board ("New Z80").  Once we've gotten the message type,
-                    // the length of the message is dependent on the type of the message sent.  Some have fixed
-                    // lengths, some are variable.  Basically this requires a state machine for each individual
-                    // message... so we just hand the bytes off to the target device and let it cope its own way. :)
-                    //
-                    bool done = false;
+                    case MessageParseState.Message:
+                        //
+                        // The IOB's message format ("Old Z80") is really really annoying to parse, especially as
+                        // compared to that of the CIO/EIO board ("New Z80").  Once we've gotten the message type,
+                        // the length of the message is dependent on the type of the message sent.  Some have fixed
+                        // lengths, some are variable.  Basically this requires a state machine for each individual
+                        // message... so we just hand the bytes off to the target device and let it cope its own way. :)
+                        //
+                        bool done = false;
 
-                    switch (_messageType)
-                    {
-                        case PERQtoZ80Message.SetKeyboardStatus:
-                            done = _keyboard.RunStateMachine(_messageType, data);
-                            break;
+                        switch (_messageType)
+                        {
+                            case PERQtoZ80Message.SetKeyboardStatus:
+                                done = _keyboard.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.SetFloppyStatus:
-                        case PERQtoZ80Message.FloppyCommand:
-                        case PERQtoZ80Message.FloppyBoot:
-                            done = _floppyDisk.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.SetFloppyStatus:
+                            case PERQtoZ80Message.FloppyCommand:
+                            case PERQtoZ80Message.FloppyBoot:
+                                done = _floppyDisk.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.HardDriveSeek:
-                            done = _hardDiskSeek.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.HardDriveSeek:
+                                done = _hardDiskSeek.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.GPIBCommand:
-                            done = _gpib.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.GPIBCommand:
+                                done = _gpib.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.SetTabletStatus:
-                            done = _tablet.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.SetTabletStatus:
+                                done = _tablet.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.SetRS232Status:
-                        case PERQtoZ80Message.RS232:
-                            done = _rs232.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.SetRS232Status:
+                            case PERQtoZ80Message.RS232:
+                                done = _rs232.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.Speech:
-                            done = _speech.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.Speech:
+                                done = _speech.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.SetClockStatus:
-                            done = _clockDev.RunStateMachine(_messageType, data);
-                            break;
+                            case PERQtoZ80Message.SetClockStatus:
+                                done = _clockDev.RunStateMachine(_messageType, data);
+                                break;
 
-                        case PERQtoZ80Message.GetStatus:
-                            GetStatus(data);
-                            done = true;
-                            break;
+                            case PERQtoZ80Message.GetStatus:
+                                GetStatus(data);
+                                done = true;
+                                break;
 
-                        default:
+                            default:
 #if TRACING_ENABLED
                             if (Trace.TraceOn)
                                 Trace.Log(LogType.Warnings, "Unhandled Z80 message type {0}", _messageType);
 #endif
-                            // Oof.  Do we just bail here?  Wait for SOM?  Shouldn't ever happen, now
-                            // that we cover every message in the old protocol?
-                            break;
-                    }
+                                // Oof.  Do we just bail here?  Wait for SOM?  Shouldn't ever happen, now
+                                // that we cover every message in the old protocol?
+                                break;
+                        }
 
-                    if (done)
-                    {
-                        _state = MessageParseState.WaitingForSOM;
+                        if (done)
+                        {
+                            _state = MessageParseState.WaitingForSOM;
 #if TRACING_ENABLED
                         if (Trace.TraceOn)
                             Trace.Log(LogType.Z80State, "{0} message complete.  Returning to WaitingForSOM state.", _messageType);
 #endif
-                    }
-                    break;
+                        }
+                        break;
 
-                default:
-                    throw new InvalidOperationException("Invalid Z80 message parsing state.");
+                    default:
+                        throw new InvalidOperationException("Invalid Z80 message parsing state.");
+                }
             }
         }
 
@@ -656,6 +664,9 @@ namespace PERQemu.IO.Z80.IOB
 
         // IOB Z80's clock rate, ~ 2.5Mhz
         public static readonly int Frequency = 2456700;
+
+        // Poll the Z80 devices every 1 ms
+        private static readonly ulong _pollIntervalNsec = 1 * Conversion.MsecToNsec;
 
         // Whether the Z80 has been started or not
         private bool _running;

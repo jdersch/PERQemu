@@ -25,6 +25,7 @@ using System.Drawing.Imaging;
 using SDL2;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace PERQemu.Display
 {
@@ -114,13 +115,16 @@ namespace PERQemu.Display
 
         private void Initialize()
         {
+            _stopwatch = new Stopwatch();
+            _stopwatch.Start();
+
             _textureLock = new ReaderWriterLockSlim();
 
             // Set up .NET/Mono host keyboard -> PERQ mapping
             _keymap = new KeyboardMap();
 
             _clickFlag = false;
-            _mouseButton = 0x0;           
+            _mouseButton = 0x0;
             
             //
             // Kick off our SDL message loop.
@@ -243,6 +247,24 @@ namespace PERQemu.Display
             // And show it to us.
             //
             SDL.SDL_RenderPresent(_sdlRenderer);
+
+            // Update FPS count
+            UpdateFPS();
+        }
+
+        private void UpdateFPS()
+        {
+            _frame++;
+
+            if (_frame > 240)
+            {
+                _stopwatch.Stop();
+                double fps = ((double)_frame / (double)_stopwatch.ElapsedMilliseconds) * 1000.0;
+                long inst = (long)((_system.CPU.Clocks / _stopwatch.ElapsedMilliseconds) * 1000.0);
+                SDL.SDL_SetWindowTitle(_sdlWindow, String.Format("PERQ - {0} frames / sec, {1} clocks", fps, inst));
+                _stopwatch.Restart();
+                _frame = 0;
+            }
         }
 
 
@@ -567,6 +589,10 @@ namespace PERQemu.Display
         private KeyboardMap _keymap;
 
         private PERQSystem _system;
+
+        // Frame count
+        private Stopwatch _stopwatch;
+        private long _frame;
 
         //
         // SDL

@@ -18,8 +18,6 @@
 
 using PERQemu.CPU;
 using PERQemu.PhysicalDisk;
-using PERQemu.Memory;
-
 using System;
 using System.IO;
 
@@ -35,7 +33,10 @@ namespace PERQemu.IO.HardDisk
             _system = system;
             Reset();
             LoadImage(null);
-        }        
+
+            // Get the index pulse generator running.
+            IndexPulseStart(0, null);
+        }
 
         public void Reset()
         {
@@ -43,44 +44,18 @@ namespace PERQemu.IO.HardDisk
 
             _cylinder = 0;
             _physCylinder = 0;
+            _trackZero = 1;
             _head = 0;
             _sector = 0;
-            _busyTime = 0;
             _seekState = SeekState.WaitForStepSet;
         }
 
+        /// <summary>
+        /// Soon to die.
+        /// </summary>
         public void Clock()
         {
-            // TODO: Rewrite this to use the Scheduler
 
-            ClockSeek();
-
-            _trackZero = (_physCylinder == 0 ? 1 : 0);
-
-            // This is a hack to fudge up the index pulse for the drive.
-            // (Makes diagnostics happy but isn't normally used for much.)
-            // TODO: actually, for the CIO board this needs to be accurate;
-            // it's how the microcode determines if it's talking to a Shugart
-            // or a Micropolis drive at boot time.
-            _clocks++;
-            if (_clocks > 4)
-            {
-                _index = (_index == 0 ? 1 : 0);
-                _clocks = 0;
-            }
-
-            if (_controllerStatus == Status.Busy)
-            {
-                // and now for our controller status countdown!
-                _busyTime--;
-
-                // if the operation is now done, we should interrupt to let the PERQ know...
-                if (_busyTime == 0)
-                {
-                    _controllerStatus = Status.Done;
-                    _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
-                }
-            }
         }
 
         public int ReadStatus()
@@ -161,6 +136,7 @@ namespace PERQemu.IO.HardDisk
             }
 
             _seekData = data;
+            ClockSeek();
         }
 
         public void LoadHeadRegister(int value)
@@ -352,6 +328,8 @@ namespace PERQemu.IO.HardDisk
             // Clip cylinder into range
             _physCylinder = Math.Min((int)_disk.Cylinders - 1, _physCylinder);
             _physCylinder = Math.Max(0, _physCylinder);
+
+            _trackZero = (_physCylinder == 0 ? 1 : 0);
         }
 
         /// <summary>
@@ -369,13 +347,13 @@ namespace PERQemu.IO.HardDisk
             // and the header to the header address
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
-                int word = sectorData.Data[i] | (sectorData.Data[i+1] << 8);
+                int word = sectorData.Data[i] | (sectorData.Data[i + 1] << 8);
                 _system.MemoryBoard.StoreWord(dataAddr + (i >> 1), (ushort)word);
             }
 
             for (int i = 0; i < sectorData.Header.Length; i += 2)
             {
-                int word = sectorData.Header[i] | (sectorData.Header[i+1] << 8);
+                int word = sectorData.Header[i] | (sectorData.Header[i + 1] << 8);
                 _system.MemoryBoard.StoreWord(headerAddr + (i >> 1), (ushort)word);
             }
 
@@ -403,7 +381,7 @@ namespace PERQemu.IO.HardDisk
             {
                 int word = _system.MemoryBoard.FetchWord(dataAddr + (i >> 1));
                 sectorData.Data[i] = (byte)(word & 0xff);
-                sectorData.Data[i+1] = (byte)((word & 0xff00) >> 8);
+                sectorData.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
 
             if (writeHeader)
@@ -412,7 +390,7 @@ namespace PERQemu.IO.HardDisk
                 {
                     int word = _system.MemoryBoard.FetchWord(headerAddr + (i >> 1));
                     sectorData.Header[i] = (byte)(word & 0xff);
-                    sectorData.Header[i+1] = (byte)((word & 0xff00) >> 8);
+                    sectorData.Header[i + 1] = (byte)((word & 0xff00) >> 8);
                 }
             }
             else
@@ -457,7 +435,7 @@ namespace PERQemu.IO.HardDisk
             {
                 int word = _system.MemoryBoard.FetchWord(headerAddr + (i >> 1));
                 sectorData.Header[i] = (byte)(word & 0xff);
-                sectorData.Header[i+1] = (byte)((word & 0xff00) >> 8);
+                sectorData.Header[i + 1] = (byte)((word & 0xff00) >> 8);
             }
 
             // Write the sector to the disk...
@@ -512,20 +490,29 @@ namespace PERQemu.IO.HardDisk
 
         private void SetBusyState()
         {
-            // Set busy flag (code 7), and set the timer for resetting it.
+            // Already busy?  Nothing to do here.
+            if (_controllerStatus == Status.Busy)
+            {
+                return;
+            }
+
+            // Set busy flag (code 7), and queue a workitem for resetting it and firing an interrupt.
             // time would normally vary based on platter rotation, etc.  5 is fine for now.
             _controllerStatus = Status.Busy;
-            _busyTime = 5;
+
+            _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
+            {
+                _controllerStatus = Status.Done;
+                _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
+            }); 
         }
 
         private void ResetFlags()
         {
             _controllerStatus = Status.Done;
-            _trackZero = 0;
             _driveFault = 0;
             _seekComplete = 0;
             _unitReady = 1;
-            _index = 1;
 
             _serialNumberHigh = 0;
             _serialNumberLow = 0;
@@ -534,6 +521,24 @@ namespace PERQemu.IO.HardDisk
             _headerAddressHigh = 0;
             _dataBufferLow = 0;
             _dataBufferHigh = 0;
+        }
+
+        private void IndexPulseStart(ulong skew, object context)
+        {
+            // Raise the index signal
+            _index = 1;
+
+            // Keep it held for 1.1uS
+            _system.Scheduler.Schedule(_indexPulseDurationNsec, IndexPulseEnd);
+        }
+
+        private void IndexPulseEnd(ulong skew, object context)
+        {
+            // Clear the index signal.
+            _index = 0;
+
+            // Wait for the disc to spin around again (20ms).
+            _system.Scheduler.Schedule(_discRotationTimeNsec, IndexPulseStart);
         }
 
         // The physical disk data
@@ -569,8 +574,17 @@ namespace PERQemu.IO.HardDisk
         private SeekState _seekState;
         private int _seekData;
 
-        private int _busyTime;
-        private int _clocks;
+        //
+        // Index timing:
+        // Your average SA4000 series drive spun at 3000rpm or 50 revs/sec, or
+        // one rev every 20ms.
+        // The index pulse duration is approximately 1.1uS.
+        //
+        private ulong _discRotationTimeNsec = 20 * Conversion.MsecToNsec;
+        private ulong _indexPulseDurationNsec = (ulong)(1.1 * Conversion.UsecToNsec);
+
+        // Work timing for reads/writes.  Assume 1ms for now.
+        private ulong _busyDurationNsec = 1 * Conversion.MsecToNsec;
 
         private PERQSystem _system;
 

@@ -20,11 +20,15 @@ using System;
 using PERQemu.Memory;
 using PERQemu.IO;
 using PERQemu.CPU;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu.Display
 {
     /// <summary>
     /// Implements functionality for the PERQ's video controller.
+    /// 
+    /// TODO: The video state machine in this class and the way it interacts with control registers is very creaky.  
+    /// Make it... less creaky and more based on real hardware behaviors.
     /// </summary>
     public sealed class VideoController : IIODevice
     {
@@ -38,7 +42,6 @@ namespace PERQemu.Display
         public void Reset()
         {
             _crtSignals = CRTSignals.LandscapeDisplay;
-            _state = VideoState.VisibleScanline;
             _scanLine = 0;
             _displayAddress = 0;
             _cursorAddress = 0;
@@ -48,11 +51,21 @@ namespace PERQemu.Display
             _lineCounter = 0;
             _lineCounterInit = 0;
             _lineCountOverflow = false;
-            _cycle = 0;
 
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Display, "Video Controller: Reset.");
 #endif
+
+            if (_currentEvent != null)
+            {
+                _system.Scheduler.Cancel(_currentEvent);
+                _currentEvent = null;
+            }
+
+            _state = VideoState.VisibleScanline;
+
+            // Kick off initial tick
+            RunStateMachine();
         }
 
         public bool HandlesPort(byte ioPort)
@@ -163,7 +176,7 @@ namespace PERQemu.Display
 
                     if ((_videoStatus & StatusRegister.EnableCursor) != 0)
                     {
-                        _cursorY = _scanLine;
+                        _cursorY = 0;
 #if TRACING_ENABLED
                         if (Trace.TraceOn)
                             Trace.Log(LogType.Display, "Cursor Y set to {0}", _cursorY);
@@ -173,18 +186,22 @@ namespace PERQemu.Display
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
                     {
                         _scanLine = 0;
+                        _system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VBlankScanline;
+                        RunStateMachine();
                     }
 
                     if ((_videoStatus & StatusRegister.EnableDisplay) != 0)
                     {
+                        _system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VisibleScanline;
+                        RunStateMachine();
                     }
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
                         Trace.Log(LogType.Display, "Video status port set to {0}", _videoStatus);
-#endif
+#endif                    
                     break;
 
                 case 0xe4:  // Load cursor X position
@@ -210,25 +227,36 @@ namespace PERQemu.Display
             }
         }
 
+        /// <summary>
+        /// Not long for this world
+        /// </summary>
+        /// <returns></returns>
         public uint Clock()
         {
-            _cycle++;
+            return 0;
+        }
 
+        public void RunStateMachine()
+        {
             switch (_state)
             {
+                case VideoState.Idle:
+                    // Do nothing, stop running the state machine now.
+                    break;
+
                 case VideoState.VisibleScanline:
-                    if (_cycle > _scanLineCycles)
+                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
-                        _cycle = 0;
                         _state = VideoState.HBlank;
                         RenderScanline();
-                    }
+                        RunStateMachine();
+                    });
+
                     break;
 
                 case VideoState.HBlank:
-                    if (_cycle > _hBlankCycles)
+                    _currentEvent = _system.Scheduler.Schedule(_hBlankTimeNsec, (skew, context) =>
                     {
-                        _cycle = 0;
                         _scanLine++;
                         if (_lineCounter > 0) _lineCounter--;
 
@@ -247,23 +275,32 @@ namespace PERQemu.Display
                         {
                             _state = VideoState.VisibleScanline;
                         }
-                    }
+                        
+                        RunStateMachine();
+                    });
                     break;
 
                 case VideoState.VBlankScanline:
-                    if (_cycle > _scanLineCycles)
+                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
-                        _cycle = 0;
                         if (_lineCounter > 0) _lineCounter--;
 
                         if (_lineCounter == 0)              // Trust what the microcode set
                         {
                             _state = VideoState.VisibleScanline;
                         }
-                    }
+                        
+                        RunStateMachine();
+                        
+                    });
                     break;
             }
 
+            UpdateSignals();
+        }
+
+        private void UpdateSignals()
+        {
             // Trigger an interrupt if the line counter is set and has reached 0
             if (_lineCounter == 0 && _lineCounterInit > 0)
             {
@@ -290,8 +327,6 @@ namespace PERQemu.Display
                 (_lineCountOverflow ? CRTSignals.LineCounterOverflow : CRTSignals.None) |
                 (_state == VideoState.VBlankScanline ? CRTSignals.VerticalSync : CRTSignals.None) |
                 (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None);
-
-            return 1;
         }
 
         private bool CursorEnabled
@@ -344,10 +379,11 @@ namespace PERQemu.Display
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RenderCursorLine()
         {
             // Calc the starting address of this line of the cursor data
-            int cursorAddress = ((_cursorAddress << 1) + (_scanLine - _cursorY) * 8);
+            int cursorAddress = ((_cursorAddress << 1) + _cursorY * 8);
 
             int cursorStartByte = _cursorX;
             int backgroundStartByte = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES + (_displayAddress << 1);
@@ -365,8 +401,11 @@ namespace PERQemu.Display
                     _system.Display.DrawByte(screenAddress + x, TransformCursorByte(backgroundByte, cursorByte));
                 }
             }
+
+            _cursorY++;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte GetByte(int byteAligned)
         {
             ushort word = _system.MemoryBoard.FetchWord(byteAligned >> 1);
@@ -384,6 +423,7 @@ namespace PERQemu.Display
         /// <summary>
         /// Transforms the display word based on the current Cursor function.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort TransformDisplayWord(ushort word)
         {
             switch (_cursorFunc)
@@ -401,6 +441,7 @@ namespace PERQemu.Display
         /// <summary>
         /// Transforms the cursor byte based on the current Cursor function and the display bytes.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte TransformCursorByte(byte dispWord, byte cursWord)
         {
             switch (_cursorFunc)
@@ -469,7 +510,8 @@ namespace PERQemu.Display
         {
             VisibleScanline = 0,
             HBlank,
-            VBlankScanline
+            VBlankScanline,
+            Idle,
         }
 
         private enum CursorFunction
@@ -528,7 +570,7 @@ namespace PERQemu.Display
         /// 1702 pixel clocks
         ///
         /// Perq master clock = 5.89Mhz = ~170ns.  For emulation purposes, this is the rate that
-        /// dictates how often our VideoController Clock() is called, so:
+        /// dictates the timescale for our video timings, so:
         /// 
         /// Portrait pixel clock = 64.78824 MHz = 15.44ns -> ~11:1 clock ratio = 92 cpu clocks/line
         /// Visible part of each scan line = 768 bit times * 15.44ns / 11 = ~70 pixel clocks
@@ -542,14 +584,12 @@ namespace PERQemu.Display
         /// Because these are part of the normal interrupt service routine, we don't need to track our
         /// own vertical retrace timer; _vBlankCycles can be removed.
         /// </summary>
-        private int _cycle;
-
-        private const int _scanLineCycles = 70;
-        private const int _hBlankCycles = 22;
-        private const int _vBlankCycles = 4 * (_scanLineCycles + _hBlankCycles); // Unused
+        private readonly ulong _scanLineTimeNsec = 70 * Scheduler.TimeStepNsec;
+        private readonly ulong _hBlankTimeNsec = 22 * Scheduler.TimeStepNsec;
         private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
 
         private VideoState _state;
+        private Event _currentEvent;
         private int _scanLine;
         private int _lineCounterInit;
         private bool _lineCountOverflow;

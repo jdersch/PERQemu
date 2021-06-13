@@ -17,6 +17,7 @@
 //
 
 using System;
+using System.Runtime.CompilerServices;
 using PERQemu.CPU;
 
 namespace PERQemu.Memory
@@ -118,6 +119,7 @@ namespace PERQemu.Memory
         /// MDO queues, then sets up executes the current Fetch (if any).  Asserts the
         /// Wait signal if the CPU should abort this cycle.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tick(MemoryCycle cycleType)
         {
             // Bump cycle counter
@@ -161,6 +163,7 @@ namespace PERQemu.Memory
         /// (from the ALU or current RasterOp result) to memory.
         /// </summary>
         /// <param name="input">Word to write (MDO)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tock(ushort input)
         {
 #if TRACING_ENABLED
@@ -174,6 +177,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Initiate a hardware reload of the OpFile instruction cache.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void LoadOpFile()
         {
             // If we're currently doing a Fetch4, Set the loadOpFile flag;
@@ -186,7 +190,7 @@ namespace PERQemu.Memory
                 _loadOpFile = true;
             }
         }
-
+#if TRACING_ENABLED
         /// <summary>
         /// Requests a specific memory cycle type at the specified address.  Here we route
         /// the request to the separate fetch and store queues, which vastly simplifies the
@@ -197,11 +201,10 @@ namespace PERQemu.Memory
         /// <param name="id">Transaction ID</param>
         public void RequestMemoryCycle(long id, int address, MemoryCycle cycleType)
         {
-#if TRACING_ENABLED
+
             if (Trace.TraceOn)
                 Trace.Log(LogType.MemoryState, "\nMemory: Requested {0} cycle in T{1} ID={2} addr={3:x5}",
                                                 cycleType, _Tstate, id, address);
-#endif
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
             // but the queue controller will have stalled the processor until the correct
@@ -218,12 +221,42 @@ namespace PERQemu.Memory
                 _mdoQueue.Request(id, address, cycleType);
             }
         }
+#else
+        /// <summary>
+        /// Requests a specific memory cycle type at the specified address.  Here we route
+        /// the request to the separate fetch and store queues, which vastly simplifies the
+        /// complicated overlapped operation of RasterOp.
+        /// </summary>
+        /// <param name="cycleType">Any Fetch or Store type</param>
+        /// <param name="address">Starting address</param>
+        /// <param name="id">Transaction ID</param>
+        public void RequestMemoryCycle(int address, MemoryCycle cycleType)
+        {
+            //
+            // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
+            // but the queue controller will have stalled the processor until the correct
+            // time, which will start at the next Tick().  In some cases (buggy microcode)
+            // the hardware would actually ignore memory references; we don't do that here,
+            // but read all the gory details in the comments at the end of MemoryController.cs.
+            //
+            if (IsFetch(cycleType))
+            {
+                _mdiQueue.Request(address, cycleType);
+            }
+            else
+            {
+                _mdoQueue.Request(address, cycleType);
+            }
+        }
+
+#endif
 
         /// <summary>
         /// If the current MDI word is valid, fetches and returns the data in _mdi.
         /// If we're executing a LoadOp, copies the data into the appropriate word
         /// of the OpFile.  If the MDI pipeline is empty, is a no-op.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ExecuteFetch()
         {
             if (_mdiQueue.Valid)
@@ -258,6 +291,7 @@ namespace PERQemu.Memory
         /// If the current MDO word is valid, write the data to the current address.
         /// If the MDO pipeline is empty, this is a no-op.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ExecuteStore(ushort data)
         {
             if (_mdoQueue.Valid)
@@ -269,6 +303,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Fetches one word from memory (immediate).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort FetchWord(int address)
         {
             // Clip address to memsize range and read
@@ -284,6 +319,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Stores one word into memory (immediate).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void StoreWord(int address, ushort data)
         {
 #if TRACING_ENABLED
@@ -297,6 +333,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Return true if the memory request type is a Fetch.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsFetch(MemoryCycle c)
         {
             return  c == MemoryCycle.Fetch ||

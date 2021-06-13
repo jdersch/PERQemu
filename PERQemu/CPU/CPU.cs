@@ -23,7 +23,7 @@ using System.Text;
 using PERQemu.IO;
 using PERQemu.Memory;
 using PERQemu.Debugger;
-using PERQemu.Display;
+using System.Runtime.CompilerServices;
 
 #if DEBUG
 using PERQemu.IO.Z80.IOB;
@@ -77,15 +77,6 @@ namespace PERQemu.CPU
             _ioBus = new IOBus(system);
 
             Reset();
-        }
-
-        /// <summary>
-        /// Elapsed clock cycles.
-        /// </summary>
-        public long Clocks
-        {
-            get { return _clocks; }
-            set { _clocks = value; }
         }
 
         // "Real" clock speed in cycles/sec (based on 170ns cycle time).  Approx. 5.88Mhz.
@@ -203,9 +194,6 @@ namespace PERQemu.CPU
 
                 // On aborts, no memory writes occur - no Tock()
 
-                // Clock video
-                _system.VideoController.Clock();
-
                 // WCS writes take two cycles to run on the real hardware, but just
                 // one cycle here -- enough to screw up memory timing during the loop
                 // when microcode is being loaded!  Clear the hold flag to continue.
@@ -256,8 +244,31 @@ namespace PERQemu.CPU
 
             // Now decode and execute the actual instruction:
 
-            // Select ALU inputs
-            int bmux = _lastBmux = GetBmuxInput(uOp);
+            // Select ALU inputs:
+
+            int bmux;
+
+            // Select BMUX input
+            if (uOp.B == 0)
+            {
+#if SIXTEEN_K
+                if (uOp.Y < 0x40)
+                {
+                    bmux = _r[uOp.Y | _registerBase];   // Or-in Base register (16K only)
+                }
+                else
+#endif
+                {
+                    bmux = _r[uOp.Y];
+                }
+            }
+            else
+            {
+                bmux = uOp.BMuxInput;
+            }
+
+            _lastBmux = bmux;
+
             int amux = GetAmuxInput(uOp);
 
 #if SIXTEEN_K
@@ -296,9 +307,6 @@ namespace PERQemu.CPU
                 }
             }
 
-            // Always clock video (used for system timing by some OSes)
-            _system.VideoController.Clock();
-
             // Execute whatever function this op calls for
             DispatchFunction(uOp);
 
@@ -310,14 +318,11 @@ namespace PERQemu.CPU
             // Jump to where we need to go...
             DispatchJump(uOp);
 
+            // TODO: does this logic belong in here?
             // And we're done.  Handle debugging state, if any
-            if (currentState == RunState.SingleStep)
-            {
-                return RunState.Debug;
-            }
-
             // If we're debugging one Qcode at a time and we just finished one, break now
-            if (_incrementBPC && currentState == RunState.RunInst)
+            if (currentState == RunState.SingleStep || 
+                (_incrementBPC && currentState == RunState.RunInst))
             {
                 return RunState.Debug;
             }
@@ -326,6 +331,20 @@ namespace PERQemu.CPU
         }
 
         #region Getters and setters
+
+        /// <summary>
+        /// This is temporary while performance analysis is in effect.
+        /// </summary>
+        public long Clocks
+        {
+            get 
+            {
+                long v = _clocks;
+                _clocks = 0;
+                return v; 
+            }
+        }
+
         /// <summary>
         /// Returns the current DDS value.  (Not really a register, but useful! :-)
         /// </summary>
@@ -448,7 +467,7 @@ namespace PERQemu.CPU
             get { return _alu.Registers.R; }
         }
 
-#if SIXTEEN_K 
+#if SIXTEEN_K
         /// <summary>
         /// The base register for indexing XY.
         /// </summary>
@@ -516,10 +535,12 @@ namespace PERQemu.CPU
         /// </summary>
         /// <param name="address"></param>
         /// <returns>The microinstruction to execute</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Instruction GetInstruction(ushort address)
         {
             // Return the precomputed microcode, unless it has yet to be cached
-            if (_microcodeCache[address] == null)
+            Instruction current = _microcodeCache[address];
+            if (current == null)
             {
                 ulong word;
 
@@ -539,10 +560,10 @@ namespace PERQemu.CPU
                     word = _microcode[address];
                 }
 
-                _microcodeCache[address] = new Instruction(word, address);
+                current = _microcodeCache[address] = new Instruction(word, address);
             }
 
-            return _microcodeCache[address];
+            return current;
         }
 
         /// <summary>
@@ -550,6 +571,7 @@ namespace PERQemu.CPU
         /// </summary>
         /// <param name="uOp"></param>
         /// <returns>AMUX input</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetAmuxInput(Instruction uOp)
         {
             int amux = 0;
@@ -635,6 +657,7 @@ namespace PERQemu.CPU
         /// </summary>
         /// <param name="uOp"></param>
         /// <returns>BMUX input</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetBmuxInput(Instruction uOp)
         {
             int bmux = 0;
@@ -664,6 +687,7 @@ namespace PERQemu.CPU
         /// <summary>
         /// If W bit set, write R back to the register file.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DoWriteBack(Instruction uOp)
         {
             // Do it if the W (write) bit is set.
@@ -1075,7 +1099,11 @@ namespace PERQemu.CPU
                         case 0xd:   // Store2
                         case 0xe:   // Fetch
                         case 0xf:   // Store
+#if TRACING_ENABLED
                             _memory.RequestMemoryCycle(_clocks, _alu.Registers.R, uOp.MemoryRequest);
+#else
+                            _memory.RequestMemoryCycle(_alu.Registers.R, uOp.MemoryRequest);
+#endif
                             break;
 
                         default:
@@ -1097,6 +1125,7 @@ namespace PERQemu.CPU
         /// <summary>
         /// Jumps based on the condition flags.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchJump(Instruction uOp)
         {
             bool conditionSatisfied = false;
@@ -1474,6 +1503,7 @@ namespace PERQemu.CPU
         /// <summary>
         /// Increment the BPC and update the program counter.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DoNextInst(Instruction uOp)
         {
             byte next = _memory.OpFile[BPC];
@@ -1514,9 +1544,9 @@ namespace PERQemu.CPU
             return 0;
         }
 
-        #endregion CPU Helper Functions
+#endregion CPU Helper Functions
 
-        #region Boot ROM functions
+#region Boot ROM functions
 
         /// <summary>
         /// Loads the boot ROM from a file on disk and descrambles it.
@@ -1568,9 +1598,9 @@ namespace PERQemu.CPU
             return word;
         }
 
-        #endregion Boot ROM functions
+#endregion Boot ROM functions
 
-        #region Special Function Helpers
+#region Special Function Helpers
 
         /// <summary>
         /// Reset the expression stack (EStack).
@@ -1652,9 +1682,9 @@ namespace PERQemu.CPU
             Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
         }
 
-        #endregion Special Function Helpers
+#endregion Special Function Helpers
 
-        #region Debugger Commands
+#region Debugger Commands
 
         [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ current PC)")]
         private void DisassembleMicrocode()
@@ -1965,7 +1995,11 @@ namespace PERQemu.CPU
         // Trace/debugging support
         private ushort _lastPC;
         private Instruction _lastInstruction;
+
+        
 #endif
+        // CPU cycles elapsed
+        private long _clocks;
 
 #if SIXTEEN_K
         // Microcode store, 16k 48-bit words
@@ -2024,9 +2058,6 @@ namespace PERQemu.CPU
 
         // Interrupt flags
         private InterruptType _interruptFlag;
-
-        // CPU cycles elapsed
-        private long _clocks;
 
         // Arithmetic unit
         private ALU _alu;
