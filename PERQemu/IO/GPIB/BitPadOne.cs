@@ -29,8 +29,10 @@ namespace PERQemu.IO.GPIB
     ///</summary>
     public class BitPadOne : IGPIBDevice
     {
-        public BitPadOne()
+        public BitPadOne(PERQSystem system)
         {
+            _system = system;
+
             // The PERQ expects the factory default device address of 010 (octal)
             _myAddress = 8;
 
@@ -110,7 +112,7 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         public void Poll(ref Queue<byte> fifo)
         {
-            if (!_talking || Display.Display.Instance.MouseOffTablet)
+            if (!_talking || _system.Display.MouseOffTablet)
             {
                 // Unlike the Kriz, the BitPad does not send updates if off the tablet.
                 // So bail here to allow relative mode to work... kind of...
@@ -148,7 +150,7 @@ namespace PERQemu.IO.GPIB
             // too often, so temper our update rate by checking that the fifo is
             // empty before sending.
             //
-            if ((_lastUpdate++ > _sampleRate) && fifo.Count == 0)
+            if (fifo.Count == 0)
             {
                 WriteIntAsStringToQueue(x, ref fifo);
                 fifo.Enqueue(_delimiter1);
@@ -214,10 +216,10 @@ namespace PERQemu.IO.GPIB
             // Calculate Y and X positions.  The offsets tacked onto the end are based on
             // playing around with the interface, not on solid data and could be incorrect.
             //
-            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY) * 2 + 80;
-            x = (Display.Display.Instance.MouseX) * 2 + 76;
+            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY) * 2 + 80;
+            x = (_system.Display.MouseX) * 2 + 76;
 
-            button = (byte)Display.Display.Instance.MouseButton;
+            button = (byte)_system.Display.MouseButton;
         }
 
         private int _lastUpdate;
@@ -231,5 +233,7 @@ namespace PERQemu.IO.GPIB
                                                    0x34, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
         private const byte _delimiter1 = 0x2c;      // ,
         private const byte _delimiter2 = 0x0a;      // LF
+
+        private PERQSystem _system;
     }
 }

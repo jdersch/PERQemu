@@ -18,7 +18,6 @@
 
 using PERQemu.CPU;
 
-using System;
 using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80.IOB
@@ -31,8 +30,9 @@ namespace PERQemu.IO.Z80.IOB
     /// </summary>
     public sealed class Tablet : IZ80Device
     {
-        public Tablet()
+        public Tablet(PERQSystem system)
         {
+            _system = system;
             Reset();
         }
 
@@ -40,11 +40,6 @@ namespace PERQemu.IO.Z80.IOB
         {
             _enabled = false;
             _messageIndex = 0;
-            _pollCount = 0;
-
-            // Set for 60 updates/sec.
-            _jiffyInterval = ((PERQCpu.Frequency / 60) / PERQCpu.IOFudge);
-
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
 #endif
@@ -86,8 +81,6 @@ namespace PERQemu.IO.Z80.IOB
 
         public void Poll(ref Queue<byte> fifo)
         {
-            _pollCount++;
-
             if (_enabled && fifo.Count == 0)
             {
                 //
@@ -97,33 +90,28 @@ namespace PERQemu.IO.Z80.IOB
                 // message within a certain timeout period.  We periodically send tablet
                 // information every few polls...
                 //
-                if (_pollCount >= _jiffyInterval)
-                {
-                    int jiffies = (_pollCount / _jiffyInterval);
-                    int x = 0;
-                    int y = 0;
-                    int button = Display.Display.Instance.MouseButton;
+                int x = 0;
+                int y = 0;
+                int button = _system.Display.MouseButton;
 
-                    GetTabletPos(out x, out y, button);
+                GetTabletPos(out x, out y, button);
 
-                    fifo.Enqueue(Z80System.SOM);
-                    fifo.Enqueue((byte)Z80toPERQMessage.TabletData);
-                    fifo.Enqueue((byte)x);          // X low
-                    fifo.Enqueue((byte)(x >> 8));   // X high
-                    fifo.Enqueue((byte)y);          // Y low
-                    fifo.Enqueue((byte)(y >> 8));   // Y high
-                    fifo.Enqueue((byte)jiffies);    // (1/60th sec clocks since last
-                                                    // message, according to perqz80.doc)
+                fifo.Enqueue(Z80System.SOM);
+                fifo.Enqueue((byte)Z80toPERQMessage.TabletData);
+                fifo.Enqueue((byte)x);          // X low
+                fifo.Enqueue((byte)(x >> 8));   // X high
+                fifo.Enqueue((byte)y);          // Y low
+                fifo.Enqueue((byte)(y >> 8));   // Y high
+                fifo.Enqueue((byte)1);          // (1/60th sec clocks since last
+                                                // message, according to perqz80.doc)
 
-                    // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
-                    // maintenance moved to the video interrupt instead.
+                // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
+                // maintenance moved to the video interrupt instead.
 #if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
-                                                     x, y, button, jiffies);
+                if (Trace.TraceOn)
+                    Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
+                                                    x, y, button, jiffies);
 #endif
-                    _pollCount = 0;
-                }
             }
         }
 
@@ -151,15 +139,15 @@ namespace PERQemu.IO.Z80.IOB
             //
 
             // Calc Y and X positions:
-            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - Display.Display.Instance.MouseY + 64);
-            x = (Display.Display.Instance.MouseX + 64);
+            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64);
+            x = (_system.Display.MouseX + 64);
 
             // Mix in the button data:
-            y = (y & 0x1fff) | ((Display.Display.Instance.MouseButton) << 13);
-            x = (x & 0x7ff) | (Display.Display.Instance.MouseButton == 0 ? 0x8000 : 0x0000);
+            y = (y & 0x1fff) | ((_system.Display.MouseButton) << 13);
+            x = (x & 0x7ff) | (_system.Display.MouseButton == 0 ? 0x8000 : 0x0000);
 
             // And set the mouse-off-tablet bit if necessary
-            if (Display.Display.Instance.MouseOffTablet)
+            if (_system.Display.MouseOffTablet)
             {
                 x |= 0x4000;
             }
@@ -183,7 +171,7 @@ namespace PERQemu.IO.Z80.IOB
         private bool _enabled;
         private int _messageIndex;
 
-        private int _jiffyInterval;
-        private int _pollCount;
+
+        private PERQSystem _system;
     }
 }

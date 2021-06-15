@@ -22,7 +22,6 @@ using PERQemu.Display;
 
 namespace PERQemu.IO
 {
-
     public class UnhandledIORequestException : Exception
     {
         public UnhandledIORequestException(string message)
@@ -40,22 +39,17 @@ namespace PERQemu.IO
     /// </summary>
     public sealed class IOBus
     {
-        private IOBus()
+        public IOBus(PERQSystem system)
         {
             _deviceDispatch = new IIODevice[256];
             _devices = new List<IIODevice>(16);
 
             // Attach devices
-            AddDevice(VideoController.Instance);
-            AddDevice(new IOB());
-            AddDevice(new OIO());
+            AddDevice(system.VideoController);
+            AddDevice(system.IOB);
+            AddDevice(system.OIO);
 
             Reset();
-        }
-
-        public static IOBus Instance
-        {
-            get { return _instance; }
         }
 
         public void Reset()
@@ -76,17 +70,6 @@ namespace PERQemu.IO
             _devices.Add(device);
 
             UpdateDispatchTable(device);
-        }
-
-        /// <summary>
-        /// Clocks any devices attached to the IOBus to allow them to run for one cycle
-        /// </summary>
-        public void Clock()
-        {
-            for(int i = 0; i < _devices.Count; i++)
-            {
-                _devices[i].Clock();
-            }
         }
 
         public void IOWrite(byte ioPort, int value)
@@ -176,7 +159,5 @@ namespace PERQemu.IO
         /// The devices attached to the bus
         /// </summary>
         private List<IIODevice> _devices;
-
-        private static IOBus _instance = new IOBus();
     }
 }

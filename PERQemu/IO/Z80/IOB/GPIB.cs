@@ -39,8 +39,9 @@ namespace PERQemu.IO.Z80.IOB
     /// </summary>
     public sealed class GPIB : IZ80Device
     {
-        public GPIB()
+        public GPIB(PERQSystem system)
         {
+            _bus = new GPIBBus(system);
             _busFifo = new Queue<byte>(128);
 
             Reset();
@@ -124,7 +125,7 @@ namespace PERQemu.IO.Z80.IOB
                                     Trace.Log(LogType.GPIB, "GPIB Write data {0}:{1:x2}", _cmdIndex, value);
 #endif
                                 // Pass the data through to the device
-                                GPIBBus.Instance.Write(_listener, value);
+                                _bus.Write(_listener, value);
                             }
                             else
                             {
@@ -189,7 +190,7 @@ namespace PERQemu.IO.Z80.IOB
             }
             else
             {
-                GPIBBus.Instance.Poll(ref _busFifo);
+                _bus.Poll(ref _busFifo);
 
                 int dataCount = _busFifo.Count;
 
@@ -327,7 +328,7 @@ namespace PERQemu.IO.Z80.IOB
 #endif
                         _listener = data;
                     }
-                    GPIBBus.Instance.BroadcastListener(data);
+                    _bus.BroadcastListener(data);
                     break;
 
                 case RemoteCommandGroup.TalkAddressGroup:
@@ -348,7 +349,7 @@ namespace PERQemu.IO.Z80.IOB
 #endif
                         _talker = data;
                     }
-                    GPIBBus.Instance.BroadcastTalker(data);
+                    _bus.BroadcastTalker(data);
                     break;
 
                 case RemoteCommandGroup.SecondaryCommandGroup:
@@ -524,7 +525,8 @@ namespace PERQemu.IO.Z80.IOB
         private GPIBCommand _cmdType;
         private int _cmdLength;
         private int _messageIndex;
-
         private int _busyClocks;
+
+        private GPIBBus _bus;
     }
 }

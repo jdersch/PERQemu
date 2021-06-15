@@ -143,9 +143,11 @@ namespace PERQemu.IO
             }
         }
 
-        public void Clock()
+        public uint Clock()
         {
             _link.Clock();
+
+            return 1;
         }
 
         private PERQLink _link;

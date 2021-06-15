@@ -30,7 +30,7 @@ namespace PERQemu.Debugger
     public class Debuggable : Attribute
     {
         /// <summary>
-        /// Constructor; specifies the friendly name exposed to the debu    gger; this is required.
+        /// Constructor; specifies the friendly name exposed to the debugger; this is required.
         /// This is case insensitive (and will be converted to lowercase).
         /// All other attributes are optional.
         /// </summary>

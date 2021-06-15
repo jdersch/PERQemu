@@ -35,7 +35,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Clocks the IO device one cycle
         /// </summary>
-        void Clock();
+        uint Clock();
 
         /// <summary>
         /// Does a read from the given port

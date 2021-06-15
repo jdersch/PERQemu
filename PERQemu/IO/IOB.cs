@@ -15,9 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
-
-using System;
-using PERQemu.IO.Z80.IOB;
+using PERQemu.IO.HardDisk;
 
 namespace PERQemu.IO
 {
@@ -28,11 +26,22 @@ namespace PERQemu.IO
     /// </summary>
     public class IOB : IIODevice
     {
-        public IOB()
+        public IOB(PERQSystem system)
         {
-            _hardDiskController = HardDisk.ShugartDiskController.Instance;
-            _z80System = Z80System.Instance;
+            _hardDiskController = new ShugartDiskController(system);
+            _z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
+            //_z80System = new PERQemu.IO.Z80_new.Z80System(system);
             Reset();
+        }
+
+        public IZ80System Z80System
+        {
+            get { return _z80System; }
+        }
+
+        public ShugartDiskController ShugartDiskController
+        {
+            get { return _hardDiskController; }
         }
 
         public void Reset()
@@ -99,7 +108,7 @@ namespace PERQemu.IO
             {
                 case 0xc1:  // Shugart command/control register & Z80 status register
                     _hardDiskController.LoadCommandRegister(value);
-                    Z80System.Instance.LoadStatus(value);
+                    _z80System.WriteStatus(value);
                     break;
 
                 case 0xc2:  // Shugart Head register
@@ -107,7 +116,7 @@ namespace PERQemu.IO
                     break;
 
                 case 0xc7:  // Z80 data port
-                    Z80System.Instance.LoadData(value);
+                    _z80System.WriteData(value);
                     break;
 
                 case 0xc8:  // Shugart Cylinder/Sector register
@@ -156,14 +165,13 @@ namespace PERQemu.IO
         /// <summary>
         /// Clocks subdevices
         /// </summary>
-        public void Clock()
+        public uint Clock()
         {
-            _hardDiskController.Clock();
-            Z80System.Instance.Clock();
+            return _z80System.Clock();
         }
 
         private HardDisk.ShugartDiskController _hardDiskController;
-        private Z80System _z80System;
+        private IZ80System _z80System;
 
         /// <summary>
         /// Ports handled by the IOB board.

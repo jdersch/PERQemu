@@ -214,3 +214,9 @@ ModelManifest.xml
 # MacOS desktop droppings
 .DS_Store
 
+/PERQemu/PROM/pz80.id0
+/PERQemu/PROM/pz80.id1
+/PERQemu/PROM/pz80.idb
+/PERQemu/PROM/pz80.map
+/PERQemu/PROM/pz80.nam
+/PERQemu/PROM/pz80.til

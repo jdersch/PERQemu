@@ -23,7 +23,7 @@ namespace PERQemu.PhysicalDisk
     //
     // Represents the contents of a 12 or 24MB Shugart SA4000-series hard disk.
     //
-    public sealed class ShugartDisk : PhysicalDisk
+    public sealed class ShugartDisk : HardDisk
     {
         public ShugartDisk(bool is24mb) : base()
         {

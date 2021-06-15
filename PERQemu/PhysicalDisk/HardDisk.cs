@@ -22,11 +22,11 @@ using System.IO;
 namespace PERQemu.PhysicalDisk
 {
     /// <summary>
-    /// Represents the physical structure of a given disk (Shugart/Micropolis/floppy, etc...)
+    /// Represents the physical structure of a given hard disk (Shugart/Micropolis, etc...)
     /// </summary>
     public struct DiskGeometry
     {
-        public DiskGeometry(uint cyls, uint tracks, uint secs, uint sectorSize, bool hasBlockHeader)
+        public DiskGeometry(uint cyls, uint tracks, uint secs, uint sectorSize)
         {
             if (cyls < 0 || tracks < 0 || secs < 0)
             {
@@ -37,7 +37,6 @@ namespace PERQemu.PhysicalDisk
             _tracks = tracks;
             _sectors = secs;
             _sectorSize = sectorSize;
-            _hasBlockHeader = hasBlockHeader;
         }
 
         public uint Cylinders
@@ -60,41 +59,31 @@ namespace PERQemu.PhysicalDisk
             get { return _sectorSize; }
         }
 
-        public bool HasBlockHeader
-        {
-            get { return _hasBlockHeader; }
-        }
-
         private uint _cylinders;
         private uint _tracks;
         private uint _sectors;
         private uint _sectorSize;
-        private bool _hasBlockHeader;
 
-        public static DiskGeometry Shugart12 = new DiskGeometry(202, 4, 30, 512, true);
-        public static DiskGeometry Shugart24 = new DiskGeometry(202, 8, 30, 512, true);
-        public static DiskGeometry Micropolis = new DiskGeometry(580, 5, 24, 512, true);
-        public static DiskGeometry FloppySSSD = new DiskGeometry(77, 1, 26, 128, false);
-        public static DiskGeometry FloppyDSSD = new DiskGeometry(77, 2, 26, 128, false);
-        public static DiskGeometry FloppySSDD = new DiskGeometry(77, 1, 26, 256, false);
-        public static DiskGeometry FloppyDSDD = new DiskGeometry(77, 2, 26, 256, false);
+        public static DiskGeometry Shugart12 = new DiskGeometry(202, 4, 30, 512);
+        public static DiskGeometry Shugart24 = new DiskGeometry(202, 8, 30, 512);
+        public static DiskGeometry Micropolis = new DiskGeometry(580, 5, 24, 512);
     }
 
     /// <summary>
-    /// Represents a physical disk drive, which contains one or more Cylinders.
+    /// Represents a hard disk drive, which contains one or more Cylinders.
     /// This is the primary interface for interaction with the disk image, and allows
     /// reading sectors of data.
     /// </summary>
-    public abstract class PhysicalDisk
+    public abstract class HardDisk
     {
         /// <summary>
-        /// Constructs a new PhysicalDisk, given the number of Cylinders on the drive,
+        /// Constructs a new HardDisk, given the number of Cylinders on the drive,
         /// Tracks per Cylinder and Sectors per Track.
         /// </summary>
         /// <param name="cylinders"></param>
         /// <param name="tracks"></param>
         /// <param name="sectors"></param>
-        public PhysicalDisk()
+        public HardDisk()
         {
             _loaded = false;
             _isWriteProtected = false;
@@ -143,13 +132,13 @@ namespace PERQemu.PhysicalDisk
             }
         }
 
-        public virtual Sector GetSector(int cylinder, int track, int sector)
+        public virtual HardDiskSector GetSector(int cylinder, int track, int sector)
         {
             ValidateCHS(cylinder, track, sector);
             return _sectors[cylinder, track, sector];
         }
 
-        public virtual void SetSector(Sector sec, int cylinder, int track, int sector)
+        public virtual void SetSector(HardDiskSector sec, int cylinder, int track, int sector)
         {
             ValidateCHS(cylinder, track, sector);
             _sectors[cylinder, track, sector] = sec;
@@ -190,7 +179,7 @@ namespace PERQemu.PhysicalDisk
 
         protected void CreateSectors()
         {
-            _sectors = new Sector[Cylinders, Tracks, Sectors];
+            _sectors = new HardDiskSector[Cylinders, Tracks, Sectors];
 
             for (int cyl = 0; cyl < Cylinders; cyl++)
             {
@@ -198,7 +187,7 @@ namespace PERQemu.PhysicalDisk
                 {
                     for (int sector = 0; sector < Sectors; sector++)
                     {
-                        _sectors[cyl, track, sector] = new Sector(cyl, track, sector, DiskGeometry);
+                        _sectors[cyl, track, sector] = new HardDiskSector(cyl, track, sector, DiskGeometry);
                     }
                 }
             }
@@ -222,7 +211,7 @@ namespace PERQemu.PhysicalDisk
             }
         }
 
-        protected Sector[, ,] _sectors;
+        protected HardDiskSector[, ,] _sectors;
         protected DiskGeometry _diskType;
         protected bool _isWriteProtected;
         private bool _loaded;
