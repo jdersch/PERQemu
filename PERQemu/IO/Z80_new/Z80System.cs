@@ -40,6 +40,7 @@ namespace PERQemu.IO.Z80_new
             _bus = new IOBIOBus(this);
             _seekControl = new HardDiskSeekControl(system);
             _keyboard = new Keyboard();
+            _sio = new Z80SIO(0xb0, system.Scheduler);
             _tms9914a = new TMS9914A();
             _ioReg1 = new IOReg1(_z80ToPerqFifo);
             _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc);
@@ -50,9 +51,14 @@ namespace PERQemu.IO.Z80_new
             _bus.RegisterDevice(_z80ctc);
             _bus.RegisterDevice(_seekControl);
             _bus.RegisterDevice(_keyboard);
+            _bus.RegisterDevice(_sio);
             _bus.RegisterDevice(_tms9914a);
             _bus.RegisterDevice(_ioReg1);
             _bus.RegisterDevice(_ioReg3);
+
+            // Attach peripherals
+            KrizTablet tablet = new KrizTablet(system);
+            _sio.AttachDevice(1, tablet);
 
             _z80Debugger = new Z80Debugger();
 
@@ -205,7 +211,6 @@ namespace PERQemu.IO.Z80_new
                     Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
 #endif
                 _running = false;
-                Reset();
             }
             else if (status == 0 && !_running)
             {
@@ -245,6 +250,7 @@ namespace PERQemu.IO.Z80_new
         private Z80CTC _z80ctc;
         private HardDiskSeekControl _seekControl;
         private Keyboard _keyboard;
+        private Z80SIO _sio;
         private TMS9914A _tms9914a;
 
         private Z80Debugger _z80Debugger;
