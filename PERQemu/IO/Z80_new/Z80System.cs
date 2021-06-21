@@ -32,15 +32,17 @@ namespace PERQemu.IO.Z80_new
         public Z80System(PERQSystem system)
         {
             _system = system;
+            _scheduler = new Scheduler(407);           // IOB Z80 clock runs at 2.4576Mhz, ~407nSec per clock tick.
+
             _cpu = new Z80Processor();
             _fdc = new NECuPD765A(system);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
-            _z80ctc = new Z80CTC(0x90, system.Scheduler);
+            _z80ctc = new Z80CTC(0x90, _scheduler);
             _bus = new IOBIOBus(this);
             _seekControl = new HardDiskSeekControl(system);
             _keyboard = new Keyboard();
-            _sio = new Z80SIO(0xb0, system.Scheduler);
+            _sio = new Z80SIO(0xb0, _scheduler);
             _tms9914a = new TMS9914A();
             _ioReg1 = new IOReg1(_z80ToPerqFifo);
             _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc);
@@ -57,21 +59,23 @@ namespace PERQemu.IO.Z80_new
             _bus.RegisterDevice(_ioReg3);
 
             // Attach peripherals
-            KrizTablet tablet = new KrizTablet(system);
+            KrizTablet tablet = new KrizTablet(_scheduler, system);
             _sio.AttachDevice(1, tablet);
 
             _z80Debugger = new Z80Debugger();
-
             _running = false;
         }
 
         public void Reset()
         {
+            _scheduler.Reset();
             _cpu.Reset();
             _cpu.Memory = new IOBMemoryBus();
             _cpu.PortsSpace = _bus;
             _bus.Reset();
         }
+
+        public bool SupportsAsync => true;
 
         [DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
         public void ShowZ80State()
@@ -95,13 +99,26 @@ namespace PERQemu.IO.Z80_new
         /// Runs the Z80 for one instruction.
         /// </summary>
         /// <returns></returns>
-        public uint Clock()
+        public uint SingleStep()
         {
-            // TODO:
-            // Clock devices.
+            if (_asyncThread != null)
+            {
+                throw new InvalidOperationException("Cannot single-step while Z80 is running asynchronously; Stop first.");
+            }
+
+            _lastExecutionMode = ExecutionMode.Synchronous;
+
             if (_running)
             {
-                return (uint)_cpu.ExecuteNextInstruction();
+                uint clocks = (uint)_cpu.ExecuteNextInstruction();
+
+                // This is TERRIBLE
+                for (uint i = 0; i < clocks; i++)
+                {
+                    _scheduler.Clock();
+                }
+
+                return clocks;
             }
             else
             {
@@ -109,25 +126,66 @@ namespace PERQemu.IO.Z80_new
             }
         }
 
-        public void RunAsynchronously()
+        /// <summary>
+        /// Commences running the Z80 system on a new thread.  Use Stop() to stop.
+        /// </summary>
+        public void RunAsync()
         {
+            if (_asyncThread != null)
+            {
+                throw new InvalidOperationException("Z80 thread is already running; Stop first.");
+            }
+
+            _lastExecutionMode = ExecutionMode.Asynchronous;
+
+            // Do not start the thread if the Z80 has been turned off.
+            if (!_running)
+            {
+                return;
+            }
+
+            _stopAsyncExecution = false;
             _asyncThread = new Thread(AsyncThread);
             _asyncThread.Start();
         }
 
+        /// <summary>
+        /// Stops execution of the Z80 thread, if running.
+        /// </summary>
+        public void Stop()
+        {
+            if (_asyncThread == null)
+            {
+                return;
+            }
+
+            // Tell the thread to exit.
+            _stopAsyncExecution = true;
+
+            // Wait.
+            _asyncThread.Join();
+            _asyncThread = null;
+        }
+
+        /// <summary>
+        /// The thread proc for asynchronous Z80 execution.
+        /// </summary>
         private void AsyncThread()
         {
-            while(true)
+            while (_running && !_stopAsyncExecution)
             {
-                // TODO: are there other options for this z80 class for execution?
-                if (_running)
+                int clocks = _cpu.ExecuteNextInstruction();
+
+                // This is *STILL* TERRIBLE
+                for (uint i = 0; i < clocks; i++)
                 {
-                    _cpu.ExecuteNextInstruction();
+                    _scheduler.Clock();
                 }
             }
         }
 
         private Thread _asyncThread;
+        private volatile bool _stopAsyncExecution;
 
         /// <summary>
         /// Sends data to the Z80.
@@ -157,7 +215,7 @@ namespace PERQemu.IO.Z80_new
 #endif
                 // TODO: move this logic into PERQToZ80FIFO?
                 _system.CPU.ClearInterrupt(InterruptType.Z80DataInReady);
-                _perqToZ80Fifo.DataReadyInterruptRequested = false;
+                _perqToZ80Fifo.SetDataReadyInterruptRequested(false);
             }
             else
             {
@@ -165,7 +223,7 @@ namespace PERQemu.IO.Z80_new
                 if (Trace.TraceOn)
                     Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
 #endif
-                _perqToZ80Fifo.DataReadyInterruptRequested = true;
+                _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
             }
 
             // Only queue up this write if we're actually running.
@@ -211,6 +269,7 @@ namespace PERQemu.IO.Z80_new
                     Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
 #endif
                 _running = false;
+                Stop();
             }
             else if (status == 0 && !_running)
             {
@@ -220,6 +279,12 @@ namespace PERQemu.IO.Z80_new
 #endif
                 _running = true;
                 Reset();
+
+                if (_lastExecutionMode == ExecutionMode.Asynchronous)
+                {
+                    // Restart execution thread
+                    RunAsync();
+                }
             }
         }
         
@@ -253,8 +318,12 @@ namespace PERQemu.IO.Z80_new
         private Z80SIO _sio;
         private TMS9914A _tms9914a;
 
+        private Scheduler _scheduler;
+
         private Z80Debugger _z80Debugger;
 
-        private bool _running;
+        private volatile bool _running;
+
+        private ExecutionMode _lastExecutionMode;
     }
 }

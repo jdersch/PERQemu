@@ -153,9 +153,21 @@ namespace PERQemu.IO.Z80.IOB
             Z80Poll();
         }
 
+        public bool SupportsAsync => false;
+
         public void ShowZ80State()
         {
             // Nothing here.
+        }
+
+        public void RunAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Stop()
+        {
+            // Nothing to do.
         }
 
         public int Clocks()
@@ -338,7 +350,7 @@ namespace PERQemu.IO.Z80.IOB
         /// Those cases are handled in Load/ReadData, with some duplication of the code here.  But
         /// it's silly to Poll all the attached devices during cycles when the Z80 is off.
         /// </summary>
-        public uint Clock()
+        public uint SingleStep()
         {
             return 1;
         }

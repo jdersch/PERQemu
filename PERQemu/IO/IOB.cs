@@ -31,7 +31,6 @@ namespace PERQemu.IO
             _hardDiskController = new ShugartDiskController(system);
             //_z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
             _z80System = new PERQemu.IO.Z80_new.Z80System(system);
-            Reset();
         }
 
         public IZ80System Z80System
@@ -52,6 +51,19 @@ namespace PERQemu.IO
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.IOState, "IOB: Board reset.");
 #endif
+        }
+
+        // TODO: Move these next three to some generic interface when we implement the EIO, etc.
+        public bool SupportsAsync => _z80System.SupportsAsync;
+
+        public void RunAsync()
+        {
+            _z80System.RunAsync();
+        }
+
+        public void Stop()
+        {
+            _z80System.Stop();
         }
 
         public bool HandlesPort(byte ioPort)
@@ -163,11 +175,11 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Clocks subdevices
+        /// Runs the Z80, synchronously.
         /// </summary>
         public uint Clock()
         {
-            return _z80System.Clock();
+            return _z80System.SingleStep();
         }
 
         private HardDisk.ShugartDiskController _hardDiskController;

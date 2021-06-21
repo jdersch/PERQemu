@@ -15,6 +15,11 @@ namespace PERQemu.IO.Z80_new
     public interface ISIODevice
     {
         /// <summary>
+        /// Resets the device.
+        /// </summary>
+        void Reset();
+
+        /// <summary>
         /// Registers a delegate used by the ISIODevice implementation to send data to the
         /// SIO's receiver.
         /// </summary>

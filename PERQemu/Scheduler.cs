@@ -66,8 +66,9 @@ namespace PERQemu
     /// </summary>
     public class Scheduler
     {
-        public Scheduler()
+        public Scheduler(ulong timeStepNsec)
         {
+            _timeStepNsec = timeStepNsec;
             Reset();
         }
 
@@ -117,7 +118,7 @@ namespace PERQemu
 
         public Event Schedule(ulong timestampNsec, SchedulerEventCallback callback)
         {
-            Event e = new Event(timestampNsec + _currentTimeNsec, null, callback);            
+            Event e = new Event(timestampNsec + _currentTimeNsec, null, callback);
             _schedule.Push(e);
 
             return e;
@@ -131,15 +132,14 @@ namespace PERQemu
             }
         }
 
-        public static ulong TimeStepNsec => _timeStepNsec;
+        public ulong TimeStepNsec => _timeStepNsec;
 
         private ulong _currentTimeNsec;
 
         private SchedulerQueue _schedule;
 
-        // 170 nsec is approximately one PERQ CPU clock cycle and is the time-base for
-        // the scheduler.
-        private static readonly ulong _timeStepNsec = 170;
+        // The time-base for the scheduler.
+        private ulong _timeStepNsec;
     }
 
     /// <summary>

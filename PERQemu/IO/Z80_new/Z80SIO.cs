@@ -131,6 +131,11 @@ namespace PERQemu.IO.Z80_new
                 _huntMode = true;       // re-entered after Reset
                 _rxIntOnNextCharacter = false;
 
+                if (_device != null)
+                {
+                    _device.Reset();
+                }
+
                 UpdateFlags();
 
 #if TRACING_ENABLED

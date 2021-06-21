@@ -584,8 +584,8 @@ namespace PERQemu.Display
         /// Because these are part of the normal interrupt service routine, we don't need to track our
         /// own vertical retrace timer; _vBlankCycles can be removed.
         /// </summary>
-        private readonly ulong _scanLineTimeNsec = 70 * Scheduler.TimeStepNsec;
-        private readonly ulong _hBlankTimeNsec = 22 * Scheduler.TimeStepNsec;
+        private readonly ulong _scanLineTimeNsec = 70 * 170;
+        private readonly ulong _hBlankTimeNsec = 22 * 170;
         private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
 
         private VideoState _state;

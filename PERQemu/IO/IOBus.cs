@@ -48,8 +48,6 @@ namespace PERQemu.IO
             AddDevice(system.VideoController);
             AddDevice(system.IOB);
             AddDevice(system.OIO);
-
-            Reset();
         }
 
         public void Reset()

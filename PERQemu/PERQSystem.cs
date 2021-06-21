@@ -35,7 +35,6 @@ namespace PERQemu
         Debug,
         DebugScript,
         Reset,
-        Pause,
         Exit,
     }
 
@@ -47,7 +46,7 @@ namespace PERQemu
     {
         public PERQSystem()
         {
-            _scheduler = new Scheduler();
+            _scheduler = new Scheduler(170);        // 170ns per PERQ CPU cycle; scheduler must be clocked with PERQ CPU.
 
             _memoryBoard = new MemoryBoard(this);
             _iob = new IOB(this);
@@ -60,6 +59,10 @@ namespace PERQemu
             // Start off debugging
             _state = RunState.Debug;
             _debugger = new Debugger.Debugger(this);
+
+            // Assume async mode if the IOB implementation supports it.
+            // Might want to select sync mode on uniprocessor systems?
+            _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
         }
 
         public void Shutdown()
@@ -92,69 +95,94 @@ namespace PERQemu
                 switch (_state)
                 {
                     case RunState.Run:
-                    case RunState.SingleStep:
-                    case RunState.RunInst:
-                    case RunState.RunZ80Inst:
-                        try
+                        if (_z80ExecutionMode == ExecutionMode.Asynchronous)
                         {
-                            // Run the IOB for one Z80 instruction, then run the PERQ CPU for
-                            // the number of microinstructions equivalent to that wall-clock time.
-                            uint clocks = _iob.Clock();
+                            // Let the IOB run in its own thread.
+                            _iob.RunAsync();
 
-                            // TODO: Fudge the PERQ ratio here, need to work out the actual math.
-                            clocks = (uint)(clocks * 2.4);
+                            // Run the PERQ CPU until manually stopped
+                            RunGuarded(() =>
+                            {
+                                while (_state == RunState.Run)
+                                {
+                                    _scheduler.Clock();
+                                    _perqCPU.Execute();
+                                }
+                            });
 
-                            RunState nextState = _state;
+                            // Stop the IOB before continuing.
+                            _iob.Stop();
+                        }
+                        else
+                        {
+                            // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
+                            RunGuarded(() =>
+                            {
+                                while (_state == RunState.Run)
+                                {
+                                    // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                                    // the number of microinstructions equivalent to that wall-clock time.
+                                    uint clocks = _iob.Clock();
+
+                                    // TODO: Fudge the PERQ ratio here, need to work out the actual math.
+                                    clocks = (uint)(clocks * 2.4);
+
+                                    RunState nextState = _state;
+                                    do
+                                    {
+                                        _scheduler.Clock();
+                                        _perqCPU.Execute();
+                                        clocks--;
+                                    } while (clocks > 0);
+                                }
+                            });
+                        }
+                        break;
+                    case RunState.SingleStep:
+                    case RunState.RunZ80Inst:
+                        // For now:
+                        // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                        // one instruction.
+                        // Timing-wise this is very inaccurate.  It would be nice to allow single-stepping either
+                        // processor and have the timings be correct.
+                        //
+                        RunGuarded(() =>
+                        {
+                            _iob.Clock();
+                            _scheduler.Clock();
+                            _perqCPU.Execute();
+
+                            // Drop back into debugging mode after running a single step.
+                            _state = RunState.Debug;
+                        });
+                        
+                        break;
+
+                    case RunState.RunInst:  // Run a single QCode
+                        // For now:
+                        // As above, except we execute PERQ CPU instructions until the start of the next QCode.
+                        RunGuarded(() =>
+                        {
                             do
                             {
+                                _iob.Clock();
                                 _scheduler.Clock();
-                                nextState = _perqCPU.Execute(_state);
-                                clocks--;
-                            } while (nextState == _state && clocks > 0);
+                                _perqCPU.Execute();
 
-                            // Drop back into debugging mode after running a single Z80 instruction.
-                            if (_state == RunState.RunZ80Inst)
-                            {
-                                _state = RunState.Debug;
-                            }
+                            } while (!_perqCPU.IncrementBPC);
 
-                            // If we were broken into during execution, we should honor it.
-                            if (_state != RunState.Debug)
-                            {
-                                _state = nextState;
-                            }
-                        }
-                        catch (PowerOffException)
-                        {
-                            // This is thrown when the microcode tells the PERQ to power down.
-                            // Catch here and tell the user.  Go back to debug state.
+                            // Drop back into debugging mode now.
                             _state = RunState.Debug;
-                            _debugMessage = "The PERQ has powered itself off.  Use the 'reset' command to restart the PERQ.";
-                        }
-                        catch (Exception e)
-                        {
-                            // The emulation has hit a serious error.
-                            // Enter the debugger.
-                            _state = RunState.Debug;
-                            _debugMessage = String.Format("Break due to internal emulation error: {0}.  System state may be inconsistent.", e.Message);
-#if DEBUG
-                            Console.WriteLine(Environment.StackTrace);
-#endif
-                        }
+                        });
                         break;
 
                     case RunState.Debug:
-                        // Enter the debugger.  On return from debugger, switch to the specified state
+                        // Enter the debugger.  On return from debugger, switch to the specified state.
                         _state = _debugger.Enter(_debugMessage);
                         break;
 
                     case RunState.DebugScript:
                         _state = _debugger.RunScript(args[0]);
-                        break;
-
-                    case RunState.Pause:
-                        // Do nothing, just sleep so as not to starve the CPU in a busy loop.
-                        System.Threading.Thread.Sleep(10);
                         break;
 
                     case RunState.Reset:
@@ -228,7 +256,38 @@ namespace PERQemu
             get { return _debugger; }
         }
 
-        
+        private delegate void RunDelegate();
+
+        /// <summary>
+        /// Executes the specified emulation delegate inside a try/catch block that properly handles
+        /// PowerDown and other exceptions to return to debug state.
+        /// </summary>
+        /// <param name="execute"></param>
+        private void RunGuarded(RunDelegate execute)
+        {
+            try
+            {
+                execute();
+            }
+            catch (PowerOffException)
+            {
+                // This is thrown when the microcode tells the PERQ to power down.
+                // Catch here and tell the user.  Go back to debug state.
+                _state = RunState.Debug;
+                _debugMessage = "The PERQ has powered itself off.  Use the 'reset' command to restart the PERQ.";
+            }
+            catch (Exception e)
+            {
+                // The emulation has hit a serious error.
+                // Enter the debugger.
+                _state = RunState.Debug;
+                _debugMessage = String.Format("Break due to internal emulation error: {0}.  System state may be inconsistent.", e.Message);
+#if DEBUG
+                Console.WriteLine(Environment.StackTrace);
+#endif
+            }
+        }
+            
 
         #region Debugger Commands
 
@@ -364,7 +423,7 @@ namespace PERQemu
             BootChar = (byte)bootChar;
         }
 
-        [DebugFunction("show bootchar", "Sets the boot character (which selects the OS to boot)")]
+        [DebugFunction("show bootchar", "Shows the boot character.")]
         private void ShowBootChar()
         {
             Console.Write("Bootchar is ");
@@ -378,6 +437,27 @@ namespace PERQemu
             }
         }
 
+        [DebugFunction("set z80 execution mode", "Sets the execution mode for the Z80 coprocessor on the IO board.")]
+        private void SetZ80ExecutionMode(ExecutionMode mode)
+        {
+            if (mode == ExecutionMode.Asynchronous &&
+                !_iob.Z80System.SupportsAsync)
+            {
+                Console.WriteLine("The current implementation does not support asynchronous execution.");
+                _z80ExecutionMode = ExecutionMode.Synchronous;
+            }
+            else
+            {
+                _z80ExecutionMode = mode;
+            }
+        }
+
+        [DebugFunction("show z80 execution mode", "Shows the currently set execution mode for the Z80 coprocessor on the IO board.")]
+        private void ShowZ80ExecutionMode()
+        {
+            Console.WriteLine(_z80ExecutionMode);
+        }
+
         #endregion
 
         private void Reset()
@@ -388,7 +468,9 @@ namespace PERQemu
             // TODO: anything else here need to be reset?
         }
 
+        
         private RunState _state;
+        private ExecutionMode _z80ExecutionMode;
         private string _debugMessage;
         private static byte _bootChar;
         private Scheduler _scheduler;

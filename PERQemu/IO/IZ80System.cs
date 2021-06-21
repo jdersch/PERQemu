@@ -24,22 +24,64 @@ using System.Text;
 
 namespace PERQemu.IO
 {
+    public enum ExecutionMode
+    {
+        Synchronous,
+        Asynchronous
+    }
+
     /// <summary>
     /// IZ80System provides an abstracted view of the IOB's Z80 subsystem.
     /// This interface is temporary while the new Z80 implementation is underway.
     /// </summary>
     public interface IZ80System
     {
+        bool SupportsAsync { get; }
+
+        /// <summary>
+        /// Resets the Z80 system.
+        /// </summary>
         void Reset();
-        uint Clock();
+
+        /// <summary>
+        /// Runs the Z80 system continuously on its own thread.
+        /// </summary>
+        void RunAsync();
+
+        /// <summary>
+        /// Executes one instruction and returns the cycles consumed in doing so.
+        /// If system is running asynchronously, processor is halted afterwards.
+        /// </summary>
+        /// <returns></returns>
+        uint SingleStep();
+
+        /// <summary>
+        /// Stops execution.  Only applicable to Asynchronous mode.
+        /// </summary>
+        void Stop();
+
+        /// <summary>
+        /// Writes to the Z80 Status register
+        /// </summary>
+        /// <param name="status"></param>
         void WriteStatus(int status);
+
+        /// <summary>
+        /// Writes to the Z80 Data register
+        /// </summary>
+        /// <param name="data"></param>
         void WriteData(int data);
+
+        /// <summary>
+        /// Reads from the Z80 Data register
+        /// </summary>
+        /// <returns></returns>
         int ReadData();
 
         // Debugging stuff
         void ShowZ80State();
 
-        // TODO: the rest of likely really belong in IOB eventually
+        // TODO: the rest of these really belong in IOB eventually.
         void LoadFloppyDisk(string path);
         void SaveFloppyDisk(string path);
         void UnloadFloppyDisk();

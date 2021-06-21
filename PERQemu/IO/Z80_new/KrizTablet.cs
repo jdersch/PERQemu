@@ -13,12 +13,20 @@ namespace PERQemu.IO.Z80_new
     /// </summary>
     public class KrizTablet : ISIODevice
     {
-        public KrizTablet(PERQSystem system)
+        public KrizTablet(Scheduler scheduler, PERQSystem system)
         {
+            _scheduler = scheduler;
+
+            // TODO: maybe just pass Display in?
             _system = system;
 
+            Reset();
+        }
+
+        public void Reset()
+        {
             // Schedule the first Kriz data event, which runs once every 1/60th of a second, forever.
-            _system.Scheduler.Schedule(_dataInterval, SendData);
+            _scheduler.Schedule(_dataInterval, SendData);
         }
 
         public void RegisterReceiveDelegate(ReceiveDelegate rxDelegate)
@@ -85,12 +93,13 @@ namespace PERQemu.IO.Z80_new
             _rxDelegate(0);
 
             // Wait 1/60th of a second and do it again.
-            _system.Scheduler.Schedule(_dataInterval, SendData);
+            _scheduler.Schedule(_dataInterval, SendData);
         }
 
         private static readonly ulong _dataInterval = (ulong)(16.666667 * Conversion.MsecToNsec);
 
         private ReceiveDelegate _rxDelegate;
+        private Scheduler _scheduler;
         private PERQSystem _system;
     }
 }
