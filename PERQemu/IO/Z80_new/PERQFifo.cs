@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PERQemu.IO.Z80_new
@@ -15,19 +16,25 @@ namespace PERQemu.IO.Z80_new
         public Z80ToPERQFIFO(PERQSystem system)
         {
             _system = system;
+            _lock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         }
 
         public void Reset()
         {
+            _lock.EnterWriteLock();
             _fifo = new Queue<byte>();
+            _lock.ExitWriteLock();
         }
 
         public byte Dequeue()
         {
+            _lock.EnterUpgradeableReadLock();
             byte value = 0;
             if (_fifo.Count > 0)
             {
+                _lock.EnterWriteLock();
                 value = _fifo.Dequeue();
+                _lock.ExitWriteLock();
 
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
@@ -48,6 +55,8 @@ namespace PERQemu.IO.Z80_new
                 // No data left, clear the PERQ interrupt.
                 _system.CPU.ClearInterrupt(InterruptType.Z80DataOutReady);
             }
+
+            _lock.ExitUpgradeableReadLock();
 
             return value;
         }
@@ -72,7 +81,9 @@ namespace PERQemu.IO.Z80_new
 
         public void Write(byte portAddress, byte value)
         {
+            _lock.EnterWriteLock();
             _fifo.Enqueue(value);
+            _lock.ExitWriteLock();
 
 #if TRACING_ENABLED
             if (Trace.TraceOn)
@@ -92,6 +103,9 @@ namespace PERQemu.IO.Z80_new
         {
             0xd0            // PERQW
         };
+
+        // TODO: investigate using something more lightweight?
+        private ReaderWriterLockSlim _lock;
     }
 
     /// <summary>
@@ -102,17 +116,18 @@ namespace PERQemu.IO.Z80_new
         public PERQToZ80FIFO(PERQSystem system)
         {
             _system = system;
+            _lock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
             Reset();
         }
 
         public void Reset()
         {
+            _lock.EnterWriteLock();
             _fifo = new Queue<byte>();
             _interruptsEnabled = false;
             _interruptActive = false;
-        }
-
-        public bool DataReadyInterruptRequested;
+            _lock.ExitWriteLock();
+        }       
 
         public string Name => "PERQ->Z80 FIFO";
 
@@ -130,23 +145,34 @@ namespace PERQemu.IO.Z80_new
 
         public event EventHandler NmiInterruptPulse;
 
+        public void SetDataReadyInterruptRequested(bool requested)
+        {
+            _lock.EnterWriteLock();
+            _dataReadyInterruptRequested = requested;
+            _lock.ExitWriteLock();
+        }
+
         public void Enqueue(byte value)
         {
+            _lock.EnterWriteLock();
+            _fifo.Enqueue(value);
+
+            // Interrupt the Z80 to let it know we have data to be read.
+            _interruptActive = true;
+
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.Z80FIFO,
                           "PERQ->Z80 FIFO enqueued byte {0:x2}, {1} items in queue.",
                           value, _fifo.Count);
 #endif
+            _lock.ExitWriteLock();
 
-            _fifo.Enqueue(value);
-
-            // Interrupt the Z80 to let it know we have data to be read.
-            _interruptActive = true;
         }
 
         public byte Read(byte portAddress)
         {
+            _lock.EnterWriteLock();
             if (_fifo.Count == 0)
             {
 #if TRACING_ENABLED
@@ -154,9 +180,9 @@ namespace PERQemu.IO.Z80_new
                     Trace.Log(LogType.Z80FIFO,
                               "PERQ->Z80 FIFO read from empty fifo (int active {0}), returning 0.", _interruptActive);
 #endif
+                _lock.ExitWriteLock();
                 return 0;
             }
-
             byte value = _fifo.Dequeue();
 
 #if TRACING_ENABLED
@@ -173,12 +199,13 @@ namespace PERQemu.IO.Z80_new
             //
             if (_fifo.Count == 0)
             {
-                if (DataReadyInterruptRequested)
+                if (_dataReadyInterruptRequested)
                 {
                     _system.CPU.RaiseInterrupt(InterruptType.Z80DataInReady);
                 }
                 _interruptActive = false;
             }
+            _lock.ExitWriteLock();
 
             return value;
         }
@@ -194,6 +221,10 @@ namespace PERQemu.IO.Z80_new
         private Queue<byte> _fifo;
         private bool _interruptsEnabled;
         private bool _interruptActive;
+        private bool _dataReadyInterruptRequested;
+
+        // TODO: investigate using something more lightweight?
+        private ReaderWriterLockSlim _lock;
 
         private byte[] _ports =
         {

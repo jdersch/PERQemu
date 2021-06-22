@@ -156,7 +156,7 @@ namespace PERQemu.CPU
         /// <summary>
         /// Executes a single microinstruction and runs associated hardware for one cycle.
         /// </summary>
-        public RunState Execute(RunState currentState)
+        public void Execute()
         {
             // Decode the next instruction
             Instruction uOp = GetInstruction(PC);
@@ -198,13 +198,7 @@ namespace PERQemu.CPU
                 // one cycle here -- enough to screw up memory timing during the loop
                 // when microcode is being loaded!  Clear the hold flag to continue.
                 _wcsHold = false;
-
-                // So we can single step through aborts for debugging
-                if (currentState == RunState.SingleStep)
-                {
-                    return RunState.Debug;
-                }
-                return currentState;
+                return;
             }
 
             //
@@ -318,16 +312,6 @@ namespace PERQemu.CPU
             // Jump to where we need to go...
             DispatchJump(uOp);
 
-            // TODO: does this logic belong in here?
-            // And we're done.  Handle debugging state, if any
-            // If we're debugging one Qcode at a time and we just finished one, break now
-            if (currentState == RunState.SingleStep || 
-                (_incrementBPC && currentState == RunState.RunInst))
-            {
-                return RunState.Debug;
-            }
-
-            return currentState;
         }
 
         #region Getters and setters
@@ -361,6 +345,14 @@ namespace PERQemu.CPU
         public int BPC
         {
             get { return _bpc & 0xf; }
+        }
+
+        /// <summary>
+        /// Exposes whether the last instruction was NextInst or NextOp
+        /// </summary>
+        public bool IncrementBPC
+        {
+            get { return _incrementBPC; }
         }
 
         /// <summary>

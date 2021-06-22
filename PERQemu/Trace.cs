@@ -25,7 +25,7 @@ namespace PERQemu
     /// to a certain set, this defines individual entries in those sets.
     /// </summary>
     [Flags]
-    public enum LogType
+    public enum LogType : ulong
     {
         None =              0x0,
         Errors =            0x1,
@@ -59,7 +59,8 @@ namespace PERQemu
         Instruction =       0x10000000,
         Keyboard =          0x20000000,
         MulDiv =            0x40000000,
-        All =               0x7fffffff
+        Z80SIO =            0x80000000,
+        All =               0xffffffffffffffff,
     }
 
 #if TRACING_ENABLED

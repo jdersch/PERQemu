@@ -109,8 +109,8 @@ namespace PERQemu.IO.Z80.IOB
                 // maintenance moved to the video interrupt instead.
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
-                    Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2} jiffies={3}",
-                                                    x, y, button, jiffies);
+                    Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2}",
+                                                    x, y, button);
 #endif
             }
         }
