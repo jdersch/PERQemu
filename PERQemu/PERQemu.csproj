@@ -161,7 +161,10 @@
     <Compile Include="IO\Z80\IOB\GPIB.cs" />
     <Compile Include="IO\Z80\IOB\Keyboard.cs" />
     <Compile Include="IO\Z80\IOB\RS232.cs" />
+    <Compile Include="IO\FloppyDrive.cs" />
+    <Compile Include="IO\Z80_new\DMARouter.cs" />
     <Compile Include="IO\Z80_new\HardDiskSeekControl.cs" />
+    <Compile Include="IO\Z80_new\IDMADevice.cs" />
     <Compile Include="IO\Z80_new\IOBBus.cs" />
     <Compile Include="IO\Z80_new\IOReg1.cs" />
     <Compile Include="IO\Z80_new\IOReg3.cs" />
@@ -173,6 +176,7 @@
     <Compile Include="IO\Z80_new\PERQFifo.cs" />
     <Compile Include="IO\Z80_new\TMS9914A.cs" />
     <Compile Include="IO\Z80_new\Z80CTC.cs" />
+    <Compile Include="IO\Z80_new\Z80DMA.cs" />
     <Compile Include="IO\Z80_new\Z80SIO.cs" />
     <Compile Include="IO\Z80_new\Z80System.cs" />
     <Compile Include="Memory\RasterOp.cs" />
