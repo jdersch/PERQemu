@@ -7,13 +7,14 @@ using System.Threading.Tasks;
 namespace PERQemu.IO.Z80_new
 {
     /// <summary>
-    /// 
+    /// Implements most of the Z80 DMA controller.
     /// </summary>
     public class Z80DMA : IZ80Device
     {
-        public Z80DMA(byte baseAddress, Z80System system)
+        public Z80DMA(byte baseAddress, IOBMemoryBus memoryBus, IOBIOBus ioBus)
         {
-            _system = system;
+            _memoryBus = memoryBus;
+            _ioBus = ioBus;
             _baseAddress = baseAddress;
 
             Reset();
@@ -70,33 +71,57 @@ namespace PERQemu.IO.Z80_new
                 IDMADevice dest;
 
                 ushort sourceAddress;
+                bool sourceIsIO;
                 ushort destAddress;
+                bool destIsIO;
 
                 // What direction is this going in
                 WR0 wr0 = (WR0)_wr[0];
+                WR1 wr1 = (WR1)_wr[1];
+                WR2 wr2 = (WR2)_wr[2];
 
                 if ((wr0 & WR0.DirectionAtoB) != 0)
                 {
                     // Source is A, dest is B
                     source = _deviceA;
                     sourceAddress = _portAddressA;
+                    sourceIsIO = (wr1 & WR1.MemoryOrIO) != 0;
                     dest = _deviceB;
                     destAddress = _portAddressB;
+                    destIsIO = (wr2 & WR2.MemoryOrIO) != 0;
                 }
                 else
                 {
                     source = _deviceB;
                     sourceAddress = _portAddressB;
+                    sourceIsIO = (wr2 & WR2.MemoryOrIO) != 0;
                     dest = _deviceA;
                     destAddress = _portAddressA;
+                    destIsIO = (wr1 & WR1.MemoryOrIO) != 0;
                 }
 
                 // If the source has a byte ready for us and the destination is also ready, 
                 // do the transfer:
                 if (source.ReadDataReady && dest.WriteDataReady)
                 {
-                    byte data = source.DMARead(sourceAddress);
-                    dest.DMAWrite(destAddress, data);
+                    byte data = 0;
+                    if (sourceIsIO)
+                    {
+                        data = _ioBus[sourceAddress];
+                    }
+                    else
+                    {
+                        data = _memoryBus[sourceAddress];
+                    }
+
+                    if (destIsIO)
+                    {
+                        _ioBus[destAddress] = data;
+                    }
+                    else
+                    {
+                        _memoryBus[destAddress] = data;
+                    }
 
                     // Update addresses & counters
                     _byteCounter--;
@@ -106,7 +131,6 @@ namespace PERQemu.IO.Z80_new
 #endif
 
 
-                    WR1 wr1 = (WR1)_wr[1];
                     if ((wr1 & WR1.PortAAddressFixed) == 0)
                     {
                         if ((wr1 & WR1.PortAIncrements) == 0)
@@ -119,7 +143,6 @@ namespace PERQemu.IO.Z80_new
                         }
                     }
 
-                    WR2 wr2 = (WR2)_wr[2];
                     if ((wr2 & WR2.PortBAddressFixed) == 0)
                     {
                         if ((wr2 & WR2.PortBIncrements) == 0)
@@ -406,7 +429,8 @@ namespace PERQemu.IO.Z80_new
             }
         }
 
-        private Z80System _system;
+        private IOBIOBus _ioBus;
+        private IOBMemoryBus _memoryBus;
         private IDMADevice _deviceA;
         private IDMADevice _deviceB;
         private byte _baseAddress;

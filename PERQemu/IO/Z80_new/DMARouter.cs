@@ -56,16 +56,6 @@ namespace PERQemu.IO.Z80_new
 
         public bool WriteDataReady => _selectedDevice.WriteDataReady;
 
-        public byte DMARead(ushort address)
-        {
-            return _selectedDevice.DMARead(address);
-        }
-
-        public void DMAWrite(ushort address, byte value)
-        {
-            _selectedDevice.DMAWrite(address, value);
-        }
-
         public void DMATerminate()
         {
             _selectedDevice.DMATerminate();

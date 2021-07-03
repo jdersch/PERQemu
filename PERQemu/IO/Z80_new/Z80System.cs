@@ -43,7 +43,7 @@ namespace PERQemu.IO.Z80_new
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
             _z80ctc = new Z80CTC(0x90, _scheduler);
-            _z80dma = new Z80DMA(0x98, this);            
+            _z80dma = new Z80DMA(0x98, _memory, _bus);
             _seekControl = new HardDiskSeekControl(system);
             _keyboard = new Keyboard();
             _z80sio = new Z80SIO(0xb0, _scheduler);

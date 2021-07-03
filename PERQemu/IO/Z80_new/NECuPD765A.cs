@@ -71,35 +71,11 @@ namespace PERQemu.IO.Z80_new
             set => _interruptsEnabled = value;
         }
 
-
-        // IDMADevice stuff
+        // IDMADevice Implementation
 
         bool IDMADevice.ReadDataReady => _readDataReady;
 
-        // TODO: this is terrible.
         bool IDMADevice.WriteDataReady => _writeDataReady;
-
-        byte IDMADevice.DMARead(ushort address)
-        {
-            if (!_readDataReady)
-            {
-                throw new InvalidOperationException("DMA read with no data ready.");
-            }
-
-            _readDataReady = false;
-            return _readByte;
-        }
-
-        void IDMADevice.DMAWrite(ushort address, byte value)
-        {
-            if (!_writeDataReady)
-            {
-                throw new InvalidOperationException("DMA write while not ready.");
-            }
-
-            _writeByte = value;
-            _writeDataReady = false;
-        }
 
         void IDMADevice.DMATerminate()
         {
@@ -137,7 +113,6 @@ namespace PERQemu.IO.Z80_new
                     return (byte)_status;
 
                 case Register.Data:
-                    // TODO: is this correct?
                     _interruptActive = false;
                     byte data = 0;
 
@@ -178,8 +153,13 @@ namespace PERQemu.IO.Z80_new
                     }
                     else if (_state == State.Execution)
                     {
-                        // Read FDC data if in non-DMA mode, and doing a read
-                        throw new NotImplementedException("FDC Data read not implemented yet.");
+                        if (!_readDataReady)
+                        {
+                            throw new InvalidOperationException("DMA read with no data ready.");
+                        }
+
+                        _readDataReady = false;
+                        data = _readByte;
                     }
                     else
                     {
@@ -211,51 +191,68 @@ namespace PERQemu.IO.Z80_new
         {
             _interruptActive = false;
 
-            // TODO: enforce state (command vs. execution, etc.)
-            if (_commandData.Count == 0)
+            if (_state == State.Command)
             {
-                // Figure out what command this is
-                foreach (CommandData data in _commands)
+                if (_commandData.Count == 0)
                 {
-                    if ((value & data.Mask) == (int)data.Command)
+                    // Figure out what command this is
+                    foreach (CommandData data in _commands)
                     {
-                        _currentCommand = data;
+                        if ((value & data.Mask) == (int)data.Command)
+                        {
+                            _currentCommand = data;
 
 #if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.FloppyDisk, "Floppy command is {0}.", _currentCommand.Command);
+                            if (Trace.TraceOn) Trace.Log(LogType.FloppyDisk, "Floppy command is {0}.", _currentCommand.Command);
 #endif
 
-                        break;
+                            break;
+                        }
                     }
+
+                    // Invalid command, handle this properly
                 }
 
-                // Invalid command, handle this properly
+                // Store the command data away, reset bits 6 and 7 of the status register,
+                // and queue a workitem to set the bits.
+                // If this is the last byte of the command, commence execution.
+                _commandData.Enqueue(value);
+
+                _status &= (~Status.DIO & ~Status.RQM);
+
+                if (_commandData.Count == _currentCommand.ByteCount)
+                {
+                    // Set EXM
+                    _state = State.Execution;
+                    _status |= Status.EXM;
+                    _statusData.Clear();
+                    _seekEnd = false;
+                    _ic = StatusRegister0.None;
+                    _scheduler.Schedule(12 * Conversion.UsecToNsec, _currentCommand.Executor);
+                }
+                else
+                {
+                    _scheduler.Schedule(12 * Conversion.UsecToNsec, (skew, context) =>
+                    {
+                    // Set DIO and RQM appropriately to signify readiness for next data
+                    _status |= (Status.RQM);
+                    });
+                }
             }
-
-            // Store the command data away, reset bits 6 and 7 of the status register,
-            // and queue a workitem to set the bits.
-            // If this is the last byte of the command, commence execution.
-            _commandData.Enqueue(value);
-
-            _status &= (~Status.DIO & ~Status.RQM);
-
-            if (_commandData.Count == _currentCommand.ByteCount)
+            else if (_state == State.Execution)
             {
-                // Set EXM
-                _state = State.Execution;
-                _status |= Status.EXM;
-                _statusData.Clear();
-                _seekEnd = false;
-                _ic = StatusRegister0.None;
-                _scheduler.Schedule(12 * Conversion.UsecToNsec, _currentCommand.Executor);
+                if (!_writeDataReady)
+                {
+                    throw new InvalidOperationException("DMA write while not ready.");
+                }
+
+                _writeByte = value;
+                _writeDataReady = false;
             }
             else
             {
-                _scheduler.Schedule(12 * Conversion.UsecToNsec, (skew, context) =>
-                {
-                    // Set DIO and RQM appropriately to signify readiness for next data
-                    _status |= (Status.RQM);
-                });
+                // Unexpected
+                throw new InvalidOperationException("Data write while in Result state.");
             }
         }
 
@@ -352,7 +349,6 @@ namespace PERQemu.IO.Z80_new
             StatusRegister0 ST0 =
                 (StatusRegister0)((int)_ic & 0xc0) |
                 (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None) |
-                //(SelectedDriveIsReady ? StatusRegister0.None : StatusRegister0.NotReady) |
                 (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head) |
                 (StatusRegister0)_unitSelect;
 
@@ -378,13 +374,14 @@ namespace PERQemu.IO.Z80_new
             if (_statusData.Count > 0)
             {
                 _status |= (Status.DIO | Status.RQM);
+                _state = State.Result;
             }
             else
             {
                 _status &= (~Status.DIO);
                 _status |= Status.RQM;
+                _state = State.Command;
             }
-            _state = State.Result;
 
             _commandData.Clear();
         }
@@ -515,7 +512,12 @@ namespace PERQemu.IO.Z80_new
 
         private void SectorByteReadCallback(ulong skewNsec, object context)
         {
-            // Read the next byte.  If this is the last one for this sector then wrap things up.
+            if (_transferRequest.TransferIndex == _transferRequest.SectorLength)
+            {
+                // Done
+                FinishSectorTransfer();
+                return;
+            }
 
             // If the last byte was not read by now, this is an overrun.
             if (_readDataReady)
@@ -529,22 +531,11 @@ namespace PERQemu.IO.Z80_new
             _readByte = _transferRequest.SectorData.Data[_transferRequest.TransferIndex++];
             _readDataReady = true;
 
-            if (_transferRequest.TransferIndex == _transferRequest.SectorLength)
-            {
-                // Done
-                FinishSectorTransfer();
-            }
-            else
-            {
-                // Do the next.
-                _scheduler.Schedule(_byteTimeNsec, SectorByteReadCallback);
-            }
+            _scheduler.Schedule(_byteTimeNsec, SectorByteReadCallback);
         }
 
         private void SectorByteWriteCallback(ulong skewNsec, object context)
         {
-            // Read the next byte.  If this is the last one for this sector then wrap things up.
-
             // If the last byte was not written, this is an overrun.
             if (_writeDataReady)
             {
@@ -558,7 +549,7 @@ namespace PERQemu.IO.Z80_new
             if (Trace.TraceOn) Trace.Log(LogType.FloppyDisk, "Wrote byte 0x{0} to index {1}", _writeByte, _transferRequest.TransferIndex);
 #endif
 
-            // Read the last written byte, and indicate readiness for the next:
+            // Write the next byte:
             _transferRequest.SectorData.Data[_transferRequest.TransferIndex++] = _writeByte;
 
             if (_transferRequest.TransferIndex == _transferRequest.SectorLength)
@@ -568,7 +559,6 @@ namespace PERQemu.IO.Z80_new
             }
             else
             {
-                // Do the next.
                 _writeDataReady = true;
                 _scheduler.Schedule(_byteTimeNsec, SectorByteWriteCallback);
             }
@@ -782,7 +772,6 @@ namespace PERQemu.IO.Z80_new
             Fault = 0x80
         }
 
-        // TODO: need to specify masks to apply
         private enum Command
         {
             ReadTrack = 0x02,

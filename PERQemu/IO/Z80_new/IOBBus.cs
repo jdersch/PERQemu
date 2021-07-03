@@ -204,16 +204,6 @@ namespace PERQemu.IO.Z80_new
             }
         }
 
-        public byte DMARead(ushort address)
-        {
-            return ReadByte(address);
-        }
-
-        public void DMAWrite(ushort address, byte value)
-        {
-            WriteByte(address, value);
-        }
-
         public void DMATerminate()
         {
 
