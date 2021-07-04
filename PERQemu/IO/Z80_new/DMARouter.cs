@@ -40,8 +40,13 @@ namespace PERQemu.IO.Z80_new
                     _selectedDevice = _system.FDC;
                     break;
 
+                case SelectedDMADevice.SIOB:
+                    _selectedDevice = _system.SIOA;
+                    break;
+
                 default:
                     throw new NotImplementedException(String.Format("DMA not implemented for device {0}.", device));
+                    break;
             }
 
 #if TRACING_ENABLED

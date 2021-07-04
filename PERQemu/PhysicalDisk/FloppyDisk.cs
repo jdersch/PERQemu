@@ -118,6 +118,11 @@ namespace PERQemu.PhysicalDisk
             return _tracks[head, cylinder];
         }
 
+        public void SetTrack(int cylinder, int head, Track track)
+        {
+            _tracks[head, cylinder] = track;
+        }
+
         /// <summary>
         /// To be invoked when a modification is made to sector contents.
         /// TODO: Do this in a less clumsy way.
@@ -246,7 +251,8 @@ namespace PERQemu.PhysicalDisk
     public class Track
     {
         /// <summary>
-        /// Create a new, empty track with the specified format, sector size and sector count.
+        /// Create a new, unformatted track with the specified format, sector size and sector count.
+        /// Used when formatting a track.
         /// </summary>
         /// <param name="format"></param>
         /// <param name="cylinder"></param>
@@ -260,15 +266,11 @@ namespace PERQemu.PhysicalDisk
             _head = head;
             _sectorCount = sectorCount;
             _sectorSize = sectorSize;
-            _sectors = new Sector[_sectorCount];
 
+            // Create new sector dictionary and sector ordering map, but do not populate; this will be done
+            // as sectors are added via AddSector.
+            _sectors = new Dictionary<int, Sector>();
             _sectorOrdering = new List<int>(_sectorCount);
-            for (int i = 0; i < _sectorCount; i++)
-            {
-                _sectors[i] = new Sector(_sectorSize, _format);
-                _sectorOrdering.Add(i + 1); // 1:1 interleave
-            }
-
         }
 
         /// <summary>
@@ -337,7 +339,7 @@ namespace PERQemu.PhysicalDisk
             //
             // Read the sector data in.
             //
-            _sectors = new Sector[_sectorCount];      // TODO: we always assume 26 sectors regardless of what the IMD file has in it.
+            _sectors = new Dictionary<int, Sector>();
             for (int i = 0; i < _sectorCount; i++)
             {
                 SectorRecordType type = (SectorRecordType)s.ReadByte();
@@ -353,7 +355,7 @@ namespace PERQemu.PhysicalDisk
                     case SectorRecordType.NormalDeleted:
                     case SectorRecordType.NormalError:
                     case SectorRecordType.DeletedError:
-                        _sectors[_sectorOrdering[i] - 1] = new Sector(_sectorSize, _format, s);
+                        _sectors[_sectorOrdering[i]] = new Sector(_sectorSize, _format, s);
                         break;
 
                     case SectorRecordType.Compressed:
@@ -363,7 +365,7 @@ namespace PERQemu.PhysicalDisk
                         compressedData = (byte)s.ReadByte();
 
                         // Fill sector with compressed data
-                        _sectors[_sectorOrdering[i] - 1] = new Sector(_sectorSize, _format, compressedData);
+                        _sectors[_sectorOrdering[i]] = new Sector(_sectorSize, _format, compressedData);
                         break;
 
                     default:
@@ -389,11 +391,11 @@ namespace PERQemu.PhysicalDisk
             }
 
             //
-            // Write the sector data out.
-            //            
+            // Write the sector data out in track order
+            //
             for (int i = 0; i < _sectorCount; i++)
             {
-                Sector sector = _sectors[_sectorOrdering[i] - 1];
+                _sectors.TryGetValue(_sectorOrdering[i], out Sector sector);
                 if (sector == null)
                 {
                     // Mark this as unavailable.
@@ -438,7 +440,19 @@ namespace PERQemu.PhysicalDisk
 
         public Sector ReadSector(int sector)
         {
-            return _sectors[sector];
+            _sectors.TryGetValue(sector, out Sector s);
+            return s;
+        }
+
+        public void AddSector(int sector, Sector newSector)
+        {
+            if (_sectorOrdering.Count == _sectorCount)
+            {
+                throw new InvalidOperationException(String.Format("Track full."));
+            }
+
+            _sectorOrdering.Add(sector);
+            _sectors[sector] = newSector;
         }
 
         private byte GetIMDSectorSize()
@@ -488,7 +502,7 @@ namespace PERQemu.PhysicalDisk
 
         private List<int> _sectorOrdering;
 
-        private Sector[] _sectors;
+        private Dictionary<int, Sector> _sectors;
 
         private static int[] _sectorSizes = { 128, 256, 512, 1024, 2048, 4096, 8192 };
     }

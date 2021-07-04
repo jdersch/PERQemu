@@ -5,6 +5,11 @@ using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80_new
 {
+    /// <summary>
+    /// Implements the 765A FDC, or at least as much of it as the PERQ IOB uses.  This means that
+    /// only the Read, Write, Format, and Seek commands are functional at this time.
+    /// Not all interrupt modes are implemented, in particular transfers are DMA-only.
+    /// </summary>
     public class NECuPD765A : IZ80Device, IDMADevice
     {
         // TODO: Ctor should take base I/O address
@@ -22,7 +27,7 @@ namespace PERQemu.IO.Z80_new
                 new CommandData(Command.ReadDeletedData, 0x1f, 9, StubExecutor),
                 new CommandData(Command.ReadId, 0xbf, 2, StubExecutor),
                 new CommandData(Command.WriteData, 0x3f, 9, WriteDataExecutor),
-                new CommandData(Command.FormatTrack, 0xbf, 66, StubExecutor),
+                new CommandData(Command.FormatTrack, 0xbf, 6, FormatExecutor),
                 new CommandData(Command.WriteDeletedData, 0x3f, 9, StubExecutor),
                 new CommandData(Command.ScanEqual, 0x1f, 9, StubExecutor),
                 new CommandData(Command.ScanLowOrEqual, 0x1f, 9, StubExecutor),
@@ -54,7 +59,6 @@ namespace PERQemu.IO.Z80_new
             _unitSelect = 0;
             _headSelect = 0;
             _seekEnd = false;
-            _ic = StatusRegister0.None;
         }
 
         public string Name => "uPD765A FDC";
@@ -226,8 +230,12 @@ namespace PERQemu.IO.Z80_new
                     _state = State.Execution;
                     _status |= Status.EXM;
                     _statusData.Clear();
-                    _seekEnd = false;
-                    _ic = StatusRegister0.None;
+
+                    if (_currentCommand.Command != Command.SenseInterruptStatus)
+                    {
+                        // Don't reset this for SenseInterruptStatus since this command needs this value.
+                        _seekEnd = false;
+                    }
                     _scheduler.Schedule(12 * Conversion.UsecToNsec, _currentCommand.Executor);
                 }
                 else
@@ -259,6 +267,26 @@ namespace PERQemu.IO.Z80_new
         private void StubExecutor(ulong skewNsec, object context)
         {
             throw new NotImplementedException("FDC command not implemented.");
+        }
+
+        private void FormatExecutor(ulong skewNsec, object context)
+        {
+            _transferRequest = new TransferRequest();
+            _transferRequest.Type = Command.FormatTrack;
+            _transferRequest.MFM = (_commandData.Dequeue() & 0x40) != 0;
+            SelectUnitHead(_commandData.Dequeue());
+            _transferRequest.Number = _commandData.Dequeue();
+            _transferRequest.SectorCount = _commandData.Dequeue();
+            _commandData.Dequeue(); // GPL, discarded for now (we don't emulate gaps)
+            _commandData.Dequeue(); // D, discarded (as above, we don't care about filler data -- TODO: probably we could!)
+
+            _transferRequest.SectorLength = 128 << _transferRequest.Number;
+
+            // Format works by doing 4 DMA transfers (for format parameters) per sector on the track.
+            // Indicate that we're ready for a DMA transfer, then kick off the sector format
+            _writeDataReady = true;
+
+            _scheduler.Schedule(_sectorTimeNsec, SectorFormatCallback);
         }
 
         private void ReadDataExecutor(ulong skewNsec, object context)
@@ -344,10 +372,7 @@ namespace PERQemu.IO.Z80_new
             // Return ST0 and PCN, and clear the interrupt active flag
             _interruptActive = false;
 
-            byte currentCylinder = (byte)(SelectedDriveIsReady ? SelectedUnit.Track : 0);
-
-            StatusRegister0 ST0 =
-                (StatusRegister0)((int)_ic & 0xc0) |
+            StatusRegister0 ST0 =                
                 (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None) |
                 (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head) |
                 (StatusRegister0)_unitSelect;
@@ -355,7 +380,6 @@ namespace PERQemu.IO.Z80_new
             _statusData.Enqueue((byte)ST0);             // ST0 (SEEK END)
             _statusData.Enqueue(_pcn[_unitSelect]);     // PCN
 
-            _interruptActive = true;
             FinishCommand();
         }
 
@@ -432,7 +456,7 @@ namespace PERQemu.IO.Z80_new
             if (!SelectedDriveIsReady)
             {
                 // Post drive not ready (TODO: this isn't correct, apparently?  FLOPPY hates this so much it hangs forever.)
-                _ic = _transferRequest.ST0 = StatusRegister0.IntrCode0 | (StatusRegister0)_unitSelect | (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head);
+                _transferRequest.ST0 = StatusRegister0.IntrCode0 | (StatusRegister0)_unitSelect | (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head);
                 _transferRequest.ST1 = StatusRegister1.None;
                 _transferRequest.ST2 = StatusRegister2.None;
 
@@ -444,6 +468,84 @@ namespace PERQemu.IO.Z80_new
             {
                 return true;
             }
+        }
+
+        private void SectorFormatCallback(ulong skewNsec, object context)
+        {
+            // If the last byte was not written, this is an overrun.
+            if (_writeDataReady)
+            {
+                _transferRequest.ST0 |= StatusRegister0.IntrCode0;      // Abnormal termination
+                _transferRequest.ST1 = StatusRegister1.OverRun;
+                FinishTransfer(_transferRequest);
+                return;
+            }
+
+            // We need four bytes from the processor before we can format this sector,
+            // collect them up:
+            switch (_transferRequest.TransferIndex)
+            {
+                case 0:
+                    _transferRequest.Cylinder = _writeByte;
+                    _transferRequest.TransferIndex++;
+                    break;
+
+                case 1:
+                    _transferRequest.Head = _writeByte;
+                    _transferRequest.TransferIndex++;
+                    break;
+
+                case 2:
+                    _transferRequest.Sector = _writeByte;
+                    _transferRequest.TransferIndex++;
+                    break;
+
+                case 3:
+                    _transferRequest.Number = _writeByte;
+
+                    // Format the sector now:
+                    Track diskTrack;
+                    if (_transferRequest.SectorIndex == 0)
+                    {
+                        // First sector in the track to be formatted: Create a new, empty track, which will be filled during the rest of this operation:
+                        // (Note: we use the passed-in cylinder/head information for the track itself; it gets inserted into the disk image on the cylinder/head the 
+                        //  drive is currently pointing to).
+                        // It is technically possible for the processor to change cyl/head designations in the middle of the format; IMD does not support this possibility
+                        // and I don't expect the PERQ to try it.
+                        diskTrack = new Track(_transferRequest.MFM ? Format.MFM500 : Format.FM500, _transferRequest.Cylinder, _transferRequest.Head, _transferRequest.SectorCount, _transferRequest.SectorLength);
+                        SelectedUnit.Disk.SetTrack(SelectedUnit.Track, _headSelect, diskTrack);
+                    }
+                    else
+                    {
+                        // Track should already have been created.
+                        diskTrack = SelectedUnit.Disk.GetTrack(SelectedUnit.Track, _headSelect);
+                    }
+
+                    // Create a new sector and write it to the track:
+                    Sector diskSector = new Sector(_transferRequest.SectorLength, diskTrack.Format);
+                    diskTrack.AddSector(_transferRequest.Sector, diskSector);
+
+                    // Move to the next sector
+                    _transferRequest.SectorIndex++;
+                    _transferRequest.TransferIndex = 0;
+
+                    if (_transferRequest.SectorIndex == _transferRequest.SectorCount)
+                    {
+                        // Done, report success:
+                        _transferRequest.ST1 = StatusRegister1.None;
+                        _transferRequest.ST2 = StatusRegister2.None;
+                        FinishTransfer(_transferRequest);
+                        return;
+                    }
+                    break;
+
+                default:
+                    throw new InvalidOperationException("Unexpected state during Format operation.");
+            }
+
+            // Do it again, do it again.
+            _writeDataReady = true;
+            _scheduler.Schedule(_transferRequest.TransferIndex == 0 ? _sectorTimeNsec : _byteTimeNsec, SectorFormatCallback);
         }
 
         private void SectorTransferCallback(ulong skewNsec, object context)
@@ -465,31 +567,46 @@ namespace PERQemu.IO.Z80_new
 
             // Validate the operation:  if the cylinder is out of range or the sector does not exist on disk, flag the appropriate
             // error and exit.
-            if (_transferRequest.Cylinder > SelectedUnit.Disk.CylinderCount)
+            if (_transferRequest.Cylinder > SelectedUnit.Disk.CylinderCount ||
+                _transferRequest.Cylinder != SelectedUnit.Track)
             {
                 _transferRequest.ST0 = StatusRegister0.IntrCode0;      // Abnormal termination
-                _transferRequest.ST2 = StatusRegister2.BadCylinder;
+                _transferRequest.ST2 = StatusRegister2.WrongCylinder;
                 FinishTransfer(_transferRequest);
                 return;
             }
 
             _transferRequest.SectorData = null;
 
-            // TODO: should compare requested cyl/head with currently set cyl/head, error out, etc.
-            Track diskTrack = SelectedUnit.Disk.GetTrack(_transferRequest.Cylinder, _transferRequest.Head);
-
-            // Sectors are 1-indexed
-            if (_transferRequest.Sector - 1 < diskTrack.SectorCount)
+            // Validate the head vs. the number of sides on the disk:
+            if (SelectedUnit.IsSingleSided && _transferRequest.Head != 0)
             {
-                // Grab the sector:
-                _transferRequest.SectorData = diskTrack.ReadSector(_transferRequest.Sector - 1);
+                _transferRequest.ST0 = StatusRegister0.IntrCode0;       // Abnormal termination
+                _transferRequest.ST1 = StatusRegister1.NoData;  // TODO: is this correct?  What does this really report for a single-sided disk?
+                FinishTransfer(_transferRequest);
+                return;
             }
+
+            Track diskTrack = SelectedUnit.Disk.GetTrack(_transferRequest.Cylinder, _transferRequest.Head);
+            
+            // Grab the sector:
+            _transferRequest.SectorData = diskTrack.ReadSector(_transferRequest.Sector);
 
             if (_transferRequest.SectorData == null)
             {
-                // No good:
+                // No sector data available:
                 _transferRequest.ST0 = StatusRegister0.IntrCode0;      // Abnormal termination
                 _transferRequest.ST1 = StatusRegister1.NoData;     // Sector not found
+                FinishTransfer(_transferRequest);
+                return;
+            }
+
+            // Check the sector format; we expect either FM500 or MFM500, matching the state of the MFM flag.
+            if ((_transferRequest.MFM && _transferRequest.SectorData.Format != Format.MFM500) ||
+                (!_transferRequest.MFM && _transferRequest.SectorData.Format != Format.FM500))
+            {
+                _transferRequest.ST0 = StatusRegister0.IntrCode0;      // Abnormal termination
+                _transferRequest.ST1 = StatusRegister1.NoData;     // Sector not found (TODO: is this correct?)
                 FinishTransfer(_transferRequest);
                 return;
             }
@@ -630,7 +747,6 @@ namespace PERQemu.IO.Z80_new
         private int _headSelect;
 
         // ST0 bits (used by SenseInterruptStatus)
-        private StatusRegister0 _ic;
         private bool _seekEnd;
 
         private bool _interruptsEnabled;
@@ -666,6 +782,10 @@ namespace PERQemu.IO.Z80_new
             // Sector data (if for a valid sector)
             public Sector SectorData;
             public int TransferIndex;
+
+            // Sector count and index (used while formatting)
+            public int SectorCount;
+            public int SectorIndex;
 
             // Cancellation
             public bool Aborted;
