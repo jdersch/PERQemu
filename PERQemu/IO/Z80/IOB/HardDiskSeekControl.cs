@@ -30,8 +30,9 @@ namespace PERQemu.IO.Z80.IOB
     /// </summary>
     public sealed class HardDiskSeekControl : IZ80Device
     {
-        public HardDiskSeekControl()
+        public HardDiskSeekControl(PERQSystem system)
         {
+            _system = system;
             Reset();
         }
 
@@ -61,7 +62,7 @@ namespace PERQemu.IO.Z80.IOB
         {
             // One byte for Seek:
             //  byte 0 = seek count
-            HardDisk.ShugartDiskController.Instance.DoMultipleSeek(data);
+            _system.IOB.ShugartDiskController.DoMultipleSeek(data);
 
             // In "normal step mode", there should be a minimum of 1ms per step!
             // In "buffered" mode, pulses are accumulated in a counter at a faster
@@ -93,5 +94,7 @@ namespace PERQemu.IO.Z80.IOB
 
         private int _busyClocks;
         private bool _seekInProgress;
+
+        private PERQSystem _system;
     }
 }

@@ -21,6 +21,7 @@ using System.IO;
 using System.Collections.Generic;
 
 using PERQemu.CPU;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu.Memory
 {
@@ -57,6 +58,7 @@ namespace PERQemu.Memory
     /// A memory word in the RasterOp datapath, augmented with debugging info
     /// (tracks the source address of a given word).
     /// </summary>
+    /// TODO: can this be made a class (might improve perf)
     public struct ROpWord
     {
         public ROpWord(int addr, int idx, ushort val)
@@ -94,8 +96,10 @@ namespace PERQemu.Memory
     /// </summary>
     public sealed class RasterOp
     {
-        private RasterOp()
+        public RasterOp(PERQSystem system)
         {
+            _system = system;
+
             _ropShifter = new Shifter();            // Our own private Idaho
             _srcFifo = new Queue<ROpWord>(16);      // 4 quads (hardware limit)
             _destFifo = new Queue<ROpWord>(4);      // 1 quad
@@ -121,11 +125,6 @@ namespace PERQemu.Memory
 #endif
         }
 
-        public static RasterOp Instance
-        {
-            get { return _instance; }
-        }
-
         public bool Enabled
         {
             get { return _enabled; }
@@ -136,6 +135,7 @@ namespace PERQemu.Memory
         /// hardware.  Is used to set the "phase" of the action, determine the direction
         /// of the transfer, and sync the RasterOp state clock with the Memory state.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CntlRasterOp(int value)
         {
             _latchOn = (value & 0x40) != 0;
@@ -191,6 +191,7 @@ namespace PERQemu.Memory
         /// Sets the RasterOp Width register, and clears the source and destination word FIFOs.
         /// In the 16K CPU, the two upper bits also control the Multiply/Divide unit.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WidRasterOp(int value)
         {
 
@@ -232,6 +233,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Loads the RasterOp Destination register.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DstRasterOp(int value)
         {
             _function = (Function)(((int)_function & 0x4) | (((~value) & 0xc0) >> 6));
@@ -251,6 +253,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Loads the RasterOp Source register.  Upper bit also controls the PERQ1 power supply!
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SrcRasterOp(int value)
         {
             _function = (Function)(((int)_function & 0x3) | (((~value) & 0x40) >> 4));
@@ -288,7 +291,7 @@ namespace PERQemu.Memory
             if (Trace.TraceOn)
                 Trace.Log(LogType.RasterOp,
                           "RasterOp: Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
-                          _phase, _state, MemoryBoard.Instance.TState, _srcNeedsAligned, _leftOver);
+                          _phase, _state, _system.MemoryBoard.TState, _srcNeedsAligned, _leftOver);
 #endif
             switch (_state)
             {
@@ -347,6 +350,7 @@ namespace PERQemu.Memory
         /// Gets the next word from the result queue.  Expected to be called only if
         /// a Store4/4R cycle is currently in progress.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort Result()
         {
             ROpWord dest;
@@ -372,6 +376,7 @@ namespace PERQemu.Memory
         /// result word.  Called during DestFetch as each word arrives to avoid
         /// complications from the delay in the overlapped Fetch/Store cycle.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ROpWord ComputeResult(ROpWord dest)
         {
             ROpWord src = dest;                         // init to silence the Xamarin compiler...
@@ -684,13 +689,14 @@ namespace PERQemu.Memory
         /// <summary>
         /// Returns the next RasterOp state, determined by the current phase and Memory Tstate.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private State NextState()
         {
             // RasterOp is clocked after the Memory "tick", but before the DispatchFunction
             // which may (at the end of the cycle) specify a phase change.  This means we can
             // complete the current quad-word cycle without concern for the next phase change
             // harshing our mellow.
-            int _stateClock = MemoryBoard.Instance.TState;
+            int _stateClock = _system.MemoryBoard.TState;
 
             State next = _state;
 
@@ -701,7 +707,7 @@ namespace PERQemu.Memory
                 case State.Off:
 #if DEBUG
                     // Old "microcode bailed early" hack -- should never happen now
-                    if (!MemoryBoard.Instance.MDONeeded || _destFifo.Count == 0)
+                    if (!_system.MemoryBoard.MDONeeded || _destFifo.Count == 0)
                     {
                         // Done waiting for the Destination Fifo to drain; really disable now
                         _enabled = false;
@@ -750,17 +756,18 @@ namespace PERQemu.Memory
         /// Populates and returns a ROpWord with the address, index and data
         /// of the current memory word (but throws an error if MDI is invalid).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ROpWord FetchNextWord()
         {
             ROpWord w = new ROpWord();
 
-            if (MemoryBoard.Instance.MDIValid)
+            if (_system.MemoryBoard.MDIValid)
             {
                 // The microcode calculates the addresses and initiates fetches;
                 // we just pluck the next incoming word off the MDI.
-                w.Address = MemoryBoard.Instance.MADR;
-                w.Index = MemoryBoard.Instance.MIndex;
-                w.Data = MemoryBoard.Instance.MDI;
+                w.Address = _system.MemoryBoard.MADR;
+                w.Index = _system.MemoryBoard.MIndex;
+                w.Data = _system.MemoryBoard.MDI;
             }
             else
             {
@@ -780,6 +787,7 @@ namespace PERQemu.Memory
         /// </summary>
         /// <param name="index">Destination word index 0..3</param>
         /// <returns>Combiner mask value</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private CombinerFlags DestWordMask(int index)
         {
             // Create the 9-bit index into the RDS ROM lookup table
@@ -804,6 +812,7 @@ namespace PERQemu.Memory
         /// </summary>
         /// <param name="index">Source word index 0..3</param>
         /// <returns>Combiner mask value</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private CombinerFlags SrcWordMask(int index)
         {
             // Create a 9-bit index into the RDS ROM lookup tablee
@@ -827,6 +836,7 @@ namespace PERQemu.Memory
         /// Return the operation(s) to perform at the beginning or end of a
         /// scan line, given a dest and source word.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private EdgeStrategy GetEdgeStrategy(CombinerFlags dstMask, CombinerFlags srcMask)
         {
             int lookup = (((int)_direction << 6) |
@@ -856,6 +866,7 @@ namespace PERQemu.Memory
         /// is true and the _srcFifo is not empty.  [could just inline this in Clock()
         /// and save a funtion call]
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ClearLeadingSrcWords()
         {
             // We only need to align the first edge in a Begin phase; else no-op
@@ -887,6 +898,7 @@ namespace PERQemu.Memory
         /// Drop extra words from the Source FIFO that are outside the update region.
         /// Called in SrcFetch if _leftOver is true.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ClearExtraSrcWords()
         {
             // We only need to clear after the second edge in an End/Clear phase
@@ -941,6 +953,7 @@ namespace PERQemu.Memory
         /// <param name="srcWord">Source</param>
         /// <param name="mask">Bitmask</param>
         /// <returns>The combined word</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort Combine(ushort dstWord, ushort srcWord, ushort mask)
         {
             switch (_function)
@@ -1035,7 +1048,7 @@ namespace PERQemu.Memory
             if (_enabled)
             {
                 Console.WriteLine("\tState={0} Phase={1} Clock=T{2}",
-                                 _state, _phase, MemoryBoard.Instance.TState);
+                                 _state, _phase, _system.MemoryBoard.TState);
                 if (_setupDone)
                 {
                     Console.WriteLine("\txOffset={0} lastSrc={1} srcAligned={2} LeftOver={3}",
@@ -1223,12 +1236,12 @@ namespace PERQemu.Memory
         // "EVEN/ODD" stuff, but slightly less abstruse.
         private EdgeStrategy[] _rscTable;
 
+        private PERQSystem _system;
+
 #if DEBUG
         // Temporary debug switch
         private bool _ropDebug;
 #endif
-
-        private static RasterOp _instance = new RasterOp();
     }
 }
 

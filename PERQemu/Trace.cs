@@ -25,7 +25,7 @@ namespace PERQemu
     /// to a certain set, this defines individual entries in those sets.
     /// </summary>
     [Flags]
-    public enum LogType
+    public enum LogType : ulong
     {
         None =              0x0,
         Errors =            0x1,
@@ -51,7 +51,7 @@ namespace PERQemu
         EStack =            0x100000,
         RasterOp =          0x200000,
         GPIB =              0x400000,
-        Optimization =      0x800000,       // currently unused ... -> Ethernet?
+        Z80FIFO =           0x800000,
         Speech =            0x1000000,
         RS232 =             0x2000000,
         Tablet =            0x4000000,
@@ -59,7 +59,9 @@ namespace PERQemu
         Instruction =       0x10000000,
         Keyboard =          0x20000000,
         MulDiv =            0x40000000,
-        All =               0x7fffffff
+        Z80SIO =            0x80000000,
+        Z80DMA =            0x100000000,
+        All =               0xffffffffffffffff,
     }
 
 #if TRACING_ENABLED
@@ -149,6 +151,7 @@ namespace PERQemu
 
                 case LogType.OpFile:
                 case LogType.EStack:
+                case LogType.Z80DMA:
                     color = ConsoleColor.DarkYellow;
                     break;
 
@@ -161,8 +164,13 @@ namespace PERQemu
                     color = ConsoleColor.DarkCyan;
                     break;
 
+                case LogType.Z80FIFO:
+                    color = ConsoleColor.DarkRed;
+                    break;
+
                 case LogType.Link:
                 case LogType.GPIB:
+                case LogType.FloppyDisk:
                     color = ConsoleColor.DarkMagenta;
                     break;
 

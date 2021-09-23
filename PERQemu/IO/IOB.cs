@@ -15,9 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
-
-using System;
-using PERQemu.IO.Z80.IOB;
+using PERQemu.IO.HardDisk;
 
 namespace PERQemu.IO
 {
@@ -28,11 +26,21 @@ namespace PERQemu.IO
     /// </summary>
     public class IOB : IIODevice
     {
-        public IOB()
+        public IOB(PERQSystem system)
         {
-            _hardDiskController = HardDisk.ShugartDiskController.Instance;
-            _z80System = Z80System.Instance;
-            Reset();
+            _hardDiskController = new ShugartDiskController(system);
+            //_z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
+            _z80System = new PERQemu.IO.Z80_new.Z80System(system);
+        }
+
+        public IZ80System Z80System
+        {
+            get { return _z80System; }
+        }
+
+        public ShugartDiskController ShugartDiskController
+        {
+            get { return _hardDiskController; }
         }
 
         public void Reset()
@@ -43,6 +51,19 @@ namespace PERQemu.IO
 #if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.IOState, "IOB: Board reset.");
 #endif
+        }
+
+        // TODO: Move these next three to some generic interface when we implement the EIO, etc.
+        public bool SupportsAsync => _z80System.SupportsAsync;
+
+        public void RunAsync()
+        {
+            _z80System.RunAsync();
+        }
+
+        public void Stop()
+        {
+            _z80System.Stop();
         }
 
         public bool HandlesPort(byte ioPort)
@@ -99,7 +120,7 @@ namespace PERQemu.IO
             {
                 case 0xc1:  // Shugart command/control register & Z80 status register
                     _hardDiskController.LoadCommandRegister(value);
-                    Z80System.Instance.LoadStatus(value);
+                    _z80System.WriteStatus(value);
                     break;
 
                 case 0xc2:  // Shugart Head register
@@ -107,7 +128,7 @@ namespace PERQemu.IO
                     break;
 
                 case 0xc7:  // Z80 data port
-                    Z80System.Instance.LoadData(value);
+                    _z80System.WriteData(value);
                     break;
 
                 case 0xc8:  // Shugart Cylinder/Sector register
@@ -154,16 +175,15 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Clocks subdevices
+        /// Runs the Z80, synchronously.
         /// </summary>
-        public void Clock()
+        public uint Clock()
         {
-            _hardDiskController.Clock();
-            Z80System.Instance.Clock();
+            return _z80System.SingleStep();
         }
 
         private HardDisk.ShugartDiskController _hardDiskController;
-        private Z80System _z80System;
+        private IZ80System _z80System;
 
         /// <summary>
         /// Ports handled by the IOB board.

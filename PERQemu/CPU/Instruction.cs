@@ -157,6 +157,7 @@ namespace PERQemu.CPU
         public Condition CND;       // 4 bits
         public JumpOperation JMP;   // 4 bits
 
+        // Extra precomputed constants
         public int LongConstant;
         public ushort VectorDispatchAddress;
         public ushort NextAddress;

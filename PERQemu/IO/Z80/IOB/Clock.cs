@@ -37,8 +37,9 @@ namespace PERQemu.IO.Z80.IOB
     /// </summary>
     public sealed class Clock : IZ80Device
     {
-        public Clock()
+        public Clock(PERQSystem system)
         {
+            _system = system;
             Reset();
         }
 
@@ -102,7 +103,7 @@ namespace PERQemu.IO.Z80.IOB
             if (_enabled)
             {
                 int tickInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);
-                int elapsed = ((Z80System.Instance.Clocks() - _lastTick) / tickInterval);
+                int elapsed = (((Z80System)(_system.IOB.Z80System)).Clocks() - _lastTick) / tickInterval;
 
                 fifo.Enqueue(Z80System.SOM);                    // SOM
                 fifo.Enqueue((byte)Z80toPERQMessage.ClockData); // Clock data message type
@@ -110,7 +111,7 @@ namespace PERQemu.IO.Z80.IOB
 #if TRACING_ENABLED
                 Console.WriteLine("Clock: jiffies since last Poll: {0} (interval {1})", elapsed, tickInterval); // fixme
 #endif
-                _lastTick = Z80System.Instance.Clocks();
+                _lastTick = ((Z80System)(_system.IOB.Z80System)).Clocks();
             }
         }
 
@@ -123,5 +124,7 @@ namespace PERQemu.IO.Z80.IOB
         private int _messageIndex;
         private bool _enabled = false;
         private int _lastTick;
+
+        private PERQSystem _system;
     }
 }

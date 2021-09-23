@@ -26,14 +26,17 @@ namespace PERQemu.IO.Z80.IOB
 {
 
     /// <summary>
-    /// Represents a virtual PERQ floppy drive (w/floppy disk).
+    /// Represents a virtual PERQ floppy controller + drive (w/floppy disk).
     /// This performs the various actions the drive is responsible for.
+    /// Portions of this code need a severe rewrite, in particular it makes a lot of
+    /// assumptions about the format (which 99.999% of the time will be correct, but still...)
     /// </summary>
     public sealed class FloppyController : IZ80Device
     {
 
-        public FloppyController()
+        public FloppyController(Z80System z80System)
         {
+            _z80System = z80System;
             _loaded = false;
             Reset();
         }
@@ -69,48 +72,13 @@ namespace PERQemu.IO.Z80.IOB
             // if it is null, we create a new, empty image.
             if (path != null)
             {
-                // This is a hacky way to determine the image type -- based on the file size!
-                // This is terrible.
-                // TODO: Splice in new ".pfd" format floppy header - similar to the hard disk
-                //       format, determines geometry and filesystem type.
-                FileInfo file = new FileInfo(path);
 
-                DiskGeometry geometry = DiskGeometry.FloppyDSSD;
-
-                switch (file.Length)
-                {
-                    case 1025024:
-                        geometry = DiskGeometry.FloppyDSDD;
-                        break;
-
-                    case 512512:
-                        geometry = DiskGeometry.FloppyDSSD;     // or... SSDD?
-                        break;
-
-                    case 256256:
-                        geometry = DiskGeometry.FloppySSSD;
-                        break;
-
-                    default:
-                        throw new InvalidOperationException("Unrecognized disk format.");
-                }
-
-                _disk = new RawFloppyDisk(geometry);
-                FileStream fs = new FileStream(path, FileMode.Open);
-                _disk.Load(fs);
-                fs.Close();
+                _disk = new FloppyDisk(path);
                 _loaded = true;
-
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.FloppyDisk,
-                              "Loaded floppy geometry is {0}/{1}/{2} with sector size {3}",
-                              geometry.Cylinders, geometry.Tracks, geometry.Sectors, geometry.SectorSize);
-#endif
             }
             else
             {
-                _disk = new RawFloppyDisk(DiskGeometry.FloppyDSSD);
+                _disk = new FloppyDisk();
                 _loaded = true;
             }
         }
@@ -120,9 +88,7 @@ namespace PERQemu.IO.Z80.IOB
         {
             if (_disk != null && _loaded)
             {
-                FileStream fs = new FileStream(path, FileMode.OpenOrCreate);
-                _disk.Save(fs);
-                fs.Close();
+                _disk.Save(path);
             }
             else
             {
@@ -229,8 +195,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
 
                 // Return invalid boot message
-                Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
-                Z80System.Instance.FIFO.Enqueue(0x12);      // Error during boot
+                _z80System.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
+                _z80System.FIFO.Enqueue(0x12);      // Error during boot
                 return;
             }
 
@@ -238,7 +204,7 @@ namespace PERQemu.IO.Z80.IOB
             // 55 AA, if not it's not a boot sector
             Sector boot = _disk.GetSector(1, 0, 0);
 
-            if (boot.ReadByte(0) != 0x55 || boot.ReadByte(1) != 0xaa)
+            if (boot.Data[0] != 0x55 || boot.Data[1] != 0xaa)
             {
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
@@ -246,8 +212,8 @@ namespace PERQemu.IO.Z80.IOB
 #endif
 
                 // Return invalid boot data message
-                Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
-                Z80System.Instance.FIFO.Enqueue(0x12);      // Error during boot
+                _z80System.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
+                _z80System.FIFO.Enqueue(0x12);      // Error during boot
             }
 
             int cylinder = 1;
@@ -265,18 +231,19 @@ namespace PERQemu.IO.Z80.IOB
 
             for (int sectorCount = 0; sectorCount < 96; sectorCount++)
             {
+                Sector s = _disk.GetSector(cylinder, track, sector);
                 // Add start of message:
                 // We're sending 128 bytes (1 sector) at a time
-                Z80System.Instance.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
-                Z80System.Instance.FIFO.Enqueue(0x13);      // Valid boot data
-                Z80System.Instance.FIFO.Enqueue((byte)_disk.DiskGeometry.SectorSize); // byte count
+                _z80System.FIFO.Enqueue(0x55);      // SOM for floppy boot is different
+                _z80System.FIFO.Enqueue(0x13);      // Valid boot data
+                _z80System.FIFO.Enqueue((byte)s.Data.Length); // byte count
 
-                Sector s = _disk.GetSector(cylinder, track, sector);
+                
 
-                for (int b = 0; b < _disk.DiskGeometry.SectorSize; b++)
+                for (int b = 0; b < s.Data.Length; b++)
                 {
-                    byte data = s.ReadByte(b);
-                    Z80System.Instance.FIFO.Enqueue(data);  // Data byte
+                    byte data = s.Data[b];
+                    _z80System.FIFO.Enqueue(data);  // Data byte
 
                     if (!checksumBit)
                     {
@@ -294,12 +261,12 @@ namespace PERQemu.IO.Z80.IOB
                 }
 
                 sector++;
-                if (sector >= _disk.DiskGeometry.Sectors)
+                if (sector >= _disk.GetTrack(cylinder, track).SectorCount)
                 {
                     sector = 0;
 
                     cylinder++;
-                    if (cylinder >= _disk.DiskGeometry.Cylinders)
+                    if (cylinder >= _disk.CylinderCount)
                     {
 #if TRACING_ENABLED
                         if (Trace.TraceOn)
@@ -336,15 +303,15 @@ namespace PERQemu.IO.Z80.IOB
             switch (_messageData[1])
             {
                 case 0:
-                    _setDensity = Density.Single;
+                    _setFormat = PhysicalDisk.Format.FM500;
                     break;
 
                 case 0x40:
-                    _setDensity = Density.Double;
+                    _setFormat = PhysicalDisk.Format.MFM500;
                     break;
 
                 default:
-                    _setDensity = Density.Invalid;
+                    _setFormat = PhysicalDisk.Format.Invalid;
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -423,7 +390,7 @@ namespace PERQemu.IO.Z80.IOB
 
             bool error = false;
 
-            if (!_loaded || _cylinder > _disk.DiskGeometry.Cylinders || _head > _disk.DiskGeometry.Tracks)
+            if (!_loaded || _cylinder > _disk.CylinderCount || _head > (_disk.IsSingleSided ? 0 : 1))
             {
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
@@ -447,9 +414,9 @@ namespace PERQemu.IO.Z80.IOB
             //  SOM
             //  0x11 (floppy done)
             //  0 for success, 1 for failure.
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
-            Z80System.Instance.FIFO.Enqueue(error ? (byte)1 : (byte)0);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
+            _z80System.FIFO.Enqueue(error ? (byte)1 : (byte)0);
 
             // Set up the NEC status registers.
             // 2 registers for a seek operation
@@ -475,10 +442,10 @@ namespace PERQemu.IO.Z80.IOB
             bool error = false;
 
             if (!_loaded ||
-                cyl > _disk.DiskGeometry.Cylinders ||
-                head > _disk.DiskGeometry.Tracks ||
-                sec > _disk.DiskGeometry.Sectors ||
-                _setDensity != GetDiskDensity())
+                cyl > _disk.CylinderCount ||
+                head > (_disk.IsSingleSided ? 0 : 1) ||
+                sec > _disk.GetTrack(cyl, head).SectorCount ||
+                _setFormat != _disk.GetSector(cyl, head, sec - 1).Format)
             {
 #if TRACING_ENABLED
                 if (Trace.TraceOn)
@@ -497,36 +464,39 @@ namespace PERQemu.IO.Z80.IOB
 #endif
             }
 
-            // Set our busy time based on byte count... should be way longer...
-            _busyClocks = (error ? 5 : (int)_disk.DiskGeometry.SectorSize);
-
             // Message format is:
             //  SOM
             //  5 (Floppy Data)
             //  0 for success, 1 for error
             //  byte count
             //  data
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyData);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyData);
+
+            Sector sector = null;
 
             if (error)
             {
-                Z80System.Instance.FIFO.Enqueue(1);     // Indicate an error
-                Z80System.Instance.FIFO.Enqueue(1);     // Length (can't use 0 as the PERQ interprets that as 256)
-                Z80System.Instance.FIFO.Enqueue(0);     // Bogus data
+                _z80System.FIFO.Enqueue(1);     // Indicate an error
+                _z80System.FIFO.Enqueue(1);     // Length (can't use 0 as the PERQ interprets that as 256)
+                _z80System.FIFO.Enqueue(0);     // Bogus data
+                _busyClocks = 5;
             }
             else
             {
-                Z80System.Instance.FIFO.Enqueue(0);     // No error
-                Z80System.Instance.FIFO.Enqueue((byte)_disk.DiskGeometry.SectorSize);  // A full sector
-
                 // Read the sector in
-                Sector sectorData = _disk.GetSector(cyl, head, sec-1);
+                sector = _disk.GetSector(cyl, head, sec - 1);
 
-                for (int b = 0; b < _disk.DiskGeometry.SectorSize; b++)
+                _z80System.FIFO.Enqueue(0);     // No error
+                _z80System.FIFO.Enqueue((byte)sector.Data.Length);  // A full sector
+
+                // Set our busy time based on byte count... should be way longer...
+                _busyClocks = (int)sector.Data.Length;
+
+                for (int b = 0; b < sector.Data.Length; b++)
                 {
-                    byte data = sectorData.ReadByte(b);
-                    Z80System.Instance.FIFO.Enqueue(data);
+                    byte data = sector.Data[b];
+                    _z80System.FIFO.Enqueue(data);
                 }
             }
 
@@ -543,16 +513,18 @@ namespace PERQemu.IO.Z80.IOB
                 (error ? StatusRegister0.FlpIntrCode0 : 0) |    // Interrupt code (0 = ok, 1 = unsuccessful command)
                 (0);                                            // Same (high bit not set for our purposes)
 
+            // TODO: if cyl,head,sec are out of range, bad things will happen.
+
             StatusRegister1 reg1 =
-                (_setDensity != GetDiskDensity() ? StatusRegister1.FlpMissAddr : 0 ) |  // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister1.FlpMissAddr : 0 ) |  // Missing address mark
                 (0) |                                                                   // Not writeable
                 (0) |                                                                   // No data
                 (0) |                                                                   // Overrun
                 (0) |                                                                   // Data error
-                (_disk != null && sec > _disk.DiskGeometry.Sectors ? StatusRegister1.FlpEndCylinder : 0); // end of cyl
+                (_disk != null && sec > _disk.GetTrack(cyl, head).SectorCount ? StatusRegister1.FlpEndCylinder : 0); // end of cyl
 
             StatusRegister2 reg2 =
-                (_setDensity != GetDiskDensity() ? StatusRegister2.FlpDataMissAddr : 0) |  // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister2.FlpDataMissAddr : 0) |  // Missing address mark
                 (0) |                                                                   // Bad cylinder
                 (0) |                                                                   // Wrong cylinder
                 (0);                                                                    // Data error in data
@@ -563,7 +535,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[3] = (byte)cyl;
             _necStatus[4] = (byte)head;
             _necStatus[5] = (byte)sec;
-            _necStatus[6] = _disk != null ? (byte)_disk.DiskGeometry.SectorSize : (byte)0;
+            _necStatus[6] = _disk != null && sector != null ? (byte)sector.Data.Length : (byte)0;
         }
 
 
@@ -573,10 +545,10 @@ namespace PERQemu.IO.Z80.IOB
             bool error = false;
 
             if (!_loaded ||
-                cyl > _disk.DiskGeometry.Cylinders ||
-                head > _disk.DiskGeometry.Tracks ||
-                sec > _disk.DiskGeometry.Sectors ||
-                _setDensity != GetDiskDensity())
+                cyl > _disk.CylinderCount ||
+                head > (_disk.IsSingleSided ? 1 : 2) ||
+                sec > _disk.GetTrack(cyl, head).SectorCount ||
+                _setFormat != _disk.GetSector(cyl, head, sec - 1).Format)
             {
                 error = true;
 
@@ -599,21 +571,21 @@ namespace PERQemu.IO.Z80.IOB
             _busyClocks = (error ? 5 : count);
 
             // Read the sector in.
-            Sector sectorData = _disk.GetSector(cyl, head, sec - 1);
+            Sector sector = _disk.GetSector(cyl, head, sec - 1);
 
             // The starting offset for the data is at index 5 of the message data
             for (int b = 0; b < count; b++)
             {
-                sectorData.Data[b] = _messageData[5 + b];
+                sector.Data[b] = _messageData[5 + b];
             }
 
             // Message out format:
             //  SOM
             //  0x11 (floppy done)
             //  0 for success, 1 for failure.
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
-            Z80System.Instance.FIFO.Enqueue(error ? (byte)1 : (byte)0);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
+            _z80System.FIFO.Enqueue(error ? (byte)1 : (byte)0);
 
             // Set up the NEC status registers.
             // 7 registers for a write operation
@@ -629,15 +601,15 @@ namespace PERQemu.IO.Z80.IOB
                 (0);                                            // Same (high bit not set for our purposes)
 
             StatusRegister1 reg1 =
-                (_setDensity != GetDiskDensity() ? StatusRegister1.FlpMissAddr : 0) |   // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister1.FlpMissAddr : 0) |   // Missing address mark
                 (0) |                                                                   // Not writeable
                 (0) |                                                                   // No data
                 (0) |                                                                   // Overrun
                 (0) |                                                                   // Data error
-                (_disk != null && sec > _disk.DiskGeometry.Sectors ? StatusRegister1.FlpEndCylinder : 0); // End of cyl
+                (_disk != null && sec > _disk.GetTrack(cyl, head).SectorCount ? StatusRegister1.FlpEndCylinder : 0); // End of cyl
 
             StatusRegister2 reg2 =
-                (_setDensity != GetDiskDensity() ? StatusRegister2.FlpDataMissAddr : 0) | // Missing address mark
+                (sector == null || _setFormat != sector.Format ? StatusRegister2.FlpDataMissAddr : 0) | // Missing address mark
                 (0) |                                                                   // Bad cylinder
                 (0) |                                                                   // Wrong cylinder
                 (0);                                                                    // Data error in data
@@ -648,7 +620,7 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[3] = (byte)cyl;
             _necStatus[4] = (byte)head;
             _necStatus[5] = (byte)sec;
-            _necStatus[6] = _disk != null ? (byte)_disk.DiskGeometry.SectorSize : (byte)0;
+            _necStatus[6] = _disk != null && sector != null ? (byte)sector.Data.Length : (byte)0;
         }
 
 
@@ -658,9 +630,9 @@ namespace PERQemu.IO.Z80.IOB
             bool error = false;
 
             if (!_loaded ||
-                cyl > _disk.DiskGeometry.Cylinders ||
-                head > _disk.DiskGeometry.Tracks ||
-                sec > _disk.DiskGeometry.Sectors)
+                cyl > _disk.CylinderCount ||
+                head > (_disk.IsSingleSided ? 0 : 1) ||
+                sec > _disk.GetTrack(cyl, head).SectorCount)
             {
                 error = true;
 
@@ -680,24 +652,23 @@ namespace PERQemu.IO.Z80.IOB
             }
 
             // Formatting should take way longer...
-            _busyClocks = (error ? 5 : (int)_disk.DiskGeometry.SectorSize);
+            int sectorSize = _setFormat == PhysicalDisk.Format.FM500 ? 128 : 256;
+            _busyClocks = error ? 5 : sectorSize;
 
-            // Read the sector in.
-            Sector sectorData = _disk.GetSector(cyl, head, sec - 1);
-
-            // The starting offset for the data is at index 5 of the message data
-            for (int b = 0; b < _disk.DiskGeometry.SectorSize; b++)
-            {
-                sectorData.Data[b] = 0xff;
-            }
+            //
+            // Note:
+            // Even though the message includes a sector number, we're really formatting an entire track.
+            // (the controller can only format an entire track at a time).
+            //
+            _disk.FormatTrack(_setFormat, cyl, head, 26, sectorSize);
 
             // Message out format:
             //  SOM
             //  0x11 (floppy done)
             //  0 for success, 1 for failure.
-            Z80System.Instance.FIFO.Enqueue(Z80System.SOM);
-            Z80System.Instance.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
-            Z80System.Instance.FIFO.Enqueue(error ? (byte)1 : (byte)0);
+            _z80System.FIFO.Enqueue(Z80System.SOM);
+            _z80System.FIFO.Enqueue((byte)Z80toPERQMessage.FloppyDone);
+            _z80System.FIFO.Enqueue(error ? (byte)1 : (byte)0);
 
             // Set up the NEC status registers.
             // 7 registers for a format operation
@@ -718,7 +689,7 @@ namespace PERQemu.IO.Z80.IOB
                 (0) |                                           // No data
                 (0) |                                           // Overrun
                 (0) |                                           // Data error
-                (_disk != null && sec > _disk.DiskGeometry.Sectors ? StatusRegister1.FlpEndCylinder : 0); // end of cyl
+                (0);                                            // end of cyl
 
             StatusRegister2 reg2 =
                 (0) |                                           // Missing address mark
@@ -731,25 +702,9 @@ namespace PERQemu.IO.Z80.IOB
             _necStatus[2] = (byte)reg2;
             _necStatus[3] = (byte)cyl;
             _necStatus[4] = (byte)head;
-            _necStatus[5] = (byte)sec;
-            _necStatus[6] = _disk != null ? (byte)_disk.DiskGeometry.SectorSize : (byte)0;
+            _necStatus[5] = sec;
+            _necStatus[6] = 0;
 
-        }
-
-        /// <summary>
-        /// Returns the density of the loaded disk (NOT necessarily the density
-        /// that the PERQ has specified.)
-        /// </summary>
-        private Density GetDiskDensity()
-        {
-            if (_disk == null)
-            {
-                return Density.Invalid;
-            }
-            else
-            {
-                return _disk.DiskGeometry.SectorSize == 128 ? Density.Single : Density.Double;
-            }
         }
 
         private enum FloppyCommand
@@ -758,13 +713,6 @@ namespace PERQemu.IO.Z80.IOB
             Write = 0x2,
             Format = 0x3,
             Seek = 0x4
-        }
-
-        private enum Density
-        {
-            Invalid = 0,    // TODO: make these agree with PERQfloppy.pl
-            Single,
-            Double
         }
 
         //
@@ -817,7 +765,7 @@ namespace PERQemu.IO.Z80.IOB
 
         private int _busyClocks;
 
-        private PhysicalDisk.PhysicalDisk _disk;
+        private FloppyDisk _disk;
         private bool _loaded;
 
         // Current read/write position
@@ -825,9 +773,11 @@ namespace PERQemu.IO.Z80.IOB
         private int _head;
 
         // Density type specified by the PERQ
-        private Density _setDensity;
+        private Format _setFormat;
 
         private byte[] _messageData;
         private int _messageIndex;
+
+        private Z80System _z80System;
     }
 }

@@ -17,14 +17,11 @@
 //
 
 using System;
-using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
 using PERQemu.CPU;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
-using PERQemu.IO.Z80.IOB;
-using PERQemu.IO.HardDisk;
+using PERQemu.IO;
 
 namespace PERQemu
 {
@@ -34,10 +31,10 @@ namespace PERQemu
         Run = 0,
         SingleStep,
         RunInst,
+        RunZ80Inst,
         Debug,
         DebugScript,
         Reset,
-        Pause,
         Exit,
     }
 
@@ -47,20 +44,30 @@ namespace PERQemu
     /// </summary>
     public sealed class PERQSystem
     {
-        private PERQSystem()
+        public PERQSystem()
         {
+            _scheduler = new Scheduler(170);        // 170ns per PERQ CPU cycle; scheduler must be clocked with PERQ CPU.
+
+            _memoryBoard = new MemoryBoard(this);
+            _iob = new IOB(this);
+            _oio = new OIO();
+            _display = new Display.Display(this);
+            _videoController = new Display.VideoController(this);
+
+            _perqCPU = new PERQCpu(this);
+
             // Start off debugging
             _state = RunState.Debug;
-        }
+            _debugger = new Debugger.Debugger(this);
 
-        public static PERQSystem Instance
-        {
-            get { return _instance; }
+            // Assume async mode if the IOB implementation supports it.
+            // Might want to select sync mode on uniprocessor systems?
+            _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
         }
 
         public void Shutdown()
         {
-            Display.Display.Instance.Shutdown();
+            _display.Shutdown();
         }
 
         public void Execute(string[] args)
@@ -88,53 +95,98 @@ namespace PERQemu
                 switch (_state)
                 {
                     case RunState.Run:
-                    case RunState.SingleStep:
-                    case RunState.RunInst:
-                        try
+                        if (_z80ExecutionMode == ExecutionMode.Asynchronous)
                         {
-                            RunState nextState = PERQCpu.Instance.Execute(_state);
+                            // Let the IOB run in its own thread.
+                            _iob.RunAsync();
 
-                            // If we were broken into during execution, we should honor it.
-                            if (_state != RunState.Debug)
+                            // Run the PERQ CPU until manually stopped
+                            RunGuarded(() =>
                             {
-                                _state = nextState;
-                            }
+                                while (_state == RunState.Run)
+                                {
+                                    _scheduler.Clock();
+                                    _perqCPU.Execute();
+                                }
+                            });
+
+                            // Stop the IOB before continuing.
+                            _iob.Stop();
                         }
-                        catch (PowerOffException)
+                        else
                         {
-                            // This is thrown when the microcode tells the PERQ to power down.
-                            // Catch here and tell the user.  Go back to debug state.
-                            _state = RunState.Debug;
-                            _debugMessage = "The PERQ has powered itself off.  Use the 'reset' command to restart the PERQ.";
+                            // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
+                            RunGuarded(() =>
+                            {
+                                while (_state == RunState.Run)
+                                {
+                                    // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                                    // the number of microinstructions equivalent to that wall-clock time.
+                                    uint clocks = _iob.Clock();
+
+                                    // TODO: Fudge the PERQ ratio here, need to work out the actual math.
+                                    clocks = (uint)(clocks * 2.4);
+
+                                    RunState nextState = _state;
+                                    do
+                                    {
+                                        _scheduler.Clock();
+                                        _perqCPU.Execute();
+                                        clocks--;
+                                    } while (clocks > 0);
+                                }
+                            });
                         }
-                        catch (Exception e)
+                        break;
+                    case RunState.SingleStep:
+                    case RunState.RunZ80Inst:
+                        // For now:
+                        // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                        // one instruction.
+                        // Timing-wise this is very inaccurate.  It would be nice to allow single-stepping either
+                        // processor and have the timings be correct.
+                        //
+                        RunGuarded(() =>
                         {
-                            // The emulation has hit a serious error.
-                            // Enter the debugger.
+                            _iob.Clock();
+                            _scheduler.Clock();
+                            _perqCPU.Execute();
+
+                            // Drop back into debugging mode after running a single step.
                             _state = RunState.Debug;
-                            _debugMessage = String.Format("Break due to internal emulation error: {0}.  System state may be inconsistent.", e.Message);
-#if DEBUG
-                            Console.WriteLine(Environment.StackTrace);
-#endif
-                        }
+                        });
+                        
+                        break;
+
+                    case RunState.RunInst:  // Run a single QCode
+                        // For now:
+                        // As above, except we execute PERQ CPU instructions until the start of the next QCode.
+                        RunGuarded(() =>
+                        {
+                            do
+                            {
+                                _iob.Clock();
+                                _scheduler.Clock();
+                                _perqCPU.Execute();
+
+                            } while (!_perqCPU.IncrementBPC);
+
+                            // Drop back into debugging mode now.
+                            _state = RunState.Debug;
+                        });
                         break;
 
                     case RunState.Debug:
-                        // Enter the debugger.  On return from debugger, switch to the specified state
-                        _state = PERQemu.Debugger.Debugger.Instance.Enter(_debugMessage);
+                        // Enter the debugger.  On return from debugger, switch to the specified state.
+                        _state = _debugger.Enter(_debugMessage);
                         break;
 
                     case RunState.DebugScript:
-                        _state = PERQemu.Debugger.Debugger.Instance.RunScript(args[0]);
-                        break;
-
-                    case RunState.Pause:
-                        // Do nothing, just sleep so as not to starve the CPU in a busy loop.
-                        System.Threading.Thread.Sleep(10);
+                        _state = _debugger.RunScript(args[0]);
                         break;
 
                     case RunState.Reset:
-                        PERQCpu.Instance.Reset();
+                        Reset();
                         _state = RunState.Debug;
                         _debugMessage = "";
                         break;
@@ -154,15 +206,88 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Static.  Allows overriding the default OS boot character.
+        /// Allows overriding the default OS boot character.
         /// (This is a key that, when held down at boot time will cause the PERQ microcode to
         /// select a different OS to boot.)
         /// </summary>
-        public static byte BootChar
+        public byte BootChar
         {
             get { return _bootChar; }
             set { _bootChar = value; }
         }
+
+        public Scheduler Scheduler
+        {
+            get { return _scheduler; }
+        }
+
+        public PERQCpu CPU
+        {
+            get { return _perqCPU; }
+        }
+
+        public MemoryBoard MemoryBoard
+        {
+            get { return _memoryBoard; }
+        }
+
+        public IOB IOB
+        {
+            get { return _iob; }
+        }
+
+        public OIO OIO
+        {
+            get { return _oio; }
+        }
+
+        public Display.Display Display
+        {
+            get { return _display; }
+        }
+
+        public Display.VideoController VideoController
+        {
+            get { return _videoController; }
+        }
+
+        public Debugger.Debugger Debugger
+        {
+            get { return _debugger; }
+        }
+
+        private delegate void RunDelegate();
+
+        /// <summary>
+        /// Executes the specified emulation delegate inside a try/catch block that properly handles
+        /// PowerDown and other exceptions to return to debug state.
+        /// </summary>
+        /// <param name="execute"></param>
+        private void RunGuarded(RunDelegate execute)
+        {
+            try
+            {
+                execute();
+            }
+            catch (PowerOffException)
+            {
+                // This is thrown when the microcode tells the PERQ to power down.
+                // Catch here and tell the user.  Go back to debug state.
+                _state = RunState.Debug;
+                _debugMessage = "The PERQ has powered itself off.  Use the 'reset' command to restart the PERQ.";
+            }
+            catch (Exception e)
+            {
+                // The emulation has hit a serious error.
+                // Enter the debugger.
+                _state = RunState.Debug;
+                _debugMessage = String.Format("Break due to internal emulation error: {0}.  System state may be inconsistent.", e.Message);
+#if DEBUG
+                Console.WriteLine(Environment.StackTrace);
+#endif
+            }
+        }
+            
 
         #region Debugger Commands
 
@@ -188,7 +313,7 @@ namespace PERQemu
                     throw new ArgumentOutOfRangeException("Invalid device name. Expected COMn: or RSX:");
                 }
 
-                Z80System.Instance.SetSerialPort(dev);
+                _iob.Z80System.SetSerialPort(dev);
             }
             catch (Exception e)
             {
@@ -199,13 +324,13 @@ namespace PERQemu
         [DebugFunction("show rs232", "Displays the current rs232 device")]
         private void ShowSerialPort()
         {
-            Console.WriteLine("RS232 port is set to {0}", Z80System.Instance.GetSerialPort());
+            Console.WriteLine("RS232 port is set to {0}", _iob.Z80System.GetSerialPort());
         }
 
         [DebugFunction("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
         private void CreateFloppyDisk()
         {
-            Z80System.Instance.LoadFloppyDisk(null);
+            _iob.Z80System.LoadFloppyDisk(null);
             Console.WriteLine("Created.");
         }
 
@@ -214,7 +339,7 @@ namespace PERQemu
         {
             try
             {
-                Z80System.Instance.LoadFloppyDisk(imagePath);
+                _iob.Z80System.LoadFloppyDisk(imagePath);
                 Console.WriteLine("Loaded.");
             }
             catch (Exception e)
@@ -226,7 +351,7 @@ namespace PERQemu
         [DebugFunction("unload floppy", "Unmounts a floppy disk image")]
         private void UnloadFloppy()
         {
-            Z80System.Instance.UnloadFloppyDisk();
+            _iob.Z80System.UnloadFloppyDisk();
         }
 
         [DebugFunction("save floppy", "Saves the current in memory floppy disk to an image file")]
@@ -234,7 +359,7 @@ namespace PERQemu
         {
             try
             {
-                Z80System.Instance.SaveFloppyDisk(imagePath);
+                _iob.Z80System.SaveFloppyDisk(imagePath);
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)
@@ -246,7 +371,7 @@ namespace PERQemu
         [DebugFunction("create harddisk", "Creates and mounts a new, unformatted hard disk image")]
         private void CreateHardDisk()
         {
-            ShugartDiskController.Instance.LoadImage(null);
+            _iob.ShugartDiskController.LoadImage(null);
             Console.WriteLine("Created.");
         }
 
@@ -255,7 +380,7 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.IO.HardDisk.ShugartDiskController.Instance.LoadImage(imagePath);
+                _iob.ShugartDiskController.LoadImage(imagePath);
                 Console.WriteLine("Loaded.");
             }
             catch (Exception e)
@@ -269,7 +394,7 @@ namespace PERQemu
         {
             try
             {
-                ShugartDiskController.Instance.SaveImage(imagePath);
+                _iob.ShugartDiskController.SaveImage(imagePath);
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)
@@ -284,7 +409,7 @@ namespace PERQemu
             string outputPath = filePath + ".jpg";
             try
             {
-                Display.Display.Instance.SaveScreenshot(outputPath);
+                _display.SaveScreenshot(outputPath);
             }
             catch (Exception e)
             {
@@ -298,7 +423,7 @@ namespace PERQemu
             BootChar = (byte)bootChar;
         }
 
-        [DebugFunction("show bootchar", "Sets the boot character (which selects the OS to boot)")]
+        [DebugFunction("show bootchar", "Shows the boot character.")]
         private void ShowBootChar()
         {
             Console.Write("Bootchar is ");
@@ -310,15 +435,72 @@ namespace PERQemu
             {
                 Console.WriteLine("unset");
             }
-        }       
+        }
+
+        [DebugFunction("set z80 execution mode", "Sets the execution mode for the Z80 coprocessor on the IO board.")]
+        private void SetZ80ExecutionMode(ExecutionMode mode)
+        {
+            if (mode == ExecutionMode.Asynchronous &&
+                !_iob.Z80System.SupportsAsync)
+            {
+                Console.WriteLine("The current implementation does not support asynchronous execution.");
+                _z80ExecutionMode = ExecutionMode.Synchronous;
+            }
+            else
+            {
+                _z80ExecutionMode = mode;
+            }
+        }
+
+        [DebugFunction("show z80 execution mode", "Shows the currently set execution mode for the Z80 coprocessor on the IO board.")]
+        private void ShowZ80ExecutionMode()
+        {
+            Console.WriteLine(_z80ExecutionMode);
+        }
 
         #endregion
 
+        private void Reset()
+        {
+            _scheduler.Reset();
+            _perqCPU.Reset();
+
+            // TODO: anything else here need to be reset?
+
+            //
+            // If the user has specified an alternate boot character, kick off this workitem to
+            // automagically press it up until DDS 154.
+            //
+            if (BootChar != 0)
+            {
+                _scheduler.Schedule((ulong)(250.0 * Conversion.MsecToNsec), BootCharCallback);
+            }
+        }
+
+        private void BootCharCallback(ulong skewNsec, object context)
+        {
+            if (BootChar != 0 && CPU.DDS < 154)
+            {
+                // Send the key:
+                _iob.Z80System.Keyboard.QueueInput(BootChar);
+
+                // And do it again.
+                _scheduler.Schedule((ulong)(250.0 * Conversion.MsecToNsec), BootCharCallback);
+            }
+        }
+
         private RunState _state;
+        private ExecutionMode _z80ExecutionMode;
         private string _debugMessage;
         private static byte _bootChar;
-
-        private static PERQSystem _instance = new PERQSystem();
+        private Scheduler _scheduler;
+        private PERQCpu _perqCPU;
+        private MemoryBoard _memoryBoard;
+        private IOB _iob;
+        private OIO _oio;
+        private Display.Display _display;
+        private Display.VideoController _videoController;
+        private Debugger.Debugger _debugger;
     }
 }
 
