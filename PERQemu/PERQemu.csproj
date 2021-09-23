@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="12.0">
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -134,16 +134,10 @@
     <Compile Include="Debugger\DebuggableAttribute.cs" />
     <Compile Include="Debugger\Z80Debugger.cs" />
     <Compile Include="HostInterface\KeyboardMap.cs" />
-    <Compile Include="CPU\ALU.cs" />
-    <Compile Include="CPU\CallStack.cs" />
-    <Compile Include="CPU\CPU.cs" />
-    <Compile Include="CPU\ExtendedRegister.cs" />
-    <Compile Include="CPU\Instruction.cs" />
     <Compile Include="Debugger\Debugger.cs" />
     <Compile Include="Debugger\DebuggerPrompt.cs" />
     <Compile Include="Debugger\DebugAttributes.cs" />
     <Compile Include="Debugger\Disassembler.cs" />
-    <Compile Include="CPU\Shifter.cs" />
     <Compile Include="Display\Display.cs" />
     <Compile Include="Display\VideoController.cs" />
     <Compile Include="IO\GPIB\BitPadOne.cs" />
@@ -601,6 +595,9 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup />
+  <ItemGroup>
+    <Folder Include="CPU\" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
