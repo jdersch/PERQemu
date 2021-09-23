@@ -17,7 +17,6 @@
 //
 
 using System;
-using System.IO;
 using System.Text;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -102,7 +101,7 @@ namespace PERQemu.Processor
             _rasterOp.Reset();
             _usequencer.Reset();
 
-            _memory.Reset();            // fixme  should this be here?
+            _memory.Reset();            // fixme  should this really be here?
 
             // Clear the op file
             for (int i = 0; i < 16; i++)
@@ -128,7 +127,7 @@ namespace PERQemu.Processor
         }
 
         // "Real" clock speed in cycles/sec (based on 170ns cycle time).  Approx. 5.88Mhz.
-        public static readonly int Frequency = 5882353;
+        public static readonly int Frequency = 5882353; // todo to be removed
 
         //
         // Z80/IO board sampling factor.  The PERQ was roughly 2.4x faster in clock rate
@@ -137,7 +136,7 @@ namespace PERQemu.Processor
         // good range?) and expose it so the "clock" hardware can simulate the 60Hz line
         // frequency "jiffy clock" more accurately.  Cuz why not.
         //
-        public static readonly int IOFudge = 8;
+        public static readonly int IOFudge = 8;     // todo to be removed
 
         /// <summary>
         /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
@@ -159,7 +158,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Runs the PERQ microengine for one microcycle.
         /// </summary>
-        public RunState Execute(RunState currentState)
+        public void Execute()
         {
 
             // Decode the next instruction
@@ -210,12 +209,7 @@ namespace PERQemu.Processor
                 // when microcode is being loaded!  Clear the hold flag to continue.
                 _ustore.Hold = false;
 
-                // So we can single step through aborts for debugging
-                if (currentState == RunState.SingleStep)
-                {
-                    return RunState.Debug;
-                }
-                return currentState;
+                return;
             }
 
 
@@ -243,7 +237,6 @@ namespace PERQemu.Processor
             {
                 _bpc++;
                 _incrementBPC = false;
-
 
                 Trace.Log(LogType.OpFile, "OpFile: BPC incremented to {0:x1}", BPC);
             }
@@ -307,16 +300,6 @@ namespace PERQemu.Processor
             // Jump to where we need to go...
             _usequencer.DispatchJump(uOp);
 
-            // TODO: does this logic belong in here?
-            // And we're done.  Handle debugging state, if any
-            // If we're debugging one Qcode at a time and we just finished one, break now
-            if (currentState == RunState.SingleStep ||
-                (_incrementBPC && currentState == RunState.RunInst))
-            {
-                return RunState.Debug;
-            }
-
-            return currentState;
         }
 
 
@@ -380,6 +363,12 @@ namespace PERQemu.Processor
         public bool OpFileEmpty
         {
             get { return (BPC & 0x8) != 0; }
+        }
+
+
+        public bool IncrementBPC
+        {
+            get { return _incrementBPC; }
         }
 
         #endregion
@@ -549,6 +538,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Selects the proper AMUX input for the specified instruction
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetAmuxInput(Instruction uOp)
         {
             int amux = 0;
@@ -613,6 +603,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Selects the proper BMUX input for the specified instruction.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetBmuxInput(Instruction uOp)
         {
             int bmux = 0;
@@ -633,6 +624,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Dispatches function and special function operations based on the instruction
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DispatchFunction(Instruction uOp)
         {
             switch (uOp.F)

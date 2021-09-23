@@ -21,7 +21,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 using System.IO;
-using PERQemu.CPU;
+using PERQemu.Processor;
 using PERQemu.Memory;
 using PERQemu.IO.Z80.IOB;
 
@@ -430,7 +430,7 @@ namespace PERQemu.Debugger
                 case "Debugger":
                     return _system.Debugger;
 
-                case "PERQCpu":
+                case "CPU":
                     return _system.CPU;
 
                 case "PERQSystem":
@@ -452,7 +452,7 @@ namespace PERQemu.Debugger
                 case "Debugger":
                     return _system.Debugger;
 
-                case "PERQCpu":
+                case "CPU":
                     return _system.CPU;
 
                 case "PERQSystem":
@@ -797,8 +797,8 @@ namespace PERQemu.Debugger
                         Disassembler.Disassemble(_system.CPU.PC, _system.CPU.GetInstruction(_system.CPU.PC)));
 
             Console.WriteLine("inst  {0:x2}-{1} (@BPC {2})",
-                        _system.MemoryBoard.OpFile[_system.CPU.BPC],
-                        QCode.QCodeHelper.GetQCodeFromOpCode(_system.MemoryBoard.OpFile[_system.CPU.BPC]).Mnemonic,
+                        _system.CPU.OpFile[_system.CPU.BPC],
+                        QCode.QCodeHelper.GetQCodeFromOpCode(_system.CPU.OpFile[_system.CPU.BPC]).Mnemonic,
                         _system.CPU.BPC);
         }
 
@@ -970,7 +970,7 @@ namespace PERQemu.Debugger
 
             Type[] debugTypes = {
                     typeof(PERQSystem),
-                    typeof(PERQCpu),
+                    typeof(CPU),
                     typeof(Z80System),
                     typeof(IO.Z80_new.Z80System),
                     typeof(Debugger) };
@@ -1016,7 +1016,7 @@ namespace PERQemu.Debugger
             _variableList = new List<DebuggerVariable>();
 
             Type[] debugTypes = {
-                    typeof(PERQCpu),
+                    typeof(CPU),
                     typeof(Z80System),
                     typeof(Debugger) };
 

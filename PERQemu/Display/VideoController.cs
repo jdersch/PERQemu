@@ -19,7 +19,7 @@
 using System;
 using PERQemu.Memory;
 using PERQemu.IO;
-using PERQemu.CPU;
+using PERQemu.Processor;
 using System.Runtime.CompilerServices;
 
 namespace PERQemu.Display
@@ -142,7 +142,7 @@ namespace PERQemu.Display
                     //  15:4    address >> 4 for .5-2MB boards; address >> 1 for old 256K boards
                     //   3:2    address bits 21:20 on cards > 2 MB (not yet supported)
                     //   1:0    not used
-                    _displayAddress = (_system.MemoryBoard.MemSize < 0x40000 ? value << 1 : value << 4);
+                    _displayAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -153,7 +153,7 @@ namespace PERQemu.Display
                 case 0xe2:  // Load cursor address register
 
                     // Same format as display address
-                    _cursorAddress = (_system.MemoryBoard.MemSize < 0x40000 ? value << 1 : value << 4);
+                    _cursorAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
 
 #if TRACING_ENABLED
                     if (Trace.TraceOn)
@@ -364,7 +364,7 @@ namespace PERQemu.Display
                 int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
                 int screenAddress = renderLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
 
-                _scanlineData[x] = TransformDisplayWord(_system.MemoryBoard.FetchWord(dataAddress));
+                _scanlineData[x] = TransformDisplayWord(_system.Memory.FetchWord(dataAddress));
             }
 
             _system.Display.DrawScanline(renderLine, _scanlineData);
@@ -408,7 +408,7 @@ namespace PERQemu.Display
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte GetByte(int byteAligned)
         {
-            ushort word = _system.MemoryBoard.FetchWord(byteAligned >> 1);
+            ushort word = _system.Memory.FetchWord(byteAligned >> 1);
 
             if ((byteAligned % 2) == 0)
             {
@@ -584,8 +584,8 @@ namespace PERQemu.Display
         /// Because these are part of the normal interrupt service routine, we don't need to track our
         /// own vertical retrace timer; _vBlankCycles can be removed.
         /// </summary>
-        private readonly ulong _scanLineTimeNsec = 70 * 170;
-        private readonly ulong _hBlankTimeNsec = 22 * 170;
+        private readonly ulong _scanLineTimeNsec = 70 * 170;    // should be _system.Scheduler.TimeStepNsec
+        private readonly ulong _hBlankTimeNsec = 22 * 170;      // in case we want to overclock ;-)
         private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
 
         private VideoState _state;

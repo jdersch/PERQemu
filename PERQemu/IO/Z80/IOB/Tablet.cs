@@ -16,7 +16,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.CPU;
+using PERQemu.Processor;
 
 using System.Collections.Generic;
 

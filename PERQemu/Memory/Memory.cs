@@ -1,4 +1,4 @@
-// memory.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
+// memory.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -18,10 +18,24 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using PERQemu.CPU;
+using PERQemu.Processor;
 
 namespace PERQemu.Memory
 {
+
+    public enum MemoryCycle
+    {
+        None = 0x0,
+        Fetch4R = 0x8,
+        Store4R = 0x9,
+        Fetch4 = 0xa,
+        Store4 = 0xb,
+        Fetch2 = 0xc,
+        Store2 = 0xd,
+        Fetch = 0xe,
+        Store = 0xf
+    }
+
     /// <summary>
     /// Implements the PERQ's Memory board and memory state machine,
     /// which is also connected to the IO bus.
@@ -46,16 +60,7 @@ namespace PERQemu.Memory
             _wait = false;
             _hold = false;
 
-            _loadOpFile = false;
-
-            for (int i = 0; i < 16; i++)
-            {
-                _opFile[i] = 0xff;
-            }
-
-#if TRACING_ENABLED
             if (Trace.TraceOn) Trace.Log(LogType.MemoryState, "Memory: Reset.");
-#endif
         }
 
         public int MemSize
@@ -103,11 +108,6 @@ namespace PERQemu.Memory
             get { return _hold; }
         }
 
-        public byte[] OpFile
-        {
-            get { return _opFile; }
-        }
-
         public int TState
         {
             get { return _Tstate; }
@@ -125,10 +125,8 @@ namespace PERQemu.Memory
             // Bump cycle counter
             _Tstate = (_Tstate + 1) & 0x3;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryState, "\nMemory: Tick! T{0} cycle={1}", _Tstate, cycleType);
-#endif
+            Trace.Log(LogType.MemoryState, "\nMemory: Tick! T{0} cycle={1}", _Tstate, cycleType);
+
             // Segregate Fetches and Stores into separate queues
             if (IsFetch(cycleType))
             {
@@ -166,45 +164,40 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tock(ushort input)
         {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryState, "Memory: Tock! T{0} mdoNeeded={1} data={2:x4}",
-                                                  _Tstate, MDONeeded, input);
-#endif
+            Trace.Log(LogType.MemoryState, "Memory: Tock! T{0} mdoNeeded={1} data={2:x4}",
+                        _Tstate, MDONeeded, input);
+
             ExecuteStore((ushort)input);
         }
 
         /// <summary>
-        /// Initiate a hardware reload of the OpFile instruction cache.
+        /// Let the CPU know if we're in the correct cycle to initiate a
+        /// LoadOp to refill the Op cache.  (Op file itself moved to the CPU)
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void LoadOpFile()
+        public bool LoadOpFile()
         {
-            // If we're currently doing a Fetch4, Set the loadOpFile flag;
-            // this will start the refill on the next T2 state (i.e., next cycle).
+            // If currently executing a Fetch4, start the refill on the
+            // next T2 state (i.e., next cycle).
             if (_mdiQueue.Cycle == MemoryCycle.Fetch4 && _Tstate == 1)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.OpFile, "OpFile: Load init.");
-#endif
-                _loadOpFile = true;
+                return true;
             }
+            return false;
         }
-#if TRACING_ENABLED
+
+#if DEBUG
         /// <summary>
         /// Requests a specific memory cycle type at the specified address.  Here we route
         /// the request to the separate fetch and store queues, which vastly simplifies the
         /// complicated overlapped operation of RasterOp.
         /// </summary>
-        /// <param name="cycleType">Any Fetch or Store type</param>
-        /// <param name="address">Starting address</param>
-        /// <param name="id">Transaction ID</param>
         public void RequestMemoryCycle(long id, int address, MemoryCycle cycleType)
         {
-
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryState, "\nMemory: Requested {0} cycle in T{1} ID={2} addr={3:x5}",
-                                                cycleType, _Tstate, id, address);
+            Trace.Log(LogType.MemoryState,
+                      "\nMemory: Requested {0} cycle in T{1} ID={2} addr={3:x6}",
+                      cycleType, _Tstate, id, address);
+            
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
             // but the queue controller will have stalled the processor until the correct
@@ -227,11 +220,12 @@ namespace PERQemu.Memory
         /// the request to the separate fetch and store queues, which vastly simplifies the
         /// complicated overlapped operation of RasterOp.
         /// </summary>
-        /// <param name="cycleType">Any Fetch or Store type</param>
-        /// <param name="address">Starting address</param>
-        /// <param name="id">Transaction ID</param>
         public void RequestMemoryCycle(int address, MemoryCycle cycleType)
         {
+            Trace.Log(LogType.MemoryState,
+              "\nMemory: Requested {0} cycle in T{1} addr={2:x6}",
+              cycleType, _Tstate, address);
+            
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
             // but the queue controller will have stalled the processor until the correct
@@ -263,27 +257,6 @@ namespace PERQemu.Memory
             {
                 _madr = _mdiQueue.Address;
                 _mdi = FetchWord(_madr);
-
-                // Are we loading the Op file with the data?
-                if (_loadOpFile)
-                {
-                    int opAddr = _mdiQueue.WordIndex * 2;
-                    _opFile[opAddr] = (byte)(_mdi & 0xff);
-                    _opFile[opAddr + 1] = (byte)((_mdi & 0xff00) >> 8);
-
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                    {
-                        Trace.Log(LogType.OpFile, "Loaded {0:x2} into OpFile[{1:x}] from {2:x5}", _opFile[opAddr], opAddr, _madr);
-                        Trace.Log(LogType.OpFile, "Loaded {0:x2} into OpFile[{1:x}] from {2:x5}", _opFile[opAddr + 1], opAddr + 1, _madr);
-                    }
-#endif
-                    // Was that the last word in the quad?
-                    if (_mdiQueue.WordIndex == 3)
-                    {
-                        _loadOpFile = false;
-                    }
-                }
             }
         }
 
@@ -309,10 +282,8 @@ namespace PERQemu.Memory
             // Clip address to memsize range and read
             ushort data = _memory[address & _memSizeMask];
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
-#endif
+            Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
+
             return data;
         }
 
@@ -322,10 +293,8 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void StoreWord(int address, ushort data)
         {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
-#endif
+            Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
+
             // Clip address to memsize range and write
             _memory[address & _memSizeMask] = data;
         }
@@ -362,8 +331,8 @@ namespace PERQemu.Memory
         //
         // Currently the IO / DMA subsystem cheats and performs its memory accesses
         // directly, but it could at some point be integrated -- allowing us to more
-        // accurately emulate the real PERQ, but at some penalty in performance.  Thus,
-        // the "Hold" field of the microinstruction is basically ignored.
+        // accurately emulate the real PERQ which must give up processor cycles for
+        // DMA. Thus, the "Hold" field of the microinstruction is basically ignored.
         //
         #endregion
 
@@ -388,22 +357,11 @@ namespace PERQemu.Memory
         private const int _memSize     = 0x100000;  // 2MB == 1MW
         private const int _memSizeMask = 0x0fffff;  // i.e., full 20 bits
 #else
-        private const int _memSize     = 0x80000;   // 1MB was more typical for a PERQ 1
+        private const int _memSize = 0x80000;   // 1MB was more typical for a PERQ 1
         private const int _memSizeMask = 0x7ffff;
 #endif
-        /// <summary>
-        /// The PERQ memory array.
-        /// </summary>
+
         private ushort[] _memory;
-
-        /// <summary>
-        /// The opfile.  This probably belongs to the CPU, but since it's loaded
-        /// by the memory state machine, I do declare that I'm putting it here!
-        /// Note that the Op file is only 8 bytes, but BPC is a 4-bit counter...
-        /// </summary>
-        private byte[] _opFile = new byte[16];
-
-        private bool _loadOpFile;
 
         private PERQSystem _system;
     }

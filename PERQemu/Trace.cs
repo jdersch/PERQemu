@@ -64,12 +64,14 @@ namespace PERQemu
         All =               0xffffffffffffffff,
     }
 
-#if TRACING_ENABLED
     public static class Trace
     {
-        public static void Log(LogType level, string format, params object[] args)
+        
+#if TRACING_ENABLED
+
+       public static void Log(LogType level, string format, params object[] args)
         {
-            if ((_level & level) == level)
+            if (TraceOn && (_level & level) == level)
             {
                 // Sleep so we give the console time to breathe.
                 System.Threading.Thread.Sleep(0);
@@ -82,7 +84,7 @@ namespace PERQemu
 
         public static void Log(LogType level, int pad, string format, params object[] args)
         {
-            if ((_level & level) == level)
+            if (TraceOn && (_level & level) == level)
             {
                 // Sleep so we give the console time to breathe.
                 System.Threading.Thread.Sleep(0);
@@ -182,9 +184,19 @@ namespace PERQemu
             Console.ForegroundColor = color;
         }
 
+#else
+        public static void Log(LogType level, string format, params object[] args) { }
+        public static void Log(LogType level, int pad, string format, params object[] args) { }
+
+        public static LogType TraceLevel
+        {
+	        get { return LogType.None; }
+            set { Trace.TraceOn = false; }
+        }
+#endif
+
         private static LogType _level;
         public static bool TraceOn = false;
     }
-#endif
 }
 

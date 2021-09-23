@@ -1,4 +1,4 @@
-﻿// Z80system.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Z80system.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -17,7 +17,7 @@
 //
 
 using Konamiman.Z80dotNet;
-using PERQemu.CPU;
+using PERQemu.Processor;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
 using System;

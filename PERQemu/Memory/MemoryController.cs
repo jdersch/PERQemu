@@ -1,4 +1,4 @@
-﻿// memorycontroller.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
+// memorycontroller.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -19,19 +19,10 @@
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
-using PERQemu.CPU;
+using PERQemu.Processor;
 
 namespace PERQemu.Memory
 {
-
-    public enum MemoryState
-    {
-        Idle = 0,
-        WaitForT3,
-        WaitForT2,
-        Running
-    }
-
 
     /// <summary>
     /// Represents a request to the memory subsystem.
@@ -46,7 +37,7 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-#if TRACING_ENABLED
+#if DEBUG
             _reqID = -1;
 #endif
             _startAddr = -1;
@@ -55,12 +46,18 @@ namespace PERQemu.Memory
             _active = false;
         }
 
-#if TRACING_ENABLED
         public override string ToString()
         {
+#if DEBUG
             return String.Format("ID={0} addr={1:x5} cycle={2} bookmark={3} active={4}",
                                  _reqID, _startAddr, _cycleType, _bookmark, _active);
+#else
+            return String.Format("Addr={0:x5} cycle={1} bookmark={2} active={3}",
+                                _startAddr, _cycleType, _bookmark, _active);
+#endif
         }
+
+#if DEBUG
         public long RequestID
         {
             get { return _reqID; }
@@ -92,45 +89,13 @@ namespace PERQemu.Memory
             set { _active = value; }
         }
 
-#if TRACING_ENABLED
+#if DEBUG
         private long _reqID;
 #endif
         private int _startAddr;
         private MemoryCycle _cycleType;
         private int _bookmark;
         private bool _active;
-    }
-
-
-    /// <summary>
-    /// A bookmark value comprises a set of flags, a word index, and next state value.
-    /// These are read from the BKM16 ROM and are consulted each cycle to drive the
-    /// memory state machine.
-    /// </summary>
-    public class BookmarkEntry
-    {
-        public BookmarkEntry(byte result)
-        {
-            Abort = ((result & 0x80) != 0);
-            Recognize = ((result & 0x40) != 0);
-            Complete = ((result & 0x20) != 0);
-            Valid = ((result & 0x10) != 0);
-            Index = (int)(result & 0x0c) >> 2;
-            NextState = (MemoryState)(result & 0x03);
-        }
-
-        public override string ToString()
-        {
-            return string.Format("PA={0} ST={1} CO={2} VA={3} idx={4} next={5}",
-                                Abort, Recognize, Complete, Valid, Index, NextState);
-        }
-
-        public bool Abort;
-        public bool Recognize;
-        public bool Complete;
-        public bool Valid;
-        public int Index;
-        public MemoryState NextState;
     }
 
 
@@ -143,6 +108,47 @@ namespace PERQemu.Memory
     /// </summary>
     public class MemoryController
     {
+
+        /// <summary>
+        /// A bookmark value comprises a set of flags, a word index, and next state value.
+        /// These are read from the BKM16 ROM and are consulted each cycle to drive the
+        /// memory state machine.
+        /// </summary>
+        public class BookmarkEntry
+        {
+            public BookmarkEntry(byte result)
+            {
+                Abort = ((result & 0x80) != 0);
+                Recognize = ((result & 0x40) != 0);
+                Complete = ((result & 0x20) != 0);
+                Valid = ((result & 0x10) != 0);
+                Index = (int)(result & 0x0c) >> 2;
+                NextState = (MemoryState)(result & 0x03);
+            }
+
+            public override string ToString()
+            {
+                return string.Format("PA={0} ST={1} CO={2} VA={3} idx={4} next={5}",
+                                    Abort, Recognize, Complete, Valid, Index, NextState);
+            }
+
+            public bool Abort;
+            public bool Recognize;
+            public bool Complete;
+            public bool Valid;
+            public int Index;
+            public MemoryState NextState;
+        }
+
+
+        public enum MemoryState
+        {
+            Idle = 0,
+            WaitForT3,
+            WaitForT2,
+            Running
+        }
+
         public MemoryController(PERQSystem system, string name)
         {
             _system = system;
@@ -167,9 +173,7 @@ namespace PERQemu.Memory
             _wait = false;
             _valid = false;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
-#endif
+            Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
         }
 
         public bool Wait
@@ -204,7 +208,7 @@ namespace PERQemu.Memory
 
         private int Tstate
         {
-            get { return _system.MemoryBoard.TState; }     // too lazy to type this over and over
+            get { return _system.Memory.TState; }     // too lazy to type this over and over
         }
 
 
@@ -216,11 +220,9 @@ namespace PERQemu.Memory
         /// </summary>
         public void Clock(MemoryCycle nextCycle)
         {
-//#if TRACING_ENABLED
-//            if (Trace.TraceOn)
-//                Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-//                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
-//#endif
+            Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+                     _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+
             // Update the current op
             Recognize();
 
@@ -230,14 +232,11 @@ namespace PERQemu.Memory
             // Update bookmarks for the next cycle
             UpdateBookmarks(nextCycle);
 
-//#if TRACING_ENABLED
-//            if (Trace.TraceOn)
-//                Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-//                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
-//#endif
+            Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+                     _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
         }
 
-#if TRACING_ENABLED
+#if DEBUG
         /// <summary>
         /// Accept a new memory request (at the bottom of the CPU cycle, after R is
         /// computed).  Because the CPU now aborts until the correct cycle when issuing
@@ -246,10 +245,9 @@ namespace PERQemu.Memory
         /// </summary>
         public void Request(long id, int startAddr, MemoryCycle cycleType)
         {
-#if DEBUG
             if (_pending.Active)
                 Console.WriteLine("{0} queue: ** new Request() when _pending already Active?", _name);
-#endif
+
             _pending.RequestID = id;
             _pending.StartAddress = startAddr;
             _pending.CycleType = cycleType;
@@ -268,7 +266,7 @@ namespace PERQemu.Memory
         public void Request(int startAddr, MemoryCycle cycleType)
         {
 #if DEBUG
-            if (_pending.Active)
+            if (_pending.Active) // todo should be a throw here
                 Console.WriteLine("{0} queue: ** new Request() when _pending already Active?", _name);
 #endif
             _pending.StartAddress = startAddr;
@@ -293,10 +291,9 @@ namespace PERQemu.Memory
                 _current = _pending;
                 _pending = old;
                 _bookmark = _current.Bookmark;
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.MemoryState, "{0} queue: Recognized {1}", _name, _current);
-#endif
+
+                Trace.Log(LogType.MemoryState, "{0} queue: Recognized {1}", _name, _current);
+
                 _pending.Clear();
             }
         }
@@ -308,7 +305,6 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RunStateMachine()
         {
-            
 
             // Bump the state
             _state = _nextState;
@@ -351,10 +347,8 @@ namespace PERQemu.Memory
             // If this is the last word in a cycle, retire the current op
             if (flags.Complete)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.MemoryState, "{0} queue: Retired {1}", _name, _current);
-#endif
+                Trace.Log(LogType.MemoryState, "{0} queue: Retired {1}", _name, _current);
+
                 _current.Clear();
                 _bookmark = 0;
             }
@@ -384,7 +378,7 @@ namespace PERQemu.Memory
                 // 
                 // Special cases for RasterOp
                 //
-                if (_system.CPU.RasterOp.Enabled)
+                if (_system.CPU.RasterOpEnabled)
                 {
                     if (Tstate == 0)
                     {
@@ -427,7 +421,7 @@ namespace PERQemu.Memory
                 //
                 // Special cases for indirect or overlapped Fetches (non-RasterOp)
                 //
-                if (_system.MemoryBoard.IsFetch(nextCycle))
+                if (_system.Memory.IsFetch(nextCycle))
                 {
                     //
                     // Back-to-back Fetch or Fetch2 requests present unique timing challenges
@@ -448,7 +442,7 @@ namespace PERQemu.Memory
                         _bookmark = book;               // ...force immediate switch for the (t2,t3)...
                         _nextBookmark = (int)nextCycle; // ...but switch back to the real cycle type in Request()
                     }
-                    else if (_current.CycleType == MemoryCycle.Fetch4 && !_system.CPU.RasterOp.Enabled)
+                    else if (_current.CycleType == MemoryCycle.Fetch4 && !_system.CPU.RasterOpEnabled)
                     {
                         book = 0x7;                     // "IndFetch4" is for the specific case of a RefillOp
                         _bookmark = book;               // followed immediately by another Fetch; can't clobber the
@@ -482,10 +476,7 @@ namespace PERQemu.Memory
                 // if a Fetch is overlapped)
                 if (flags.Complete)
                 {
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.MemoryState, "{0} queue: Terminated {1}", _name, _current);
-#endif
+                    Trace.Log(LogType.MemoryState, "{0} queue: Terminated {1}", _name, _current);
                     _current.Clear();
                 }
 
@@ -510,10 +501,8 @@ namespace PERQemu.Memory
             //		1:0		current Tstate
             //
             int lookup = (((int)book & 0x0f) << 4) | ((int)state << 2) | Tstate;
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryState, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
-#endif
+
+            Trace.Log(LogType.MemoryState, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
             return _bkmTable[lookup];
         }
 
@@ -533,10 +522,7 @@ namespace PERQemu.Memory
             }
             fs.Close();
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.EmuState, "Initialized BKM ROM lookup table.");
-#endif
+            Trace.Log(LogType.EmuState, "Initialized BKM ROM lookup table.");
         }
 
 

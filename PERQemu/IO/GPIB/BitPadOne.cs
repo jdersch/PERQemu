@@ -16,7 +16,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.CPU;
+using PERQemu.Processor;
 
 using System;
 using System.Collections.Generic;
@@ -51,7 +51,7 @@ namespace PERQemu.IO.GPIB
             // than the older IOB @ 2.45Mhz, so the IO "fudge" might change.  This
             // is very silly.)
             //
-            _sampleRate = (PERQCpu.Frequency / 40) / PERQCpu.IOFudge;
+            _sampleRate = (CPU.Frequency / 40) / CPU.IOFudge;
 
             Reset();
         }

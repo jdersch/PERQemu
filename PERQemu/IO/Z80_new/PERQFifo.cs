@@ -1,4 +1,4 @@
-﻿using PERQemu.CPU;
+﻿using PERQemu.Processor;
 using System;
 using System.Collections.Generic;
 using System.Linq;

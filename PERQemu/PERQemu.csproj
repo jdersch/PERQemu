@@ -138,7 +138,6 @@
     <Compile Include="Debugger\DebuggerPrompt.cs" />
     <Compile Include="Debugger\DebugAttributes.cs" />
     <Compile Include="Debugger\Disassembler.cs" />
-    <Compile Include="Display\Display.cs" />
     <Compile Include="Display\VideoController.cs" />
     <Compile Include="IO\GPIB\BitPadOne.cs" />
     <Compile Include="IO\GPIB\GPIBBus.cs" />
@@ -173,7 +172,6 @@
     <Compile Include="IO\Z80_new\Z80DMA.cs" />
     <Compile Include="IO\Z80_new\Z80SIO.cs" />
     <Compile Include="IO\Z80_new\Z80System.cs" />
-    <Compile Include="Memory\RasterOp.cs" />
     <Compile Include="EntryPoint.cs" />
     <Compile Include="IO\Z80\IOB\FloppyController.cs" />
     <Compile Include="IO\HardDisk\ShugartController.cs" />
@@ -182,7 +180,6 @@
     <Compile Include="IO\IIODevice.cs" />
     <Compile Include="IO\IOBus.cs" />
     <Compile Include="IO\Z80\IOB\Z80System.cs" />
-    <Compile Include="Memory\Memory.cs" />
     <Compile Include="Paths.cs" />
     <Compile Include="PERQSystem.cs" />
     <Compile Include="PhysicalDisk\FloppyDisk.cs" />
@@ -208,6 +205,9 @@
     <Compile Include="CPU\RegisterFile.cs" />
     <Compile Include="CPU\Sequencer.cs" />
     <Compile Include="CPU\Shifter.cs" />
+    <Compile Include="Display\Display.cs" />
+    <Compile Include="Memory\Memory.cs" />
+    <Compile Include="Memory\MemoryController.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -538,9 +538,6 @@
     <None Include="Docs\z80 docs\z80link.pas" />
     <None Include="Docs\z80 docs\z80script.pas" />
     <None Include="Docs\z80 docs\z80talker.pas" />
-    <Compile Include="Memory\MemoryController.cs">
-      <SubType>Code</SubType>
-    </Compile>
     <None Include="packages.config" />
     <None Include="PROM\boot.bin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -611,6 +608,7 @@
   <ItemGroup />
   <ItemGroup>
     <Folder Include="CPU\" />
+    <Folder Include="Memory\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

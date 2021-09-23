@@ -16,7 +16,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.CPU;
+using PERQemu.Processor;
 using PERQemu.PhysicalDisk;
 using System;
 using System.IO;
@@ -348,13 +348,13 @@ namespace PERQemu.IO.HardDisk
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
                 int word = sectorData.Data[i] | (sectorData.Data[i + 1] << 8);
-                _system.MemoryBoard.StoreWord(dataAddr + (i >> 1), (ushort)word);
+                _system.Memory.StoreWord(dataAddr + (i >> 1), (ushort)word);
             }
 
             for (int i = 0; i < sectorData.Header.Length; i += 2)
             {
                 int word = sectorData.Header[i] | (sectorData.Header[i + 1] << 8);
-                _system.MemoryBoard.StoreWord(headerAddr + (i >> 1), (ushort)word);
+                _system.Memory.StoreWord(headerAddr + (i >> 1), (ushort)word);
             }
 
 #if TRACING_ENABLED
@@ -379,7 +379,7 @@ namespace PERQemu.IO.HardDisk
 
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
-                int word = _system.MemoryBoard.FetchWord(dataAddr + (i >> 1));
+                int word = _system.Memory.FetchWord(dataAddr + (i >> 1));
                 sectorData.Data[i] = (byte)(word & 0xff);
                 sectorData.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
@@ -388,7 +388,7 @@ namespace PERQemu.IO.HardDisk
             {
                 for (int i = 0; i < sectorData.Header.Length; i += 2)
                 {
-                    int word = _system.MemoryBoard.FetchWord(headerAddr + (i >> 1));
+                    int word = _system.Memory.FetchWord(headerAddr + (i >> 1));
                     sectorData.Header[i] = (byte)(word & 0xff);
                     sectorData.Header[i + 1] = (byte)((word & 0xff00) >> 8);
                 }
@@ -425,7 +425,7 @@ namespace PERQemu.IO.HardDisk
 
             for (int i = 0; i < sectorData.Data.Length; i += 2)
             {
-                int word = _system.MemoryBoard.FetchWord(dataAddr + (i >> 1));
+                int word = _system.Memory.FetchWord(dataAddr + (i >> 1));
                 sectorData.Data[i] = (byte)(word & 0xff);
                 sectorData.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
@@ -433,7 +433,7 @@ namespace PERQemu.IO.HardDisk
             // Write the new header data...
             for (int i = 0; i < sectorData.Header.Length; i += 2)
             {
-                int word = _system.MemoryBoard.FetchWord(headerAddr + (i >> 1));
+                int word = _system.Memory.FetchWord(headerAddr + (i >> 1));
                 sectorData.Header[i] = (byte)(word & 0xff);
                 sectorData.Header[i + 1] = (byte)((word & 0xff00) >> 8);
             }

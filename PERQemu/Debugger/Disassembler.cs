@@ -18,7 +18,7 @@
 
 using System;
 using System.Text;
-using PERQemu.CPU;
+using PERQemu.Processor;
 
 namespace PERQemu.Debugger
 {
@@ -34,7 +34,7 @@ namespace PERQemu.Debugger
         /// </summary>
         /// <param name="op"></param>
         /// <returns></returns>
-        public static string Disassemble(ushort address, Instruction op)
+        public static string Disassemble(ushort address, CPU.Instruction op)
         {
             _pc = address;
 
@@ -83,7 +83,7 @@ namespace PERQemu.Debugger
         /// </summary>
         /// <param name="uOp"></param>
         /// <returns></returns>
-        private static string DisassembleAmuxInput(Instruction uOp)
+        private static string DisassembleAmuxInput(CPU.Instruction uOp)
         {
             string amux = "<invalid>";
 
@@ -137,7 +137,7 @@ namespace PERQemu.Debugger
         /// </summary>
         /// <param name="uOp"></param>
         /// <returns></returns>
-        private static string DisassembleBmuxInput(Instruction uOp)
+        private static string DisassembleBmuxInput(CPU.Instruction uOp)
         {
             string bmux = "<invalid>";
 
@@ -170,12 +170,12 @@ namespace PERQemu.Debugger
             return bmux;
         }
 
-        private static bool IsSpecialFunction(Instruction uOp)
+        private static bool IsSpecialFunction(CPU.Instruction uOp)
         {
             return (uOp.F == 0 || uOp.F == 2);
         }
 
-        private static string DisassembleALUOp(string amux, string bmux, Instruction op)
+        private static string DisassembleALUOp(string amux, string bmux, CPU.Instruction op)
         {
             string alu = "<invalid>";
 
@@ -253,7 +253,7 @@ namespace PERQemu.Debugger
         /// Decode Function and Special Function fields.
         /// </summary>
         /// <param name="uOp"></param>
-        private static string DisassembleFunction(Instruction uOp)
+        private static string DisassembleFunction(CPU.Instruction uOp)
         {
             string function = "";
 
@@ -457,7 +457,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleJump(Instruction uOp)
+        private static string DisassembleJump(CPU.Instruction uOp)
         {
             string jump = "<invalid>";
 
@@ -475,8 +475,8 @@ namespace PERQemu.Debugger
                     jump = "If IntrPend, {0}";
                     break;
 
-                case Condition.Carry19: // C19
-                    jump = "If C19, {0}";
+                case Condition.CarryH:  // C19 or C23
+                    jump = CPU.CPUBits == 20 ? "If C19, {0}" : "If C23, {0}";
                     break;
 
                 case Condition.BPC3:    // Opfile empty
@@ -531,7 +531,7 @@ namespace PERQemu.Debugger
         /// Decodes the jump field.
         /// </summary>
         /// <param name="uOp"></param>
-        private static string DisassembleJumpType(Instruction uOp)
+        private static string DisassembleJumpType(CPU.Instruction uOp)
         {
             string type = "<invalid>";
 
@@ -638,7 +638,7 @@ namespace PERQemu.Debugger
         /// </summary>
         /// <param name="uOp"></param>
         /// <returns></returns>
-        private static string CalcAddress(Instruction uOp)
+        private static string CalcAddress(CPU.Instruction uOp)
         {
             ushort addr = 0;
 
@@ -677,7 +677,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static int DisassembleNextInst(Instruction uOp)
+        private static int DisassembleNextInst(CPU.Instruction uOp)
         {
             return (ushort)ZOpFill(~uOp.Z);
         }

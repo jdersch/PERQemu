@@ -1,4 +1,5 @@
-// perqsystem.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+
+// perqsystem.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -17,7 +18,7 @@
 //
 
 using System;
-using PERQemu.CPU;
+using PERQemu.Processor;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
@@ -48,13 +49,15 @@ namespace PERQemu
         {
             _scheduler = new Scheduler(170);        // 170ns per PERQ CPU cycle; scheduler must be clocked with PERQ CPU.
 
-            _memoryBoard = new MemoryBoard(this);
+            _mem = new MemoryBoard(this);
             _iob = new IOB(this);
             _oio = new OIO();
             _display = new Display.Display(this);
             _videoController = new Display.VideoController(this);
+            _ioBus = new IOBus(this);
 
-            _perqCPU = new PERQCpu(this);
+             // Configurator will provide the type; for now, force a PERQ1A
+            _perqCPU = new PERQ1A(this);
 
             // Start off debugging
             _state = RunState.Debug;
@@ -63,6 +66,14 @@ namespace PERQemu
             // Assume async mode if the IOB implementation supports it.
             // Might want to select sync mode on uniprocessor systems?
             _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
+ 
+            // Reset
+            _perqCPU.Reset();
+            _ioBus.Reset();
+
+            // Just have to do this once.  Will be CPU-specific.
+            _perqCPU.LoadROM(Paths.BuildPROMPath("boot.bin"));
+
         }
 
         public void Shutdown()
@@ -75,8 +86,6 @@ namespace PERQemu
             //
             // Evaluate commandline args.  For now, we support only one argument -- a script to execute.
             //
-            // TODO: add support for double-clicking on a .phd (hard disk) or .pfd (floppy) image to
-            // automatically load up at launch?
             if (args.Length > 0)
             {
                 if (args.Length == 1)
@@ -221,19 +230,24 @@ namespace PERQemu
             get { return _scheduler; }
         }
 
-        public PERQCpu CPU
+        public CPU CPU
         {
             get { return _perqCPU; }
         }
 
-        public MemoryBoard MemoryBoard
+        public MemoryBoard Memory
         {
-            get { return _memoryBoard; }
+            get { return _mem; }
         }
 
         public IOB IOB
         {
             get { return _iob; }
+        }
+
+        public IOBus IOBus
+        {
+            get { return _ioBus; }
         }
 
         public OIO OIO
@@ -494,9 +508,10 @@ namespace PERQemu
         private string _debugMessage;
         private static byte _bootChar;
         private Scheduler _scheduler;
-        private PERQCpu _perqCPU;
-        private MemoryBoard _memoryBoard;
+        private CPU _perqCPU;
+        private MemoryBoard _mem;
         private IOB _iob;
+        private IOBus _ioBus;
         private OIO _oio;
         private Display.Display _display;
         private Display.VideoController _videoController;

@@ -16,7 +16,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.CPU;
+using PERQemu.Processor;
 
 using System;
 using System.Collections.Generic;
@@ -102,7 +102,7 @@ namespace PERQemu.IO.Z80.IOB
         {
             if (_enabled)
             {
-                int tickInterval = ((Z80System.Frequency / 60) / PERQCpu.IOFudge);
+                int tickInterval = ((Z80System.Frequency / 60) / CPU.IOFudge);
                 int elapsed = (((Z80System)(_system.IOB.Z80System)).Clocks() - _lastTick) / tickInterval;
 
                 fifo.Enqueue(Z80System.SOM);                    // SOM

@@ -19,7 +19,7 @@
 using System;
 using System.Collections.Generic;
 
-using PERQemu.CPU;
+using PERQemu.Processor;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
 

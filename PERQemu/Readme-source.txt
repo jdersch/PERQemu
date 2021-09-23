@@ -290,7 +290,7 @@ detail.  In a nutshell, the PERQ CPU is a microcoded (48-bit microcode word)
 machine with 4- or 16K of writeable control store, a 20-bit ALU, 256 general
 purpose 20-bit registers, a 16-bit IO bus and just a ton of other neat features.
 
-CPU.cs contains the nexus of the implementation in the PERQCpu class.  PERQCpu
+CPU.cs contains the nexus of the implementation in the CPU class.  CPU
 implements the decoding and execution logic, writeable control store, and defers
 to the following for subordinate tasks:
     - The "ALU" class implements the CPU's 20-bit ALU.
@@ -310,7 +310,7 @@ to the following for subordinate tasks:
     - The "RasterOp" class (\Memory\RasterOp.cs) is the "real" RasterOp that
       emulates the hardware datapath.
 
-PERQCpu.Execute() is the main entrypoint of interest; everything branches off
+CPU.Execute() is the main entrypoint of interest; everything branches off
 from here.
 
 

@@ -1,4 +1,4 @@
-// display.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// display.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -43,6 +43,9 @@ namespace PERQemu.Display
         public Display(PERQSystem system)
         {
             _system = system;
+            _sdlRunning = false;
+            _sdlPumpEvent = null;
+
             Initialize();
         }
 
@@ -91,6 +94,7 @@ namespace PERQemu.Display
         public void Shutdown()
         {
             _sdlRunning = false;
+            SDLShutdown();
         }
 
         public int MouseX
@@ -125,47 +129,54 @@ namespace PERQemu.Display
 
             _clickFlag = false;
             _mouseButton = 0x0;
-            
+
             //
             // Kick off our SDL message loop.
             //
-            _sdlThread = new Thread(SDLMessageLoopThread);
-            _sdlThread.Start();
+            //_sdlThread = new Thread(SDLMessageLoopThread);
+            //_sdlThread.Start();
+
+            // Start up SDL (on the main thread)
+            InitializeSDL();
         }
 
-        private void SDLMessageLoopThread()
+        //private void SDLMessageLoopThread()
+        public void SDLMessageLoop()
         {
-            // Start up SDL
-            InitializeSDL();
 
-            _sdlRunning = true;
-
-            while (_sdlRunning)
-            {
-                SDL.SDL_Event e;
-
-                //
-                // Run main message loop
-                //
-                while (SDL.SDL_WaitEvent(out e) != 0)
-                {
-                    if (e.type == SDL.SDL_EventType.SDL_QUIT)
+            // Schedule an event to poll for events at REASONABLE intervals
+            // let's try 100 per second? (10ms) (should be > 60 for 60fps :-)
+            _sdlPumpEvent = _system.Scheduler.Schedule(10 * Conversion.MsecToNsec, (skew, context) =>
                     {
-                        _sdlRunning = false;
-                        break;
-                    }
-                    else
-                    {
-                        SDLMessageHandler(e);
-                    }
-                }
+                        SDL.SDL_Event e;
 
-                SDL.SDL_Delay(0);
-            }
+                        //
+                        // Run main message loop
+                        //
+                        while (SDL.SDL_PollEvent(out e) != 0)
+                        {
+                            SDLMessageHandler(e);
+                        }
+
+                        SDLMessageLoop();
+                    });
+        }
+
+        public void SDLShutdown()
+        {
+            Console.WriteLine("SDLShutdown requested.");
+
+            if (_sdlRunning) { return; }  // sanity check?
 
             //
             // Shut things down nicely.
             //
+            if (_sdlPumpEvent != null)
+            {
+                _system.Scheduler.Cancel(_sdlPumpEvent);
+                _sdlPumpEvent = null;
+            }
+
             if (_sdlRenderer != IntPtr.Zero)
             {
                 SDL.SDL_DestroyRenderer(_sdlRenderer);
@@ -183,11 +194,14 @@ namespace PERQemu.Display
 
         private void SDLMessageHandler(SDL.SDL_Event e)
         {
+            //Console.WriteLine("Handling event {0}", e.type);
+
             //
             // Handle current messages.  This executes in the UI context.
             //            
             switch (e.type)
             {
+
                 case SDL.SDL_EventType.SDL_USEREVENT:
                     // This should always be the case since we only define one
                     // user event, but just to be truly pedantic...
@@ -197,7 +211,6 @@ namespace PERQemu.Display
                     }
                     break;
 
-                
                 case SDL.SDL_EventType.SDL_MOUSEMOTION:
                     OnMouseMove(e.motion.x, e.motion.y);
                     break;
@@ -208,8 +221,8 @@ namespace PERQemu.Display
 
                 case SDL.SDL_EventType.SDL_MOUSEBUTTONUP:
                     OnMouseUp(e.button.button);
-                    break; 
-                
+                    break;
+
                 case SDL.SDL_EventType.SDL_KEYDOWN:
                     OnKeyDown(e.key.keysym.sym);
                     break;
@@ -217,7 +230,12 @@ namespace PERQemu.Display
                 case SDL.SDL_EventType.SDL_KEYUP:
                     OnKeyUp(e.key.keysym.sym);
                     break;
-                
+
+                case SDL.SDL_EventType.SDL_QUIT:
+                    _sdlRunning = false;
+                    SDLShutdown();
+                    break;
+
                 default:
                     break;
             }
@@ -226,10 +244,10 @@ namespace PERQemu.Display
 
         private void RenderDisplay()
         {
+
             //
             // Stuff the display data into the display texture
             //
-
             IntPtr textureBits = IntPtr.Zero;
             int pitch = 0;
             SDL.SDL_LockTexture(_displayTexture, IntPtr.Zero, out textureBits, out pitch);
@@ -260,8 +278,8 @@ namespace PERQemu.Display
             {
                 _stopwatch.Stop();
                 double fps = ((double)_frame / (double)_stopwatch.ElapsedMilliseconds) * 1000.0;
-                long inst = (long)((_system.CPU.Clocks / _stopwatch.ElapsedMilliseconds) * 1000.0);
-                SDL.SDL_SetWindowTitle(_sdlWindow, String.Format("PERQ - {0} frames / sec, {1} clocks", fps, inst));
+                long inst = ((long)_system.CPU.Clocks / _stopwatch.ElapsedMilliseconds) * 1000;
+                SDL.SDL_SetWindowTitle(_sdlWindow, String.Format("PERQ - {0:N2} frames / sec, {1} clocks", fps, inst));
                 _stopwatch.Restart();
                 _frame = 0;
             }
@@ -272,7 +290,7 @@ namespace PERQemu.Display
         {
             int retVal;
 
-            SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
+            // SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
 
             // Get SDL humming
             if ((retVal = SDL.SDL_Init(SDL.SDL_INIT_EVERYTHING)) < 0)
@@ -287,12 +305,12 @@ namespace PERQemu.Display
             }
 
             _sdlWindow = SDL.SDL_CreateWindow(
-                "PERQ", 
-                SDL.SDL_WINDOWPOS_UNDEFINED, 
-                SDL.SDL_WINDOWPOS_UNDEFINED, 
-                768, 
-                1024, 
-                SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN);
+                "PERQ",
+                SDL.SDL_WINDOWPOS_UNDEFINED,
+                SDL.SDL_WINDOWPOS_UNDEFINED,
+                768,
+                1024,
+                SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
 
             if (_sdlWindow == IntPtr.Zero)
             {
@@ -316,10 +334,16 @@ namespace PERQemu.Display
 
             SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x00, 0x00, 0x00, 0xff);
 
+            _sdlRunning = true;
+
             // Register a User event for rendering.
             _renderEventType = SDL.SDL_RegisterEvents(1);
             _renderEvent = new SDL.SDL_Event();
             _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
+
+            SDL.SDL_PumpEvents();   // so the mac will render the bloody window frame
+            SDLMessageLoop();       // kick off our periodic polling loop
+
         }
 
         private void CreateDisplayTexture(bool filter)
@@ -517,7 +541,7 @@ namespace PERQemu.Display
         /// <param name="e"></param>
         void OnKeyUp(SDL.SDL_Keycode keycode)
         {
-            switch(keycode)
+            switch (keycode)
             {
                 case SDL.SDL_Keycode.SDLK_LSHIFT:
                 case SDL.SDL_Keycode.SDLK_RSHIFT:
@@ -608,7 +632,9 @@ namespace PERQemu.Display
         private UInt32 _renderEventType;
         private SDL.SDL_Event _renderEvent;
 
-        private Thread _sdlThread;
+        private Event _sdlPumpEvent;
+
+        //private Thread _sdlThread;
         private bool _sdlRunning;
     }
 }
