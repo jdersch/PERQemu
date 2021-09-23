@@ -12,11 +12,12 @@ namespace PERQemu.IO.Z80_new
     /// </summary>
     public class IOReg3 : IZ80Device
     {
-        public IOReg3(PERQToZ80FIFO perqZ80fifo, Keyboard keyboard, NECuPD765A fdc)
+        public IOReg3(PERQToZ80FIFO perqZ80fifo, Keyboard keyboard, NECuPD765A fdc, DMARouter dmaRouter)
         {
             _perqZ80fifo = perqZ80fifo;
             _keyboard = keyboard;
             _fdc = fdc;
+            _dmaRouter = dmaRouter;
         }
 
         public void Reset()
@@ -48,9 +49,16 @@ namespace PERQemu.IO.Z80_new
         public void Write(byte portAddress, byte value)
         {
             //
-            // TODO (once we implement DMA):
-            // hook up DMA controls here
+            // Configure DMA:
+            // From v87.z80:
+            //  D.FLOP EQU     1 * 40Q; DMA TO FLOPPY
+            //  D.PRQR EQU     2 * 40Q; DMA TO PERQ READ
+            //  D.PRQW EQU     3 * 40Q; DMA TO PERQ WRITE
+            //  D.SIOA EQU     4 * 40Q; DMA TO SIO CHANNEL A
+            //  D.SIOB EQU     5 * 40Q; DMA TO SIA CHANNEL B
+            //  D.GPIB EQU     6 * 40Q; DMA TO GPIB
             //
+            _dmaRouter.SelectDMADevice((SelectedDMADevice)((value & 0xe0) >> 5));
 
             //
             // Dole out Interrupt enables here:
@@ -71,5 +79,6 @@ namespace PERQemu.IO.Z80_new
         private PERQToZ80FIFO _perqZ80fifo;
         private Keyboard _keyboard;
         private NECuPD765A _fdc;
+        private DMARouter _dmaRouter;
     }
 }

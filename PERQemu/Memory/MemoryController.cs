@@ -216,11 +216,11 @@ namespace PERQemu.Memory
         /// </summary>
         public void Clock(MemoryCycle nextCycle)
         {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
-#endif
+//#if TRACING_ENABLED
+//            if (Trace.TraceOn)
+//                Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+//                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+//#endif
             // Update the current op
             Recognize();
 
@@ -230,11 +230,11 @@ namespace PERQemu.Memory
             // Update bookmarks for the next cycle
             UpdateBookmarks(nextCycle);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
-#endif
+//#if TRACING_ENABLED
+//            if (Trace.TraceOn)
+//                Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+//                         _name, Tstate, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+//#endif
         }
 
 #if TRACING_ENABLED

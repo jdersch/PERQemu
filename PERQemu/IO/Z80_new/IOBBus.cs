@@ -143,7 +143,7 @@ namespace PERQemu.IO.Z80_new
     /// IOBIOBus implements the Konamiman Z80dotNet IMemory interface for the purposes of
     /// providing access to the IOB's Z80 Memory space.
     /// </summary>
-    public class IOBMemoryBus : IMemory
+    public class IOBMemoryBus : IMemory, IDMADevice
     {
         public IOBMemoryBus()
         {
@@ -163,6 +163,10 @@ namespace PERQemu.IO.Z80_new
         {
             get { return 0x10000; } // 64K address space
         }
+
+        public bool ReadDataReady => true;      // Always ready
+
+        public bool WriteDataReady => true;     // Always ready
 
         public byte[] GetContents(int startAddress, int length) { return null; }
         public void SetContents(int startAddress, byte[] contents, int startIndex = 0, int? length = null) { }
@@ -198,6 +202,11 @@ namespace PERQemu.IO.Z80_new
                 // throw for now so I can see what's going on
                 throw new InvalidOperationException(String.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}.", address, value));
             }
+        }
+
+        public void DMATerminate()
+        {
+
         }
 
         private void LoadROM()

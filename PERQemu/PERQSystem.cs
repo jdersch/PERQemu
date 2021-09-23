@@ -466,9 +466,29 @@ namespace PERQemu
             _perqCPU.Reset();
 
             // TODO: anything else here need to be reset?
+
+            //
+            // If the user has specified an alternate boot character, kick off this workitem to
+            // automagically press it up until DDS 154.
+            //
+            if (BootChar != 0)
+            {
+                _scheduler.Schedule((ulong)(250.0 * Conversion.MsecToNsec), BootCharCallback);
+            }
         }
 
-        
+        private void BootCharCallback(ulong skewNsec, object context)
+        {
+            if (BootChar != 0 && CPU.DDS < 154)
+            {
+                // Send the key:
+                _iob.Z80System.Keyboard.QueueInput(BootChar);
+
+                // And do it again.
+                _scheduler.Schedule((ulong)(250.0 * Conversion.MsecToNsec), BootCharCallback);
+            }
+        }
+
         private RunState _state;
         private ExecutionMode _z80ExecutionMode;
         private string _debugMessage;

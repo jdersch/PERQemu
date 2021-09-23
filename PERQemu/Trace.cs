@@ -60,6 +60,7 @@ namespace PERQemu
         Keyboard =          0x20000000,
         MulDiv =            0x40000000,
         Z80SIO =            0x80000000,
+        Z80DMA =            0x100000000,
         All =               0xffffffffffffffff,
     }
 
@@ -150,6 +151,7 @@ namespace PERQemu
 
                 case LogType.OpFile:
                 case LogType.EStack:
+                case LogType.Z80DMA:
                     color = ConsoleColor.DarkYellow;
                     break;
 
@@ -168,6 +170,7 @@ namespace PERQemu
 
                 case LogType.Link:
                 case LogType.GPIB:
+                case LogType.FloppyDisk:
                     color = ConsoleColor.DarkMagenta;
                     break;
 

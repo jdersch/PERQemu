@@ -20,7 +20,6 @@ using Konamiman.Z80dotNet;
 using PERQemu.CPU;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
-using PERQemu.IO.Z80.IOB;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -34,33 +33,47 @@ namespace PERQemu.IO.Z80_new
             _system = system;
             _scheduler = new Scheduler(407);           // IOB Z80 clock runs at 2.4576Mhz, ~407nSec per clock tick.
 
+            _bus = new IOBIOBus(this);
+            _memory = new IOBMemoryBus();
             _cpu = new Z80Processor();
-            _fdc = new NECuPD765A(system);
+            _cpu.Memory = _memory;
+            _cpu.PortsSpace = _bus;
+
+            _fdc = new NECuPD765A(_scheduler);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
             _z80ctc = new Z80CTC(0x90, _scheduler);
-            _bus = new IOBIOBus(this);
+            _z80dma = new Z80DMA(0x98, _memory, _bus);
             _seekControl = new HardDiskSeekControl(system);
             _keyboard = new Keyboard();
-            _sio = new Z80SIO(0xb0, _scheduler);
+            _z80sio = new Z80SIO(0xb0, _scheduler);
             _tms9914a = new TMS9914A();
+            _dmaRouter = new DMARouter(this);
             _ioReg1 = new IOReg1(_z80ToPerqFifo);
-            _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc);
+            _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc, _dmaRouter);
+
+            _z80dma.AttachDeviceA(_dmaRouter);
+            _z80dma.AttachDeviceB(_memory);
             
+            // Put devices on the bus
             _bus.RegisterDevice(_fdc);
             _bus.RegisterDevice(_perqToZ80Fifo);
             _bus.RegisterDevice(_z80ToPerqFifo);
             _bus.RegisterDevice(_z80ctc);
+            _bus.RegisterDevice(_z80dma);
             _bus.RegisterDevice(_seekControl);
             _bus.RegisterDevice(_keyboard);
-            _bus.RegisterDevice(_sio);
+            _bus.RegisterDevice(_z80sio);
             _bus.RegisterDevice(_tms9914a);
             _bus.RegisterDevice(_ioReg1);
             _bus.RegisterDevice(_ioReg3);
 
             // Attach peripherals
             KrizTablet tablet = new KrizTablet(_scheduler, system);
-            _sio.AttachDevice(1, tablet);
+            _z80sio.AttachDevice(1, tablet);
+            
+            _floppyDrive = new FloppyDrive();
+            _fdc.AttachDrive(0, _floppyDrive);
 
             _z80Debugger = new Z80Debugger();
             _running = false;
@@ -70,8 +83,6 @@ namespace PERQemu.IO.Z80_new
         {
             _scheduler.Reset();
             _cpu.Reset();
-            _cpu.Memory = new IOBMemoryBus();
-            _cpu.PortsSpace = _bus;
             _bus.Reset();
         }
 
@@ -111,6 +122,7 @@ namespace PERQemu.IO.Z80_new
             if (_running)
             {
                 uint clocks = (uint)_cpu.ExecuteNextInstruction();
+                _z80dma.Execute();
 
                 // This is TERRIBLE
                 for (uint i = 0; i < clocks; i++)
@@ -175,6 +187,7 @@ namespace PERQemu.IO.Z80_new
             while (_running && !_stopAsyncExecution)
             {
                 int clocks = _cpu.ExecuteNextInstruction();
+                _z80dma.Execute();
 
                 // This is *STILL* TERRIBLE
                 for (uint i = 0; i < clocks; i++)
@@ -288,35 +301,59 @@ namespace PERQemu.IO.Z80_new
             }
         }
         
-        public void LoadFloppyDisk(string path) { }
+        public void LoadFloppyDisk(string path) 
+        {
+            _floppyDrive.LoadDisk(new PhysicalDisk.FloppyDisk(path));
+        }
 
-        public void SaveFloppyDisk(string path) { }
+        public void SaveFloppyDisk(string path) 
+        {
+            _floppyDrive.Disk.Save(path);
+        }
 
-        public void UnloadFloppyDisk() { }
+        public void UnloadFloppyDisk() 
+        {
+            _floppyDrive.UnloadDisk();
+        }
 
         public void SetSerialPort(ISerialDevice dev) { }
 
         public string GetSerialPort() { return String.Empty; }
 
-        public Z80Processor CPU { get { return _cpu; } }
+        public Z80Processor CPU => _cpu;
 
         public Queue<byte> FIFO { get; }
 
-        public IKeyboard Keyboard { get { return _keyboard; } }
+        public IKeyboard Keyboard => _keyboard;
+
+        // DMA Capable devices
+        public NECuPD765A FDC => _fdc;
+        public PERQToZ80FIFO PERQReadFIFO => _perqToZ80Fifo;
+
+        public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
+
+        public Z80SIO SIOA => _z80sio;
+
+        public TMS9914A GPIB => _tms9914a;
 
         private PERQSystem _system;
         private Z80Processor _cpu;
         private IOBIOBus _bus;
+        private IOBMemoryBus _memory;
         private IOReg1 _ioReg1;
         private IOReg3 _ioReg3;
         private NECuPD765A _fdc;
         private PERQToZ80FIFO _perqToZ80Fifo;
         private Z80ToPERQFIFO _z80ToPerqFifo;
         private Z80CTC _z80ctc;
+        private Z80DMA _z80dma;
         private HardDiskSeekControl _seekControl;
         private Keyboard _keyboard;
-        private Z80SIO _sio;
+        private Z80SIO _z80sio;
         private TMS9914A _tms9914a;
+        private DMARouter _dmaRouter;
+
+        private FloppyDrive _floppyDrive;
 
         private Scheduler _scheduler;
 

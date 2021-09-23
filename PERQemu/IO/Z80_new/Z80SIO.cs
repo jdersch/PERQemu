@@ -11,7 +11,7 @@ namespace PERQemu.IO.Z80_new
     /// It implements the operational modes that the PERQ IOB makes use of.
     /// Currently only enough is implemented to support the Kriz tablet.
     /// </summary>
-    public class Z80SIO : IZ80Device
+    public class Z80SIO : IZ80Device, IDMADevice
     {
         public Z80SIO(byte baseAddress, Scheduler scheduler)
         {
@@ -49,9 +49,19 @@ namespace PERQemu.IO.Z80_new
         {
             // TODO: this is bogus
             get { return (byte)(0x40 + (_channels[0].InterruptLatched ? _channels[0].InterruptOffset : _channels[1].InterruptOffset)); }
-        }
+        }      
 
         public event EventHandler NmiInterruptPulse;
+
+        // IDMADevice implementation
+        public bool ReadDataReady => true;
+
+        public bool WriteDataReady => true;
+
+        public void DMATerminate()
+        {
+            
+        }
 
         public void AttachDevice(int channel, ISIODevice device)
         {
