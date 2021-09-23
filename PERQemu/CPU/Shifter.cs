@@ -1,4 +1,4 @@
-// shifter.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
+// shifter.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -16,165 +16,165 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Runtime.Serialization;
-using System.Security.Permissions;
-
-namespace PERQemu.CPU
+namespace PERQemu.Processor
 {
-    public sealed class Shifter
+    public partial class CPU
     {
-        static Shifter()
-        {
-            BuildShifterTable();
-        }
 
-        public ushort ShifterOutput
+        public enum ShifterCommand
         {
-            get { return _shifterOutput; }
-        }
-
-        /// <summary>
-        /// Set up the shifter according to the PERQ's encoding rules
-        /// (two 4-bit nibbles packed into 1 command byte).
-        /// </summary>
-        public void SetShifterCommand(int input)
-        {
-            _shifterParams = _shifterTable[input & 0xff];
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Shifter, "Shifter: Command={0} amount={1} mask={2:x4}",
-                    _shifterParams.Command, _shifterParams.ShiftAmount, _shifterParams.ShiftMask);
-#endif
+            LeftShift = 0,
+            RightShift,
+            Rotate,
+            Field
         }
 
         /// <summary>
-        /// Set the shifter command the easy way (internal calls).
+        /// Implements the PERQ's 32-bit barrel shifter, which can do left and
+        /// right shifts, rotates, or bitfield extractions every cycle.  Though
+        /// the hardware only has one shared shifter datapath, we cheat a little
+        /// here and allow the MQ/MulDiv unit to have its own, and the RasterOp
+        /// unit to have one too.  That's a pretty big efficiency win, since we
+        /// don't have to potentially reprogram the shifter command on every cycle.
         /// </summary>
-        public void SetShifterCommand(ShifterCommand cmd, int amt, int mask)
+        public sealed class Shifter
         {
-            _shifterParams.Command = cmd;
-            _shifterParams.ShiftAmount = amt;
-            _shifterParams.ShiftMask = mask;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Shifter, "Shifter: Command={0} amount={1} mask={2:x4}",
-                    _shifterParams.Command, _shifterParams.ShiftAmount, _shifterParams.ShiftMask);
-#endif
-        }
-
-        /// <summary>
-        /// Applies shifter logic to the given input word.
-        /// </summary>
-        public void Shift(int input)
-        {
-            Shift(input, input);
-        }
-
-        /// <summary>
-        /// Performs left & right shifts (low word only) or combines the two
-        /// (high + low) to do rotates or field operations.  The ability to
-        /// specify two separate input words is used by RasterOp's "half word
-        /// pipeline."
-        /// </summary>
-        public void Shift(int low, int high)
-        {
-            uint d;
-
-            switch (_shifterParams.Command)
+            static Shifter()
             {
-                case ShifterCommand.LeftShift:
-                    _shifterOutput = (ushort)(low << _shifterParams.ShiftAmount);
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
+                BuildShifterTable();
+            }
+
+            public ushort ShifterOutput
+            {
+                get { return _output; }
+            }
+
+            /// <summary>
+            /// Set up the shifter according to the PERQ's encoding rules
+            /// (two 4-bit nibbles packed into 1 command byte).
+            /// </summary>
+            public void SetShifterCommand(int input)
+            {
+                _params = _shifterTable[input & 0xff];
+
+                Trace.Log(LogType.Shifter, "Command={0} amount={1} mask={2:x4}",
+                          _params.Command, _params.ShiftAmount, _params.ShiftMask);
+            }
+
+            /// <summary>
+            /// Set the shifter command the easy way (internal calls).
+            /// </summary>
+            public void SetShifterCommand(ShifterCommand cmd, int amt, int mask)
+            {
+                _params.Command = cmd;
+                _params.ShiftAmount = amt;
+                _params.ShiftMask = mask;
+
+                Trace.Log(LogType.Shifter, "Command={0} amount={1} mask={2:x4}",
+                          _params.Command, _params.ShiftAmount, _params.ShiftMask);
+            }
+
+            /// <summary>
+            /// Applies shifter logic to the given input word.
+            /// </summary>
+            public void Shift(int input)
+            {
+                Shift(input, input);
+            }
+
+            /// <summary>
+            /// Performs left and right shifts (low word only) or combines the two
+            /// (high + low) to do rotates or field operations.  The ability to
+            /// specify two separate input words is used by RasterOp's "half word
+            /// pipeline."
+            /// </summary>
+            public void Shift(int low, int high)
+            {
+                uint d;
+
+                switch (_params.Command)
+                {
+                    case ShifterCommand.LeftShift:
+                        _output = (ushort)(low << _params.ShiftAmount);
+
                         Trace.Log(LogType.Shifter, "Left shift by {0}: in={1:x4} out={2:x4}",
-                                                   _shifterParams.ShiftAmount, low, _shifterOutput);
-#endif
-                    break;
+                                  _params.ShiftAmount, low, _output);
+                        break;
 
-                case ShifterCommand.RightShift:
-                    _shifterOutput = (ushort)((low & 0x0ffff) >> _shifterParams.ShiftAmount);    // logical, not arithmetic.
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
+                    case ShifterCommand.RightShift:
+                        _output = (ushort)((low & 0x0ffff) >> _params.ShiftAmount);    // logical, not arithmetic
+
                         Trace.Log(LogType.Shifter, "Right shift by {0}: in={1:x4} out={2:x4}",
-                                                   _shifterParams.ShiftAmount, low, _shifterOutput);
-#endif
-                    break;
+                                  _params.ShiftAmount, low, _output);
+                        break;
 
-                case ShifterCommand.Rotate:
-                    d = (uint)(((high & 0xffff) << 16) | (low & 0xffff));   // 32 bits
-                    _shifterOutput = (ushort)(0xffff & (d >> _shifterParams.ShiftAmount));
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
+                    case ShifterCommand.Rotate:
+                        d = (uint)(((high & 0xffff) << 16) | (low & 0xffff));   // 32 bits
+                        _output = (ushort)(0xffff & (d >> _params.ShiftAmount));
+
                         Trace.Log(LogType.Shifter, "Rotate by {0}: in={1:x4}{2:x4} out={3:x4}",
-                                                   _shifterParams.ShiftAmount, high, low, _shifterOutput);
-#endif
-                    break;
+                                  _params.ShiftAmount, high, low, _output);
+                        break;
 
-                case ShifterCommand.Field:
-                    d = (uint)(((high & 0xffff) << 16) | (low & 0xffff));   // 32 bits
-                    _shifterOutput = (ushort)(((d >> _shifterParams.ShiftAmount)) & _shifterParams.ShiftMask);
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
+                    case ShifterCommand.Field:
+                        d = (uint)(((high & 0xffff) << 16) | (low & 0xffff));   // 32 bits
+                        _output = (ushort)(((d >> _params.ShiftAmount)) & _params.ShiftMask);
+
                         Trace.Log(LogType.Shifter, "Field mask {0} rotated by {1} out={2:x4}",
-                                                   _shifterParams.ShiftMask, _shifterParams.ShiftAmount, _shifterOutput);
-#endif
-                    break;
+                                  _params.ShiftMask, _params.ShiftAmount, _output);
+                        break;
+                }
             }
-        }
 
-        /// <summary>
-        /// Precomputes all possible shifter values to make computation at runtime cheap.
-        /// </summary>
-        private static void BuildShifterTable()
-        {
-            _shifterTable = new ShifterTableEntry[0x100];
-
-            for (int i = 0; i < 0x100; i++)
+            /// <summary>
+            /// Precomputes all possible shifter values to make computation at runtime cheap.
+            /// </summary>
+            private static void BuildShifterTable()
             {
-                int low = (~i) & 0x0f;
-                int high = ((~i) & 0xf0) >> 4;
+                _shifterTable = new ShifterTableEntry[0x100];
 
-                // See if this is a left or right shift, or a rotate
-                if (low == 0xf)
+                for (int i = 0; i < 0x100; i++)
                 {
-                    _shifterTable[i].Command = ShifterCommand.LeftShift;
-                    _shifterTable[i].ShiftAmount = high;
-                }
-                else if ((0xf - low) == high)
-                {
-                    _shifterTable[i].Command = ShifterCommand.RightShift;
-                    _shifterTable[i].ShiftAmount = high;
-                }
-                else if (
-                    (low == 0xd || low == 0xe) &&
-                    (high >= 0x8 && high <= 0xf))
-                {
-                    _shifterTable[i].Command = ShifterCommand.Rotate;
-                    _shifterTable[i].ShiftAmount = (high & 0x7) | (low == 0xd ? 0x0 : 0x8);
-                }
-                else
-                {
-                    _shifterTable[i].Command = ShifterCommand.Field;
-                    _shifterTable[i].ShiftAmount = high;
-                    _shifterTable[i].ShiftMask = (0x1ffff >> (0x10 - low));
+                    int low = (~i) & 0x0f;
+                    int high = ((~i) & 0xf0) >> 4;
+
+                    // See if this is a left or right shift, or a rotate
+                    if (low == 0xf)
+                    {
+                        _shifterTable[i].Command = ShifterCommand.LeftShift;
+                        _shifterTable[i].ShiftAmount = high;
+                    }
+                    else if ((0xf - low) == high)
+                    {
+                        _shifterTable[i].Command = ShifterCommand.RightShift;
+                        _shifterTable[i].ShiftAmount = high;
+                    }
+                    else if (
+                        (low == 0xd || low == 0xe) &&
+                        (high >= 0x8 && high <= 0xf))
+                    {
+                        _shifterTable[i].Command = ShifterCommand.Rotate;
+                        _shifterTable[i].ShiftAmount = (high & 0x7) | (low == 0xd ? 0x0 : 0x8);
+                    }
+                    else
+                    {
+                        _shifterTable[i].Command = ShifterCommand.Field;
+                        _shifterTable[i].ShiftAmount = high;
+                        _shifterTable[i].ShiftMask = (0x1ffff >> (0x10 - low));
+                    }
                 }
             }
+
+            private struct ShifterTableEntry
+            {
+                public ShifterCommand Command;
+                public int ShiftAmount;
+                public int ShiftMask;
+            }
+
+            private ushort _output;
+            private ShifterTableEntry _params;
+            private static ShifterTableEntry[] _shifterTable;
         }
-
-
-        private struct ShifterTableEntry
-        {
-            public ShifterCommand Command;
-            public int ShiftAmount;
-            public int ShiftMask;
-        }
-
-        private ushort _shifterOutput;
-        private ShifterTableEntry _shifterParams;
-        private static ShifterTableEntry[] _shifterTable;
     }
 }
-

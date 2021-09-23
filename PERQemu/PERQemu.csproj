@@ -194,6 +194,20 @@
     <Compile Include="Scheduler.cs" />
     <Compile Include="Trace.cs" />
     <Compile Include="IO\Z80\IOB\HardDiskSeekControl.cs" />
+    <Compile Include="CPU\ALU.cs" />
+    <Compile Include="CPU\CallStack.cs" />
+    <Compile Include="CPU\ControlStore.cs" />
+    <Compile Include="CPU\CPU.cs" />
+    <Compile Include="CPU\ExpressionStack.cs" />
+    <Compile Include="CPU\ExtendedRegister.cs" />
+    <Compile Include="CPU\Instruction.cs" />
+    <Compile Include="CPU\PERQ1.cs" />
+    <Compile Include="CPU\PERQ1A.cs" />
+    <Compile Include="CPU\PERQ24.cs" />
+    <Compile Include="CPU\RasterOp.cs" />
+    <Compile Include="CPU\RegisterFile.cs" />
+    <Compile Include="CPU\Sequencer.cs" />
+    <Compile Include="CPU\Shifter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

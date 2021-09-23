@@ -1,4 +1,4 @@
-// cpu.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
+// cpu.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -19,19 +19,26 @@
 using System;
 using System.IO;
 using System.Text;
-
-using PERQemu.IO;
-using PERQemu.Memory;
-using PERQemu.Debugger;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-#if DEBUG
-using PERQemu.IO.Z80.IOB;
-using System.Collections.Generic;
-#endif
+using PERQemu.IO;
+using PERQemu.IO.Z80_new;
+using PERQemu.Memory;
+using PERQemu.Debugger;
 
-namespace PERQemu.CPU
+namespace PERQemu.Processor
 {
+
+    public class PowerOffException : Exception
+    {
+        public PowerOffException()
+        {
+            // This probably belongs somewhere else.
+            // It's also only relevant to the PERQ-1.
+        }
+    }
+
     /// <summary>
     /// PERQ hardware interrupts, listed in order of priority.
     /// </summary>
@@ -50,33 +57,74 @@ namespace PERQemu.CPU
     }
 
     /// <summary>
-    /// Implements a PERQ 1 4K or 16K CPU (depending on the SIXTEEN_K compiler flag).
-    /// Since we only ever need one of these, and to simplify communication with other
-    /// devices (interrupt requests, etc.) this is a singleton.
-    ///
-    /// There are some aspects that could be factored out of this class (like the DDS
-    /// and boot ROM logic).
-    /// </summary>    
-    public sealed class PERQCpu
+    /// Implements the PERQ's custom microengine.
+    /// </summary>
+    public partial class CPU
     {
-        public PERQCpu(PERQSystem system)
+        static CPU()
         {
-            _system = system;
+            // Our derived classes customize themselves in the static
+            // constructor, setting various word sizes, masks, etc.
+        }
 
-            // Load the boot ROM
-            LoadBootRom(Paths.BuildPROMPath("boot.bin"));
+        public CPU(PERQSystem system)
+        {
+
+            _system = system;
+            _memory = _system.Memory;
 
             // Create CPU components
-            _alu = new ALU();
-            _shifter = new Shifter();
-#if SIXTEEN_K
-            _mqShifter = new Shifter();
-#endif
-            _rasterOp = new RasterOp(system);
-            _memory = system.MemoryBoard;
-            _ioBus = new IOBus(system);
+            _ustore = new ControlStore();
+            _usequencer = new Sequencer(this);
 
-            Reset();
+            _alu = new ALU();
+            _xy = new RegisterFile();
+            _estack = new ExpressionStack();
+
+            _shifter = new Shifter();
+            _rasterOp = new RasterOp(_memory);
+
+            _mqShifter = new Shifter();
+
+            //Reset();
+        }
+
+        /// <summary>
+        /// Reset the CPU, clear the control store and re-enable the boot ROM.
+        /// </summary>
+        public void Reset()
+        {
+            // Reset the major components
+            _xy.Reset();
+            _alu.Reset();
+            _estack.Reset();
+            _ustore.Reset();
+            _rasterOp.Reset();
+            _usequencer.Reset();
+
+            _memory.Reset();            // fixme  should this be here?
+
+            // Clear the op file
+            for (int i = 0; i < 16; i++)
+            {
+                _opFile[i] = 0xff;
+            }
+
+            // Reset the rest
+            _dds = 0;
+            _bpc = 0;
+            _iod = 0;
+            _clocks = 0;
+            _lastPC = 0;
+            _lastBmux = 0;
+            _refillOp = false;
+            _incrementBPC = false;
+            _interruptFlag = InterruptType.None;
+
+            _mq = 0;
+            _mqEnabled = false;
+
+            Trace.Log(LogType.CpuState, "CPU: Reset.");
         }
 
         // "Real" clock speed in cycles/sec (based on 170ns cycle time).  Approx. 5.88Mhz.
@@ -92,118 +140,84 @@ namespace PERQemu.CPU
         public static readonly int IOFudge = 8;
 
         /// <summary>
-        /// Reset the CPU, clear the writable control store and re-enable the boot ROM.
+        /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
+        /// called once.
         /// </summary>
-        public void Reset()
+        public void LoadROM(string path)
         {
-            _romEnabled = true;
-            _interruptFlag = InterruptType.None;
-
-            _clocks = 0;
-            _dds = 0;
-            _iod = 0;
-            _bpc = 0;
-            _lastBmux = 0;
-            _wcsHold = false;
-            _incrementBPC = false;
-            _victim = 0xffff;
-            _stackPointer = 0;
-            _pc.Value = 0;
-            _s.Value = 0;
-            _mq = 0;
-#if SIXTEEN_K
-            _registerBase = 0;
-            _mqEnabled = false;
-#endif
-
-#if TRACING_ENABLED
-            _lastPC = 0;
-#endif
-            _oldALURegisters = new ALURegisterFile();
-
-            // Clear microcode
-            for (int i = 0; i < _microcode.Length; i++)
+            try
             {
-                _microcodeCache[i] = null;
-                _microcode[i] = 0;
+                _ustore.LoadBootROM(path);
             }
-
-            // Clear registers
-            for (int i = 0; i < _r.Length; i++)
+            catch
             {
-                _r[i] = 0;
+                Console.WriteLine("Could not load boot ROM from {0}!", path);
+                // return fail or throw something?
             }
-
-            // Clear Estack
-            for (int i = 0; i < _stack.Length; i++)
-            {
-                _stack[i] = 0;
-            }
-
-            _callStack.Clear();
-            _callStack.Reset();
-
-            _alu.Reset();
-            _rasterOp.Reset();
-            _memory.Reset();
-            _ioBus.Reset();
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.CpuState, "CPU: Reset.");
-#endif
         }
 
         /// <summary>
-        /// Executes a single microinstruction and runs associated hardware for one cycle.
+        /// Runs the PERQ microengine for one microcycle.
         /// </summary>
-        public void Execute()
+        public RunState Execute(RunState currentState)
         {
+
             // Decode the next instruction
-            Instruction uOp = GetInstruction(PC);
+            Instruction uOp = _ustore.GetInstruction((ushort)_usequencer.PC);
 
             _clocks++;
 
             // Clock the memory state machine and set up any pending fetches
             _memory.Tick(uOp.MemoryRequest);
 
+            // If a refill is in progress, load the next word (even if we abort
+            // the current instruction below)
+            if (_refillOp)
+            {
+                LoadOpWord();
+            }
+
             //
             // Several conditions may stall the processor:
-            //  1.  In the T0 & T1 after any Fetch, attempting to access MDI or MDX causes
-            //      the processor to stall, but other instructions may run in those cycles;
-            //  2.  The memory system may assert a "hold" if the IO or DMA is accessing
-            //      memory; we don't actually enforce that, yet, but the "wait" may be set
-            //      for stores issued in the wrong cycle;
-            //  3.  WCS writes actually take two cycles to execute; we fake one wait state
-            //      here with the _wcsHold boolean.
-            // If any of those conditions are true we "abort" the current instruction until
-            // the correct cycle comes around.
+            //  1.  In the T0 & T1 after any Fetch, attempting to access MDI
+            //      or MDX causes the processor to stall, but other instructions
+            //      may run in those cycles;
+            //  2.  The memory system may assert a "hold" if the IO or DMA is
+            //      accessing memory; we don't actually enforce that, yet, but
+            //      the "wait" may be set for stores issued in the wrong cycle;
+            //  3.  WCS writes actually take two cycles to execute; we fake a
+            //      wait state after any control store writes.
             //
-            bool abort = (_wcsHold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid));
+            // If any of those conditions are true we "abort" the current
+            // instruction until the correct cycle comes around.
+            //
+            bool abort = (_ustore.Hold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid));
 
             if (abort)
             {
-                // We're waiting for the next T3 or T2 cycle to come around on the guitar is
-                // what we're doing.  We can't cheat and skip the wait states, as RasterOp
-                // depends on T-state cycling through each word during overlapped fetch/stores.
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.MemoryState,
-                        "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
-                        _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _wcsHold);
-#endif
+                // We're waiting for the next T3 or T2 cycle to come around on
+                // the guitar is what we're doing.  We can't cheat and skip the
+                // wait states, as RasterOp depends on T-state cycling through
+                // each word during overlapped fetch/stores.
+                Trace.Log(LogType.MemoryState,
+                    "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
+                    _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _ustore.Hold);
 
-                // On aborts, no memory writes occur - no Tock()
+                // On aborts, no memory writes occur - no Tock()                    
 
                 // WCS writes take two cycles to run on the real hardware, but just
                 // one cycle here -- enough to screw up memory timing during the loop
                 // when microcode is being loaded!  Clear the hold flag to continue.
-                _wcsHold = false;
-                return;
+                _ustore.Hold = false;
+
+                // So we can single step through aborts for debugging
+                if (currentState == RunState.SingleStep)
+                {
+                    return RunState.Debug;
+                }
+                return currentState;
             }
 
-            //
-            // Run the microinstruction
-            //
 
 #if TRACING_ENABLED
             // This is a very expensive log, so only call it if we have to
@@ -211,75 +225,57 @@ namespace PERQemu.CPU
             {
                 Trace.Log(LogType.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
             }
-
-            // Catch cases where the CPU is looping forever
-            if (_lastPC == PC &&
-                uOp.CND == Condition.True &&
-                uOp.JMP == JumpOperation.Goto)
-            {
-                throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x5}", PC));
-            }
 #endif
 
-            // If the last instruction was NextOp or NextInst, increment BPC at the start of this instruction
+#if DEBUG
+            // Catch cases where the CPU is looping forever
+            //if (_lastPC == PC &&
+            //    uOp.CND == Condition.True &&
+            //    uOp.JMP == JumpOperation.Goto)
+            //{
+            //    throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x5}", PC));
+            //}
+#endif
+
+            // If the last instruction was NextOp or NextInst, increment
+            // BPC at the start of this instruction
             if (_incrementBPC)
             {
                 _bpc++;
                 _incrementBPC = false;
 
-#if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.OpFile, "OpFile: BPC incremented to {0:x1}", BPC);
-#endif
+
+                Trace.Log(LogType.OpFile, "OpFile: BPC incremented to {0:x1}", BPC);
             }
 
-            // Latch the ALU registers from the last micro-op before we do this instruction's
-            // ALU operation since we need them for conditional jumps later.
-            _oldALURegisters = _alu.Registers;
+            // Latch the ALU result and flags from the last micro-op before we
+            // do this instruction's op, to test for conditional jumps later.
+            _alu.LatchResult();
 
+            //
             // Now decode and execute the actual instruction:
+            //
 
-            // Select ALU inputs:
-
-            int bmux;
-
-            // Select BMUX input
-            if (uOp.B == 0)
-            {
-#if SIXTEEN_K
-                if (uOp.Y < 0x40)
-                {
-                    bmux = _r[uOp.Y | _registerBase];   // Or-in Base register (16K only)
-                }
-                else
-#endif
-                {
-                    bmux = _r[uOp.Y];
-                }
-            }
-            else
-            {
-                bmux = uOp.BMuxInput;
-            }
-
-            _lastBmux = bmux;
-
+            // Select ALU inputs
+            int bmux = _lastBmux = GetBmuxInput(uOp);
             int amux = GetAmuxInput(uOp);
 
-#if SIXTEEN_K
-            // If the hardware multiply unit is enabled, run the (possibly modified) ALU op
+            // If the hardware multiply unit is enabled, pass the MQ register
+            // to the ALU (where it may be modified); otherwise, run a normal op.
             if (_mqEnabled)
             {
-                DoMulDivALUOp(amux, bmux, _mq, uOp.ALU);
+                _alu.Execute(uOp.ALU, amux, bmux, _rasterOp.MulDivInst, _mq);
             }
             else
-#endif
             {
-                // Do ALU operation
-                _alu.DoALUOp(amux, bmux, uOp.ALU);
+                _alu.Execute(uOp.ALU, amux, bmux);
             }
 
             // Do writeback if W bit is set
-            DoWriteBack(uOp);
+            if (uOp.W == 1)
+            {
+                _xy.WriteRegister(uOp.X, _alu.R.Value);
+            }
 
             // If enabled, clock the RasterOp pipeline
             if (_rasterOp.Enabled)
@@ -289,7 +285,7 @@ namespace PERQemu.CPU
 
             // Is a memory store operation in progress?  Pending RasterOp stores
             // supercede the ALU; otherwise write the last ALU result
-            if (_system.MemoryBoard.MDONeeded)
+            if (_memory.MDONeeded)
             {
                 if (_rasterOp.ResultReady)
                 {
@@ -297,38 +293,98 @@ namespace PERQemu.CPU
                 }
                 else
                 {
-                    _memory.Tock((ushort)_alu.Registers.R);
+                    _memory.Tock(_alu.R.Lo);
                 }
             }
 
             // Execute whatever function this op calls for
             DispatchFunction(uOp);
 
-#if TRACING_ENABLED
+            // Save these for posterity
             _lastPC = PC;
             _lastInstruction = uOp;
-#endif
 
             // Jump to where we need to go...
-            DispatchJump(uOp);
+            _usequencer.DispatchJump(uOp);
 
-        }
-
-        #region Getters and setters
-
-        /// <summary>
-        /// This is temporary while performance analysis is in effect.
-        /// </summary>
-        public long Clocks
-        {
-            get 
+            // TODO: does this logic belong in here?
+            // And we're done.  Handle debugging state, if any
+            // If we're debugging one Qcode at a time and we just finished one, break now
+            if (currentState == RunState.SingleStep ||
+                (_incrementBPC && currentState == RunState.RunInst))
             {
-                long v = _clocks;
-                _clocks = 0;
-                return v; 
+                return RunState.Debug;
             }
+
+            return currentState;
         }
 
+
+        #region Properties
+
+        public static string Name
+        {
+            get { return _name; }
+        }
+
+        public static string Description
+        {
+            get { return _desc; }
+        }
+
+        public static int CPUBits
+        {
+            get { return _bits; }
+        }
+
+        public static int CPUMask
+        {
+            get { return _mask; }
+        }
+
+        public static int WCSBits
+        {
+            get { return _wcsBits; }
+        }
+
+        public static int WCSSize
+        {
+            get { return _wcsSize; }
+        }
+
+        public static int WCSMask
+        {
+            get { return _wcsMask; }
+        }
+
+        public static bool Is4K
+        {
+            get { return (_wcsSize == 4096); }
+        }
+
+        public static int MicroCycleTime
+        {
+            get { return _cycleTime; }
+        }
+
+        public ulong Clocks
+        {
+            get { return _clocks; }
+        }
+
+        public bool RasterOpEnabled
+        {
+            get { return _rasterOp.Enabled; }
+        }
+
+        public bool OpFileEmpty
+        {
+            get { return (BPC & 0x8) != 0; }
+        }
+
+        #endregion
+
+        #region Debugger properties
         /// <summary>
         /// Returns the current DDS value.  (Not really a register, but useful! :-)
         /// </summary>
@@ -336,6 +392,15 @@ namespace PERQemu.CPU
         public int DDS
         {
             get { return _dds; }
+        }
+
+        /// <summary>
+        /// Returns the OpFile contents.
+        /// </summary>
+        [DebugProperty("opfile")]   // ?
+        public byte[] OpFile
+        {
+            get { return _opFile; }
         }
 
         /// <summary>
@@ -348,48 +413,45 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Exposes whether the last instruction was NextInst or NextOp
-        /// </summary>
-        public bool IncrementBPC
-        {
-            get { return _incrementBPC; }
-        }
-
-        /// <summary>
-        /// Indicates whether the Opfile is empty or not,
-        /// based on bit 4 of BPC.
-        /// </summary>
-        public bool OpFileEmpty
-        {
-            get { return (BPC & 0x8) != 0; }
-        }
-
-        /// <summary>
         /// The Victim Latch.
         /// </summary>
         [DebugProperty("victim")]
         public ushort Victim
         {
-            get { return _victim; }
+            get { return _usequencer.Victim; }
         }
 
         /// <summary>
         /// The uState register.
         /// </summary>
+        /// <remarks>
+        /// I have a feeling our handling here isn't complete; allegedly _lastBmux
+        /// is only selected if Ustate doesn't specify a register -- but how is that
+        /// coded by the microassembler?  Nothing in the standard microcode seems to
+        /// use that feature anyway, or we're just accidentally setting _lastBmux
+        /// correctly and it passes?  The H bit on the 24bit cpus selects a second
+        /// uState register, which is really just called "upper" -- so on the 24-bit
+        /// machines, _lastbmux (bits 12:15) are always zero.  We don't allow reading
+        /// the CCSR0 PAL here either, but I suspect only a few *really* esoteric
+        /// diagnostics ever used that functionality, and Tony alludes to a possible
+        /// hardware bug that made it not work on the 4k CPU anyway.  This is off
+        /// into the serious periphery of PERQ esoterica, though Accent does appear
+        /// to make use of the Upper() macro extensively so to do 24 bit support
+        /// properly I'll have to investigate further! (24-bit POS G.82/G.85 (?) was
+        /// exceedingly rare and is probably lost forever...)
+        /// </remarks>
         [DebugProperty("ustate")]
-        public int MicrostateRegister
+        public virtual int ReadMicrostateRegister(byte h)
         {
-            get
-            {
-                return
-                    BPC |
-                    (_alu.Registers.Ovf ? 0x0010 : 0x0) |
-                    (_alu.Registers.Eql ? 0x0020 : 0x0) |
-                    (_alu.Registers.Cry ? 0x0040 : 0x0) |
-                    (_alu.Registers.Lss ? 0x0080 : 0x0) |
-                    (_stackPointer != 0 ? 0x0200 : 0x0) |
-                    ((((~_lastBmux) >> 16) & 0xf) << 12);
-            }
+            // On the 20-bit CPUs, there's only one microstate register:
+            return
+                BPC |
+                (_alu.Flags.Ovf ? 0x0010 : 0x0) |
+                (_alu.Flags.Eql ? 0x0020 : 0x0) |
+                (_alu.Flags.Cry ? 0x0040 : 0x0) |
+                (_alu.Flags.Lss ? 0x0080 : 0x0) |
+                (_estack.StackPointer != 0 ? 0x0200 : 0x0) |
+                ((((~_lastBmux) >> 16) & 0xf) << 12);
         }
 
         /// <summary>
@@ -398,8 +460,8 @@ namespace PERQemu.CPU
         [DebugProperty("pc")]
         public ushort PC
         {
-            get { return _pc.Value; }
-            set { _pc.Value = value; }
+            get { return (ushort)_usequencer.PC; }
+            set { _usequencer.PC = value; }
         }
 
         /// <summary>
@@ -419,10 +481,7 @@ namespace PERQemu.CPU
         {
             _interruptFlag |= i;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Interrupt, "Interrupt flag {0} raised, active interrupts now {1}", i, _interruptFlag);
-#endif
+            Trace.Log(LogType.Interrupt, "Interrupt {0} raised, active now {1}", i, _interruptFlag);
         }
 
         /// <summary>
@@ -431,23 +490,20 @@ namespace PERQemu.CPU
         [DebugFunction("clear interrupt")]
         public void ClearInterrupt(InterruptType i)
         {
-#if TRACING_ENABLED
             if ((_interruptFlag & ~i) != _interruptFlag)
             {
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Interrupt, "Interrupt flag {0} cleared, active interrupts now {1}", i, _interruptFlag & ~i);
+                Trace.Log(LogType.Interrupt, "Interrupt {0} cleared, active now {1}", i, _interruptFlag & ~i);
             }
-#endif
             _interruptFlag &= ~i;
         }
 
         /// <summary>
-        /// The CPU's microcode store (4 or 16K).
+        /// The CPU's microcode store.
         /// </summary>
         [DebugProperty("ucode")]
         public ulong[] Microcode
         {
-            get { return _microcode; }
+            get { return _ustore.Microcode; }
         }
 
         /// <summary>
@@ -456,19 +512,17 @@ namespace PERQemu.CPU
         [DebugProperty("r")]
         public int R
         {
-            get { return _alu.Registers.R; }
+            get { return _alu.R.Value; }
         }
 
-#if SIXTEEN_K
         /// <summary>
-        /// The base register for indexing XY.
+        /// The base register for indexing the XY registers.
         /// </summary>
         [DebugProperty("rbase")]
         public byte RegisterBase
         {
-            get { return _registerBase; }
+            get { return _xy.RegisterBase; }
         }
-#endif
 
         /// <summary>
         /// The Multiply/Divide MQ register.
@@ -488,82 +542,13 @@ namespace PERQemu.CPU
             get { return _iod; }
         }
 
-        /// <summary>
-        /// The CPU's expression stack.
-        /// </summary>
-        [DebugProperty("estk")]
-        public int[] EStack
-        {
-            get { return _stack; }
-        }
-
-        /// <summary>
-        /// The expression stack pointer.
-        /// </summary>
-        [DebugProperty("estkptr")]
-        public int EStackPointer
-        {
-            get { return _stackPointer; }
-            set { _stackPointer = value; }
-        }
-
-        /// <summary>
-        /// The Am2910 call stack.
-        /// </summary>
-        public CallStack CallStack
-        {
-            get { return _callStack; }
-        }
-
-        public RasterOp RasterOp
-        {
-            get { return _rasterOp; }
-        }
         #endregion
 
         #region CPU Helper functions
-        /// <summary>
-        /// Reads the instruction from the microcode store (or ROM) at the given address.
-        /// </summary>
-        /// <param name="address"></param>
-        /// <returns>The microinstruction to execute</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Instruction GetInstruction(ushort address)
-        {
-            // Return the precomputed microcode, unless it has yet to be cached
-            Instruction current = _microcodeCache[address];
-            if (current == null)
-            {
-                ulong word;
-
-                if (_romEnabled)
-                {
-                    if (address < 0x200)
-                    {
-                        word = _rom[address];
-                    }
-                    else
-                    {
-                        word = _microcode[address];
-                    }
-                }
-                else
-                {
-                    word = _microcode[address];
-                }
-
-                current = _microcodeCache[address] = new Instruction(word, address);
-            }
-
-            return current;
-        }
 
         /// <summary>
         /// Selects the proper AMUX input for the specified instruction
         /// </summary>
-        /// <param name="uOp"></param>
-        /// <returns>AMUX input</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetAmuxInput(Instruction uOp)
         {
             int amux = 0;
@@ -572,7 +557,7 @@ namespace PERQemu.CPU
             switch (uOp.A)
             {
                 case AField.Shifter:
-                    _shifter.Shift(_oldALURegisters.R);
+                    _shifter.Shift(_alu.OldR.Lo);       // Shifter takes 16 bits of R
                     amux = _shifter.ShifterOutput;
                     break;
 
@@ -580,28 +565,18 @@ namespace PERQemu.CPU
                     if (OpFileEmpty)
                     {
                         // Only latch if Victim is empty (0xffff indicates an unset Victim...)
-                        if (_victim == 0xffff)
+                        if (_usequencer.Victim == _wcsMask)
                         {
-#if SIXTEEN_K
-                            // 16K CPU - All 14 bits saved, according to VFY 2.x...
-                            _victim = _pc.Value;
-#else
-                            // 4K CPU - Only the low 12 bits count for the Victim latch
-                            _victim = _pc.Lo;
-#endif
-#if TRACING_ENABLED
-                            if (Trace.TraceOn)
-                                Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _victim);
-#endif
+                            _usequencer.Victim = _usequencer.PC;    // This is gives 12 or 14 bits
+
+                            Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _usequencer.Victim);
                         }
                     }
 
-                    amux = _memory.OpFile[BPC];
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
-#endif
+                    amux = _opFile[BPC];
                     _incrementBPC = true;   // Increment BPC at the beginning of the next instruction
+
+                    Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
                     break;
 
                 case AField.IOD:
@@ -613,28 +588,19 @@ namespace PERQemu.CPU
                     break;
 
                 case AField.MDX:
-                    amux = (_memory.MDI & 0xf) << 16;
+                    amux = (_memory.MDI & (_bits == 24 ? 0xff : 0xf)) << 16;
                     break;
 
                 case AField.UState:
-                    amux = MicrostateRegister;
+                    amux = ReadMicrostateRegister(uOp.H);
                     break;
 
                 case AField.XYRegister:
-#if SIXTEEN_K
-                    if (uOp.X < 0x40)
-                    {
-                        amux = _r[uOp.X | _registerBase];   // Or-in Base register (16K only)
-                    }
-                    else
-#endif
-                    {
-                        amux = _r[uOp.X];
-                    }
+                    amux = _xy.ReadRegister(uOp.X);
                     break;
 
                 case AField.TOS:
-                    amux = _stack[_stackPointer];
+                    amux = _estack.TOS;
                     break;
 
                 default:
@@ -645,11 +611,8 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Selects the proper BMUX input for the specified instruction
+        /// Selects the proper BMUX input for the specified instruction.
         /// </summary>
-        /// <param name="uOp"></param>
-        /// <returns>BMUX input</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetBmuxInput(Instruction uOp)
         {
             int bmux = 0;
@@ -657,16 +620,7 @@ namespace PERQemu.CPU
             // Select BMUX input
             if (uOp.B == 0)
             {
-#if SIXTEEN_K
-                if (uOp.Y < 0x40)
-                {
-                    bmux = _r[uOp.Y | _registerBase];   // Or-in Base register (16K only)
-                }
-                else
-#endif
-                {
-                    bmux = _r[uOp.Y];
-                }
+                bmux = _xy.ReadRegister(uOp.Y);
             }
             else
             {
@@ -677,118 +631,8 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// If W bit set, write R back to the register file.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DoWriteBack(Instruction uOp)
-        {
-            // Do it if the W (write) bit is set.
-            // We ASSUME that the assembler sets W for R := (MQ | Victim) phrases...
-            if (uOp.W == 1)
-            {
-#if SIXTEEN_K
-                if (uOp.X < 0x40)
-                {
-                    _r[uOp.X | _registerBase] = _alu.Registers.R;   // Or-in Base register (16K only)
-
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.RegisterAssignment, "R|RBase{0:x2}={1:x5}",
-                            uOp.X | _registerBase, _alu.Registers.R);
-#endif
-                }
-                else
-#endif
-                {
-                    _r[uOp.X] = _alu.Registers.R;
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.RegisterAssignment, "R{0:x2}={1:x5}", uOp.X, _alu.Registers.R);
-#endif
-                }
-            }
-        }
-
-#if SIXTEEN_K
-        /// <summary>
-        /// Dark magick to modify the ALU op if necessary for a Multiply or Divide step.
-        /// Modifies the Amux and ALU op inputs as needed and runs the ALU; later the
-        /// special function select updates the MQ register appropriately.
-        /// </summary>
-        private void DoMulDivALUOp(int amux, int bmux, int mdReg, ALUOperation curOp)
-        {
-            ALUOperation modOp = curOp;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MulDiv, "MulDiv ALUop: IN  op={0} amux={1:x5} mq={2:x4}", curOp, amux, mdReg);
-#endif
-
-            if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
-            {
-                switch (_rasterOp.MulDivInst)
-                {
-                    case MulDivCommand.Off:
-                        // Should never happen!
-                        throw new InvalidOperationException("DoMulDivALUOp called with MulDivInst=OFF!?");
-
-                    case MulDivCommand.UnsignedDivide:
-                        //
-                        // For a divide step, shift the MSB of the quotient (MQ<15> from the last cycle)
-                        // into the LSB of the remainder (SHIFT<0> here, already shifted by amux select).
-                        // Later DispatchFunction() will shift the quotient in MQ and apply the computed Q0 bit.
-                        //
-                        int bit = (mdReg & 0x8000) >> 15;           // save MQ<15> from last cycle
-                        amux = ((amux & 0xffffe) | bit);            // xfer it into SHIFT<0> (current amux input)
-
-                        //
-                        // Next, examine the sign bit from the PREVIOUS cycle's result (R<15>) to determine
-                        // if the current op should be an addition or subtraction (of the remainder).  Only
-                        // do this if the current op is add/sub (first use of DivideStep is a shift).
-                        //
-                        if ((_oldALURegisters.R & 0x8000) != 0)     // was sign of previous R + or -?
-                        {
-                            modOp = ALUOperation.AplusB;
-                        }
-                        else
-                        {
-                            modOp = ALUOperation.AminusB;
-                        }
-                        break;
-
-                    case MulDivCommand.UnsignedMultiply:
-                    case MulDivCommand.SignedMultiply:
-                        //
-                        // For a multiply, check the LSB of the multiplier (current MQ register);
-                        // if set, do an add, else pass thru unmolested.  This happens before the
-                        // MQ is shifted in DispatchFunction().
-                        //
-                        if ((mdReg & 0x1) == 1)
-                        {
-                            modOp = ALUOperation.AplusB;
-                        }
-                        else
-                        {
-                            modOp = ALUOperation.A;
-                        }
-                        break;
-                }
-            }
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.MulDiv, "MulDiv ALUop: OUT op={0} amux={1:x5}", modOp, amux);
-#endif
-
-            // Execute the updated ALU op
-            _alu.DoALUOp(amux, bmux, modOp);
-        }
-#endif
-
-        /// <summary>
         /// Dispatches function and special function operations based on the instruction
         /// </summary>
-        /// <param name="uOp"></param>
         private void DispatchFunction(Instruction uOp)
         {
             switch (uOp.F)
@@ -799,9 +643,7 @@ namespace PERQemu.CPU
                     // Calculate shifter output when F=2
                     if (uOp.F == 0x2)
                     {
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Shifter, "ShiftOnZ");
-#endif
+                        Trace.Log(LogType.Shifter, "ShiftOnZ");
                         _shifter.SetShifterCommand(uOp.Z);
                     }
 
@@ -814,30 +656,26 @@ namespace PERQemu.CPU
                         case 0x1:   // ShiftOnR
                             if (uOp.F == 0)
                             {
-#if TRACING_ENABLED
-                                if (Trace.TraceOn) Trace.Log(LogType.Shifter, "ShiftOnR");
-#endif
-                                _shifter.SetShifterCommand(~(_alu.Registers.R));
+                                Trace.Log(LogType.Shifter, "ShiftOnR");
+                                _shifter.SetShifterCommand(~(_alu.R.Value));
                             }
                             break;
 
                         case 0x2:   // StackReset
-                            StackReset();
+                            _estack.StackReset();
+                            IncrementDDS();
                             break;
 
                         case 0x3:   // TOS := (R)
-#if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.EStack, "TOS set to {0:x5}", _alu.Registers.R);
-#endif
-                            _stack[_stackPointer] = _alu.Registers.R;
+                            _estack.TOS = _alu.R.Value;
                             break;
 
                         case 0x4:   // Push
-                            StackPush(_alu.Registers.R);
+                            _estack.Push(_alu.R.Value);
                             break;
 
                         case 0x5:   // Pop
-                            StackPop();
+                            _estack.Pop();
                             break;
 
                         case 0x6:   // CntlRasterOp := (Z)
@@ -845,86 +683,90 @@ namespace PERQemu.CPU
                             break;
 
                         case 0x7:   // SrcRasterOp := (R)
-                            _rasterOp.SrcRasterOp(_alu.Registers.R);
+                            _rasterOp.SrcRasterOp(_alu.R.Lo);
                             break;
 
                         case 0x8:   // DstRasterOp := (R)
-                            _rasterOp.DstRasterOp(_alu.Registers.R);
+                            _rasterOp.DstRasterOp(_alu.R.Lo);
                             break;
 
                         case 0x9:   // WidRasterOp := (R)
-                            _rasterOp.WidRasterOp(_alu.Registers.R);
-#if SIXTEEN_K
-                            //
-                            // The hardware multiply/divide support is enabled or disabled by setting the
-                            // upper two bits in the WidRasterOp register.  Oof.  Due to the order in which
-                            // ALU and Dispatch ops are done, we'll set an enable flag here to minimize the
-                            // ugly interactions between ALU, CPU and RasterOp.
-                            //
-                            // Enabling the MulDiv unit sets the MQ shifter control word.
-                            //
-                            switch (_rasterOp.MulDivInst)       // taken from WidRasterOp reg bits <7:6>
+                            _rasterOp.WidRasterOp(_alu.R.Lo);
+
+                            if (!Is4K)
                             {
-                                case MulDivCommand.Off:
-#if TRACING_ENABLED
-                                    if (Trace.TraceOn && _mqEnabled) Trace.Log(LogType.MulDiv, "MulDiv unit disabled.");
-#endif
-                                    _mqEnabled = false;
-                                    break;
-
-                                case MulDivCommand.UnsignedDivide:
-#if TRACING_ENABLED
-                                    if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv enabled: Divide");
-#endif
-                                    _mqShifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
-                                    _mqEnabled = true;
-                                    break;
-
-                                case MulDivCommand.UnsignedMultiply:
-                                case MulDivCommand.SignedMultiply:
-#if TRACING_ENABLED
-                                    if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv enabled: Multiply");
-#endif
-                                    _mqShifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
-                                    _mqEnabled = true;
-                                    break;
-                            }
-#endif
-                            break;
-
-                        case 0xa:   // LoadOp
-                            _memory.LoadOpFile();
-
-                            if (_romEnabled)
-                            {
-                                _romEnabled = false;        // OpFile load disables ROM
-
-                                // And since we've disabled the ROM, we ought just
-                                // for good measure to invalidate the microcode cache.
-                                for (int i = 0; i < 512; i++)
+                                //
+                                // The hardware multiply/divide support is enabled or disabled by setting the
+                                // upper two bits in the WidRasterOp register.  Oof.  Due to the order in which
+                                // ALU and Dispatch ops are done, we'll set an enable flag here to minimize the
+                                // ugly interactions between ALU, CPU and RasterOp.
+                                //
+                                // Enabling the MulDiv unit sets the MQ shifter control word.
+                                //
+                                switch (_rasterOp.MulDivInst)       // taken from WidRasterOp reg bits <7:6>
                                 {
-                                    _microcodeCache[i] = null;
+                                    case MulDivCommand.Off:
+                                        if (_mqEnabled)
+                                            Trace.Log(LogType.MulDiv, "MulDiv: Unit disabled.");
+                                        _mqEnabled = false;
+                                        break;
+
+                                    case MulDivCommand.UnsignedDivide:
+                                        Trace.Log(LogType.MulDiv, "MulDiv Enabled: Divide");
+                                        _mqShifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
+                                        _mqEnabled = true;
+                                        break;
+
+                                    case MulDivCommand.UnsignedMultiply:
+                                    case MulDivCommand.SignedMultiply:
+                                        Trace.Log(LogType.MulDiv, "MulDiv Enabled: Multiply");
+                                        _mqShifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
+                                        _mqEnabled = true;
+                                        break;
                                 }
                             }
                             break;
 
-                        case 0xb:   // BPC := (R)
-                            _bpc = _alu.Registers.R & 0xf;  // bottom 4 bits of R
-#if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.OpFile, "BPC set to {0:x1}", BPC);
+                        case 0xa:   // LoadOp
+                            // NOTE:
+                            // LoadOp triggers a hardware assisted refill of the Op file by copying
+                            // the four words following a Fetch4 request into the 8x8 RAM.  Here we
+                            // ask the memory controller if we're in the right cycle; this should
+                            // always return true, since otherwise the microcode is buggy!
+                            _refillOp = _memory.LoadOpFile();
+
+                            if (_refillOp)
+                            {
+                                Trace.Log(LogType.OpFile, "OpFile: Load init.");
+                            }
+#if DEBUG
+                            else
+                            {
+                                Trace.Log(LogType.Errors, "LoadOp called in wrong cycle?");
+                            }
 #endif
+
+                            if (_ustore.ROMEnabled)
+                            {
+                                _ustore.DisableROM();   // LoadOp disables the Boot ROM
+                            }
+                            break;
+
+                        case 0xb:   // BPC := (R)
+                            _bpc = _alu.R.Lo & 0xf;     // bottom 4 bits of R
+                            Trace.Log(LogType.OpFile, "BPC set to {0:x1}", BPC);
                             break;
 
                         case 0xc:   // WCSL
-                            WriteControlStore(ControlStoreWord.Low, (ushort)_oldALURegisters.R);
+                            _ustore.WriteControlStore(ControlStoreWord.Low, _usequencer.S, _alu.OldR.Lo);
                             break;
 
                         case 0xd:   // WCSM
-                            WriteControlStore(ControlStoreWord.Middle, (ushort)_oldALURegisters.R);
+                            _ustore.WriteControlStore(ControlStoreWord.Middle, _usequencer.S, _alu.OldR.Lo);
                             break;
 
                         case 0xe:   // WCSH
-                            WriteControlStore(ControlStoreWord.High, (ushort)_oldALURegisters.R);
+                            _ustore.WriteControlStore(ControlStoreWord.High, _usequencer.S, _alu.OldR.Lo);
                             break;
 
                         case 0xf:   // IOB function
@@ -933,13 +775,11 @@ namespace PERQemu.CPU
                                 // This is Input if the msb of Z is unset, Output otherwise
                                 if (uOp.IsIOInput)
                                 {
-                                    // Input
-                                    _iod = _ioBus.IORead(uOp.IOPort);
+                                    _iod = _system.IOBus.IORead(uOp.IOPort);
                                 }
                                 else
                                 {
-                                    // Output
-                                    _ioBus.IOWrite(uOp.IOPort, _alu.Registers.R);
+                                    _system.IOBus.IOWrite(uOp.IOPort, _alu.R.Lo);
                                 }
                             }
                             break;
@@ -953,32 +793,40 @@ namespace PERQemu.CPU
                 case 0x1:   // Store / Extended functions
                     switch (uOp.SF)
                     {
-#if SIXTEEN_K
                         case 0x0:   // (R) := Victim Latch
-                            _alu.SetR(_victim);
-                            DoWriteBack(uOp);       // late writeback
-#if TRACING_ENABLED
-                            if (Trace.TraceOn)
-                                Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _victim);
-#endif
-                            _victim = 0xffff;       // do NOT set PC, but DO clear the latch
+                            if (Is4K)
+                            {
+                                Trace.Log(LogType.Errors, "Read from Victim latch ignored (4K)");
+                            }
+                            else
+                            {
+                                _alu.SetResult(_usequencer.Victim);
+                                _xy.WriteRegister(uOp.X, _alu.R.Value);
+
+                                Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _usequencer.Victim);
+
+                                // ReadVictim clears the latch, does not set PC
+                                _usequencer.Victim = 0xffff;
+                            }
                             break;
 
                         case 0x1:   // Multiply / DivideStep
-#if TRACING_ENABLED
-                            if (Trace.TraceOn)
-                                Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x5} R={1:x5} R<15>={2}",
-                                                          _mq, _alu.Registers.R, ((_alu.Registers.R & 0x8000) >> 15));
-#endif
+                            if (Is4K)
+                            {
+                                Trace.Log(LogType.Errors, "MulDiv step ignored (4K)");
+                                break;
+                            }
+
+                            Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x5} R={1:x6} R<15>={2}",
+                                                       _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
                             //
-                            // For the hardware assisted Multiply/Divide steps, we've already done the ALU op
-                            // on the high word of the product or quotient during the ALU execution above;
-                            // here we take care of the low word in the MQ register.
+                            // For the hardware assisted Multiply/Divide steps, we've already done
+                            // the ALU op on the high word of the product or quotient during the ALU
+                            // execution above; here we take care of the low word in the MQ register.
                             //
                             switch (_rasterOp.MulDivInst)
                             {
                                 case MulDivCommand.Off:
-                                    // Should never happen...
                                     throw new InvalidOperationException("MulDiv error: step SF while not enabled??");
 
                                 case MulDivCommand.UnsignedDivide:
@@ -988,23 +836,22 @@ namespace PERQemu.CPU
                                     //  2. Save the complement of the MSB from R into the LSB of MQ.
                                     //
                                     // Thar be dragons here:
-                                    //   ONLY complement the LSB if the ALU op was an add or subtract; this covers
-                                    //   the setup step where the initial left shift is done but no Q0 bit computation
-                                    //   is needed.  The 16K ALU does this based on ArithX/ArithY, the MDINSTR bits
-                                    //   and some PAL logic; here we're just cheating.  (It's a no-win; either we peek
-                                    //   at the ALU op here, or the ALU has to reach into the MQ reg...)
+                                    //   ONLY complement the LSB if the ALU op was an add or subtract;
+                                    //   this covers the setup step where the initial left shift is done
+                                    //   but no Q0 bit computation is needed.  The 16K ALU does this based
+                                    //   on ArithX/ArithY, the MDINSTR bits and some PAL logic; here we're
+                                    //   just cheating.  (It's a no-win; either we peek at the ALU op here,
+                                    //   or the ALU has to reach into the MQ reg...)
                                     //
                                     if ((uOp.ALU == ALUOperation.AplusB) || (uOp.ALU == ALUOperation.AminusB))
                                     {
                                         _mqShifter.Shift(_mq);
-                                        _mq = _mqShifter.ShifterOutput | (~((_alu.Registers.R & 0x8000) >> 15) & 0x1);
+                                        _mq = _mqShifter.ShifterOutput | (~((_alu.R.Lo & 0x8000) >> 15) & 0x1);
                                     }
-#if TRACING_ENABLED
                                     else
                                     {
-                                        if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv step: Q0 bit skipped");
+                                        Trace.Log(LogType.MulDiv, "MulDiv Step: Q0 bit skipped");
                                     }
-#endif
                                     break;
 
                                 case MulDivCommand.UnsignedMultiply:
@@ -1015,73 +862,75 @@ namespace PERQemu.CPU
                                     //  2. Save the LSB from the current R into the MSB of MQ.
                                     //
                                     _mqShifter.Shift(_mq);
-                                    _mq = _mqShifter.ShifterOutput | ((_alu.Registers.R & 0x1) << 15);
+                                    _mq = _mqShifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
                                     break;
                             }
-#if TRACING_ENABLED
-                            if (Trace.TraceOn)
-                                Trace.Log(LogType.MulDiv, "MulDiv step: MQ out={0:x5} MQ<0>={1}", _mq, (_mq & 0x1));
-#endif
+                            Trace.Log(LogType.MulDiv, "MulDiv Step: MQ out={0:x5} MQ<0>={1}", _mq, (_mq & 0x1));
                             break;
 
                         case 0x2:   // Load multiplier / dividend
-                            _mq = (_alu.Registers.R & 0xffff);      // MQ register is 16 bits wide
-#if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv load: MQ={0:x4}", _mq);
-#endif
+                            if (Is4K)
+                            {
+                                //
+                                // In the original 4K CPU, these special functions don't exist and are
+                                // ignored.  Since some diagnostic software (and VFY 2.x) test for MQ
+                                // to determine CPU type, we allow these ops to succeed (rather than
+                                // throw an exception).  Any read or write of MQ simply returns zero.
+                                //
+                                _mq = 0;
+                                Trace.Log(LogType.Errors, "MulDiv Load ignored (4K)");
+                            }
+                            else
+                            {
+                                _mq = (_alu.R.Value & 0xffff);
+                                Trace.Log(LogType.MulDiv, "MulDiv Load: MQ={0:x4}", _mq);
+                            }
                             break;
 
                         case 0x3:   // Load base register (not R)
-                            _registerBase = (byte)(~_alu.Registers.R);
+                            if (Is4K)
+                            {
+                                Trace.Log(LogType.Errors, "Set base register ignored (4K)");
+                            }
+                            else
+                            {
+                                _xy.SetRegisterBase((byte)(~_alu.R.Lo));
+                            }
                             break;
 
                         case 0x4:   // (R) := product or quotient
-                            _alu.SetR(_mq & 0xffff);
-                            DoWriteBack(uOp);                       // late writeback
-#if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv read: MQ={0:x4}", _mq);
-#endif
+                            if (Is4K)
+                            {
+                                _alu.SetResult(_mq);
+                                Trace.Log(LogType.Errors, "MQ Read ignored (4K)");
+                            }
+                            else
+                            {
+                                _alu.SetResult(_mq & 0xffff);
+                                _xy.WriteRegister(uOp.X, _alu.R.Value);
+                                Trace.Log(LogType.MulDiv, "Read: MQ={0:x4}", _mq);
+                            }
                             break;
 
                         case 0x5:   // Push long constant
-                            StackPush(uOp.LongConstant);
+                            _estack.Push(uOp.LongConstant);
                             break;
 
                         case 0x6:   // Address input (MA) := Shift
-                            _shifter.Shift(_oldALURegisters.R);
+                            _shifter.Shift(_alu.OldR.Lo);
 
                             //
-                            // We hack in the NIA value into the decoded (cached) Instruction's "Next" field.
-                            // This should always work since the Next field's value is never normally used
-                            // for this type of instruction.
+                            // We hack in the NIA value into the decoded (cached) Instruction's
+                            // "Next" field.  This should always work since the Next field's
+                            // value is never normally used for this type of instruction.  The
+                            // shifter provides 12- or 14-bits of address depending on CPU type.
                             //
-                            uOp.NextAddress = (ushort)(_shifter.ShifterOutput & 0x3fff);
+                            uOp.NextAddress = _shifter.ShifterOutput;
                             break;
 
                         case 0x7:   // Leap address generation
                                     // This is handled by CalcAddress
                             break;
-#else
-                        //
-                        // In the original 4K CPU, these special functions don't exist and are ignored.
-                        // Since some diagnostic software (and VFY 2.x) test for MQ to determine CPU
-                        // type, we allow these ops to succeed (rather than throw an exception).  Any
-                        // read or write of MQ simply returns zero.
-                        //
-                        case 0x2:   // Load multiplier / dividend
-                            _mq = 0;
-#if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv load ignored (4K)");
-#endif
-                            break;
-
-                        case 0x4:   // (R) := product or quotient
-                            _alu.SetR(_mq);
-#if TRACING_ENABLED
-                            if (Trace.TraceOn) Trace.Log(LogType.MulDiv, "MulDiv read ignored (4K)");
-#endif
-                            break;
-#endif
 
                         case 0x8:   // Fetch4R
                         case 0x9:   // Store4R
@@ -1091,10 +940,10 @@ namespace PERQemu.CPU
                         case 0xd:   // Store2
                         case 0xe:   // Fetch
                         case 0xf:   // Store
-#if TRACING_ENABLED
-                            _memory.RequestMemoryCycle(_clocks, _alu.Registers.R, uOp.MemoryRequest);
+#if DEBUG
+                            _memory.RequestMemoryCycle((long)_clocks, _alu.R.Value, uOp.MemoryRequest);
 #else
-                            _memory.RequestMemoryCycle(_alu.Registers.R, uOp.MemoryRequest);
+                            _memory.RequestMemoryCycle(_alu.R.Value, uOp.MemoryRequest);
 #endif
                             break;
 
@@ -1115,406 +964,27 @@ namespace PERQemu.CPU
         }
 
         /// <summary>
-        /// Jumps based on the condition flags.
+        /// Load two bytes into the OpFile from the current incoming memory word.
+        /// If the refill is complete, reset the flag (but the microcode sets BPC,
+        /// not the hardware).
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchJump(Instruction uOp)
+        public void LoadOpWord()
         {
-            bool conditionSatisfied = false;
+            int opAddr = _memory.MIndex * 2;
 
-            // Do jump operation based on ALU flags from the last instruction
-            switch (uOp.CND)
-            {
-                case Condition.True:
-                    conditionSatisfied = true;
-                    break;
+            _opFile[opAddr] = (byte)(_memory.MDI & 0xff);
+            _opFile[opAddr + 1] = (byte)((_memory.MDI & 0xff00) >> 8);
 
-                case Condition.False:
-                    conditionSatisfied = false;
-                    break;
-
-                case Condition.IntrPend:
-                    conditionSatisfied = _interruptFlag != InterruptType.None;
-                    break;
-
-                case Condition.Carry19:
-                    conditionSatisfied = _oldALURegisters.Carry19 == 0;
-                    break;
-
-                case Condition.BPC3:
-                    conditionSatisfied = OpFileEmpty;
-                    break;
-
-                case Condition.Odd:
-                    conditionSatisfied = (_oldALURegisters.R & 0x1) != 0;
-                    break;
-
-                case Condition.ByteSign:
-                    conditionSatisfied = (_oldALURegisters.R & 0x80) != 0;
-                    break;
-
-                case Condition.Neq:
-                    conditionSatisfied = _oldALURegisters.Neq;
-                    break;
-
-                case Condition.Leq:
-                    conditionSatisfied = _oldALURegisters.Leq;
-                    break;
-
-                case Condition.Lss:
-                    conditionSatisfied = _oldALURegisters.Lss;
-                    break;
-
-                case Condition.Ovf:
-                    conditionSatisfied = _oldALURegisters.Ovf;
-                    break;
-
-                case Condition.Carry15:
-                    conditionSatisfied = _oldALURegisters.Cry;
-                    break;
-
-                case Condition.Eql:
-                    conditionSatisfied = _oldALURegisters.Eql;
-                    break;
-
-                case Condition.Gtr:
-                    conditionSatisfied = _oldALURegisters.Gtr;
-                    break;
-
-                case Condition.Geq:
-                    conditionSatisfied = _oldALURegisters.Geq;
-                    break;
-
-                default:
-                    throw new UnimplementedInstructionException(String.Format("Unimplemented Condition {0}", uOp.CND));
-            }
-
-            // Dispatch jump action
-            switch (uOp.JMP)
-            {
-                case JumpOperation.JumpZero:
-                    _pc.Value = 0;
-                    _callStack.Reset();
-                    break;
-
-                case JumpOperation.Call:
-                    if (conditionSatisfied)
-                    {
-                        _callStack.PushFull((ushort)(_pc.Value + 1));
-                        _pc.Value = uOp.NextAddress;
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                    }
-                    break;
-
-                case JumpOperation.NextInstReviveVictim:
-                    if (uOp.H == 0)
-                    {
-                        DoNextInst(uOp);
-                    }
-                    else
-                    {
-                        // Revive the victim; unset victim latch
-                        if (_victim == 0xffff)
-                        {
-                            throw new InvalidOperationException("Revive from unset victim latch!");
-                        }
-#if SIXTEEN_K
-                        // On 16K CPU, Victim restores all 14 bits -- according to VFY 2.0!?
-                        _pc.Value = _victim;
-#else
-                        // Only the low 12 bits are changed
-                        _pc.Lo = _victim;
-#endif
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "PC restored from victim ({0:x4})", _victim);
-#endif
-                        _victim = 0xffff;
-                    }
-                    break;
-
-                case JumpOperation.Goto:
-                    if (conditionSatisfied)
-                    {
-                        _pc.Value = uOp.NextAddress;
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                    }
-                    break;
-
-                case JumpOperation.PushLoad:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.CpuState, "PushLoad: cond={0} S={1:x4}", conditionSatisfied, uOp.NextAddress);
-#endif
-                    if (conditionSatisfied)
-                    {
-                        _s.Value = uOp.NextAddress;
-                        _pc.Lo++;
-                        _callStack.PushLo(_pc.Lo);
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                        _callStack.PushLo(_pc.Lo);
-                    }
-                    break;
-
-                case JumpOperation.CallS:
-                    _callStack.PushFull((ushort)(_pc.Value + 1));
-                    _pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
-                    break;
-
-                case JumpOperation.VectorDispatch:
-                    if (conditionSatisfied)
-                    {
-                        if (uOp.H == 0)
-                        {
-                            // Vector
-                            _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (InterruptPriority() << 2));
-                        }
-                        else
-                        {
-                            // Dispatch
-                            _shifter.Shift(_oldALURegisters.R);
-                            _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (((~_shifter.ShifterOutput) & 0xf) << 2));
-                        }
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Dispatch to {0:x4}", _pc);
-#endif
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                    }
-                    break;
-
-                case JumpOperation.GotoS:
-                    _pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
-                    break;
-
-                case JumpOperation.RepeatLoop:
-                    if (_s.Lo != 0)
-                    {
-                        _pc.Lo = _callStack.TopLo();
-                        _s.Lo--;
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                        _callStack.PopLo();
-                    }
-                    break;
-
-                case JumpOperation.Repeat:
-                    if (_s.Lo != 0)
-                    {
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Repeat S={0:x4}", _s);
-#endif
-                        _pc.Lo = uOp.NextAddress;
-                        _s.Lo--;
-                    }
-                    else
-                    {
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Repeat done.", _s);
-#endif
-                        _pc.Lo++;
-                    }
-                    break;
-
-                case JumpOperation.Return:
-                    if (conditionSatisfied)
-                    {
-                        _pc.Value = _callStack.PopFull();
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                    }
-                    break;
-
-                case JumpOperation.JumpPop:
-                    if (conditionSatisfied)
-                    {
-                        if (uOp.H != 0)
-                        {
-                            _callStack.PopFull();       // LeapPop (16K only?)
-                        }
-                        else
-                        {
-                            _callStack.PopLo();
-                        }
-                        _pc.Value = uOp.NextAddress;
-                    }
-                    else
-                    {
-                        _pc.Lo++;
-                    }
-                    break;
-
-                case JumpOperation.LoadS:
-                    _s.Value = uOp.NextAddress;
-                    _pc.Lo++;
-#if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.CpuState, "Load S={0:x4}", _s);
-#endif
-                    break;
-
-                case JumpOperation.Loop:
-                    if (conditionSatisfied)
-                    {
-                        _pc.Lo++;
-                        _callStack.PopLo();  // ?
-                    }
-                    else
-                    {
-                        _pc.Lo = _callStack.TopLo();
-                    }
-                    break;
-
-                case JumpOperation.Next:
-                    _pc.Lo++;
-                    break;
-
-                case JumpOperation.ThreeWayBranch:
-                    if (conditionSatisfied)
-                    {
-                        if (_s.Lo != 0)
-                        {
-                            _pc.Lo++;
-                            _callStack.PopLo();
-                            _s.Lo--;
-                        }
-                        else
-                        {
-                            _pc.Lo++;
-                            _callStack.PopLo();
-                        }
-                    }
-                    else
-                    {
-                        if (_s.Lo != 0)
-                        {
-                            _pc.Lo = _callStack.TopLo();
-                            _s.Lo--;
-                        }
-                        else
-                        {
-                            _pc.Value = uOp.NextAddress;
-                            _callStack.PopLo();
-                        }
-                    }
-                    break;
-
-                default:
-                    throw new UnimplementedInstructionException(String.Format("Unhandled Jump type {0}", uOp.JMP));
-            }
-        }
-
-        /// <summary>
-        /// Writes a 16-bit subword of a 48-bit microcode instruction to the control store.
-        /// </summary>
-        private void WriteControlStore(ControlStoreWord word, ushort data)
-        {
-            // Get the current microcode word
-            ulong cs = _microcode[_s.Value];
-
-            _microcode[_s.Value] = UnscrambleControlStoreWord(cs, word, data);
-
-            // Invalidate cache for this instruction
-            _microcodeCache[_s.Value] = null;
-
-            // Set the hold bit to inject a wait state
-            _wcsHold = true;
-
-#if TRACING_ENABLED
             if (Trace.TraceOn)
-                Trace.Log(LogType.MicrocodeStore,
-                    "Wrote {0},{1:x4} at control store {2:x4} -- now contains {3:x12}",
-                    word, data, _s.Value, _microcode[_s.Value]);
-#endif
-        }
-
-        /// <summary>
-        /// Unscrambles a control store word.  This is complicated by the fact that
-        /// the bit mapping from the ALU output to the controlstore is all scrambled up.
-        ///
-        /// This is not a very efficient routine.  But it doesn't get executed very frequently
-        /// (usually only at OS load) so I'm going to leave it alone for now.
-        /// </summary>
-        private ulong UnscrambleControlStoreWord(ulong current, ControlStoreWord word, ushort data)
-        {
-            // We write the inverse of the data (outputs are active low)
-            data = (ushort)(~data);
-
-            switch (word)
             {
-                case ControlStoreWord.Low:
-                    current = SetBits(data, current,
-                        new int[] { 24, 25, 22, 27, 23, 29, 30, 31, 8, 9, 10, 11, 12, 13, 14, 15 });
-                    break;
-
-                case ControlStoreWord.Middle:
-                    current = SetBits(data, current,
-                        new int[] { 16, 17, 18, 19, 20, 21, 26, 28, 0, 1, 2, 3, 4, 5, 6, 7 });
-                    break;
-
-                case ControlStoreWord.High:
-                    // The high word corresponds directly to the data being written,
-                    // it's just shifted over 32 bits.  Yay.
-                    current = (ulong)((current & 0x0000ffffffff) | (ulong)(data) << 32);
-                    break;
+                Trace.Log(LogType.OpFile, "Loaded {0:x2} into OpFile[{1:x}] from {2:x6}", _opFile[opAddr], opAddr, _memory.MADR);
+                Trace.Log(LogType.OpFile, "Loaded {0:x2} into OpFile[{1:x}] from {2:x6}", _opFile[opAddr + 1], opAddr + 1, _memory.MADR);
             }
 
-            return current;
-        }
-
-        /// <summary>
-        /// Sets a series of bits in the 48-bit destination word from a 16-bit source word.
-        /// </summary>
-        private ulong SetBits(ulong sourceWord, ulong destWord, int[] destBits)
-        {
-            for (int sourceBit = 0; sourceBit < destBits.Length; sourceBit++)
+            if (_memory.MIndex == 3)
             {
-                // Get the bit value from the source word
-                ulong bitValue = (sourceWord >> sourceBit) & 0x1;
-
-                // Frob that into the destination word at its magical location
-                destWord = (destWord & ~((ulong)0x1 << destBits[sourceBit])) | ((ulong)bitValue << destBits[sourceBit]);
+                _refillOp = false;
             }
-
-            return destWord;
-        }
-
-        /// <summary>
-        /// Increment the BPC and update the program counter.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DoNextInst(Instruction uOp)
-        {
-            byte next = _memory.OpFile[BPC];
-
-#if TRACING_ENABLED
-            Trace.TraceLevel &= (~LogType.Instruction);
-            if (Trace.TraceOn)
-                Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
-                    QCode.QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, BPC);
-#endif
-#if SIXTEEN_K
-            _pc.Lo = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
-#else
-            _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
-#endif
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", PC);
-#endif
-            _incrementBPC = true;
         }
 
         /// <summary>
@@ -1536,152 +1006,35 @@ namespace PERQemu.CPU
             return 0;
         }
 
-#endregion CPU Helper Functions
-
-#region Boot ROM functions
-
         /// <summary>
-        /// Loads the boot ROM from a file on disk and descrambles it.
-        /// This currently expects a ROM built by PRQMIC, from microcode
-        /// sources, not an actual ROM dump from the PERQ.
+        /// Increments the DDS (diagnostic counter).
         /// </summary>
-        private void LoadBootRom(string path)
-        {
-            FileStream fs = new FileStream(path, FileMode.Open);
-
-            // Read all 512 scrambled instruction words in...
-            for (ushort i = 0; i < 512; i++)
-            {
-                ushort addr = 0;
-                ulong word = ReadMicrocodeWord(fs, out addr);
-
-                // The only address outside of range should be the last (which has addr 0xffff)
-                if (addr < 512)
-                {
-                    _rom[addr] = word;
-                }
-            }
-            fs.Close();
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.EmuState, "Read boot ROM from {0}.", path);
-#endif
-        }
-
-        /// <summary>
-        /// Reads a 48-bit word in from the given stream.
-        /// </summary>
-        private ulong ReadMicrocodeWord(FileStream fs, out ushort addr)
-        {
-            ulong word = 0;
-
-            // Read the address, low bits first
-            addr = (ushort)(fs.ReadByte());
-            addr = (ushort)((addr | ((ushort)fs.ReadByte() << 8)));
-
-            // Read the instruction one byte at a time, low bits first
-            word = (ulong)(fs.ReadByte());
-            word = (word | ((ulong)(fs.ReadByte()) << 8));
-            word = (word | ((ulong)(fs.ReadByte()) << 16));
-            word = (word | ((ulong)(fs.ReadByte()) << 24));
-            word = (word | ((ulong)(fs.ReadByte()) << 32));
-            word = (word | ((ulong)(fs.ReadByte()) << 40));
-
-            return word;
-        }
-
-#endregion Boot ROM functions
-
-#region Special Function Helpers
-
-        /// <summary>
-        /// Reset the expression stack (EStack).
-        /// </summary>
-        private void StackReset()
-        {
-            _stackPointer = 0;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.EStack, "EStack: Reset.");
-#endif
-            // Resetting the stack increments the diagnostic display
-            IncrementDDS();
-        }
-
-        /// <summary>
-        /// Push a 20-bit value onto the EStack.
-        /// </summary>
-        private void StackPush(int value)
-        {
-            _stackPointer++;
-
-            // Check for stack overflow.  According to the PERQ documentation, behavior
-            // in this state is undefined.  However, _real_ code seems to be buggy (i.e.
-            // leaks pops/pushes) and depends on the EStack pointer wrapping around.
-            // (For example, PERQMan's random number generator microcode does one too few
-            // pops before returning...)
-            if (_stackPointer > 15)
-            {
-#if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.Errors, "EStack overflow!");
-#endif
-                _stackPointer = 0;
-            }
-
-            _stack[_stackPointer] = value;
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.EStack, "Estack: Pushed {0:x5}, pointer now {1}", value, _stackPointer);
-#endif
-        }
-
-        /// <summary>
-        /// Pop a 20-bit value from the EStack.
-        /// </summary>
-        private void StackPop()
-        {
-            _stackPointer--;
-
-            // Check for stack underflow.  According to the PERQ documentation, behavior
-            // in this state is undefined.  See StackPush().
-            if (_stackPointer < 0)
-            {
-#if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.Errors, "EStack underflow!");
-#endif
-                _stackPointer = 15;
-            }
-
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.EStack, "EStack: Popped, pointer now {0}", _stackPointer);
-#endif
-        }
-
-        /// <summary>
-        /// Increments the DDS (diagnostic counter)
-        /// </summary>
-        private void IncrementDDS()
+        public void IncrementDDS()
         {
             _dds++;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
-#endif
+            Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
 
             // TODO: This should be moved elsewhere
             Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
         }
 
-#endregion Special Function Helpers
+        #endregion CPU Helper Functions
 
-#region Debugger Commands
+        #region Debugger Commands
+
+        /// <summary>
+        /// Provide access to the microstore for the debugger/disassembler.
+        /// </summary>
+        public Instruction GetInstruction(ushort addr)
+        {
+            return _ustore.GetInstruction(addr);
+        }
 
         [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ current PC)")]
         private void DisassembleMicrocode()
         {
-            DisassembleMicrocode(_pc.Value, 16);
+            DisassembleMicrocode(PC, 16);
         }
 
         [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr])")]
@@ -1695,16 +1048,16 @@ namespace PERQemu.CPU
         {
             ushort endAddr = (ushort)(startAddress + length);
 
-            if (startAddress >= _microcode.Length || endAddr >= _microcode.Length)
+            if (startAddress >= _ustore.Microcode.Length || endAddr >= _ustore.Microcode.Length)
             {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _microcode.Length);
+                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _ustore.Microcode.Length);
                 return;
             }
 
             // Disassemble microcode
             for (ushort i = startAddress; i < endAddr; i++)
             {
-                string line = Disassembler.Disassemble(i, GetInstruction(i));
+                string line = Disassembler.Disassemble(i, _ustore.GetInstruction(i));
                 Console.WriteLine(line);
             }
         }
@@ -1714,32 +1067,7 @@ namespace PERQemu.CPU
         {
             try
             {
-                FileStream fs = new FileStream(ucodeFile, FileMode.Open);
-                bool done = false;
-
-                // Read instruction words in...
-                while (!done)
-                {
-                    ushort addr = 0;
-                    ulong word = ReadMicrocodeWord(fs, out addr);
-
-                    // The only address outside of range should be the last (which has addr 0xffff)
-                    if (addr != 0xffff)
-                    {
-                        Console.Write("{0:x} ", addr);
-                        _microcode[addr] = word;
-                        _microcodeCache[addr] = null;
-                    }
-                    else
-                    {
-                        done = true;
-                    }
-                }
-                fs.Close();
-
-                _romEnabled = false;
-
-                Console.WriteLine("\nMicrocode loaded, boot ROM disabled.");
+                _ustore.LoadMicrocode(ucodeFile);
             }
             catch (Exception e)
             {
@@ -1750,13 +1078,13 @@ namespace PERQemu.CPU
         [DebugFunction("jump", "Set next microinstruction address")]
         private void JumpTo(ushort nextPC)
         {
-            if (nextPC < 0 || nextPC >= _microcode.Length)
+            if (nextPC < 0 || nextPC >= _ustore.Microcode.Length)
             {
-                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _microcode.Length - 1);
+                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _ustore.Microcode.Length - 1);
             }
             else
             {
-                _pc.Value = nextPC;
+                PC = nextPC;
             }
         }
 
@@ -1764,43 +1092,44 @@ namespace PERQemu.CPU
         public void ShowPC()
         {
             Console.WriteLine("\nPC={0:x4} BPC={1:x1} Victim={2:x4} DDS={3} UState={4:x2} Interrupt={5}",
-                              PC, BPC, Victim, DDS, MicrostateRegister, InterruptFlag);
+                              PC, BPC, Victim, DDS, ReadMicrostateRegister(0), InterruptFlag);
         }
 
         [DebugFunction("show xy register", "Displays the values of the XY registers")]
         private void ShowRegister()
         {
-            for (int reg = 0; reg < 256; reg++)
+            for (byte reg = 0; reg <= 255; reg++)
             {
-                Console.Write("R[{0:x2}]={1:x5}{2}", reg, _r[reg],
+                Console.Write("R[{0:x2}]={1:x6}{2}", reg, _xy.ReadRegister(reg),
                               ((reg + 1) % 4 == 0) ? "\n" : "\t");
             }
             Console.WriteLine();
         }
 
         [DebugFunction("show xy register", "Displays the value of the specified XY register [0..255]")]
-        private void ShowRegister(ushort reg)
+        private void ShowRegister(byte reg)
         {
             if (reg > 255)
             {
                 Console.WriteLine("Argument out of range -- must be between 0 and 255");
                 return;
             }
-            Console.WriteLine("R[{0:x2}]={1:x5}", reg, _r[reg]);
+            Console.WriteLine("R[{0:x2}]={1:x6}", reg, _xy.ReadRegister(reg));
         }
 
 #if DEBUG
         [DebugFunction("set xy register", "Change the value of an XY register")]
-        private void SetRegister(ushort reg, uint val)
+        private void SetRegister(byte reg, uint val)
         {
             if (reg > 255)
             {
                 Console.WriteLine("Argument out of range -- must be between 0 and 255");
                 return;
             }
-            _r[reg] = (int)(val & 0xffff);     // clip to 20 bits
+            _xy.WriteRegister(reg, (int)(val & 0xffffff));     // clip to 24 bits
 
-            Console.WriteLine("R[{0:x2}]={1:x5} (dec {2})", reg, _r[reg], _r[reg]);
+            Console.WriteLine("R[{0:x2}]={1:x6} (dec {2})", reg,
+                              _xy.ReadRegister(reg), _xy.ReadRegister(reg));
         }
 #endif
 
@@ -1893,7 +1222,7 @@ namespace PERQemu.CPU
         [DebugFunction("show memstate", "Dump the memory controller state")]
         private void ShowMemQueues()
         {
-            _system.MemoryBoard.DumpQueues();
+            _memory.DumpQueues();
         }
 #endif
 
@@ -1904,25 +1233,20 @@ namespace PERQemu.CPU
 
             for (int i = 0; i < 8; i++)
             {
-                Console.WriteLine("{0}: {1:x2}", i, _system.MemoryBoard.OpFile[i]);
+                Console.WriteLine("{0}: {1:x2}", i, _opFile[i]);
             }
         }
 
         [DebugFunction("show estack", "Displays the contents of the expression stack")]
         private void ShowEStack()
         {
-            Console.WriteLine("EStack Pointer={0}.  Contents:", _stackPointer);
-
-            for (int i = 0; i < 16; i++)
-            {
-                Console.WriteLine("{0} {1:00}: {2:x5}", (i == _stackPointer ? "=>" : "  "), i, _stack[i]);
-            }
+            _estack.DumpContents();
         }
 
         [DebugFunction("show cstack", "Displays the contents of the 2910 call stack")]
         private void ShowCStack()
         {
-            _callStack.DumpContents();
+            _usequencer.DumpContents();
         }
 
 #if DEBUG
@@ -1973,119 +1297,95 @@ namespace PERQemu.CPU
             _rasterOp.ShowRegs();
         }
 
-        [DebugFunction("show z80 state", "Display current Z80 device ready state")]
-        private void ShowZ80State()
-        {
-            Console.WriteLine("Z80 clock: {0}", ((Z80System)(_system.IOB.Z80System)).Clocks());
-            //_system.IOB.Z80System.ShowReadyState();
-        }
+        // this all changes with the new Z80?
+        //[DebugFunction("show z80 state", "Display current Z80 device ready state")]
+        //private void ShowZ80State()
+        //{
+        //    Console.WriteLine("Z80 clock: {0}", ((Z80System)(_system.IOB.Z80System)).Clocks());
+        //    //_system.IOB.Z80System.ShowReadyState();
+        //}
+
 #endif
         #endregion
 
+        //
+        // Configurables set by derived classes
+        //
+        protected static string _name;
+        protected static string _desc;
 
-#if TRACING_ENABLED
-        // Trace/debugging support
-        private ushort _lastPC;
-        private Instruction _lastInstruction;
+        protected static int _bits;
+        protected static int _mask;
 
-        
-#endif
-        // CPU cycles elapsed
-        private long _clocks;
+        protected static int _wcsBits;
+        protected static int _wcsSize;
+        protected static int _wcsMask;
 
-#if SIXTEEN_K
-        // Microcode store, 16k 48-bit words
-        private ulong[] _microcode = new ulong[16384];
+        protected static int _cycleTime;
 
-        // Decoded microcode cache
-        private Instruction[] _microcodeCache = new Instruction[16384];
-#else
-        // Microcode store, 4k 48-bit words
-        private ulong[] _microcode = new ulong[4096];
+        // Timing regulation
+        protected ulong _clocks;                // elapsed cycles
+        protected ulong _cpuSecond;             // cycles per second
 
-        // Decoded microcode cache
-        private Instruction[] _microcodeCache = new Instruction[4096];
-#endif
-
-        // Microcode ROM, 512 48-bit words
-        private ulong[] _rom = new ulong[512];
-
-        // ROM enable latch
-        private bool _romEnabled;
-
-        // Wait state flag when loading WCS
-        private bool _wcsHold;
-
-        // Microcode address
-        private ExtendedRegister _pc;
-
-        // Victim latch
-        private ushort _victim;
-
-        // 2910 S register
-        private ExtendedRegister _s;
-
-        // 2910 call stack (actually belongs to the AMD microcode sequencer,
-        // but that's sorta been conflated into this class...)
-        private CallStack _callStack = new CallStack();
-
-        // Expression stack
-        private int[] _stack = new int[16];
-        private int _stackPointer;
-
-        // XY registers
-        private int[] _r = new int[256];
-
-#if SIXTEEN_K
-        // Base register
-        private byte _registerBase;
-#endif
-
-        // Byte Program Counter
-        private int _bpc;
-        private bool _incrementBPC;
-
-        // Diagnostic counter
-        private int _dds;
-
-        // Interrupt flags
-        private InterruptType _interruptFlag;
-
-        // Arithmetic unit
-        private ALU _alu;
-
-        // Copy of last ALU register set
-        private ALURegisterFile _oldALURegisters;
-
-        // Copy of Bmux bits in microstate register
-        // for mysterious, if not nefarious purposes
-        private int _lastBmux;
-
-        // Shifter
-        private Shifter _shifter;
-
-        // RasterOp
+        // Major components, common to all CPU types
         private RasterOp _rasterOp;
+        private Sequencer _usequencer;
+        private ControlStore _ustore;
+        private RegisterFile _xy;
+        private ExpressionStack _estack;
 
-        // Multiplier Quotient register ("MQ") only exists in the 16K CPU, but some
-        // microcode (VFY 2.x, e.g.) tries to write/read from MQ to test for WCS size
-        // on the fly.  So we define MQ for both CPU types, but essentially treat it
-        // as read-only in the 4K variant.
-        private int _mq;
-#if SIXTEEN_K
-        private Shifter _mqShifter;
-        private bool _mqEnabled;
-#endif
+        // Shared with the sequencer
+        protected ALU _alu;
+        protected Shifter _shifter;
 
         // Memory card reference
         private MemoryBoard _memory;
 
+        // Parent
+        private PERQSystem _system;
+
+        //
+        // Parts we implement in this file directly
+        //
+
+        // Multiplier Quotient register ("MQ") only exists in the 16K or newer CPUs,
+        // but some microcode (VFY 2.x, e.g.) tries to write/read from MQ to test
+        // for WCS size on the fly.  So we define MQ for all CPU types, but treat
+        // it as read-only in the 4K variant.
+        private int _mq;
+        private bool _mqEnabled;
+        private Shifter _mqShifter;
+
+        // Note that the Op file is only 8 bytes, but BPC is a 4-bit counter...
+        protected byte[] _opFile = new byte[16];
+
+        // Flag if LoadOp is requested (hardware assisted refill of the 8x8 OpFile)
+        private bool _refillOp;
+
+        // Byte Program Counter
+        protected int _bpc;
+        protected bool _incrementBPC;
+
         // IO data
         private int _iod;
 
-        // IO bus reference
-        private IOBus _ioBus;
+        // Interrupt flags
+        protected InterruptType _interruptFlag;
 
-        private PERQSystem _system;
+        //
+        // Housekeeping
+        //
+
+        // Diagnostic counter
+        private int _dds;
+
+        // Copy of Bmux bits in microstate register
+        // for mysterious, if not nefarious purposes
+        protected int _lastBmux;
+
+        // Trace/debugging support
+        private ushort _lastPC;
+        private Instruction _lastInstruction;
+
     }
 }
