@@ -16,6 +16,8 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System.Runtime.CompilerServices;
+
 namespace PERQemu.Processor
 {
     public partial class CPU
@@ -50,7 +52,7 @@ namespace PERQemu.Processor
 
             public void SetRegisterBase(byte rb)
             {
-                if (CPU.Is4K)
+                if (Is4K)
                 {
                     _registerBase = 0;      // Doesn't exist on 4K; ignore it
                 }
@@ -64,6 +66,7 @@ namespace PERQemu.Processor
             /// Return the contents of a register; index by the base register
             /// if appropriate (16K or newer CPU).
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public int ReadRegister(byte addr)
             {
                 if (addr < 0x40)
@@ -85,6 +88,7 @@ namespace PERQemu.Processor
             /// on PERQ1A . This appears to be true, but we'll leave that up to
             /// the caller; this method doesn't enforce the W bit check.
             /// </remarks>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void WriteRegister(byte addr, int val)
             {
                 // Clip to 20 or 24 bits

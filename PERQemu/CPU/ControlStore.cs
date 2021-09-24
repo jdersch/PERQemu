@@ -18,6 +18,7 @@
 
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu.Processor
 {
@@ -109,6 +110,7 @@ namespace PERQemu.Processor
             /// Reads the instruction from the microcode RAM (or ROM, if enabled)
             /// at the given address, clipped to the address range for this CPU.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public Instruction GetInstruction(ushort addr)
             {
                 addr &= (ushort)WCSMask;

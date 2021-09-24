@@ -47,17 +47,25 @@ namespace PERQemu
     {
         public PERQSystem()
         {
-            _scheduler = new Scheduler(170);        // 170ns per PERQ CPU cycle; scheduler must be clocked with PERQ CPU.
-
-            _mem = new MemoryBoard(this);
-            _iob = new IOB(this);
-            _oio = new OIO();
+            //
+            // TODO: CPU type, memory size, and screen type (portrait or landscape)
+            // all to be made configurable.  For now, we'll still use TWO_MEG and
+            // set up a PERQ-1A by default.
+            //
+#if TWO_MEG
+            _mem = new MemoryBoard(this, 1024 * 1024);
+#else
+            _mem = new MemoryBoard(this, 512 * 1024);
+#endif
             _display = new Display.Display(this);
             _videoController = new Display.VideoController(this);
+            _iob = new IOB(this);
+            _oio = new OIO();
             _ioBus = new IOBus(this);
 
-             // Configurator will provide the type; for now, force a PERQ1A
             _perqCPU = new PERQ1A(this);
+
+            _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Start off debugging
             _state = RunState.Debug;
@@ -66,9 +74,10 @@ namespace PERQemu
             // Assume async mode if the IOB implementation supports it.
             // Might want to select sync mode on uniprocessor systems?
             _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
- 
+
             // Reset
             _perqCPU.Reset();
+            _mem.Reset();
             _ioBus.Reset();
 
             // Just have to do this once.  Will be CPU-specific.
@@ -164,7 +173,7 @@ namespace PERQemu
                             // Drop back into debugging mode after running a single step.
                             _state = RunState.Debug;
                         });
-                        
+
                         break;
 
                     case RunState.RunInst:  // Run a single QCode
@@ -301,7 +310,7 @@ namespace PERQemu
 #endif
             }
         }
-            
+
 
         #region Debugger Commands
 

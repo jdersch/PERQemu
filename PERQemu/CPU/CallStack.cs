@@ -143,7 +143,7 @@ namespace PERQemu.Processor
             /// </summary>
             public void DumpContents()
             {
-                if (CPU.Is4K)
+                if (Is4K)
                 {
                     // Just the low 12 bits
                     Console.WriteLine("CStack Pointer={0}.  Contents:", _loStackPtr);

@@ -115,9 +115,12 @@ it is reasonably functional and stable (though there may still be issues):
   Mul/Div unit.  It is unknown at this point if early versions of Accent or PNX
   make use of MulDiv, although later versions do.
 
-    These are both implemented by code under the \CPU directory.  16K CPU
-    support is toggled by the "SIXTEEN_K" conditional compilation symbol.
+- PERQ 24-bit CPU - In progress!  Changes to support the extended 24-bit 16K
+  CPU are in place, but no testing can be done until PERQ-2/Z80/EIO changes
+  are complete, along with 24-bit ROM images and a configuration option to let
+  the user choose which machine to configure.
 
+    These are all implemented by code under the \CPU directory.
 
 - Memory - Complete.  The default memory board provides 1MB (.5MW) of RAM.
   You can increase this to 2MB (1MW, the maximum supported) by enabling the
@@ -126,7 +129,7 @@ it is reasonably functional and stable (though there may still be issues):
   you're a real masochist, stick with as much memory as the old beastie can
   support.  [This will eventually be configurable at runtime.]
 
-    This is implemented by code in the \Memory directory.  A new ROM image
+    This is implemented by code in the Memory directory.  A new ROM image
     for the memory state machine and a Perl script to build it are included
     in the \PROM directory.
 
@@ -135,8 +138,8 @@ it is reasonably functional and stable (though there may still be issues):
   the new Memory implementation, is enabled by default.  The old "fake" RasterOp
   code is gone.
 
-    RasterOp still lives in the \Memory directory, though it probably ought to
-    be in \CPU.  Two new text files and a small Perl script are included in the
+    RasterOp has been moved to live in the \CPU directory and is a part of the
+    CPU proper.  Two new text files and a small Perl script are included in the
     \PROM directory which are used to build a new pair of small ROMs that drive
     the new RasterOp, and contain usage notes.
 
@@ -167,8 +170,6 @@ it is reasonably functional and stable (though there may still be issues):
     own section, really.  Subdevices that are implemented are:
 
         - Keyboard - This is implemented by code in \IO\Z80\IOB\Keyboard.cs.
-          Now includes a platform-independent driver in 100% managed code;
-          it works under Mono on both Linux and Mac OS X [see caveat, below]
         - RS232 - \IO\Z80\IOB\RS232.cs, as well as actual device interfaces
           under \IO\SerialDevices.
         - "Kriz" Tablet.  This was a proprietary electromagnetic ranging tablet
@@ -183,8 +184,8 @@ it is reasonably functional and stable (though there may still be issues):
         - Speech (sound chip).  Basically a stub.  \IO\Z80\IOB\Speech.cs
 
 
-2.1 What's Not Implemented
---------------------------
+2.1 What's Not Implemented (Yet)
+--------------------------------
 
 - A True Z80 emulation.  This will be necessary in order to support the later
   PERQ 2 models.  Not impossible, just a lot of work.  Should be possible to
@@ -192,6 +193,7 @@ it is reasonably functional and stable (though there may still be issues):
   Fortunately, disassemblies of the Z80 ROMs are available, and the hardware
   interfaces shouldn't be hard to suss out.
 
+    [In progress!]
 
 - Ethernet.  This is completely unimplemented.  Would be an interesting
   challenge, though POS doesn't make much use of it aside from basic file
@@ -231,12 +233,8 @@ it is reasonably functional and stable (though there may still be issues):
   require full Z80 support.  It'll also require support for the Micropolis
   and ST-506 hard drive interfaces, different video layout (portrait vs.
   landscape) and tweaks to the keyboard handling (more keys).  Would probably
-  also necessitate some serious code refactoring.  [Update: short of a full-
-  blown Z80 emulation, a CIO/Micropolis version of the IO Board, running the
-  "new" Z80 protocol, would allow for our emulated PERQ-1 to run Accent S5/S6,
-  PNX 2+, and POS G.  This could be a much quicker way to expand the amount of
-  available software we can run, and some steps have been taken to investigate
-  ways to make PERQemu more configurable at runtime. Watch this space.]
+  also necessitate some serious code refactoring.
+    [In progress!]
 
 
 2.2 Operating System Support
@@ -264,7 +262,6 @@ Accent S4 now tracks the mouse, though it takes a little getting used to since
 it runs in relative mode.  To simulate mouse "swipes" you have to use the Alt
 (or Command on Mac) key to tell PERQemu the mouse is "off tablet", reposition,
 then release the key to start tracking again.  It's a little clumsy at first.
-[Accent sources would still be hugely appreciated!]
 
 
 If anyone has any other software that ran on the PERQ-1 and does not run
@@ -277,7 +274,7 @@ successfully under PERQemu, send us a copy and we'll find out why!
 3.1 The CPU and Memory
 ----------------------
 
-Under the \CPU directory you'll find the implementation of the main PERQ CPU.
+Under the CPU directory you'll find the implementation of the main PERQ CPU.
 If you are not familiar with it I seriously suggest reading through the
 following documents on Bitsavers:
 
@@ -290,32 +287,60 @@ detail.  In a nutshell, the PERQ CPU is a microcoded (48-bit microcode word)
 machine with 4- or 16K of writeable control store, a 20-bit ALU, 256 general
 purpose 20-bit registers, a 16-bit IO bus and just a ton of other neat features.
 
-CPU.cs contains the nexus of the implementation in the CPU class.  CPU
-implements the decoding and execution logic, writeable control store, and defers
-to the following for subordinate tasks:
-    - The "ALU" class implements the CPU's 20-bit ALU.
+In the 24-bit variant of the 16K CPU, all of the 20-bit datapath elements are
+extended by four bits, allowing access to a much larger memory address range.
+Note that the SIXTEEN_K conditional is removed, and CPU type may be configured
+by the user at runtime [when the configurator is written].
+
+CPU.cs contains the nexus of the implementation in the CPU class.  It directly
+implements the decoding and execution logic, and provides debugger hooks for
+pulling out status information.  To make it a little more "wieldy" it has been
+refactored to break out many of the subordinate tasks:
+
+    - The "ALU" class implements the CPU's 20- or 24-bit ALU.
+    - The "CallStack" class implements the PERQ's hardware callstack (12 bit
+      on 4K machines, 14 bit on 16K).  This is now internal to the Sequencer
+      class (see below).
+    - The "ControlStore" class manages the writable control store and boot ROM.
+    - The "ExpressionStack" class implements the 16-level, 20- or 24-bit push-
+      down stack and TOS register.
+    - The "ExtendedRegister" class implements the odd two-part register types
+      used in several places in the processor, with separate or combined 
+      access to the upper and lower parts of the register.
+    - The "Instruction" class caches instruction decoding to make things faster.
+    - The "RasterOp" class emulates the hardware datapath for doing fast block
+      memory moves used in graphics operations.
+    - The "RegisterFile" class provides the XY register file of 256 general
+      purpose registers, either 20- or 24-bits wide.
+    - The "Sequencer" class implements the Am2910 microsequencer and the PC, S
+      and Victim registers.  These are 12 bits in the 4K CPU, extended by the
+      "2 bit kluge" to 14 bits in the 16K CPUs.
     - The "Shifter" class implements the PERQ's Shift, Rotate and bitfield
       operations.
-    - The "CallStack" class implements the PERQ's hardware callstack (12 bit
-      on 4K machines, 14 bit on 16K).
-    - The "ExtendedRegister" class implements the odd 14 bit (12 bit with the
-      "2 bit kluge" tacked on) PC and S registers on the 16K CPU.
-    - The "Instruction" class caches instruction decoding to make things a bit
-      faster.
+
+CPU.Execute() is the main entrypoint of interest; everything branches off
+from here.
+
+All original PERQ models were limited to 2MB (1MW) of memory by their 20-bit
+address limit.  The rare 24-bit PERQ was extended to allow 32MB (16MW), but
+historically only a 4MB (2MW) board was produced due to technology limitations
+at the time (i.e., 1Mbit DRAMs didn't exist yet).  Documentation hints at the
+existence of an 8MB PERQ (though no OS software currently available makes use
+of that much RAM).  PERQemu will allow dynamic memory configuration up to the
+full utilization of the 24-bit address space (?); for now a half megaword (1MB)
+is standard.  The TWO_MEG conditional builds the 20-bit maximum of one megaword.
+
     - The "Memory" class (\Memory\Memory.cs) implements the PERQ's memory store
       and memory state machine.
     - The "MemoryController" class (\Memory\MemoryController.cs) provides
       separate memory input and output queues to support the overlapped Fetch/
       Store required by RasterOp.
-    - The "RasterOp" class (\Memory\RasterOp.cs) is the "real" RasterOp that
-      emulates the hardware datapath.
-
-CPU.Execute() is the main entrypoint of interest; everything branches off
-from here.
 
 
 3.2 I/O
 -------
+
+[This is all undergoing a major overhaul as the "real Z80" is introduced.]
 
 All I/O related code lives under the \IO directory.  The IOBus class acts as
 the hub (or "bus," if you will) and essentially delegates I/O reads and writes
@@ -343,6 +368,8 @@ All devices hung off of the Z80 subsystem implement the IZ80Device interface.
 
 3.3 Storage
 -----------
+
+[This too is changing to accommodate PERQ 2 disk types]
 
 The physical media is simulated by the PhyicalDisk implementations under
 \PhysicalDisk.  RawFloppyDisk wraps a RAW floppy image.  ShugartDisk wraps an
@@ -372,14 +399,14 @@ a Shugart hard disk with POS or Accent.)
 
 The PERQ hardware supports double-density floppies but PERQemu does not -- yet.
 You can sometimes read double-density RT-11 floppies, but writing tends to blow
-things up (usually hanging, or crashing, the emulator).  A new format called
-.PFD adds a short header that will allow PERQemu to fully support reading and
-writing SSDD or DSDD floppies; it is compatible with .RAW so PERQemu can read
-them right now.  Watch this space.
+things up (usually hanging, or crashing, the emulator).  [Support for reading
+and writing IMD format TBA?]
 
 
 3.4 The Display
 ---------------
+
+[This is changing to support the PERQ-2/landscape and change to SDL2]
 
 The VideoController class (in \Display\VideoController.cs) implements the
 hardware that controls the display and is responsible for dealing with video
@@ -399,14 +426,7 @@ I/O device.
     no more need for PInvokes, which makes Mono much happier.  It lives in
     \HostInterface\KeyboardMap.cs.
 
-    Note: the Mac OS X keyboard driver for Mono is utterly broken for our
-    purposes so, I ended up basically rewriting it.  Since apparently nobody
-    gives a rat's rear end about the PowerPC anymore, it's probably pointless
-    to send in a patch; I'm only testing under Mono 2.10.x (last version that
-    runs on it).  Please contact me for a patch if you want to try PERQemu on
-    your G5. :)  [Update: still borked on the latest Mono to run on MacOS X
-    Yosemite/Intel.  The same patch still applies, so obviously nobody has
-    looked at that code in years.]
+    [This is all changing with the move to SDL2]
 
     Mono on Linux seems to work out of the box, though it seems Caps Lock
     events aren't passed through.  So NO SHOUTING at PERQemu on Linux, for now.

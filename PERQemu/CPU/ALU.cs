@@ -17,6 +17,7 @@
 //
 
 using System;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu.Processor
 {
@@ -104,6 +105,7 @@ namespace PERQemu.Processor
             /// Normal two-input ALU operation: combine AMUX and BMUX inputs
             /// according to the ALU field in the microinstruction.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Execute(ALUOperation op, int amux, int bmux)
             {
                 Trace.Log(LogType.AluState, "ALU: In: Amux={0:x6} Bmux={1:x6}", amux, bmux);

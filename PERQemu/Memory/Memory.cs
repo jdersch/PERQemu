@@ -42,9 +42,12 @@ namespace PERQemu.Memory
     /// </summary>
     public sealed class MemoryBoard
     {
-        public MemoryBoard(PERQSystem system)
+        public MemoryBoard(PERQSystem system, int sizeInWords)
         {
             _system = system;
+            _memSize = sizeInWords;
+            _memSizeMask = sizeInWords - 1;
+
             Reset();
         }
 
@@ -60,7 +63,7 @@ namespace PERQemu.Memory
             _wait = false;
             _hold = false;
 
-            if (Trace.TraceOn) Trace.Log(LogType.MemoryState, "Memory: Reset.");
+            Trace.Log(LogType.MemoryState, "Memory: Reset.");
         }
 
         public int MemSize
@@ -142,9 +145,9 @@ namespace PERQemu.Memory
             ExecuteFetch();
 
             //
-            // Set the wait flag if we need to abort the current instruction.  If
-            // output is pending, we never wait; otherwise we let the conbined status
-            // of the request queues determine our result.
+            // Set the wait flag if we need to abort the current instruction.
+            // If output is pending, we never wait; otherwise we let the combined
+            // status of the request queues determine our result.
             //
             if (MDONeeded)
             {
@@ -345,21 +348,8 @@ namespace PERQemu.Memory
         private bool _wait;                 // True if CPU has to wait for memory
         private bool _hold;                 // True if IO hold asserted (not implemented)
 
-
-        // TODO: Memory board size should be configurable at runtime.
-        // For the PERQ 1, the original "quarter meg" board was 256KB (128KW).  Some
-        // "half meg" boards existed (512KB/256KW) but were rare; the most common was
-        // the 1MB/512KW using 64K RAMs.  Some very rare 2MB/1MW boards used piggyback
-        // 128Kb RAMs; the landscape boards used 256Kb RAMs.  It'd be cool to support
-        // 'em all -- along with the "multi-meg" board (4MB, and possibly 8MB!) that
-        // was available only with the incredibly rare 24-bit T4 machines.
-#if TWO_MEG
-        private const int _memSize     = 0x100000;  // 2MB == 1MW
-        private const int _memSizeMask = 0x0fffff;  // i.e., full 20 bits
-#else
-        private const int _memSize = 0x80000;   // 1MB was more typical for a PERQ 1
-        private const int _memSizeMask = 0x7ffff;
-#endif
+        private int _memSize;
+        private int _memSizeMask;
 
         private ushort[] _memory;
 

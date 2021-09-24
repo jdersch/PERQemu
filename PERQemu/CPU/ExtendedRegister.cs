@@ -40,8 +40,8 @@ namespace PERQemu.Processor
             _hiMask = (1 << highBits) - 1;
             _hi = 0;
 
-            Console.WriteLine("new reg: lo {0} bits mask {1:x6} hi {2} bits mask {3:x6}",
-                             _loBits, _loMask, _hiBits, _hiMask);
+            Console.WriteLine("new reg: lo {0} bits mask {1:x6} hi {2} bits mask {3:x6}",   // Debug
+                             _loBits, _loMask, _hiBits, _hiMask);   
         }
 
         // todo: Hmm.  perhaps accept any value, and mask on the way out?

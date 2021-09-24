@@ -101,8 +101,6 @@ namespace PERQemu.Processor
             _rasterOp.Reset();
             _usequencer.Reset();
 
-            _memory.Reset();            // fixme  should this really be here?
-
             // Clear the op file
             for (int i = 0; i < 16; i++)
             {
@@ -158,6 +156,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Runs the PERQ microengine for one microcycle.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Execute()
         {
 
@@ -212,14 +211,11 @@ namespace PERQemu.Processor
                 return;
             }
 
-
-#if TRACING_ENABLED
             // This is a very expensive log, so only call it if we have to
             if (Trace.TraceOn && (LogType.Instruction & Trace.TraceLevel) != 0)
             {
                 Trace.Log(LogType.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
             }
-#endif
 
 #if DEBUG
             // Catch cases where the CPU is looping forever
@@ -345,7 +341,7 @@ namespace PERQemu.Processor
             get { return (_wcsSize == 4096); }
         }
 
-        public static int MicroCycleTime
+        public static ulong MicroCycleTime
         {
             get { return _cycleTime; }
         }
@@ -364,7 +360,6 @@ namespace PERQemu.Processor
         {
             get { return (BPC & 0x8) != 0; }
         }
-
 
         public bool IncrementBPC
         {
@@ -1313,7 +1308,7 @@ namespace PERQemu.Processor
         protected static int _wcsSize;
         protected static int _wcsMask;
 
-        protected static int _cycleTime;
+        protected static ulong _cycleTime;
 
         // Timing regulation
         protected ulong _clocks;                // elapsed cycles

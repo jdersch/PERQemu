@@ -320,6 +320,7 @@ namespace PERQemu.Processor
             /// Runs the next step in the RasterOp cycle, or a No-op if the
             /// hardware isn't enabled.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Clock()
             {
                 ROpWord w;

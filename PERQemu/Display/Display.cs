@@ -147,19 +147,19 @@ namespace PERQemu.Display
             // Schedule an event to poll for events at REASONABLE intervals
             // let's try 100 per second? (10ms) (should be > 60 for 60fps :-)
             _sdlPumpEvent = _system.Scheduler.Schedule(10 * Conversion.MsecToNsec, (skew, context) =>
-                    {
-                        SDL.SDL_Event e;
+            {
+                SDL.SDL_Event e;
 
-                        //
-                        // Run main message loop
-                        //
-                        while (SDL.SDL_PollEvent(out e) != 0)
-                        {
-                            SDLMessageHandler(e);
-                        }
+                //
+                // Run main message loop
+                //
+                while (SDL.SDL_PollEvent(out e) != 0)
+                {
+                    SDLMessageHandler(e);
+                }
 
-                        SDLMessageLoop();
-                    });
+                SDLMessageLoop();
+            });
         }
 
         public void SDLShutdown()
@@ -194,11 +194,7 @@ namespace PERQemu.Display
 
         private void SDLMessageHandler(SDL.SDL_Event e)
         {
-            //Console.WriteLine("Handling event {0}", e.type);
-
-            //
             // Handle current messages.  This executes in the UI context.
-            //            
             switch (e.type)
             {
 
@@ -308,8 +304,8 @@ namespace PERQemu.Display
                 "PERQ",
                 SDL.SDL_WINDOWPOS_UNDEFINED,
                 SDL.SDL_WINDOWPOS_UNDEFINED,
-                768,
-                1024,
+                _displayWidth,
+                _displayHeight,
                 SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
 
             if (_sdlWindow == IntPtr.Zero)

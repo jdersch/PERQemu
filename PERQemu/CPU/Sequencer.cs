@@ -113,6 +113,7 @@ namespace PERQemu.Processor
             /// <summary>
             /// Jumps based on the condition flags.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void DispatchJump(Instruction uOp)
             {
                 bool conditionSatisfied = false;
