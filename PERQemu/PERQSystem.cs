@@ -57,15 +57,24 @@ namespace PERQemu
 #else
             _mem = new MemoryBoard(this, 512 * 1024);
 #endif
+
+            //
+            // TODO: There are some sort of ugly dependencies here...
+            //      CPU needs Memory;
+            //      Scheduler "needs" CPU;
+            //      Display, Video need Memory, CPU, and (eventually IOB);
+            //      IOBus needs IOB, OIO;
+            //      new Z80 needs IOB?
+            //
+            _perqCPU = new PERQ1A(this);
+
+            _scheduler = new Scheduler(CPU.MicroCycleTime);
+
             _display = new Display.Display(this);
             _videoController = new Display.VideoController(this);
             _iob = new IOB(this);
             _oio = new OIO();
             _ioBus = new IOBus(this);
-
-            _perqCPU = new PERQ1A(this);
-
-            _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Start off debugging
             _state = RunState.Debug;

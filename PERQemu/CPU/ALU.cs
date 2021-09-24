@@ -40,6 +40,19 @@ namespace PERQemu.Processor
             public bool Neq;
             public bool Eql;
 
+            public void Clear()
+            {
+                CarryH = false;
+                Ovf = false;
+                Cry = false;
+                Leq = false;
+                Lss = false;
+                Geq = false;
+                Gtr = false;
+                Neq = false;
+                Eql = false;
+            }
+
             public override string ToString()
             {
                 return
@@ -68,6 +81,7 @@ namespace PERQemu.Processor
             {
                 _r = new ExtendedRegister((_bits - 16), 16);
                 _oldR = new ExtendedRegister((_bits - 16), 16);
+                _flags = new ALUFlags();
             }
 
             public void Reset()
@@ -75,8 +89,8 @@ namespace PERQemu.Processor
                 _r.Value = 0;
                 _oldR.Value = 0;
 
-                _flags = new ALUFlags();        // quick & dirty reset
-                _oldFlags = _flags;
+                _flags.Clear();
+                _oldFlags.Clear();
 
                 Trace.Log(LogType.AluState, "ALU: Reset.");
             }
@@ -322,6 +336,7 @@ namespace PERQemu.Processor
             /// Sets the R register, since the compiler barfs at us if we try
             /// to expose the ExtendedRegister through a setter.  Bleah.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetResult(int r)
             {
                 _r.Value = r;       // this populates .Lo and .Hi
@@ -330,6 +345,7 @@ namespace PERQemu.Processor
             /// <summary>
             /// Latch the result and flags from the previous cycle.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void LatchResult()
             {
                 _oldR = _r;

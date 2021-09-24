@@ -285,7 +285,7 @@ namespace PERQemu.Memory
             // Clip address to memsize range and read
             ushort data = _memory[address & _memSizeMask];
 
-            Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x5} --> {1:x4}", address & _memSizeMask, data);
+            Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x6} --> {1:x4}", address & _memSizeMask, data);
 
             return data;
         }
@@ -296,7 +296,7 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void StoreWord(int address, ushort data)
         {
-            Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x5} <-- {1:x4}", address & _memSizeMask, data);
+            Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x6} <-- {1:x4}", address & _memSizeMask, data);
 
             // Clip address to memsize range and write
             _memory[address & _memSizeMask] = data;

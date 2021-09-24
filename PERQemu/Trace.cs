@@ -190,12 +190,12 @@ namespace PERQemu
 
         public static LogType TraceLevel
         {
-	        get { return LogType.None; }
-            set { Trace.TraceOn = false; }
+            get { return _level; }
+            set { /* ignore it */ }
         }
 #endif
 
-        private static LogType _level;
+        private static LogType _level = LogType.None;
         public static bool TraceOn = false;
     }
 }

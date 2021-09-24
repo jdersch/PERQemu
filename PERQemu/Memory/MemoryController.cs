@@ -49,10 +49,10 @@ namespace PERQemu.Memory
         public override string ToString()
         {
 #if DEBUG
-            return String.Format("ID={0} addr={1:x5} cycle={2} bookmark={3} active={4}",
+            return String.Format("ID={0} addr={1:x6} cycle={2} bookmark={3} active={4}",
                                  _reqID, _startAddr, _cycleType, _bookmark, _active);
 #else
-            return String.Format("Addr={0:x5} cycle={1} bookmark={2} active={3}",
+            return String.Format("Addr={0:x6} cycle={1} bookmark={2} active={3}",
                                 _startAddr, _cycleType, _bookmark, _active);
 #endif
         }
@@ -153,6 +153,8 @@ namespace PERQemu.Memory
         {
             _system = system;
             _name = name;
+            _current = new MemoryRequest();
+            _pending = new MemoryRequest();
             _bkmTable = new BookmarkEntry[256];
 
             LoadBookmarkROM();
@@ -164,14 +166,12 @@ namespace PERQemu.Memory
         {
             _state = _nextState = MemoryState.Idle;
             _bookmark = _nextBookmark = 0;
-
-            _current = new MemoryRequest();
-            _pending = new MemoryRequest();
-
             _address = -1;
             _index = 0;
             _wait = false;
             _valid = false;
+            _current.Clear();
+            _pending.Clear();
 
             Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
         }
@@ -218,6 +218,7 @@ namespace PERQemu.Memory
         /// Memory.Tick(), this executes at the top of the microcycle, so it may abort 
         /// the current instruction if a new request is issued at the wrong time.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock(MemoryCycle nextCycle)
         {
             Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",

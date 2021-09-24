@@ -29,8 +29,8 @@ namespace PERQemu.IO
         public IOB(PERQSystem system)
         {
             _hardDiskController = new ShugartDiskController(system);
-            //_z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
-            _z80System = new PERQemu.IO.Z80_new.Z80System(system);
+            _z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
+            //_z80System = new PERQemu.IO.Z80_new.Z80System(system);
         }
 
         public IZ80System Z80System
