@@ -18,14 +18,19 @@
 
 namespace PERQemu.Processor
 {
+    /// <summary>
+    /// This class implements the fire-breathing 24-bit, 64K CPU used in
+    /// the "PERQ 2.0" lineup of workstations and servers from the famed
+    /// Retrocomputing Division of Boondoggle Heavy Industries, Ltd.
+    /// </summary>
     public class PERQ24A : CPU
     {
         static PERQ24A()
         {
-            // 24-bit, 16K CPU
             _name = "PERQ24A";
-            _desc = "PERQ24A 64K CPU (24-bit)";
-            _cycleTime = 125;
+            _desc = "PERQ24A 64K CPU (24-bit)"
+          //_cycleTime = 160;   // 6.25Mhz development board
+            _cycleTime = 125;   // 8MHz production board
 
             _bits = 24;
             _mask = 0xffffff;
