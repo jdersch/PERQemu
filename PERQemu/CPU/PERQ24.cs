@@ -16,16 +16,16 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using PERQemu;
-
 namespace PERQemu.Processor
 {
+    /// <summary>
+    /// This is the rare 24-bit, 16K CPU.  It is available when the
+    /// "PERQ-2/T4" (aka "PERQ-4" or "PQ4000") configuration is selected.
+    /// </summary>
     public class PERQ24 : CPU
     {
         static PERQ24()
         {
-            // 24-bit, 16K CPU
             _name = "PERQ24";
             _desc = "PERQ24 16K CPU (24-bit)";
             _cycleTime = 170;

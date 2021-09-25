@@ -18,11 +18,20 @@
 
 namespace PERQemu.Processor
 {
+    /// <summary>
+    /// This class implements the original PERQ 20-bit CPU with 4K of
+    /// writable control store.
+    /// </summary>
+    /// <remarks>
+    /// This CPU is only available in the PERQ-1 or very first generation
+    /// of the PERQ-2.  It's here mostly for historical completeness, as
+    /// much of the really interesting software (Accent and PNX) eventually
+    /// dropped support for it.
+    /// </remarks>
     public class PERQ1 : CPU
     {
         static PERQ1()
         {
-            // 20-bit, 4K original CPU
             _name = "PERQ1";
             _desc = "PERQ-1 4K CPU (20-bit)";
             _cycleTime = 170;
