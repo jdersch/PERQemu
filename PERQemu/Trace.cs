@@ -17,6 +17,7 @@
 //
 
 using System;
+using System.Diagnostics;
 
 namespace PERQemu
 {
@@ -66,10 +67,9 @@ namespace PERQemu
 
     public static class Trace
     {
-        
-#if TRACING_ENABLED
 
-       public static void Log(LogType level, string format, params object[] args)
+        [Conditional("TRACING_ENABLED")]
+        public static void Log(LogType level, string format, params object[] args)
         {
             if (TraceOn && (_level & level) == level)
             {
@@ -82,6 +82,7 @@ namespace PERQemu
             }
         }
 
+        [Conditional("TRACING_ENABLED")]
         public static void Log(LogType level, int pad, string format, params object[] args)
         {
             if (TraceOn && (_level & level) == level)
@@ -96,6 +97,7 @@ namespace PERQemu
             }
         }
 
+#if TRACING_ENABLED
         public static LogType TraceLevel
         {
             get { return _level; }
@@ -112,6 +114,14 @@ namespace PERQemu
                 }
             }
         }
+
+#else
+        public static LogType TraceLevel
+        {
+            get { return _level; }
+            set { /* ignore it */ }
+        }
+#endif
 
         /// <summary>
         /// Selects a color for the given trace type.
@@ -184,16 +194,6 @@ namespace PERQemu
             Console.ForegroundColor = color;
         }
 
-#else
-        public static void Log(LogType level, string format, params object[] args) { }
-        public static void Log(LogType level, int pad, string format, params object[] args) { }
-
-        public static LogType TraceLevel
-        {
-            get { return _level; }
-            set { /* ignore it */ }
-        }
-#endif
 
         private static LogType _level = LogType.None;
         public static bool TraceOn = false;
