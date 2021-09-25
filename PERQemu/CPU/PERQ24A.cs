@@ -52,7 +52,7 @@ namespace PERQemu.Processor
         /// the microinstruction to select between the usual Microstate reg
         /// and "Upper", which gives the top 8 bits of the BMux input (so the
         /// upper byte of a 24-bit register can be read).  When H=0, the usual
-        /// uState value is returned, but the format is redefnied for PERQ24A:
+        /// uState value is returned, but the format is redefined for PERQ24A:
         /// 
         ///  15      12               8    7        0
         /// +-------+-------------------+------------+
@@ -75,8 +75,8 @@ namespace PERQemu.Processor
             {
                 return  BPC |
                         (OpFileEmpty ? 0x0080 : 0x0) |
-                        (_estack.StackPointer != 0 ? 0x0100 : 0x0) |
-                        (_usequencer.StackFull ? 0x0200 : 0x0) |
+                        (_estack.StackPointer == 0  ? 0x0100 : 0x0) |
+                        (_usequencer.StackFull == 0 ? 0x0200 : 0x0) | // active low
                         (_cpuOption.CacheOn ? 0x0400 : 0x0) |
                         (_alu.Flags.Lss ? 0x1000 : 0x0) |
                         (_alu.Flags.Eql ? 0x2000 : 0x0) |
@@ -91,16 +91,15 @@ namespace PERQemu.Processor
         /// based on the original PERQ, using 1980s technologies, but designed
         /// to incorporate some of the features of the "TKUP" machine and
         /// address some of the weaknesses of the original PERQ.  It features
-        /// an 8-bit BPC and provision for an off-board cache, an extended
-        /// RBase (10 bits) to expand the XY register file to 1,024 (!!) total
-        /// registers (16 banks of 64, switched into the low bank), a writable
-        /// Upper register and a completely revamped set of Special Function
-        /// decodes, dedicated MulDiv control register (and revamped RasterOp
-        /// control registers), a fully 16-bit microsequencer that's 100% code
-        /// compatible with the Am2910 (eliminating the two-bit kluge), new
-        /// boot ROMs with graphical console and network booting support, and
-        /// numerous other little improvements/corrections to the various
-        /// documented "quirks and oddities" of the beloved PERQ.
+        /// a full 16-bit microsequencer that's 100% code compatible with the
+        /// Am2910 (eliminating the two-bit kluge), an 8-bit BPC and provision
+        /// for an off-board cache, an extended RBase (10 bits) to expand the
+        /// XY register file to 1,024 (!!) general-purpose registers (16 banks
+        /// of 64, switched into the low bank), a writable Upper register and
+        /// a completely revamped set of Special Function decodes, new boot ROMs
+        /// with graphical console and network booting support, and numerous
+        /// other little improvements/corrections to the various documented
+        /// "quirks and oddities" of the beloved PERQ.
         /// 
         /// Paired with this new CPU is a dramatically updated Z80/EIO board
         /// with a redesigned DMA architecture and unified hard disk/Ethernet
@@ -108,11 +107,9 @@ namespace PERQemu.Processor
         /// dual floppy drives and up to four MFM, ESDI or SMD hard disks.
         /// 
         /// Naturally this also requires a radical new memory board and video
-        /// architecture, expanded backplane options with 3-, 5- and 7-slots
-        /// allowing more I/O expansion and the full utilization of the 24-bit
-        /// address space (two 8MW boards, each with its own independent frame
-        /// buffer allowing for "dual-headed" configuration in the 7-slot
-        /// models), and much, much more.
+        /// architecture.  To fully utilize the 24-bit address space, a new
+        /// 7-slot backplane accepts _two_ 8MW boards, each with an independent
+        /// frame buffer, making "dual-headed" configurations possible.
         /// 
         /// While we will collectively experience the heat death of the universe
         /// long before this "PERQ 2.0" architecture actually comes into 
