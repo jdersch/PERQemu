@@ -579,6 +579,7 @@
     <None Include="Disks\d6.phd" />
     <None Include="Disks\d6orig.phd" />
     <None Include="Disks\f1.phd" />
+    <None Include="CPU\PERQ24A.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
