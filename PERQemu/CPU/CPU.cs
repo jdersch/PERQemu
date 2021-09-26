@@ -219,12 +219,12 @@ namespace PERQemu.Processor
 
 #if DEBUG
             // Catch cases where the CPU is looping forever
-            //if (_lastPC == PC &&
-            //    uOp.CND == Condition.True &&
-            //    uOp.JMP == JumpOperation.Goto)
-            //{
-            //    throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x5}", PC));
-            //}
+            if (_lastPC == PC &&
+                uOp.CND == Condition.True &&
+                uOp.JMP == JumpOperation.Goto)
+            {
+                throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x4}", PC));
+            }
 #endif
 
             // If the last instruction was NextOp or NextInst, increment
@@ -381,7 +381,6 @@ namespace PERQemu.Processor
         /// <summary>
         /// Returns the OpFile contents.
         /// </summary>
-        [DebugProperty("opfile")]   // ?
         public byte[] OpFile
         {
             get { return _opFile; }
@@ -397,6 +396,15 @@ namespace PERQemu.Processor
         }
 
         /// <summary>
+        /// The 2910's S Register.
+        /// </summary>
+        [DebugProperty("s")]
+        public ushort S
+        {
+            get { return _usequencer.S; }
+        }
+
+        /// <summary>
         /// The Victim Latch.
         /// </summary>
         [DebugProperty("victim")]
@@ -406,25 +414,21 @@ namespace PERQemu.Processor
         }
 
         /// <summary>
-        /// The uState register.
+        /// The uState register(s).
         /// </summary>
         /// <remarks>
-        /// I have a feeling our handling here isn't complete; allegedly _lastBmux
-        /// is only selected if Ustate doesn't specify a register -- but how is that
-        /// coded by the microassembler?  Nothing in the standard microcode seems to
-        /// use that feature anyway, or we're just accidentally setting _lastBmux
-        /// correctly and it passes?  The H bit on the 24bit cpus selects a second
-        /// uState register, which is really just called "upper" -- so on the 24-bit
-        /// machines, _lastbmux (bits 12:15) are always zero.  We don't allow reading
-        /// the CCSR0 PAL here either, but I suspect only a few *really* esoteric
-        /// diagnostics ever used that functionality, and Tony alludes to a possible
-        /// hardware bug that made it not work on the 4k CPU anyway.  This is off
-        /// into the serious periphery of PERQ esoterica, though Accent does appear
-        /// to make use of the Upper() macro extensively so to do 24 bit support
-        /// properly I'll have to investigate further! (24-bit POS G.82/G.85 (?) was
-        /// exceedingly rare and is probably lost forever...)
+        /// The H bit on the 24 bit CPU selects a second uState register, which
+        /// is aka "Upper"; in that processor _lastbmux (bits 12:15) are always
+        /// zero.  Note that we also don't implement the CCSR0 PAL here either,
+        /// but I suspect only a few *really* esoteric diagnostics ever used that
+        /// functionality, and Tony alludes to a possible hardware bug that made
+        /// it not work on the 4k CPU anyway.  This is off into the serious
+        /// periphery of PERQ esoterica.
         /// </remarks>
-        [DebugProperty("ustate")]
+        // TODO: Whoops.  Attaching a DebugProperty to a virtual method doesn't
+        // work; will have to figure out another way to provide this info given
+        // the differences between the 20- and 24-bit processors.
+        // [DebugProperty("ustate")]
         public virtual int ReadMicrostateRegister(byte h)
         {
             // On the 20-bit CPUs, there's only one microstate register:
@@ -484,7 +488,6 @@ namespace PERQemu.Processor
         /// <summary>
         /// The CPU's microcode store.
         /// </summary>
-        [DebugProperty("ucode")]
         public ulong[] Microcode
         {
             get { return _ustore.Microcode; }
@@ -549,10 +552,10 @@ namespace PERQemu.Processor
                 case AField.NextOp:
                     if (OpFileEmpty)
                     {
-                        // Only latch if Victim is empty (0xffff indicates an unset Victim...)
+                        // Only latch if Victim is empty (all ones indicates an unset Victim...)
                         if (_usequencer.Victim == _wcsMask)
                         {
-                            _usequencer.Victim = _usequencer.PC;    // This is gives 12 or 14 bits
+                            _usequencer.Victim = _usequencer.PC;    // 12 or 14 bits
 
                             Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _usequencer.Victim);
                         }
@@ -573,7 +576,7 @@ namespace PERQemu.Processor
                     break;
 
                 case AField.MDX:
-                    amux = (_memory.MDI & (_bits == 24 ? 0xff : 0xf)) << 16;
+                    amux = (_memory.MDI & (_bits == 24 ? 0x00ff : 0x000f)) << 16;
                     break;
 
                 case AField.UState:
@@ -804,7 +807,7 @@ namespace PERQemu.Processor
                                 break;
                             }
 
-                            Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x5} R={1:x6} R<15>={2}",
+                            Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x4} R={1:x6} R<15>={2}",
                                                        _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
                             //
                             // For the hardware assisted Multiply/Divide steps, we've already done
@@ -852,7 +855,7 @@ namespace PERQemu.Processor
                                     _mq = _mqShifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
                                     break;
                             }
-                            Trace.Log(LogType.MulDiv, "MulDiv Step: MQ out={0:x5} MQ<0>={1}", _mq, (_mq & 0x1));
+                            Trace.Log(LogType.MulDiv, "MulDiv Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
                             break;
 
                         case 0x2:   // Load multiplier / dividend
@@ -864,12 +867,11 @@ namespace PERQemu.Processor
                                 // to determine CPU type, we allow these ops to succeed (rather than
                                 // throw an exception).  Any read or write of MQ simply returns zero.
                                 //
-                                _mq = 0;
                                 Trace.Log(LogType.Errors, "MulDiv Load ignored (4K)");
                             }
                             else
                             {
-                                _mq = (_alu.R.Value & 0xffff);
+                                _mq = _alu.R.Lo;        // MQ reg is 16 bits wide
                                 Trace.Log(LogType.MulDiv, "MulDiv Load: MQ={0:x4}", _mq);
                             }
                             break;
@@ -888,7 +890,7 @@ namespace PERQemu.Processor
                         case 0x4:   // (R) := product or quotient
                             if (Is4K)
                             {
-                                _alu.SetResult(_mq);
+                                _alu.SetResult(0);
                                 Trace.Log(LogType.Errors, "MQ Read ignored (4K)");
                             }
                             else
@@ -1002,6 +1004,15 @@ namespace PERQemu.Processor
 
             Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
 
+            // TODO: would be nice to have a breakpoint on DDS value
+#if DEBUG
+            if (_dds == 199)
+            {
+                Trace.TraceLevel = LogType.All;
+                _system.Break();
+            }   // hack for debugging
+#endif
+
             // TODO: This should be moved elsewhere
             Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
         }
@@ -1085,38 +1096,38 @@ namespace PERQemu.Processor
         [DebugFunction("show xy register", "Displays the values of the XY registers")]
         private void ShowRegister()
         {
-            for (byte reg = 0; reg <= 255; reg++)
+            for (int reg = 0; reg < 256; reg++)
             {
-                Console.Write("R[{0:x2}]={1:x6}{2}", reg, _xy.ReadRegister(reg),
+                Console.Write("R[{0:x2}]={1:x6}{2}", reg, _xy.ReadRegister((byte)reg),
                               ((reg + 1) % 4 == 0) ? "\n" : "\t");
             }
             Console.WriteLine();
         }
 
         [DebugFunction("show xy register", "Displays the value of the specified XY register [0..255]")]
-        private void ShowRegister(byte reg)
+        private void ShowRegister(ushort reg)
         {
             if (reg > 255)
             {
                 Console.WriteLine("Argument out of range -- must be between 0 and 255");
                 return;
             }
-            Console.WriteLine("R[{0:x2}]={1:x6}", reg, _xy.ReadRegister(reg));
+            Console.WriteLine("R[{0:x2}]={1:x6}", reg, _xy.ReadRegister((byte)reg));
         }
 
 #if DEBUG
         [DebugFunction("set xy register", "Change the value of an XY register")]
-        private void SetRegister(byte reg, uint val)
+        private void SetRegister(ushort reg, uint val)
         {
             if (reg > 255)
             {
                 Console.WriteLine("Argument out of range -- must be between 0 and 255");
                 return;
             }
-            _xy.WriteRegister(reg, (int)(val & 0xffffff));     // clip to 24 bits
+            _xy.WriteRegister((byte)reg, (int)(val & 0xffffff));     // clip to 24 bits
 
             Console.WriteLine("R[{0:x2}]={1:x6} (dec {2})", reg,
-                              _xy.ReadRegister(reg), _xy.ReadRegister(reg));
+                              _xy.ReadRegister((byte)reg), _xy.ReadRegister((byte)reg));
         }
 #endif
 
@@ -1144,7 +1155,7 @@ namespace PERQemu.Processor
             {
                 StringBuilder line = new StringBuilder();
 
-                line.AppendFormat("{0:x5}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
+                line.AppendFormat("{0:x6}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
                     i, mem[i], mem[i + 1], mem[i + 2], mem[i + 3], mem[i + 4], mem[i + 5], mem[i + 6], mem[i + 7]);
 
                 for (uint j = i; j < i + 8; j++)
@@ -1220,7 +1231,7 @@ namespace PERQemu.Processor
 
             for (int i = 0; i < 8; i++)
             {
-                Console.WriteLine("{0}: {1:x2}", i, _opFile[i]);
+                Console.WriteLine("   {0}: {1:x2}", i, _opFile[i]);
             }
         }
 

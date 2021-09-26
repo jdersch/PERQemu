@@ -31,7 +31,7 @@ namespace PERQemu
         None =              0x0,
         Errors =            0x1,
         Warnings =          0x2,
-        DDS =               0x4,            // could be reassigned
+        DDS =               0x4,
         EmuState =          0x8,
         CpuState =          0x10,
         AluState =          0x20,
@@ -42,13 +42,13 @@ namespace PERQemu
         MicrocodeStore =    0x400,
         Shifter =           0x800,
         HardDisk =          0x1000,
-        MemoryFetch =       0x2000,         // consolidate?
-        MemoryStore =       0x4000,         // -> Canon?
+        MemoryFetch =       0x2000,
+        MemoryStore =       0x4000,
         FloppyDisk =        0x8000,
         OpFile =            0x10000,
         Interrupt =         0x20000,
         Display =           0x40000,
-        QCode =             0x80000,        // could be synonym for OpFile, reused?
+        QCode =             0x80000,
         EStack =            0x100000,
         RasterOp =          0x200000,
         GPIB =              0x400000,

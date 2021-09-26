@@ -533,7 +533,7 @@ namespace PERQemu.Memory
         /// </summary>
         public void DumpQueue()
         {
-            Console.WriteLine("{0} queue:\tstate: wait={1} valid={2} index={3} addr={4:x5}",
+            Console.WriteLine("{0} queue:\tstate: wait={1} valid={2} index={3} addr={4:x6}",
                               _name, _wait, _valid, _index, _address);
             Console.WriteLine("\t\tcurrent: {0}", _current);
             Console.WriteLine("\t\tpending: {0}", _pending);

@@ -130,7 +130,7 @@ namespace PERQemu.Display
                     //   1:0    not used
                     _displayAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
 
-                    Trace.Log(LogType.Display, "Display Address Register set to {0:x5}", _displayAddress);
+                    Trace.Log(LogType.Display, "Display Address Register set to {0:x6}", _displayAddress);
                     break;
 
                 case 0xe2:  // Load cursor address register
@@ -138,7 +138,7 @@ namespace PERQemu.Display
                     // Same format as display address
                     _cursorAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
 
-                    Trace.Log(LogType.Display, "Cursor Address Register set to {0:x5}", _cursorAddress);
+                    Trace.Log(LogType.Display, "Cursor Address Register set to {0:x6}", _cursorAddress);
                     break;
 
                 case 0xe3:  // Video control port

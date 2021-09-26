@@ -93,12 +93,8 @@ namespace PERQemu.Processor
             /// </remarks>
             public ushort Victim
             {
-                get { return _victim.Lo; }
-                set
-                {
-                    _victim.Lo = value;
-                    Console.WriteLine("Victim assigned {0}, set to {1}", value, Victim);
-                }
+                get { return (ushort)_victim.Value; }
+                set { _victim.Value = value; }
             }
 
             /// <summary>

@@ -119,7 +119,7 @@ namespace PERQemu.Processor
 
             public override string ToString()
             {
-                return String.Format("Addr={0:x5} Idx={1} Data={2:x4} Mask={3}",
+                return String.Format("Addr={0:x6} Idx={1} Data={2:x4} Mask={3}",
                                      Address, Index, Data, Mask);
             }
 
@@ -302,11 +302,11 @@ namespace PERQemu.Processor
                 _srcBitOffset = (value & 0xf);
 
                 // Check for poweroff bit and stop emulation if we're a PERQ-1.
-                if ((value & 0x80) > 0)
+                if ((value & 0x80) == 0)
                 {
                     //if (PERQolator.Sys.Config.Chassis == ChassisType.PERQ1)
                     {
-                        Console.WriteLine("Power off?");
+                        Console.WriteLine("Power off? SrcRastOp set to {0}", value);
                         //throw new PowerOffException();
                     }
                 }

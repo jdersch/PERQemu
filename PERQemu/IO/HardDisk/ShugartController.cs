@@ -360,7 +360,7 @@ namespace PERQemu.IO.HardDisk
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.HardDisk,
-                          "Shugart sector read complete from {0}/{1}/{2}, wrote to memory at {3:x5}",
+                          "Shugart sector read complete from {0}/{1}/{2}, wrote to memory at {3:x6}",
                           _cylinder, _head, _sector, dataAddr);
 #endif
             SetBusyState();
@@ -406,7 +406,7 @@ namespace PERQemu.IO.HardDisk
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.HardDisk,
-                          "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x5}",
+                          "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x6}",
                           _cylinder, _head, _sector, dataAddr);
 #endif
             SetBusyState();
@@ -444,7 +444,7 @@ namespace PERQemu.IO.HardDisk
 #if TRACING_ENABLED
             if (Trace.TraceOn)
                 Trace.Log(LogType.HardDisk,
-                          "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x5}",
+                          "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
                           _cylinder, _head, _sector, dataAddr);
 #endif
             SetBusyState();

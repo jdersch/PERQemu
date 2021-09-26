@@ -39,16 +39,8 @@ namespace PERQemu.Processor
             _hiBits = highBits;
             _hiMask = (1 << highBits) - 1;
             _hi = 0;
-
-            Console.WriteLine("new reg: lo {0} bits mask {1:x6} hi {2} bits mask {3:x6}",   // Debug
-                             _loBits, _loMask, _hiBits, _hiMask);   
         }
 
-        // todo: Hmm.  perhaps accept any value, and mask on the way out?
-        // it seems there are a number of cases where the code assumes more
-        // bits than are actually defined -- victim using 0xffff to indicate
-        // "unset" for example -- and being too precise has broken things...
-        // dang.
         public int Value
         {
             get { return ((_hi << _loBits) | _lo); }
@@ -67,14 +59,17 @@ namespace PERQemu.Processor
 
         public ushort Hi
         {
-            get { return _hi; }
+            get { return _hi; }     // NB: high half is returned right justified
             set { _hi = (ushort)((value >> _loBits) & _hiMask); }
         }
 
         public override string ToString()
         {
-            // return Value.ToString();
-            return string.Format("[ExtendedRegister: Value={0}, Lo={1}, Hi={2}]", Value, Lo, Hi);   // Debug
+#if DEBUG
+            return string.Format("[ExtendedRegister: Value={0}, Lo={1}, Hi={2}]", Value, Lo, Hi);
+#else
+            return Value.ToString();
+#endif
         }
 
         private ushort _lo;
