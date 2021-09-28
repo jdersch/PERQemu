@@ -29,8 +29,11 @@ namespace PERQemu.Processor
         {
             _name = "PERQ24A";
             _desc = "PERQ24A 64K CPU (24-bit)"
-          //_cycleTime = 160;   // 6.25Mhz development board
+#if DEBUG
+            _cycleTime = 160;   // 6.25Mhz development board
+#else
             _cycleTime = 125;   // 8MHz production board
+#endif
 
             _bits = 24;
             _mask = 0xffffff;
@@ -60,8 +63,8 @@ namespace PERQemu.Processor
         /// +-------+-------------------+------------+
         /// 
         /// where:
-        ///     uu - unused         CO - CacheOn    CF - Call stack Full
-        ///     SE - Estack empty   OE - OpEmpty    BPC - 7 bit op address
+        ///     uu - unused         CO - Cache On   CF - Call stack Full
+        ///     SE - eStack Empty   OE - Op Empty   BPC - 7 bit op address
         /// 
         /// See the "PERQ 2.0 Microprogramming Guide" for more info. :-)
         /// </remarks>
@@ -74,20 +77,20 @@ namespace PERQemu.Processor
             else
             {
                 return  BPC |
-                        (OpFileEmpty ? 0x0080 : 0x0) |
-                        (_estack.StackPointer == 0  ? 0x0100 : 0x0) |
-                        (_usequencer.StackFull == 0 ? 0x0200 : 0x0) | // active low
-                        (_cpuOption.CacheOn ? 0x0400 : 0x0) |
-                        (_alu.Flags.Lss ? 0x1000 : 0x0) |
-                        (_alu.Flags.Eql ? 0x2000 : 0x0) |
-                        (_alu.Flags.Cry ? 0x4000 : 0x0) |
-                        (_alu.Flags.Ovf ? 0x8000 : 0x0);
+                        (OpFileEmpty            ? 0x0080 : 0x0) |
+                        (_estack.StackEmpty     ? 0x0100 : 0x0) |
+                        (_usequencer.StackFull  ? 0x0200 : 0x0) |
+                        (_cpuOption.CacheOn     ? 0x0400 : 0x0) |
+                        (_alu.Flags.Lss         ? 0x1000 : 0x0) |
+                        (_alu.Flags.Eql         ? 0x2000 : 0x0) |
+                        (_alu.Flags.Cry         ? 0x4000 : 0x0) |
+                        (_alu.Flags.Ovf         ? 0x8000 : 0x0);
             }
         }
 
         ///<remarks>
-        /// This (mostly!) fictional device is a fever dream, KiCAD schematic,
-        /// and collection of documents describing a brand new retrocomputer
+        /// This (mostly!) fictional device is a fever dream, a collection of
+        /// KiCAD schematics and documents describing a brand new retrocomputer
         /// based on the original PERQ, using 1980s technologies, but designed
         /// to incorporate some of the features of the "TKUP" machine and
         /// address some of the weaknesses of the original PERQ.  It features

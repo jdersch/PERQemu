@@ -1,4 +1,4 @@
-// iob.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// iob.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
+
 using PERQemu.IO.HardDisk;
 
 namespace PERQemu.IO
@@ -48,9 +49,7 @@ namespace PERQemu.IO
             _hardDiskController.Reset();
             _z80System.Reset();
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.IOState, "IOB: Board reset.");
-#endif
+            Trace.Log(LogType.IOState, "IOB: Board reset.");
         }
 
         // TODO: Move these next three to some generic interface when we implement the EIO, etc.
@@ -101,10 +100,7 @@ namespace PERQemu.IO
                 //    return _z80System.ReadStatus();
 
                 default:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", ioPort);
-#endif
+                    Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", ioPort);
                     return 0xff;
             }
         }
@@ -166,10 +162,7 @@ namespace PERQemu.IO
                     break;
 
                 default:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled IOB Write to port {0:x2}, data {1:x4}", ioPort, value);
-#endif
+                    Trace.Log(LogType.Warnings, "Unhandled IOB Write to port {0:x2}, data {1:x4}", ioPort, value);
                     break;
             }
         }

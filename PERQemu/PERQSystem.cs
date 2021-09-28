@@ -330,19 +330,24 @@ namespace PERQemu
 
             try
             {
-                if (devName.ToLower().StartsWith("com"))        // TODO: allow /dev/nnn for Unix/Linux!
+                if (/* SystemType=Windows && */ devName.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
                 {
                     // COM port.  Try to instantiate & assign to system.
                     dev = new PhysicalPort(devName);
                 }
-                else if (devName.ToLower().StartsWith("rsx:"))
+                else if (/* SystemType=Unix && */ devName.StartsWith("/dev", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    // Unix device path.  Try to instantiate & assign to system.
+                    dev = new PhysicalPort(devName);
+                }
+                else if (devName.StartsWith("rsx:", StringComparison.InvariantCultureIgnoreCase))
                 {
                     // RSX device.
                     dev = new RSXFilePort();
                 }
                 else
                 {
-                    throw new ArgumentOutOfRangeException("Invalid device name. Expected COMn: or RSX:");
+                    throw new ArgumentOutOfRangeException("Invalid device name. Expected /dev/path, COMn: or RSX:");
                 }
 
                 _iob.Z80System.SetSerialPort(dev);

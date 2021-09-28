@@ -32,15 +32,27 @@ namespace PERQemu
 
         public EntryPoint()
         {
-            CreateSystem();
-            Console.CancelKeyPress += new ConsoleCancelEventHandler(OnCtrlC);
+            //
+            // When running under the Profiler, our working directory is off in some
+            // app wrapper directory, so we can't locate the PROM/ or Scripts/ folders
+            // and initialization fails.  Try to set our working directory to the
+            // location of PERQemu.exe.  We have to do this before instantiating the
+            // EntryPoint, since that creates PERQSystem.  Oof.
+            //
+            var path = new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath;
+            Environment.CurrentDirectory = System.IO.Path.GetDirectoryName(path);
+
+            Console.CancelKeyPress += OnCtrlC;
         }
 
         void OnCtrlC(object sender, ConsoleCancelEventArgs e)
         {
-            // Cancel the event since we don't actually want to kill the emulator,
-            // just break into the execution.
+            // Cancel the event since we don't actually want to kill the
+            // emulator;  just break into the execution.  TODO: this should
+            // actually interrupt the ExecutionController which will stop the
+            // machine if it is configured and running.
             e.Cancel = true;
+            Console.Write("^C");
 
             if (_system != null)
             {
@@ -51,16 +63,21 @@ namespace PERQemu
         public void Run(string[] args)
         {
             PrintBanner();
-            _system.Execute(args);
-        }
 
-        private void CreateSystem()
-        {
+            // TODO: move this into the execution controller.  Instead, here we'll
+            // start up the CLI and let the user configure a machine or parse the
+            // command line (run a script arg) to load a saved config.  The machine
+            // will then be dynamically instantiated, run, and torn down at runtime.
             _system = new PERQSystem();
+            _system.Execute(args);
         }
 
         private void PrintBanner()
         {
+            //
+            // "Man is born to trouble, as the sparks fly upwards" - Job Ch.5
+            //      -- Change log in Layered/multibus/micro/Real.High
+            //
             Version currentVersion = Assembly.GetCallingAssembly().GetName().Version;
             Console.WriteLine("PERQemu v{0}.{1}.{2} ('As the sparks fly upwards.')",
                               currentVersion.Major, currentVersion.Minor, currentVersion.Build);
@@ -79,4 +96,3 @@ namespace PERQemu
         private PERQSystem _system;
     }
 }
-
