@@ -23,8 +23,8 @@ namespace PERQemu.Processor
     public partial class CPU
     {
         /// <summary>
-        /// Implements the PERQ's 16-level push-down Expression stack.  Handles
-        /// 20- or 24-bit values.
+        /// Implements the PERQ's 16-level push-down Expression stack.
+        /// Handles 20- or 24-bit values.
         /// </summary>
         protected class ExpressionStack
         {
@@ -70,11 +70,11 @@ namespace PERQemu.Processor
             }
 
             /// <summary>
-            /// Gets the stack pointer (included in the microstate register).
+            /// Gets the stack empty flag (used in Microstate register)
             /// </summary>
-            public int StackPointer
+            public bool StackEmpty
             {
-                get { return _stackPointer; }
+                get { return (_stackPointer == 0); }
             }
 
             /// <summary>
@@ -96,10 +96,10 @@ namespace PERQemu.Processor
                     _stackPointer = 0;
                 }
 
-                _stack[_stackPointer] = value & CPUMask;
+                _stack[_stackPointer] = value & CPUMask;    // TOS = value;
 
                 Trace.Log(LogType.EStack, "Estack pushed {0:x6}, pointer now {1}.",
-                          value & CPUMask, _stackPointer);
+                          _stack[_stackPointer], _stackPointer);
             }
 
             /// <summary>

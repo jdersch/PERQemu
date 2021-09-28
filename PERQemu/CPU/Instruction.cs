@@ -97,7 +97,7 @@ namespace PERQemu.Processor
                         {
                             NextAddress = (ushort)((NotZ | ((0xff & (~Y)) << 8)) & _wcsMask);
 
-                            if (CPU.Is4K)
+                            if (Is4K)
                             {
                                 Trace.Log(LogType.Warnings,
                                         "Leap not implemented on the 4K CPU.  Jumped to {0:x4} instead, not {1:x4}",

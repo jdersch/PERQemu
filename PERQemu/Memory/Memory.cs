@@ -142,7 +142,12 @@ namespace PERQemu.Memory
                 _mdoQueue.Clock(cycleType);
             }
 
-            ExecuteFetch();
+            // Execute the fetch
+            if (_mdiQueue.Valid)
+            {
+                _madr = _mdiQueue.Address;
+                _mdi = FetchWord(_madr);
+            }
 
             //
             // Set the wait flag if we need to abort the current instruction.
@@ -170,7 +175,11 @@ namespace PERQemu.Memory
             Trace.Log(LogType.MemoryState, "Memory: Tock! T{0} mdoNeeded={1} data={2:x4}",
                         _Tstate, MDONeeded, input);
 
-            ExecuteStore((ushort)input);
+            // Execute the store
+            if (_mdoQueue.Valid)
+            {
+                StoreWord(_mdoQueue.Address, input);
+            }
         }
 
         /// <summary>
@@ -247,34 +256,6 @@ namespace PERQemu.Memory
         }
 
 #endif
-
-        /// <summary>
-        /// If the current MDI word is valid, fetches and returns the data in _mdi.
-        /// If we're executing a LoadOp, copies the data into the appropriate word
-        /// of the OpFile.  If the MDI pipeline is empty, is a no-op.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ExecuteFetch()
-        {
-            if (_mdiQueue.Valid)
-            {
-                _madr = _mdiQueue.Address;
-                _mdi = FetchWord(_madr);
-            }
-        }
-
-        /// <summary>
-        /// If the current MDO word is valid, write the data to the current address.
-        /// If the MDO pipeline is empty, this is a no-op.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ExecuteStore(ushort data)
-        {
-            if (_mdoQueue.Valid)
-            {
-                StoreWord(_mdoQueue.Address, data);
-            }
-        }
 
         /// <summary>
         /// Fetches one word from memory (immediate).

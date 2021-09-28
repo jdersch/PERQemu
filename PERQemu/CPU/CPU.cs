@@ -160,10 +160,10 @@ namespace PERQemu.Processor
         public void Execute()
         {
 
+            _clocks++;
+
             // Decode the next instruction
             Instruction uOp = _ustore.GetInstruction((ushort)_usequencer.PC);
-
-            _clocks++;
 
             // Clock the memory state machine and set up any pending fetches
             _memory.Tick(uOp.MemoryRequest);
@@ -193,19 +193,18 @@ namespace PERQemu.Processor
 
             if (abort)
             {
-                // We're waiting for the next T3 or T2 cycle to come around on
-                // the guitar is what we're doing.  We can't cheat and skip the
-                // wait states, as RasterOp depends on T-state cycling through
-                // each word during overlapped fetch/stores.
+                // Waiting for the next T3 or T2 cycle to come around on the
+                // guitar.  We cannot cheat and skip the wait states, as RasterOp
+                // depends on T-state cycling through each word during overlapped
+                // fetch/stores.
                 Trace.Log(LogType.MemoryState,
                     "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
                     _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _ustore.Hold);
 
                 // On aborts, no memory writes occur - no Tock()                    
 
-                // WCS writes take two cycles to run on the real hardware, but just
-                // one cycle here -- enough to screw up memory timing during the loop
-                // when microcode is being loaded!  Clear the hold flag to continue.
+                // WCS writes take two cycles to run on the real hardware.  If
+                // the last op wrote the WCS, clear the hold flag to continue.
                 _ustore.Hold = false;
 
                 return;
@@ -242,7 +241,7 @@ namespace PERQemu.Processor
             _alu.LatchResult();
 
             //
-            // Now decode and execute the actual instruction:
+            // Now decode and execute the current instruction:
             //
 
             // Select ALU inputs
@@ -438,7 +437,7 @@ namespace PERQemu.Processor
                 (_alu.Flags.Eql ? 0x0020 : 0x0) |
                 (_alu.Flags.Cry ? 0x0040 : 0x0) |
                 (_alu.Flags.Lss ? 0x0080 : 0x0) |
-                (_estack.StackPointer != 0 ? 0x0200 : 0x0) |
+                (_estack.StackEmpty ? 0x0 : 0x0200) |   // inverted!
                 ((((~_lastBmux) >> 16) & 0xf) << 12);
         }
 
@@ -780,165 +779,157 @@ namespace PERQemu.Processor
                     }
                     break;
 
-                case 0x1:   // Store / Extended functions
-                    switch (uOp.SF)
+                case 0x1:   // Memory / Extended functions
+
+                    if (uOp.SF <= 7)
                     {
-                        case 0x0:   // (R) := Victim Latch
-                            if (Is4K)
+                        if (Is4K)
+                        {
+                            // The 4K CPU doesn't have hardware to execute F=1, SF=0-7
+                            // but some microcode actually uses this to determine what
+                            // processor type it's running on!  We handle those odd
+                            // cases here...
+                            switch (uOp.SF)
                             {
-                                Trace.Log(LogType.Errors, "Read from Victim latch ignored (4K)");
-                            }
-                            else
-                            {
-                                _alu.SetResult(_usequencer.Victim);
-                                _xy.WriteRegister(uOp.X, _alu.R.Value);
-
-                                Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _usequencer.Victim);
-
-                                // ReadVictim clears the latch, does not set PC
-                                _usequencer.Victim = 0xffff;
-                            }
-                            break;
-
-                        case 0x1:   // Multiply / DivideStep
-                            if (Is4K)
-                            {
-                                Trace.Log(LogType.Errors, "MulDiv step ignored (4K)");
-                                break;
-                            }
-
-                            Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x4} R={1:x6} R<15>={2}",
-                                                       _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
-                            //
-                            // For the hardware assisted Multiply/Divide steps, we've already done
-                            // the ALU op on the high word of the product or quotient during the ALU
-                            // execution above; here we take care of the low word in the MQ register.
-                            //
-                            switch (_rasterOp.MulDivInst)
-                            {
-                                case MulDivCommand.Off:
-                                    throw new InvalidOperationException("MulDiv error: step SF while not enabled??");
-
-                                case MulDivCommand.UnsignedDivide:
-                                    //
-                                    // For one division step:
-                                    //  1. Shift MQ left one bit;
-                                    //  2. Save the complement of the MSB from R into the LSB of MQ.
-                                    //
-                                    // Thar be dragons here:
-                                    //   ONLY complement the LSB if the ALU op was an add or subtract;
-                                    //   this covers the setup step where the initial left shift is done
-                                    //   but no Q0 bit computation is needed.  The 16K ALU does this based
-                                    //   on ArithX/ArithY, the MDINSTR bits and some PAL logic; here we're
-                                    //   just cheating.  (It's a no-win; either we peek at the ALU op here,
-                                    //   or the ALU has to reach into the MQ reg...)
-                                    //
-                                    if ((uOp.ALU == ALUOperation.AplusB) || (uOp.ALU == ALUOperation.AminusB))
-                                    {
-                                        _mqShifter.Shift(_mq);
-                                        _mq = _mqShifter.ShifterOutput | (~((_alu.R.Lo & 0x8000) >> 15) & 0x1);
-                                    }
-                                    else
-                                    {
-                                        Trace.Log(LogType.MulDiv, "MulDiv Step: Q0 bit skipped");
-                                    }
+                                case 0x0:
+                                    _alu.SetResult(0);
+                                    Trace.Log(LogType.Errors, "Read from Victim latch ignored (4K)");
                                     break;
 
-                                case MulDivCommand.UnsignedMultiply:
-                                case MulDivCommand.SignedMultiply:
-                                    //
-                                    // For one multiplication step:
-                                    //  1. Shift MQ right one bit;
-                                    //  2. Save the LSB from the current R into the MSB of MQ.
-                                    //
-                                    _mqShifter.Shift(_mq);
-                                    _mq = _mqShifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
+                                case 0x4:
+                                    _alu.SetResult(0);
+                                    Trace.Log(LogType.Errors, "Read from MQ ignored (4K)");
+                                    break;
+
+                                default:
+                                    Trace.Log(LogType.Errors, "Extended special function {0} ignored (4K)", uOp.SF);
                                     break;
                             }
-                            Trace.Log(LogType.MulDiv, "MulDiv Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
-                            break;
-
-                        case 0x2:   // Load multiplier / dividend
-                            if (Is4K)
+                        }
+                        else
+                        {
+                            // The 16K CPUs use the low SF bits to encode the
+                            // Extended Special Functions:
+                            switch (uOp.SF)
                             {
-                                //
-                                // In the original 4K CPU, these special functions don't exist and are
-                                // ignored.  Since some diagnostic software (and VFY 2.x) test for MQ
-                                // to determine CPU type, we allow these ops to succeed (rather than
-                                // throw an exception).  Any read or write of MQ simply returns zero.
-                                //
-                                Trace.Log(LogType.Errors, "MulDiv Load ignored (4K)");
-                            }
-                            else
-                            {
-                                _mq = _alu.R.Lo;        // MQ reg is 16 bits wide
-                                Trace.Log(LogType.MulDiv, "MulDiv Load: MQ={0:x4}", _mq);
-                            }
-                            break;
+                                case 0x0:   // (R) := Victim Latch
+                                    _alu.SetResult(_usequencer.Victim);
+                                    _xy.WriteRegister(uOp.X, _alu.R.Value);
 
-                        case 0x3:   // Load base register (not R)
-                            if (Is4K)
-                            {
-                                Trace.Log(LogType.Errors, "Set base register ignored (4K)");
-                            }
-                            else
-                            {
-                                _xy.SetRegisterBase((byte)(~_alu.R.Lo));
-                            }
-                            break;
+                                    Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _usequencer.Victim);
 
-                        case 0x4:   // (R) := product or quotient
-                            if (Is4K)
-                            {
-                                _alu.SetResult(0);
-                                Trace.Log(LogType.Errors, "MQ Read ignored (4K)");
-                            }
-                            else
-                            {
-                                _alu.SetResult(_mq & 0xffff);
-                                _xy.WriteRegister(uOp.X, _alu.R.Value);
-                                Trace.Log(LogType.MulDiv, "Read: MQ={0:x4}", _mq);
-                            }
-                            break;
+                                    // ReadVictim clears the latch, does not set PC
+                                    _usequencer.Victim = 0xffff;
+                                    break;
 
-                        case 0x5:   // Push long constant
-                            _estack.Push(uOp.LongConstant);
-                            break;
+                                case 0x1:   // Multiply / DivideStep
+                                    Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x4} R={1:x6} R<15>={2}",
+                                                               _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
+                                    //
+                                    // For the hardware assisted Multiply/Divide steps, we've already done
+                                    // the ALU op on the high word of the product or quotient during the ALU
+                                    // execution above; here we take care of the low word in the MQ register.
+                                    //
+                                    switch (_rasterOp.MulDivInst)
+                                    {
+                                        case MulDivCommand.Off:
+                                            throw new InvalidOperationException("MulDiv error: step SF while not enabled??");
 
-                        case 0x6:   // Address input (MA) := Shift
-                            _shifter.Shift(_alu.OldR.Lo);
-
-                            //
-                            // We hack in the NIA value into the decoded (cached) Instruction's
-                            // "Next" field.  This should always work since the Next field's
-                            // value is never normally used for this type of instruction.  The
-                            // shifter provides 12- or 14-bits of address depending on CPU type.
-                            //
-                            uOp.NextAddress = _shifter.ShifterOutput;
-                            break;
-
-                        case 0x7:   // Leap address generation
-                                    // This is handled by CalcAddress
-                            break;
-
-                        case 0x8:   // Fetch4R
-                        case 0x9:   // Store4R
-                        case 0xa:   // Fetch4
-                        case 0xb:   // Store4
-                        case 0xc:   // Fetch2
-                        case 0xd:   // Store2
-                        case 0xe:   // Fetch
-                        case 0xf:   // Store
+                                        case MulDivCommand.UnsignedDivide:
+                                            //
+                                            // For one division step:
+                                            //  1. Shift MQ left one bit;
+                                            //  2. Save the complement of the MSB from R into the LSB of MQ.
+                                            //
+                                            // Thar be dragons here:
+                                            //   ONLY complement the LSB if the ALU op was an add or subtract;
+                                            //   this covers the setup step where the initial left shift is done
+                                            //   but no Q0 bit computation is needed.  The 16K ALU does this based
+                                            //   on ArithX/ArithY, the MDINSTR bits and some PAL logic; here we're
+                                            //   just cheating.  (It's a no-win; either we peek at the ALU op here,
+                                            //   or the ALU has to reach into the MQ reg...)
+                                            //
+                                            if ((uOp.ALU == ALUOperation.AplusB) || (uOp.ALU == ALUOperation.AminusB))
+                                            {
+                                                _mqShifter.Shift(_mq);
+                                                _mq = _mqShifter.ShifterOutput | (~((_alu.R.Lo & 0x8000) >> 15) & 0x1);
+                                            }
 #if DEBUG
-                            _memory.RequestMemoryCycle((long)_clocks, _alu.R.Value, uOp.MemoryRequest);
-#else
-                            _memory.RequestMemoryCycle(_alu.R.Value, uOp.MemoryRequest);
+                                            else
+                                            {
+                                                Trace.Log(LogType.MulDiv, "MulDiv Step: Q0 bit skipped");
+                                            }
 #endif
-                            break;
+                                            break;
 
-                        default:
-                            throw new UnimplementedInstructionException(
-                                String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                                        case MulDivCommand.UnsignedMultiply:
+                                        case MulDivCommand.SignedMultiply:
+                                            //
+                                            // For one multiplication step:
+                                            //  1. Shift MQ right one bit;
+                                            //  2. Save the LSB from the current R into the MSB of MQ.
+                                            //
+                                            _mqShifter.Shift(_mq);
+                                            _mq = _mqShifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
+                                            break;
+                                    }
+                                    Trace.Log(LogType.MulDiv, "MulDiv Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
+                                    break;
+
+                                case 0x2:   // Load multiplier / dividend
+                                    _mq = _alu.R.Lo;        // MQ reg is 16 bits wide
+                                    Trace.Log(LogType.MulDiv, "MulDiv Load: MQ={0:x4}", _mq);
+                                    break;
+
+                                case 0x3:   // Load base register (not R)
+                                    _xy.SetRegisterBase((byte)(~_alu.R.Lo));
+                                    break;
+
+                                case 0x4:   // (R) := product or quotient
+                                    _alu.SetResult(_mq & 0xffff);
+                                    _xy.WriteRegister(uOp.X, _alu.R.Value);
+                                    Trace.Log(LogType.MulDiv, "Read: MQ={0:x4}", _mq);
+                                    break;
+
+                                case 0x5:   // Push long constant
+#if DEBUG
+                                    if (uOp.LongConstant != _alu.R.Value)
+                                        Console.WriteLine("Push long const discrepancy: R={0:x6}, uOp={1:x6}!", _alu.R.Value, uOp.LongConstant);
+#endif
+                                    _estack.Push(uOp.LongConstant);
+                                    break;
+
+                                case 0x6:   // Address input (MA) := Shift
+                                    _shifter.Shift(_alu.OldR.Lo);
+                                    //
+                                    // We hack in the NIA value into the decoded (cached) Instruction's
+                                    // "Next" field.  This should always work since the Next field's
+                                    // value is never normally used for this type of instruction.  The
+                                    // shifter provides 12- or 14-bits of address depending on CPU type.
+                                    //
+                                    uOp.NextAddress = _shifter.ShifterOutput;
+                                    break;
+
+                                case 0x7:   // Leap address generation
+                                            // This is handled by CalcAddress
+                                    break;
+                            }
+                        }
+                    }
+                    else if (uOp.SF <= 15)
+                    {
+                        // Common to all CPUs: SF 8..15 are the memory ops
+#if DEBUG
+                        _memory.RequestMemoryCycle((long)_clocks, _alu.R.Value, uOp.MemoryRequest);
+#else
+                        _memory.RequestMemoryCycle(_alu.R.Value, uOp.MemoryRequest);
+#endif
+                    }
+                    else
+                    {
+                        // Not possible...
+                        throw new UnimplementedInstructionException(
+                            String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
                     }
                     break;
 
