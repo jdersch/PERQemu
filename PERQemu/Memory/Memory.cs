@@ -48,16 +48,16 @@ namespace PERQemu.Memory
             _memSize = sizeInWords;
             _memSizeMask = sizeInWords - 1;
 
+            _memory = new ushort[_memSize];
+            _mdiQueue = new MemoryController(this, "MDI");
+            _mdoQueue = new MemoryController(this, "MDO");
+
+            Console.WriteLine("Created MemoryBoard size={0:x6} mask={1:x6}", _memSize, _memSizeMask);
             Reset();
         }
 
         public void Reset()
         {
-            _memory = new ushort[_memSize];
-
-            _mdiQueue = new MemoryController(_system, "MDI");
-            _mdoQueue = new MemoryController(_system, "MDO");
-
             _Tstate = 0;
             _mdi = 0;
             _wait = false;
@@ -114,6 +114,16 @@ namespace PERQemu.Memory
         public int TState
         {
             get { return _Tstate; }
+        }
+
+        public int MemSizeMask
+        {
+            get { return _memSizeMask; }
+        }
+
+        public bool RopEnabled
+        {
+            get { return _system.CPU.RasterOpEnabled; }
         }
 
 
@@ -209,7 +219,7 @@ namespace PERQemu.Memory
             Trace.Log(LogType.MemoryState,
                       "\nMemory: Requested {0} cycle in T{1} ID={2} addr={3:x6}",
                       cycleType, _Tstate, id, address);
-            
+
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
             // but the queue controller will have stalled the processor until the correct
@@ -254,7 +264,6 @@ namespace PERQemu.Memory
                 _mdoQueue.Request(address, cycleType);
             }
         }
-
 #endif
 
         /// <summary>
@@ -289,7 +298,7 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsFetch(MemoryCycle c)
         {
-            return  c == MemoryCycle.Fetch ||
+            return c == MemoryCycle.Fetch ||
                     c == MemoryCycle.Fetch2 ||
                     c == MemoryCycle.Fetch4 ||
                     c == MemoryCycle.Fetch4R;
@@ -321,18 +330,18 @@ namespace PERQemu.Memory
         #endregion
 
         private MemoryController _mdiQueue;		// Queue for Fetch requests
-        private MemoryController _mdoQueue;		// Queue for Store requests
-
-        private int _Tstate;                // Current T-state
-        private int _madr;                  // Address of word currently on MDI
-        private ushort _mdi;                // Result of most recent fetch
-        private bool _wait;                 // True if CPU has to wait for memory
-        private bool _hold;                 // True if IO hold asserted (not implemented)
+        private MemoryController _mdoQueue;     // Queue for Store requests
 
         private int _memSize;
         private int _memSizeMask;
 
-        private ushort[] _memory;
+        private int _Tstate;
+        private int _madr;
+        private ushort _mdi;
+        private bool _wait;
+        private bool _hold;
+
+        private ushort[] _memory;   // todo: bring sexy back: MEMCORE!!
 
         private PERQSystem _system;
     }

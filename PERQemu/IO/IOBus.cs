@@ -25,7 +25,7 @@ namespace PERQemu.IO
     public class UnhandledIORequestException : Exception
     {
         public UnhandledIORequestException(string message)
-            : base( message )
+            : base(message)
         {
 
         }
@@ -72,24 +72,19 @@ namespace PERQemu.IO
 
         public void IOWrite(byte ioPort, int value)
         {
-            value &= 0xffff;    // IOD is 16 bits wide; trim upper bits from 20 (or 24 :-) bit registers
+            value &= 0xffff;    // IOD is 16 bits wide; trim upper bits
 
             if (_deviceDispatch[ioPort] == null)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Warnings,
-                             "No device registered for IO port {0:x2} write ({1:x4})", ioPort, value);
-#endif
+                Trace.Log(LogType.Warnings,
+                         "No device registered for IO port {0:x2} write ({1:x4})", ioPort, value);
                 return;
             }
 
-#if TRACING_ENABLED
             if (Trace.TraceOn && !(_deviceDispatch[ioPort] is VideoController))
                 Trace.Log(LogType.IOState,
                          "Output sent to port {0:x2} ({1:x4}) handled by {2}",
                           ioPort, value, _deviceDispatch[ioPort]);
-#endif
 
             _deviceDispatch[ioPort].IOWrite(ioPort, value);
         }
@@ -98,27 +93,21 @@ namespace PERQemu.IO
         {
             if (_deviceDispatch[ioPort] == null)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Warnings,
-                             "No device registered for IO port {0:x2} read, returning 0", ioPort);
-#endif
+                Trace.Log(LogType.Warnings,
+                         "No device registered for IO port {0:x2} read, returning 0", ioPort);
                 return 0;
             }
 
-#if TRACING_ENABLED
             if (Trace.TraceOn && !(_deviceDispatch[ioPort] is VideoController))
                 Trace.Log(LogType.IOState,
                          "Input request from port {0:x2} handled by {1}",
                           ioPort, _deviceDispatch[ioPort]);
-#endif
 
             int retVal = _deviceDispatch[ioPort].IORead(ioPort);
 
-#if TRACING_ENABLED
             if (Trace.TraceOn && !(_deviceDispatch[ioPort] is VideoController))
                 Trace.Log(LogType.IOState, "Input received is {0:x4}", retVal);
-#endif
+
             return retVal;
         }
 

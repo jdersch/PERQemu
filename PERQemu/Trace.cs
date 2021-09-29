@@ -71,7 +71,7 @@ namespace PERQemu
         [Conditional("TRACING_ENABLED")]
         public static void Log(LogType level, string format, params object[] args)
         {
-            if (TraceOn && (_level & level) == level)
+            if (TraceOn && ((_level & level) == level))
             {
                 // Sleep so we give the console time to breathe.
                 System.Threading.Thread.Sleep(0);
@@ -85,7 +85,7 @@ namespace PERQemu
         [Conditional("TRACING_ENABLED")]
         public static void Log(LogType level, int pad, string format, params object[] args)
         {
-            if (TraceOn && (_level & level) == level)
+            if (TraceOn && ((_level & level) == level))
             {
                 // Sleep so we give the console time to breathe.
                 System.Threading.Thread.Sleep(0);
@@ -195,8 +195,8 @@ namespace PERQemu
         }
 
 
-        private static LogType _level = LogType.None;
-        public static bool TraceOn = false;
+        private static LogType _level = LogType.All;
+        public static bool TraceOn = true;
     }
 }
 

@@ -116,10 +116,18 @@ namespace PERQemu.Processor
 
                 IsSpecialFunction = (F == 0 || F == 2);
 
+                //
                 // BMux input (for B != 0)
-                // Select a constant.  If SF special function 0 (LongConstant) this is
-                // 8 bits from Z, and 8 bits from Y.  Otherwise just 8 bits from Y.
-                if (IsSpecialFunction && SF == 0)
+                // Select a constant.  For a "short" constant, this is just 8 bits
+                // from Y as the LSB of the BMux input.  A "long" (16-bit) constant
+                // may be selected, which uses the 8 bits from Z as the MSB.  In
+                // both cases the hardware sets the unused upper bits to zeroes.
+                // LongConstant is encoded as F=0|2, SF=0 (on all CPUs); in the 16K
+                // processors the Push Long Constant special function (F=1, SF=5)
+                // selects the 16-bit constant and pushes the result onto TOS.
+                //
+                if ((IsSpecialFunction && SF == 0) ||       // Long Const
+                    (!Is4K && F == 1 && SF == 5))           // Push Long Const
                 {
                     BMuxInput = LongConstant;
                 }

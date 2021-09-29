@@ -68,6 +68,9 @@ namespace PERQemu
             //
             _perqCPU = new PERQ1A(this);
 
+            // Just have to do this once.  Will be CPU-specific.
+            _perqCPU.LoadROM(Paths.BuildPROMPath("boot.bin"));
+
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             _display = new Display.Display(this);
@@ -84,19 +87,11 @@ namespace PERQemu
             // Might want to select sync mode on uniprocessor systems?
             _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
 
-            // Reset
-            _perqCPU.Reset();
-            _mem.Reset();
-            _ioBus.Reset();
+            // Now issue a reset
+            Reset();
 
-            // Just have to do this once.  Will be CPU-specific.
-            _perqCPU.LoadROM(Paths.BuildPROMPath("boot.bin"));
-
-        }
-
-        public void Shutdown()
-        {
-            _display.Shutdown();
+            // And kick off the display...
+            _display.InitializeSDL();
         }
 
         public void Execute(string[] args)
@@ -230,6 +225,11 @@ namespace PERQemu
         {
             // User break into debugger
             _state = RunState.Debug;
+        }
+
+        public void Shutdown()
+        {
+            _display.ShutdownSDL();
         }
 
         /// <summary>
@@ -501,8 +501,8 @@ namespace PERQemu
         {
             _scheduler.Reset();
             _perqCPU.Reset();
-
-            // TODO: anything else here need to be reset?
+            _mem.Reset();
+            _ioBus.Reset();
 
             //
             // If the user has specified an alternate boot character, kick off this workitem to

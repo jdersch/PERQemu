@@ -38,16 +38,14 @@ namespace PERQemu.IO
             // _canon = new CanonPrinter();
             // _ether = new 10MbEthernet();
             // _streamer = new QICTape();
-            Reset();
+            //Reset();
         }
 
         public void Reset()
         {
             _link.Reset();
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.IOState, "OIO: Board reset.");
-#endif
+            Trace.Log(LogType.IOState, "OIO: Board reset.");
         }
 
         public bool HandlesPort(byte ioPort)
@@ -98,10 +96,7 @@ namespace PERQemu.IO
                 //  read loopback/diagnostic?
 
                 default:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled OIO Read from port {0:x2}.", ioPort);
-#endif
+                    Trace.Log(LogType.Warnings, "Unhandled OIO Read from port {0:x2}.", ioPort);
                     break;
             }
 
@@ -135,10 +130,7 @@ namespace PERQemu.IO
                 //  dummy write/diagnostic?
 
                 default:
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.Warnings, "Unhandled OIO Write to port {0:x2}, data {1:x4}", ioPort, value);
-#endif
+                    Trace.Log(LogType.Warnings, "Unhandled OIO Write to port {0:x2}, data {1:x4}", ioPort, value);
                     break;
             }
         }

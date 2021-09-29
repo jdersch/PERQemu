@@ -36,7 +36,7 @@ namespace PERQemu.Display
         public VideoController(PERQSystem system)
         {
             _system = system;
-            Reset();
+            _currentEvent = null;
         }
 
         public void Reset()

@@ -63,21 +63,15 @@ namespace PERQemu.IO.HardDisk
             // Reading status DOES NOT clear pending interrupts.
             // (See behavior in disktest.mic)
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Read Shugart status register, returned {0:x4}", DiskStatus);
-#endif
+            Trace.Log(LogType.HardDisk, "Read Shugart status register, returned {0:x4}", DiskStatus);
             return DiskStatus;
         }
 
 
         public void LoadCommandRegister(int data)
         {
+            Trace.Log(LogType.HardDisk, "Shugart command data: {0:x4}", data);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart command data: {0:x4}", data);
-#endif
             // Note:  Most of the info gleaned about the Shugart controller register behavior is from
             // sysb.micro source.
             // Command bits:
@@ -86,10 +80,8 @@ namespace PERQemu.IO.HardDisk
             //    5     pulses a single seek
             Command command = (Command)(data & 0x7);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
-#endif
+
+            Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
 
             switch (command)
             {
@@ -103,10 +95,7 @@ namespace PERQemu.IO.HardDisk
                     // It will interrupt when done.
                     ResetFlags();
 
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.HardDisk, "HardDisk: Shugart disk and state machine reset.");
-#endif
+                    Trace.Log(LogType.HardDisk, "HardDisk: Shugart disk and state machine reset.");
                     SetBusyState();
                     break;
 
@@ -143,9 +132,7 @@ namespace PERQemu.IO.HardDisk
         {
             _head = value & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.HardDisk, "Shugart head set to {0:x4}", _head);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart head set to {0:x4}", _head);
         }
 
         public void LoadCylSecRegister(int value)
@@ -154,79 +141,57 @@ namespace PERQemu.IO.HardDisk
             _head = (value & 0xe0) >> 5;
             _cylinder = (value & 0xff80) >> 8;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
         }
 
         public void LoadSerialLowRegister(int value)
         {
             _serialNumberLow = value & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
         }
 
         public void LoadSerialHighRegister(int value)
         {
             _serialNumberHigh = value & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
-#endif
+
+            Trace.Log(LogType.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
         }
 
         public void LoadBlockRegister(int value)
         {
             _blockNumber = (value & 0xffff);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
         }
 
         public void LoadHeaderAddrLowRegister(int value)
         {
             _headerAddressLow = (Unfrob(value)) & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
         }
 
         public void LoadHeaderAddrHighRegister(int value)
         {
             _headerAddressHigh = (~value) & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
         }
 
         public void LoadDataBufferAddrLowRegister(int value)
         {
             _dataBufferLow = (Unfrob(value)) & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
         }
 
         public void LoadDataBufferAddrHighRegister(int value)
         {
             _dataBufferHigh = (~value) & 0xffff;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
         }
 
         public int DiskStatus
@@ -252,10 +217,7 @@ namespace PERQemu.IO.HardDisk
                     {
                         _seekState = SeekState.WaitForStepRelease;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn)
-                            Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
-#endif
+                        Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
                         _seekComplete = 0;
                     }
                     break;
@@ -265,10 +227,7 @@ namespace PERQemu.IO.HardDisk
                     {
                         _seekState = SeekState.SeekComplete;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn)
-                            Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
-#endif
+                        Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
                     }
                     break;
 
@@ -279,10 +238,7 @@ namespace PERQemu.IO.HardDisk
                     _seekState = SeekState.WaitForStepSet;
                     _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
 
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
-                        Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
-#endif
+                    Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
                     break;
             }
         }
@@ -298,10 +254,7 @@ namespace PERQemu.IO.HardDisk
                 SeekTo(_physCylinder + 1);
             }
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
         }
 
         public void DoMultipleSeek(int cylCount)
@@ -315,10 +268,7 @@ namespace PERQemu.IO.HardDisk
                 SeekTo(_physCylinder + cylCount);
             }
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
-#endif
+            Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
         }
 
         private void SeekTo(int cylinder)
@@ -357,12 +307,10 @@ namespace PERQemu.IO.HardDisk
                 _system.Memory.StoreWord(headerAddr + (i >> 1), (ushort)word);
             }
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk,
-                          "Shugart sector read complete from {0}/{1}/{2}, wrote to memory at {3:x6}",
-                          _cylinder, _head, _sector, dataAddr);
-#endif
+            Trace.Log(LogType.HardDisk,
+                      "Shugart sector read complete from {0}/{1}/{2}, wrote to memory at {3:x6}",
+                      _cylinder, _head, _sector, dataAddr);
+
             SetBusyState();
         }
 
@@ -403,12 +351,11 @@ namespace PERQemu.IO.HardDisk
             // Write the sector to the disk...
             _disk.SetSector(sectorData, _cylinder, _head, _sector);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk,
-                          "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x6}",
-                          _cylinder, _head, _sector, dataAddr);
-#endif
+
+            Trace.Log(LogType.HardDisk,
+                      "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x6}",
+                      _cylinder, _head, _sector, dataAddr);
+
             SetBusyState();
         }
 
@@ -441,12 +388,11 @@ namespace PERQemu.IO.HardDisk
             // Write the sector to the disk...
             _disk.SetSector(sectorData, _cylinder, _head, _sector);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.HardDisk,
-                          "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
-                          _cylinder, _head, _sector, dataAddr);
-#endif
+
+            Trace.Log(LogType.HardDisk,
+                      "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
+                      _cylinder, _head, _sector, dataAddr);
+
             SetBusyState();
         }
 
@@ -504,7 +450,7 @@ namespace PERQemu.IO.HardDisk
             {
                 _controllerStatus = Status.Done;
                 _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
-            }); 
+            });
         }
 
         private void ResetFlags()

@@ -43,10 +43,16 @@ namespace PERQemu.Display
         public Display(PERQSystem system)
         {
             _system = system;
+
             _sdlRunning = false;
             _sdlPumpEvent = null;
+            _textureLock = new ReaderWriterLockSlim();
 
-            Initialize();
+            _stopwatch = new Stopwatch();
+            _keymap = new KeyboardMap();
+
+            _clickFlag = false;
+            _mouseButton = 0x0;
         }
 
         public void Refresh()
@@ -87,15 +93,10 @@ namespace PERQemu.Display
         public void SaveScreenshot(string path)
         {
             EncoderParameters p = new EncoderParameters(1);
-            p.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 100L);
+            p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
             //_buffer.Save(path, GetEncoderForFormat(ImageFormat.Jpeg), p);
         }
 
-        public void Shutdown()
-        {
-            _sdlRunning = false;
-            SDLShutdown();
-        }
 
         public int MouseX
         {
@@ -115,29 +116,6 @@ namespace PERQemu.Display
         public bool MouseOffTablet
         {
             get { return _mouseOffTablet; }
-        }
-
-        private void Initialize()
-        {
-            _stopwatch = new Stopwatch();
-            _stopwatch.Start();
-
-            _textureLock = new ReaderWriterLockSlim();
-
-            // Set up .NET/Mono host keyboard -> PERQ mapping
-            _keymap = new KeyboardMap();
-
-            _clickFlag = false;
-            _mouseButton = 0x0;
-
-            //
-            // Kick off our SDL message loop.
-            //
-            //_sdlThread = new Thread(SDLMessageLoopThread);
-            //_sdlThread.Start();
-
-            // Start up SDL (on the main thread)
-            InitializeSDL();
         }
 
         //private void SDLMessageLoopThread()
@@ -162,34 +140,39 @@ namespace PERQemu.Display
             });
         }
 
-        public void SDLShutdown()
+        public void ShutdownSDL()
         {
-            Console.WriteLine("SDLShutdown requested.");
+            Console.WriteLine("SDLShutdown requested.");    // Debug
 
-            if (_sdlRunning) { return; }  // sanity check?
-
-            //
-            // Shut things down nicely.
-            //
-            if (_sdlPumpEvent != null)
+            if (_sdlRunning)
             {
-                _system.Scheduler.Cancel(_sdlPumpEvent);
-                _sdlPumpEvent = null;
-            }
+                //
+                // Shut things down nicely.
+                //
+                _stopwatch.Stop();
 
-            if (_sdlRenderer != IntPtr.Zero)
-            {
-                SDL.SDL_DestroyRenderer(_sdlRenderer);
-                _sdlRenderer = IntPtr.Zero;
-            }
+                if (_sdlPumpEvent != null)
+                {
+                    _system.Scheduler.Cancel(_sdlPumpEvent);
+                    _sdlPumpEvent = null;
+                }
 
-            if (_sdlWindow != IntPtr.Zero)
-            {
-                SDL.SDL_DestroyWindow(_sdlWindow);
-                _sdlWindow = IntPtr.Zero;
-            }
+                if (_sdlRenderer != IntPtr.Zero)
+                {
+                    SDL.SDL_DestroyRenderer(_sdlRenderer);
+                    _sdlRenderer = IntPtr.Zero;
+                }
 
-            SDL.SDL_Quit();
+                if (_sdlWindow != IntPtr.Zero)
+                {
+                    SDL.SDL_DestroyWindow(_sdlWindow);
+                    _sdlWindow = IntPtr.Zero;
+                }
+
+                _sdlRunning = false;
+
+                SDL.SDL_Quit();
+            }
         }
 
         private void SDLMessageHandler(SDL.SDL_Event e)
@@ -228,8 +211,7 @@ namespace PERQemu.Display
                     break;
 
                 case SDL.SDL_EventType.SDL_QUIT:
-                    _sdlRunning = false;
-                    SDLShutdown();
+                    ShutdownSDL();
                     break;
 
                 default:
@@ -240,7 +222,6 @@ namespace PERQemu.Display
 
         private void RenderDisplay()
         {
-
             //
             // Stuff the display data into the display texture
             //
@@ -281,8 +262,10 @@ namespace PERQemu.Display
             }
         }
 
-
-        private void InitializeSDL()
+        /// <summary>
+        /// Set up our SDL window and start the display machinery in motion.
+        /// </summary>
+        public void InitializeSDL()
         {
             int retVal;
 
@@ -337,9 +320,10 @@ namespace PERQemu.Display
             _renderEvent = new SDL.SDL_Event();
             _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
 
+            _stopwatch.Start();
+
             SDL.SDL_PumpEvents();   // so the mac will render the bloody window frame
             SDLMessageLoop();       // kick off our periodic polling loop
-
         }
 
         private void CreateDisplayTexture(bool filter)

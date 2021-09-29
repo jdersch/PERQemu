@@ -894,7 +894,10 @@ namespace PERQemu.Processor
                                 case 0x5:   // Push long constant
 #if DEBUG
                                     if (uOp.LongConstant != _alu.R.Value)
+                                    {
                                         Console.WriteLine("Push long const discrepancy: R={0:x6}, uOp={1:x6}!", _alu.R.Value, uOp.LongConstant);
+                                        _system.Break();
+                                    }
 #endif
                                     _estack.Push(uOp.LongConstant);
                                     break;
@@ -996,13 +999,6 @@ namespace PERQemu.Processor
             Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
 
             // TODO: would be nice to have a breakpoint on DDS value
-#if DEBUG
-            if (_dds == 199)
-            {
-                Trace.TraceLevel = LogType.All;
-                _system.Break();
-            }   // hack for debugging
-#endif
 
             // TODO: This should be moved elsewhere
             Console.Title = String.Format("DDS {0:d3}", _dds % 1000);

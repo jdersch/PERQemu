@@ -236,19 +236,15 @@ namespace PERQemu.IO.Z80.IOB
         {
             if (data == 0x80 && _running)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
+
                 _running = false;
                 Reset();
             }
             else if (data == 0 && !_running)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
+
                 _running = true;
                 Reset();            // Status change sent in our first Clock() by RefreshReadyState()
             }
@@ -269,13 +265,10 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         public void WriteData(int data)
         {
+            Trace.Log(LogType.Z80State,
+                      "Z80 data port write: {0:x4} (byte {1:x2}), {2} items in queue.",
+                      data, (byte)data, _inputFifo.Count);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State,
-                          "Z80 data port write: {0:x4} (byte {1:x2}), {2} items in queue.",
-                          data, (byte)data, _inputFifo.Count);
-#endif
             //
             // The 8th bit of the incoming data to this port is latched.
             // When set, the PERQ is requesting that the Z80 send a DataInReady interrupt when it is ready.
@@ -283,19 +276,15 @@ namespace PERQemu.IO.Z80.IOB
             //
             if ((data & 0x100) == 0)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
+
                 _system.CPU.ClearInterrupt(InterruptType.Z80DataInReady);
                 _dataReadyInterruptRequested = false;
             }
             else
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
+
                 _dataReadyInterruptRequested = true;
             }
 
@@ -318,11 +307,8 @@ namespace PERQemu.IO.Z80.IOB
             {
                 retVal = _outputFifo.Dequeue();
 
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 FIFO read {0:x2}, {1:x4} items left in queue.",
-                                                retVal, _outputFifo.Count);
-#endif
+                Trace.Log(LogType.Z80State, "Z80 FIFO read {0:x2}, {1:x4} items left in queue.",
+                                            retVal, _outputFifo.Count);
             }
             else
             {
@@ -333,10 +319,8 @@ namespace PERQemu.IO.Z80.IOB
                 //
                 _system.CPU.ClearInterrupt(InterruptType.Z80DataOutReady);
 
-#if TRACING_ENABLED
                 if (Trace.TraceOn && _running)  // Don't whine needlessly :-)
                     Trace.Log(LogType.Warnings, "Z80 read from empty FIFO, returning 0.");
-#endif
             }
 
             return retVal;
@@ -356,7 +340,7 @@ namespace PERQemu.IO.Z80.IOB
         }
 
         public void Z80Poll()
-        { 
+        {
             if (!_running)
             {
                 return;
@@ -418,7 +402,6 @@ namespace PERQemu.IO.Z80.IOB
             while (_inputFifo.Count > 0)
             {
 
-
                 byte data = _inputFifo.Dequeue();
 
                 switch (_state)
@@ -427,37 +410,33 @@ namespace PERQemu.IO.Z80.IOB
                         if (data == SOM)
                         {
                             _state = MessageParseState.MessageType;
-#if TRACING_ENABLED
-                        if (Trace.TraceOn)
+
                             Trace.Log(LogType.Z80State, "Byte was SOM, transitioning to MessageType state.");
-                    }
-                    else if (data == 0xaa)
-                    {
-                        if (Trace.TraceOn)
+                        }
+                        else if (data == 0xaa)
+                        {
                             Trace.Log(LogType.Warnings,
                                      "SOM byte sent to Z80 was 0xAA; this boot disk was likely meant for a PERQ 2.");
-                    }
-                    else
-                    {
-                        // Lots of these are spurious; seems the microcode sends a zero byte to turn off the
-                        // Z80In interrupt, which the Z80 ignores.  We could probably check and ignore these
-                        // in LoadData(), not bothering to queue them up in the first place.  But for now,
-                        // just have to ignore 'em.  Maybe only log non-zero bytes here?  Those would indicate
-                        // a situation worth investigating...
-                        if (Trace.TraceOn && data != 0)
-                            Trace.Log(LogType.Z80State,
-                                     "Non-SOM byte sent to Z80 subsystem while waiting for SOM: {0:x2}", data);
-#endif
+                        }
+                        else
+                        {
+                            // Lots of these are spurious; seems the microcode sends a zero byte to turn off the
+                            // Z80In interrupt, which the Z80 ignores.  We could probably check and ignore these
+                            // in LoadData(), not bothering to queue them up in the first place.  But for now,
+                            // just have to ignore 'em.  Maybe only log non-zero bytes here?  Those would indicate
+                            // a situation worth investigating...
+                            if (Trace.TraceOn && data != 0)
+                                Trace.Log(LogType.Z80State,
+                                         "Non-SOM byte sent to Z80 subsystem while waiting for SOM: {0:x2}", data);
                         }
                         break;
 
                     case MessageParseState.MessageType:
                         _messageType = (PERQtoZ80Message)data;
-#if TRACING_ENABLED
-                    if (Trace.TraceOn)
+
                         Trace.Log(LogType.Z80State,
                                  "Z80 Message type is {0}, transitioning to Message state.", _messageType);
-#endif
+
                         _state = MessageParseState.Message;
                         break;
 
@@ -514,10 +493,8 @@ namespace PERQemu.IO.Z80.IOB
                                 break;
 
                             default:
-#if TRACING_ENABLED
-                            if (Trace.TraceOn)
                                 Trace.Log(LogType.Warnings, "Unhandled Z80 message type {0}", _messageType);
-#endif
+
                                 // Oof.  Do we just bail here?  Wait for SOM?  Shouldn't ever happen, now
                                 // that we cover every message in the old protocol?
                                 break;
@@ -526,10 +503,8 @@ namespace PERQemu.IO.Z80.IOB
                         if (done)
                         {
                             _state = MessageParseState.WaitingForSOM;
-#if TRACING_ENABLED
-                        if (Trace.TraceOn)
+
                             Trace.Log(LogType.Z80State, "{0} message complete.  Returning to WaitingForSOM state.", _messageType);
-#endif
                         }
                         break;
 
@@ -568,14 +543,12 @@ namespace PERQemu.IO.Z80.IOB
             // If something changed, tell the PERQ
             if (oldFlags != _deviceReadyState)
             {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
                 Trace.Log(LogType.Z80State, "Sending Z80 device ready status @ {0}: {1}.",
                                             _clocks, _deviceReadyState);
-#endif
-            _outputFifo.Enqueue(Z80System.SOM);             // SOM
-            _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
-            _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
+
+                _outputFifo.Enqueue(Z80System.SOM);             // SOM
+                _outputFifo.Enqueue((byte)Z80toPERQMessage.Z80StatusChange);
+                _outputFifo.Enqueue((byte)_deviceReadyState);   // Data
             }
         }
 
@@ -586,10 +559,8 @@ namespace PERQemu.IO.Z80.IOB
         /// </summary>
         private void GetStatus(byte requested)
         {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Z80State, "GetStatus: data={0}", requested);
-#endif
+            Trace.Log(LogType.Z80State, "GetStatus: data={0}", requested);
+
             for (int i = 1; i <= 256; i = (i << 1))
             {
                 if ((requested & i) != 0)

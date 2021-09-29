@@ -214,10 +214,11 @@ namespace PERQemu.Processor
                             {
                                 throw new InvalidOperationException("Revive from unset victim latch!");
                             }
-                            // On 16K CPU, Victim restores all 14 bits -- according to VFY 2.0!?
-                            _pc.Value = Victim;
 
                             Trace.Log(LogType.CpuState, "PC restored from victim ({0:x4})", Victim);
+                           
+                            _pc.Value = Victim;     // Restore
+                            Victim = 0xffff;        // Clear the latch
                         }
                         break;
 

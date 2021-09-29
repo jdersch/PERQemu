@@ -305,10 +305,9 @@ namespace PERQemu.Processor
                 if ((value & 0x80) == 0)
                 {
                     //if (PERQolator.Sys.Config.Chassis == ChassisType.PERQ1)
-                    {
-                        Console.WriteLine("Power off? SrcRastOp set to {0}", value);
-                        //throw new PowerOffException();
-                    }
+                    //{
+                        throw new PowerOffException();
+                    //}
                 }
 
                 Trace.Log(LogType.RasterOp,
