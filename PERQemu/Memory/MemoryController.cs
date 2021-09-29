@@ -163,10 +163,6 @@ namespace PERQemu.Memory
 
             _quadWordMask = _mem.MemSizeMask & 0xfffffc;     // nip two LSBs
             _doubleWordMask = _mem.MemSizeMask & 0xfffffe;   // nip LSB
-
-            Console.WriteLine("MemCtrl masks: quad={0:x6} dbl={1:x6}", _quadWordMask, _doubleWordMask);
-
-            Reset();
         }
 
         public void Reset()

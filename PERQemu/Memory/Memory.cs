@@ -52,7 +52,6 @@ namespace PERQemu.Memory
             _mdiQueue = new MemoryController(this, "MDI");
             _mdoQueue = new MemoryController(this, "MDO");
 
-            Console.WriteLine("Created MemoryBoard size={0:x6} mask={1:x6}", _memSize, _memSizeMask);
             Reset();
         }
 
@@ -62,6 +61,9 @@ namespace PERQemu.Memory
             _mdi = 0;
             _wait = false;
             _hold = false;
+
+            _mdiQueue.Reset();
+            _mdoQueue.Reset();
 
             Trace.Log(LogType.MemoryState, "Memory: Reset.");
         }
