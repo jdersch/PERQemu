@@ -31,7 +31,7 @@ namespace PERQemu.IO.Z80_new
         public Z80System(PERQSystem system)
         {
             _system = system;
-            _scheduler = new Scheduler(407);           // IOB Z80 clock runs at 2.4576Mhz, ~407nSec per clock tick.
+            _scheduler = new Scheduler(407); // IOB Z80 clock runs at 2.4576Mhz, ~407nSec per clock tick.
 
             _bus = new IOBIOBus(this);
             _memory = new IOBMemoryBus();

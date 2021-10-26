@@ -52,8 +52,8 @@ namespace PERQemu.Memory
             return String.Format("ID={0} addr={1:x6} cycle={2} bookmark={3} active={4}",
                                  _reqID, _startAddr, _cycleType, _bookmark, _active);
 #else
-                    return String.Format("Addr={0:x6} cycle={1} bookmark={2} active={3}",
-                                        _startAddr, _cycleType, _bookmark, _active);
+            return String.Format("Addr={0:x6} cycle={1} bookmark={2} active={3}",
+                                _startAddr, _cycleType, _bookmark, _active);
 #endif
         }
 
@@ -370,9 +370,9 @@ namespace PERQemu.Memory
                 {
                     if (_mem.TState == 0)
                     {
-                        // First: we're allowed to issue Store4/4R in T0, ahead of the
-                        // usual T3.  So we tweak the cycle type to index the bookmark
-                        // ROM with the modified timings.
+                        // First: we're allowed to issue Store4/4R in T0, ahead
+                        // of the usual T3.  So we tweak the cycle type to index
+                        // the bookmark ROM with the modified timings.
                         if (nextCycle == MemoryCycle.Store4R)
                         {
                             book = 0x2;         // "RopStore4R"
@@ -385,25 +385,29 @@ namespace PERQemu.Memory
                     else if (_mem.TState == 3)
                     {
                         //
-                        // Second: Fetch4/4Rs are issued back-to-back (in the correct t3)
-                        // but must NOT introduce the possible CPU abort of a WaitT2 state;
-                        // MDI must remain valid AND the index values must count down correctly
-                        // for the operation in progress, so that after the t0,t1 complete the
-                        // next op's four words arrive in the four subsequent Tstates.  This
-                        // introduces two additional fake cycle types, as with the case above.  Ugh..
+                        // Second: Fetch4/4Rs are issued back-to-back (in the
+                        // correct t3) but must NOT introduce the possible CPU
+                        // abort of a WaitT2 state;  MDI must remain valid AND
+                        // the index values must count down correctly for the
+                        // operation in progress, so after the t0,t1 complete
+                        // the next op's four words arrive in the four subsequent
+                        // Tstates.  This introduces two additional fake cycle
+                        // types, as with the case above.  Ugh..
                         //
-                        if (_current.CycleType == MemoryCycle.Fetch4R && nextCycle == MemoryCycle.Fetch4R)
+                        if (_current.CycleType == MemoryCycle.Fetch4R &&
+                                     nextCycle == MemoryCycle.Fetch4R)
                         {
                             _bookmark = book = 0x1;     // "RopFetch4R"
                         }
-                        else if (_current.CycleType == MemoryCycle.Fetch4 && nextCycle == MemoryCycle.Fetch4)
+                        else if (_current.CycleType == MemoryCycle.Fetch4 &&
+                                          nextCycle == MemoryCycle.Fetch4)
                         {
                             _bookmark = book = 0x3;     // "RopFetch4"
                         }
                     }
                 }
 
-                // For RasterOp special cases, use the modified bookmark for the entire cycle
+                // For RasterOp special cases, use modified bookmark for entire cycle
                 _nextBookmark = book;
 
                 //
@@ -412,19 +416,21 @@ namespace PERQemu.Memory
                 if (_mem.IsFetch(nextCycle))
                 {
                     //
-                    // Back-to-back Fetch or Fetch2 requests present unique timing challenges
-                    // (and allow a small performance boost by eliminating some wait states).
-                    // To accommodate this with as little embarrassment as possible, we use a
-                    // transitional bookmark value to cover the overlap. For a Fetch, this may
-                    // terminate the op early, invalidating one or more time slots where MDI is
-                    // valid (and forcing a CPU wait so that incorrect data is not returned).
-                    // In other cases we have to let the current op retire normally but drop
-                    // immediately into a WaitT2 (rather than WaitT3) for the new op.  There's
-                    // no pretty way to deal with this...
+                    // Back-to-back Fetch or Fetch2 requests present unique timing
+                    // challenges.  To accommodate this with as little embarrassment
+                    // as possible, we use a transitional bookmark value to cover
+                    // the overlap. For a Fetch, this may terminate the op early,
+                    // invalidating one or more time slots where MDI is valid (and
+                    // forcing a CPU wait so that incorrect data is not returned).
+                    // In other cases we have to let the current op retire normally
+                    // but drop immediately into a WaitT2 (rather than WaitT3) for
+                    // the new op.  There's no pretty way to deal with this...
                     //
-                    // Gory details in the comments below.  Look away now for "plausible deniability".
+                    // Gory details in the comments below.  Look away now for
+                    // "plausible deniability".
                     //
-                    if (_current.CycleType == MemoryCycle.Fetch || _current.CycleType == MemoryCycle.Fetch2)
+                    if (_current.CycleType == MemoryCycle.Fetch ||
+                        _current.CycleType == MemoryCycle.Fetch2)
                     {
                         book = 0x6;                     // "IndFetch" covers the overlap...
                         _bookmark = book;               // ...force immediate switch for the (t2,t3)...
@@ -503,7 +509,7 @@ namespace PERQemu.Memory
 
             for (int i = 0; i < 256; i++)
             {
-                // Split the result byte into fields once, rather than on every lookup :-)
+                // Split result byte into fields once, rather than on lookup
                 _bkmTable[i] = new BookmarkEntry((byte)fs.ReadByte());
             }
             fs.Close();

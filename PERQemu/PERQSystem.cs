@@ -59,7 +59,7 @@ namespace PERQemu
 #endif
 
             //
-            // TODO: There are some sort of ugly dependencies here...
+            // TODO: There are some ugly dependencies here...
             //      CPU needs Memory;
             //      Scheduler "needs" CPU;
             //      Display, Video need Memory, CPU, and (eventually IOB);

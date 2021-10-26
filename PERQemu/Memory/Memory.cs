@@ -51,8 +51,6 @@ namespace PERQemu.Memory
             _memory = new ushort[_memSize];
             _mdiQueue = new MemoryController(this, "MDI");
             _mdoQueue = new MemoryController(this, "MDO");
-
-            Reset();
         }
 
         public void Reset()
@@ -247,8 +245,8 @@ namespace PERQemu.Memory
         public void RequestMemoryCycle(int address, MemoryCycle cycleType)
         {
             Trace.Log(LogType.MemoryState,
-              "\nMemory: Requested {0} cycle in T{1} addr={2:x6}",
-              cycleType, _Tstate, address);
+                      "\nMemory: Requested {0} cycle in T{1} addr={2:x6}",
+                      cycleType, _Tstate, address);
             
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
@@ -277,7 +275,8 @@ namespace PERQemu.Memory
             // Clip address to memsize range and read
             ushort data = _memory[address & _memSizeMask];
 
-            Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x6} --> {1:x4}", address & _memSizeMask, data);
+            Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x6} --> {1:x4}",
+                      address & _memSizeMask, data);
 
             return data;
         }
@@ -288,7 +287,8 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void StoreWord(int address, ushort data)
         {
-            Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x6} <-- {1:x4}", address & _memSizeMask, data);
+            Trace.Log(LogType.MemoryStore, "Memory: Store addr {0:x6} <-- {1:x4}",
+                      address & _memSizeMask, data);
 
             // Clip address to memsize range and write
             _memory[address & _memSizeMask] = data;
