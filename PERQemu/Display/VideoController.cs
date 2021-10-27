@@ -262,7 +262,6 @@ namespace PERQemu.Display
                         }
 
                         RunStateMachine();
-
                     });
                     break;
             }
@@ -270,6 +269,7 @@ namespace PERQemu.Display
             UpdateSignals();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void UpdateSignals()
         {
             // Trigger an interrupt if the line counter is set and has reached 0
@@ -312,79 +312,102 @@ namespace PERQemu.Display
             get { return (_videoStatus & StatusRegister.EnableParityInterrupts) != StatusRegister.EnableParityInterrupts; }
         }
 
-        private ushort[] _scanlineData = new ushort[PERQ_DISPLAYWIDTH_IN_WORDS];
+        private byte[] _scanlineData = new byte[PERQ_DISPLAYWIDTH_IN_WORDS * 2];
+        private byte[] _cursorData = new byte[8];
 
+        /// <summary>
+        /// Renders one video scanline, mixing in the cursor image when enabled.  
+        /// </summary>
+        /// <remarks>
+        /// The PERQ video driver runs free when the microcode is ignoring video
+        /// interrupts, producing a visual display of a rolling retrace across the
+        /// entire height of the tube, so we clip the current _scanLine to the
+        /// visible range.  If the cursor is enabled for this line, we apply the
+        /// current cursor function and mix the image in before shipping the full
+        /// scanline off to the display driver.  While we still fetch words from
+        /// memory, we process the scan line a byte at a time; this eliminates the
+        /// need for funky byte alignment when mixing in the cursor.
+        /// </remarks>
         public void RenderScanline()
         {
             int renderLine = _scanLine;
 
-            // The PERQ video driver runs free when the microcode is ignoring
-            // interrupts, producing a visual display of a rolling retrace across the
-            // entire height of the tube.  It'd be fun to simulate that for accuracy's
-            // sake, but for now just mod the value so it remains in the visible range.
             if (_scanLine < 0 || _scanLine > _lastVisibleScanLine)
             {
                 renderLine = _scanLine % PERQ_DISPLAYHEIGHT;
             }
 
-            for (int x = 0; x < PERQ_DISPLAYWIDTH_IN_WORDS; x++)
-            {
-                int dataAddress = renderLine * PERQ_DISPLAYWIDTH_IN_WORDS + x + _displayAddress;
-                int screenAddress = renderLine * PERQ_DISPLAYWIDTH_IN_BYTES + (x * 2);
+            // Set the start of this scanline, offset from start of display
+            int displayAddress = _displayAddress + (renderLine * PERQ_DISPLAYWIDTH_IN_WORDS);
+            int screenByte = 0;
 
-                _scanlineData[x] = TransformDisplayWord(_system.Memory.FetchWord(dataAddress));
-            }
-
-            _system.Display.DrawScanline(renderLine, _scanlineData);
-
-            // TODO: make this part of the above rather than doing it... stupidly.
             if (CursorEnabled)
             {
-                if (_scanLine >= 0 && _scanLine <= _lastVisibleScanLine)
+                // Calc the starting address of this line of cursor data
+                int cursorAddress = _cursorAddress + (_cursorY * 4);
+                _cursorY++;
+
+                // Fetch the quad and break it into 8 bytes for easy mixin'!
+                GetCursorQuad(cursorAddress);
+
+                int cursorStartByte = _cursorX;
+                int cursByte = 0;
+
+                // The "slow" loop mixes in the cursor as we go
+                for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
                 {
-                    RenderCursorLine();
+                    var word = TransformDisplayWord(_system.Memory.FetchWord(displayAddress + w));
+
+                    // First the high byte...
+                    if (screenByte >= cursorStartByte && screenByte < cursorStartByte + 8)
+                    {
+                        _scanlineData[screenByte++] = TransformCursorByte((byte)((word & 0xff00) >> 8),
+                                                                          _cursorData[cursByte++]);
+                    }
+                    else
+                    {
+                        _scanlineData[screenByte++] = (byte)((word & 0xff00) >> 8);
+                    }
+
+                    // Now the low byte
+                    if (screenByte >= cursorStartByte && screenByte < cursorStartByte + 8)
+                    {
+                        _scanlineData[screenByte++] = TransformCursorByte((byte)(word & 0x00ff),
+                                                                          _cursorData[cursByte++]);
+                    }
+                    else
+                    {
+                        _scanlineData[screenByte++] = (byte)(word & 0x00ff);
+                    }
                 }
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void RenderCursorLine()
-        {
-            // Calc the starting address of this line of the cursor data
-            int cursorAddress = ((_cursorAddress << 1) + _cursorY * 8);
-
-            int cursorStartByte = _cursorX;
-            int backgroundStartByte = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES + (_displayAddress << 1);
-            int screenAddress = _scanLine * PERQ_DISPLAYWIDTH_IN_BYTES;
-
-            // We draw 8 bytes (4 words) of horizontal cursor data combined with
-            // the background data on that line based on the current cursor function.
-            for (int x = cursorStartByte; x < cursorStartByte + 8; x++)
-            {
-                if (x >= 0 && x < PERQ_DISPLAYWIDTH_IN_BYTES)
-                {
-                    byte backgroundByte = GetByte(backgroundStartByte + x);
-                    byte cursorByte = GetByte(cursorAddress + (x - cursorStartByte));
-
-                    _system.Display.DrawByte(screenAddress + x, TransformCursorByte(backgroundByte, cursorByte));
-                }
-            }
-
-            _cursorY++;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte GetByte(int byteAligned)
-        {
-            ushort word = _system.Memory.FetchWord(byteAligned >> 1);
-
-            if ((byteAligned % 2) == 0)
-            {
-                return (byte)(word >> 8);
             }
             else
             {
-                return (byte)(word);
+                // The "fast" loop just pushes the display buffer
+                for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
+                {
+                    var word = TransformDisplayWord(_system.Memory.FetchWord(displayAddress + w));
+                    _scanlineData[screenByte++] = (byte)((word & 0xff00) >> 8);  // high byte
+                    _scanlineData[screenByte++] = (byte)(word & 0x00ff);         // low byte
+                }
+            }
+
+            // Ship it!
+            _system.Display.DrawScanline(renderLine, _scanlineData);
+        }
+
+        /// <summary>
+        /// Retrieve a quad word and break it into an 8-byte array.  Like
+        /// _scanlineData, reuse _cursorData[] to avoid memory allocation overhead.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void GetCursorQuad(int addr)
+        {
+            for (int w = 0; w < 4; w++)
+            {
+                var word = _system.Memory.FetchWord(addr + w);
+                _cursorData[(w * 2)] = (byte)((word & 0xff00) >> 8);
+                _cursorData[(w * 2) + 1] = (byte)(word & 0x00ff);
             }
         }
 
@@ -407,7 +430,7 @@ namespace PERQemu.Display
         }
 
         /// <summary>
-        /// Transforms the cursor byte based on the current Cursor function and the display bytes.
+        /// Transforms the cursor byte based on the current Cursor function and display byte.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte TransformCursorByte(byte dispWord, byte cursWord)

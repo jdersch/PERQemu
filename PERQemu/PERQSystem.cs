@@ -234,8 +234,8 @@ namespace PERQemu
 
         /// <summary>
         /// Allows overriding the default OS boot character.
-        /// (This is a key that, when held down at boot time will cause the PERQ microcode to
-        /// select a different OS to boot.)
+        /// (This is a key that, when held down at boot time will cause the PERQ
+        /// microcode to select a different OS to boot.)
         /// </summary>
         public byte BootChar
         {
@@ -291,10 +291,9 @@ namespace PERQemu
         private delegate void RunDelegate();
 
         /// <summary>
-        /// Executes the specified emulation delegate inside a try/catch block that properly handles
-        /// PowerDown and other exceptions to return to debug state.
+        /// Executes the specified emulation delegate inside a try/catch block that
+        /// properly handles PowerDown and other exceptions to return to debug state.
         /// </summary>
-        /// <param name="execute"></param>
         private void RunGuarded(RunDelegate execute)
         {
             try
