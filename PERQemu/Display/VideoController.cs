@@ -356,7 +356,7 @@ namespace PERQemu.Display
                 // The "slow" loop mixes in the cursor as we go
                 for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
                 {
-                    var word = TransformDisplayWord(_system.Memory.FetchWord(displayAddress + w));
+                    var word = _system.Memory.FetchWord(displayAddress + w);
 
                     // First the high byte...
                     if (screenByte >= cursorStartByte && screenByte < cursorStartByte + 8)
