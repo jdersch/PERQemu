@@ -60,15 +60,18 @@ namespace PERQemu.Display
             _mouseButton = 0x0;
         }
 
+        /// <summary>
+        /// Send a render event to the SDL message loop so the screen will get drawn.
+        /// </summary>
         public void Refresh()
         {
-            //
-            // Send a render event to the SDL message loop so that things
-            // will get drawn.
-            //
-            SDL.SDL_PushEvent(ref _renderEvent);
+            SDL.SDL_PushEvent(ref _renderEvent);        // ref?
         }
 
+        /// <summary>
+        /// Expand the 1-bit pixels from the PERQ into 32-bit SDL pixels, one
+        /// full scanline at a time.  Use the precomputed table to go faster.
+        /// </summary>
         public void DrawScanline(int scanline, byte[] scanlineData)
         {
             int rgbIndex = scanline * _displayWidth;
@@ -89,7 +92,6 @@ namespace PERQemu.Display
             p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
             //_buffer.Save(path, GetEncoderForFormat(ImageFormat.Jpeg), p);
         }
-
 
         public int MouseX
         {
@@ -209,7 +211,6 @@ namespace PERQemu.Display
                 default:
                     break;
             }
-
         }
 
         private void RenderDisplay()
@@ -281,7 +282,7 @@ namespace PERQemu.Display
                 SDL.SDL_WINDOWPOS_UNDEFINED,
                 _displayWidth,
                 _displayHeight,
-                SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
+                0);     // SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE); ugh
 
             if (_sdlWindow == IntPtr.Zero)
             {

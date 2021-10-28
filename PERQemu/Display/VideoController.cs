@@ -47,7 +47,7 @@ namespace PERQemu.Display
             _cursorAddress = 0;
             _cursorX = 0;
             _cursorY = 0;
-            _cursorFunc = CursorFunction.AndCursor;
+            _cursorFunc = CursorFunction.CTNormal;
             _lineCounter = 0;
             _lineCounterInit = 0;
             _lineCountOverflow = false;
@@ -108,11 +108,17 @@ namespace PERQemu.Display
                     // Line count register counts horizontal scan lines and generates
                     // an interrupt after N lines are scanned.
                     //   bit    description
-                    //  15:7    not used
+                    //  15:8    high byte is the "video control port", below
+                    //     7    "start over" bit signals the end of the display list
                     //   6:0    2's complement of N
                     _lineCounterInit = 128 - (value & 0x7f);
                     _lineCounter = _lineCounterInit;
                     _lineCountOverflow = false;
+
+                    //if ((value & 0x80) == 0)
+                    //{
+                    //    _scanLine = 0;      // StartOver bit signals end of display list
+                    //}
 
                     // Clear interrupt
                     _system.CPU.ClearInterrupt(InterruptType.LineCounter);
@@ -150,7 +156,7 @@ namespace PERQemu.Display
                     //     10   Enable display (off during vertical blanking)
                     //      9   Enable Vertical Sync
                     //      8   Enable cursor
-                    //    7:0   not used
+                    //    7:0   Low byte is the Line Count, above
                     _cursorFunc = (CursorFunction)((value & 0xe000) >> 13);
                     _videoStatus = (StatusRegister)(value & 0x1f00);
 
@@ -158,12 +164,11 @@ namespace PERQemu.Display
                     {
                         _cursorY = 0;
 
-                        Trace.Log(LogType.Display, "Cursor Y set to {0}", _cursorY);
+                        Trace.Log(LogType.Display, "Cursor Y enabled at line {0}", _scanLine);
                     }
 
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
                     {
-                        _scanLine = 0;
                         _system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VBlankScanline;
                         RunStateMachine();
@@ -231,7 +236,7 @@ namespace PERQemu.Display
                         _scanLine++;
                         if (_lineCounter > 0) _lineCounter--;
 
-                        if (_scanLine == _lastVisibleScanLine - 1)
+                        if (_scanLine > _lastVisibleScanLine)
                         {
                             // Usually the microcode drives vertical blanking through
                             // the control register; but during bootup it sometimes lets
@@ -241,6 +246,7 @@ namespace PERQemu.Display
                             // freeze up...
                             _state = VideoState.VBlankScanline;
                             _system.Display.Refresh();
+                            _scanLine = 0;      // Should be reset by the StartOver bit!?
                         }
                         else
                         {
@@ -252,11 +258,11 @@ namespace PERQemu.Display
                     break;
 
                 case VideoState.VBlankScanline:
-                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
+                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec + _hBlankTimeNsec, (skew, context) =>
                     {
                         if (_lineCounter > 0) _lineCounter--;
 
-                        if (_lineCounter == 0)              // Trust what the microcode set
+                        if (_lineCounter == 0)
                         {
                             _state = VideoState.VisibleScanline;
                         }
@@ -321,8 +327,9 @@ namespace PERQemu.Display
         /// <remarks>
         /// The PERQ video driver runs free when the microcode is ignoring video
         /// interrupts, producing a visual display of a rolling retrace across the
-        /// entire height of the tube, so we clip the current _scanLine to the
-        /// visible range.  If the cursor is enabled for this line, we apply the
+        /// entire height of the tube.  We clip the current _scanLine to the
+        /// visible range and render something so the display doesn't appear to
+        /// be frozen...  If the cursor is enabled for this line, we apply the
         /// current cursor function and mix the image in before shipping the full
         /// scanline off to the display driver.  While we still fetch words from
         /// memory, we process the scan line a byte at a time; this eliminates the
@@ -356,7 +363,7 @@ namespace PERQemu.Display
                 // The "slow" loop mixes in the cursor as we go
                 for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
                 {
-                    var word = _system.Memory.FetchWord(displayAddress + w);
+                    var word = TransformDisplayWord(_system.Memory.FetchWord(displayAddress + w));
 
                     // First the high byte...
                     if (screenByte >= cursorStartByte && screenByte < cursorStartByte + 8)
@@ -414,19 +421,37 @@ namespace PERQemu.Display
         /// <summary>
         /// Transforms the display word based on the current Cursor function.
         /// </summary>
+        /// <remarks>
+        /// This is silly, but let's see what a more faithful rendition looks like?
+        /// Will probably change the "broken" ones to display _something_ rather
+        /// than nothing... although a POS test program will need to be written to
+        /// see all the combinations.  Remember, when the screen is shrunk the
+        /// bottom part can be forced on, off, or complemented... 
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort TransformDisplayWord(ushort word)
         {
             switch (_cursorFunc)
             {
-                case CursorFunction.InvertedCursorInvertedDisplay:
-                case CursorFunction.NandCursorInvertedDisplay:
-                case CursorFunction.NorCursorInvertedDisplay:
-                case CursorFunction.XnorCursorInvertedDisplay:
-                    return (ushort)~word;
-            }
+                case CursorFunction.CTInvBlackHole:
+                case CursorFunction.CTWhite:
+                    return 0x0000;
 
-            return word;
+                case CursorFunction.CTCursorOnly:
+                case CursorFunction.CTBlackHole:
+                    return 0xffff;
+
+                case CursorFunction.CTNormal:
+                case CursorFunction.CTCursCompl:
+                    return word;
+
+                case CursorFunction.CTInvert:
+                case CursorFunction.CTInvCursCompl:
+                    return (ushort)~word;
+
+                default:
+                    throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
+            }
         }
 
         /// <summary>
@@ -435,29 +460,64 @@ namespace PERQemu.Display
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte TransformCursorByte(byte dispWord, byte cursWord)
         {
+            /*
+                From io_others.pas:
+        		CursFunction = (CTWhite, CTCursorOnly, CTBlackHole, CTInvBlackHole,
+        						CTNormal, CTInvert, CTCursCompl, CTInvCursCompl);
+        						
+                From the POS Programming Examples:
+                "The even functions have zeroes in memory represented as white and
+                ones as black (this is the default: white background with black
+                characters).  Odd functions have zeroes represented as black and
+                ones as white.  The functions are as follows (inverted means screen
+                interpretation; zeroes black, ones white):
+                
+                CTWhite:        Screen picture is not shown, only cursor.
+                CTCursorOnly:   Same as CTWhite, only inverted.
+                CTBlackHole:    This function doesn't work.
+                CTInvBlackHole: This function doesn't work either.
+                CTNormal:       Ones in the cursor are black, zeros allow the
+                                screen to show through.
+                CTInvert:       Same as CTNormal only inverted.
+                CTCursCompl:    Ones in the cursor are XORed with screen,
+                                zeros allow screen to show through.
+                CTInvCursCompl: Same as CTCursCompl only inverted."
+
+//return (byte)~(cursWord | dispWord);
+
+//return (byte)((cursWord & dispWord) | ((~cursWord) & (~dispWord)));
+                
+             Display word already inverted, so... THIS version:
+             7 black scrn, white curs, xor                          white screen, white curs black block 
+             6 white scrn, white curs, xor over black block
+             5 black scrn, white curs, or  (white curs bits mask white background bits)
+             4 white scrn, black curs, black block xors, black cursor or'ed!?
+             3 white scrn, black curs, white block masks everything, black curs bits xor black background bits
+             2 black scrn, white curs, black block masks everything, white curs bits xor white background bits
+             1 black scrn, black curs, white block masks everything, black curs bits allow white background bits
+             0 white scrn, black curs, white block masks everything, black curs bits allow white background bits
+            */
             switch (_cursorFunc)
             {
-                case CursorFunction.AndCursor:
-                    return (byte)(cursWord & dispWord);
+                case CursorFunction.CTInvBlackHole:
+                case CursorFunction.CTWhite:
+                    return (byte)cursWord;
 
-                case CursorFunction.OrCursor:
-                    return (byte)(cursWord | dispWord);
-
-                case CursorFunction.XorCursor:
-                    return (byte)(cursWord ^ dispWord);
-
-                case CursorFunction.InvertedCursor:
-                case CursorFunction.InvertedCursorInvertedDisplay:
+                case CursorFunction.CTBlackHole:
+                case CursorFunction.CTCursorOnly:
                     return (byte)~cursWord;
 
-                case CursorFunction.NandCursorInvertedDisplay:
-                    return (byte)~(cursWord & dispWord);
+                case CursorFunction.CTNormal:
+                    return (byte)(cursWord | dispWord);
 
-                case CursorFunction.NorCursorInvertedDisplay:
+                case CursorFunction.CTInvert:
                     return (byte)~(cursWord | dispWord);
 
-                case CursorFunction.XnorCursorInvertedDisplay:
-                    return (byte)((cursWord & dispWord) | ((~cursWord) & (~dispWord)));
+                case CursorFunction.CTCursCompl:
+                    return (byte)(cursWord ^ dispWord);
+
+                case CursorFunction.CTInvCursCompl:
+                    return (byte)~(cursWord ^ dispWord);
 
                 default:
                     throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
@@ -507,14 +567,14 @@ namespace PERQemu.Display
 
         private enum CursorFunction
         {
-            InvertedCursorInvertedDisplay = 0,
-            InvertedCursor,
-            AndCursor,
-            NandCursorInvertedDisplay,
-            NorCursorInvertedDisplay,
-            OrCursor,
-            XnorCursorInvertedDisplay,
-            XorCursor
+            CTWhite = 0,        // InvertedCursorInvertedDisplay
+            CTCursorOnly,       // InvertedCursor
+            CTBlackHole,        // AndCursor
+            CTInvBlackHole,     // NandCursorInvertedDisplay
+            CTNormal,           // NorCursorInvertedDisplay
+            CTInvert,           // OrCursor
+            CTCursCompl,        // XnorCursorInvertedDisplay
+            CTInvCursCompl      // XorCursor
         }
 
         private byte[] _handledPorts =
