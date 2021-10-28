@@ -86,9 +86,9 @@ namespace PERQemu.IO.Z80_new
             // Send the data off to the SIO.
             _rxDelegate(0x81);                  // sync
             _rxDelegate((byte)~((tabX >> 8) | (offTablet ? 0x40 : 0x00)));     // high bits of X + TabOffTablet
-            _rxDelegate((byte)~(tabX));          // low X
+            _rxDelegate((byte)~(tabX));         // low X
             _rxDelegate((byte)~((tabY >> 8) | (buttons << 5)));     // high bits of Y + switch bits
-            _rxDelegate((byte)~tabY);            // low Y
+            _rxDelegate((byte)~(tabY));         // low Y
             _rxDelegate(0); // Garbage:  The Z80 code expects to read 6 characters for some reason, it throws away the last two.
             _rxDelegate(0);
 

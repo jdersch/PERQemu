@@ -58,6 +58,8 @@ namespace PERQemu.Display
 
             _clickFlag = false;
             _mouseButton = 0x0;
+            _mouseX = 0;
+            _mouseY = 0;
         }
 
         /// <summary>
@@ -323,7 +325,6 @@ namespace PERQemu.Display
 
         private void CreateDisplayTexture(bool filter)
         {
-
             _textureLock.EnterWriteLock();
             SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, filter ? "linear" : "nearest");
 
@@ -578,7 +579,7 @@ namespace PERQemu.Display
                 for (int b = 0; b < 8; b++)
                 {
                     // TODO: Clinton P4 phosphor color? :-)
-                    uint color = (i & (1 << b)) == 0 ? 0xff000000 : 0xffffffff;
+                    uint color = (i & (1 << b)) == 0 ? 0xffffffff : 0xff000000;
                     _bitToPixel[i, b] = (int)color;
                 }
             }

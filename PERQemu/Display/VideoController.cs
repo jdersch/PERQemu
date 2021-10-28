@@ -60,7 +60,7 @@ namespace PERQemu.Display
                 _currentEvent = null;
             }
 
-            _state = VideoState.VisibleScanline;
+            _state = VideoState.Idle;
 
             // Kick off initial tick
             RunStateMachine();
@@ -115,10 +115,10 @@ namespace PERQemu.Display
                     _lineCounter = _lineCounterInit;
                     _lineCountOverflow = false;
 
-                    //if ((value & 0x80) == 0)
-                    //{
-                    //    _scanLine = 0;      // StartOver bit signals end of display list
-                    //}
+                    if ((value & 0x80) != 0)
+                    {
+                        _scanLine = 0;      // StartOver bit signals end of display list
+                    }
 
                     // Clear interrupt
                     _system.CPU.ClearInterrupt(InterruptType.LineCounter);
@@ -218,6 +218,8 @@ namespace PERQemu.Display
             {
                 case VideoState.Idle:
                     // Do nothing, stop running the state machine now.
+                    // Todo: here's where we do our slick "rolling retrace"
+                    // as the tube warms up :-)
                     break;
 
                 case VideoState.VisibleScanline:
@@ -246,7 +248,7 @@ namespace PERQemu.Display
                             // freeze up...
                             _state = VideoState.VBlankScanline;
                             _system.Display.Refresh();
-                            _scanLine = 0;      // Should be reset by the StartOver bit!?
+                            _scanLine = 0;  // argh
                         }
                         else
                         {
@@ -337,6 +339,8 @@ namespace PERQemu.Display
         /// </remarks>
         public void RenderScanline()
         {
+            if (!DisplayEnabled) return;
+
             int renderLine = _scanLine;
 
             if (_scanLine < 0 || _scanLine > _lastVisibleScanLine)
@@ -353,6 +357,11 @@ namespace PERQemu.Display
                 // Calc the starting address of this line of cursor data
                 int cursorAddress = _cursorAddress + (_cursorY * 4);
                 _cursorY++;
+
+                //Console.Title = String.Format("Mouse X={0} Y={1}, Curs X={2}, Y={3}, sl={4}",
+                //                              _system.Display.MouseX,
+                //                              _system.Display.MouseY,
+                //                              _cursorX, _cursorY, _scanLine);
 
                 // Fetch the quad and break it into 8 bytes for easy mixin'!
                 GetCursorQuad(cursorAddress);
@@ -482,21 +491,8 @@ namespace PERQemu.Display
                 CTCursCompl:    Ones in the cursor are XORed with screen,
                                 zeros allow screen to show through.
                 CTInvCursCompl: Same as CTCursCompl only inverted."
-
-//return (byte)~(cursWord | dispWord);
-
-//return (byte)((cursWord & dispWord) | ((~cursWord) & (~dispWord)));
-                
-             Display word already inverted, so... THIS version:
-             7 black scrn, white curs, xor                          white screen, white curs black block 
-             6 white scrn, white curs, xor over black block
-             5 black scrn, white curs, or  (white curs bits mask white background bits)
-             4 white scrn, black curs, black block xors, black cursor or'ed!?
-             3 white scrn, black curs, white block masks everything, black curs bits xor black background bits
-             2 black scrn, white curs, black block masks everything, white curs bits xor white background bits
-             1 black scrn, black curs, white block masks everything, black curs bits allow white background bits
-             0 white scrn, black curs, white block masks everything, black curs bits allow white background bits
             */
+
             switch (_cursorFunc)
             {
                 case CursorFunction.CTInvBlackHole:
@@ -511,13 +507,13 @@ namespace PERQemu.Display
                     return (byte)(cursWord | dispWord);
 
                 case CursorFunction.CTInvert:
-                    return (byte)~(cursWord | dispWord);
+                    return (byte)(~cursWord | ~dispWord);
 
                 case CursorFunction.CTCursCompl:
                     return (byte)(cursWord ^ dispWord);
 
                 case CursorFunction.CTInvCursCompl:
-                    return (byte)~(cursWord ^ dispWord);
+                    return (byte)(~cursWord ^ ~dispWord);
 
                 default:
                     throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
@@ -579,14 +575,14 @@ namespace PERQemu.Display
 
         private byte[] _handledPorts =
         {
-            0x65,   // Read CRT signals
-            0x66,   // Read Hi address parity
-            0x67,   // Read Low address parity
-            0xe0,   // Load Line counter
-            0xe1,   // Load Display address
-            0xe2,   // Load Cursor address
-            0xe3,   // Load Video status
-            0xe4    // Load Cursor X position
+            0x65,               // Read CRT signals
+            0x66,               // Read Hi address parity
+            0x67,               // Read Low address parity
+            0xe0,               // Load Line counter
+            0xe1,               // Load Display address
+            0xe2,               // Load Cursor address
+            0xe3,               // Load Video status
+            0xe4                // Load Cursor X position
         };
 
         /// <summary>
