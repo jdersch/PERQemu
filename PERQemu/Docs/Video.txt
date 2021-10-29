@@ -7,7 +7,7 @@ of information about display timing gleaned from various hardware and microcode
 sources as summarized below, and implemented in VideoController.cs.  For the
 emulator, timings are rounded to the nearest cycle (so they're not 100% accurate)
 although the new Scheduler/time-based scheme could be more precise.  A few micro-
-seconds here and there don't appreciably alter the experience. ;-)
+seconds here and there won't appreciably alter the experience. ;-)
 
 
 Vertical timing - both monitors:
@@ -44,7 +44,7 @@ The display is maintained in Pascal/microcode by setting up a display list that
 breaks down the vertical field into "bands" of up to 128 lines each.  Several
 control bits, including a function code that sets the screen's background color
 and a mixing function for the cursor image are programmed with a line count
-(from 0..127) into the hardware's video registers.  As the hardware draws each
+(from 1..128) into the hardware's video registers.  As the hardware draws each
 line on the display the line counter is decremented, triggering an interrupt
 when it reaches zero.  The microcode must then immediately fetch and program the
 values for the next band of the display; maximum latency is ~80 microinstructions
@@ -52,7 +52,8 @@ to avoid the risk of the display glitching or breaking up.
 
 Vertical retrace is accounted for by the microcode setting up two bands
 totalling 43 lines.  The second of these sets a bit which indicates the end of
-the current display list (to reset our scanline counter).
+the current display list (which, conveniently, is used to reset the scanline
+counter).
 
 The cursor image is moved about on screen by creating a band with the "cursor
 enabled" bit set.  This band is up to 64 lines high and is programmed to start
@@ -70,9 +71,9 @@ interrupts must be fielded by the microcode for every frame of the display, 60
 times per second!  Ouch...
 
 This is true even when the bottom part of the display is "turned off" -- a POS
-feature that allowed the system to temporarily use part of video memory for
+feature that allows the system to temporarily use part of video memory for
 large programs such as Scavenger or the compiler.  On a 2MB (or later, 4MB)
-machine it seems silly to worry about an extra 20K of memory, but in a 256K
+machine it seems silly to worry about an extra 96K of memory, but in a 256K
 PERQ that's a fairly sizeable chunk.  Accent and PNX don't offer this, as their
 window managers can't "resize" the screen dynamically, but it's a fun and
 fairly unique feature of POS that adds to its quirky charm.  Because PERQemu
@@ -83,7 +84,7 @@ the control registers properly will run.
 Subject to certain alignment restrictions, the display and cursor buffers may
 reside anywhere in main memory.  The hardware automatically tracks the addresses
 as each frame is drawn.  Animation effects or double-buffering the entire screen
-are possibly by changing the Display Address or Cursor Address registers before
+are possible by changing the Display Address or Cursor Address registers before
 the start of the frame.  Like the hardware it emulates, PERQemu does not check
 the validity of addresses programmed into the registers.  Caveat microcodor?
 
@@ -136,7 +137,7 @@ the graphical display has a number of critical benefits:
 
     fixes the keyboard problems (busted key translations in Mono on the Mac);
 
-    is faster.  Much faster.  In theory.  So far?  Not so much. :-(
+    is much faster.  In theory.  In practice, so far?  Not so much. :-(
 
 There are downsides, though:
 
@@ -148,11 +149,10 @@ There are downsides, though:
     in the distribution and/or /Library/Frameworks or /opt or /usr/local
     or <bang shoots self in foot/head>;
 
-    Uses a lot more memory.  Like, stupid amounts of memory.  It takes more
-    RAM to simulate the 1bpp display than the ENTIRE contents of a PERQ-1,
-    including its disk drive.  The process of bloating up the 1bpp display
-    to full 32-bit color and jamming 300MB/sec into the video card is just
-    patently absurd.  But what can ya do.
+    Uses a lot more memory.  Like, stupid amounts of memory.  Bloating up
+    the 1bpp display to full 32-bit color and jamming 300MB/sec into the
+    video card is just patently absurd.  But what can ya do.  "Progress."
+
 
 VideoController.cs drives the video section of the PERQ, handling the registers
 and state machine that tracks the horizontal and vertical video timings.  As
@@ -165,17 +165,9 @@ Display.cs manages the 32bpp buffer that is copied from system memory into an
 SDL texture (in GPU memory) and ultimately rendered to the display.  To help
 speed this up -- in theory, anyway -- a table is generated at startup to map
 a byte of pixel data from the PERQ into 8 x 32-bit pixels.  As the scanline
-data is delivered from the VideoController, a simple table lookup and copy
+data is delivered from the VideoController, a simple table lookup-and-copy
 "paints" 8 pixels at a time into the 32bpp buffer with no bit twiddling or
-conditionals required.  You'd think this would be faster.  Of course it isn't.
-But it's entirely empirical, since profiling C# on a Mac this old is basically
-impossible.  EIGHT 2.8GHz cores can't keep up with a 6Mhz emulated machine that
-would entirely fit in their L3 cache.  <reloads...>
-
-Uh, okay, remove the ranting and editorializing and get back to some of the
-squirrely details of the implementation, with proper benchmarks after the CPU
-is moved to a background thread and SDL2 is moved to the main thread.  Because
-of course it has to run on the main thread.  Ugh.
+conditionals required.
 
 
 Video Controller State Machine
@@ -203,37 +195,39 @@ patterns roll by.
 On the hardware, the screen then goes wobbly again until the system is loaded
 and the Pascal/IO microcode takes over to set up the frame buffer and use the
 screen.  I just have this itching to simulate that retrace graphically, to 
-really make the experience that much more realistic. :-)  Since we now burn a
-gazillion bytes of memory on that damned 32 bit frame buffer we might as well
-add some visual sugar to sweeten the deal.
+really make the experience that much more realistic. :-)  Since we now have to
+render everything through a 32 bit frame buffer we might as well add some visual
+sugar to sweeten the deal.
 
-Meanwhile, the state machine now follows the microcode's direction.  The Idle
-state transitions when the EnableVideo bit is set; at this point the first
-band should be programmed into the LineCount register and a CursorFunction
-set.  When the _lineCounter goes to zero we raise the interrupt and go back to
-Idle mode.  The CPU clears the interrupt by reprogramming the LineCounter,
-then sets the flags to display another visual field OR enables the transition
-to VBlank.  I think this is much less "creaky" and more faithful to the real
-hardware.
+Meanwhile, the Idle state transitions when the EnableVideo bit is set; at this
+point the first band should be programmed into the LineCount register and a
+CursorFunction set.  When the _lineCounter goes to zero we raise the interrupt
+and go back to Idle mode.  The CPU clears the interrupt by reprogramming the
+LineCounter, then sets the flags to display another visual field OR enables the
+transition to VBlank.  I think this is much less "creaky" and more faithful to
+the real hardware.
+
 
 The ScanLine Buffer
 -------------------
 
 Waaaay back I ran a bunch of tests to see if we could reduce the impact of
 copying so much data around.  Even on 32-bit Mono it looked like looping over
-12 quad words was substantially faster than zipping through 48 ushorts.  So I
-went nuts and dragged out the test code I'd introduced in the 0.4.5beta tree
-and dropped a stripped-down version into Memory and VideoController.
+12 quad words was substantially faster than zipping through 48 ushorts, and now
+on 64-bits it seems to give a couple of fps bump.  So I went nuts and dragged
+out the test code I'd introduced in the 0.4.5beta tree and dropped a stripped-
+down version into Memory and VideoController.
 
 Memory.cs now uses a Core struct to simulate a union type that can be accessed
-by word or by quad word.  That is, all "normal" accesses through the FetchWord
-method work just as before, but the video can use FetchQuad() to grab big
-chunks.  We can then zip through an entire scanline in 12 quads (portrait
+by word or by quad word.  That is, all "normal" accesses through the FetchWord()
+method work just as before, but the video can use FetchQuad() to grab bigger
+chunks.  We can then zip through an entire scanline in 12 meaty slabs (portrait
 display).  When the cursor is enabled, the old method of drawing the cursor
 on top of the just-completed scanline is replaced by one unified loop.  It
 still walks through 48 words, mixing in the cursor at the appropriate starting
 byte.  This is slower but simpler, since it doesn't require a bunch of fussing
-with masking or aligning the cursor bytes.
+with masking or aligning the cursor bytes.  At most it's only done for 64 lines
+out of the 1024 on the screen, so, feh.  I'll live with it for now.
 
 On the receiving end, DrawScanline() now uses a pre-computed table to quickly
 do pixel doub..qu..octoubling?  I like that, let's go with "octoubling".  For
@@ -242,10 +236,11 @@ pixel values that are dropped into the 32bpp buffer.  Of course, the tradeoff
 is that we burn more memory and bandwidth but avoid a bunch of shifts, masking
 ops and a conditional for all 768 individual bits of each horizontal line
 (1280 when I get Landscape going).  Is it actually worth it?  Are modern CPUs
-actually faster at
+with their large cache lines actually faster at bit banging this:
     p[i] = (i & (1 << b) == 0 ? foo : bar);
-than
+than this?
     p[i] = t[i, b];
+
 Who knows?  Literally nobody knows.  It's an eternal mystery.  (NO I haven't
 benchmarked it yet, it's just simpler and cleaner and it SHOULD be faster
 even if it isn't, SO THERE.)
@@ -267,15 +262,15 @@ occasionally spit out the current interrupt state on the console.  Every
 device that raises and interrupt tends to be the one that also clears it, so
 it avoids all that silly (read: slow) locking business by just eliminating
 contention entirely.  VideoController can raise/clear the LineCounter intr
-without worrying of the Z80 is mucking with the flags at the same time.
+without worrying of the Z80 is mucking with the other flags at the same time.
 
 Of course, if I wasn't developing this on a Mac that's still running Yosemite,
-or if there's a Mono equivalent of .NET 5.0 available that'll run on it, the
-Interlocked.Or() and Interlocked.And() methods look perfect for the tast;
+or if there's a Mono equivalent of .NET >= 5.0 available that'll run on it,
+the Interlocked.Or() and Interlocked.And() methods look perfect for the task;
 they're supposed to be lightning fast since they map directly to atomic cas
-instructions in the processor (x64, at any rate).  For now, stability seems
-more important.  I'm still only getting 30fps with the CPU and SDL2 both
-running on the main thread.  Sigh.  More refactoring ahead...
+instructions in the processor (on x64, at any rate).  For now, stability is
+more important than speed.  I'm still only getting 30fps with the CPU and SDL2
+both running on the main thread.  Sigh.  More refactoring ahead...
 
-Doh.  How did this turn into a blog entry?  Cripes.  Rewrites and cleanups
+Doh.  How did this turn into a blog entry?  Cripes.  More rewrites and cleanups
 before any thought of submitting a pull request.
