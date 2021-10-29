@@ -17,6 +17,7 @@
 //
 
 using System;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
 using PERQemu.IO;
@@ -25,10 +26,27 @@ using PERQemu.Processor;
 namespace PERQemu.Display
 {
     /// <summary>
-    /// Implements functionality for the PERQ's video controller.
-    /// 
-    /// TODO: The video state machine in this class and the way it interacts with control registers is very creaky.  
-    /// Make it... less creaky and more based on real hardware behaviors.
+    /// A performance cheat: provide a fixed size memory buffer for one video
+    /// scanline, accessible as 64-bit quad words or 8-bit bytes (for doing
+    /// fast copies when not cursor mixing, and byte-wide/unaligned copies
+    /// when the cursor is enabled).
+    /// </summary>
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct ScanLineBuffer
+    {
+        [FieldOffset(0)]
+        public ulong[] Quads;
+
+        [FieldOffset(0)]
+        public byte[] Bytes;
+    }
+
+    /// <summary>
+    /// Runs the PERQ's video controller: implements the control and status
+    /// registers that the microcode uses to drive the display, manages the
+    /// video output stream and cursor positioning, and generates "line count"
+    /// interrupts that drive things like the system (software) clock.  See
+    /// the file Docs/Video.txt for more details than you care to know.
     /// </summary>
     public sealed class VideoController : IIODevice
     {
@@ -37,6 +55,13 @@ namespace PERQemu.Display
         {
             _system = system;
             _currentEvent = null;
+
+            // TODO: Allocate our fixed buffer based on the configured display
+            _scanlineData = new ScanLineBuffer();
+            _scanlineData.Bytes = new byte[PERQ_DISPLAYWIDTH_IN_BYTES];
+
+            // One quadword as 8 bytes
+            _cursorData = new byte[8];
         }
 
         public void Reset()
@@ -109,7 +134,7 @@ namespace PERQemu.Display
                     // an interrupt after N lines are scanned.
                     //   bit    description
                     //  15:8    high byte is the "video control port", below
-                    //     7    "start over" bit signals the end of the display list
+                    //     7    "start over" bit
                     //   6:0    2's complement of N
                     _lineCounterInit = 128 - (value & 0x7f);
                     _lineCounter = _lineCounterInit;
@@ -163,20 +188,19 @@ namespace PERQemu.Display
                     if ((_videoStatus & StatusRegister.EnableCursor) != 0)
                     {
                         _cursorY = 0;
-
                         Trace.Log(LogType.Display, "Cursor Y enabled at line {0}", _scanLine);
                     }
 
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
                     {
-                        _system.Scheduler.Cancel(_currentEvent);
+                        //_system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VBlankScanline;
                         RunStateMachine();
                     }
 
                     if ((_videoStatus & StatusRegister.EnableDisplay) != 0)
                     {
-                        _system.Scheduler.Cancel(_currentEvent);
+                        //_system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VisibleScanline;
                         RunStateMachine();
                     }
@@ -193,7 +217,7 @@ namespace PERQemu.Display
                     // Cursor X position is only specifiable in 8-pixel offsets
                     // (moving the cursor within those 8 pixels is actually done
                     // in software by shifting the cursor bitmap to match.  Fun.
-                    _cursorX = (int)(240 - (value & 0xff));
+                    _cursorX = (240 - (value & 0xff));
 
                     Trace.Log(LogType.Display, "Cursor X set to {0} (value={1})", _cursorX, value);
                     break;
@@ -214,47 +238,58 @@ namespace PERQemu.Display
 
         public void RunStateMachine()
         {
+
             switch (_state)
             {
                 case VideoState.Idle:
-                    // Do nothing, stop running the state machine now.
-                    // Todo: here's where we do our slick "rolling retrace"
-                    // as the tube warms up :-)
+                    // Do nothing.  The microcode will program the control
+                    // register(s) to set things in motion again.
+                    Trace.Log(LogType.Display, "Video RunSM in {0} at {1}, scan={2} count={3}",
+                                      _state, _system.Scheduler.CurrentTimeNsec,
+                                     _scanLine, _lineCounter);
                     break;
 
                 case VideoState.VisibleScanline:
                     _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
-                        _state = VideoState.HBlank;
                         RenderScanline();
+
+                        _state = VideoState.HBlank;
                         RunStateMachine();
                     });
-
                     break;
 
                 case VideoState.HBlank:
                     _currentEvent = _system.Scheduler.Schedule(_hBlankTimeNsec, (skew, context) =>
                     {
                         _scanLine++;
-                        if (_lineCounter > 0) _lineCounter--;
-
                         if (_scanLine > _lastVisibleScanLine)
                         {
-                            // Usually the microcode drives vertical blanking through
-                            // the control register; but during bootup it sometimes lets
-                            // the display run free, ignoring Vblank, but setting the
-                            // Enable bit so that memory refresh happens.  Here we just
-                            // force the state change so the display doesn't appear to
-                            // freeze up...
-                            _state = VideoState.VBlankScanline;
-                            _system.Display.Refresh();
-                            _scanLine = 0;  // argh
+                            // Off the end of the visible field; tell the Display
+                            // to go render the frame, but rate limit the refresh
+                            // in case the microcode is ignoring interrupts (so
+                            // the emulator doesn't go bonkers).
+                            if (_scanLine % PERQ_DISPLAYHEIGHT == 0)
+                                _system.Display.Refresh();
+                        }
+
+                        // A bit of hackery: if the line count has gone to zero AND
+                        // it was non-zero to start with, return to Idle and wait
+                        // for the microcode to set up the next band (which should
+                        // be the first of the VBlank bands).  However, at boot-up
+                        // when things are running wild, just loop back to draw
+                        // another line (which RenderLine will clip to the visible
+                        // range).  This is all a bit cheesy.
+                        if (_lineCounter > 0) _lineCounter--;
+
+                        if (_lineCounter == 0 && _lineCounterInit > 0)
+                        {
+                            _state = VideoState.Idle;
                         }
                         else
                         {
                             _state = VideoState.VisibleScanline;
                         }
-
                         RunStateMachine();
                     });
                     break;
@@ -264,11 +299,18 @@ namespace PERQemu.Display
                     {
                         if (_lineCounter > 0) _lineCounter--;
 
+                        // If we're at the end of the vertical blanking interval,
+                        // UpdateSignals() will raise the line counter interrupt.
+                        // We just return to Idle and wait for the microcode to
+                        // enable the next band (2nd Vblank or back to Visible).
                         if (_lineCounter == 0)
                         {
-                            _state = VideoState.VisibleScanline;
+                            _state = VideoState.Idle;
                         }
-
+                        else
+                        {
+                            _state = VideoState.VBlankScanline;
+                        }
                         RunStateMachine();
                     });
                     break;
@@ -320,26 +362,25 @@ namespace PERQemu.Display
             get { return (_videoStatus & StatusRegister.EnableParityInterrupts) != StatusRegister.EnableParityInterrupts; }
         }
 
-        private byte[] _scanlineData = new byte[PERQ_DISPLAYWIDTH_IN_WORDS * 2];
-        private byte[] _cursorData = new byte[8];
+        // debug
+        public void Status()
+        {
+            Console.WriteLine("_lineCounterInit={0}, count={1} overflow={2}",
+                              _lineCounterInit, _lineCounter, _lineCountOverflow);
+            Console.WriteLine("_scanline={0}, _state={1}, crt={2}",
+                              _scanLine, _state, _crtSignals);
+        }
 
         /// <summary>
         /// Renders one video scanline, mixing in the cursor image when enabled.  
         /// </summary>
         /// <remarks>
-        /// The PERQ video driver runs free when the microcode is ignoring video
-        /// interrupts, producing a visual display of a rolling retrace across the
-        /// entire height of the tube.  We clip the current _scanLine to the
-        /// visible range and render something so the display doesn't appear to
-        /// be frozen...  If the cursor is enabled for this line, we apply the
-        /// current cursor function and mix the image in before shipping the full
-        /// scanline off to the display driver.  While we still fetch words from
-        /// memory, we process the scan line a byte at a time; this eliminates the
-        /// need for funky byte alignment when mixing in the cursor.
+        /// Clips the current _scanLine to the visible range.  Applies the current
+        /// cursor function and ships the scanline off to the display driver.
         /// </remarks>
         public void RenderScanline()
         {
-            if (!DisplayEnabled) return;
+            //if (!DisplayEnabled) return;
 
             int renderLine = _scanLine;
 
@@ -348,20 +389,14 @@ namespace PERQemu.Display
                 renderLine = _scanLine % PERQ_DISPLAYHEIGHT;
             }
 
-            // Set the start of this scanline, offset from start of display
-            int displayAddress = _displayAddress + (renderLine * PERQ_DISPLAYWIDTH_IN_WORDS);
-            int screenByte = 0;
-
             if (CursorEnabled)
             {
-                // Calc the starting address of this line of cursor data
-                int cursorAddress = _cursorAddress + (_cursorY * 4);
-                _cursorY++;
+                // Set the start of this scanline, offset from start of display
+                int dispAddress = _displayAddress + (renderLine * PERQ_DISPLAYWIDTH_IN_WORDS);
+                int dispByte = 0;
 
-                //Console.Title = String.Format("Mouse X={0} Y={1}, Curs X={2}, Y={3}, sl={4}",
-                //                              _system.Display.MouseX,
-                //                              _system.Display.MouseY,
-                //                              _cursorX, _cursorY, _scanLine);
+                // Calc the starting address of this line of cursor data
+                int cursorAddress = (_cursorAddress / 4) + _cursorY++;
 
                 // Fetch the quad and break it into 8 bytes for easy mixin'!
                 GetCursorQuad(cursorAddress);
@@ -372,58 +407,64 @@ namespace PERQemu.Display
                 // The "slow" loop mixes in the cursor as we go
                 for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
                 {
-                    var word = TransformDisplayWord(_system.Memory.FetchWord(displayAddress + w));
+                    var word = TransformDisplayWord(_system.Memory.FetchWord(dispAddress + w));
 
                     // First the high byte...
-                    if (screenByte >= cursorStartByte && screenByte < cursorStartByte + 8)
+                    if (dispByte >= cursorStartByte && dispByte < cursorStartByte + 8)
                     {
-                        _scanlineData[screenByte++] = TransformCursorByte((byte)((word & 0xff00) >> 8),
+                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)((word & 0xff00) >> 8),
                                                                           _cursorData[cursByte++]);
                     }
                     else
                     {
-                        _scanlineData[screenByte++] = (byte)((word & 0xff00) >> 8);
+                        _scanlineData.Bytes[dispByte++] = (byte)((word & 0xff00) >> 8);
                     }
 
                     // Now the low byte
-                    if (screenByte >= cursorStartByte && screenByte < cursorStartByte + 8)
+                    if (dispByte >= cursorStartByte && dispByte < cursorStartByte + 8)
                     {
-                        _scanlineData[screenByte++] = TransformCursorByte((byte)(word & 0x00ff),
+                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)(word & 0x00ff),
                                                                           _cursorData[cursByte++]);
                     }
                     else
                     {
-                        _scanlineData[screenByte++] = (byte)(word & 0x00ff);
+                        _scanlineData.Bytes[dispByte++] = (byte)(word & 0x00ff);
                     }
                 }
             }
             else
             {
-                // The "fast" loop just pushes the display buffer
-                for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
+                // Set the start of this scanline, offset from start of display (by quads)
+                int dispAddress = (_displayAddress / 4) + (renderLine * PERQ_DISPLAYWIDTH_IN_QUADS);
+
+                // The "fast" loop gobbles up quad words
+                for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_QUADS; w++)
                 {
-                    var word = TransformDisplayWord(_system.Memory.FetchWord(displayAddress + w));
-                    _scanlineData[screenByte++] = (byte)((word & 0xff00) >> 8);  // high byte
-                    _scanlineData[screenByte++] = (byte)(word & 0x00ff);         // low byte
+                    _scanlineData.Quads[w] = TransformDisplayQuad(_system.Memory.FetchQuad(dispAddress + w));
                 }
             }
 
             // Ship it!
-            _system.Display.DrawScanline(renderLine, _scanlineData);
+            _system.Display.DrawScanline(renderLine, _scanlineData.Bytes);
         }
 
         /// <summary>
-        /// Retrieve a quad word and break it into an 8-byte array.  Like
-        /// _scanlineData, reuse _cursorData[] to avoid memory allocation overhead.
+        /// Retrieve a quad word from memory and break it into an 8-byte array.
         /// </summary>
+        /// <remarks>
+        /// Like _scanlineData, reuse _cursorData[] to avoid memory allocation
+        /// overhead.  Writes the bytes out in reverse order so we can just go
+        /// fast and shift things.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void GetCursorQuad(int addr)
         {
-            for (int w = 0; w < 4; w++)
+            var quad = _system.Memory.FetchQuad(addr);
+
+            for (int b = 0; b < 8; b++)
             {
-                var word = _system.Memory.FetchWord(addr + w);
-                _cursorData[(w * 2)] = (byte)((word & 0xff00) >> 8);
-                _cursorData[(w * 2) + 1] = (byte)(word & 0x00ff);
+                _cursorData[b] = (byte)(quad & 0xff);
+                quad = quad >> 8;
             }
         }
 
@@ -440,23 +481,29 @@ namespace PERQemu.Display
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort TransformDisplayWord(ushort word)
         {
+            return (ushort)(TransformDisplayQuad(word) & 0xffff);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ulong TransformDisplayQuad(ulong quad)
+        {
             switch (_cursorFunc)
             {
                 case CursorFunction.CTInvBlackHole:
                 case CursorFunction.CTWhite:
-                    return 0x0000;
+                    return 0;
 
                 case CursorFunction.CTCursorOnly:
                 case CursorFunction.CTBlackHole:
-                    return 0xffff;
+                    return 0xffffffffffffffff;
 
                 case CursorFunction.CTNormal:
                 case CursorFunction.CTCursCompl:
-                    return word;
+                    return quad;
 
                 case CursorFunction.CTInvert:
                 case CursorFunction.CTInvCursCompl:
-                    return (ushort)~word;
+                    return ~quad;
 
                 default:
                     throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
@@ -467,53 +514,29 @@ namespace PERQemu.Display
         /// Transforms the cursor byte based on the current Cursor function and display byte.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte TransformCursorByte(byte dispWord, byte cursWord)
+        private byte TransformCursorByte(byte dispByte, byte cursByte)
         {
-            /*
-                From io_others.pas:
-        		CursFunction = (CTWhite, CTCursorOnly, CTBlackHole, CTInvBlackHole,
-        						CTNormal, CTInvert, CTCursCompl, CTInvCursCompl);
-        						
-                From the POS Programming Examples:
-                "The even functions have zeroes in memory represented as white and
-                ones as black (this is the default: white background with black
-                characters).  Odd functions have zeroes represented as black and
-                ones as white.  The functions are as follows (inverted means screen
-                interpretation; zeroes black, ones white):
-                
-                CTWhite:        Screen picture is not shown, only cursor.
-                CTCursorOnly:   Same as CTWhite, only inverted.
-                CTBlackHole:    This function doesn't work.
-                CTInvBlackHole: This function doesn't work either.
-                CTNormal:       Ones in the cursor are black, zeros allow the
-                                screen to show through.
-                CTInvert:       Same as CTNormal only inverted.
-                CTCursCompl:    Ones in the cursor are XORed with screen,
-                                zeros allow screen to show through.
-                CTInvCursCompl: Same as CTCursCompl only inverted."
-            */
-
             switch (_cursorFunc)
             {
                 case CursorFunction.CTInvBlackHole:
                 case CursorFunction.CTWhite:
-                    return (byte)cursWord;
+                    return (byte)cursByte;
 
                 case CursorFunction.CTBlackHole:
                 case CursorFunction.CTCursorOnly:
-                    return (byte)~cursWord;
+                    return (byte)~cursByte;
 
                 case CursorFunction.CTNormal:
-                    return (byte)(cursWord | dispWord);
+                    return (byte)(cursByte | dispByte);
 
                 case CursorFunction.CTInvert:
-                    return (byte)(~cursWord | ~dispWord);
+                    return (byte)(~cursByte & dispByte);
 
                 case CursorFunction.CTCursCompl:
-                    return (byte)(cursWord ^ dispWord);
+                    return (byte)(cursByte ^ dispByte);
 
                 case CursorFunction.CTInvCursCompl:
-                    return (byte)(~cursWord ^ ~dispWord);
+                    return (byte)(~cursByte ^ ~dispByte);
 
                 default:
                     throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
@@ -558,7 +581,7 @@ namespace PERQemu.Display
             VisibleScanline = 0,
             HBlank,
             VBlankScanline,
-            Idle,
+            Idle
         }
 
         private enum CursorFunction
@@ -586,54 +609,20 @@ namespace PERQemu.Display
         };
 
         /// <summary>
-        /// Various handy portrait display constants
+        /// Various handy portrait display constants -- for now...
         /// </summary>
         public static int PERQ_DISPLAYWIDTH = 768;
+        public static int PERQ_DISPLAYWIDTH_IN_QUADS = 12;
         public static int PERQ_DISPLAYWIDTH_IN_WORDS = 48;
         public static int PERQ_DISPLAYWIDTH_IN_BYTES = 96;
         public static int PERQ_DISPLAYHEIGHT = 1024;
 
-        /// <summary>
-        /// Elapsed cycles, used for display timing.
-        /// These are based on the below information, rounded to the
-        /// nearest cycle (so they're not 100% accurate)
-        ///
-        /// Vertical:
-        /// 1024 lines displayed
-        /// 43 lines blanking
-        /// ----
-        /// 1067 lines
-        ///
-        /// Horizontal - Portrait montior
-        /// 768 pixels displayed
-        /// 244 blank
-        /// -----
-        /// 1012 pixel clocks
-        ///
-        /// Horizontal - landscape monitor (not yet implemented)
-        /// 1280 pixels displayed
-        /// 422 blank
-        /// -----
-        /// 1702 pixel clocks
-        ///
-        /// Perq master clock = 5.89Mhz = ~170ns.  For emulation purposes, this is the rate that
-        /// dictates the timescale for our video timings, so:
-        /// 
-        /// Portrait pixel clock = 64.78824 MHz = 15.44ns -> ~11:1 clock ratio = 92 cpu clocks/line
-        /// Visible part of each scan line = 768 bit times * 15.44ns / 11 = ~70 pixel clocks
-        /// Horizontal retrace per scan line = 244 bit times * 15.44ns / 11 = ~22 pixel clocks
-        ///
-        /// Landscape pixel clock = 108.962 MHz = 9.1ns -> ~18.5:1 clock ratio = 92 cpu clocks/line!
-        /// Visible part of scan line = 1280 bit times * 9.1ns / 18.5 = ~70 pixel clocks
-        /// Horizontal retrace = 422 bit times * 9.1ns / 18.5 = ~22 pixel clocks
-        /// 
-        /// Vertical retrace is accounted for by the microcode setting up two bands totalling 43 lines.
-        /// Because these are part of the normal interrupt service routine, we don't need to track our
-        /// own vertical retrace timer; _vBlankCycles has been removed.
-        /// </summary>
         private readonly ulong _scanLineTimeNsec = 70 * 170;    // should be _system.Scheduler.TimeStepNsec
         private readonly ulong _hBlankTimeNsec = 22 * 170;      // in case we want to overclock ;-)
         private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
+
+        private ScanLineBuffer _scanlineData;
+        private byte[] _cursorData;
 
         private VideoState _state;
         private Event _currentEvent;
@@ -643,13 +632,13 @@ namespace PERQemu.Display
 
         // IO registers
         private int _lineCounter;
-        private CRTSignals _crtSignals;
-        private StatusRegister _videoStatus;
         private int _displayAddress;
         private int _cursorAddress;
         private int _cursorX;
         private int _cursorY;
         private CursorFunction _cursorFunc;
+        private CRTSignals _crtSignals;
+        private StatusRegister _videoStatus;
 
         private PERQSystem _system;
     }

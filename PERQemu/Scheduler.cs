@@ -105,8 +105,6 @@ namespace PERQemu
         /// <summary>
         /// Add a new event to the schedule.
         /// </summary>
-        /// <param name="e"></param>
-        /// <returns></returns>
         public Event Schedule(ulong timestampNsec, object context, SchedulerEventCallback callback)
         {
 
@@ -130,6 +128,12 @@ namespace PERQemu
             {
                 _schedule.Remove(e);
             }
+        }
+
+        public void DumpEvents()
+        {
+            System.Console.WriteLine("Time is {0}.  Queue:", _currentTimeNsec);
+            _schedule.Dump();
         }
 
         public ulong TimeStepNsec => _timeStepNsec;
@@ -180,10 +184,10 @@ namespace PERQemu
 
             //
             // Do a linear search to find the place to put this in.
-            // Since we maintain a sorted list with every insertion we only need to find the first entry
-            // that the new entry is earlier (or equal) to.
-            // This will likely be adequate as the queue should never get incredibly deep; a binary
-            // search may be more performant if this is not the case.
+            // Since we maintain a sorted list with every insertion we only needy
+            // to find the first entr that the new entry is earlier (or equal) to.
+            // This will likely be adequate as the queue should never get incredibly
+            // deep; a binary search may be more performant if this is not the case.
             //
             LinkedListNode<Event> current = _queue.First;
             while (current != null)
@@ -203,7 +207,7 @@ namespace PERQemu
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Event Pop()
-        {           
+        {
             Event e = _top;
             _queue.RemoveFirst();
 
@@ -218,7 +222,18 @@ namespace PERQemu
             {
                 _queue.Remove(e);
                 _top = _queue.First != null ? _queue.First.Value : null;
-            }           
+            }
+        }
+
+        // debugging
+        public void Dump()
+        {
+            foreach (var e in _queue)
+            {
+                System.Console.WriteLine("event {0} at {1}",
+                                         e.EventCallback.Method.Name,
+                                         e.TimestampNsec);
+            }
         }
 
         private LinkedList<Event> _queue;

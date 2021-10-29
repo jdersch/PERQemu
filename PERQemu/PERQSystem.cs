@@ -322,6 +322,14 @@ namespace PERQemu
 
         #region Debugger Commands
 
+        [DebugFunction("dump scheduler queue", "")]
+        private void DumpScheduler()
+        {
+            _display.Status();
+            _videoController.Status();
+            _scheduler.DumpEvents();
+        }
+
         [DebugFunction("set rs232", "Configures the emulated serial port to use the specified device")]
         private void SetSerialPort(string devName)
         {

@@ -54,6 +54,9 @@ namespace PERQemu.Display
             _textureLock = new ReaderWriterLockSlim();
 
             _stopwatch = new Stopwatch();
+            _frame = 0;
+            _prevClock = 0;
+
             _keymap = new KeyboardMap();
 
             _clickFlag = false;
@@ -67,7 +70,7 @@ namespace PERQemu.Display
         /// </summary>
         public void Refresh()
         {
-            SDL.SDL_PushEvent(ref _renderEvent);        // ref?
+            SDL.SDL_PushEvent(ref _renderEvent);
         }
 
         /// <summary>
@@ -82,7 +85,7 @@ namespace PERQemu.Display
             {
                 for (int bit = 7; bit >= 0; bit--)
                 {
-                    _32bppDisplayBuffer[rgbIndex++] = (int)_bitToPixel[scanlineData[i], bit];
+                    _32bppDisplayBuffer[rgbIndex++] = _bitToPixel[scanlineData[i], bit];
                 }
             }
         }
@@ -119,8 +122,9 @@ namespace PERQemu.Display
         public void SDLMessageLoop()
         {
             // Schedule an event to poll for events at REASONABLE intervals
-            // let's try 100 per second? (10ms) (should be > 60 for 60fps :-)
-            _sdlPumpEvent = _system.Scheduler.Schedule(10 * Conversion.MsecToNsec, (skew, context) =>
+            // let's try 60 per second? At least for now. Increase it if my
+            // poor old Mac ever comes close to 60fps :-)
+            _sdlPumpEvent = _system.Scheduler.Schedule((ulong)(16.6667 * Conversion.MsecToNsec), (skew, context) =>
             {
                 SDL.SDL_Event e;
 
@@ -169,6 +173,14 @@ namespace PERQemu.Display
 
                 SDL.SDL_Quit();
             }
+        }
+
+        public void Status()
+        {
+            Console.WriteLine("_sdlRunning={0}, _sdlPumpEvent={1}",
+                              _sdlRunning, _sdlPumpEvent.EventCallback.ToString());
+            Console.WriteLine("_frame={0}, _mouseX,Y={1},{2}",
+                             _frame, _mouseX, _mouseY);
         }
 
         private void SDLMessageHandler(SDL.SDL_Event e)
@@ -242,20 +254,25 @@ namespace PERQemu.Display
             // Update FPS count
             _frame++;
 
-            if (_frame > 240)
+            if (_frame > 180)
             {
                 UpdateFPS(_frame);
                 _frame = 0;
             }
         }
 
-        private void UpdateFPS(double frames)
+        private void UpdateFPS(long frames)
         {
             _stopwatch.Stop();
-            double fps = (frames / (double)_stopwatch.ElapsedMilliseconds) * 1000.0;
-            long inst = ((long)_system.CPU.Clocks / _stopwatch.ElapsedMilliseconds) * 1000;
-            SDL.SDL_SetWindowTitle(_sdlWindow, String.Format("PERQ - {0:N2} frames / sec, {1} clocks", fps, inst));
+            var elapsed = _stopwatch.ElapsedMilliseconds;
             _stopwatch.Restart();
+
+            double inst = _system.CPU.Clocks - _prevClock;
+            double fps = (frames * 1000.0) / elapsed;
+            double ns = (elapsed / inst) * 1000000.0;
+            _prevClock = _system.CPU.Clocks;
+
+            SDL.SDL_SetWindowTitle(_sdlWindow, String.Format("PERQ - {0:N2} frames / sec, {1:N2}ns / cycle", fps, ns));
         }
 
         /// <summary>
@@ -284,7 +301,7 @@ namespace PERQemu.Display
                 SDL.SDL_WINDOWPOS_UNDEFINED,
                 _displayWidth,
                 _displayHeight,
-                0);     // SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE); ugh
+                0);     // SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE); FIXME ugh, on a 1080p display SDL shrnks the window slightly to avoid the Dock if it's exposed so make this host specific?
 
             if (_sdlWindow == IntPtr.Zero)
             {
@@ -294,7 +311,7 @@ namespace PERQemu.Display
             _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
             if (_sdlRenderer == IntPtr.Zero)
             {
-                Console.WriteLine("Could not create accelerated renderer?");
+                Console.WriteLine("Could not create accelerated renderer?");    // FIXME fyi, debug, remove me
 
                 // Fall back to software
                 _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
@@ -558,17 +575,11 @@ namespace PERQemu.Display
         }
 
         /// <summary>
-        /// A cheesy hack to see if we can speed up the pixel operations.  As
-        /// each scanline is drawn, we have to expand the 1bpp PERQ data into
-        /// stupidly bloated 32bpp color pixels -- 8bpp modes in SDL2 are all
-        /// basically broken and useless -- so rather than have to shift and
-        /// mask every bit and conditionally set every pixel on every line at
-        /// 60fps, we precompute all that ONCE at startup and then just look
-        /// up and copy 8 values in a tight loop.  Every nanosecond not wasted
-        /// on that kind of overhead helps eke out a tiny bit more emulator
-        /// performance.  And hell, we're already wasting a massive amount of
-        /// memory and blasting 300MB/sec at the damned display, so what the
-        /// hell.  God I hate "modern" computing.
+        /// A hack to speed up pixel operations.  As each scanline is drawn,
+        /// we have to expand the 1bpp PERQ data into SDL's 32bpp color pixels.
+        /// Rather than shift, mask and conditionally set every pixel on every
+        /// line at 60fps, we precompute all that ONCE at startup and then just
+        /// look up and copy 8 values in a tight loop.  Every nanosecond counts!
         /// </summary>
         private static void MakePixelExpansionTable()
         {
@@ -578,30 +589,25 @@ namespace PERQemu.Display
             {
                 for (int b = 0; b < 8; b++)
                 {
-                    // TODO: Clinton P4 phosphor color? :-)
-                    uint color = (i & (1 << b)) == 0 ? 0xffffffff : 0xff000000;
+                    // TODO: Clinton P104 phosphor color? :-)
+                    uint color = (i & (1 << b)) == 0 ? 0xfffeefff : 0xff000000;
                     _bitToPixel[i, b] = (int)color;
                 }
             }
         }
 
         //
-        // Display data
-        //
-
-        private delegate void DisplayDelegate();
-        private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
-
         // Display
+        //
         private const int _displayWidth = 768;      // TODO: make configurable!
         private const int _displayHeight = 1024;    // Same for portrait, landscape
 
-        //
-        // Buffer for rendering pixels.  SDL doesn't support 1bpp pixel formats, so to keep things simple we use
-        // an array of ints and a 32bpp format.  What's a few extra bits between friends.
-        //
+        // Buffer for rendering pixels.  SDL doesn't support 1bpp pixel formats,
+        // so to keep things simple we use an array of ints and a 32bpp format.
+        // What's a few extra megabytes between friends.
         private int[] _32bppDisplayBuffer = new int[(_displayWidth * _displayHeight)];
 
+        // Table of precomputed pixel expansions
         private static int[,] _bitToPixel;
 
         // Mouse
@@ -624,6 +630,7 @@ namespace PERQemu.Display
         // Frame count
         private Stopwatch _stopwatch;
         private long _frame;
+        private ulong _prevClock;
 
         //
         // SDL
@@ -638,6 +645,9 @@ namespace PERQemu.Display
         // Events and stuff
         private UInt32 _renderEventType;
         private SDL.SDL_Event _renderEvent;
+
+        private delegate void DisplayDelegate();
+        private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
 
         private Event _sdlPumpEvent;
 

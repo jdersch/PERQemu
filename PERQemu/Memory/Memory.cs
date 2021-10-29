@@ -17,8 +17,8 @@
 //
 
 using System;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
-using PERQemu.Processor;
 
 namespace PERQemu.Memory
 {
@@ -37,6 +37,27 @@ namespace PERQemu.Memory
     }
 
     /// <summary>
+    /// Main memory array, BK style.
+    /// </summary>
+    /// <remarks>
+    /// C# purists may howl, but testing on my "old" 8-core, 2.8Ghz Mac
+    /// under 32-bit Mono showed a 30% speed increase when shifting video
+    /// data out as longs, and now that we've pretty much been freed/forced
+    /// to update PERQemu to run on 64-bit platforms (on later MacOS, at
+    /// any rate) we might as well take advantage.  Word access for normal
+    /// CPU and I/O, Quads for video.  Booyah.
+    /// </remarks>
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct Core
+    {
+        [FieldOffset(0)]
+        public ulong[] Quads;
+
+        [FieldOffset(0)]
+        public ushort[] Words;
+    }
+
+    /// <summary>
     /// Implements the PERQ's Memory board and memory state machine,
     /// which is also connected to the IO bus.
     /// </summary>
@@ -48,7 +69,9 @@ namespace PERQemu.Memory
             _memSize = sizeInWords;
             _memSizeMask = sizeInWords - 1;
 
-            _memory = new ushort[_memSize];
+            _memory = new Core();
+            _memory.Words = new ushort[_memSize];
+
             _mdiQueue = new MemoryController(this, "MDI");
             _mdoQueue = new MemoryController(this, "MDO");
         }
@@ -73,7 +96,7 @@ namespace PERQemu.Memory
 
         public ushort[] Memory
         {
-            get { return _memory; }
+            get { return _memory.Words; }
         }
 
         public ushort MDI
@@ -247,7 +270,7 @@ namespace PERQemu.Memory
             Trace.Log(LogType.MemoryState,
                       "\nMemory: Requested {0} cycle in T{1} addr={2:x6}",
                       cycleType, _Tstate, address);
-            
+
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
             // but the queue controller will have stalled the processor until the correct
@@ -267,13 +290,27 @@ namespace PERQemu.Memory
 #endif
 
         /// <summary>
+        /// Fetches one quadword from memory (immediate).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ulong FetchQuad(int address)
+        {
+            // Fast and furious: does not clip or bounds check!
+            ulong data = _memory.Quads[address];
+
+            // Buuuuut... to be useful, it has to be byte swapped.
+            // Welp, there goes our salvage, guys.
+            return ((data & 0x00ff00ff00ff00ff) << 8) | ((data & 0xff00ff00ff00ff00) >> 8);
+        }
+
+        /// <summary>
         /// Fetches one word from memory (immediate).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort FetchWord(int address)
         {
             // Clip address to memsize range and read
-            ushort data = _memory[address & _memSizeMask];
+            ushort data = _memory.Words[address & _memSizeMask];
 
             Trace.Log(LogType.MemoryFetch, "Memory: Fetch addr {0:x6} --> {1:x4}",
                       address & _memSizeMask, data);
@@ -291,7 +328,7 @@ namespace PERQemu.Memory
                       address & _memSizeMask, data);
 
             // Clip address to memsize range and write
-            _memory[address & _memSizeMask] = data;
+            _memory.Words[address & _memSizeMask] = data;
         }
 
         /// <summary>
@@ -331,8 +368,10 @@ namespace PERQemu.Memory
         //
         #endregion
 
+
         private MemoryController _mdiQueue;		// Queue for Fetch requests
         private MemoryController _mdoQueue;     // Queue for Store requests
+        private Core _memory;
 
         private int _memSize;
         private int _memSizeMask;
@@ -342,8 +381,6 @@ namespace PERQemu.Memory
         private ushort _mdi;
         private bool _wait;
         private bool _hold;
-
-        private ushort[] _memory;   // todo: bring sexy back: MEMCORE!!
 
         private PERQSystem _system;
     }

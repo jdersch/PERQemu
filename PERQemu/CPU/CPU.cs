@@ -18,6 +18,7 @@
 
 using System;
 using System.Text;
+using System.Threading;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -37,6 +38,7 @@ namespace PERQemu.Processor
             // It's also only relevant to the PERQ-1.
         }
     }
+
 
     /// <summary>
     /// PERQ hardware interrupts, listed in order of priority.
@@ -68,7 +70,6 @@ namespace PERQemu.Processor
 
         public CPU(PERQSystem system)
         {
-
             _system = system;
             _memory = _system.Memory;
 
@@ -84,6 +85,8 @@ namespace PERQemu.Processor
             _rasterOp = new RasterOp(_memory);
 
             _mqShifter = new Shifter();
+
+            _intLock = new object();
 
             //Reset();
         }
@@ -294,7 +297,6 @@ namespace PERQemu.Processor
 
             // Jump to where we need to go...
             _usequencer.DispatchJump(uOp);
-
         }
 
 
@@ -466,7 +468,10 @@ namespace PERQemu.Processor
         [DebugFunction("raise interrupt")]
         public void RaiseInterrupt(InterruptType i)
         {
-            _interruptFlag |= i;
+            lock (_intLock)
+            {
+                _interruptFlag |= i;
+            }
 
             Trace.Log(LogType.Interrupt, "Interrupt {0} raised, active now {1}", i, _interruptFlag);
         }
@@ -477,11 +482,17 @@ namespace PERQemu.Processor
         [DebugFunction("clear interrupt")]
         public void ClearInterrupt(InterruptType i)
         {
+            lock (_intLock)
+            {
+                _interruptFlag &= ~i;
+            }
+
+#if TRACING_ENABLED
             if ((_interruptFlag & ~i) != _interruptFlag)
             {
                 Trace.Log(LogType.Interrupt, "Interrupt {0} cleared, active now {1}", i, _interruptFlag & ~i);
             }
-            _interruptFlag &= ~i;
+#endif
         }
 
         /// <summary>
@@ -1356,6 +1367,7 @@ namespace PERQemu.Processor
 
         // Interrupt flags
         protected InterruptType _interruptFlag;
+        private object _intLock;
 
         //
         // Housekeeping
