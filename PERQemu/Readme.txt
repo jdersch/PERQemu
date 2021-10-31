@@ -26,9 +26,11 @@
    
     Verified that this version runs on MacOS X 10.11 (Yosemite) AND on
     10.13 (High Sierra).  These are the newest versions I have available
-    for testing.  They run in both 32- and 64-bit mode!  Absolutely no idea
-    if they work on 10.14+, and I haven't tried to fire up the Linux VM in
-    quite some time... will get to that when we get closer to wrapping up
+    for testing.  They run in both 32- and 64-bit mode!  The horrible Mac
+    keyboard hack is no longer required, which is good since we can't
+    support the old Mono 4.6.1 runtime anymore. :-/  Absolutely no idea
+    if anything runs on 10.14+, and I haven't tried to fire up the Linux VM
+    in quite some time... will get to that when we get closer to wrapping up
     an actual release!
 
     On my "ancient" 8-core MacPro 3,1 I'm getting 30fps; with the display
