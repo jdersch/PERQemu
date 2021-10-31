@@ -210,9 +210,9 @@
     <Compile Include="Emulator\Scheduler.cs" />
     <Compile Include="Emulator\Memory\VideoController.cs" />
     <Compile Include="UI\SDL\Display.cs" />
-    <Compile Include="Executor\Conversion.cs" />
-    <Compile Include="Executor\Paths.cs" />
-    <Compile Include="Executor\Trace.cs" />
+    <Compile Include="Controller\Conversion.cs" />
+    <Compile Include="Controller\Paths.cs" />
+    <Compile Include="Controller\Trace.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -587,6 +587,15 @@
     <None Include="Docs\Video.txt" />
     <None Include="Program.cs" />
     <None Include="Emulator\CPU\PERQ24A.cs" />
+    <None Include="Controller\ExecCommands.cs" />
+    <None Include="Controller\ExecutionController.cs" />
+    <None Include="Controller\Settings.cs" />
+    <None Include="Controller\Log.cs" />
+    <None Include="Docs\PERQ_Chart.jpg" />
+    <None Include="Configurator\ConfigCommands.cs" />
+    <None Include="Configurator\ConfigTypes.cs" />
+    <None Include="Configurator\Configuration.cs" />
+    <None Include="Configurator\Configurator.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
@@ -623,7 +632,7 @@
     <Folder Include="Emulator\PhysicalDisk\" />
     <Folder Include="Configurator\" />
     <Folder Include="UI\SDL\" />
-    <Folder Include="Executor\" />
+    <Folder Include="Controller\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
