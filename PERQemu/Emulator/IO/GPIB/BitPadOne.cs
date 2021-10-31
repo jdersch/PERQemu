@@ -51,7 +51,7 @@ namespace PERQemu.IO.GPIB
             // than the older IOB @ 2.45Mhz, so the IO "fudge" might change.  This
             // is very silly.)
             //
-            _sampleRate = (CPU.Frequency / 40) / CPU.IOFudge;
+            _sampleRate = 18382;    // (CPU.Frequency / 40) / CPU.IOFudge; (constants removed)
 
             Reset();
         }

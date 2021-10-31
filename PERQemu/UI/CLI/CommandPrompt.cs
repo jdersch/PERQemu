@@ -190,10 +190,12 @@ namespace PERQemu.UI
             return _input;
         }
 
+
         private void DisplayPrompt()
         {
             Console.Write(_prompt + "> ");
         }
+
 
         private void UpdateDisplay()
         {
@@ -240,6 +242,7 @@ namespace PERQemu.UI
 
             _lastInputLength = _input.Length;
         }
+
 
         private bool InsideString()
         {
@@ -407,7 +410,9 @@ namespace PERQemu.UI
             // If not running silent and we have completions, spit 'em out
             if (!silent && result.Completions.Count > 0)
             {
-                PrintCompletions(result.Completions);
+                Console.WriteLine();
+                Console.WriteLine("Possible completions are:");
+                Columnify(result.Completions);
             }
 
             // Did our input line change?
@@ -429,29 +434,48 @@ namespace PERQemu.UI
             return changed;
         }
 
-        private void PrintCompletions(List<string> completions) // todo use one "columnify" function
+        /// <summary>
+        /// Print a nice columnar list of (reasonably short) strings.
+        /// </summary>
+        /// <param name="items">Strings to print</param>
+        /// <param name="leftCol">Left indent</param>
+        /// <param name="tabWidth">Column width</param>
+        public void Columnify(List<string> items, int leftCol = 4, int tabWidth = 15)
         {
-            const int width = 15;    // Simulated tab stop
+            Console.Write(" ".PadLeft(leftCol));
+            var col = leftCol;
 
-            Console.WriteLine();
-            Console.WriteLine("Possible completions are:");
-            Console.Write("    ");
-            int col = 4;
-
-            foreach (var c in completions)
+            foreach (var i in items)
             {
-                if (col + width > Console.BufferWidth)
+                if (col + tabWidth > Console.BufferWidth)
                 {
                     Console.WriteLine();
-                    Console.Write("    ");
-                    col = 4;
+                    Console.Write(" ".PadLeft(leftCol));
+                    col = leftCol;
                 }
-                Console.Write(c.PadRight(width));
-                col += width;
+
+                // If you want to print long strings, pass a wider tabWidth.
+                // But catch the occasional edge case and try to make it pretty.
+                if (i.Length > tabWidth)
+                {
+                    var extra = i.Length % tabWidth;
+
+                    Console.Write(i);
+                    col += i.Length;
+
+                    if (col + extra < Console.BufferWidth)
+                    {
+                        Console.Write(" ".PadRight(extra));
+                        col += extra;
+                    }
+                }
+                else
+                {
+                    Console.Write(i.PadRight(tabWidth));
+                    col += tabWidth;
+                }
             }
             Console.WriteLine();
-
-            DisplayPrompt();
         }
 
 

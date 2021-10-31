@@ -56,10 +56,10 @@ namespace PERQemu.UI
 
         public void ExecuteScript(string scriptFile, bool verbose = false)
         {
-            Console.WriteLine("Reading from '{0}'...", scriptFile);
-
             using (StreamReader sr = new StreamReader(scriptFile))
             {
+                Console.WriteLine("Reading from '{0}'...", scriptFile);
+
                 while (!sr.EndOfStream)
                 {
                     string line = sr.ReadLine();
@@ -70,13 +70,14 @@ namespace PERQemu.UI
                         ExecuteLine(line);
                     }
                 }
+
+                sr.Close();
             }
         }
 
 
         public void ExecuteLine(string line)
         {
-
             if (line.StartsWith("#", StringComparison.CurrentCulture))
             {
                 // Comments start with "#", just ignore them

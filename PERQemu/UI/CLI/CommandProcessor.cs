@@ -124,21 +124,43 @@ namespace PERQemu
         // Basic commands
         //
 
-        [Command("help", "Show PERQolator help.")]
+        [Command("about", "About PERQemu")]
+        private void About()
+        {
+            EntryPoint.PrintBanner();
+        }
+
+        [Command("help", "Show PERQemu help.")]
         private void Help()
         {
-            // Dump out a text file?  For now, blat this out.
-            Console.WriteLine("This is PERQolator, a PERQ emulator.  Commands may be entered through");
-            Console.WriteLine("the command line, or a graphical interface may be invoked by typing");
-            Console.WriteLine("'gui' or starting PERQolator from the shell with the '-g' switch.");
+            // For now, all help is just inline.  Eventually a guide or
+            // even (gasp!) a web site should provide more in-depth info.
+            // we can easily break this down to be more useful:
+            //      help            - general overview 
+            //      help commands   - cli usage (below)
+            //      help media      - working with disks and floppies (and tapes someday)
+            //      help emulator   - how to set up and run the emulated perq
+            // and so on.
+            // each subsystem should have its own help too.
+            //      configure help  - how to load, modify and save a perq config
+            //      settings help   - what user preferences can be set
+            //      debug help      - in the debug version, specific debugger info
+            // etc.
+            Console.WriteLine("Type 'commands' at the prompt to see which commands are available.");
+            Console.WriteLine("Some commands may accept optional arguments or may require them; press");
+            Console.WriteLine("the TAB key at any point to see a list of possible completions for the");
+            Console.WriteLine("current input word, or preview the next argument expected.  Pressing");
+            Console.WriteLine("the SPACE BAR or TAB key will expand the current input up to the longest");
+            Console.WriteLine("unambiguous match.");
             Console.WriteLine();
-            Console.WriteLine("Type 'commands' to see which commands are available.  Press the TAB key");
-            Console.WriteLine("or SPACE BAR at any time to see a list of completions.  Use the arrow");
-            Console.WriteLine("keys to retrieve and edit previous command lines.");
+            Console.WriteLine("String arguments may be a single word, or must be surrounded by quotes");
+            Console.WriteLine("if they contain spaces.  Numeric arguments may be specified in decimal");
+            Console.WriteLine("(the default base), octal, binary, or hex blah blah blah." );
+            Console.WriteLine("Use the arrow keys to retrieve and edit previous command lines.");
             Console.WriteLine();
             Console.WriteLine("For more help, see the User's Guide included with the distribution.");
-            
         }
+
 
         [Command("commands", "Show console commands and their descriptions")]
         public void ShowCommands()
@@ -172,12 +194,6 @@ namespace PERQemu
         private void Done()
         {
             Console.WriteLine("Already at top-level.");
-        }
-
-        [Command("about", "About PERQemu")]
-        private void About()
-        {
-            EntryPoint.PrintBanner();
         }
 
         [Command("exit")]

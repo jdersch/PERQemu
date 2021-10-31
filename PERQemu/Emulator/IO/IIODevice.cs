@@ -1,4 +1,4 @@
-// iiodevice.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// iiodevice.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -23,8 +23,6 @@ namespace PERQemu.IO
         /// <summary>
         /// Indicates whether this IODevice instance handles the given IO port.
         /// </summary>
-        /// <param name="ioPort"></param>
-        /// <returns></returns>
         bool HandlesPort(byte ioPort);
 
         /// <summary>
@@ -40,15 +38,11 @@ namespace PERQemu.IO
         /// <summary>
         /// Does a read from the given port
         /// </summary>
-        /// <param name="ioPort"></param>
-        /// <returns></returns>
         int IORead(byte ioPort);
 
         /// <summary>
         /// Does a write to the given port
         /// </summary>
-        /// <param name="ioPort"></param>
-        /// <param name="value"></param>
         void IOWrite(byte ioPort, int value);
     }
 }

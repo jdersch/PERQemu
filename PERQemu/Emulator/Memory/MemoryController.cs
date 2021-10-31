@@ -1,4 +1,4 @@
-// memorycontroller.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+// memorycontroller.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -19,7 +19,6 @@
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
-using PERQemu.Processor;
 
 namespace PERQemu.Memory
 {
@@ -37,9 +36,6 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-#if DEBUG
-            _reqID = -1;
-#endif
             _startAddr = -1;
             _cycleType = MemoryCycle.None;
             _bookmark = 0;
@@ -48,22 +44,9 @@ namespace PERQemu.Memory
 
         public override string ToString()
         {
-#if DEBUG
-            return String.Format("ID={0} addr={1:x6} cycle={2} bookmark={3} active={4}",
-                                 _reqID, _startAddr, _cycleType, _bookmark, _active);
-#else
             return String.Format("Addr={0:x6} cycle={1} bookmark={2} active={3}",
                                 _startAddr, _cycleType, _bookmark, _active);
-#endif
         }
-
-#if DEBUG
-        public long RequestID
-        {
-            get { return _reqID; }
-            set { _reqID = value; }
-        }
-#endif
 
         public int StartAddress
         {
@@ -89,9 +72,7 @@ namespace PERQemu.Memory
             set { _active = value; }
         }
 
-#if DEBUG
-        private long _reqID;
-#endif
+
         private int _startAddr;
         private MemoryCycle _cycleType;
         private int _bookmark;
@@ -107,10 +88,11 @@ namespace PERQemu.Memory
         Running
     }
 
+
     /// <summary>
-    /// A bookmark value comprises a set of flags, a word index, and next state value.
-    /// These are read from the BKM16 ROM and are consulted each cycle to drive the
-    /// memory state machine.
+    /// A bookmark comprises a set of flags, a word index, and next state value.
+    /// These are read from the BKM16 ROM and are consulted each cycle to drive
+    /// the memory state machine.
     /// </summary>
     public class BookmarkEntry
     {
@@ -137,6 +119,7 @@ namespace PERQemu.Memory
         public int Index;
         public MemoryState NextState;
     }
+
 
     /// <summary>
     /// Object to keep track of the Memory board's input and output queues.
@@ -230,42 +213,21 @@ namespace PERQemu.Memory
                      _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
         }
 
-#if DEBUG
         /// <summary>
-        /// Accept a new memory request (at the bottom of the CPU cycle, after R is
-        /// computed).  Because the CPU now aborts until the correct cycle when issuing
-        /// new memory operations, we simply latch the new request and let the state
-        /// machine mechanism do all the right magic at the next Clock().
+        /// Accept a new memory request (at the bottom of the CPU cycle, after
+        /// R is computed).  Because the CPU now aborts until the correct cycle
+        /// when issuing new memory operations, we simply latch the new request
+        /// and let the state machine do all the right magic at the next Clock().
         /// </summary>
-        public void Request(long id, int startAddr, MemoryCycle cycleType)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Request(int startAddr, MemoryCycle cycleType)
         {
-            if (_pending.Active)
-                Console.WriteLine("{0} queue: ** new Request() when _pending already Active?", _name);
-
-            _pending.RequestID = id;
-            _pending.StartAddress = startAddr & _mem.MemSizeMask;
+            _pending.StartAddress = startAddr;
             _pending.CycleType = cycleType;
 
             _pending.Active = true;
             _pending.Bookmark = _nextBookmark;
         }
-#else
-            /// <summary>
-            /// Accept a new memory request (at the bottom of the CPU cycle, after R is
-            /// computed).  Because the CPU now aborts until the correct cycle when issuing
-            /// new memory operations, we simply latch the new request and let the state
-            /// machine mechanism do all the right magic at the next Clock().
-            /// </summary>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Request(int startAddr, MemoryCycle cycleType)
-            {
-                _pending.StartAddress = startAddr;
-                _pending.CycleType = cycleType;
-
-                _pending.Active = true;
-                _pending.Bookmark = _nextBookmark;
-            }
-#endif
 
         /// <summary>
         /// If the current op is complete and a pending op is ready, promote it.

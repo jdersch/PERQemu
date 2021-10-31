@@ -1,4 +1,4 @@
-// cpu.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+// cpu.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -43,6 +43,8 @@ namespace PERQemu.Processor
     /// <summary>
     /// PERQ hardware interrupts, listed in order of priority.
     /// </summary>
+    // TODO: separate these so they can be raised/cleared without contention!
+    // (possibly removing the need for write locks entirely)
     [Flags]
     public enum InterruptType
     {
@@ -56,6 +58,7 @@ namespace PERQemu.Processor
         X = 0x40,
         Parity = 0x80,
     }
+
 
     /// <summary>
     /// Implements the PERQ's custom microengine.
@@ -87,8 +90,6 @@ namespace PERQemu.Processor
             _mqShifter = new Shifter();
 
             _intLock = new object();
-
-            //Reset();
         }
 
         /// <summary>
@@ -127,17 +128,6 @@ namespace PERQemu.Processor
             Trace.Log(LogType.CpuState, "CPU: Reset.");
         }
 
-        // "Real" clock speed in cycles/sec (based on 170ns cycle time).  Approx. 5.88Mhz.
-        public static readonly int Frequency = 5882353; // todo to be removed
-
-        //
-        // Z80/IO board sampling factor.  The PERQ was roughly 2.4x faster in clock rate
-        // than the Z80 on the IOB, but clocking our fake Z80 even every other cycle is a
-        // lot of overhead.  Make this more explicit and tunable here (8-16 is a pretty
-        // good range?) and expose it so the "clock" hardware can simulate the 60Hz line
-        // frequency "jiffy clock" more accurately.  Cuz why not.
-        //
-        public static readonly int IOFudge = 8;     // todo to be removed
 
         /// <summary>
         /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
@@ -162,11 +152,10 @@ namespace PERQemu.Processor
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Execute()
         {
-
             _clocks++;
 
             // Decode the next instruction
-            Instruction uOp = _ustore.GetInstruction((ushort)_usequencer.PC);
+            Instruction uOp = _ustore.GetInstruction(_usequencer.PC);
 
             // Clock the memory state machine and set up any pending fetches
             _memory.Tick(uOp.MemoryRequest);
@@ -190,24 +179,21 @@ namespace PERQemu.Processor
             //      wait state after any control store writes.
             //
             // If any of those conditions are true we "abort" the current
-            // instruction until the correct cycle comes around.
+            // instruction until the correct cycle comes around.  We cannot
+            // cheat and skip over aborts, as RasterOp depends on T-state
+            // cycling through each word during overlapped fetch/stores.
             //
-            bool abort = (_ustore.Hold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid));
-
-            if (abort)
+            if (_ustore.Hold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid))
             {
-                // Waiting for the next T3 or T2 cycle to come around on the
-                // guitar.  We cannot cheat and skip the wait states, as RasterOp
-                // depends on T-state cycling through each word during overlapped
-                // fetch/stores.
+                // Waiting for the next T3 or T2 cycle to come around on the guitar
                 Trace.Log(LogType.MemoryState,
                     "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
                     _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _ustore.Hold);
 
                 // On aborts, no memory writes occur - no Tock()                    
 
-                // WCS writes take two cycles to run on the real hardware.  If
-                // the last op wrote the WCS, clear the hold flag to continue.
+                // WCS writes take two cycles to run on the hardware.  If the
+                // last op wrote the WCS, clear the hold flag to continue
                 _ustore.Hold = false;
 
                 return;
@@ -244,7 +230,7 @@ namespace PERQemu.Processor
             _alu.LatchResult();
 
             //
-            // Now decode and execute the current instruction:
+            // Execute the current instruction
             //
 
             // Select ALU inputs
@@ -1018,6 +1004,13 @@ namespace PERQemu.Processor
         #endregion CPU Helper Functions
 
         #region Debugger Commands
+
+        // TODO almost all of this will be moved to a new class that can be
+        // linked into the new command parser.  it'll reduce this massive file
+        // by hundreds of lines and consolidate the cli stuff outside the CPU
+        // proper.  if necessary, public functions here will expose things the
+        // debugger wants to see; when an (eventual) graphical debugger is added,
+        // it too will use the api exposed here.
 
         /// <summary>
         /// Provide access to the microstore for the debugger/disassembler.

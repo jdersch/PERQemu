@@ -216,13 +216,13 @@ namespace PERQemu.UI
 
         public override string ToString()
         {
-            if (this.SubNodes.Count > 1)
+            if (SubNodes.Count > 1)
             {
-                return string.Format("{0} ({1})", this.Name, this.SubNodes.Count);
+                return string.Format("{0}... ({1})", Name, SubNodes.Count);
             }
             else
             {
-                return this.Name;
+                return Name;
             }
         }
 
@@ -249,13 +249,13 @@ namespace PERQemu.UI
                 // Is this the last word?
                 if (words.Count == 1)
                 {
-                    this.SubNodes.Add(cmd);     // Add the new node here
+                    SubNodes.Add(cmd);          // Add the new node here
                     return;                     // and we're done
                 }
                 else
                 {
                     subNode = new CommandNode(words[0], "");
-                    this.SubNodes.Add(subNode); // Add a glue node, continue
+                    SubNodes.Add(subNode);      // Add a glue node, continue
                 }
             }
             else

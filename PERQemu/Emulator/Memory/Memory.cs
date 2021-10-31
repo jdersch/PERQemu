@@ -1,4 +1,4 @@
-// memory.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+// memory.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -37,13 +37,13 @@ namespace PERQemu.Memory
     }
 
     /// <summary>
-    /// Main memory array, BK style.
+    /// Main memory array.  Provides word addressing for normal CPU and I/O
+    /// 16-bit accesses, or quad words for 64-bit video fetches.
     /// </summary>
     /// <remarks>
-    /// C# purists may howl, but testing on my "old" 8-core, 2.8Ghz Mac
-    /// under 32-bit Mono showed a 30% speed increase when shifting video
-    /// data out as longs, and now that we've pretty much been freed/forced
-    /// to update PERQemu to run on 64-bit platforms (on later MacOS, at
+    /// C# purists may howl, but testing under 32-bit Mono showed a 30% speed
+    /// increase when shifting video data out as longs, and now that we've 
+    /// pretty much been freed/forced to run on 64-bits (on later MacOS, at
     /// any rate) we might as well take advantage.  Word access for normal
     /// CPU and I/O, Quads for video.  Booyah.
     /// </remarks>
@@ -61,9 +61,9 @@ namespace PERQemu.Memory
     /// Implements the PERQ's Memory board and memory state machine,
     /// which is also connected to the IO bus.
     /// </summary>
-    public sealed class MemoryBoard
+    public sealed class MemoryBoard     // TODO : ISystemBoard
     {
-        public MemoryBoard(PERQSystem system, int sizeInWords)
+        public MemoryBoard(PERQSystem system, int sizeInWords)  // TODO take size from system.Config
         {
             _system = system;
             _memSize = sizeInWords;
@@ -74,6 +74,8 @@ namespace PERQemu.Memory
 
             _mdiQueue = new MemoryController(this, "MDI");
             _mdoQueue = new MemoryController(this, "MDO");
+
+            // TODO attach the VideoController here.
         }
 
         public void Reset()
@@ -355,11 +357,12 @@ namespace PERQemu.Memory
         //
         // All references to MDI (Memory Data IN) and MDO (Memory Data OUT) are from
         // the CPU's point of view - the opposite of the Memory Board's (and the
-        // hardware schematics') point of view?
+        // hardware schematics') point of view!
         //
         // Memory requests from the CPU/RasterOp unit are queued up according to
         // some elaborate timing rules.  Because there are several scenarios where
         // requests may overlap, fetches and stores are queued up in separate FIFOs.
+        // (This is for emulation only; the hardware doesn't do it that way.)
         //
         // Currently the IO / DMA subsystem cheats and performs its memory accesses
         // directly, but it could at some point be integrated -- allowing us to more

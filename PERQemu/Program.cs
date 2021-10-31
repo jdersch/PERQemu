@@ -24,14 +24,14 @@
 using System;
 using System.Reflection;
 
-using PERQolator.UI.Forms;
-using PERQolator.Config;
+//using PERQemu.UI.Forms;
+//using PERQemu.Config;
 
-namespace PERQolator
+namespace PERQemu
 {
-    static class PERQolator
+    static class PERQemu
     {
-        static PERQolator()
+        static PERQemu()
         {
             // Locate our startup directory and make it our working directory.  This
             // is necessary for running under the Mono profiler app, but also makes
@@ -40,9 +40,12 @@ namespace PERQolator
             _baseDir = System.IO.Path.GetDirectoryName(_baseDir);
             Environment.CurrentDirectory = _baseDir;
 
-            // Create a version string
+            //
+            // "Man is born to trouble, as the sparks fly upwards" - Job Ch.5
+            //      -- Change log in Layered/mulReal.High
+            //
             Version vers = Assembly.GetCallingAssembly().GetName().Version;
-            _version = String.Format("PERQolator v{0}.{1}.{2} (House Decaf)",
+            _version = String.Format("PERQemu v{0}.{1}.{2} ('As the sparks fly upwards.')",
                                     vers.Major, vers.Minor, vers.Build);
 
             // Set a platform flag
@@ -69,7 +72,7 @@ namespace PERQolator
 
             if (_switches.printHelp)
             {
-                Console.WriteLine("Usage:  PERQolator [-h] [-v] [-g] [<script>]");
+                Console.WriteLine("Usage:  PERQemu [-h] [-v] [-g] [<script>]");
                 Console.WriteLine();
                 Console.WriteLine("\t-h\tprint this help message");
                 Console.WriteLine("\t-v\tprint version information");
@@ -133,7 +136,15 @@ namespace PERQolator
         {
             Console.WriteLine(Version);
             Console.WriteLine(Copyright);
-
+#if DEBUG
+            Console.WriteLine();
+            Console.WriteLine("[DEBUG version]");
+            Console.WriteLine("[Working directory is {0}]", Environment.CurrentDirectory);
+            Console.WriteLine("[Host is configured for {0} processor(s)]", Environment.ProcessorCount);
+#endif
+#if TRACING_ENABLED
+            Console.WriteLine("[Tracing is available]");
+#endif
             if (HostIsUnix && !_switches.startGUI)
             {
                 Console.WriteLine("Type 'help' for console commands, or 'gui' to start the GUI.");
@@ -144,7 +155,7 @@ namespace PERQolator
             }
         }
 
-        public static string Copyright = "Copyright (c) 2019-2021, S. Boondoggle (skeezicsb@gmail.com)";
+        public static string Copyright = "Copyright (c) 2006-2021, J. Dersch (derschjo@gmail.com)";
 
         public static string Version
         {

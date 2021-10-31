@@ -1,4 +1,4 @@
-// iobus.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+// iobus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -116,7 +116,6 @@ namespace PERQemu.IO
         /// Adds a new device to the dispatch table.
         /// Will throw if conflicts are found.
         /// </summary>
-        /// <param name="device"></param>
         private void UpdateDispatchTable(IIODevice device)
         {
             for (int i = 0; i < 255; i++)
