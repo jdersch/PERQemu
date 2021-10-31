@@ -252,7 +252,8 @@ namespace PERQemu.Display
                 case VideoState.VisibleScanline:
                     _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
-                        RenderScanline();
+                        // We could range check.  Or just clip it.
+                        RenderScanline(_scanLine % PERQ_DISPLAYHEIGHT);
 
                         _state = VideoState.HBlank;
                         RunStateMachine();
@@ -378,17 +379,8 @@ namespace PERQemu.Display
         /// Clips the current _scanLine to the visible range.  Applies the current
         /// cursor function and ships the scanline off to the display driver.
         /// </remarks>
-        public void RenderScanline()
+        public void RenderScanline(int renderLine)
         {
-            //if (!DisplayEnabled) return;
-
-            int renderLine = _scanLine;
-
-            if (_scanLine < 0 || _scanLine > _lastVisibleScanLine)
-            {
-                renderLine = _scanLine % PERQ_DISPLAYHEIGHT;
-            }
-
             if (CursorEnabled)
             {
                 // Set the start of this scanline, offset from start of display
@@ -412,8 +404,7 @@ namespace PERQemu.Display
                     // First the high byte...
                     if (dispByte >= cursorStartByte && dispByte < cursorStartByte + 8)
                     {
-                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)((word & 0xff00) >> 8),
-                                                                          _cursorData[cursByte++]);
+                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)((word & 0xff00) >> 8), _cursorData[cursByte++]);
                     }
                     else
                     {
@@ -423,8 +414,7 @@ namespace PERQemu.Display
                     // Now the low byte
                     if (dispByte >= cursorStartByte && dispByte < cursorStartByte + 8)
                     {
-                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)(word & 0x00ff),
-                                                                          _cursorData[cursByte++]);
+                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)(word & 0x00ff), _cursorData[cursByte++]);
                     }
                     else
                     {
@@ -472,7 +462,6 @@ namespace PERQemu.Display
         /// Transforms the display word based on the current Cursor function.
         /// </summary>
         /// <remarks>
-        /// This is silly, but let's see what a more faithful rendition looks like?
         /// Will probably change the "broken" ones to display _something_ rather
         /// than nothing... although a POS test program will need to be written to
         /// see all the combinations.  Remember, when the screen is shrunk the
@@ -617,8 +606,8 @@ namespace PERQemu.Display
         public static int PERQ_DISPLAYWIDTH_IN_BYTES = 96;
         public static int PERQ_DISPLAYHEIGHT = 1024;
 
-        private readonly ulong _scanLineTimeNsec = 70 * 170;    // should be _system.Scheduler.TimeStepNsec
-        private readonly ulong _hBlankTimeNsec = 22 * 170;      // in case we want to overclock ;-)
+        private readonly ulong _scanLineTimeNsec = 70 * 170;
+        private readonly ulong _hBlankTimeNsec = 22 * 170;
         private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
 
         private ScanLineBuffer _scanlineData;
