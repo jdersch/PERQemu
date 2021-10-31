@@ -216,8 +216,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
-    <Content Include="Docs\Changes.txt" />
-    <Content Include="Docs\PNX-SysB.txt" />
     <Content Include="SDL2.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -580,7 +578,6 @@
     <Content Include="Readme.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <None Include="Docs\KeyboardHandler.cs.Mac" />
     <None Include="Disks\d6.phd" />
     <None Include="Disks\d6orig.phd" />
     <None Include="Disks\f1.phd" />
@@ -596,11 +593,15 @@
     <None Include="Configurator\ConfigTypes.cs" />
     <None Include="Configurator\Configuration.cs" />
     <None Include="Configurator\Configurator.cs" />
+    <None Include="Docs\Configurator.png" />
+    <Content Include="Docs\Old\Changes.txt" />
+    <Content Include="Docs\Old\IOPorts.txt" />
+    <None Include="Docs\Old\KeyboardHandler.cs.Mac" />
+    <Content Include="Docs\Old\RasterOpMicrocode.txt" />
+    <Content Include="Docs\Old\PNX-SysB.txt" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
-    <Content Include="Docs\IOPorts.txt" />
-    <Content Include="Docs\RasterOpMicrocode.txt" />
     <Content Include="Docs\z80 docs\z80ram_addr.txt" />
     <Content Include="Docs\z80 docs\z80rom_addr.txt" />
     <Content Include="PERQemu.ico" />
@@ -633,6 +634,7 @@
     <Folder Include="Configurator\" />
     <Folder Include="UI\SDL\" />
     <Folder Include="Controller\" />
+    <Folder Include="Docs\Old\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
