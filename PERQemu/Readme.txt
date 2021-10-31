@@ -1,7 +1,66 @@
 ﻿PERQemu Readme
 
+10/30/2021 - skeezicsb - v0.4.6 (experimental)
+3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
+
+
+    ***********
+    * NOTICE! *
+    ***********
+
+    This "experiments" branch is a pretty major divergence from the PERQemu
+    master.  The skeezicsb/master should track the original jdersch/master
+    but will occaisionally incorporate a few tweaks to make it work on the
+    Mac and Mono.  During the summer of 2021, Josh began the work to add a
+    "real Z80" to the I/O board  to allow for PERQ-2 emulation, and made
+    big changes to switch from WinForms to SDL2 for the display.  AWESOME!
+
+    Status as of October, 2021:
+
+    What's new here is that the new SDL2 Display.cs has been hacked to allow
+    it to run on Mono under macOS.  The Windows version may be able to spawn
+    a separate thread for SDL's event loop, but on the Mac this is apparently
+    impossible; thus, I've temporarily forced it back onto the main thread.
+   
+    Verified that this version runs on MacOS X 10.11 (Yosemite) AND on
+    10.13 (High Sierra).  These are the newest versions I have available
+    for testing.  They run in both 32- and 64-bit mode!  Absolutely no idea
+    if they work on 10.14+, and I haven't tried to fire up the Linux VM in
+    quite some time... will get to that when we get closer to wrapping up
+    an actual release!
+
+    On my "ancient" 8-core MacPro 3,1 I'm getting 30fps; with the display
+    tweaks incorporated here, 33fps is typical on my 3.0Ghz Core Duo iMac.
+    This is with the CPU running on the main thread with the SDL event loop.
+
+    The CPU class has been refactored to include support for the 24-bit
+    processor!  It'll take about 5 minutes to tweak Memory and VideoController
+    to accept the 4MB memory option, and Landscape display support should be
+    similarly painless to add -- once we have a "configurator" in place.
+
+    The beginnings of a major restructuring are starting to be folded in!
+    An enhanced CLI is sneaking in once some updates that Josh added to the
+    Debugger are incorporated.  This will allow some nice enhancements that
+    support the mostly-written configurator that'll be moved over too.  If
+    I could back-port the 64-bit Cocoa WinForms driver (<bashes head on
+    desk>) to run on 10.11-10.13, a pretty slick graphical configuration
+    tool is already written, but abandoned due to 32-bit app support being
+    dropped by Apple.  Sigh.
+
+    As the "new Z80" is expanded and debugged, reorganizing the IO code to
+    similarly allow dynamic configuration based on machine type will follow.
+    Various PERQ configurations can then be created, saved, and loaded from
+    the CLI, including all of the PERQ-2 models.  This will dramatically
+    expand the library of available software, including later versions of
+    PNX, POS G, Accent S5 and S6, Spice Lisp, and even 24-bit Accent!
+
+    So, after a long hiatus, stuff is happenin' again.  Watch this space!
+
+
+Original README.Source follows.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 1.0 Introduction
