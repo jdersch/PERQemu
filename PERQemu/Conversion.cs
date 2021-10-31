@@ -1,4 +1,21 @@
-﻿
+﻿//
+// Conversion.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// This file is part of PERQemu.
+//
+// PERQemu is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
+//
 
 namespace PERQemu
 {
@@ -23,5 +40,14 @@ namespace PERQemu
         /// Conversion from microseconds to seconds
         /// </summary>
         public static readonly double UsecToSec = 0.000001;
+    }
+
+    // fixme uh, move this somewhere more appropriate?
+    public enum Radix
+    {
+        Binary = 2,
+        Octal = 8,
+        Decimal = 10,
+        Hexadecimal = 16
     }
 }

@@ -589,8 +589,9 @@ namespace PERQemu.Display
             {
                 for (int b = 0; b < 8; b++)
                 {
-                    // TODO: Clinton P104 phosphor color? :-)
-                    uint color = (i & (1 << b)) == 0 ? 0xfffeefff : 0xff000000;
+                    // TODO: Accurately render Clinton P104 phosphor color? :-)
+                    // For now, make it subtly more bluish white.
+                    uint color = (i & (1 << b)) == 0 ? 0xfff0f0ff : 0xff000000;
                     _bitToPixel[i, b] = (int)color;
                 }
             }

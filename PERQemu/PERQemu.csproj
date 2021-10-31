@@ -208,6 +208,11 @@
     <Compile Include="Display\Display.cs" />
     <Compile Include="Memory\Memory.cs" />
     <Compile Include="Memory\MemoryController.cs" />
+    <Compile Include="UI\CLI\CommandAttribute.cs" />
+    <Compile Include="UI\CLI\CommandExecutor.cs" />
+    <Compile Include="UI\CLI\CommandNode.cs" />
+    <Compile Include="UI\CLI\CommandProcessor.cs" />
+    <Compile Include="UI\CLI\CommandPrompt.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -581,6 +586,7 @@
     <None Include="Disks\f1.phd" />
     <None Include="CPU\PERQ24A.cs" />
     <None Include="Docs\Video.txt" />
+    <None Include="Program.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
@@ -611,6 +617,7 @@
   <ItemGroup>
     <Folder Include="CPU\" />
     <Folder Include="Memory\" />
+    <Folder Include="UI\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

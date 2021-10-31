@@ -72,7 +72,7 @@ namespace PERQemu
             _system.Execute(args);
         }
 
-        private void PrintBanner()
+        public static void PrintBanner()
         {
             //
             // "Man is born to trouble, as the sparks fly upwards" - Job Ch.5
