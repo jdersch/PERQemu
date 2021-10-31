@@ -66,9 +66,10 @@ namespace PERQemu
 
         public void Initialize(Configuration conf)
         {
-            _system = new PERQSystem(conf);
+            //_system = new PERQSystem(conf);
+            //Log.Write("ExecutionController: {0} initialized.", conf.Name);
 
-            Log.Write("ExecutionController: {0} initialized.", conf.Name);
+            _system = new PERQSystem();
         }
 
         public RunMode State
@@ -90,12 +91,12 @@ namespace PERQemu
                 return;
             }
 
-            if (!_system.Config.IsValid)
-            {
-                Console.WriteLine("The system as configured is invalid and cannot start.");
-                Console.WriteLine("Please check the configuration and try again.");
-                return;
-            }
+            //if (!_system.Config.IsValid)
+            //{
+            //    Console.WriteLine("The system as configured is invalid and cannot start.");
+            //    Console.WriteLine("Please check the configuration and try again.");
+            //    return;
+            //}
 
             if (_mode != RunMode.Off)
             {
@@ -103,7 +104,7 @@ namespace PERQemu
                 return;
             }
 
-            Log.Write("ExecutionCtrl: Power ON requested.");
+            //Log.Write("ExecutionCtrl: Power ON requested.");
 
             
             //_system.Run(_mode);
@@ -111,17 +112,17 @@ namespace PERQemu
 
         public void Reset()
         {
-            Log.Write("ExecutionCtrl: System Reset requested.");
+            //Log.Write("ExecutionCtrl: System Reset requested.");
             _mode = RunMode.Reset;
 
-            PERQemu.Sys.Reset();
+            //PERQemu.Sys.Reset();
 
             // if (!Settings.PauseOnReset) { change back to Run mode; }
         }
 
         public void PowerOff()
         {
-            Log.Write("ExecutionCtrl: Power OFF requested.");
+            //Log.Write("ExecutionCtrl: Power OFF requested.");
             //DetachSystem();
             _mode = RunMode.Off;
         }

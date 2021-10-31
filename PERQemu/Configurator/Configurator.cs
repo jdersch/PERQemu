@@ -42,7 +42,7 @@ namespace PERQemu.Config
 
         public void Initialize()
         {
-            Log.Debug(Category.EmuState, "Configurator: initializing.");
+            //Log.Debug(Category.EmuState, "Configurator: initializing.");
 
             Configuration conf;
             StorageConfiguration[] drives;

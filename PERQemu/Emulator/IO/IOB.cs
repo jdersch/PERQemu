@@ -17,6 +17,7 @@
 //
 
 using PERQemu.IO.HardDisk;
+using PERQemu.IO.Z80_new;
 
 namespace PERQemu.IO
 {
@@ -31,7 +32,7 @@ namespace PERQemu.IO
         {
             _hardDiskController = new ShugartDiskController(system);
             //_z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
-            _z80System = new PERQemu.IO.Z80_new.Z80System(system);
+            _z80System = new Z80System(system);
         }
 
         public IZ80System Z80System

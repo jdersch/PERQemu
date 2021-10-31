@@ -41,13 +41,4 @@ namespace PERQemu
         /// </summary>
         public static readonly double UsecToSec = 0.000001;
     }
-
-    // fixme uh, move this somewhere more appropriate?
-    public enum Radix
-    {
-        Binary = 2,
-        Octal = 8,
-        Decimal = 10,
-        Hexadecimal = 16
-    }
 }

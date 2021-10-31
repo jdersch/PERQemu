@@ -213,6 +213,14 @@
     <Compile Include="Controller\Conversion.cs" />
     <Compile Include="Controller\Paths.cs" />
     <Compile Include="Controller\Trace.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Configurator\Configurator.cs" />
+    <Compile Include="Controller\ExecutionController.cs" />
+    <Compile Include="Configurator\Configuration.cs" />
+    <Compile Include="Configurator\ConfigTypes.cs" />
+    <Compile Include="Configurator\ConfigCommands.cs" />
+    <Compile Include="Controller\ExecCommands.cs" />
+    <Compile Include="Controller\Settings.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -582,17 +590,9 @@
     <None Include="Disks\d6orig.phd" />
     <None Include="Disks\f1.phd" />
     <None Include="Docs\Video.txt" />
-    <None Include="Program.cs" />
     <None Include="Emulator\CPU\PERQ24A.cs" />
-    <None Include="Controller\ExecCommands.cs" />
-    <None Include="Controller\ExecutionController.cs" />
-    <None Include="Controller\Settings.cs" />
     <None Include="Controller\Log.cs" />
     <None Include="Docs\PERQ_Chart.jpg" />
-    <None Include="Configurator\ConfigCommands.cs" />
-    <None Include="Configurator\ConfigTypes.cs" />
-    <None Include="Configurator\Configuration.cs" />
-    <None Include="Configurator\Configurator.cs" />
     <None Include="Docs\Configurator.png" />
     <Content Include="Docs\Old\Changes.txt" />
     <Content Include="Docs\Old\IOPorts.txt" />

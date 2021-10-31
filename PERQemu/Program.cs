@@ -18,14 +18,13 @@
 //
 
 // TODO
-// Integrate this as the new top-level entry point as the project is
-// restructured.  Move from the PERQemu namespace into PERQemu.
+// Integrate this as the new top-level entry point as the project is restructured.
 
 using System;
 using System.Reflection;
 
 //using PERQemu.UI.Forms;
-//using PERQemu.Config;
+using PERQemu.Config;
 
 namespace PERQemu
 {
@@ -83,15 +82,15 @@ namespace PERQemu
 
             if (_switches.debug)
             {
-                Log.Level = Severity.Debug;
-                Log.Categories = Category.All;
+                //Log.Level = Severity.Debug;
+                //Log.Categories = Category.All;
             }
 
-            // Set up our command-line parser and GUI manager
+            // Set up command-line parser and GUI manager
             _cli = new CommandProcessor();
-            _gui = new FormsManager();
+            //_gui = new FormsManager();
 
-            // Create our main objects
+            // Create main objects
             _config = new Configurator();
             _controller = new ExecutionController();
 
@@ -99,7 +98,7 @@ namespace PERQemu
             Settings.Load();
             Console.WriteLine(Settings.Reason);     // DEBUG
 
-            // Initialize the ExecutionController
+            // Initialize the ExecutionController and default PERQ
             _controller.Initialize(_config.Current);
 
             // Start 'er up!
@@ -174,29 +173,29 @@ namespace PERQemu
             get { return _hostIsUnix; }
         }
 
-        public static FormsManager GUI
-        {
-            get { return _gui; }
-        }
+        //public static FormsManager GUI
+        //{
+        //    get { return _gui; }
+        //}
 
         public static CommandProcessor CLI
         {
             get { return _cli; }
         }
 
-        public static PERQSystem Sys
-        {
-            get { return _controller.System; }
-        }
-
         public static Configurator Config
         {
-            get { return _config; }
+        	get { return _config; }
         }
 
         public static ExecutionController Controller
         {
-            get { return _controller; }
+        	get { return _controller; }
+        }
+
+        public static PERQSystem Sys
+        {
+            get { return _controller.System; }
         }
 
         /// <summary>
@@ -252,7 +251,7 @@ namespace PERQemu
         private static bool _hostIsUnix;
 
         private static CmdLineArgs _switches;
-        private static FormsManager _gui;
+        //private static FormsManager _gui;
         private static CommandProcessor _cli;
 
         private static Configurator _config;

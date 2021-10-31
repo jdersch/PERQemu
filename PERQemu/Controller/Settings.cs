@@ -119,7 +119,7 @@ namespace PERQemu
         /// </summary>
         public static void Load()
         {
-            Log.Write("Settings.Load: settings file is " + Paths.SettingsPath);
+            //Log.Write("Settings.Load: settings file is " + Paths.SettingsPath);
 
             try
             {
