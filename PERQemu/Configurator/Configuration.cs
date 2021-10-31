@@ -21,7 +21,7 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 
-namespace PERQolator.Config
+namespace PERQemu.Config
 {
     /// <summary>
     /// Describes the configuration of a PERQ system, including its storage

@@ -114,7 +114,7 @@ namespace PERQemu
             Log.Write("ExecutionCtrl: System Reset requested.");
             _mode = RunMode.Reset;
 
-            PERQolator.Sys.Reset();
+            PERQemu.Sys.Reset();
 
             // if (!Settings.PauseOnReset) { change back to Run mode; }
         }

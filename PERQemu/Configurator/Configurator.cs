@@ -22,7 +22,7 @@ using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace PERQolator.Config
+namespace PERQemu.Config
 {
     /// <summary>
     /// Configurator works with the CLI and/or GUI to create, modify, load and
@@ -248,7 +248,7 @@ namespace PERQolator.Config
             try
             {
                 // Feed the script to the CLI
-                PERQolator.CLI.ReadScript(path);
+                PERQemu.CLI.ReadScript(path);
 
                 // Save the file name for saving later.  If it was a valid
                 // config file (written by SaveConfiguration() below) all the
@@ -296,7 +296,7 @@ namespace PERQolator.Config
                     // Write a small header, then enter configuration mode and
                     // write the basic things first.
                     //
-                    sw.WriteLine("# PERQolator configuration file, written " + DateTime.Now);
+                    sw.WriteLine("# PERQemu configuration file, written " + DateTime.Now);
                     sw.WriteLine("configure");
                     sw.WriteLine("name " + _current.Name);
                     sw.WriteLine("description \"" + _current.Description + "\"");

@@ -123,7 +123,7 @@ namespace PERQemu
 
             try
             {
-                PERQolator.CLI.ReadScript(Paths.SettingsPath);
+                PERQemu.CLI.ReadScript(Paths.SettingsPath);
                 Reason = "Settings loaded.";
                 Changed = false;
             }
@@ -151,8 +151,8 @@ namespace PERQemu
                     // Write a small header, then enter configuration mode and
                     // write the basic things first.
                     //
-                    sw.WriteLine("# PERQolator settings file, written " + DateTime.Now);
-                    sw.WriteLine("# " + PERQolator.Version);
+                    sw.WriteLine("# PERQemu settings file, written " + DateTime.Now);
+                    sw.WriteLine("# " + PERQemu.Version);
                     sw.WriteLine("#\n# * Please do not hand-edit this file. *\n#");
                     sw.WriteLine("settings");
                     sw.WriteLine("default");        // it's the only way to be sure
@@ -174,11 +174,11 @@ namespace PERQemu
 
                     // If the user has selected a valid PERQ, save it so it's
                     // the default machine configuration upon restart
-                    if (PERQolator.Config.Current.IsValid &&
-                        PERQolator.Config.Current.Name != "default")
+                    if (PERQemu.Config.Current.IsValid &&
+                        PERQemu.Config.Current.Name != "default")
                     {
                         sw.WriteLine("#\n# Most recent configuration:");
-                        sw.WriteLine("configure select " + PERQolator.Config.Current.Name);
+                        sw.WriteLine("configure select " + PERQemu.Config.Current.Name);
                     }
 
                     sw.Close();

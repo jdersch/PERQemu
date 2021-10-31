@@ -21,9 +21,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-using PERQolator.Config;
+using PERQemu.Config;
 
-namespace PERQolator.UI
+namespace PERQemu.UI
 {
     /// <summary>
     /// Command-line interface to the Configurator.  Operates directly on the
@@ -35,57 +35,57 @@ namespace PERQolator.UI
         [Command("configure", "Enter the configuration subsystem")]
         public void SetConfigPrefix()
         {
-            PERQolator.CLI.SetPrefix("configure");
+            PERQemu.CLI.SetPrefix("configure");
         }
 
         [Command("configure commands", "Show configuration commands and their descriptions")]
         public void ShowConfigCommands()
         {
-            PERQolator.CLI.ShowCommands("configure");
+            PERQemu.CLI.ShowCommands("configure");
         }
 
         [Command("configure done", "Exit configuration mode, return to top-level")]
         public void ConfigDone()
         {
-            if (!PERQolator.Config.Validate())
+            if (!PERQemu.Config.Validate())
             {
                 Console.WriteLine("This configuration is invalid!  Please correct the following error:");
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
-            PERQolator.CLI.ResetPrefix();
+            PERQemu.CLI.ResetPrefix();
         }
 
         [Command("configure default", "Reset the machine to the default configuration")]
         public void SetDefault()
         {
             Console.WriteLine("Setting the machine to defaults.");
-            PERQolator.Config.Current = PERQolator.Config.Default;
+            PERQemu.Config.Current = PERQemu.Config.Default;
             
         }
 
         [Command("configure list", "List pre-defined machine configurations")]
         public void ListPrefabs()
         {
-            string[] prefabs = PERQolator.Config.GetPrefabs();
+            string[] prefabs = PERQemu.Config.GetPrefabs();
             Array.Sort(prefabs);
 
             Console.WriteLine("Standard configurations:");
             foreach (var key in prefabs)
             {
-                Configuration perq = PERQolator.Config.GetConfigByName(key);
+                Configuration perq = PERQemu.Config.GetConfigByName(key);
                 Console.WriteLine("    {0} - {1}", perq.Name.PadLeft(10), perq.Description);
             }
 
             Console.WriteLine("Current configuration:");
             Console.WriteLine("    {0} - {1}",
-                              PERQolator.Config.Current.Name.PadLeft(10),
-                              PERQolator.Config.Current.Description);
+                              PERQemu.Config.Current.Name.PadLeft(10),
+                              PERQemu.Config.Current.Description);
         }
 
         [Command("configure select", "Select a pre-defined machine configuration")]
         public void SelectPrefab(string name)
         {
-            Configuration newConf = PERQolator.Config.GetConfigByName(name);
+            Configuration newConf = PERQemu.Config.GetConfigByName(name);
 
             // Did we git a goodun, pa?
             if (newConf == null)
@@ -93,10 +93,10 @@ namespace PERQolator.UI
                 Console.WriteLine("No configuration matching '{0}'.", name);
                 Console.WriteLine("Use the configuration 'list' command to see available configurations.");
             }
-            else if (newConf != PERQolator.Config.Current)
+            else if (newConf != PERQemu.Config.Current)
             {
                 Console.WriteLine("Configuration '{0}' selected.", newConf);
-                PERQolator.Config.Current = newConf;
+                PERQemu.Config.Current = newConf;
             }
         }
 
@@ -109,7 +109,7 @@ namespace PERQolator.UI
         [Command("configure show", "Show a pre-defined machine configuration")]
         public void ShowConfiguration(string name)
         {
-            Configuration conf = PERQolator.Config.GetConfigByName(name);
+            Configuration conf = PERQemu.Config.GetConfigByName(name);
 
             if (conf == null)
             {
@@ -125,17 +125,17 @@ namespace PERQolator.UI
         [Command("configure check", "Check that the configuration is valid")]
         public void CheckConfig()
         {
-            if (!PERQolator.Config.Validate())
+            if (!PERQemu.Config.Validate())
             {
                 Console.WriteLine("Configuration is not valid:");
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
             else
             {
-                if (PERQolator.Config.Current.Reason != string.Empty)
+                if (PERQemu.Config.Current.Reason != string.Empty)
                 {
                     Console.WriteLine("Configuration is valid, with warnings:");
-                    Console.WriteLine(PERQolator.Config.Current.Reason);
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
                 }
                 else
                 {
@@ -153,9 +153,9 @@ namespace PERQolator.UI
         [Command("configure load", "Load a saved configuration")]
         public void LoadConfig(string file)
         {
-            if (!PERQolator.Config.Load(file))
+            if (!PERQemu.Config.Load(file))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
             else
             {
@@ -166,9 +166,9 @@ namespace PERQolator.UI
         [Command("configure save", "Save the configuration to the current file")]
         public void SaveConfig()
         {
-            if (!PERQolator.Config.Save())
+            if (!PERQemu.Config.Save())
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
             else
             {
@@ -179,7 +179,7 @@ namespace PERQolator.UI
         [Command("configure save", "Save the configuration to a named file")]
         public void SaveConfig(string file)
         {
-            PERQolator.Config.Current.Filename = file;
+            PERQemu.Config.Current.Filename = file;
             SaveConfig();
         }
 
@@ -193,7 +193,7 @@ namespace PERQolator.UI
         [Command("configure name", "Name the current configuration")]
         public void SetName(string name)
         {
-            PERQolator.Config.Current.Name = name;
+            PERQemu.Config.Current.Name = name;
         }
 
         [Command("configure description")]
@@ -206,7 +206,7 @@ namespace PERQolator.UI
         [Command("configure description", "Add a short description of the current configuration")]
         public void SetDescription(string desc)
         {
-            PERQolator.Config.Current.Description = desc;
+            PERQemu.Config.Current.Description = desc;
         }
 
         [Command("configure chassis")]
@@ -221,10 +221,10 @@ namespace PERQolator.UI
         [Command("configure chassis", "Set the machine type")]
         public void SetChassis(ChassisType perq)
         {
-            if (perq != PERQolator.Config.Current.Chassis)
+            if (perq != PERQemu.Config.Current.Chassis)
             {
                 Console.WriteLine("{0} chassis selected.", perq);
-                PERQolator.Config.Current.Chassis = perq;
+                PERQemu.Config.Current.Chassis = perq;
             }
         }
 
@@ -240,15 +240,15 @@ namespace PERQolator.UI
         [Command("configure cpu", "Set the CPU type")]
         public void SetCPU(CPUType cpu)
         {
-            if (cpu != PERQolator.Config.Current.CPU)
+            if (cpu != PERQemu.Config.Current.CPU)
             {
                 Console.WriteLine("{0} CPU selected.", cpu);
-                PERQolator.Config.Current.CPU = cpu;
+                PERQemu.Config.Current.CPU = cpu;
             }
 
-            if (!PERQolator.Config.CheckCPU(PERQolator.Config.Current))
+            if (!PERQemu.Config.CheckCPU(PERQemu.Config.Current))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
         }
 
@@ -271,7 +271,7 @@ namespace PERQolator.UI
             Console.WriteLine("supported depends on the CPU type, and must be a power of two.");
             Console.WriteLine("\t20-bit CPU: 256, 512, 1024 or 2048 (KB)");
             Console.WriteLine("\t24-bit CPU: 2048, 4096, 8192, or 16384 (KB)");
-            Console.WriteLine("Or enter 1, 2, 4, 8 or 16 for MB.  PERQolator will round up to the nearest\nlegal value.");
+            Console.WriteLine("Or enter 1, 2, 4, 8 or 16 for MB.  PERQemu will round up to the nearest\nlegal value.");
         }
 
         [Command("configure memory", "Set the memory size")]
@@ -298,15 +298,15 @@ namespace PERQolator.UI
 
             size *= 1024;               // in bytes
 
-            if ((int)size != PERQolator.Config.Current.MemorySize)
+            if ((int)size != PERQemu.Config.Current.MemorySize)
             {
-                PERQolator.Config.Current.MemorySize = (int)size;
-                Console.WriteLine("Memory size set to {0}.", PERQolator.Config.Current.MemSizeToString());
+                PERQemu.Config.Current.MemorySize = (int)size;
+                Console.WriteLine("Memory size set to {0}.", PERQemu.Config.Current.MemSizeToString());
             }
 
-            if (!PERQolator.Config.CheckMemory(PERQolator.Config.Current))
+            if (!PERQemu.Config.CheckMemory(PERQemu.Config.Current))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
         }
 
@@ -321,15 +321,15 @@ namespace PERQolator.UI
         [Command("configure io board", "Configure the IO board type")]
         public void SetIO(IOBoardType io)
         {
-            if (io != PERQolator.Config.Current.IOBoard)
+            if (io != PERQemu.Config.Current.IOBoard)
             {
                 Console.WriteLine("IO Board type {0} selected.", io);
-                PERQolator.Config.Current.IOBoard = io;
+                PERQemu.Config.Current.IOBoard = io;
             }
 
-            if (!PERQolator.Config.CheckIO(PERQolator.Config.Current))
+            if (!PERQemu.Config.CheckIO(PERQemu.Config.Current))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
         }
 
@@ -344,29 +344,29 @@ namespace PERQolator.UI
         [Command("configure option board", "Configure the IO Option board type")]
         public void SetOptionIO(OptionBoardType oio)
         {
-            if (oio != PERQolator.Config.Current.IOOptionBoard)
+            if (oio != PERQemu.Config.Current.IOOptionBoard)
             {
                 Console.WriteLine("IO Option board type {0} selected.", oio);
-                PERQolator.Config.Current.IOOptionBoard = oio;
+                PERQemu.Config.Current.IOOptionBoard = oio;
 
                 // Board changed; reset the selected options to defaults
                 if (oio == OptionBoardType.OIO)
                 {
-                    PERQolator.Config.Current.IOOptions = IOOptionType.Link;
+                    PERQemu.Config.Current.IOOptions = IOOptionType.Link;
                 }
                 else if (oio == OptionBoardType.MLO)
                 {
-                    PERQolator.Config.Current.IOOptions = IOOptionType.SMD;
+                    PERQemu.Config.Current.IOOptions = IOOptionType.SMD;
                 }
                 else
                 {
-                    PERQolator.Config.Current.IOOptions = IOOptionType.None;
+                    PERQemu.Config.Current.IOOptions = IOOptionType.None;
                 }
             }
 
-            if (!PERQolator.Config.CheckOptions(PERQolator.Config.Current))
+            if (!PERQemu.Config.CheckOptions(PERQemu.Config.Current))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
         }
 
@@ -385,7 +385,7 @@ namespace PERQolator.UI
             {
                 // Always valid; resets the selected options
                 case IOOptionType.None:
-                    PERQolator.Config.Current.IOOptions = opt;
+                    PERQemu.Config.Current.IOOptions = opt;
                     Console.WriteLine("IO options reset.");
                     break;
 
@@ -393,10 +393,10 @@ namespace PERQolator.UI
                 case IOOptionType.Link:
                 case IOOptionType.LinkTape:
                 case IOOptionType.Tape:
-                    if (PERQolator.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
-                        PERQolator.Config.Current.IOOptionBoard == OptionBoardType.MLO)
+                    if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
+                        PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
                     {
-                        PERQolator.Config.Current.IOOptions |= opt;
+                        PERQemu.Config.Current.IOOptions |= opt;
                         Console.WriteLine("IO option '{0}' selected.", opt);
                     }
                     else
@@ -412,7 +412,7 @@ namespace PERQolator.UI
                 case IOOptionType.EthCanTape:
                 case IOOptionType.Canon:
                 case IOOptionType.CanTape:
-                    if (PERQolator.Config.Current.IOBoard == IOBoardType.NIO &&
+                    if (PERQemu.Config.Current.IOBoard == IOBoardType.NIO &&
                         opt.HasFlag(IOOptionType.Ether))
                     {
                         // Special case: if the user wants to add Ethernet to a 
@@ -420,19 +420,19 @@ namespace PERQolator.UI
                         // to the EIO and remove the optional (incompatible) Ethernet
                         // option.  This is silly.
                         Console.WriteLine("* Adding Ethernet option to an NIO changes it to an EIO; reconfiguring.");
-                        PERQolator.Config.Current.IOBoard = IOBoardType.EIO;
-                        PERQolator.Config.Current.IOOptions &= ~(IOOptionType.Ether);
+                        PERQemu.Config.Current.IOBoard = IOBoardType.EIO;
+                        PERQemu.Config.Current.IOOptions &= ~(IOOptionType.Ether);
 
-                        if (PERQolator.Config.Current.IOOptions == IOOptionType.None)
+                        if (PERQemu.Config.Current.IOOptions == IOOptionType.None)
                         {
                             // If that was the only option selected, remove the board
-                            PERQolator.Config.Current.IOOptionBoard = OptionBoardType.None;
+                            PERQemu.Config.Current.IOOptionBoard = OptionBoardType.None;
                             Console.WriteLine("* Removed empty IO Option board.");
                         }
                     }
-                    else if (PERQolator.Config.Current.IOOptionBoard == OptionBoardType.OIO)
+                    else if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO)
                     {
-                        PERQolator.Config.Current.IOOptions |= opt;
+                        PERQemu.Config.Current.IOOptions |= opt;
                         Console.WriteLine("IO option '{0}' selected.", opt);
                     }
                     else
@@ -442,9 +442,9 @@ namespace PERQolator.UI
                     break;
             }
 
-            if (!PERQolator.Config.CheckOptions(PERQolator.Config.Current))
+            if (!PERQemu.Config.CheckOptions(PERQemu.Config.Current))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
         }
 
@@ -459,15 +459,15 @@ namespace PERQolator.UI
         [Command("configure display", "Configure the display device")]
         public void SetDisplay(DisplayType disp)
         {
-            if (disp != PERQolator.Config.Current.Display)
+            if (disp != PERQemu.Config.Current.Display)
             {
-                PERQolator.Config.Current.Display = disp;
+                PERQemu.Config.Current.Display = disp;
                 Console.WriteLine("{0} display option selected.", disp);
             }
 
-            if (!PERQolator.Config.CheckMemory(PERQolator.Config.Current))
+            if (!PERQemu.Config.CheckMemory(PERQemu.Config.Current))
             {
-                Console.WriteLine(PERQolator.Config.Current.Reason);
+                Console.WriteLine(PERQemu.Config.Current.Reason);
             }
         }
 
@@ -482,9 +482,9 @@ namespace PERQolator.UI
         [Command("configure tablet", "Configure the pointing device(s)")]
         public void SetTablet(TabletType tab)
         {
-            if (tab != PERQolator.Config.Current.Tablet)
+            if (tab != PERQemu.Config.Current.Tablet)
             {
-                PERQolator.Config.Current.Tablet = tab;
+                PERQemu.Config.Current.Tablet = tab;
                 Console.WriteLine("Tablet option {0} selected.", tab);
             }
         }

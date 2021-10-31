@@ -19,7 +19,7 @@
 
 // TODO
 // Integrate this as the new top-level entry point as the project is
-// restructured.  Move from the PERQolator namespace into PERQemu.
+// restructured.  Move from the PERQemu namespace into PERQemu.
 
 using System;
 using System.Reflection;
@@ -123,13 +123,14 @@ namespace PERQemu
             // If the GUI is requested, start up the FrontPanel display
             if (_switches.startGUI)
             {
-                _gui.Run("FrontPanel");
+                // _gui.Run("FrontPanel");      // Sigh.
+                System.Console.WriteLine("No GUI for you!");
             }
-            else
-            {
+            //else
+            //{
                 // Run the CLI
                 _cli.Run();
-            }
+            //}
         }
 
         public static void PrintBanner()
@@ -155,7 +156,8 @@ namespace PERQemu
             }
         }
 
-        public static string Copyright = "Copyright (c) 2006-2021, J. Dersch (derschjo@gmail.com)";
+        public static string Copyright = "Copyright (c) 2006-2021, J. Dersch (derschjo@gmail.com)\n" +
+                                         "Feebly assisted by S. Boondoggle (skeezicsb@gmail.com)";
 
         public static string Version
         {

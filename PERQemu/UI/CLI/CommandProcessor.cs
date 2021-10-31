@@ -180,7 +180,7 @@ namespace PERQemu
 
         //    // When started manually, return to the console if the user closes
         //    // the front panel -- but exit if they explicitly choose File->Exit.
-        //    if (PERQolator.GUI.Run("FrontPanel"))
+        //    if (PERQemu.GUI.Run("FrontPanel"))
         //    {
         //        _running = false;
         //    }
@@ -197,7 +197,7 @@ namespace PERQemu
         }
 
         [Command("exit")]
-        [Command("quit", "Leave PERQolator")]
+        [Command("quit", "Leave PERQemu")]
         private void Quit()
         {
             _running = false;

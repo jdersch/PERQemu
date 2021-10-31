@@ -3,7 +3,7 @@
 //
 //  Copyright (c) 2019, S. Boondoggle <skeezicsb@gmail.com>
 //
-//  This file is a part of PERQolator, a refactoring of PERQemu originally
+//  This file is a part of PERQemu, a refactoring of PERQemu originally
 //  written by Josh Dersch.
 //
 //  This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PERQolator
+namespace PERQemu
 {
     /// <summary>
     /// Filter for the level of verbosity: higher the number, the less that

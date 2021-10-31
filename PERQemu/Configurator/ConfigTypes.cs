@@ -19,7 +19,7 @@
 
 using System;
 
-namespace PERQolator.Config
+namespace PERQemu.Config
 {
     //
     // See Notes/Configuration.txt for details.

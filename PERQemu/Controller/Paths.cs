@@ -16,45 +16,121 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System;
 using System.IO;
 
 namespace PERQemu
 {
     /// <summary>
-    /// Defines the paths pointing to various resources used by PERQemu
-    /// and provides helper functions for building paths.
+    /// Helpers for locating files needed to run the emulator and default
+    /// locations for configuration files, disk images, etc.
     /// </summary>
     public static class Paths
     {
-        public static string Disk
+        /// <summary>
+        /// Directory inside the app wrapper containing PROM images.
+        /// </summary>
+        public static string PROMDir
         {
-            get { return _disk; }
+            get { return Path.Combine(PERQemu.BaseDir, "PROM"); }
         }
 
-        public static string PROM
+        /// <summary>
+        /// Default directory for PERQ configuration files.
+        /// </summary>
+        public static string ConfigDir
         {
-            get { return _prom; }
+            get { return Path.Combine(PERQemu.BaseDir, "Conf"); }
         }
 
-        public static string BuildDiskPath(string file)
+        /// <summary>
+        /// Default directory for PERQ hard and floppy disk images.
+        /// </summary>
+        public static string DiskDir
         {
-            return Path.Combine(_disk, file);
+            get { return Path.Combine(PERQemu.BaseDir, "Disks"); }
         }
 
-        public static string BuildScriptsPath(string file)
+        /// <summary>
+        /// Output directory is for saving screenshots or printed output, from
+        /// the Canon or other simulated printers.
+        /// </summary>
+        public static string OutputDir
         {
-            return Path.Combine(_scripts, file);
+            get { return Path.Combine(PERQemu.BaseDir, "Output"); }
+        }
+
+        /// <summary>
+        /// Settings dir is the root of the user's home directory (same on
+        /// Windows and Unix).
+        /// </summary>
+        public static string SettingsDir
+        {
+            get
+            {
+                return PERQemu.HostIsUnix
+                       ? Environment.GetEnvironmentVariable("HOME")
+                       : Environment.ExpandEnvironmentVariables("%HOMEDRIVE%%HOMEPATH%");
+            }
+        }
+
+        /// <summary>
+        /// Return the path to the default configuration file, appropriate to
+        /// the platform.   We save settings in a common format and avoid any
+        /// platform-specific mechanisms.
+        /// </summary>
+        public static string SettingsPath
+        {
+            get
+            {
+                return Path.Combine(SettingsDir, (PERQemu.HostIsUnix
+                                                  ? ".PERQemu_cfg"
+                                                  : "PERQemu.cfg"));
+            }
+        }
+
+        /// <summary>
+        /// Try to make long crazy strings less long and crazy.
+        /// </summary>
+        public static string MakeRelative(string path)
+        {
+            // in .NET 5, so not on my old machine :-(
+            // return Path.GetRelativePath(PERQemu.BaseDir, path);
+
+            try
+            {
+                var full = Path.GetFullPath(path);
+
+                if (full.StartsWith(PERQemu.BaseDir, PERQemu.HostIsUnix ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
+                {
+                    return full.Substring(PERQemu.BaseDir.Length + 1);
+                }
+                else
+                {
+                    return path;
+                }
+            }
+            catch
+            {
+                Console.WriteLine("Could not make a relative path for '{0}'", path);
+                return path;    // ??? or ""?  or null?
+            }
         }
 
         public static string BuildPROMPath(string file)
         {
-            return Path.Combine(_prom, file);
+            return Path.Combine(PROMDir, file);
         }
 
-        private static string _disk = "Disks";
-        private static string _scripts = "Scripts";
-        private static string _prom = "PROM";
+        public static string BuildDiskPath(string file)
+        {
+            return Path.Combine(DiskDir, file);
+        }
 
+        public static string BuildOutputPath(string file)
+        {
+            return Path.Combine(OutputDir, file);
+        }
     }
 }
 
