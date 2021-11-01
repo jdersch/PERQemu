@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using PERQemu.Memory;
+
 namespace PERQemu.IO.Z80_new
 {
     /// <summary>
@@ -79,7 +81,7 @@ namespace PERQemu.IO.Z80_new
             // Calc Y and X positions, coordinate translation based on tweaking so the host screen
             // coordinates line up with the PERQ's...
             int tabX = _system.Display.MouseX + 64;
-            int tabY = Display.VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64;
+            int tabY = VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64;
             int buttons = _system.Display.MouseButton;
             bool offTablet = _system.Display.MouseOffTablet;
 

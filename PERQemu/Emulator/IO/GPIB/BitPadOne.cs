@@ -16,10 +16,10 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.Processor;
-
 using System;
 using System.Collections.Generic;
+
+using PERQemu.Memory;
 
 namespace PERQemu.IO.GPIB
 {
@@ -67,10 +67,7 @@ namespace PERQemu.IO.GPIB
             _talking = false;
             _listening = false;
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
-#endif
+            Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
         }
 
         /// <summary>
@@ -81,10 +78,8 @@ namespace PERQemu.IO.GPIB
         {
             _talking = (address == _myAddress);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
-#endif
+            Trace.Log(LogType.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
+
             if (_talking)
             {
                 _lastUpdate = 0;    // Reset counter so we don't start sampling immediately
@@ -100,10 +95,7 @@ namespace PERQemu.IO.GPIB
         {
             _listening = (address == _myAddress);
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
-#endif
+            Trace.Log(LogType.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
         }
 
         /// <summary>
@@ -159,12 +151,9 @@ namespace PERQemu.IO.GPIB
                 fifo.Enqueue(_buttonMapping[button]);
                 fifo.Enqueue(_delimiter2);
 
-#if TRACING_ENABLED
                 // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} ({3}) update={4}",
-                                               x, y, button, (char)_buttonMapping[button], _lastUpdate);
-#endif
+                Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} ({3}) update={4}",
+                                           x, y, button, (char)_buttonMapping[button], _lastUpdate);
                 _lastUpdate = 0;
             }
         }
@@ -176,10 +165,7 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         public void Write(byte b)
         {
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2})!?", b);
-#endif
+            Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2})!?", b);
         }
 
         /// <summary>
@@ -216,7 +202,7 @@ namespace PERQemu.IO.GPIB
             // Calculate Y and X positions.  The offsets tacked onto the end are based on
             // playing around with the interface, not on solid data and could be incorrect.
             //
-            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY) * 2 + 80;
+            y = (VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY) * 2 + 80;
             x = (_system.Display.MouseX) * 2 + 76;
 
             button = (byte)_system.Display.MouseButton;

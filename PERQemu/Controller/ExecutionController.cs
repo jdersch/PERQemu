@@ -69,7 +69,7 @@ namespace PERQemu
             //_system = new PERQSystem(conf);
             //Log.Write("ExecutionController: {0} initialized.", conf.Name);
 
-            _system = new PERQSystem();
+            _system = new PERQSystem(conf);
         }
 
         public RunMode State

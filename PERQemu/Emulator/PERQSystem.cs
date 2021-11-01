@@ -18,11 +18,13 @@
 //
 
 using System;
+using PERQemu.Config;
 using PERQemu.Processor;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
 using PERQemu.IO;
+using PERQemu.UI;
 
 namespace PERQemu
 {
@@ -45,18 +47,17 @@ namespace PERQemu
     /// </summary>
     public sealed class PERQSystem
     {
-        public PERQSystem()
+        public PERQSystem(Configuration conf)
         {
             //
-            // TODO: CPU type, memory size, and screen type (portrait or landscape)
-            // all to be made configurable.  For now, we'll still use TWO_MEG and
-            // set up a PERQ-1A by default.
+            // TODO: We now take in a configuration record, but make no attempt
+            // yet to make sure it has been validated (since the Configurator
+            // hasn't been wired in.  Assume we're passing in a known-good default
+            // configuration (a PERQ-1A with 1-2MB and no funny business).
             //
-#if TWO_MEG
-            _mem = new MemoryBoard(this, 1024 * 1024);
-#else
-            _mem = new MemoryBoard(this, 512 * 1024);
-#endif
+            _conf = conf;
+
+            _mem = new MemoryBoard(this);
 
             //
             // TODO: There are some ugly dependencies here...
@@ -68,15 +69,14 @@ namespace PERQemu
             //
             _perqCPU = new PERQ1A(this);
 
-            // Just have to do this once.  Will be CPU-specific.
+            // Just have to do this once.  Will be CPU-specific. TODO: this moves to the CPUBoard
             _perqCPU.LoadROM(Paths.BuildPROMPath("boot.bin"));
 
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
-            _display = new Display.Display(this);
-            _videoController = new Display.VideoController(this);
+            _display = new Display(this);
             _iob = new IOB(this);
-            _oio = new OIO();
+            _oio = new OIO(); // this
             _ioBus = new IOBus(this);
 
             // Start off debugging
@@ -243,50 +243,19 @@ namespace PERQemu
             set { _bootChar = value; }
         }
 
-        public Scheduler Scheduler
-        {
-            get { return _scheduler; }
-        }
+        public Configuration Config => _conf;
+        public Scheduler Scheduler => _scheduler;
 
-        public CPU CPU
-        {
-            get { return _perqCPU; }
-        }
+        public CPU CPU => _perqCPU;
+        public MemoryBoard Memory => _mem;
+        public VideoController VideoController => _mem.Video;
+        public Display Display => _display;
+        public IOB IOB =>  _iob;
+        public OIO OIO => _oio;
+        public IOBus IOBus => _ioBus;
 
-        public MemoryBoard Memory
-        {
-            get { return _mem; }
-        }
-
-        public IOB IOB
-        {
-            get { return _iob; }
-        }
-
-        public IOBus IOBus
-        {
-            get { return _ioBus; }
-        }
-
-        public OIO OIO
-        {
-            get { return _oio; }
-        }
-
-        public Display.Display Display
-        {
-            get { return _display; }
-        }
-
-        public Display.VideoController VideoController
-        {
-            get { return _videoController; }
-        }
-
-        public Debugger.Debugger Debugger
-        {
-            get { return _debugger; }
-        }
+        public Debugger.Debugger Debugger => _debugger;
+        
 
         private delegate void RunDelegate();
 
@@ -326,7 +295,7 @@ namespace PERQemu
         private void DumpScheduler()
         {
             _display.Status();
-            _videoController.Status();
+            VideoController.Status();
             _scheduler.DumpEvents();
         }
 
@@ -337,17 +306,17 @@ namespace PERQemu
 
             try
             {
-                if (/* SystemType=Windows && */ devName.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
+                if (!PERQemu.HostIsUnix && devName.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
                 {
                     // COM port.  Try to instantiate & assign to system.
                     dev = new PhysicalPort(devName);
                 }
-                else if (/* SystemType=Unix && */ devName.StartsWith("/dev", StringComparison.InvariantCultureIgnoreCase))
+                else if (PERQemu.HostIsUnix && devName.StartsWith("/dev", StringComparison.InvariantCultureIgnoreCase))
                 {
                     // Unix device path.  Try to instantiate & assign to system.
                     dev = new PhysicalPort(devName);
                 }
-                else if (devName.StartsWith("rsx:", StringComparison.InvariantCultureIgnoreCase))
+                else if (devName.Equals("rsx:", StringComparison.InvariantCultureIgnoreCase))
                 {
                     // RSX device.
                     dev = new RSXFilePort();
@@ -537,14 +506,15 @@ namespace PERQemu
         private ExecutionMode _z80ExecutionMode;
         private string _debugMessage;
         private static byte _bootChar;
+
+        private Configuration _conf;
         private Scheduler _scheduler;
         private CPU _perqCPU;
         private MemoryBoard _mem;
         private IOB _iob;
         private IOBus _ioBus;
         private OIO _oio;
-        private Display.Display _display;
-        private Display.VideoController _videoController;
+        private Display _display;
         private Debugger.Debugger _debugger;
     }
 }

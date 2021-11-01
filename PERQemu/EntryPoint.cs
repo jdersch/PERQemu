@@ -19,6 +19,8 @@
 using System;
 using System.Reflection;
 
+using PERQemu.Config;
+
 namespace PERQemu
 {
     class EntryPoint
@@ -68,7 +70,7 @@ namespace PERQemu
             // start up the CLI and let the user configure a machine or parse the
             // command line (run a script arg) to load a saved config.  The machine
             // will then be dynamically instantiated, run, and torn down at runtime.
-            _system = new PERQSystem();
+            _system = new PERQSystem(new Configuration());
             _system.Execute(args);
         }
 

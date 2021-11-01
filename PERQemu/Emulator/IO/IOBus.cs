@@ -18,7 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using PERQemu.Display;
+
+using PERQemu.Memory;
 
 namespace PERQemu.IO
 {

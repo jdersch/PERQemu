@@ -63,11 +63,11 @@ namespace PERQemu.Memory
     /// </summary>
     public sealed class MemoryBoard     // TODO : ISystemBoard
     {
-        public MemoryBoard(PERQSystem system, int sizeInWords)  // TODO take size from system.Config
+        public MemoryBoard(PERQSystem system)
         {
             _system = system;
-            _memSize = sizeInWords;
-            _memSizeMask = sizeInWords - 1;
+            _memSize = _system.Config.MemorySizeInBytes / 2;  // KB -> KW
+            _memSizeMask = _memSize - 1;
 
             _memory = new Core();
             _memory.Words = new ushort[_memSize];
@@ -75,7 +75,7 @@ namespace PERQemu.Memory
             _mdiQueue = new MemoryController(this, "MDI");
             _mdoQueue = new MemoryController(this, "MDO");
 
-            // TODO attach the VideoController here.
+            _videoController = new VideoController(_system);
         }
 
         public void Reset()
@@ -91,65 +91,21 @@ namespace PERQemu.Memory
             Trace.Log(LogType.MemoryState, "Memory: Reset.");
         }
 
-        public int MemSize
-        {
-            get { return _memSize; }
-        }
+        public int MemSize => _memSize;
+        public int MemSizeMask => _memSizeMask;
+        public ushort[] Memory => _memory.Words;
 
-        public ushort[] Memory
-        {
-            get { return _memory.Words; }
-        }
+        public ushort MDI => _mdi;
+        public int  MADR => _mdiQueue.Address;
+        public int  MIndex => _mdiQueue.WordIndex;
+        public bool MDIValid => _mdiQueue.Valid;
+        public bool MDONeeded => _mdoQueue.Valid;
+        public bool Wait => _wait;
+        public bool Hold => _hold;
 
-        public ushort MDI
-        {
-            get { return _mdi; }
-        }
-
-        public bool MDIValid
-        {
-            get { return _mdiQueue.Valid; }
-        }
-
-        public int MADR
-        {
-            get { return _mdiQueue.Address; }
-        }
-
-        public int MIndex
-        {
-            get { return _mdiQueue.WordIndex; }
-        }
-
-        public bool MDONeeded
-        {
-            get { return _mdoQueue.Valid; }
-        }
-
-        public bool Wait
-        {
-            get { return _wait; }
-        }
-
-        public bool Hold
-        {
-            get { return _hold; }
-        }
-
-        public int TState
-        {
-            get { return _Tstate; }
-        }
-
-        public int MemSizeMask
-        {
-            get { return _memSizeMask; }
-        }
-
-        public bool RopEnabled
-        {
-            get { return _system.CPU.RasterOpEnabled; }
-        }
+        public int TState => _Tstate;
+        public bool RopEnabled => _system.CPU.RasterOpEnabled;
+        public VideoController Video => _videoController;
 
 
         /// <summary>
@@ -233,35 +189,7 @@ namespace PERQemu.Memory
             return false;
         }
 
-#if DEBUG
-        /// <summary>
-        /// Requests a specific memory cycle type at the specified address.  Here we route
-        /// the request to the separate fetch and store queues, which vastly simplifies the
-        /// complicated overlapped operation of RasterOp.
-        /// </summary>
-        public void RequestMemoryCycle(long id, int address, MemoryCycle cycleType)
-        {
-            Trace.Log(LogType.MemoryState,
-                      "\nMemory: Requested {0} cycle in T{1} ID={2} addr={3:x6}",
-                      cycleType, _Tstate, id, address);
 
-            //
-            // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
-            // but the queue controller will have stalled the processor until the correct
-            // time, which will start at the next Tick().  In some cases (buggy microcode)
-            // the hardware would actually ignore memory references; we don't do that here,
-            // but read all the gory details in the comments at the end of MemoryController.cs.
-            //
-            if (IsFetch(cycleType))
-            {
-                _mdiQueue.Request(id, address, cycleType);
-            }
-            else
-            {
-                _mdoQueue.Request(id, address, cycleType);
-            }
-        }
-#else
         /// <summary>
         /// Requests a specific memory cycle type at the specified address.  Here we route
         /// the request to the separate fetch and store queues, which vastly simplifies the
@@ -289,7 +217,6 @@ namespace PERQemu.Memory
                 _mdoQueue.Request(address, cycleType);
             }
         }
-#endif
 
         /// <summary>
         /// Fetches one quadword from memory (immediate).
@@ -372,9 +299,10 @@ namespace PERQemu.Memory
         #endregion
 
 
+        private Core _memory;
         private MemoryController _mdiQueue;		// Queue for Fetch requests
         private MemoryController _mdoQueue;     // Queue for Store requests
-        private Core _memory;
+        private VideoController _videoController;
 
         private int _memSize;
         private int _memSizeMask;

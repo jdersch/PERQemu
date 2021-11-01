@@ -16,18 +16,18 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.HostInterface;
-
+using SDL2;
 using System;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Drawing.Imaging;
-using SDL2;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 
-namespace PERQemu.Display
+using PERQemu.HostInterface;
+
+namespace PERQemu.UI
 {
     /// <summary>
     /// This implements only the bits necessary to blit a chunk of memory to a

@@ -21,9 +21,10 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
 using PERQemu.IO;
+using PERQemu.UI;
 using PERQemu.Processor;
 
-namespace PERQemu.Display
+namespace PERQemu.Memory
 {
     /// <summary>
     /// A performance cheat: provide a fixed size memory buffer for one video

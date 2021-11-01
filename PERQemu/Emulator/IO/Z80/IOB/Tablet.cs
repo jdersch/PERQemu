@@ -16,7 +16,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.Processor;
+using PERQemu.Memory;
 
 using System.Collections.Generic;
 
@@ -40,9 +40,8 @@ namespace PERQemu.IO.Z80.IOB
         {
             _enabled = false;
             _messageIndex = 0;
-#if TRACING_ENABLED
-            if (Trace.TraceOn) Trace.Log(LogType.Tablet, "Tablet: Reset");
-#endif
+
+            Trace.Log(LogType.Tablet, "Tablet: Reset");
         }
 
         public ReadyFlags BusyBit
@@ -71,11 +70,8 @@ namespace PERQemu.IO.Z80.IOB
                 retVal = true;                      // Done with message
             }
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "Tablet: message {0} data={1:x} enabled={2}",
-                                          message, value, _enabled);
-#endif
+            Trace.Log(LogType.Tablet, "Tablet: message {0} data={1:x} enabled={2}",
+                                      message, value, _enabled);
             return retVal;
         }
 
@@ -107,11 +103,8 @@ namespace PERQemu.IO.Z80.IOB
 
                 // Per Z80 v8.7, this 5th byte is accepted but ignored; time base
                 // maintenance moved to the video interrupt instead.
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2}",
-                                                    x, y, button);
-#endif
+
+                Trace.Log(LogType.Tablet, "Tablet polled: x={0} y={1} button={2}", x, y, button);
             }
         }
 
@@ -139,7 +132,7 @@ namespace PERQemu.IO.Z80.IOB
             //
 
             // Calc Y and X positions:
-            y = (Display.VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64);
+            y = (VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64);
             x = (_system.Display.MouseX + 64);
 
             // Mix in the button data:
@@ -161,16 +154,12 @@ namespace PERQemu.IO.Z80.IOB
             fifo.Enqueue((byte)(_enabled ? 0x2 : 0x0));     // Per Z80 v8.7: enabled flag is bit 1,
             fifo.Enqueue(0x0);                              // Send SIO B overrun count (fake it :-)
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.Tablet, "Tablet: GetStatus() returns enabled={0}", _enabled);
-#endif
+            Trace.Log(LogType.Tablet, "Tablet: GetStatus() returns enabled={0}", _enabled);
         }
 
 
         private bool _enabled;
         private int _messageIndex;
-
 
         private PERQSystem _system;
     }

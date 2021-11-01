@@ -298,9 +298,9 @@ namespace PERQemu.UI
 
             size *= 1024;               // in bytes
 
-            if ((int)size != PERQemu.Config.Current.MemorySize)
+            if ((int)size != PERQemu.Config.Current.MemorySizeInBytes)
             {
-                PERQemu.Config.Current.MemorySize = (int)size;
+                PERQemu.Config.Current.MemorySizeInBytes = (int)size;
                 Console.WriteLine("Memory size set to {0}.", PERQemu.Config.Current.MemSizeToString());
             }
 

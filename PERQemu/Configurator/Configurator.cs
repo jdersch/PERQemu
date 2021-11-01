@@ -302,7 +302,7 @@ namespace PERQemu.Config
                     sw.WriteLine("description \"" + _current.Description + "\"");
                     sw.WriteLine("chassis " + _current.Chassis);
                     sw.WriteLine("cpu " + _current.CPU);
-                    sw.WriteLine("memory " + _current.MemorySize / 1024);
+                    sw.WriteLine("memory " + _current.MemorySizeInBytes / 1024);
                     sw.WriteLine("io board " + _current.IOBoard);
                     sw.WriteLine("display " + _current.Display);
                     sw.WriteLine("tablet " + _current.Tablet);
@@ -400,7 +400,7 @@ namespace PERQemu.Config
                         return false;
                     }
 
-                    if (conf.MemorySize > TWO_MEG)
+                    if (conf.MemorySizeInBytes > TWO_MEG)
                     {
                         conf.Reason = "PERQ1 (4K) CPU supports a maximum of 2MB of memory.";
                         return false;
@@ -410,17 +410,17 @@ namespace PERQemu.Config
                 // 16K CPU in the PERQ-2 models didn't support the older 
                 // quarter-meg or half-meg memory boards (nitpicky); max 2MB.
                 case CPUType.PERQ1A:
-                    if (conf.Chassis == ChassisType.PERQ2 && conf.MemorySize < HALF_MEG)
+                    if (conf.Chassis == ChassisType.PERQ2 && conf.MemorySizeInBytes < HALF_MEG)
                     {
                         conf.Reason = "PERQ2: 16K CPU requires minimum of 512KB of memory.";
                         return false;
                     }
-                    else if (conf.Chassis == ChassisType.PERQ2T2 && conf.MemorySize < ONE_MEG)
+                    else if (conf.Chassis == ChassisType.PERQ2T2 && conf.MemorySizeInBytes < ONE_MEG)
                     {
                         conf.Reason = "PERQ2-T2: 16K CPU requires minimum of 1MB of memory.";
                         return false;
                     }
-                    else if (conf.MemorySize > TWO_MEG)
+                    else if (conf.MemorySizeInBytes > TWO_MEG)
                     {
                         conf.Reason = "PERQ1A (16K) CPU supports a maximum of 2MB of memory.";
                         return false;
@@ -454,7 +454,7 @@ namespace PERQemu.Config
         {
             if (conf.CPU == CPUType.PERQ1 || conf.CPU == CPUType.PERQ1A)
             {
-                if (conf.MemorySize > TWO_MEG)
+                if (conf.MemorySizeInBytes > TWO_MEG)
                 {
                     conf.Reason = "20-bit CPU supports maximum of 2MB of memory.";
                     return false;
@@ -463,12 +463,12 @@ namespace PERQemu.Config
             }
             else    // 24-bit CPU
             {
-                if (conf.MemorySize < FOUR_MEG)
+                if (conf.MemorySizeInBytes < FOUR_MEG)
                 {
                     conf.Reason = "24-bit CPU shipped with minimum of 4MB memory.";
                     return false;
                 }
-                else if (conf.MemorySize > FOUR_MEG)
+                else if (conf.MemorySizeInBytes > FOUR_MEG)
                 {
                     conf.Reason = "OS may not support more than 4MB of memory.";
                     // Just a warning
@@ -478,7 +478,7 @@ namespace PERQemu.Config
             // A weird special case
             if (conf.Chassis == ChassisType.PERQ1 &&
                 conf.Display == DisplayType.Landscape &&
-                conf.MemorySize != ONE_MEG)
+                conf.MemorySizeInBytes != ONE_MEG)
             {
                 conf.Reason = "The exceedingly rare PERQ-1 with Landscape display only had 1MB of memory.";
                 // But I'll allow it. :-)
@@ -697,7 +697,7 @@ namespace PERQemu.Config
             return true;
         }
 
-        // Common memory sizes
+        // Common memory sizes in bytes
         public const int HALF_MEG = 512 * 1024;
         public const int ONE_MEG = 1024 * 1024;
         public const int TWO_MEG = 1024 * 1024 * 2;

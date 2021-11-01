@@ -42,7 +42,7 @@ namespace PERQemu.Config
             _ioBoard = IOBoardType.IOB;
             _ioOptionBoard = OptionBoardType.OIO;
             _ioOptions = IOOptionType.Link | IOOptionType.Ether;
-            _memSize = 1024 * 1024;
+            _memSize = 1024 * 1024 * 2;
             _displayType = DisplayType.Portrait;
             _tabletType = TabletType.BitPad;
 
@@ -143,7 +143,7 @@ namespace PERQemu.Config
             set { _cpuBoard = value; }
         }
 
-        public int MemorySize
+        public int MemorySizeInBytes
         {
             get { return _memSize; }
             set { _memSize = value; }
