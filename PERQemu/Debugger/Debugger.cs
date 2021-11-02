@@ -838,47 +838,6 @@ namespace PERQemu.Debugger
             _nextState = RunState.Exit;
         }
 
-        /*
-                private void SetBreakpoint(string[] args)
-                {
-
-                }
-
-                private void ClearBreakpoint(string[] args)
-                {
-
-                }
-
-                private void ToggleBreakpoint(string[] args)
-                {
-
-                }
-
-                private void ShowBreakpoints(string[] args)
-                {
-
-                }
-        */
-
-#if TRACING_ENABLED
-        [DebugFunction("set logging", "Enables logging for the specified event types")]
-        private void SetLogging(LogType type)
-        {
-            Trace.TraceLevel |= type;
-        }
-
-        [DebugFunction("show logging", "Shows the currently enabled logging settings")]
-        private void ShowLogging()
-        {
-            Console.WriteLine(Trace.TraceLevel);
-        }
-
-        [DebugFunction("clear logging", "Disables logging for the specified event types")]
-        private void ClearLogging(LogType type)
-        {
-            Trace.TraceLevel &= ~type;
-        }
-#endif
 
         [DebugFunction("show variables", "Shows debugger variables and their descriptions.")]
         private void ShowVariables()
@@ -889,14 +848,6 @@ namespace PERQemu.Debugger
             }
         }
 
-        [DebugFunction("show commands", "Shows debugger commands and their descriptions.")]
-        private void ShowCommands()
-        {
-            foreach (DebuggerCommand cmd in _commandList)
-            {
-                Console.WriteLine("{0} - {1}", cmd.Name, cmd.Description);
-            }
-        }
 
         private static uint TryParseUint(string arg)
         {

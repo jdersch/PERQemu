@@ -1,4 +1,5 @@
-// Z80system.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// Z80system.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -88,7 +89,7 @@ namespace PERQemu.IO.Z80_new
 
         public bool SupportsAsync => true;
 
-        [DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
+        //[DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
         public void ShowZ80State()
         {
             IZ80Registers regs = _cpu.Registers;
@@ -222,20 +223,16 @@ namespace PERQemu.IO.Z80_new
             //
             if ((data & 0x100) == 0)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
+
                 // TODO: move this logic into PERQToZ80FIFO?
                 _system.CPU.ClearInterrupt(InterruptType.Z80DataInReady);
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(false);
             }
             else
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
+
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
             }
 
@@ -277,19 +274,13 @@ namespace PERQemu.IO.Z80_new
         {
             if (status == 0x80 && _running)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
                 _running = false;
                 Stop();
             }
             else if (status == 0 && !_running)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
-#endif
+                Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
                 _running = true;
                 Reset();
 

@@ -1,5 +1,6 @@
 //
 // Program.cs - Copyright (c) 2019-2021 S. Boondoggle (skeezicsb@gmail.com)
+// was: EntryPoint - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -17,9 +18,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-// TODO
-// Integrate this as the new top-level entry point as the project is restructured.
-
 using System;
 using System.Reflection;
 
@@ -32,29 +30,26 @@ namespace PERQemu
     {
         static PERQemu()
         {
+            //
             // Locate our startup directory and make it our working directory.  This
             // is necessary for running under the Mono profiler app, but also makes
             // it easier to locate other resources like ROM images, graphics, etc.
+            //
             _baseDir = new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath;
             _baseDir = System.IO.Path.GetDirectoryName(_baseDir);
             Environment.CurrentDirectory = _baseDir;
 
+            // Set a platform flag
+            _hostIsUnix = (Environment.OSVersion.Platform == PlatformID.Unix ||
+                           Environment.OSVersion.Platform == PlatformID.MacOSX);
+            
             //
             // "Man is born to trouble, as the sparks fly upwards" - Job Ch.5
             //      -- Change log in Layered/mulReal.High
             //
             Version vers = Assembly.GetCallingAssembly().GetName().Version;
-            _version = String.Format("PERQemu v{0}.{1}.{2} ('As the sparks fly upwards.')",
+            _version = string.Format("PERQemu v{0}.{1}.{2} ('As the sparks fly upwards.')",
                                     vers.Major, vers.Minor, vers.Build);
-
-            // Set a platform flag
-            _hostIsUnix = (Environment.OSVersion.Platform == PlatformID.Unix ||
-                           Environment.OSVersion.Platform == PlatformID.MacOSX);
-
-            // Since we use reflection to build up our CLI and GUI, let the
-            // user know this might take a while.  It's the polite thing to do.
-            Console.WriteLine("Initializing, please wait...");
-            Console.Out.Flush();
         }
 
         [STAThread]
@@ -85,6 +80,10 @@ namespace PERQemu
                 //Log.Level = Severity.Debug;
                 //Log.Categories = Category.All;
             }
+            // Since we use reflection to build up our CLI and GUI, let the
+            // user know this might take a while.  It's the polite thing to do.
+            Console.WriteLine("Initializing, please wait...");
+            Console.Out.Flush();
 
             // Set up command-line parser and GUI manager
             _cli = new CommandProcessor();
@@ -123,7 +122,7 @@ namespace PERQemu
             if (_switches.startGUI)
             {
                 // _gui.Run("FrontPanel");      // Sigh.
-                System.Console.WriteLine("No GUI for you!");
+                Console.WriteLine("No GUI for you!");
             }
             //else
             //{

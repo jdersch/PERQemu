@@ -46,7 +46,6 @@ namespace PERQemu.IO.Z80_new
 
                 default:
                     throw new NotImplementedException(String.Format("DMA not implemented for device {0}.", device));
-                    break;
             }
 
 #if TRACING_ENABLED

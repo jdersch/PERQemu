@@ -216,9 +216,9 @@ namespace PERQemu.UI
                 clear = sb.ToString();
             }
 
-            // If running under the profiler or on the IDE's console, avoid
-            // a divide-by-zero.  Needed for the old Xamarin Studio/Profiler
-            // but maybe not on Visual Studio?
+            // If running under the profiler or on the IDE's console, avoid a
+            // divide-by-zero (which goes into an infinite loop).  Needed for
+            // the old Xamarin Studio/Profiler but maybe not on Visual Studio?
             if (Console.BufferWidth == 0)
             {
                 column = _textPosition + _originColumn;
@@ -339,13 +339,13 @@ namespace PERQemu.UI
             }
             else
             {
-                _input = String.Empty;
+                _input = string.Empty;
             }
         }
 
         private void ClearInput()
         {
-            _input = String.Empty;
+            _input = string.Empty;
             HistoryIndex = _commandHistory.Count - 1;
             TextPosition = 0;
         }
@@ -412,7 +412,8 @@ namespace PERQemu.UI
             {
                 Console.WriteLine();
                 Console.WriteLine("Possible completions are:");
-                Columnify(result.Completions);
+                PERQemu.CLI.Columnify(result.Completions.ToArray());
+                DisplayPrompt();
             }
 
             // Did our input line change?
@@ -432,50 +433,6 @@ namespace PERQemu.UI
             }
 
             return changed;
-        }
-
-        /// <summary>
-        /// Print a nice columnar list of (reasonably short) strings.
-        /// </summary>
-        /// <param name="items">Strings to print</param>
-        /// <param name="leftCol">Left indent</param>
-        /// <param name="tabWidth">Column width</param>
-        public void Columnify(List<string> items, int leftCol = 4, int tabWidth = 15)
-        {
-            Console.Write(" ".PadLeft(leftCol));
-            var col = leftCol;
-
-            foreach (var i in items)
-            {
-                if (col + tabWidth > Console.BufferWidth)
-                {
-                    Console.WriteLine();
-                    Console.Write(" ".PadLeft(leftCol));
-                    col = leftCol;
-                }
-
-                // If you want to print long strings, pass a wider tabWidth.
-                // But catch the occasional edge case and try to make it pretty.
-                if (i.Length > tabWidth)
-                {
-                    var extra = i.Length % tabWidth;
-
-                    Console.Write(i);
-                    col += i.Length;
-
-                    if (col + extra < Console.BufferWidth)
-                    {
-                        Console.Write(" ".PadRight(extra));
-                        col += extra;
-                    }
-                }
-                else
-                {
-                    Console.Write(i.PadRight(tabWidth));
-                    col += tabWidth;
-                }
-            }
-            Console.WriteLine();
         }
 
 

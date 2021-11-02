@@ -274,3 +274,6 @@ both running on the main thread.  Sigh.  More refactoring ahead...
 
 Doh.  How did this turn into a blog entry?  Cripes.  More rewrites and cleanups
 before any thought of submitting a pull request.
+
+---
+Last update: skeezics    Tue Oct 29 19:42:33 PDT 2021

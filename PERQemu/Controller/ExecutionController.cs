@@ -41,6 +41,18 @@ namespace PERQemu
         CatchFire               // Program is shutting down, PERQ deconfiguring
     }
 
+public enum RunState
+{
+	Run = 0,
+	SingleStep,
+	RunInst,
+	RunZ80Inst,
+	Debug,
+	DebugScript,
+	Reset,
+	Exit,
+    }
+
     /// <summary>
     /// Top-level control for managing the execution of a configured PERQ.
 	/// It knows how to start, pause and stop the machine, as well as the
@@ -66,10 +78,8 @@ namespace PERQemu
 
         public void Initialize(Configuration conf)
         {
-            //_system = new PERQSystem(conf);
-            //Log.Write("ExecutionController: {0} initialized.", conf.Name);
-
             _system = new PERQSystem(conf);
+            Trace.Log(LogType.EmuState, "ExecutionController: {0} initialized.", conf.Name);
         }
 
         public RunMode State
@@ -91,23 +101,24 @@ namespace PERQemu
                 return;
             }
 
-            //if (!_system.Config.IsValid)
-            //{
-            //    Console.WriteLine("The system as configured is invalid and cannot start.");
-            //    Console.WriteLine("Please check the configuration and try again.");
-            //    return;
-            //}
-
             if (_mode != RunMode.Off)
             {
                 Console.WriteLine("The PERQ is already powered on.");
                 return;
             }
 
-            //Log.Write("ExecutionCtrl: Power ON requested.");
+            if (!_system.Config.IsValid)
+            {
+                Console.WriteLine("The system as configured is invalid and cannot start.");
+                Console.WriteLine("Please check the configuration and try again.");
+                return;
+            }
 
-            
-            //_system.Run(_mode);
+            Console.WriteLine("Power ON requested.");
+            // And kick off the display...
+            _system.Display.InitializeSDL();
+
+            _system.Execute();
         }
 
         public void Reset()
@@ -122,10 +133,24 @@ namespace PERQemu
 
         public void PowerOff()
         {
-            //Log.Write("ExecutionCtrl: Power OFF requested.");
-            //DetachSystem();
+             if (_system == null)
+            {
+                Console.WriteLine("No PERQ defined!");
+                return;
+            }
+
+            if (_mode == RunMode.Off)
+            {
+                Console.WriteLine("The PERQ is already powered off.");
+                return;
+            }
+
+            Console.WriteLine("Power OFF requested.");
             _mode = RunMode.Off;
-        }
+
+            PERQemu.Sys.Display.ShutdownSDL();
+
+       }
 
 
         private RunMode _mode;

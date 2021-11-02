@@ -38,7 +38,7 @@ namespace PERQemu.UI
             PERQemu.CLI.SetPrefix("configure");
         }
 
-        [Command("configure commands", "Show configuration commands and their descriptions")]
+        [Command("configure commands", "Show configuration commands")]
         public void ShowConfigCommands()
         {
             PERQemu.CLI.ShowCommands("configure");
@@ -213,7 +213,7 @@ namespace PERQemu.UI
         public void SetChassis()
         {
             Console.WriteLine("Configure the basic machine type.  Valid chassis types:");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(ChassisType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(ChassisType)));
             Console.WriteLine();
             Console.WriteLine("The chassis selected affects what CPU, IO and Disk options are available.");
         }
@@ -232,7 +232,7 @@ namespace PERQemu.UI
         public void SetCPU()
         {
             Console.WriteLine("Configure the CPU board.  Valid CPU board types: ");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(CPUType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(CPUType)));
             Console.WriteLine();
             Console.WriteLine("Selected CPU type may depend on chassis and other options.");
         }
@@ -314,7 +314,7 @@ namespace PERQemu.UI
         public void SetIO()
         {
             Console.WriteLine("Configure the IO board.  Valid IO board types are:");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(IOBoardType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(IOBoardType)));
             Console.WriteLine();
         }
 
@@ -337,7 +337,7 @@ namespace PERQemu.UI
         public void SetOptionIO()
         {
             Console.WriteLine("Configure the IO Option board.  Valid IO Option types are:");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(OptionBoardType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(OptionBoardType)));
             Console.WriteLine();
         }
 
@@ -374,7 +374,7 @@ namespace PERQemu.UI
         public void SetIOOption()
         {
             Console.WriteLine("Configure an IO Option.  Valid IO Option types are:");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(IOOptionType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(IOOptionType)));
             Console.WriteLine();
         }
 
@@ -452,7 +452,7 @@ namespace PERQemu.UI
         public void SetDisplay()
         {
             Console.WriteLine("Configures the display device(s) attached to the PERQ.  Valid types are:");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(DisplayType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(DisplayType)));
             Console.WriteLine();
         }
 
@@ -475,7 +475,7 @@ namespace PERQemu.UI
         public void SetTablet()
         {
             Console.WriteLine("Configures the pointing device(s) attached to the PERQ.  Valid types are:");
-            Console.WriteLine(Columnify(Enum.GetNames(typeof(TabletType))));
+            PERQemu.CLI.Columnify(Enum.GetNames(typeof(TabletType)));
             Console.WriteLine();
         }
 
@@ -489,24 +489,5 @@ namespace PERQemu.UI
             }
         }
 
-
-        private string Columnify(string[] options)
-        {
-            int width = 12;         // our simulated tab stop
-            int col = 0;
-            StringBuilder sb = new StringBuilder();
-
-            foreach (var opt in options)
-            {
-                if (col + width > Console.BufferWidth)
-                {
-                    sb.Append("\n");
-                    col = 0;
-                }
-                sb.Append(opt.PadLeft(width));
-                col += width;
-            }
-            return sb.ToString();
-        }
     }
 }

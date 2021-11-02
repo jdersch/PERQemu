@@ -21,6 +21,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+using PERQemu.Config;
 using PERQemu.Memory;
 
 namespace PERQemu.Processor
@@ -304,10 +305,10 @@ namespace PERQemu.Processor
                 // Check for poweroff bit and stop emulation if we're a PERQ-1.
                 if ((value & 0x80) == 0)
                 {
-                    //if (PERQemu.Sys.Config.Chassis == ChassisType.PERQ1)
-                    //{
+                    if (PERQemu.Sys.Config.Chassis == ChassisType.PERQ1)
+                    {
                         throw new PowerOffException();
-                    //}
+                    }
                 }
 
                 Trace.Log(LogType.RasterOp,

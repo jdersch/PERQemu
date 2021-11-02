@@ -130,23 +130,6 @@ namespace PERQemu.Processor
 
 
         /// <summary>
-        /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
-        /// called once.
-        /// </summary>
-        public void LoadROM(string path)
-        {
-            try
-            {
-                _ustore.LoadBootROM(path);
-            }
-            catch
-            {
-                Console.WriteLine("Could not load boot ROM from {0}!", path);
-                // return fail or throw something?
-            }
-        }
-
-        /// <summary>
         /// Runs the PERQ microengine for one microcycle.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -288,49 +271,18 @@ namespace PERQemu.Processor
 
         #region Properties
 
-        public static string Name
-        {
-            get { return _name; }
-        }
-
-        public static string Description
-        {
-            get { return _desc; }
-        }
-
-        public static int CPUBits
-        {
-            get { return _bits; }
-        }
-
-        public static int CPUMask
-        {
-            get { return _mask; }
-        }
-
-        public static int WCSBits
-        {
-            get { return _wcsBits; }
-        }
-
-        public static int WCSSize
-        {
-            get { return _wcsSize; }
-        }
-
-        public static int WCSMask
-        {
-            get { return _wcsMask; }
-        }
+        public static string Name => _name;
+        public static string Description => _desc;
+        public static int CPUBits => _bits;
+        public static int CPUMask => _mask;
+        public static int WCSBits => _wcsBits;
+        public static int WCSSize => _wcsSize;
+        public static int WCSMask => _wcsMask;
+        public static ulong MicroCycleTime => _cycleTime;
 
         public static bool Is4K
         {
             get { return (_wcsSize == 4096); }
-        }
-
-        public static ulong MicroCycleTime
-        {
-            get { return _cycleTime; }
         }
 
         public ulong Clocks
@@ -351,6 +303,11 @@ namespace PERQemu.Processor
         public bool IncrementBPC
         {
             get { return _incrementBPC; }
+        }
+
+        public ulong[] Microcode
+        {
+        	get { return _ustore.Microcode; }
         }
 
         #endregion
@@ -401,6 +358,25 @@ namespace PERQemu.Processor
         }
 
         /// <summary>
+        /// The microstate register (20-bit).
+        /// </summary>
+        [DebugProperty("ustate")]
+        public int Microstate
+        {
+            get { return ReadMicrostateRegister(0); }
+        }
+
+        /// <summary>
+        /// On 24-bit CPUs, reads the Upper register (Microstate with H=1).
+        /// Results on 20-bit CPUs are undefined.  This isn't ideal.
+        /// </summary>
+        [DebugProperty("upper")]
+        public int Upper
+        {
+            get { return ReadMicrostateRegister(1); }
+        }
+
+        /// <summary>
         /// The uState register(s).
         /// </summary>
         /// <remarks>
@@ -411,22 +387,20 @@ namespace PERQemu.Processor
         /// functionality, and Tony alludes to a possible hardware bug that made
         /// it not work on the 4k CPU anyway.  This is off into the serious
         /// periphery of PERQ esoterica.
+        /// 
+        /// FYI: can't attach the DebugProperty to a virtual method, so we add
+        /// those separately above.  Mild, as hackish workarounds go.
         /// </remarks>
-        // TODO: Whoops.  Attaching a DebugProperty to a virtual method doesn't
-        // work; will have to figure out another way to provide this info given
-        // the differences between the 20- and 24-bit processors.
-        // [DebugProperty("ustate")]
         public virtual int ReadMicrostateRegister(byte h)
         {
             // On the 20-bit CPUs, there's only one microstate register:
-            return
-                BPC |
-                (_alu.Flags.Ovf ? 0x0010 : 0x0) |
-                (_alu.Flags.Eql ? 0x0020 : 0x0) |
-                (_alu.Flags.Cry ? 0x0040 : 0x0) |
-                (_alu.Flags.Lss ? 0x0080 : 0x0) |
-                (_estack.StackEmpty ? 0x0 : 0x0200) |   // inverted!
-                ((((~_lastBmux) >> 16) & 0xf) << 12);
+            return BPC |
+                    (_alu.Flags.Ovf ? 0x0010 : 0x0) |
+                    (_alu.Flags.Eql ? 0x0020 : 0x0) |
+                    (_alu.Flags.Cry ? 0x0040 : 0x0) |
+                    (_alu.Flags.Lss ? 0x0080 : 0x0) |
+                    (_estack.StackEmpty ? 0x0 : 0x0200) |   // inverted!
+                    ((((~_lastBmux) >> 16) & 0xf) << 12);
         }
 
         /// <summary>
@@ -451,7 +425,6 @@ namespace PERQemu.Processor
         /// <summary>
         /// Raises the specified interrupt.
         /// </summary>
-        [DebugFunction("raise interrupt")]
         public void RaiseInterrupt(InterruptType i)
         {
             lock (_intLock)
@@ -465,7 +438,6 @@ namespace PERQemu.Processor
         /// <summary>
         /// Clears the specified interrupt, if set.
         /// </summary>
-        [DebugFunction("clear interrupt")]
         public void ClearInterrupt(InterruptType i)
         {
             lock (_intLock)
@@ -479,14 +451,6 @@ namespace PERQemu.Processor
                 Trace.Log(LogType.Interrupt, "Interrupt {0} cleared, active now {1}", i, _interruptFlag & ~i);
             }
 #endif
-        }
-
-        /// <summary>
-        /// The CPU's microcode store.
-        /// </summary>
-        public ulong[] Microcode
-        {
-            get { return _ustore.Microcode; }
         }
 
         /// <summary>
@@ -919,11 +883,7 @@ namespace PERQemu.Processor
                     else if (uOp.SF <= 15)
                     {
                         // Common to all CPUs: SF 8..15 are the memory ops
-#if DEBUG
-                        _memory.RequestMemoryCycle((long)_clocks, _alu.R.Value, uOp.MemoryRequest);
-#else
                         _memory.RequestMemoryCycle(_alu.R.Value, uOp.MemoryRequest);
-#endif
                     }
                     else
                     {
@@ -1020,181 +980,68 @@ namespace PERQemu.Processor
             return _ustore.GetInstruction(addr);
         }
 
-        [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ current PC)")]
-        private void DisassembleMicrocode()
+        public void LoadMicrocode(string ucodeFile)
         {
-            DisassembleMicrocode(PC, 16);
+        	_ustore.LoadMicrocode(ucodeFile);
         }
 
-        [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr])")]
-        private void DisassembleMicrocode(ushort startAddress)
+        /// <summary>
+        /// Provide access to the XY registers for the debugger.
+        /// </summary>
+        public int ReadRegister(byte r)
         {
-            DisassembleMicrocode(startAddress, 16);
+            return _xy.ReadRegister(r);
         }
 
-        [DebugFunction("disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr, len])")]
-        private void DisassembleMicrocode(ushort startAddress, ushort length)
+        public void WriteRegister(byte r, int v)
         {
-            ushort endAddr = (ushort)(startAddress + length);
-
-            if (startAddress >= _ustore.Microcode.Length || endAddr >= _ustore.Microcode.Length)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _ustore.Microcode.Length);
-                return;
-            }
-
-            // Disassemble microcode
-            for (ushort i = startAddress; i < endAddr; i++)
-            {
-                string line = Disassembler.Disassemble(i, _ustore.GetInstruction(i));
-                Console.WriteLine(line);
-            }
+            _xy.WriteRegister(r, v);
         }
 
-        [DebugFunction("load microcode", "Loads the specified microcode file into the PERQ's writable control store")]
-        private void LoadMicrocode(string ucodeFile)
+        /// <summary>
+        /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
+        /// called once.  Called by PERQsystem based on CPU and I/O Board type.
+        /// </summary>
+        public void LoadROM(string path)
         {
-            try
-            {
-                _ustore.LoadMicrocode(ucodeFile);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to load microcode from {0}, error: {1}", ucodeFile, e.Message);
-            }
+        	try
+        	{
+        		_ustore.LoadBootROM(path);
+        	}
+        	catch
+        	{
+        		Console.WriteLine("Could not load boot ROM from {0}!", path);
+        		// return fail or throw something?
+        	}
         }
 
-        [DebugFunction("jump", "Set next microinstruction address")]
-        private void JumpTo(ushort nextPC)
-        {
-            if (nextPC < 0 || nextPC >= _ustore.Microcode.Length)
-            {
-                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", _ustore.Microcode.Length - 1);
-            }
-            else
-            {
-                PC = nextPC;
-            }
-        }
-
-        [DebugFunction("show cpu registers", "Displays the values of the CPU registers")]
         public void ShowPC()
         {
+            // TODO: move me  or  just return the formatted string?
             Console.WriteLine("\nPC={0:x4} BPC={1:x1} Victim={2:x4} DDS={3} UState={4:x2} Interrupt={5}",
                               PC, BPC, Victim, DDS, ReadMicrostateRegister(0), InterruptFlag);
         }
 
-        [DebugFunction("show xy register", "Displays the values of the XY registers")]
-        private void ShowRegister()
-        {
-            for (int reg = 0; reg < 256; reg++)
-            {
-                Console.Write("R[{0:x2}]={1:x6}{2}", reg, _xy.ReadRegister((byte)reg),
-                              ((reg + 1) % 4 == 0) ? "\n" : "\t");
-            }
-            Console.WriteLine();
-        }
 
-        [DebugFunction("show xy register", "Displays the value of the specified XY register [0..255]")]
-        private void ShowRegister(ushort reg)
-        {
-            if (reg > 255)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and 255");
-                return;
-            }
-            Console.WriteLine("R[{0:x2}]={1:x6}", reg, _xy.ReadRegister((byte)reg));
-        }
 
 #if DEBUG
-        [DebugFunction("set xy register", "Change the value of an XY register")]
-        private void SetRegister(ushort reg, uint val)
-        {
-            if (reg > 255)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and 255");
-                return;
-            }
-            _xy.WriteRegister((byte)reg, (int)(val & 0xffffff));     // clip to 24 bits
 
-            Console.WriteLine("R[{0:x2}]={1:x6} (dec {2})", reg,
-                              _xy.ReadRegister((byte)reg), _xy.ReadRegister((byte)reg));
-        }
-#endif
+        //[DebugFunction("find memory", "Find a specific value in the PERQ's memory [@start, val]")]
+        //private void FindMemory(uint startAddress, ushort val)
+        //{
+        //    if (startAddress >= _memory.MemSize)
+        //    {
+        //        Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", _memory.MemSize - 1);
+        //        return;
+        //    }
 
-        [DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr])")]
-        private void ShowMemory(uint startAddress)
-        {
-            ShowMemory(startAddress, 64);
-        }
+        //    ushort[] mem = _memory.Memory;
 
-        [DebugFunction("show memory", "Dumps the PERQ's memory (@ [addr, len])")]
-        private void ShowMemory(uint startAddress, uint length)
-        {
-            uint endAddr = (uint)(startAddress + length);
-
-            if (startAddress >= _memory.MemSize || endAddr - 8 >= _memory.MemSize)
-            {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", _memory.MemSize - 1);
-                return;
-            }
-
-            ushort[] mem = _memory.Memory;
-
-            // Format and display 8 words per line
-            for (uint i = startAddress; i < endAddr; i += 8)
-            {
-                StringBuilder line = new StringBuilder();
-
-                line.AppendFormat("{0:x6}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
-                    i, mem[i], mem[i + 1], mem[i + 2], mem[i + 3], mem[i + 4], mem[i + 5], mem[i + 6], mem[i + 7]);
-
-                for (uint j = i; j < i + 8; j++)
-                {
-                    // Build ascii representation...
-                    char high = (char)((mem[j] & 0xff00) >> 8);
-                    char low = (char)((mem[j] & 0xff));
-
-                    if (!Debugger.Debugger.IsPrintable(high))
-                    {
-                        high = '.';
-                    }
-
-                    if (!Debugger.Debugger.IsPrintable(low))
-                    {
-                        low = '.';
-                    }
-
-                    line.AppendFormat("{0}{1}", low, high);     // Reversed so strings read right :)
-                }
-
-                Console.WriteLine(line);
-            }
-        }
-
-#if DEBUG
-        [DebugFunction("find memory", "Find a specific value in the PERQ's memory")]
-        private void FindMemory(ushort val)
-        {
-            FindMemory(0, val);
-        }
-
-        [DebugFunction("find memory", "Find a specific value in the PERQ's memory [@start, val]")]
-        private void FindMemory(uint startAddress, ushort val)
-        {
-            if (startAddress >= _memory.MemSize)
-            {
-                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", _memory.MemSize - 1);
-                return;
-            }
-
-            ushort[] mem = _memory.Memory;
-
-            for (uint i = startAddress; i < _memory.MemSize; i++)
-            {
-                if (mem[i] == val) ShowMemory((i & 0xffffc), 4);        // show the quadword
-            }
-        }
+        //    for (uint i = startAddress; i < _memory.MemSize; i++)
+        //    {
+        //        if (mem[i] == val) ShowMemory((i & 0xffffc), 4);        // show the quadword
+        //    }
+        //}
 
         [DebugFunction("set memory", "Write a specific value in the PERQ's memory")]
         private void SetMemory(uint address, ushort val)
@@ -1215,8 +1062,7 @@ namespace PERQemu.Processor
         }
 #endif
 
-        [DebugFunction("show opfile", "Displays the contents of the opcode file")]
-        private void ShowOpfile()
+        public void ShowOpfile()
         {
             Console.WriteLine("BPC={0}. Opfile Contents:", BPC);
 
@@ -1226,14 +1072,12 @@ namespace PERQemu.Processor
             }
         }
 
-        [DebugFunction("show estack", "Displays the contents of the expression stack")]
-        private void ShowEStack()
+        public void ShowEStack()
         {
             _estack.DumpContents();
         }
 
-        [DebugFunction("show cstack", "Displays the contents of the 2910 call stack")]
-        private void ShowCStack()
+        public void ShowCStack()
         {
             _usequencer.DumpContents();
         }

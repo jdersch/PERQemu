@@ -17,7 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -105,16 +104,6 @@ namespace PERQemu.UI
             }
         }
 
-
-        public void ShowCommands()
-        {
-            ShowCommands(_commandRoot);
-        }
-
-        public void ShowCommands(string prefix)
-        {
-            ShowCommands(_commandRoot.FindSubNodeByName(prefix));
-        }
 
         /// <summary>
         /// Shows a top-level command summary.
@@ -418,6 +407,13 @@ namespace PERQemu.UI
 
         public static Radix GetRadix(ref string arg)
         {
+            // Special case for C programmers :-)
+            if (arg.StartsWith("0x", StringComparison.InvariantCulture))
+            {
+                arg = arg.Remove(0, 2);
+                return Radix.Hexadecimal;
+            }
+
             switch (arg[0])
             {
                 case 'b':
@@ -435,7 +431,6 @@ namespace PERQemu.UI
 
                 case '$':
                 case 'x':
-                    // todo: accept 0x for the C programmers... :-)
                     arg = arg.Remove(0, 1);
                     return Radix.Hexadecimal;
 
