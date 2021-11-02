@@ -168,7 +168,7 @@ namespace PERQemu
             Console.Write("Bootchar is ");
             if (PERQemu.Sys.BootChar != 0)
             {
-                Console.WriteLine(PERQemu.Sys.BootChar);
+                Console.WriteLine((char)PERQemu.Sys.BootChar);
             }
             else
             {

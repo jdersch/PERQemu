@@ -81,6 +81,7 @@ namespace PERQemu
             Reset();
         }
 
+
         //      =============================
         //
         //      MAJOR REORGANIZATION UNDERWAY
@@ -93,6 +94,46 @@ namespace PERQemu
         // days/weeks.  Things will be broken or weird for a while.
         //      -- S. Boondoggle
         //
+
+        public Configuration Config => _conf;
+        public Scheduler Scheduler => _scheduler;
+
+        public CPU CPU => _cpu;
+        public MemoryBoard Memory => _mem;
+        public VideoController VideoController => _mem.Video;
+        public Display Display => _display;
+        public IOB IOB => _iob;                 // todo ioboard
+        public OIO OIO => _oio;                 // todo ioboard (or optionioboard?)
+        public IOBus IOBus => _ioBus;
+
+        public Debugger.Debugger Debugger => _debugger; // fixme soon to go
+
+        /// <summary>
+        /// Allows overriding the default OS boot character.
+        /// (This is a key that, when held down at boot time will cause the PERQ
+        /// microcode to select a different OS to boot.)
+        /// </summary>
+        public byte BootChar
+        {
+            get { return _bootChar; }
+            set { _bootChar = value; }
+        }
+
+        public ExecutionMode Z80ExecutionMode
+        {
+            get { return _z80ExecutionMode; }
+            set { _z80ExecutionMode = value; }
+        }
+
+        private delegate void RunDelegate();
+
+        private void Reset()
+        {
+            _scheduler.Reset();
+            _cpu.Reset();
+            _mem.Reset();
+            _ioBus.Reset();
+        }
 
         public void Execute()
         {
@@ -190,7 +231,6 @@ namespace PERQemu
                         _state = _debugger.Enter(_debugMessage);
                         break;
 
-
                     case RunState.Reset:
                         Reset();
                         _state = RunState.Debug;
@@ -210,39 +250,6 @@ namespace PERQemu
             _state = RunState.Debug;
         }
 
-
-        /// <summary>
-        /// Allows overriding the default OS boot character.
-        /// (This is a key that, when held down at boot time will cause the PERQ
-        /// microcode to select a different OS to boot.)
-        /// </summary>
-        public byte BootChar
-        {
-            get { return _bootChar; }
-            set { _bootChar = value; }
-        }
-
-        public ExecutionMode Z80ExecutionMode
-        {
-            get { return _z80ExecutionMode; }
-            set { _z80ExecutionMode = value; }
-        }
-
-        public Configuration Config => _conf;
-        public Scheduler Scheduler => _scheduler;
-
-        public CPU CPU => _cpu;
-        public MemoryBoard Memory => _mem;
-        public VideoController VideoController => _mem.Video;
-        public Display Display => _display;
-        public IOB IOB =>  _iob;
-        public OIO OIO => _oio;
-        public IOBus IOBus => _ioBus;
-
-        public Debugger.Debugger Debugger => _debugger;
-        
-
-        private delegate void RunDelegate();
 
         /// <summary>
         /// Executes the specified emulation delegate inside a try/catch block that
@@ -273,33 +280,43 @@ namespace PERQemu
             }
         }
 
-
-        private void Reset()
+        /// <summary>
+        /// If the user has specified an alternate boot character, kick off
+        /// a workitem to automagically press it (up until the point in the
+        /// standard boot microcode where the key is read).
+        /// </summary>
+        public void PressBootKey()
         {
-            _scheduler.Reset();
-            _cpu.Reset();
-            _mem.Reset();
-            _ioBus.Reset();
-
-            //
-            // If the user has specified an alternate boot character, kick off this workitem to
-            // automagically press it up until DDS 154.
-            //
             if (BootChar != 0)
             {
-                _scheduler.Schedule((ulong)(250.0 * Conversion.MsecToNsec), BootCharCallback);
+                _scheduler.Schedule((ulong)(10.0 * Conversion.MsecToNsec), BootCharCallback);
             }
         }
 
+        /// <summary>
+        /// Simulate holding down a key if the user has selected an alternate
+        /// boot char.  To be effective, only sends the character from the start
+        /// of SYSB (when the DDS reaches 150) to when the Z80 reads and returns
+        /// it to the microcode (by DDS 151).  Deschedules itself after that.
+        /// </summary>
+        /// <remarks>
+        /// Most versions of SYSB start by immediately turning off the Z80,
+        /// restarting it, enabling the keyboard to read the boot character,
+        /// then turning everything off again while it continues the bootstrap.
+        /// With only 2-3 retries at approximately 11.9ms of delay between each
+        /// one, there's actually a very short window to sneak the boot key in
+        /// there!  Adding a new run state is a little cheesy but should be
+        /// more accurate (and reliable) than before.
+        /// </remarks>
         private void BootCharCallback(ulong skewNsec, object context)
         {
-            if (BootChar != 0 && CPU.DDS < 154)
+            if (_cpu.DDS < 152)
             {
                 // Send the key:
                 _iob.Z80System.Keyboard.QueueInput(BootChar);
 
                 // And do it again.
-                _scheduler.Schedule((ulong)(250.0 * Conversion.MsecToNsec), BootCharCallback);
+                _scheduler.Schedule((ulong)(10.0 * Conversion.MsecToNsec), BootCharCallback);
             }
         }
 

@@ -609,7 +609,7 @@ namespace PERQemu.UI
             }
         }
 
-//#if DEBUG
+#if DEBUG
         public void DumpCommandTree(CommandNode node)
         {
             Console.Write("".PadLeft(_indent));
@@ -660,7 +660,7 @@ namespace PERQemu.UI
         }
 
         private int _indent = 0;
-//#endif
+#endif
 
         private CommandNode _commandRoot;
         private CommandNode _currentRoot;

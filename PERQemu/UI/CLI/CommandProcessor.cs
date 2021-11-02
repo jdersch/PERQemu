@@ -234,22 +234,29 @@ namespace PERQemu
             _exec.ShowCommands(node);
         }
 
-        //[Command("gui", "Start the graphical interface")]
-        //private void LaunchGUI()
-        //{
-        //    Console.WriteLine("[Console now read-only; close the GUI to return.]");
+        [Command("gui", "Start the graphical interface")]
+        private void LaunchGUI()
+        {
+            // I'm looking at YOU, 64-bit Cocoa WinForms port that was promised
+            // three YEARS ago.  Sigh.
+            Console.WriteLine("Nope.  No cross-platform GUI available yet.");
 
-        //    // When started manually, return to the console if the user closes
-        //    // the front panel -- but exit if they explicitly choose File->Exit.
-        //    if (PERQemu.GUI.Run("FrontPanel"))
-        //    {
-        //        _running = false;
-        //    }
-        //    else
-        //    {
-        //        Console.WriteLine("[Return to CLI mode.]");
-        //    }
-        //}
+            // TODO: build a flippin' Windows machine and try out the PERQolator
+            // GUI there.  At least maybe we'd have a way to continue development...
+            
+            //Console.WriteLine("[Console now read-only; close the GUI to return.]");
+
+            //// When started manually, return to the console if the user closes
+            //// the front panel -- but exit if they explicitly choose File->Exit.
+            //if (PERQemu.GUI.Run("FrontPanel"))
+            //{
+            //    _running = false;
+            //}
+            //else
+            //{
+            //    Console.WriteLine("[Return to CLI mode.]");
+            //}
+        }
 
         [Command("done", IsDiscreet = true)]
         private void Done()
@@ -271,14 +278,14 @@ namespace PERQemu
             _running = false;
         }
 
-        //#if DEBUG
-        [Command("dump command tree", IsDiscreet = true)]
+#if DEBUG
+        [Command("debug dump command tree")] // , IsDiscreet = true)]
         public void DumpCommandTree()
         {
             Console.WriteLine("\nCommand tree:");
             _exec.DumpCommandTree(_exec.CurrentRoot);
         }
-        //#endif
+#endif
 
         private bool _running;
         private CommandExecutor _exec;

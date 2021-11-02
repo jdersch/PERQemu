@@ -290,9 +290,9 @@ namespace PERQemu.Processor
             get { return _clocks; }
         }
 
-        public bool RasterOpEnabled
+        public RasterOp RasterOp
         {
-            get { return _rasterOp.Enabled; }
+            get { return _rasterOp; }
         }
 
         public bool OpFileEmpty
@@ -952,10 +952,20 @@ namespace PERQemu.Processor
         public void IncrementDDS()
         {
             _dds++;
-
             Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
 
-            // TODO: would be nice to have a breakpoint on DDS value
+            // This is a little hacky, but since just about every PERQ
+            // ever made used standard boot ROMs and the standard SYSB
+            // microcode, having this hook here isn't too terrible...
+            if (_dds == 150)
+            {
+                _system.PressBootKey();
+            }
+
+            // TODO: a general event-based way to provide hooks or
+            // breakpoints when the DDS reaches a particular value might
+            // be a cleaner way to allow a GUI, the debugger, or the boot
+            // key-holder-downer-thingie to hook in...
 
             // TODO: This should be moved elsewhere
             Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
@@ -1022,46 +1032,6 @@ namespace PERQemu.Processor
                               PC, BPC, Victim, DDS, ReadMicrostateRegister(0), InterruptFlag);
         }
 
-
-
-#if DEBUG
-
-        //[DebugFunction("find memory", "Find a specific value in the PERQ's memory [@start, val]")]
-        //private void FindMemory(uint startAddress, ushort val)
-        //{
-        //    if (startAddress >= _memory.MemSize)
-        //    {
-        //        Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", _memory.MemSize - 1);
-        //        return;
-        //    }
-
-        //    ushort[] mem = _memory.Memory;
-
-        //    for (uint i = startAddress; i < _memory.MemSize; i++)
-        //    {
-        //        if (mem[i] == val) ShowMemory((i & 0xffffc), 4);        // show the quadword
-        //    }
-        //}
-
-        [DebugFunction("set memory", "Write a specific value in the PERQ's memory")]
-        private void SetMemory(uint address, ushort val)
-        {
-            if (address >= _memory.MemSize)
-            {
-                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", _memory.MemSize - 1);
-                return;
-            }
-
-            _memory.StoreWord((int)address, val);
-        }
-
-        [DebugFunction("show memstate", "Dump the memory controller state")]
-        private void ShowMemQueues()
-        {
-            _memory.DumpQueues();
-        }
-#endif
-
         public void ShowOpfile()
         {
             Console.WriteLine("BPC={0}. Opfile Contents:", BPC);
@@ -1082,63 +1052,6 @@ namespace PERQemu.Processor
             _usequencer.DumpContents();
         }
 
-#if DEBUG
-        [DebugFunction("set rasterop debug", "Enable extended RasterOp debugging")]
-        private void SetRopDebug()
-        {
-            _rasterOp.Debug = true;
-        }
-
-        [DebugFunction("set rasterop logging", "Enable extended RasterOp logging")]
-        private void SetRopLogging()
-        {
-#if TRACING_ENABLED
-            // Bundled all these for convenience...
-            Trace.TraceLevel |= (LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
-#endif
-        }
-
-        [DebugFunction("clear rasterop debug", "Disable extended RasterOp debugging")]
-        private void ClearRopDebug()
-        {
-            _rasterOp.Debug = false;
-        }
-
-        [DebugFunction("clear rasterop logging", "Disable extended RasterOp logging")]
-        private void ClearRopLogging()
-        {
-#if TRACING_ENABLED
-            Trace.TraceLevel &= ~(LogType.RasterOp | LogType.MemoryState | LogType.MemoryFetch | LogType.MemoryStore);
-#endif
-        }
-
-        [DebugFunction("show rasterop state", "Display current RasterOp unit status")]
-        private void ShowRopState()
-        {
-            _rasterOp.ShowState();
-        }
-
-        [DebugFunction("show rasterop fifos", "Display current RasterOp source & destination FIFOs")]
-        private void ShowRopFifos()
-        {
-            _rasterOp.ShowFifos();
-        }
-
-        [DebugFunction("show rasterop registers", "Display current RasterOp register contents")]
-        private void ShowRopRegs()
-        {
-            _rasterOp.ShowRegs();
-        }
-
-        // this all changes with the new Z80?
-        //[DebugFunction("show z80 state", "Display current Z80 device ready state")]
-        //private void ShowZ80State()
-        //{
-        //    Console.WriteLine("Z80 clock: {0}", ((Z80System)(_system.IOB.Z80System)).Clocks());
-        //    //_system.IOB.Z80System.ShowReadyState();
-        //}
-
-#endif
         #endregion
 
         //

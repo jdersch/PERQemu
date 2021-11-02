@@ -26,15 +26,15 @@ using PERQemu.Memory;
 
 namespace PERQemu.Processor
 {
-    public partial class CPU
-    {
-        private enum Direction
+    //public class CPU
+    //{
+        enum Direction
         {
             LeftToRight,
             RightToLeft
         }
 
-        private enum Function
+        enum Function
         {
             Insert = 0,
             InsertNot,
@@ -46,7 +46,7 @@ namespace PERQemu.Processor
             Xnor
         }
 
-        private enum Phase
+        enum Phase
         {
             Begin = 0,
             Mid,
@@ -59,7 +59,7 @@ namespace PERQemu.Processor
             Done
         }
 
-        private enum State
+        enum State
         {
             Idle = 0,
             DestFetch,
@@ -67,7 +67,7 @@ namespace PERQemu.Processor
             Off
         }
 
-        private enum EdgeStrategy
+        enum EdgeStrategy
         {
             NoPopNoPeek = 0,
             NoPopPeek,
@@ -77,7 +77,7 @@ namespace PERQemu.Processor
         }
 
         [Flags]
-        private enum CombinerFlags
+        enum CombinerFlags
         {
             Invalid = 0x00,         // word not properly initialized (debugging)
             DontMask = 0x01,        // pass word unmodified; beginning of scan line
@@ -100,7 +100,7 @@ namespace PERQemu.Processor
         /// A memory word in the RasterOp datapath, augmented with debugging info
         /// (tracks the source address of a given word).
         /// </summary>
-        private struct ROpWord
+        struct ROpWord
         {
             public ROpWord(int addr, int idx, ushort val)
             {
@@ -148,7 +148,7 @@ namespace PERQemu.Processor
 
             public RasterOp(MemoryBoard mem)
             {
-                _ropShifter = new Shifter();            // Our own private Idaho
+                _ropShifter = new CPU.Shifter();        // Our own private Idaho
                 _srcFifo = new Queue<ROpWord>(16);      // 4 quads (hardware limit)
                 _destFifo = new Queue<ROpWord>(4);      // 1 quad
                 _halfPipe = new ROpWord();              // 1 word, for overlap
@@ -647,7 +647,7 @@ namespace PERQemu.Processor
                     // xOffset is the shift amount based on current register values;
                     // set up the RasterOp shifter command.
                     _xOffset = (16 + (_destBitOffset - _srcBitOffset)) & 0xf;
-                    _ropShifter.SetShifterCommand(ShifterCommand.Rotate, _xOffset, 0);
+                    _ropShifter.SetShifterCommand(CPU.ShifterCommand.Rotate, _xOffset, 0);
 
                     //
                     // Region bitmask setup
@@ -1134,7 +1134,7 @@ namespace PERQemu.Processor
             private ushort _bothEdgesMask;
 
             // Our own Shifter (cheating; the hardware has only one)
-            private Shifter _ropShifter;
+            private CPU.Shifter _ropShifter;
 
             // The "half-pipeline register"
             private ROpWord _halfPipe;
@@ -1157,5 +1157,5 @@ namespace PERQemu.Processor
             private static EdgeStrategy[] _rscTable;
 
         }
-    }
+    //}
 }

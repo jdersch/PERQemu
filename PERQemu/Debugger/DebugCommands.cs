@@ -234,6 +234,73 @@ namespace PERQemu
             }
         }
 
+#if DEBUG
+        [Command("debug find memory", "Find a specific value in the PERQ's memory [@start, val]")]
+        private void FindMemory(uint startAddress, ushort val)
+        {
+            if (startAddress >= PERQemu.Sys.Memory.MemSize)
+            {
+                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", PERQemu.Sys.Memory.MemSize - 1);
+                return;
+            }
+
+            ushort[] mem = PERQemu.Sys.Memory.Memory;
+
+            for (uint i = startAddress; i < mem.Length; i++)
+            {
+                if (mem[i] == val) ShowMemory((i & 0xffffc), 4);        // show the quadword
+            }
+        }
+
+        [Command("debug set memory", "Write a specific value in the PERQ's memory")]
+        private void SetMemory(uint address, ushort val)
+        {
+            if (address >= PERQemu.Sys.Memory.MemSize)
+            {
+                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", PERQemu.Sys.Memory.MemSize - 1);
+                return;
+            }
+
+            PERQemu.Sys.Memory.StoreWord((int)address, val);
+        }
+
+        [Command("debug show memstate", "Dump the memory controller state")]
+        private void ShowMemQueues()
+        {
+            PERQemu.Sys.Memory.DumpQueues();
+        }
+
+        [Command("debug set rasterop debug", "Enable extended RasterOp debugging")]
+        private void SetRopDebug()
+        {
+            PERQemu.Sys.CPU.RasterOp.Debug = true;
+        }
+
+        [Command("debug clear rasterop debug", "Disable extended RasterOp debugging")]
+        private void ClearRopDebug()
+        {
+            PERQemu.Sys.CPU.RasterOp.Debug = false;
+        }
+
+        [Command("debug show rasterop state", "Display current RasterOp unit status")]
+        private void ShowRopState()
+        {
+            PERQemu.Sys.CPU.RasterOp.ShowState();
+        }
+
+        [Command("debug show rasterop fifos", "Display current RasterOp source & destination FIFOs")]
+        private void ShowRopFifos()
+        {
+            PERQemu.Sys.CPU.RasterOp.ShowFifos();
+        }
+
+        [Command("debug show rasterop registers", "Display current RasterOp register contents")]
+        private void ShowRopRegs()
+        {
+            PERQemu.Sys.CPU.RasterOp.ShowRegs();
+        }
+#endif
+
         //
         // Interrupts and I/O
         //

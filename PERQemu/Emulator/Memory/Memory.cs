@@ -104,7 +104,7 @@ namespace PERQemu.Memory
         public bool Hold => _hold;
 
         public int TState => _Tstate;
-        public bool RopEnabled => _system.CPU.RasterOpEnabled;
+        public bool RopEnabled => _system.CPU.RasterOp.Enabled;
         public VideoController Video => _videoController;
 
 
