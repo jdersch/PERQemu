@@ -29,12 +29,19 @@ namespace PERQemu
     /// </summary>
     public class ExecCommands
     {
-        //
-        // load::<media> -- insert removable media
-        // save::<media> -- save removable media
-        // unload::<media> -- remove " ".  alias: eject
-        // create::<media> -- create new blank, formatted media
-        // 
+        [Command("status", "Show current status of the PERQ")]
+        [Command("debug status", "Show current status of the PERQ")]
+        public void Status()
+        {
+            if (PERQemu.Sys == null)
+            {
+                Console.WriteLine("No PERQ!");
+                return;
+            }
+
+            Console.WriteLine("Current run state is " + PERQemu.Sys.State);
+            Console.WriteLine("Current configuration is " + PERQemu.Sys.Config.Name);
+        }
 
         [Command("power on", "Turn on the configured PERQ!")]
         public void PowerOn()
@@ -49,25 +56,25 @@ namespace PERQemu
         }
 
         [Command("go")]
+        [Command("debug go")]
         [Command("start", "Start or restart the PERQ")]
+        [Command("debug start", "Start or restart the PERQ")]
         public void Start()
         {
-            Console.WriteLine("Starting the PERQ...");
-
+            PERQemu.Controller.TransitionTo(RunState.Running);
         }
 
         [Command("stop", "Stop or pause the PERQ")]
         public void Stop()
         {
-            Console.WriteLine("Stopping the PERQ...");
-
+            PERQemu.Controller.TransitionTo(RunState.Paused);
         }
 
         [Command("reset", "Reset the PERQ")]
+        [Command("debug reset", "Reset the PERQ")]
         public void Reset()
         {
-            Console.WriteLine("Resetting the PERQ...");
-
+            PERQemu.Controller.TransitionTo(RunState.Reset);
         }
 
         //
@@ -159,16 +166,16 @@ namespace PERQemu
         [Command("set bootchar", "Set the boot character (selects the OS to boot)")]
         private void SetBootChar(char bootChar)
         {
-            PERQemu.Sys.BootChar = (byte)bootChar;
+            PERQemu.Controller.BootChar = (byte)bootChar;
         }
 
         [Command("show bootchar", "Show the boot character")]
         private void ShowBootChar()
         {
             Console.Write("Bootchar is ");
-            if (PERQemu.Sys.BootChar != 0)
+            if (PERQemu.Controller.BootChar != 0)
             {
-                Console.WriteLine((char)PERQemu.Sys.BootChar);
+                Console.WriteLine((char)PERQemu.Controller.BootChar);
             }
             else
             {

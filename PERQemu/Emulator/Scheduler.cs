@@ -107,7 +107,6 @@ namespace PERQemu
         /// </summary>
         public Event Schedule(ulong timestampNsec, object context, SchedulerEventCallback callback)
         {
-
             Event e = new Event(timestampNsec + _currentTimeNsec, context, callback);
             _schedule.Push(e);
 

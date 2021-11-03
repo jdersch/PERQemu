@@ -25,32 +25,20 @@ using PERQemu.Config;
 namespace PERQemu
 {
     /// <summary>
-    /// Defines the run state of the virtual PERQ.  This hasn't been fully worked out.
+    /// Defines the run state of the virtual PERQ.
     /// </summary>
-    public enum RunMode
+    public enum RunState
     {
-        Off = 0,                // Power is off or no PERQ configured
-        WarmingUp,              // Power is on and the GUI is warming up :-)
-        Reset,                  // Held-in-reset state if PauseOnReset
-        Run,                    // Run, run like the wind
-        Pause,                  // User- or program-requested Pause
-        Step,                   // Debugger is single stepping execution
-        Inst,                   // Debugger is running one opcode
-        Auto,                   // Debugger is updating on every cycle (slow)
-        Halt,                   // Power off exception or grievous error
-        CatchFire               // Program is shutting down, PERQ deconfiguring
-    }
-
-public enum RunState
-{
-	Run = 0,
-	SingleStep,
-	RunInst,
-	RunZ80Inst,
-	Debug,
-	DebugScript,
-	Reset,
-	Exit,
+        Off = 0,        // Power is off or no PERQ configured
+        WarmingUp,      // Power is on and the GUI is warming up :-)
+        Reset,          // Held-in-reset state if PauseOnReset
+        Paused,         // User- or program-requested Pause
+        Running,        // Run, run like the wind
+        SingleStep,     // Debugger is single stepping execution
+        RunInst,        // Debugger is running one opcode
+        RunZ80Inst,     // Debugger is running one Z80 opcode
+        Halted,         // Power off exception or grievous error
+        ShuttingDown    // Program is shutting down, PERQ deconfiguring
     }
 
     /// <summary>
@@ -58,34 +46,29 @@ public enum RunState
 	/// It knows how to start, pause and stop the machine, as well as the
     /// debug modes(step, inst, auto).
     /// </summary>
-    /// <design>
-    /// Runs on the main thread, and simply manages several WaitHandles to
-    /// block or unblock the running machine.  Calls may be made from the
-    /// CLI or the GUI in response to typed commands or clicks from the
-    /// Front Panel or Debugger (so this control is thread aware).
-    /// 
-    /// We only instantiate one controller, and attach/detach the configured
-    /// PERQ to it.
-    /// </design>
     public sealed class ExecutionController
     {
 
         public ExecutionController()
         {
             _system = null;
-            _mode = RunMode.Off;
+            _bootChar = 0;
         }
 
-        public void Initialize(Configuration conf)
+        public RunState State
         {
-            _system = new PERQSystem(conf);
-            Trace.Log(LogType.EmuState, "ExecutionController: {0} initialized.", conf.Name);
+            get { return (_system == null ? RunState.Off : _system.State); }
         }
 
-        public RunMode State
+        /// <summary>
+        /// Allows overriding the default OS boot character.
+        /// (This is a key that, when held down at boot time will cause the PERQ
+        /// microcode to select a different OS to boot.)
+        /// </summary>
+        public byte BootChar
         {
-            get { return _mode; }
-            set { _mode = value; }      // this is wrong; need a method to sanity check things
+            get { return _bootChar; }
+            set { _bootChar = value; }
         }
 
         public PERQSystem System
@@ -93,21 +76,20 @@ public enum RunState
             get { return _system; }
         }
 
+        public void Initialize(Configuration conf)
+        {
+            _system = new PERQSystem(conf);
+        }
+
         public void PowerOn()
         {
-            if (_system == null)
-            {
-                Console.WriteLine("No PERQ defined!  Cannot power on.");
-                return;
-            }
-
-            if (_mode != RunMode.Off)
+            if (_system != null && _system.State != RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered on.");
                 return;
             }
 
-            if (!_system.Config.IsValid)
+            if (!PERQemu.Config.Current.IsValid)
             {
                 Console.WriteLine("The system as configured is invalid and cannot start.");
                 Console.WriteLine("Please check the configuration and try again.");
@@ -115,46 +97,63 @@ public enum RunState
             }
 
             Console.WriteLine("Power ON requested.");
-            // And kick off the display...
-            _system.Display.InitializeSDL();
 
+            if (PERQemu.Config.Current.IsModified)
+            {
+                _system = null;     // release?
+                _system = new PERQSystem(PERQemu.Config.Current);
+            }
+
+            _system.State = RunState.WarmingUp;
             _system.Execute();
         }
 
         public void Reset()
         {
-            //Log.Write("ExecutionCtrl: System Reset requested.");
-            _mode = RunMode.Reset;
-
-            //PERQemu.Sys.Reset();
-
-            // if (!Settings.PauseOnReset) { change back to Run mode; }
+            _system.State = RunState.Reset;
+            _system.Execute();
         }
 
         public void PowerOff()
         {
-             if (_system == null)
-            {
-                Console.WriteLine("No PERQ defined!");
-                return;
-            }
-
-            if (_mode == RunMode.Off)
+           if (_system == null || _system.State == RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered off.");
                 return;
             }
 
+            // todo:
+            //      stop if running
+            //      save disks?
+            //      proceed to shutdown (stops SDL loop, closes display)
+
             Console.WriteLine("Power OFF requested.");
-            _mode = RunMode.Off;
+            _system.State = RunState.ShuttingDown;
+            _system.Execute();
+        }
 
-            PERQemu.Sys.Display.ShutdownSDL();
+        public RunState TransitionTo(RunState nextState)
+        {
+            var current = _system.State;
 
-       }
+            //Console.WriteLine("Transition request from {0} to {1}", current, nextState);
 
+            // Are we already in the requested state?
+            if (current == nextState) return current;
 
-        private RunMode _mode;
+            // Now, how do we get theyah from heeyah?
+            // this gets real stupid real fast
+            if (current == RunState.Off)
+                PowerOn();
+
+            _system.State = nextState;
+            _system.Execute();
+
+            return PERQemu.Controller.State;
+        }
+
+        private static byte _bootChar;
+
         private PERQSystem _system;
-
     }
 }

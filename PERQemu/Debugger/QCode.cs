@@ -18,7 +18,7 @@
 
 using System;
 
-namespace PERQemu.QCode
+namespace PERQemu.Debugger
 {
     /// <summary>
     /// Represents a single QCode instruction; includes a mapping from

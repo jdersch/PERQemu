@@ -31,11 +31,8 @@ namespace PERQemu.IO.HardDisk
         public ShugartDiskController(PERQSystem system)
         {
             _system = system;
-            Reset();
+            //Reset();      must be explicit
             LoadImage(null);
-
-            // Get the index pulse generator running.
-            IndexPulseStart(0, null);
         }
 
         public void Reset()
@@ -48,6 +45,11 @@ namespace PERQemu.IO.HardDisk
             _head = 0;
             _sector = 0;
             _seekState = SeekState.WaitForStepSet;
+
+            // TODO: IO Board should start the drives spinning when
+            // the execution controller actually spins up the machine!
+			// Get the index pulse generator running.
+			IndexPulseStart(0, null);
         }
 
         /// <summary>
@@ -388,7 +390,6 @@ namespace PERQemu.IO.HardDisk
             // Write the sector to the disk...
             _disk.SetSector(sectorData, _cylinder, _head, _sector);
 
-
             Trace.Log(LogType.HardDisk,
                       "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
@@ -399,9 +400,6 @@ namespace PERQemu.IO.HardDisk
         public void LoadImage(string path)
         {
             // Create a new PhysicalDisk for a 24mb Shugart drive...
-            // TODO: this should account for the 4104, and also write
-            // a type code byte into the header to make auto-discovery
-            // of the disk image type more accurate...
             _disk = new ShugartDisk(true /* 24mb */);
 
             if (path != null)

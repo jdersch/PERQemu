@@ -89,7 +89,8 @@ namespace PERQemu.Config
         public string Name
         {
             get { return _name; }
-            set {
+            set
+            {
                 _name = value;
                 _key = _name.Trim().ToLower();
             }
@@ -270,5 +271,20 @@ namespace PERQemu.Config
         private bool _validated;
         private bool _modified;
         private bool _saved;
+    }
+
+
+    public class UnimplementedHardwareException : Exception
+    {
+        public UnimplementedHardwareException(string message) : base(message)
+        {
+        }
+    }
+
+    public class InvalidConfigurationException : Exception
+    {
+        public InvalidConfigurationException(string message) : base(message)
+        {
+        }
     }
 }

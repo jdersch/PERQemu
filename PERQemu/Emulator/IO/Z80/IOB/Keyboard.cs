@@ -207,7 +207,7 @@ namespace PERQemu.IO.Z80.IOB
             //
             // Special case: Hack for bootchar to make it easier to override at startup.
             //
-            if (_system.BootChar != 0 && _enabled && _system.CPU.DDS < 154 && fifo.Count < 1)
+            if (PERQemu.Controller.BootChar != 0 && _enabled && _system.CPU.DDS < 154 && fifo.Count < 1)
             {
                 _bootCharThrottle++;
 
@@ -215,7 +215,7 @@ namespace PERQemu.IO.Z80.IOB
                 {
                     fifo.Enqueue(Z80System.SOM);                        // SOM
                     fifo.Enqueue((byte)Z80toPERQMessage.KeyboardData);  // Keyboard char message type
-                    fifo.Enqueue(_system.BootChar);                  // Data
+                    fifo.Enqueue(PERQemu.Controller.BootChar);          // Data
 
                     _bootCharThrottle = 0;
                 }

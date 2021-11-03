@@ -34,8 +34,8 @@ namespace PERQemu.Processor
     {
         public PowerOffException()
         {
-            // This probably belongs somewhere else.
-            // It's also only relevant to the PERQ-1.
+            // Thrown when the PERQ-1 powers itself off.
+            // (The PERQ-2 didn't have "soft" power.)
         }
     }
 

@@ -19,6 +19,8 @@
 using System;
 using System.Runtime.CompilerServices;
 
+using PERQemu.Debugger;
+
 namespace PERQemu.Processor
 {
     public partial class CPU
@@ -408,7 +410,7 @@ namespace PERQemu.Processor
                 {
                     Trace.TraceLevel &= (~LogType.Instruction);
                     Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}",
-                              next, QCode.QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, _cpu.BPC);
+                              next, QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, _cpu.BPC);
                 }
 
                 _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));

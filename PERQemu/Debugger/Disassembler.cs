@@ -18,6 +18,7 @@
 
 using System;
 using System.Text;
+
 using PERQemu.Processor;
 
 namespace PERQemu.Debugger

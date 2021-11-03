@@ -115,6 +115,7 @@ namespace PERQemu
             }
         }
 
+#region CLI Utility Routines
 
         /// <summary>
         /// Print a nice columnar list of (reasonably short) strings.
@@ -159,6 +160,15 @@ namespace PERQemu
             }
             Console.WriteLine();
         }
+
+        public bool IsPrintable(char c)
+        {
+            return (char.IsLetterOrDigit(c) ||
+                    char.IsSymbol(c) ||
+                    char.IsPunctuation(c));
+        }
+
+#endregion
 
         //
         // Basic built-in commands
@@ -279,7 +289,7 @@ namespace PERQemu
         }
 
 #if DEBUG
-        [Command("debug dump command tree")] // , IsDiscreet = true)]
+        [Command("debug dump command tree")]
         public void DumpCommandTree()
         {
             Console.WriteLine("\nCommand tree:");

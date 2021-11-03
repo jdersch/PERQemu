@@ -31,6 +31,23 @@ namespace PERQemu.UI
     /// </summary>
     public class ConfigCommands
     {
+        /// <summary>
+        /// The GUI configurator runs in a modal dialog, so the user can't be
+        /// frobbing the settings while the machine is running.  For the CLI
+        /// we run a quick check so that methods that change things that could
+        /// mess with a running instance are prohibited.  Returns true if the
+        /// PERQ is off, false (with an error message) if it's running.
+        /// </summary>
+        private bool OKtoReconfig()
+        {
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                return true;
+            }
+
+            Console.WriteLine("Cannot reconfigure while the PERQ is running; please power down and try again.");
+            return false;
+        }
 
         [Command("configure", "Enter the configuration subsystem")]
         public void SetConfigPrefix()
@@ -58,9 +75,11 @@ namespace PERQemu.UI
         [Command("configure default", "Reset the machine to the default configuration")]
         public void SetDefault()
         {
-            Console.WriteLine("Setting the machine to defaults.");
-            PERQemu.Config.Current = PERQemu.Config.Default;
-            
+            if (OKtoReconfig())
+            {
+                Console.WriteLine("Setting the machine to defaults.");
+                PERQemu.Config.Current = PERQemu.Config.Default;
+            }
         }
 
         [Command("configure list", "List pre-defined machine configurations")]
@@ -85,18 +104,21 @@ namespace PERQemu.UI
         [Command("configure select", "Select a pre-defined machine configuration")]
         public void SelectPrefab(string name)
         {
-            Configuration newConf = PERQemu.Config.GetConfigByName(name);
+            if (OKtoReconfig())
+            {
+                Configuration newConf = PERQemu.Config.GetConfigByName(name);
 
-            // Did we git a goodun, pa?
-            if (newConf == null)
-            {
-                Console.WriteLine("No configuration matching '{0}'.", name);
-                Console.WriteLine("Use the configuration 'list' command to see available configurations.");
-            }
-            else if (newConf != PERQemu.Config.Current)
-            {
-                Console.WriteLine("Configuration '{0}' selected.", newConf);
-                PERQemu.Config.Current = newConf;
+                // Did we git a goodun, pa?
+                if (newConf == null)
+                {
+                    Console.WriteLine("No configuration matching '{0}'.", name);
+                    Console.WriteLine("Use the configuration 'list' command to see available configurations.");
+                }
+                else if (newConf != PERQemu.Config.Current)
+                {
+                    Console.WriteLine("Configuration '{0}' selected.", newConf);
+                    PERQemu.Config.Current = newConf;
+                }
             }
         }
 
@@ -153,13 +175,16 @@ namespace PERQemu.UI
         [Command("configure load", "Load a saved configuration")]
         public void LoadConfig(string file)
         {
-            if (!PERQemu.Config.Load(file))
+            if (OKtoReconfig())
             {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
-            }
-            else
-            {
-                Console.WriteLine("Configuration loaded.");
+                if (!PERQemu.Config.Load(file))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
+                else
+                {
+                    Console.WriteLine("Configuration loaded.");
+                }
             }
         }
 
@@ -221,10 +246,13 @@ namespace PERQemu.UI
         [Command("configure chassis", "Set the machine type")]
         public void SetChassis(ChassisType perq)
         {
-            if (perq != PERQemu.Config.Current.Chassis)
+            if (OKtoReconfig())
             {
-                Console.WriteLine("{0} chassis selected.", perq);
-                PERQemu.Config.Current.Chassis = perq;
+                if (perq != PERQemu.Config.Current.Chassis)
+                {
+                    Console.WriteLine("{0} chassis selected.", perq);
+                    PERQemu.Config.Current.Chassis = perq;
+                }
             }
         }
 
@@ -240,15 +268,18 @@ namespace PERQemu.UI
         [Command("configure cpu", "Set the CPU type")]
         public void SetCPU(CPUType cpu)
         {
-            if (cpu != PERQemu.Config.Current.CPU)
+            if (OKtoReconfig())
             {
-                Console.WriteLine("{0} CPU selected.", cpu);
-                PERQemu.Config.Current.CPU = cpu;
-            }
+                if (cpu != PERQemu.Config.Current.CPU)
+                {
+                    Console.WriteLine("{0} CPU selected.", cpu);
+                    PERQemu.Config.Current.CPU = cpu;
+                }
 
-            if (!PERQemu.Config.CheckCPU(PERQemu.Config.Current))
-            {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
+                if (!PERQemu.Config.CheckCPU(PERQemu.Config.Current))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
             }
         }
 
@@ -277,36 +308,39 @@ namespace PERQemu.UI
         [Command("configure memory", "Set the memory size")]
         public void SetMemory(uint size)
         {
-            if (size > 0 && size <= 16)
+            if (OKtoReconfig())
             {
-                // shortcut - assume they mean megabytes
-                size = RoundToPowerOf2(size) * 1024;
-            }
-            else if (size == 256 || size == 512)
-            {
-                // 256 and 512 are valid for quarter & half-meg boards
-            }
-            else if (size >= 1024 && size <= 32768)
-            {
-                // round to the nearest supported capacity
-                size = RoundToPowerOf2(size / 1024) * 1024;
-            }
-            else
-            {
-                Console.WriteLine("That's a silly amount of memory.");
-            }
+                if (size > 0 && size <= 16)
+                {
+                    // shortcut - assume they mean megabytes
+                    size = RoundToPowerOf2(size) * 1024;
+                }
+                else if (size == 256 || size == 512)
+                {
+                    // 256 and 512 are valid for quarter & half-meg boards
+                }
+                else if (size >= 1024 && size <= 32768)
+                {
+                    // round to the nearest supported capacity
+                    size = RoundToPowerOf2(size / 1024) * 1024;
+                }
+                else
+                {
+                    Console.WriteLine("That's a silly amount of memory.");
+                }
 
-            size *= 1024;               // in bytes
+                size *= 1024;               // in bytes
 
-            if ((int)size != PERQemu.Config.Current.MemorySizeInBytes)
-            {
-                PERQemu.Config.Current.MemorySizeInBytes = (int)size;
-                Console.WriteLine("Memory size set to {0}.", PERQemu.Config.Current.MemSizeToString());
-            }
+                if ((int)size != PERQemu.Config.Current.MemorySizeInBytes)
+                {
+                    PERQemu.Config.Current.MemorySizeInBytes = (int)size;
+                    Console.WriteLine("Memory size set to {0}.", PERQemu.Config.Current.MemSizeToString());
+                }
 
-            if (!PERQemu.Config.CheckMemory(PERQemu.Config.Current))
-            {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
+                if (!PERQemu.Config.CheckMemory(PERQemu.Config.Current))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
             }
         }
 
@@ -321,15 +355,18 @@ namespace PERQemu.UI
         [Command("configure io board", "Configure the IO board type")]
         public void SetIO(IOBoardType io)
         {
-            if (io != PERQemu.Config.Current.IOBoard)
+            if (OKtoReconfig())
             {
-                Console.WriteLine("IO Board type {0} selected.", io);
-                PERQemu.Config.Current.IOBoard = io;
-            }
+                if (io != PERQemu.Config.Current.IOBoard)
+                {
+                    Console.WriteLine("IO Board type {0} selected.", io);
+                    PERQemu.Config.Current.IOBoard = io;
+                }
 
-            if (!PERQemu.Config.CheckIO(PERQemu.Config.Current))
-            {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
+                if (!PERQemu.Config.CheckIO(PERQemu.Config.Current))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
             }
         }
 
@@ -344,29 +381,32 @@ namespace PERQemu.UI
         [Command("configure option board", "Configure the IO Option board type")]
         public void SetOptionIO(OptionBoardType oio)
         {
-            if (oio != PERQemu.Config.Current.IOOptionBoard)
+            if (OKtoReconfig())
             {
-                Console.WriteLine("IO Option board type {0} selected.", oio);
-                PERQemu.Config.Current.IOOptionBoard = oio;
+                if (oio != PERQemu.Config.Current.IOOptionBoard)
+                {
+                    Console.WriteLine("IO Option board type {0} selected.", oio);
+                    PERQemu.Config.Current.IOOptionBoard = oio;
 
-                // Board changed; reset the selected options to defaults
-                if (oio == OptionBoardType.OIO)
-                {
-                    PERQemu.Config.Current.IOOptions = IOOptionType.Link;
+                    // Board changed; reset the selected options to defaults
+                    if (oio == OptionBoardType.OIO)
+                    {
+                        PERQemu.Config.Current.IOOptions = IOOptionType.Link;
+                    }
+                    else if (oio == OptionBoardType.MLO)
+                    {
+                        PERQemu.Config.Current.IOOptions = IOOptionType.SMD;
+                    }
+                    else
+                    {
+                        PERQemu.Config.Current.IOOptions = IOOptionType.None;
+                    }
                 }
-                else if (oio == OptionBoardType.MLO)
-                {
-                    PERQemu.Config.Current.IOOptions = IOOptionType.SMD;
-                }
-                else
-                {
-                    PERQemu.Config.Current.IOOptions = IOOptionType.None;
-                }
-            }
 
-            if (!PERQemu.Config.CheckOptions(PERQemu.Config.Current))
-            {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
+                if (!PERQemu.Config.CheckOptions(PERQemu.Config.Current))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
             }
         }
 
@@ -381,70 +421,73 @@ namespace PERQemu.UI
         [Command("configure option", "Configure extra features of the IO Option board")]
         public void SetIOOption(IOOptionType opt)
         {
-            switch (opt)
+            if (OKtoReconfig())
             {
-                // Always valid; resets the selected options
-                case IOOptionType.None:
-                    PERQemu.Config.Current.IOOptions = opt;
-                    Console.WriteLine("IO options reset.");
-                    break;
+                switch (opt)
+                {
+                    // Always valid; resets the selected options
+                    case IOOptionType.None:
+                        PERQemu.Config.Current.IOOptions = opt;
+                        Console.WriteLine("IO options reset.");
+                        break;
 
-                // These are valid for OIO and MLO
-                case IOOptionType.Link:
-                case IOOptionType.LinkTape:
-                case IOOptionType.Tape:
-                    if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
-                        PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
-                    {
-                        PERQemu.Config.Current.IOOptions |= opt;
-                        Console.WriteLine("IO option '{0}' selected.", opt);
-                    }
-                    else
-                    {
-                        Console.WriteLine("That option not compatible with the selected IO Option board.");
-                    }
-                    break;
-
-                // These are only valid for OIO, but Ether may conflict
-                // if the EIO board is selected.  Does it work with the NIO?
-                case IOOptionType.Ether:
-                case IOOptionType.EthCan:
-                case IOOptionType.EthCanTape:
-                case IOOptionType.Canon:
-                case IOOptionType.CanTape:
-                    if (PERQemu.Config.Current.IOBoard == IOBoardType.NIO &&
-                        opt.HasFlag(IOOptionType.Ether))
-                    {
-                        // Special case: if the user wants to add Ethernet to a 
-                        // machine configured with an NIO board, I'll just switch
-                        // to the EIO and remove the optional (incompatible) Ethernet
-                        // option.  This is silly.
-                        Console.WriteLine("* Adding Ethernet option to an NIO changes it to an EIO; reconfiguring.");
-                        PERQemu.Config.Current.IOBoard = IOBoardType.EIO;
-                        PERQemu.Config.Current.IOOptions &= ~(IOOptionType.Ether);
-
-                        if (PERQemu.Config.Current.IOOptions == IOOptionType.None)
+                    // These are valid for OIO and MLO
+                    case IOOptionType.Link:
+                    case IOOptionType.LinkTape:
+                    case IOOptionType.Tape:
+                        if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
+                            PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
                         {
-                            // If that was the only option selected, remove the board
-                            PERQemu.Config.Current.IOOptionBoard = OptionBoardType.None;
-                            Console.WriteLine("* Removed empty IO Option board.");
+                            PERQemu.Config.Current.IOOptions |= opt;
+                            Console.WriteLine("IO option '{0}' selected.", opt);
                         }
-                    }
-                    else if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO)
-                    {
-                        PERQemu.Config.Current.IOOptions |= opt;
-                        Console.WriteLine("IO option '{0}' selected.", opt);
-                    }
-                    else
-                    {
-                        Console.WriteLine("That option is incompatible with the selected IO Option board.");
-                    }
-                    break;
-            }
+                        else
+                        {
+                            Console.WriteLine("That option not compatible with the selected IO Option board.");
+                        }
+                        break;
 
-            if (!PERQemu.Config.CheckOptions(PERQemu.Config.Current))
-            {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
+                    // These are only valid for OIO, but Ether may conflict
+                    // if the EIO board is selected.  Does it work with the NIO?
+                    case IOOptionType.Ether:
+                    case IOOptionType.EthCan:
+                    case IOOptionType.EthCanTape:
+                    case IOOptionType.Canon:
+                    case IOOptionType.CanTape:
+                        if (PERQemu.Config.Current.IOBoard == IOBoardType.NIO &&
+                            opt.HasFlag(IOOptionType.Ether))
+                        {
+                            // Special case: if the user wants to add Ethernet to a 
+                            // machine configured with an NIO board, I'll just switch
+                            // to the EIO and remove the optional (incompatible) Ethernet
+                            // option.  This is silly.
+                            Console.WriteLine("* Adding Ethernet option to an NIO changes it to an EIO; reconfiguring.");
+                            PERQemu.Config.Current.IOBoard = IOBoardType.EIO;
+                            PERQemu.Config.Current.IOOptions &= ~(IOOptionType.Ether);
+
+                            if (PERQemu.Config.Current.IOOptions == IOOptionType.None)
+                            {
+                                // If that was the only option selected, remove the board
+                                PERQemu.Config.Current.IOOptionBoard = OptionBoardType.None;
+                                Console.WriteLine("* Removed empty IO Option board.");
+                            }
+                        }
+                        else if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO)
+                        {
+                            PERQemu.Config.Current.IOOptions |= opt;
+                            Console.WriteLine("IO option '{0}' selected.", opt);
+                        }
+                        else
+                        {
+                            Console.WriteLine("That option is incompatible with the selected IO Option board.");
+                        }
+                        break;
+                }
+
+                if (!PERQemu.Config.CheckOptions(PERQemu.Config.Current))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
             }
         }
 
@@ -459,15 +502,18 @@ namespace PERQemu.UI
         [Command("configure display", "Configure the display device")]
         public void SetDisplay(DisplayType disp)
         {
-            if (disp != PERQemu.Config.Current.Display)
+            if (OKtoReconfig())
             {
-                PERQemu.Config.Current.Display = disp;
-                Console.WriteLine("{0} display option selected.", disp);
-            }
+                if (disp != PERQemu.Config.Current.Display)
+                {
+                    PERQemu.Config.Current.Display = disp;
+                    Console.WriteLine("{0} display option selected.", disp);
+                }
 
-            if (!PERQemu.Config.CheckMemory(PERQemu.Config.Current))
-            {
-                Console.WriteLine(PERQemu.Config.Current.Reason);
+                if (!PERQemu.Config.CheckMemory(PERQemu.Config.Current))
+                {
+                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
             }
         }
 
@@ -482,12 +528,16 @@ namespace PERQemu.UI
         [Command("configure tablet", "Configure the pointing device(s)")]
         public void SetTablet(TabletType tab)
         {
-            if (tab != PERQemu.Config.Current.Tablet)
+            if (OKtoReconfig())
             {
-                PERQemu.Config.Current.Tablet = tab;
-                Console.WriteLine("Tablet option {0} selected.", tab);
+                if (tab != PERQemu.Config.Current.Tablet)
+                {
+                    PERQemu.Config.Current.Tablet = tab;
+                    Console.WriteLine("Tablet option {0} selected.", tab);
+                }
             }
         }
 
+        // TODO storage commands!  here or in a separate file
     }
 }

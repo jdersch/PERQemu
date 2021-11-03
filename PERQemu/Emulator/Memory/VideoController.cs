@@ -246,8 +246,8 @@ namespace PERQemu.Memory
                     // Do nothing.  The microcode will program the control
                     // register(s) to set things in motion again.
                     Trace.Log(LogType.Display, "Video RunSM in {0} at {1}, scan={2} count={3}",
-                                      _state, _system.Scheduler.CurrentTimeNsec,
-                                     _scanLine, _lineCounter);
+                                             _state, _system.Scheduler.CurrentTimeNsec,
+                                             _scanLine, _lineCounter);
                     break;
 
                 case VideoState.VisibleScanline:

@@ -74,18 +74,25 @@ namespace PERQemu
             // logging, radix, step mode, whatever
         }
 
+        [Command("step")]
         [Command("debug step", "Run one microinstruction")]
         public void DebugStep()
         {
-            Console.WriteLine("Single stepping the processor");
+            PERQemu.Controller.TransitionTo(RunState.SingleStep);
         }
 
+        [Command("inst")]
         [Command("debug inst", "Run one opcode")]
         public void DebugInst()
         {
-            Console.WriteLine("Executing the next opcode");
+            PERQemu.Controller.TransitionTo(RunState.RunInst);
         }
 
+        [Command("debug z80 inst", "Run one Z80 opcode")]
+        public void DebugZ80Inst()
+        {
+            PERQemu.Controller.TransitionTo(RunState.RunZ80Inst);
+        }
 
 #if TRACING_ENABLED
         //
@@ -217,12 +224,12 @@ namespace PERQemu
                     char high = (char)((mem[j] & 0xff00) >> 8);
                     char low = (char)((mem[j] & 0xff));
 
-                    if (!Debugger.Debugger.IsPrintable(high))
+                    if (!PERQemu.CLI.IsPrintable(high))
                     {
                         high = '.';
                     }
 
-                    if (!Debugger.Debugger.IsPrintable(low))
+                    if (!PERQemu.CLI.IsPrintable(low))
                     {
                         low = '.';
                     }

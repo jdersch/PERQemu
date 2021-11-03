@@ -805,7 +805,7 @@ namespace PERQemu.Debugger
         [DebugFunction("go", "Starts or continues execution of the PERQ.")]
         private void Go()
         {
-            _nextState = RunState.Run;
+            _nextState = RunState.Running;
         }
 
         [DebugFunction("step", "Runs the PERQ for one microcycle.")]
@@ -829,13 +829,13 @@ namespace PERQemu.Debugger
         [DebugFunction("reset", "Resets the PERQ.")]
         private void Reset()
         {
-            _nextState = RunState.Reset;
+            //_nextState = RunState.Reset;
         }
 
         [DebugFunction("exit", "Leaves the emulator.  Any disk state not saved will be lost.")]
         private void Exit()
         {
-            _nextState = RunState.Exit;
+            //_nextState = RunState.Exit;
         }
 
 

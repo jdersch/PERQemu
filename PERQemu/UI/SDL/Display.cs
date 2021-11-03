@@ -118,31 +118,36 @@ namespace PERQemu.UI
             get { return _mouseOffTablet; }
         }
 
-        //private void SDLMessageLoopThread()
-        public void SDLMessageLoop()
+        public void Reset()
         {
-            // Schedule an event to poll for events at REASONABLE intervals
-            // let's try 60 per second? At least for now. Increase it if my
-            // poor old Mac ever comes close to 60fps :-)
-            _sdlPumpEvent = _system.Scheduler.Schedule((ulong)(16.6667 * Conversion.MsecToNsec), (skew, context) =>
+            if (_sdlRunning)
             {
-                SDL.SDL_Event e;
+                if (_sdlPumpEvent != null)
+                    _system.Scheduler.Cancel(_sdlPumpEvent);
 
-                //
-                // Run main message loop
-                //
-                while (SDL.SDL_PollEvent(out e) != 0)
-                {
-                    SDLMessageHandler(e);
-                }
+                SDLMessageLoop(0, null);
+            }
+        }
 
-                SDLMessageLoop();
-            });
+        private void SDLMessageLoop(ulong skewNsec, object context)
+        {
+            SDL.SDL_Event e;
+
+            // Run main message loop
+            while (SDL.SDL_PollEvent(out e) != 0)
+            {
+                SDLMessageHandler(e);
+            }
+
+            // Reschedule to poll again at a reasonable interval
+            // let's try 60ish per second? At least for now. Increase it if my
+            // poor old Mac ever comes close to 60fps :-)
+            _sdlPumpEvent = _system.Scheduler.Schedule((16 * Conversion.MsecToNsec), SDLMessageLoop);
         }
 
         public void ShutdownSDL()
         {
-            Console.WriteLine("SDLShutdown requested.");    // Debug
+            Console.WriteLine("SDL Shutdown requested.");    // Debug
 
             if (_sdlRunning)
             {
@@ -178,7 +183,7 @@ namespace PERQemu.UI
         public void Status()
         {
             Console.WriteLine("_sdlRunning={0}, _sdlPumpEvent={1}",
-                              _sdlRunning, _sdlPumpEvent.EventCallback.ToString());
+                              _sdlRunning, _sdlPumpEvent?.EventCallback.Method.Name);
             Console.WriteLine("_frame={0}, _mouseX,Y={1},{2}",
                              _frame, _mouseX, _mouseY);
         }
@@ -272,7 +277,7 @@ namespace PERQemu.UI
             double ns = (elapsed / inst) * 1000000.0;
             _prevClock = _system.CPU.Clocks;
 
-            SDL.SDL_SetWindowTitle(_sdlWindow, String.Format("PERQ - {0:N2} frames / sec, {1:N2}ns / cycle", fps, ns));
+            SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} frames / sec, {1:N2}ns / cycle", fps, ns));
         }
 
         /// <summary>
@@ -287,7 +292,7 @@ namespace PERQemu.UI
             // Get SDL humming
             if ((retVal = SDL.SDL_Init(SDL.SDL_INIT_EVERYTHING)) < 0)
             {
-                throw new InvalidOperationException(String.Format("SDL_Init failed.  Error {0:x}", retVal));
+                throw new InvalidOperationException(string.Format("SDL_Init failed.  Error {0:x}", retVal));
             }
 
             if (SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "0") == SDL.SDL_bool.SDL_FALSE)
@@ -301,7 +306,7 @@ namespace PERQemu.UI
                 SDL.SDL_WINDOWPOS_UNDEFINED,
                 _displayWidth,
                 _displayHeight,
-                0);     // SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE); FIXME ugh, on a 1080p display SDL shrnks the window slightly to avoid the Dock if it's exposed so make this host specific?
+                SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN);
 
             if (_sdlWindow == IntPtr.Zero)
             {
@@ -336,8 +341,8 @@ namespace PERQemu.UI
 
             _stopwatch.Start();
 
-            SDL.SDL_PumpEvents();   // so the mac will render the bloody window frame
-            SDLMessageLoop();       // kick off our periodic polling loop
+            SDL.SDL_PumpEvents();       // so the mac will render the bloody window frame
+            SDLMessageLoop(0, null);    // kick off our periodic polling loop
         }
 
         private void CreateDisplayTexture(bool filter)
