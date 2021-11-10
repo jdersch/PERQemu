@@ -156,6 +156,7 @@ namespace PERQemu.IO
         // Describe the specific board
         protected static string _name;
         protected static string _desc;
+        protected static ulong _z80CycleTime;
 
         // Devices required by all I/O boards
         protected IZ80System _z80System;

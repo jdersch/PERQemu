@@ -221,6 +221,7 @@
     <Compile Include="Debugger\Z80DebugCommands.cs" />
     <Compile Include="Debugger\QCode.cs" />
     <Compile Include="Emulator\IO\IOBoard.cs" />
+    <Compile Include="Emulator\IO\EIO.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

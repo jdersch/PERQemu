@@ -36,6 +36,8 @@ namespace PERQemu.IO
 
             _name = "IOB";
             _desc = "PERQ-1 I/O Board, old Z80, Shugart";
+
+            _z80CycleTime = 407;    // 2.4576Mhz
         }
 
         public IOB(PERQSystem system) : base(system)
