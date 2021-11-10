@@ -83,12 +83,12 @@ namespace PERQemu
                     throw new InvalidConfigurationException(string.Format("No such CPU board type '{0}'", _conf.CPU));
             }
 
-            // Create the CPU's scheduler.  TODO: should move this into CPUBoard
+            // Create the CPU's scheduler
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
-            // Fire up the IO board (which will set up the Z80)
-            // Once we've selected the board type we load the appropriate
-            // CPU boot ROMs!
+
+            // Fire up the IO board (which will set up the Z80).  Once the
+            // board type is selected, load the appropriate CPU boot ROMs!
             switch (_conf.IOBoard)
             {
                 case IOBoardType.IOB:
@@ -124,8 +124,8 @@ namespace PERQemu
             }
 
             // Assume async mode if the IO Board implementation supports it.
-            // Might want to select sync mode on uniprocessor systems?
-            // What's a glacier?
+            // Might want to select sync mode on uniprocessor systems?  What is
+            // a "uniprocessor"?  Is that like a "land line" or "glacier"?
             _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
 
             // If any IO options are defined, instantiate the board
@@ -167,7 +167,7 @@ namespace PERQemu
         public MemoryBoard Memory => _mem;
         public VideoController VideoController => _mem.Video;
         public Display Display => _display;
-        public IOB IOB => _iob;                 // todo ioboard
+        public IOBoard IOB => _iob;                 // todo ioboard
         public OIO OIO => _oio;                 // todo ioboard (or optionioboard?)
         public IOBus IOBus => _ioBus;
 

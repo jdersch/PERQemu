@@ -19,9 +19,9 @@
 
 using System;
 
-using PERQemu.IO;
+using PERQemu.IO.HardDisk;
 
-namespace PERQemu
+namespace PERQemu.IO
 {
     /// <summary>
     /// A base class for the PERQ's I/O boards.
@@ -42,54 +42,130 @@ namespace PERQemu
 
     public abstract class IOBoard : IIODevice
     {
-        public IOBoard()
+        static IOBoard()
         {
-            _portsHandled = new bool[256];
+            // Our derived classes customize themselves in the static
+            // constructor, setting up ports and other goodies
+            Console.WriteLine("IOBoard static constructor called.");
         }
 
-        public abstract void Reset();
+        public IOBoard(PERQSystem system)
+        {
+            Console.WriteLine("IOBoard constructor called.");
+            _sys = system;
+        }
+
+        public IZ80System Z80System
+        {
+            get { return _z80System; }
+        }
+
+        // public IStorageController DiskController
+        public ShugartDiskController DiskController
+        {
+        	get { return _hardDiskController; }
+        }
+
+        public bool HandlesPort(byte port)
+        {
+        	return _portsHandled[port];
+        }
+
+        public bool SupportsAsync
+        {
+            get { return _z80System.SupportsAsync; }
+        }
+
+        //
+        // Basic operations
+        //
+
+        public virtual void Reset()
+        {
+            _hardDiskController.Reset();
+            _z80System.Reset();
+
+            Trace.Log(LogType.IOState, "{0}: Board reset.", _name);
+        }
+
+        public abstract uint Clock();
 
         public abstract int IORead(byte port);
 
         public abstract void IOWrite(byte port, int value);
 
-        public bool HandlesPort(byte port)
-        {
-            return _portsHandled[port];
-        }
+        //
+        // Hard disk
+        //
 
-        protected void RegisterPorts(byte[] ports)
+        public virtual bool LoadDisk(string mediaPath, int unit = 0)
         {
-            foreach (var p in ports)
-            {
-                if (_portsHandled[p])
-                {
-                    Trace.Log(LogType.Errors, "Port {0:x} already registered!", p);
-                }
-
-                _portsHandled[p] = true;
-            }
-        }
-
-        public bool LoadDisk(string unit)
-        {
+            // FIXME:
+            // new interface should handle multiple units (at least two
+            // drives, and later more with SMD?)
+            // pathnames should be canonicalized, relative to Disks/ dir?
+            // don't make the controller catch errors, do that here
+            _hardDiskController.LoadImage(mediaPath /*, unit */);
             return true;
         }
 
-        public void UnloadDisk(string unit)
+        public virtual bool SaveDisk(int unit = 0)
         {
+            // FIXME:
+            // new storage controllers will remember the name of the image
+            // and use it when saving by default
+            // will also handle multiple units
+            // will handle error checking here and return a nice boolean
+
+            // _hardDiskController.SaveImage(/* unit */);
+            return true;    // FIXME ack.
         }
 
-        public abstract uint Clock();               // fixme -- to be removed!
+        public virtual bool SaveDisk(string mediaPath, int unit = 0)
+        {
+            _hardDiskController.SaveImage(mediaPath /*, unit */);
+            return true;    // assume it worked, ugh.
+        }
+            
+        public virtual void UnloadDisk(int unit = 0)
+        {
+            // FIXME the CDC 976x drives could be unloaded :-)
+            // we should also allow the user to add or remove a second
+            // Microp or 5.25" drive and actually release the storage
+            // (rather than just initialize a blank image).  once we
+            // start supporting 140mb Maxtors that's a LOT of wasted memory!
+            // _hardDiskController.Unload(unit);
+        }
 
-        public static readonly int IOFudge = 8;     // fixme -- to be removed!
+        /// <summary>
+        /// Populate the port lookup table.
+        /// </summary>
+        protected void RegisterPorts(byte[] ports)
+        {
+        	foreach (var p in ports)
+        	{
+        		if (_portsHandled[p])
+        		{
+        			Trace.Log(LogType.Errors, "Port {0:x} already registered!", p);
+        		}
 
+        		_portsHandled[p] = true;
+        	}
+        }
 
-        protected Z80System _z80;
-        protected IStorageController _hardDisk;
+        // Describe the specific board
+        protected static string _name;
+        protected static string _desc;
 
-        protected PERQSystem _sys;
+        // Devices required by all I/O boards
+        protected IZ80System _z80System;
+        // protected IStorageController _hardDisk;
+        protected ShugartDiskController _hardDiskController;
 
-        private bool[] _portsHandled;
+        // I/O port map for this board
+        private static bool[] _portsHandled = new bool[256];
+
+        // Parent
+        private PERQSystem _sys;
     }
 }

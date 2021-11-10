@@ -1,3 +1,4 @@
+//
 // iob.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -16,45 +17,43 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System;
+
 using PERQemu.IO.HardDisk;
 using PERQemu.IO.Z80_new;
 
 namespace PERQemu.IO
 {
     /// <summary>
-    /// Represents an IOB card in a PERQ1 system.
-    /// This contains hardware for the Shugart disk controller and a Z80
-    /// for controlling low-speed devices.
+    /// Represents an IOB card in a PERQ1 system.  This contains hardware for
+    /// the Shugart disk controller and a Z80 for controlling low-speed devices.
     /// </summary>
-    public class IOB : IIODevice
+    public class IOB : IOBoard
     {
-        public IOB(PERQSystem system)
+        static IOB()
         {
+            Console.WriteLine("IOB static constructor called.");
+
+            _name = "IOB";
+            _desc = "PERQ-1 I/O Board, old Z80, Shugart";
+        }
+
+        public IOB(PERQSystem system) : base(system)
+        {
+            Console.WriteLine("IOB constructor called.");
             _hardDiskController = new ShugartDiskController(system);
-            //_z80System = new PERQemu.IO.Z80.IOB.Z80System(system);
             _z80System = new Z80System(system);
+
+            RegisterPorts(_handledPorts);
         }
 
-        public IZ80System Z80System
+        /// <summary>
+        /// Runs the Z80, synchronously.
+        /// </summary>
+        public override uint Clock()
         {
-            get { return _z80System; }
+            return _z80System.SingleStep();
         }
-
-        public ShugartDiskController ShugartDiskController
-        {
-            get { return _hardDiskController; }
-        }
-
-        public void Reset()
-        {
-            _hardDiskController.Reset();
-            _z80System.Reset();
-
-            Trace.Log(LogType.IOState, "IOB: Board reset.");
-        }
-
-        // TODO: Move these next three to some generic interface when we implement the EIO, etc.
-        public bool SupportsAsync => _z80System.SupportsAsync;
 
         public void RunAsync()
         {
@@ -66,30 +65,14 @@ namespace PERQemu.IO
             _z80System.Stop();
         }
 
-        public bool HandlesPort(byte ioPort)
-        {
-            // Lazy slow routine to indicate whether this device handles the given port
-            // right now this is set up to assume that if the device handles the port for
-            // input then it also handles it for output; this is not correct, but hey.
-            for (int i = 0; i < _handledPorts.Length; i++)
-            {
-                if (ioPort == _handledPorts[i])
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         /// <summary>
-        /// Does a read from the given port
+        /// Reads a word from the given I/O port.
         /// </summary>
-        /// <param name="ioPort"></param>
-        /// <returns></returns>
-        public int IORead(byte ioPort)
+
+        public override int IORead(byte port)
         {
-            switch (ioPort)
+            switch (port)
             {
                 case 0x40:  // Read disk status
                     return _hardDiskController.ReadStatus();
@@ -101,19 +84,17 @@ namespace PERQemu.IO
                 //    return _z80System.ReadStatus();
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", ioPort);
+                    Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", port);
                     return 0xff;
             }
         }
 
         /// <summary>
-        /// Does a write to the given port
+        /// Writes a word to the given I/O port.
         /// </summary>
-        /// <param name="ioPort"></param>
-        /// <param name="value"></param>
-        public void IOWrite(byte ioPort, int value)
+        public override void IOWrite(byte port, int value)
         {
-            switch (ioPort)
+            switch (port)
             {
                 case 0xc1:  // Shugart command/control register & Z80 status register
                     _hardDiskController.LoadCommandRegister(value);
@@ -152,7 +133,7 @@ namespace PERQemu.IO
                     _hardDiskController.LoadHeaderAddrHighRegister(value);
                     break;
 
-                // 0xd4,d5,dc,dd: load DMA registers -- Canon inteface
+                // 0xd4,d5,dc,dd: load DMA registers -- Canon, Streamer interfaces?
 
                 case 0xd8:  // Shugart Data Buffer Address Low register
                     _hardDiskController.LoadDataBufferAddrLowRegister(value);
@@ -163,24 +144,13 @@ namespace PERQemu.IO
                     break;
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled IOB Write to port {0:x2}, data {1:x4}", ioPort, value);
+                    Trace.Log(LogType.Warnings, "Unhandled IOB Write to port {0:x2}, data {1:x4}", port, value);
                     break;
             }
         }
 
         /// <summary>
-        /// Runs the Z80, synchronously.
-        /// </summary>
-        public uint Clock()
-        {
-            return _z80System.SingleStep();
-        }
-
-        private HardDisk.ShugartDiskController _hardDiskController;
-        private IZ80System _z80System;
-
-        /// <summary>
-        /// Ports handled by the IOB board.
+        /// Ports handled by the IOB.
         /// </summary>
         private byte[] _handledPorts =
         {
@@ -201,7 +171,7 @@ namespace PERQemu.IO
             0xd8,       // 330 DatAdrL: load Shugart data buffer address low bits
             0xd9,       // 331 CWAdrL:    "     "    header  "      "     "    "
 
-            // DMA (TODO: only used by Canon?)
+            // DMA
             0xd4,       // 324 DMAhi: load DMA data buffer address high bits (Only used by Canon?)
             0xd5,       // 325 HDRhi:   "   "  header  "      "      "    "           "
             0xdc,       // 334 DMAlo: load DMA data buffer address low bits (Only used by Canon?)

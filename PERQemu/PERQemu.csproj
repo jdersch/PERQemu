@@ -220,6 +220,7 @@
     <Compile Include="Debugger\DebugCommands.cs" />
     <Compile Include="Debugger\Z80DebugCommands.cs" />
     <Compile Include="Debugger\QCode.cs" />
+    <Compile Include="Emulator\IO\IOBoard.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -600,7 +601,6 @@
     <Content Include="Docs\Old\PNX-SysB.txt" />
     <None Include="EntryPoint.cs" />
     <None Include="Docs\IOBoards.txt" />
-    <None Include="Emulator\IO\IOBoard.cs" />
     <None Include="Debugger\DebuggableAttribute.cs" />
     <None Include="Debugger\Debugger.cs" />
     <None Include="Debugger\DebuggerPrompt.cs" />

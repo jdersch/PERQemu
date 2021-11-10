@@ -62,7 +62,7 @@ namespace PERQemu.IO.Z80.IOB
         {
             // One byte for Seek:
             //  byte 0 = seek count
-            _system.IOB.ShugartDiskController.DoMultipleSeek(data);
+            _system.IOB.DiskController.DoMultipleSeek(data);
 
             // In "normal step mode", there should be a minimum of 1ms per step!
             // In "buffered" mode, pulses are accumulated in a counter at a faster

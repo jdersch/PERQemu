@@ -61,7 +61,7 @@ namespace PERQemu.IO.Z80_new
             // it was set up to move in.
             if (value != 0)
             {
-                _system.IOB.ShugartDiskController.DoSingleSeek();
+                _system.IOB.DiskController.DoSingleSeek();
             }
         }
 

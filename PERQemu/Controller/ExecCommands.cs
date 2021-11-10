@@ -141,7 +141,7 @@ namespace PERQemu
         [Command("create harddisk", "Creates and mounts a new, unformatted hard disk image")]
         private void CreateHardDisk()
         {
-            PERQemu.Sys.IOB.ShugartDiskController.LoadImage(null);
+            PERQemu.Sys.IOB.DiskController.LoadImage(null);
             Console.WriteLine("Created.");
         }
 
@@ -150,7 +150,7 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.Sys.IOB.ShugartDiskController.LoadImage(imagePath);
+                PERQemu.Sys.IOB.DiskController.LoadImage(imagePath);
                 Console.WriteLine("Loaded.");
             }
             catch (Exception e)
@@ -166,7 +166,7 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.Sys.IOB.ShugartDiskController.SaveImage(imagePath); // FIXME
+                PERQemu.Sys.IOB.DiskController.SaveImage(imagePath); // FIXME
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)

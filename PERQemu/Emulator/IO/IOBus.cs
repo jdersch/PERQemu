@@ -126,7 +126,7 @@ namespace PERQemu.IO
                     if (_deviceDispatch[i] != null)
                     {
                         throw new InvalidOperationException(
-                            String.Format("IO Port conflict at {0:x2} between {1} and {2}",
+                            string.Format("IO Port conflict at {0:x2} between {1} and {2}",
                                            i, device, _deviceDispatch[i]));
                     }
                     else
