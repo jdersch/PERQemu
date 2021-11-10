@@ -781,7 +781,7 @@ namespace PERQemu.Processor
                 Console.WriteLine("RasterOp: FetchNextWord in {0} while MDI was invalid!", _state);
                 w.Clear();
 #else
-                    throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
+                throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
 #endif
             }
             return w;
@@ -932,10 +932,6 @@ namespace PERQemu.Processor
         /// Masks and combines a source and destination word according to
         /// the current RasterOp function.
         /// </summary>
-        /// <param name="dstWord">Destination</param>
-        /// <param name="srcWord">Source</param>
-        /// <param name="mask">Bitmask</param>
-        /// <returns>The combined word</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort Combine(ushort dstWord, ushort srcWord, ushort mask)
         {

@@ -51,6 +51,7 @@ namespace PERQemu.UI
 
             _sdlRunning = false;
             _sdlPumpEvent = null;
+            _renderEventType = 0;
             _textureLock = new ReaderWriterLockSlim();
 
             _stopwatch = new Stopwatch();
@@ -65,12 +66,112 @@ namespace PERQemu.UI
             _mouseY = 0;
         }
 
+        public int MouseX => _mouseX;
+        public int MouseY => _mouseY;
+        public int MouseButton => _mouseButton;
+        public bool MouseOffTablet => _mouseOffTablet;
+
+
         /// <summary>
-        /// Send a render event to the SDL message loop so the screen will get drawn.
+        /// Set up our SDL window and start the display machinery in motion.
         /// </summary>
-        public void Refresh()
+        public void InitializeSDL()
         {
-            SDL.SDL_PushEvent(ref _renderEvent);
+            int retVal;
+
+            if (_sdlRunning)
+            {
+                Console.WriteLine("** InitializeSDL called while already running!?");
+                return;
+            }
+
+            // debug
+            Console.WriteLine("Initializing SDL, WasInit reports " + SDL.SDL_WasInit(SDL.SDL_INIT_EVERYTHING));
+
+            SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
+
+            // Necessary?
+            SDL.SDL_SetMainReady();
+
+            // Get SDL humming
+            if ((retVal = SDL.SDL_Init(SDL.SDL_INIT_EVERYTHING)) < 0)
+            {
+                throw new InvalidOperationException(string.Format("SDL_Init failed.  Error {0:x}", retVal));
+            }
+
+            if (SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "0") == SDL.SDL_bool.SDL_FALSE)
+            {
+                throw new InvalidOperationException("SDL_SetHint failed to set scale quality.");
+            }
+
+            _sdlWindow = SDL.SDL_CreateWindow(
+                "PERQ",
+                SDL.SDL_WINDOWPOS_UNDEFINED,
+                SDL.SDL_WINDOWPOS_UNDEFINED,
+                _displayWidth,
+                _displayHeight,
+                SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN);
+
+            if (_sdlWindow == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("SDL_CreateWindow failed.");
+            }
+
+            _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
+            if (_sdlRenderer == IntPtr.Zero)
+            {
+                // Fall back to software
+                _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
+
+                if (_sdlRenderer == IntPtr.Zero)
+                {
+                    // Still no luck.
+                    throw new InvalidOperationException("SDL_CreateRenderer failed.");
+                }
+            }
+
+            CreateDisplayTexture(false);
+
+            // todo: initialize in our slightly greenish/grayish background color :-)
+            // during "warmup" we'll fade in to full brightness.  because why not.
+            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x0f, 0x0f, 0x0f, 0xff);
+
+            // Set up our custom event, if not already done.
+            if (_renderEventType == 0)
+            {
+                // Register a User event for rendering.
+                _renderEventType = SDL.SDL_RegisterEvents(1);
+                _renderEvent = new SDL.SDL_Event();
+                _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
+            }
+
+            _stopwatch.Start();     // todo: could we use the SDL timer, if this is redundant?
+
+            _sdlRunning = true;
+
+            SDL.SDL_PumpEvents();   // so the mac will render the bloody window frame
+            Reset();                // kick off our periodic polling loop
+        }
+
+        private void CreateDisplayTexture(bool filter)
+        {
+            _textureLock.EnterWriteLock();
+            SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, filter ? "linear" : "nearest");
+
+            _displayTexture = SDL.SDL_CreateTexture(
+                _sdlRenderer,
+                SDL.SDL_PIXELFORMAT_ARGB8888,
+                (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
+                _displayWidth,
+                _displayHeight);
+
+            if (_displayTexture == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("SDL_CreateTexture failed.");
+            }
+
+            SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
+            _textureLock.ExitWriteLock();
         }
 
         /// <summary>
@@ -90,45 +191,21 @@ namespace PERQemu.UI
             }
         }
 
-
-        public void SaveScreenshot(string path)
+        /// <summary>
+        /// Send a render event to the SDL message loop so the screen will get drawn.
+        /// </summary>
+        public void Refresh()
         {
-            EncoderParameters p = new EncoderParameters(1);
-            p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
-            //_buffer.Save(path, GetEncoderForFormat(ImageFormat.Jpeg), p);
+            SDL.SDL_PushEvent(ref _renderEvent);
         }
 
-        public int MouseX
-        {
-            get { return _mouseX; }
-        }
-
-        public int MouseY
-        {
-            get { return _mouseY; }
-        }
-
-        public int MouseButton
-        {
-            get { return _mouseButton; }
-        }
-
-        public bool MouseOffTablet
-        {
-            get { return _mouseOffTablet; }
-        }
-
-        public void Reset()
-        {
-            if (_sdlRunning)
-            {
-                if (_sdlPumpEvent != null)
-                    _system.Scheduler.Cancel(_sdlPumpEvent);
-
-                SDLMessageLoop(0, null);
-            }
-        }
-
+        /// <summary>
+        /// Run the SDL message loop.  (For now!) Relies on the PERQ scheduler to
+        /// check the loop ~ 16ms, which is plenty fast to poll for mouse, keyboard
+        /// and screen refresh events at 60fps.  FIXME: move to another polling or
+        /// scheduling mechanism -- like, interleaved with the CLI ReadKey call so
+        /// the console and GUI may appear to run simultaneously?
+        /// </summary>
         private void SDLMessageLoop(ulong skewNsec, object context)
         {
             SDL.SDL_Event e;
@@ -145,55 +222,13 @@ namespace PERQemu.UI
             _sdlPumpEvent = _system.Scheduler.Schedule((16 * Conversion.MsecToNsec), SDLMessageLoop);
         }
 
-        public void ShutdownSDL()
-        {
-            Console.WriteLine("SDL Shutdown requested.");    // Debug
-
-            if (_sdlRunning)
-            {
-                //
-                // Shut things down nicely.
-                //
-                _stopwatch.Stop();
-
-                if (_sdlPumpEvent != null)
-                {
-                    _system.Scheduler.Cancel(_sdlPumpEvent);
-                    _sdlPumpEvent = null;
-                }
-
-                if (_sdlRenderer != IntPtr.Zero)
-                {
-                    SDL.SDL_DestroyRenderer(_sdlRenderer);
-                    _sdlRenderer = IntPtr.Zero;
-                }
-
-                if (_sdlWindow != IntPtr.Zero)
-                {
-                    SDL.SDL_DestroyWindow(_sdlWindow);
-                    _sdlWindow = IntPtr.Zero;
-                }
-
-                _sdlRunning = false;
-
-                SDL.SDL_Quit();
-            }
-        }
-
-        public void Status()
-        {
-            Console.WriteLine("_sdlRunning={0}, _sdlPumpEvent={1}",
-                              _sdlRunning, _sdlPumpEvent?.EventCallback.Method.Name);
-            Console.WriteLine("_frame={0}, _mouseX,Y={1},{2}",
-                             _frame, _mouseX, _mouseY);
-        }
-
+        /// <summary>
+        /// Handle SDL events.  This executes in the UI context (main thread).
+        /// </summary>
         private void SDLMessageHandler(SDL.SDL_Event e)
         {
-            // Handle current messages.  This executes in the UI context.
             switch (e.type)
             {
-
                 case SDL.SDL_EventType.SDL_USEREVENT:
                     // This should always be the case since we only define one
                     // user event, but just to be truly pedantic...
@@ -232,40 +267,49 @@ namespace PERQemu.UI
             }
         }
 
+        /// <summary>
+        /// Paint the completed frame on the screen.
+        /// </summary>
         private void RenderDisplay()
         {
-            //
-            // Stuff the display data into the display texture
-            //
+            // todo: figure out some kind of frame dropping for slow hosts
+            // (consult Settings.RateLimit) but in "fast" mode just run 'em
+            // as fast as the cpu can go?  (that might make the clocks run
+            // too fast, but that'd be a nice problem to have...)
+            // --> perhaps gate with a waithandle (fairly fast, lightweight)?
+
             IntPtr textureBits = IntPtr.Zero;
             int pitch = 0;
 
+            // Stuff the display data into the display texture
             SDL.SDL_LockTexture(_displayTexture, IntPtr.Zero, out textureBits, out pitch);
-
             Marshal.Copy(_32bppDisplayBuffer, 0, textureBits, _32bppDisplayBuffer.Length);
-
             SDL.SDL_UnlockTexture(_displayTexture);
 
-            //
             // Render the display texture to the renderer
-            //
             SDL.SDL_RenderCopy(_sdlRenderer, _displayTexture, IntPtr.Zero, IntPtr.Zero);
 
-            //
             // And show it to us.
-            //
             SDL.SDL_RenderPresent(_sdlRenderer);
 
             // Update FPS count
             _frame++;
 
-            if (_frame > 180)
+            if (_frame > 180)       // configurable? :-)
             {
                 UpdateFPS(_frame);
                 _frame = 0;
             }
         }
 
+        /// <summary>
+        /// Update the FPS counter.
+        /// </summary>
+        /// <remarks>
+        /// For now(?) this is in the title bar, but it could be made optional
+        /// (or only in DEBUG mode?) or moved to a footer area where other status
+        /// info, like caps lock or mouse capture status is displayed...
+        /// </remarks>
         private void UpdateFPS(long frames)
         {
             _stopwatch.Stop();
@@ -281,90 +325,63 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Set up our SDL window and start the display machinery in motion.
+        /// Reset, restart the message loop.
         /// </summary>
-        public void InitializeSDL()
+        public void Reset()
         {
-            int retVal;
-
-            SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
-
-            // Get SDL humming
-            if ((retVal = SDL.SDL_Init(SDL.SDL_INIT_EVERYTHING)) < 0)
+            if (_sdlRunning)
             {
-                throw new InvalidOperationException(string.Format("SDL_Init failed.  Error {0:x}", retVal));
+                if (_sdlPumpEvent != null)
+                    _system.Scheduler.Cancel(_sdlPumpEvent);
+
+                SDLMessageLoop(0, null);
             }
+        }
 
-            if (SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "0") == SDL.SDL_bool.SDL_FALSE)
+        /// <summary>
+        /// Close down the display and free SDL resources.
+        /// </summary>
+        public void ShutdownSDL()
+        {
+            Console.WriteLine("SDL Shutdown requested.");    // Debug
+
+            if (_sdlRunning)
             {
-                throw new InvalidOperationException("SDL_SetHint failed to set scale quality.");
-            }
+                //
+                // Shut things down nicely.
+                //
+                _stopwatch.Stop();
 
-            _sdlWindow = SDL.SDL_CreateWindow(
-                "PERQ",
-                SDL.SDL_WINDOWPOS_UNDEFINED,
-                SDL.SDL_WINDOWPOS_UNDEFINED,
-                _displayWidth,
-                _displayHeight,
-                SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN);
+                // Clear out our custom events
+                SDL.SDL_FlushEvent((SDL.SDL_EventType)_renderEventType);
 
-            if (_sdlWindow == IntPtr.Zero)
-            {
-                throw new InvalidOperationException("SDL_CreateWindow failed.");
-            }
-
-            _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
-            if (_sdlRenderer == IntPtr.Zero)
-            {
-                Console.WriteLine("Could not create accelerated renderer?");    // FIXME fyi, debug, remove me
-
-                // Fall back to software
-                _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
-
-                if (_sdlRenderer == IntPtr.Zero)
+                if (_sdlPumpEvent != null)
                 {
-                    // Still no luck.
-                    throw new InvalidOperationException("SDL_CreateRenderer failed.");
+                    _system.Scheduler.Cancel(_sdlPumpEvent);
+                    _sdlPumpEvent = null;
                 }
+
+                if (_sdlRenderer != IntPtr.Zero)
+                {
+                    SDL.SDL_DestroyRenderer(_sdlRenderer);
+                    _sdlRenderer = IntPtr.Zero;
+                }
+
+                if (_sdlWindow != IntPtr.Zero)
+                {
+                    SDL.SDL_DestroyWindow(_sdlWindow);
+                    _sdlWindow = IntPtr.Zero;
+                }
+
+                _sdlRunning = false;
+
+                SDL.SDL_Quit();
             }
-
-            CreateDisplayTexture(false);
-
-            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x00, 0x00, 0x00, 0xff);
-
-            _sdlRunning = true;
-
-            // Register a User event for rendering.
-            _renderEventType = SDL.SDL_RegisterEvents(1);
-            _renderEvent = new SDL.SDL_Event();
-            _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
-
-            _stopwatch.Start();
-
-            SDL.SDL_PumpEvents();       // so the mac will render the bloody window frame
-            SDLMessageLoop(0, null);    // kick off our periodic polling loop
         }
 
-        private void CreateDisplayTexture(bool filter)
-        {
-            _textureLock.EnterWriteLock();
-            SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, filter ? "linear" : "nearest");
-
-            _displayTexture = SDL.SDL_CreateTexture(
-                _sdlRenderer,
-                SDL.SDL_PIXELFORMAT_ARGB8888,
-                (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
-                _displayWidth,
-                _displayHeight);
-
-            if (_displayTexture == IntPtr.Zero)
-            {
-                throw new InvalidOperationException("SDL_CreateTexture failed.");
-            }
-
-            SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
-            _textureLock.ExitWriteLock();
-        }
+        //
+        //  Mouse & Keyboard handling
+        //
 
         void OnMouseWheel(object sender, MouseEventArgs e)
         {
@@ -565,6 +582,17 @@ namespace PERQemu.UI
             */
         }
 
+        //
+        //  Other
+        //
+
+        public void SaveScreenshot(string path)
+        {
+            EncoderParameters p = new EncoderParameters(1);
+            p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
+            //_buffer.Save(path, GetEncoderForFormat(ImageForm, p);
+        }
+
         private ImageCodecInfo GetEncoderForFormat(ImageFormat format)
         {
             ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
@@ -577,6 +605,15 @@ namespace PERQemu.UI
                 }
             }
             return null;
+        }
+
+        // todo: remove (eventually); for debugging
+        public void Status()
+        {
+            Console.WriteLine("_sdlRunning={0}, _sdlPumpEvent={1}, _renderEventType={2}",
+                              _sdlRunning, _sdlPumpEvent?.EventCallback.Method.Name, _renderEventType);
+            Console.WriteLine("_frame={0}, _mouseX,Y={1},{2}",
+                             _frame, _mouseX, _mouseY);
         }
 
         /// <summary>

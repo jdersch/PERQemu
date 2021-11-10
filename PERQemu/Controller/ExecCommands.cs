@@ -41,6 +41,8 @@ namespace PERQemu
 
             Console.WriteLine("Current run state is " + PERQemu.Sys.State);
             Console.WriteLine("Current configuration is " + PERQemu.Sys.Config.Name);
+
+            // todo: check and show floppy and disk drive IsModified
         }
 
         [Command("power on", "Turn on the configured PERQ!")]
@@ -49,6 +51,7 @@ namespace PERQemu
             PERQemu.Controller.PowerOn();
         }
 
+        // todo: warn if the modified disks aren't saved
         [Command("power off", "Turn off the PERQ")]
         public void PowerOff()
         {
@@ -65,6 +68,7 @@ namespace PERQemu
         }
 
         [Command("stop", "Stop or pause the PERQ")]
+        [Command("debug stop", "Stop or pause the PERQ")]
         public void Stop()
         {
             PERQemu.Controller.TransitionTo(RunState.Paused);
@@ -74,16 +78,22 @@ namespace PERQemu
         [Command("debug reset", "Reset the PERQ")]
         public void Reset()
         {
-            PERQemu.Controller.TransitionTo(RunState.Reset);
+            PERQemu.Controller.Reset();
         }
 
         //
         // Media: Floppies and Hard Disks
         //
 
+        // todo: move the interface to the floppy/hard disk loading and saving
+        // to PERQsystem?
+        // todo: allow for second hard drive in perq2 models
+
         [Command("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
         private void CreateFloppyDisk()
         {
+            // todo: allow specification of sssd, ssdd, dssd, dsdd
+            // all floppies created in imd format by default?
             PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(null);
             Console.WriteLine("Created.");
         }
@@ -108,6 +118,9 @@ namespace PERQemu
             PERQemu.Sys.IOB.Z80System.UnloadFloppyDisk();
         }
 
+        // todo: floppy remembers the path we loaded from so we don't have to?
+        // todo: make relative to Disks/ dir
+
         [Command("save floppy", "Saves the current in memory floppy disk to an image file")]
         private void SaveFloppy(string imagePath)
         {
@@ -122,6 +135,9 @@ namespace PERQemu
             }
         }
 
+        // todo: allow for all supported types, not just shugart
+        // todo: allow for multiple units in perq 2 models
+        // todo: allow user to define new types here?  or just use built-in ones?
         [Command("create harddisk", "Creates and mounts a new, unformatted hard disk image")]
         private void CreateHardDisk()
         {
@@ -143,7 +159,8 @@ namespace PERQemu
             }
         }
 
-        // TODO:  HAVE TO DEAL WITH MULTIPLE UNITS, other drive types, etc
+        // todo: like floppy, controller should/will remember name of file loaded
+        // todo: allow user to specify unit # when appropriate (default 0)
         [Command("save harddisk", "Save the current hard disk to an image file")]
         private void SaveHardDisk(string imagePath)
         {
@@ -183,8 +200,10 @@ namespace PERQemu
             }
         }
 
-
-        [Command("set rs232", "Configures the emulated serial port to use the specified device")]
+        // todo: on eio/nio, allow for port b... hmm.
+        // todo: move the interface to PERQsystem? or provide a hook to Z80system
+        // todo: move these to SettingsCommands so they can be saved/reloaded
+        [Command("set rs232", "Configure the emulated serial port to use the specified device")]
         private void SetSerialPort(string devName)
         {
             ISerialDevice dev = null;
@@ -225,7 +244,8 @@ namespace PERQemu
             Console.WriteLine("RS232 port is set to {0}", PERQemu.Sys.IOB.Z80System.GetSerialPort());
         }
 
-
+        // todo: allow for png formatter (read Settings.ScreenFormat)
+        // todo: make path relative to Output/ (or Settings.OutputDir)
         [Command("save screenshot", "Save a screenshot of the current PERQ display")]
         private void SaveScreenshot(string filePath)
         {

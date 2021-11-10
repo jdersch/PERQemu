@@ -46,7 +46,7 @@ namespace PERQemu.PhysicalDisk
 
         public FloppyDisk()
         {
-            _imagePath = String.Empty;
+            _imagePath = string.Empty;
             _tracks = new Track[2, 77];
             _cylinderCount = 77;
             _isSingleSided = false;
@@ -104,10 +104,6 @@ namespace PERQemu.PhysicalDisk
         /// <summary>
         /// Returns sector data for the given address.
         /// </summary>
-        /// <param name="cylinder"></param>
-        /// <param name="head"></param>
-        /// <param name="sector"></param>
-        /// <returns></returns>
         public Sector GetSector(int cylinder, int head, int sector)
         {
             return _tracks[head, cylinder].ReadSector(sector);
@@ -135,11 +131,6 @@ namespace PERQemu.PhysicalDisk
         /// <summary>
         /// Formats the given track with the specified sector count, size, and format.
         /// </summary>
-        /// <param name="cylinder"></param>
-        /// <param name="head"></param>
-        /// <param name="sectorCount"></param>
-        /// <param name="sectorSize"></param>
-        /// <param name="format"></param>
         public void FormatTrack(Format format, int cylinder, int head, int sectorCount, int sectorSize)
         {
             _tracks[head, cylinder] = new Track(format, cylinder, head, sectorCount, sectorSize);
@@ -254,11 +245,6 @@ namespace PERQemu.PhysicalDisk
         /// Create a new, unformatted track with the specified format, sector size and sector count.
         /// Used when formatting a track.
         /// </summary>
-        /// <param name="format"></param>
-        /// <param name="cylinder"></param>
-        /// <param name="head"></param>
-        /// <param name="sectorCount"></param>
-        /// <param name="sectorSize"></param>
         public Track(Format format, int cylinder, int head, int sectorCount, int sectorSize)
         {
             _format = format;
@@ -277,7 +263,6 @@ namespace PERQemu.PhysicalDisk
         /// Create a new track loaded from the given stream.  The stream is expected to be positioned
         /// at the beginning of an IMD sector definition.
         /// </summary>
-        /// <param name="s"></param>
         public Track(Stream s)
         {
             bool bCylMap = false;
@@ -302,11 +287,8 @@ namespace PERQemu.PhysicalDisk
             // This can happen on tracks with missing sector data.
             if (_sectorCount != 26)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.FloppyDisk, "Cylinder {0} head {1} has only {2} sectors.", 
-                        _cylinder, _head, _sectorCount);
-#endif
+                Trace.Log(LogType.FloppyDisk, "Cylinder {0} head {1} has only {2} sectors.", 
+                    _cylinder, _head, _sectorCount);
             }
 
             _sectorSize = _sectorSizes[sectorSizeIndex];
@@ -369,7 +351,7 @@ namespace PERQemu.PhysicalDisk
                         break;
 
                     default:
-                        throw new InvalidOperationException(String.Format("Unexpected IMD sector data type {0}", type));
+                        throw new InvalidOperationException(string.Format("Unexpected IMD sector data type {0}", type));
                 }
             }
         }
@@ -448,7 +430,7 @@ namespace PERQemu.PhysicalDisk
         {
             if (_sectorOrdering.Count == _sectorCount)
             {
-                throw new InvalidOperationException(String.Format("Track full."));
+                throw new InvalidOperationException("Track full.");
             }
 
             _sectorOrdering.Add(sector);
@@ -467,7 +449,7 @@ namespace PERQemu.PhysicalDisk
 
             // Should not happen.
             throw new InvalidOperationException(
-                String.Format("No IMD sector size for {0}", _sectorSize));
+                string.Format("No IMD sector size for {0}", _sectorSize));
         }
 
         //

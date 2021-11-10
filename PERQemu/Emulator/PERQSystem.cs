@@ -47,6 +47,8 @@ namespace PERQemu
             //
             _conf = conf;
 
+            _userInterrupt = false;
+
             //
             // TODO: There are some ugly dependencies here...
             //      CPU needs Memory;
@@ -78,7 +80,7 @@ namespace PERQemu
                     throw new UnimplementedHardwareException("Sorry, PERQ24A CPU is not implemented.");
 
                 default:
-                    throw new InvalidConfigurationException(string.Format("No such CPU type '{0}'", _conf.CPU));
+                    throw new InvalidConfigurationException(string.Format("No such CPU board type '{0}'", _conf.CPU));
             }
 
             // Create the CPU's scheduler.  TODO: should move this into CPUBoard
@@ -154,22 +156,9 @@ namespace PERQemu
 
             // Create a lock to protect state transitions
             _stLock = new object();
+
         }
 
-
-
-        //      =============================
-        //
-        //      MAJOR REORGANIZATION UNDERWAY
-        //  "Strange things are afoot at the Circle-K"
-        //
-        //      =============================
-        //
-        // PERQSystem is undergoing major reconstructive surgery.  Things here
-        // in the experiments branch will be changing rapidly in the coming
-        // days/weeks.  Things will be broken or weird for a while.
-        //      -- S. Boondoggle
-        //
 
         public Configuration Config => _conf;
         public Scheduler Scheduler => _scheduler;
@@ -219,6 +208,7 @@ namespace PERQemu
         /// </summary>
         public void Break()
         {
+            _userInterrupt = true;
             State = RunState.Paused;
         }
 
@@ -335,10 +325,15 @@ namespace PERQemu
                     case RunState.Reset:
                         Reset();
 
-                        //if (Settings.PauseOnReset)
-                        //    State = RunState.Paused;
-                        //else
-                        State = RunState.Running;
+                        if (_userInterrupt || Settings.PauseOnReset)
+                        {
+                            State = RunState.Paused;
+                            _userInterrupt = false;
+                        }
+                        else
+                        {
+                            State = RunState.Running;
+                        }
                         break;
 
                     case RunState.Off:
@@ -435,6 +430,7 @@ namespace PERQemu
         }
 
         private RunState _state;
+        private bool _userInterrupt;
         private ExecutionMode _z80ExecutionMode;
         //private string _debugMessage;
 

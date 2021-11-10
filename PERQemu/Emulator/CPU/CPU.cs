@@ -1,3 +1,4 @@
+//
 // cpu.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -22,8 +23,6 @@ using System.Threading;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-using PERQemu.IO;
-using PERQemu.IO.Z80_new;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 
@@ -182,12 +181,13 @@ namespace PERQemu.Processor
                 return;
             }
 
+#if TRACING_ENABLED
             // This is a very expensive log, so only call it if we have to
             if (Trace.TraceOn && (LogType.Instruction & Trace.TraceLevel) != 0)
             {
                 Trace.Log(LogType.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
             }
-
+#endif
 #if DEBUG
             // Catch cases where the CPU is looping forever
             if (_lastPC == PC &&
@@ -722,7 +722,7 @@ namespace PERQemu.Processor
                         case 0xf:   // IOB function
                             if (uOp.F == 0x0)
                             {
-                                // This is Input if the msb of Z is unset, Output otherwise
+                                // Input if the msb of Z is unset, Output otherwise
                                 if (uOp.IsIOInput)
                                 {
                                     _iod = _system.IOBus.IORead(uOp.IOPort);
@@ -975,13 +975,6 @@ namespace PERQemu.Processor
 
         #region Debugger Commands
 
-        // TODO almost all of this will be moved to a new class that can be
-        // linked into the new command parser.  it'll reduce this massive file
-        // by hundreds of lines and consolidate the cli stuff outside the CPU
-        // proper.  if necessary, public functions here will expose things the
-        // debugger wants to see; when an (eventual) graphical debugger is added,
-        // it too will use the api exposed here.
-
         /// <summary>
         /// Provide access to the microstore for the debugger/disassembler.
         /// </summary>
@@ -1021,7 +1014,7 @@ namespace PERQemu.Processor
         	catch
         	{
         		Console.WriteLine("Could not load boot ROM from {0}!", path);
-        		// return fail or throw something?
+                // fixme: should be fatal; return fail or throw
         	}
         }
 

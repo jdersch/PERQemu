@@ -110,8 +110,13 @@ namespace PERQemu
 
         public void Reset()
         {
-            _system.State = RunState.Reset;
-            _system.Execute();
+            // If no system, quietly no-op (since we always pass
+            // through Reset when bringing the system up)
+            if (_system != null && _system.State != RunState.Off)
+            {
+                _system.State = RunState.Reset;
+                _system.Execute();
+            }
         }
 
         public void PowerOff()
@@ -124,7 +129,7 @@ namespace PERQemu
 
             // todo:
             //      stop if running
-            //      save disks?
+            //      save disks? -- graphical dialog!?  consult Settings.*
             //      proceed to shutdown (stops SDL loop, closes display)
 
             Console.WriteLine("Power OFF requested.");
@@ -136,7 +141,7 @@ namespace PERQemu
         {
             var current = _system.State;
 
-            //Console.WriteLine("Transition request from {0} to {1}", current, nextState);
+            Console.WriteLine("Transition request from {0} to {1}", current, nextState);
 
             // Are we already in the requested state?
             if (current == nextState) return current;

@@ -144,6 +144,7 @@ namespace PERQemu
 #if TRACING_ENABLED
             Console.WriteLine("[Tracing is available]");
 #endif
+
             if (HostIsUnix && !_switches.startGUI)
             {
                 Console.WriteLine("Type 'help' for console commands, or 'gui' to start the GUI.");
