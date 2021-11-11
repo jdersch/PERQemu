@@ -19,8 +19,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
+using PERQemu.IO.Z80;
 using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO
@@ -89,14 +89,6 @@ namespace PERQemu.IO
         void SetSerialPort(ISerialDevice dev);
         string GetSerialPort();
         Queue<byte> FIFO { get; }
-        IKeyboard Keyboard { get; }
-    }
-
-    /// <summary>
-    /// This is also temporary during new Z80 construction
-    /// </summary>
-    public interface IKeyboard
-    {
-        void QueueInput(byte key);
+        Keyboard Keyboard { get; }
     }
 }

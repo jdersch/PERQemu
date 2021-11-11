@@ -21,6 +21,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Konamiman.Z80dotNet;
+
 using PERQemu.Processor;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
@@ -316,7 +317,7 @@ namespace PERQemu.IO.Z80
 
         public Queue<byte> FIFO { get; }
 
-        public IKeyboard Keyboard => _keyboard;
+        public Keyboard Keyboard => _keyboard;
 
         // DMA Capable devices
         public NECuPD765A FDC => _fdc;

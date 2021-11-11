@@ -1,4 +1,5 @@
-// display.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// Display.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -25,7 +26,6 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 
-using PERQemu.HostInterface;
 
 namespace PERQemu.UI
 {
@@ -58,7 +58,7 @@ namespace PERQemu.UI
             _frame = 0;
             _prevClock = 0;
 
-            _keymap = new KeyboardMap();
+            _keymap = new KeyboardMap(_system.Config.Chassis);
 
             _clickFlag = false;
             _mouseButton = 0x0;
@@ -466,13 +466,13 @@ namespace PERQemu.UI
                 // Useful on laptop touchpads which don't simulate (or mice that
                 // don't have) scroll wheels.
                 case SDL.SDL_Keycode.SDLK_HOME:
-                case SDL.SDL_Keycode.SDLK_PAGEUP:
+                //case SDL.SDL_Keycode.SDLK_PAGEUP:         pass this to map as PERQ-2 "SETUP" key...
                     //_dispBox.Top = 0;                    
                     handled = true;
                     break;
 
                 case SDL.SDL_Keycode.SDLK_END:
-                case SDL.SDL_Keycode.SDLK_PAGEDOWN:
+                //case SDL.SDL_Keycode.SDLK_PAGEDOWN:       pass this to map as PERQ-2 "LINEFEED" key...
                     //_dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;                    
                     handled = true;
                     break;
@@ -480,7 +480,7 @@ namespace PERQemu.UI
                 // Toggle the "lock" keys... this needs work.
                 case SDL.SDL_Keycode.SDLK_CAPSLOCK:
                 case SDL.SDL_Keycode.SDLK_NUMLOCKCLEAR:
-                case SDL.SDL_Keycode.SDLK_SCROLLLOCK:
+                // case SDL.SDL_Keycode.SDLK_SCROLLLOCK:    pass this to map as PERQ-2 "NOSCRL" key
                     _keymap.SetLockKeyState(keycode);
                     handled = true;
                     break;

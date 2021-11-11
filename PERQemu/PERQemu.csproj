@@ -132,7 +132,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Debugger\Z80Debugger.cs" />
-    <Compile Include="HostInterface\KeyboardMap.cs" />
     <Compile Include="Debugger\DebugAttributes.cs" />
     <Compile Include="Debugger\Disassembler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -212,6 +211,7 @@
     <Compile Include="Emulator\IO\Z80\Z80DMA.cs" />
     <Compile Include="Emulator\IO\Z80\Z80SIO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80System.cs" />
+    <Compile Include="UI\SDL\KeyboardMap.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

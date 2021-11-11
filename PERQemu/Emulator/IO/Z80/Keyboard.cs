@@ -19,10 +19,9 @@
 
 using System;
 
-
 namespace PERQemu.IO.Z80
 {
-    public class Keyboard : IZ80Device, IKeyboard
+    public class Keyboard : IZ80Device
     {
         public Keyboard()
         {
