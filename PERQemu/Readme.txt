@@ -60,6 +60,21 @@
 
     So, after a long hiatus, stuff is happenin' again.  Watch this space!
 
+    Back at it:  Status as of November, 2021:
+
+    Have removed the old Z80 and moved Z80_new into its place.  Started to
+    refactor the IO so that different board types can be selected -- the
+    EIO for the PERQ-2 is rather different than the old IOB.  Have quite a
+    bit of work to do before we can start building virtual PERQ-2 machines
+    but there's a pinprick of light at the end of that long dark tunnel. :-)
+
+    Amazingly, with all of my ham-fisted shenanigans over the last month,
+    it still builds and runs!  Getting ~ 32fps pretty consistently on my
+    old Mac now, and really hope that moving the bulk of the CPU onto its
+    own thread will finally get me closer to 170ns/60fps emulation (on my
+    "old" hardware).  Then I can drop in the rate-limiting stuff for those
+    of you with hardware built in the last decade, where it should really fly.
+
 
 Original README.Source follows.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
