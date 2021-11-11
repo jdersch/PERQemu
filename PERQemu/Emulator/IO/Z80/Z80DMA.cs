@@ -1,10 +1,25 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿//
+// Z80DMA.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// This file is part of PERQemu.
+//
+// PERQemu is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
+//
 
-namespace PERQemu.IO.Z80_new
+using System;
+
+namespace PERQemu.IO.Z80
 {
     /// <summary>
     /// Implements most of the Z80 DMA controller.
@@ -64,7 +79,7 @@ namespace PERQemu.IO.Z80_new
         {
             // TODO: handle "Interrupt on RDY" option
 
-            // If DMA is in progress, make it happen.
+            // If DMA is in progress, make it happen
             if (_enableDMA)
             {
                 IDMADevice source;
@@ -100,8 +115,8 @@ namespace PERQemu.IO.Z80_new
                     destIsIO = (wr1 & WR1.MemoryOrIO) != 0;
                 }
 
-                // If the source has a byte ready for us and the destination is also ready, 
-                // do the transfer:
+                // If the source has a byte ready for us and the destination is 
+                // also ready, do the transfer:
                 if (source.ReadDataReady && dest.WriteDataReady)
                 {
                     byte data = 0;
@@ -126,9 +141,9 @@ namespace PERQemu.IO.Z80_new
                     // Update addresses & counters
                     _byteCounter--;
 
-#if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "DMA transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left.", data, source, sourceAddress, dest, destAddress, _byteCounter);
-#endif
+                    Trace.Log(LogType.Z80DMA, 
+                              "DMA transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left.",
+                              data, source, sourceAddress, dest, destAddress, _byteCounter);
 
 
                     if ((wr1 & WR1.PortAAddressFixed) == 0)
@@ -160,9 +175,8 @@ namespace PERQemu.IO.Z80_new
                 // interrupt, restart, etc.
                 if (_byteCounter == 0)
                 {
-#if TRACING_ENABLED
-                    if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "DMA transfer complete.");
-#endif
+                    Trace.Log(LogType.Z80DMA, "DMA transfer complete.");
+
                     if ((_interruptControl & 0x2) != 0)
                     {
                         _interruptActive = true;
@@ -176,9 +190,7 @@ namespace PERQemu.IO.Z80_new
                         _portAddressA = _portAddressAInit;
                         _portAddressB = _portAddressBInit;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "DMA transfer auto-restarting.");
-#endif
+                        Trace.Log(LogType.Z80DMA, "DMA transfer auto-restarting.");
                     }
                     else
                     {
@@ -186,7 +198,6 @@ namespace PERQemu.IO.Z80_new
                         dest.DMATerminate();
                         _enableDMA = false;
                     }
-
                 }
             }
         }
@@ -216,9 +227,8 @@ namespace PERQemu.IO.Z80_new
                     }
                 }
 
-#if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Write of 0x{0:x2} to Z80 DMA base register {1}", value, _baseRegister);
-#endif
+                Trace.Log(LogType.Z80DMA, "Write of 0x{0:x2} to Z80 DMA base register {1}",
+                                           value, _baseRegister);
                 WriteBaseRegister(value);
             }
             else
@@ -235,8 +245,8 @@ namespace PERQemu.IO.Z80_new
             switch(_baseRegister)
             {
                 case 0:
-                    // bits D3-D6 indicate sub-registers to be written to, if none are set,
-                    // return to base state.
+                    // bits D3-D6 indicate sub-registers to be written to,
+                    // if none are set, return to base state.
                     _writeBaseRegister = (value & 0x78) == 0;
                     break;
 
@@ -275,36 +285,28 @@ namespace PERQemu.IO.Z80_new
                         _portAddressAInit = (ushort)((_portAddressAInit & 0xff00) | value);
                         _wr[_baseRegister] &= 0xf7;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
                     }
                     else if ((regVal & 0x10) != 0)
                     {
                         _portAddressAInit = (ushort)((_portAddressAInit & 0x00ff) | (value << 8));
                         _wr[_baseRegister] &= 0xef;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
                     }
                     else if ((regVal & 0x20) != 0)
                     {
                         _blockLength = (ushort)((_blockLength & 0xff00) | value);
                         _wr[_baseRegister] &= 0xdf;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
                     }
                     else if ((regVal & 0x20) != 0)
                     {
                         _blockLength = (ushort)((_blockLength & 0x00ff) | (value << 8));
                         _wr[_baseRegister] &= 0xbf;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
                     }
                     _writeBaseRegister = (value & 0x78) == 0;
                     break;
@@ -335,18 +337,14 @@ namespace PERQemu.IO.Z80_new
                         _portAddressBInit = (ushort)((_portAddressBInit & 0xff00) | value);
                         _wr[_baseRegister] &= 0xfb;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
                     }
                     else if ((regVal & 0x08) != 0)
                     {
                         _portAddressBInit = (ushort)((_portAddressBInit & 0x00ff) | (value << 8));
                         _wr[_baseRegister] &= 0xf7;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
                     }
                     else if ((regVal & 0x10) != 0)
                     {
@@ -363,16 +361,12 @@ namespace PERQemu.IO.Z80_new
                         _interruptVector = value;
                         _interruptControl &= 0xef;
 
-#if TRACING_ENABLED
-                        if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Interrupt vector now 0x{0:x4}", _interruptVector);
-#endif
+                        Trace.Log(LogType.Z80DMA, "Interrupt vector now 0x{0:x4}", _interruptVector);
                     }
                     _writeBaseRegister = ((regVal & 0x1c) == 0) && ((_interruptControl & 0x18) == 0);
-
                     break;
 
-                default:
-                    // Shouldn't happen
+                default:        // Shouldn't happen
                     throw new InvalidOperationException("Unexpected subregister write.");
             }
         }
@@ -521,6 +515,5 @@ namespace PERQemu.IO.Z80_new
             new RegisterDecodes(0xc7, 0x82),
             new RegisterDecodes(0x83, 0x83),    // WR6
         };
-
     }
 }

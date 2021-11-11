@@ -1,4 +1,5 @@
-﻿// IOBBus.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+﻿//
+// IOBBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -18,15 +19,15 @@
 
 using Konamiman.Z80dotNet;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Collections.Generic;
 
-namespace PERQemu.IO.Z80_new
+namespace PERQemu.IO.Z80
 {   
     /// <summary>
-    /// IOBIOBus implements the Konamiman Z80dotNet IMemory interface for the purposes of
-    /// providing access to the IOB's Z80 Port I/O space.
+    /// IOBIOBus implements the Konamiman Z80dotNet IMemory interface for the
+    /// purposes of providing access to the IOB's Z80 Port I/O space.
     /// </summary>
     public class IOBIOBus : IMemory
     {

@@ -20,7 +20,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PERQemu.IO.Z80_new
+namespace PERQemu.IO.Z80
 {
     /// <summary>
     /// A rough implementation of the Z80 SIO serial controller.

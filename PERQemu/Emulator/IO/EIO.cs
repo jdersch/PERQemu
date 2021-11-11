@@ -20,7 +20,7 @@
 using System;
 
 using PERQemu.IO.HardDisk;
-using PERQemu.IO.Z80_new;
+using PERQemu.IO.Z80;
 
 namespace PERQemu.IO
 {

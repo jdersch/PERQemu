@@ -169,23 +169,6 @@
     <Compile Include="Emulator\IO\SerialDevices\ISerialDevice.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RealPort.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RSXFilePort.cs" />
-    <Compile Include="Emulator\IO\Z80_new\DMARouter.cs" />
-    <Compile Include="Emulator\IO\Z80_new\HardDiskSeekControl.cs" />
-    <Compile Include="Emulator\IO\Z80_new\IDMADevice.cs" />
-    <Compile Include="Emulator\IO\Z80_new\IOBBus.cs" />
-    <Compile Include="Emulator\IO\Z80_new\IOReg1.cs" />
-    <Compile Include="Emulator\IO\Z80_new\IOReg3.cs" />
-    <Compile Include="Emulator\IO\Z80_new\ISIODevice.cs" />
-    <Compile Include="Emulator\IO\Z80_new\IZ80Device.cs" />
-    <Compile Include="Emulator\IO\Z80_new\Keyboard.cs" />
-    <Compile Include="Emulator\IO\Z80_new\KrizTablet.cs" />
-    <Compile Include="Emulator\IO\Z80_new\NECuPD765A.cs" />
-    <Compile Include="Emulator\IO\Z80_new\PERQFifo.cs" />
-    <Compile Include="Emulator\IO\Z80_new\TMS9914A.cs" />
-    <Compile Include="Emulator\IO\Z80_new\Z80CTC.cs" />
-    <Compile Include="Emulator\IO\Z80_new\Z80DMA.cs" />
-    <Compile Include="Emulator\IO\Z80_new\Z80SIO.cs" />
-    <Compile Include="Emulator\IO\Z80_new\Z80System.cs" />
     <Compile Include="Emulator\Memory\Memory.cs" />
     <Compile Include="Emulator\Memory\MemoryController.cs" />
     <Compile Include="Emulator\PhysicalDisk\FloppyDisk.cs" />
@@ -212,6 +195,23 @@
     <Compile Include="Debugger\QCode.cs" />
     <Compile Include="Emulator\IO\IOBoard.cs" />
     <Compile Include="Emulator\IO\EIO.cs" />
+    <Compile Include="Emulator\IO\Z80\DMARouter.cs" />
+    <Compile Include="Emulator\IO\Z80\HardDiskSeekControl.cs" />
+    <Compile Include="Emulator\IO\Z80\IDMADevice.cs" />
+    <Compile Include="Emulator\IO\Z80\IOBBus.cs" />
+    <Compile Include="Emulator\IO\Z80\IOReg1.cs" />
+    <Compile Include="Emulator\IO\Z80\IOReg3.cs" />
+    <Compile Include="Emulator\IO\Z80\ISIODevice.cs" />
+    <Compile Include="Emulator\IO\Z80\IZ80Device.cs" />
+    <Compile Include="Emulator\IO\Z80\Keyboard.cs" />
+    <Compile Include="Emulator\IO\Z80\KrizTablet.cs" />
+    <Compile Include="Emulator\IO\Z80\NECuPD765A.cs" />
+    <Compile Include="Emulator\IO\Z80\PERQFifo.cs" />
+    <Compile Include="Emulator\IO\Z80\TMS9914A.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80CTC.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80DMA.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80SIO.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80System.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

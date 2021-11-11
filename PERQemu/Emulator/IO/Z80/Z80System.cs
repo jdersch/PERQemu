@@ -17,15 +17,15 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System;
+using System.Collections.Generic;
+using System.Threading;
 using Konamiman.Z80dotNet;
 using PERQemu.Processor;
 using PERQemu.Debugger;
 using PERQemu.IO.SerialDevices;
-using System;
-using System.Collections.Generic;
-using System.Threading;
 
-namespace PERQemu.IO.Z80_new
+namespace PERQemu.IO.Z80
 {
     public class Z80System : IZ80System
     {
@@ -95,7 +95,8 @@ namespace PERQemu.IO.Z80_new
             IZ80Registers regs = _cpu.Registers;
 
             // TODO: should display shadow regs?
-            Console.WriteLine("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}", regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
+            Console.WriteLine("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}",
+                              regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
             Console.WriteLine("    IX=${0:x4} IY=${1:x4}", regs.IX, regs.IY);
 
             // TODO: this doesn't really belong here
@@ -151,7 +152,7 @@ namespace PERQemu.IO.Z80_new
 
             _lastExecutionMode = ExecutionMode.Asynchronous;
 
-            // Do not start the thread if the Z80 has been turned off.
+            // Do not start the thread if the Z80 has been turned off
             if (!_running)
             {
                 return;

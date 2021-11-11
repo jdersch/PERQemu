@@ -1,10 +1,25 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿//
+// Z80CTC.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// This file is part of PERQemu.
+//
+// PERQemu is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
+//
 
-namespace PERQemu.IO.Z80_new
+using System;
+
+namespace PERQemu.IO.Z80
 {
     public class Z80CTC : IZ80Device
     {
@@ -12,6 +27,7 @@ namespace PERQemu.IO.Z80_new
         {
             _baseAddress = baseAddress;
             _scheduler = scheduler;
+
             Reset();
         }
 
@@ -26,8 +42,11 @@ namespace PERQemu.IO.Z80_new
         public string Name => "Z80 CTC";
 
         public byte[] Ports => new byte[] {
-                    _baseAddress, (byte)(_baseAddress + 1),
-                    (byte)(_baseAddress + 2), (byte)(_baseAddress + 3) };
+                    _baseAddress,
+                    (byte)(_baseAddress + 1),
+                    (byte)(_baseAddress + 2),
+                    (byte)(_baseAddress + 3)
+        };
          
 
         public bool IntLineIsActive => _interruptEnabled;
@@ -139,6 +158,7 @@ namespace PERQemu.IO.Z80_new
         private bool _interruptEnabled = false;
         private byte _interruptVectorBase;
         private byte? _interruptVector = null;
+
 
         [Flags]
         private enum ControlFlags
