@@ -1,8 +1,24 @@
-﻿using System;
+﻿//
+// Z80SIO.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// This file is part of PERQemu.
+//
+// PERQemu is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
+//
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace PERQemu.IO.Z80_new
 {
@@ -31,9 +47,7 @@ namespace PERQemu.IO.Z80_new
             _channels[0].Reset();
             _channels[1].Reset();
 
-#if TRACING_ENABLED
             Trace.Log(LogType.Z80SIO, "SIO reset.");
-#endif
         }
 
         public string Name => "Z80 SIO";
@@ -148,9 +162,7 @@ namespace PERQemu.IO.Z80_new
 
                 UpdateFlags();
 
-#if TRACING_ENABLED
                 Trace.Log(LogType.Z80SIO, "SIO Channel {0} reset.", _channelNumber);
-#endif
             }
 
             public bool InterruptLatched => _rxInterruptLatched || _txInterruptLatched;
@@ -167,17 +179,15 @@ namespace PERQemu.IO.Z80_new
             {
                 if (_selectedRegister < 3)
                 {
-                    byte value =  _readRegs[_selectedRegister];
-#if TRACING_ENABLED
-                    Trace.Log(LogType.Z80SIO, "SIO Channel {0} read {1:x} from register {2}", _channelNumber, value, _selectedRegister);
-#endif
+                    byte value = _readRegs[_selectedRegister];
+                    Trace.Log(LogType.Z80SIO, "SIO Channel {0} read {1:x} from register {2}",
+                              _channelNumber, value, _selectedRegister);
                     return value;
                 }
                 else
                 {
-#if TRACING_ENABLED
-                    Trace.Log(LogType.Z80SIO, "SIO Channel {0} read from invalid register {2}", _channelNumber, _selectedRegister);
-#endif
+                    Trace.Log(LogType.Z80SIO, "SIO Channel {0} read from invalid register {2}",
+                              _channelNumber, _selectedRegister);
                     return 0;
                 }
             }
@@ -185,30 +195,30 @@ namespace PERQemu.IO.Z80_new
             public byte ReadData()
             {
                 byte data = 0;
+
                 if (_rxFifo.Count > 0)
                 {
                     data = _rxFifo.Dequeue();
                     UpdateFlags();
                 }
-#if TRACING_ENABLED
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} data read: {1:x2}", _channelNumber, data);
-#endif
+
+                Trace.Log(LogType.Z80SIO, "SIO Channel {0} data read: {1:x2}",
+                          _channelNumber, data);
                 return data;
             }
 
             public void WriteData(byte value)
             {
-#if TRACING_ENABLED
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} data write: {1:x2}", _channelNumber, value);
-#endif
+                Trace.Log(LogType.Z80SIO, "SIO Channel {0} data write: {1:x2}",
+                          _channelNumber, value);
                 // Nothing right now.
             }
 
             public void WriteRegister(byte value)
             {
-#if TRACING_ENABLED
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} write {1:x2} to register {2}", _channelNumber, value, _selectedRegister);
-#endif
+                Trace.Log(LogType.Z80SIO, "SIO Channel {0} write {1:x2} to register {2}",
+                          _channelNumber, value, _selectedRegister);
+
                 _writeRegs[_selectedRegister] = value;
 
                 if (_selectedRegister == 0)
@@ -223,7 +233,6 @@ namespace PERQemu.IO.Z80_new
                     {
                         case WReg0Cmd.NullCode:
                             break;
-                        
 
                         case WReg0Cmd.ResetExtStatusInterrupts:
                             _rxInterruptLatched = false;
@@ -239,7 +248,7 @@ namespace PERQemu.IO.Z80_new
                             break;
 
                         default:
-                            throw new NotImplementedException(String.Format("Unimplemented SIO command {0}.", cmd));
+                            throw new NotImplementedException(string.Format("Unimplemented SIO command {0}.", cmd));
                     }
 
                     // Select register pointer
@@ -266,16 +275,13 @@ namespace PERQemu.IO.Z80_new
                     _selectedRegister = 0;
                 }
 
-#if TRACING_ENABLED
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} register pointer now {1}", _channelNumber, _selectedRegister);
-#endif
-
+                Trace.Log(LogType.Z80SIO, "SIO Channel {0} register pointer now {1}",
+                          _channelNumber, _selectedRegister);
             }
 
             /// <summary>
             /// Invoked by attached ISIODevice when it has data to send.
             /// </summary>
-            /// <param name="data"></param>
             private void ReceiveData(byte data)
             {
                 // Accept data if RX enabled
@@ -287,9 +293,7 @@ namespace PERQemu.IO.Z80_new
                         {
                             if (data == _writeRegs[7])  // 8-bit sync value
                             {
-#if TRACING_ENABLED
                                  Trace.Log(LogType.Z80SIO, "SIO Channel {0} sync word matched", _channelNumber);
-#endif                                
                                 _huntMode = false;  // exit hunt mode
                             }
                         }
@@ -297,9 +301,7 @@ namespace PERQemu.IO.Z80_new
                         {
                             _rxFifo.Enqueue(data);
                             UpdateFlags();
-#if TRACING_ENABLED
                             Trace.Log(LogType.Z80SIO, "SIO Channel {0} enqueued byte {1:x2}, fifo depth now {2}", _channelNumber, data, _rxFifo.Count);
-#endif
                         }
                     }
                     else // Async mode
@@ -468,6 +470,5 @@ namespace PERQemu.IO.Z80_new
         private Scheduler _scheduler;
         private byte _baseAddress;
         private byte[] _ports;
-
     }
 }

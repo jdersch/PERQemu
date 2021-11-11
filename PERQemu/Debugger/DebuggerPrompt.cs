@@ -20,6 +20,13 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
+    //
+    //  THIS FILE IS DEPRECATED AND WILL BE REMOVED
+    //
+    //  after some newly added functionality here is folded into
+    //  the new CLI (that now resides in UI/CLI/Command*.cs)
+    //
+
 namespace PERQemu.Debugger
 {
     public class DebuggerPrompt

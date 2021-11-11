@@ -169,16 +169,6 @@
     <Compile Include="Emulator\IO\SerialDevices\ISerialDevice.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RealPort.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RSXFilePort.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\Clock.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\FloppyController.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\GPIB.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\HardDiskSeekControl.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\IZ80Device.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\Keyboard.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\RS232.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\Speech.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\Tablet.cs" />
-    <Compile Include="Emulator\IO\Z80\IOB\Z80System.cs" />
     <Compile Include="Emulator\IO\Z80_new\DMARouter.cs" />
     <Compile Include="Emulator\IO\Z80_new\HardDiskSeekControl.cs" />
     <Compile Include="Emulator\IO\Z80_new\IDMADevice.cs" />
@@ -600,7 +590,6 @@
     <None Include="Docs\Old\KeyboardHandler.cs.Mac" />
     <Content Include="Docs\Old\RasterOpMicrocode.txt" />
     <Content Include="Docs\Old\PNX-SysB.txt" />
-    <None Include="EntryPoint.cs" />
     <None Include="Docs\IOBoards.txt" />
     <None Include="Debugger\DebuggableAttribute.cs" />
     <None Include="Debugger\Debugger.cs" />

@@ -25,6 +25,13 @@ using PERQemu.Processor;
 using PERQemu.Memory;
 using PERQemu.IO.Z80.IOB;
 
+    //
+    //  THIS FILE IS DEPRECATED AND WILL BE REMOVED
+    //
+    //  after some newly added functionality here is folded into
+    //  the new CLI (that now resides in UI/CLI/Command*.cs)
+    //
+
 namespace PERQemu.Debugger
 {
 

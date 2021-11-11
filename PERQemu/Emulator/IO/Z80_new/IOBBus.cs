@@ -99,17 +99,12 @@ namespace PERQemu.IO.Z80_new
             if (device != null)
             {
                 value = device.Read((byte)port);
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} ({1}), returning 0x{2:x}", port, device.Name, value);
-#endif
+
+                Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} ({1}), returning 0x{2:x}", port, device.Name, value);
             }
             else
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} unhandled, returning 0xff.", port);
-#endif
+                Trace.Log(LogType.Z80State, "Z80 Port Read from 0x{0:x} unhandled, returning 0xff.", port);
             }
 
             return value;
@@ -121,17 +116,12 @@ namespace PERQemu.IO.Z80_new
             if (device != null)
             {
                 device.Write((byte)port, value);
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 Port Write of 0x{0:x} to 0x{1:x} ({2})", value, port, device.Name);
-#endif
+
+                Trace.Log(LogType.Z80State, "Z80 Port Write of 0x{0:x} to 0x{1:x} ({2})", value, port, device.Name);
             }
             else
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Z80State, "Z80 Port Write of 0x{0:x} to 0x{1:x} unhandled, returning 0.", value, port);
-#endif
+                Trace.Log(LogType.Z80State, "Z80 Port Write of 0x{0:x} to 0x{1:x} unhandled, returning 0.", value, port);
             }
         }
 
@@ -187,7 +177,7 @@ namespace PERQemu.IO.Z80_new
             else
             {
                 // throw for now so I can see what's going on
-                throw new InvalidOperationException(String.Format("Unexpected memory read at address 0x{0:x}.", address));
+                throw new InvalidOperationException(string.Format("Unexpected memory read at address 0x{0:x}.", address));
             }
         }
 
@@ -200,7 +190,7 @@ namespace PERQemu.IO.Z80_new
             else
             {
                 // throw for now so I can see what's going on
-                throw new InvalidOperationException(String.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}.", address, value));
+                throw new InvalidOperationException(string.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}.", address, value));
             }
         }
 
