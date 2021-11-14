@@ -1,4 +1,5 @@
-// videocontroller.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// VideoController.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -21,7 +22,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
 using PERQemu.IO;
-using PERQemu.UI;
+using PERQemu.Config;
 using PERQemu.Processor;
 
 namespace PERQemu.Memory
@@ -57,9 +58,26 @@ namespace PERQemu.Memory
             _system = system;
             _currentEvent = null;
 
-            // TODO: Allocate our fixed buffer based on the configured display
+            // Set up our display based on the current configuration
+            if (_system.Config.Display == DisplayType.Landscape)
+            {
+                _displayWidth = 1280;
+                _isPortrait = false;
+            }
+            else
+            {
+                _displayWidth = 768;
+                _isPortrait = true;
+            }
+
+            // Compute these once
+            _displayQuads = _displayWidth / 64;
+            _displayWords = _displayWidth / 16;
+            _displayBytes = _displayWidth / 8;
+
+            // One scanline
             _scanlineData = new ScanLineBuffer();
-            _scanlineData.Bytes = new byte[PERQ_DISPLAYWIDTH_IN_BYTES];
+            _scanlineData.Bytes = new byte[_displayBytes];
 
             // One quadword as 8 bytes
             _cursorData = new byte[8];
@@ -67,7 +85,7 @@ namespace PERQemu.Memory
 
         public void Reset()
         {
-            _crtSignals = CRTSignals.LandscapeDisplay;
+            _crtSignals = CRTSignals.None;
             _scanLine = 0;
             _displayAddress = 0;
             _cursorAddress = 0;
@@ -91,6 +109,10 @@ namespace PERQemu.Memory
             // Kick off initial tick
             RunStateMachine();
         }
+
+        public int DisplayWidth => _displayWidth;
+        public int DisplayHeight => _displayHeight;
+
 
         public bool HandlesPort(byte ioPort)
         {
@@ -121,7 +143,7 @@ namespace PERQemu.Memory
 
                 default:
                     throw new UnhandledIORequestException(
-                        String.Format("Unhandled Memory IO Read from port {0:x2}", ioPort));
+                        string.Format("Unhandled Memory IO Read from port {0:x2}", ioPort));
             }
         }
 
@@ -141,7 +163,7 @@ namespace PERQemu.Memory
                     _lineCounter = _lineCounterInit;
                     _lineCountOverflow = false;
 
-                    if ((value & 0x80) != 0)
+                    if ((value & (int)StatusRegister.StartOver) != 0)
                     {
                         _scanLine = 0;      // StartOver bit signals end of display list
                     }
@@ -225,7 +247,7 @@ namespace PERQemu.Memory
 
                 default:
                     throw new UnhandledIORequestException(
-                        String.Format("Unhandled Memory IO Write to port {0:x2}, data {1:x4}", ioPort, value));
+                        string.Format("Unhandled Memory IO Write to port {0:x2}, data {1:x4}", ioPort, value));
             }
         }
 
@@ -254,7 +276,7 @@ namespace PERQemu.Memory
                     _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
                         // We could range check.  Or just clip it.
-                        RenderScanline(_scanLine % PERQ_DISPLAYHEIGHT);
+                        RenderScanline(_scanLine % DisplayHeight);
 
                         _state = VideoState.HBlank;
                         RunStateMachine();
@@ -265,13 +287,14 @@ namespace PERQemu.Memory
                     _currentEvent = _system.Scheduler.Schedule(_hBlankTimeNsec, (skew, context) =>
                     {
                         _scanLine++;
+
                         if (_scanLine > _lastVisibleScanLine)
                         {
                             // Off the end of the visible field; tell the Display
                             // to go render the frame, but rate limit the refresh
                             // in case the microcode is ignoring interrupts (so
                             // the emulator doesn't go bonkers).
-                            if (_scanLine % PERQ_DISPLAYHEIGHT == 0)
+                            if (_scanLine % DisplayHeight == 0)
                                 _system.Display.Refresh();
                         }
 
@@ -337,13 +360,14 @@ namespace PERQemu.Memory
                 _lineCountOverflow = true;
             }
 
+            //
             // The LineCounterOverflow status bit in the CRT Signals register should
             // mirror our interrupt status; don't just raise it for the one cycle when
             // we hit zero, but leave it set until the line counter is reset by IOWrite.
             // Accent specifically checks for this bit!
-
+            //
             _crtSignals =
-                CRTSignals.LandscapeDisplay |
+                (_isPortrait ? CRTSignals.LandscapeDisplay : CRTSignals.None) |     // Inverted!
                 (_lineCountOverflow ? CRTSignals.LineCounterOverflow : CRTSignals.None) |
                 (_state == VideoState.VBlankScanline ? CRTSignals.VerticalSync : CRTSignals.None) |
                 (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None);
@@ -375,17 +399,15 @@ namespace PERQemu.Memory
 
         /// <summary>
         /// Renders one video scanline, mixing in the cursor image when enabled.  
+        /// Applies the current screen function and ships the scanline off to the
+        /// display driver.
         /// </summary>
-        /// <remarks>
-        /// Clips the current _scanLine to the visible range.  Applies the current
-        /// cursor function and ships the scanline off to the display driver.
-        /// </remarks>
         public void RenderScanline(int renderLine)
         {
             if (CursorEnabled)
             {
                 // Set the start of this scanline, offset from start of display
-                int dispAddress = _displayAddress + (renderLine * PERQ_DISPLAYWIDTH_IN_WORDS);
+                int dispAddress = _displayAddress + (renderLine * _displayWords);
                 int dispByte = 0;
 
                 // Calc the starting address of this line of cursor data
@@ -398,7 +420,7 @@ namespace PERQemu.Memory
                 int cursByte = 0;
 
                 // The "slow" loop mixes in the cursor as we go
-                for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_WORDS; w++)
+                for (int w = 0; w < _displayWords; w++)
                 {
                     var word = TransformDisplayWord(_system.Memory.FetchWord(dispAddress + w));
 
@@ -426,10 +448,10 @@ namespace PERQemu.Memory
             else
             {
                 // Set the start of this scanline, offset from start of display (by quads)
-                int dispAddress = (_displayAddress / 4) + (renderLine * PERQ_DISPLAYWIDTH_IN_QUADS);
+                int dispAddress = (_displayAddress / 4) + (renderLine * _displayQuads);
 
                 // The "fast" loop gobbles up quad words
-                for (int w = 0; w < PERQ_DISPLAYWIDTH_IN_QUADS; w++)
+                for (int w = 0; w < _displayQuads; w++)
                 {
                     _scanlineData.Quads[w] = TransformDisplayQuad(_system.Memory.FetchQuad(dispAddress + w));
                 }
@@ -501,7 +523,7 @@ namespace PERQemu.Memory
         }
 
         /// <summary>
-        /// Transforms the cursor byte based on the current Cursor function and display byte.
+        /// Transforms a cursor byte based on the Cursor function and display byte.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte TransformCursorByte(byte dispByte, byte cursByte)
@@ -544,21 +566,15 @@ namespace PERQemu.Memory
             LineCounterOverflow = 0x10,
             Unused1 = 0x20,
             Unused2 = 0x40,
-            LandscapeDisplay = 0x80         // set=Portrait, clear=Landscape!
+            LandscapeDisplay = 0x80     // set=Portrait, clear=Landscape!
         }
 
         [Flags]
         private enum StatusRegister
         {
             None = 0x0,
-            Unused0 = 0x001,
-            Unused1 = 0x002,
-            Unused2 = 0x004,
-            Unused3 = 0x008,
-            Unused4 = 0x010,
-            Unused5 = 0x020,
-            Unused6 = 0x040,
-            Unused7 = 0x080,
+            LineCountMask = 0x7f,       // 7 bits = 1..128 lines in the band
+            StartOver = 0x80,           // High bit signals end of frame
             EnableCursor = 0x100,
             EnableVSync = 0x200,
             EnableDisplay = 0x400,
@@ -599,17 +615,20 @@ namespace PERQemu.Memory
         };
 
         /// <summary>
-        /// Various handy portrait display constants -- for now...
+        /// These timings are constant for both supported Displays!
         /// </summary>
-        public static int PERQ_DISPLAYWIDTH = 768;
-        public static int PERQ_DISPLAYWIDTH_IN_QUADS = 12;
-        public static int PERQ_DISPLAYWIDTH_IN_WORDS = 48;
-        public static int PERQ_DISPLAYWIDTH_IN_BYTES = 96;
-        public static int PERQ_DISPLAYHEIGHT = 1024;
+        private readonly ulong _scanLineTimeNsec = 70 * 170;    // CPU.CycleTime
+        private readonly ulong _hBlankTimeNsec = 22 * 170;      // See Video.txt
 
-        private readonly ulong _scanLineTimeNsec = 70 * 170;
-        private readonly ulong _hBlankTimeNsec = 22 * 170;
-        private static int _lastVisibleScanLine = PERQ_DISPLAYHEIGHT - 1;
+        private int _displayWidth;                              // Configurable!
+        private const int _displayHeight = 1024;                // Fixed, for now
+        private const int _lastVisibleScanLine = _displayHeight - 1;
+
+        // Trade speed for space
+        private int _displayQuads;
+        private int _displayWords;
+        private int _displayBytes;
+        private bool _isPortrait = true;
 
         private ScanLineBuffer _scanlineData;
         private byte[] _cursorData;

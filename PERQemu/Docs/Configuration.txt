@@ -1,0 +1,149 @@
+﻿
+Configuration Notes
+===================
+
+Notes on the new "Configurator" and how virtual PERQs can be specified,
+saved, and loaded.  Consult PERQ_Chart.jpg for reference.
+
+
+Goals
+-----
+
+Configurator is designed to allow users to configure a virtual PERQ using a
+graphical or command-line interface.  This configuration can then be handed
+off to the execution controller which manages the actual setup, running, and
+shutdown of the virtual machine.  The configuration should allow for all of
+the options from The Chart, subject only to the limits of what hardware the
+emulator currently supports.  For convenience, users can specify media files
+(hard disk images) as part of the configuration so that a complete virtual
+machine may be quickly loaded from disk and run.
+
+The PERQemu distribution will contain a new top-level "Conf" directory which
+will contain a number of pre-configured systems to allow new users to try out
+the emulator right away.  These "prefabs" can be edited in the same way as any
+configurations the user creates.  By default, all PERQemu configs will be kept
+in this folder.
+
+Saved configurations are simply a collection of CLI commands, which means they
+are human-readable text files that may be edited outside of the emulator.
+This means the savvy user can just type the shortcut:
+
+    > @Conf/myperq.cfg
+
+at the command prompt, or use the command:
+
+    > configuration select myperq
+
+to achieve the same result.  From the command line, too:
+
+    mac_or_linux% mono PERQemu.exe Conf/myperq.cfg
+
+Ideally, a configuration file type could be registered/recognized by the host
+OS so that double-clicking it would launch PERQemu and automatically load the
+file, but that will undoubtedly require some sort of installer script or fussy
+extra procedure to set up, so we'll put that on the list for a later release.
+
+Currently PERQemu is a "console application" and offers only the CLI; while
+eventually a GUI for Windows could appear, there are dim hopes for a reasonable
+cross-platform solution that would include Mac or Linux users.
+
+
+Implementation
+--------------
+
+Configuration.cs and ConfigTypes.cs provide the structure for describing a
+virtual PERQ.  A single Configuration object may be passed to the execution
+controller to instantiate a PERQSystem object, which uses this to configure
+itself, selecting the CPU, memory capacity, IO board and options, display
+and keyboard type, etc.
+
+ConfigCommands.cs is the CLI interface.  It provides a complete "subsystem"
+that offers the full range of configuration options.  The CLI always operates
+on the "current" configuration object; changes are applied immediately.  This
+imposes a few restrictions: the virtual PERQ must not be running if changes
+are to be made.
+
+ConfigForm.cs is the WinForms implementation of a graphical Configurator.  It
+is not (yet) part of PERQemu.  The GUI version works with its own Configuration
+object, so the user can make whatever changes they like but only apply them if
+they choose; a Cancel button leaves the current configuration intact.
+
+Configurator.cs is the top-level object that manages loading, saving and
+verification of Configurations.  While it might make more sense to have the
+Configuration object validate itself, or be more classically OO, I thought
+it simpler to have the Configurator be the brains.  It's responsible for
+checking that various combinations of options are valid, interface with the
+file system, and work with the GUI and CLI rather than have them poking at
+the Configuration directly.  This could change.  I ain't married to it.
+
+
+Chassis Types
+-------------
+
+The idea to break things down into so many constituent parts -- possibly too
+many, at too fine a grain -- came from the desire to configure a number of
+purely theoretical machines that don't actually exist (yet).  By making the
+emulator far more dynamic it would allow for development and testing of some
+fantastical PERQ variants that include the 64K CPU, larger memories, bigger
+displays, faster I/O boards, additional disk types, etc.  All of this has
+been scaled back in order to have _some_ chance of actually finishing this
+someday.
+
+Selecting the chassis type is a shorthand for limiting certain configuration
+choices.  I/O boards are tied to the chassis type (PERQ-1 or PERQ-2), and
+the keyboard and default tablet types as well.  PERQ-1s are limited to just
+one hard disk (see IOBoards.txt for more) while PERQ-2s may contain a second
+internal drive.  Mostly I wanted to do some sexy visuals in the configurator,
+with a snazzy 3D rendering (someday an actual OpenGL model? :-) of the exact
+machine type displayed as options were selected.  (See: Configurator.png)
+
+There are some fairly arbitrary restrictions that we may or may not enforce;
+the problem isn't that the emulator "cares" how you configure your PERQ, but
+that of software support.  A machine running POS F can't support the landscape
+display, and later versions of some OSes dropped support for the 4K CPU or
+required the "new" Z80 protocols.  So the Configurator's built-in rules try
+to limit options that will result in a PERQ that won't boot or won't run.
+
+
+Other Options
+-------------
+
+Other configurations are very straightforward: memory size is the most basic.
+With a 4K or 16K CPU (20-bit), you max out at 2MB (or 1 megaword).  There are
+some exceptions to this:  PNX 1.3 doesn't support 2MB, so if you want to boot
+up a PNX 1.3 disk choose 1MB.  And while technically the exceedingly rare 
+PERQ-1 with a landscape display only supported 1MB, we won't enforce that
+(unless there's an OS or firmware issue with 2MB).
+
+CPU type is generally "PERQ-1A"; the 20-bit 16K CPU ran in every machine.  We
+support the original 4K (PERQ-1 only) and the rare 24-bit 16K (PERQ-2/T4 only)
+variants as well.
+
+Although the "Multibus/Laser Option" board (MLO) was developed on the PERQ-1
+way earlier than previously thought, the only surviving software seems to rely
+on the PERQ-2's (EIO) DMA hardware.  While MLO hardware was until recently
+thought to be unobtainable, several boards have surfaced and a possible netlist
+is available!  With real reference hardware available it may be enough to
+eventually add this to the emulator, though it is far, far down the list of
+priorities.
+
+It isn't clear that the 3Mbit Ethernet board could run in a PERQ-2, though I'm
+guessing it could not?  Even in a PERQ-1 there were wire-wrapped motherboard
+mods to make it work.  It's entirely likely that CMU was the only place outside
+of 3RCC that had 3Mbit Ethernet boards!  For emulation purposes, if/when we get
+to it, software support will determine if this option is limited to certain IO
+board or chassis types.
+
+Due to microcode and hardware conflicts, it does not appear possible to run a
+PERQ-2 EIO with an OIO Ethernet option board.  While the T2 cabinet has both
+OSLAN A & B ports (ICL's branding of Ethernet?) there's no standard software
+support for it.  When Ethernet is implemented, PERQemu will only support one
+interface.
+
+There are two "universal" options: the Link board and the Streamer.  These
+could be fashioned to run in the CPU Option or IO Option slots.  For simplicity,
+we will not likely add a separate CPU Option board to the virtual PERQ; all the
+options will be IO Options under the hood.  This would theoretically allow for
+a PERQ with an Ether3 or MLO board to also support the Link and Streamer.  All
+of this is very far away and subject to change!
+

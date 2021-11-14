@@ -227,7 +227,8 @@ namespace PERQemu.Config
             {
                 return (Configuration)_prefabs[name];
             }
-            else if (_prefabs.ContainsKey(name.ToUpper())) {
+            else if (_prefabs.ContainsKey(name.ToUpper()))
+            {
 
                 return (Configuration)_prefabs[name.ToUpper()];
             }
@@ -443,13 +444,16 @@ namespace PERQemu.Config
         }
 
         /// <summary>
-        /// Checks the selected memory size against constraints: 20-bit CPU can
-        /// only support 2MB or less; 24-bit CPU only supported 4MB (officially).
-        /// We allow up to 16MB (the "Universal Landscape Memory" board fully-
-        /// populated with 1Mbit DRAMs) but it's unlikely any PERQ OS supported
-        /// 8MB or 16MB... it'll be fun to find out someday!  Also checks the
-        /// Display for a few special cases.
+        /// Checks the selected memory size against CPU addressing limits.
+        /// Also checks the Display for a few special cases.
         /// </summary>
+        /// <remarks>
+        /// 20-bit CPUs can only support 2MB or less; the 24-bit CPU only
+        /// supported 4MB (officially).  We allow up to 16MB (the "Universal
+        /// Landscape Memory" board fully-populated with 1Mbit DRAMs) but it's
+        /// unlikely any PERQ OS supported 8MB or 16MB.  A 32MB board in the
+        /// PERQ form factor in 1985 would have been outrageously expensive.
+        /// </remarks>
         public bool CheckMemory(Configuration conf)
         {
             if (conf.CPU == CPUType.PERQ1 || conf.CPU == CPUType.PERQ1A)
@@ -495,7 +499,7 @@ namespace PERQemu.Config
             if (((conf.IOBoard == IOBoardType.IOB || conf.IOBoard == IOBoardType.CIO) && conf.Chassis != ChassisType.PERQ1) ||
                 ((conf.IOBoard == IOBoardType.NIO || conf.IOBoard == IOBoardType.EIO) && conf.Chassis == ChassisType.PERQ1))
             {
-                conf.Reason = String.Format("IO Board type {0} not compatible with {1} chassis.", conf.IOBoard, conf.Chassis);
+                conf.Reason = string.Format("IO Board type {0} not compatible with {1} chassis.", conf.IOBoard, conf.Chassis);
                 return false;
             }
 
@@ -505,6 +509,7 @@ namespace PERQemu.Config
                 conf.Reason = "PERQ-1 with Kriz tablet is unusual, though supported...";
             }
 
+            // We'll allow it?  But you'll regret it
             if (conf.Tablet == TabletType.None)
             {
                 conf.Reason = "No graphics tablet configured!?";
@@ -516,24 +521,14 @@ namespace PERQemu.Config
         /// Checks the IO Options for conflicts.
         /// </summary>
         /// <remarks>
-        /// TODO: move this verbosity elsewhere
-        /// PERQ-1 did not support the MLO board (which isn't implemented yet
-        /// anyway) since it relied on the EIO's DMA hardware.  It's not clear
-        /// if the 3Mbit Ethernet board could run in a PERQ-2, but I'm guessing
-        /// it could not (backplane differences, though even in a PERQ-1 there
-        /// were wire-wrapped motherboard mods to make it work).  It's entirely
-        /// likely that CMU was the only place that had 3Mbit Ethernet boards!
-        /// ---
-        /// Due to microcode conflicts and DMA channel collisions, I don't think
-        /// it's possible to run an OIO with Ethernet alongside an EIO; at best,
-        /// it's ignored (no software support for two interfaces) and at worst it
-        /// produces hardware conflicts (which may be what fucked up my T2? sigh).
-        /// Note that someday I should add in support for the "universal" tape
-        /// streamer and/or link board in the CPU Option slot.  That way a PERQ-1
-        /// with a 3Mbit board, or a PERQ-2 with an MLO board could still use
-        /// those options.  The PERQLink was also how they hooked up the Metheus
-        /// color controller, so I'm guessing a T4+MLO could drive both the color
-        /// display AND SMD disks.  In my fantasy world it can, fer dang sure.
+        /// For now, the following restrictions apply:
+        ///     - Can't have two Ethernets in a system, unfortunately.  So an
+        ///       EIO precludes adding an OIO with Ethernet, though the other
+        ///       combinations are valid.
+        ///     - Ether3 (when implemented) will be a PERQ-1 option only.
+        ///     - MLO (when implemented) will be a PERQ-2 option only.
+        ///     - Both Link and Streamer options are "universal" (but aren't
+        ///       implemented yet).
         /// </remarks>
         public bool CheckOptions(Configuration conf)
         {
@@ -566,13 +561,13 @@ namespace PERQemu.Config
                         conf.IOOptionBoard = OptionBoardType.None;  // force it
                     }
 
-                    // Should reset this, rather than whine?
                     if (conf.IOOptions.HasFlag(IOOptionType.SMD))
                     {
+                        // Should reset this, rather than whine?
                         conf.Reason = "OIO Board extraneous option selected, ignored.";
                     }
 
-                    // Disallow EIO + OIO Ethernet... but allow NIO
+                    // Disallow EIO + OIO Ethernet... but allow NIO?  Ugh.
                     if ((conf.IOBoard == IOBoardType.EIO) && conf.IOOptions.HasFlag(IOOptionType.Ether))
                     {
                         conf.Reason = string.Format("OIO Board Ethernet option conflicts with {0} board.", conf.IOBoard);
@@ -581,13 +576,14 @@ namespace PERQemu.Config
                     break;
 
                 case OptionBoardType.MLO:
-                    if (conf.Chassis != ChassisType.PERQ2T2)
+                    if (conf.Chassis == ChassisType.PERQ1)
                     {
                         conf.Reason = string.Format("Multibus/Laser option not supported in {0}.", conf.Chassis);
                         return false;
                     }
                     else
                     {
+                        // Someday.  Will have to check other option combos.
                         conf.Reason = "Sorry, the MLO board is not yet supported.";
                         conf.IOOptionBoard = OptionBoardType.None;
                         return false;
@@ -599,15 +595,18 @@ namespace PERQemu.Config
 
         /// <summary>
         /// Checks that the list of disk devices is appropriate for the selected
-        /// IO board.  For now, traditional configuration rules apply:
+        /// IO board.
+        /// </summary>
+        /// <remarks>
+        /// For now, traditional configuration rules apply:
         ///     PERQ-1 only has 1 floppy, 1 Shugart 14" disk.
         ///     PERQ-2 only has 1 floppy, 1 or 2 Micropolis 8" disks.
         ///     PERQT2 only has 1 floppy, 1 or 2 5.25" disks.
-        /// At the moment, SMD Disks (only in EIO+MLO T2 or T4 systems) are not
-        /// supported.  Future enhancements include allowing a second floppy,
-        /// up to four 5.25" drives, and up to four SMD drives.  Even the PERQ-1
-        /// could be enhanced to allow for additional Shugart SA4x00 drives. :-)
-        /// </summary>
+        /// At the moment, SMD Disks are not supported (requires the as-yet-
+        /// unimplemented MLO option board).
+        /// If any genuine 8" Micropolis images can be found that came from a
+        /// PERQ-1, we'll allow that configuration (with a CIO board) as well.
+        /// </remarks>
         public bool CheckDisks(Configuration conf)
         {
             bool gotFloppy = false;

@@ -222,21 +222,21 @@ Memory.cs now uses a Core struct to simulate a union type that can be accessed
 by word or by quad word.  That is, all "normal" accesses through the FetchWord()
 method work just as before, but the video can use FetchQuad() to grab bigger
 chunks.  We can then zip through an entire scanline in 12 meaty slabs (portrait
-display).  When the cursor is enabled, the old method of drawing the cursor
-on top of the just-completed scanline is replaced by one unified loop.  It
-still walks through 48 words, mixing in the cursor at the appropriate starting
-byte.  This is slower but simpler, since it doesn't require a bunch of fussing
-with masking or aligning the cursor bytes.  At most it's only done for 64 lines
-out of the 1024 on the screen, so, feh.  I'll live with it for now.
+display, 20 for Landscape).  When the cursor is enabled, the old method of
+drawing the cursor on top of the just-completed scanline is replaced by one
+unified loop.  It still walks through 48 words, mixing in the cursor at the
+appropriate starting byte.  This is slower but simpler, since it doesn't require
+a bunch of fussing with masking or aligning the cursor bytes.  At most it's only
+done for 64 lines out of the 1024 on the screen, so I'll live with it for now.
 
 On the receiving end, DrawScanline() now uses a pre-computed table to quickly
 do pixel doub..qu..octoubling?  I like that, let's go with "octoubling".  For
 each byte of PERQ pixel data, a simple table lookup provides eight 32-bit SDL
 pixel values that are dropped into the 32bpp buffer.  Of course, the tradeoff
 is that we burn more memory and bandwidth but avoid a bunch of shifts, masking
-ops and a conditional for all 768 individual bits of each horizontal line
-(1280 when I get Landscape going).  Is it actually worth it?  Are modern CPUs
-with their large cache lines actually faster at bit banging this:
+ops and a conditional for all 768 (or 1280) individual bits of each horizontal
+line.  Is it actually worth it?  Are modern CPUs with their large cache lines
+actually faster at bit banging this:
     p[i] = (i & (1 << b) == 0 ? foo : bar);
 than this?
     p[i] = t[i, b];
@@ -249,31 +249,22 @@ even if it isn't, SO THERE.)
 Other Stuff
 -----------
 
-Heh heh.  The first four CursorFunctions just show the cursor over a blank
-screen.  This isn't terribly useful.  I can't remember the last time I tried
-"login /cursorfunction=0" to see what happens on the actual hardware.  Hmm.
+The first four CursorFunctions just show the cursor over a blank screen.  This
+isn't terribly useful.  I can't remember the last time I tried
+    "login /cursorfunction=0"
+to see what happens on the real hardware.  Rip in the fabric of spacetime?
 
-Had to wrap a lock() around the _interruptFlag because now with the Z80 on
-its own thread, we actually do have to be careful about thread safety.  It
-occurs to me that the far simpler/faster thing to do is make each interrupt
-"pin" a separate value; for almost all of them the CPU just reads the flag
-word to calculate priority (Vector setup) or condition code (IntrPend) and
-occasionally spit out the current interrupt state on the console.  Every
-device that raises and interrupt tends to be the one that also clears it, so
-it avoids all that silly (read: slow) locking business by just eliminating
-contention entirely.  VideoController can raise/clear the LineCounter intr
-without worrying of the Z80 is mucking with the other flags at the same time.
 
-Of course, if I wasn't developing this on a Mac that's still running Yosemite,
-or if there's a Mono equivalent of .NET >= 5.0 available that'll run on it,
-the Interlocked.Or() and Interlocked.And() methods look perfect for the task;
-they're supposed to be lightning fast since they map directly to atomic cas
-instructions in the processor (on x64, at any rate).  For now, stability is
-more important than speed.  I'm still only getting 30fps with the CPU and SDL2
-both running on the main thread.  Sigh.  More refactoring ahead...
+Landscape is now implemented but won't be fully tested until we have the rest
+of the PERQ-2/EIO completed.  I don't think any OS we can boot on the current
+PERQ-1 emulation has any support for the landscape option, and although there
+were a handful of extremely rare PERQ-1 systems that had them, they almost
+certainly required the CIO/"new" Z80 firmware.
 
-Doh.  How did this turn into a blog entry?  Cripes.  More rewrites and cleanups
-before any thought of submitting a pull request.
+
+Note that the "CRT signals" register bit for LandscapeDisplay is inverted
+(i.e., active low) so the code is a little twisted.  Just trust that it works.
+
 
 ---
-Last update: skeezics    Tue Oct 29 19:42:33 PDT 2021
+Last update: skeezics    Sat Nov 13 18:53:13 PST 2021

@@ -594,6 +594,7 @@
     <None Include="Debugger\DebuggableAttribute.cs" />
     <None Include="Debugger\Debugger.cs" />
     <None Include="Debugger\DebuggerPrompt.cs" />
+    <None Include="Docs\Configuration.txt" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />

@@ -75,19 +75,13 @@ namespace PERQemu.IO.GPIB
         {
             if (_deviceDispatch[deviceId] == null)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.Warnings, "No device is registered for GPIB ID {0:x2} write ({1:x2})",
-                              deviceId, value);
-#endif
+                Trace.Log(LogType.Warnings, "No device is registered for GPIB ID {0:x2} write ({1:x2})",
+                          deviceId, value);
                 return;
             }
 
-#if TRACING_ENABLED
-            if (Trace.TraceOn)
-                Trace.Log(LogType.GPIB, "Output sent to GPIB device {0:x2} ({1:x2}) handled by {2}",
-                          deviceId, value, _deviceDispatch[deviceId]);
-#endif
+            Trace.Log(LogType.GPIB, "Output sent to GPIB device {0:x2} ({1:x2}) handled by {2}",
+                      deviceId, value, _deviceDispatch[deviceId]);
 
             _deviceDispatch[deviceId].Write(value);
         }

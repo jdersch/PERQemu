@@ -101,7 +101,7 @@ namespace PERQemu
             if (PERQemu.Config.Current.IsModified)
             {
                 _system = null;     // release?
-                _system = new PERQSystem(PERQemu.Config.Current);
+                Initialize(PERQemu.Config.Current);
             }
 
             _system.State = RunState.WarmingUp;

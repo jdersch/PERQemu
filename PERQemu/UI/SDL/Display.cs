@@ -26,6 +26,7 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 
+using PERQemu.Config;
 
 namespace PERQemu.UI
 {
@@ -64,6 +65,13 @@ namespace PERQemu.UI
             _mouseButton = 0x0;
             _mouseX = 0;
             _mouseY = 0;
+
+            // Keep a local copy
+            _displayWidth = _system.VideoController.DisplayWidth;
+            _displayHeight = _system.VideoController.DisplayHeight;
+
+            // Allocate our hunka hunka burnin' pixels
+            _32bppDisplayBuffer = new int[(_displayWidth * _displayHeight)];
         }
 
         public int MouseX => _mouseX;
@@ -259,7 +267,8 @@ namespace PERQemu.UI
                     break;
 
                 case SDL.SDL_EventType.SDL_QUIT:
-                    ShutdownSDL();
+                    PERQemu.Controller.PowerOff();  // Hit the brakes!
+                    ShutdownSDL();                  // Now clobber the window
                     break;
 
                 default:
@@ -617,11 +626,11 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// A hack to speed up pixel operations.  As each scanline is drawn,
-        /// we have to expand the 1bpp PERQ data into SDL's 32bpp color pixels.
-        /// Rather than shift, mask and conditionally set every pixel on every
-        /// line at 60fps, we precompute all that ONCE at startup and then just
-        /// look up and copy 8 values in a tight loop.  Every nanosecond counts!
+        /// A hack to speed up pixel operations, inspired by Contralto.  As each
+        /// scanline is drawn, the 1bpp PERQ data is expanded into SDL's 32bpp
+        /// color pixels.  Rather than shift, mask and conditionally set every
+        /// pixel on every line at 60fps, we precompute all that ONCE at startup
+        /// then look up and copy 8 values in a tight loop.  Nanoseconds count!
         /// </summary>
         private static void MakePixelExpansionTable()
         {
@@ -642,13 +651,13 @@ namespace PERQemu.UI
         //
         // Display
         //
-        private const int _displayWidth = 768;      // TODO: make configurable!
-        private const int _displayHeight = 1024;    // Same for portrait, landscape
+        private int _displayWidth;
+        private int _displayHeight;
 
         // Buffer for rendering pixels.  SDL doesn't support 1bpp pixel formats,
         // so to keep things simple we use an array of ints and a 32bpp format.
         // What's a few extra megabytes between friends.
-        private int[] _32bppDisplayBuffer = new int[(_displayWidth * _displayHeight)];
+        private int[] _32bppDisplayBuffer;
 
         // Table of precomputed pixel expansions
         private static int[,] _bitToPixel;

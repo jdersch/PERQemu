@@ -1,5 +1,6 @@
-﻿// bitpadone.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
-//  
+//
+// BitPadOne.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
 // This file is part of PERQemu.
 //
 // PERQemu is free software: you can redistribute it and/or modify
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -18,8 +19,6 @@
 
 using System;
 using System.Collections.Generic;
-
-using PERQemu.Memory;
 
 namespace PERQemu.IO.GPIB
 {
@@ -202,7 +201,7 @@ namespace PERQemu.IO.GPIB
             // Calculate Y and X positions.  The offsets tacked onto the end are based on
             // playing around with the interface, not on solid data and could be incorrect.
             //
-            y = (VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY) * 2 + 80;
+            y = (_system.VideoController.DisplayHeight - _system.Display.MouseY) * 2 + 80;
             x = (_system.Display.MouseX) * 2 + 76;
 
             button = (byte)_system.Display.MouseButton;

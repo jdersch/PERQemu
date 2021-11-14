@@ -1,4 +1,4 @@
-﻿//
+//
 // KrizTablet.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -18,8 +18,6 @@
 //
 
 using System;
-
-using PERQemu.Memory;
 
 namespace PERQemu.IO.Z80
 {
@@ -96,7 +94,7 @@ namespace PERQemu.IO.Z80
             // Calc Y and X positions, coordinate translation based on tweaking so the host screen
             // coordinates line up with the PERQ's...
             int tabX = _system.Display.MouseX + 64;
-            int tabY = VideoController.PERQ_DISPLAYHEIGHT - _system.Display.MouseY + 64;
+            int tabY = _system.VideoController.DisplayHeight - _system.Display.MouseY + 64;
             int buttons = _system.Display.MouseButton;
             bool offTablet = _system.Display.MouseOffTablet;
 

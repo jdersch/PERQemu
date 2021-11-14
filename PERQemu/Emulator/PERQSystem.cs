@@ -80,7 +80,8 @@ namespace PERQemu
                     throw new UnimplementedHardwareException("Sorry, PERQ24A CPU is not implemented.");
 
                 default:
-                    throw new InvalidConfigurationException(string.Format("No such CPU board type '{0}'", _conf.CPU));
+                    throw new InvalidConfigurationException(
+                        string.Format("No such CPU board type '{0}'", _conf.CPU));
             }
 
             // Create the CPU's scheduler
@@ -117,15 +118,17 @@ namespace PERQemu
                 case IOBoardType.CIO:
                 case IOBoardType.EIO:
                 case IOBoardType.NIO:
-                    throw new UnimplementedHardwareException(string.Format("Sorry, IO board type {0} is not implemented.", _conf.IOBoard));
+                    throw new UnimplementedHardwareException(
+                        string.Format("Sorry, IO board type {0} is not implemented.", _conf.IOBoard));
 
                 default:
-                    throw new InvalidConfigurationException(string.Format("No such IO board type '{0}'", _conf.IOBoard));
+                    throw new InvalidConfigurationException(
+                        string.Format("No such IO board type '{0}'", _conf.IOBoard));
             }
 
             // Assume async mode if the IO Board implementation supports it.
             // Might want to select sync mode on uniprocessor systems?  What is
-            // a "uniprocessor"?  Is that like a "land line" or "glacier"?
+            // a "uniprocessor"?  Is that like a "land line" or a "glacier"?
             _z80ExecutionMode = _iob.SupportsAsync ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
 
             // If any IO options are defined, instantiate the board
@@ -142,10 +145,12 @@ namespace PERQemu
 
                 case OptionBoardType.Ether3:
                 case OptionBoardType.MLO:
-                    throw new UnimplementedHardwareException(string.Format("Sorry, IO Option board type {0} is not implemented.", _conf.IOOptionBoard));
+                    throw new UnimplementedHardwareException(
+                        string.Format("Sorry, IO Option board type {0} is not implemented.", _conf.IOOptionBoard));
 
                 default:
-                    throw new InvalidConfigurationException(string.Format("No such IO Option board type '{0}'", _conf.IOOptionBoard));
+                    throw new InvalidConfigurationException(
+                        string.Format("No such IO Option board type '{0}'", _conf.IOOptionBoard));
             }
 
             // The Display will initialize itself (lazily)
@@ -167,8 +172,8 @@ namespace PERQemu
         public MemoryBoard Memory => _mem;
         public VideoController VideoController => _mem.Video;
         public Display Display => _display;
-        public IOBoard IOB => _iob;                 // todo ioboard
-        public OIO OIO => _oio;                 // todo ioboard (or optionioboard?)
+        public IOBoard IOB => _iob;
+        public OIO OIO => _oio;              // todo ioboard (or optionioboard?)
         public IOBus IOBus => _ioBus;
 
 

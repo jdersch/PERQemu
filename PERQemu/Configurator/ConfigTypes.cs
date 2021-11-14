@@ -60,15 +60,15 @@ namespace PERQemu.Config
     public enum IOOptionType
     {
         None = 0x00,
-        Link = 0x01,
-        Ether = 0x02,
-        Canon = 0x04,
-        EthCan = 0x06,      // Shortcut for popular option
-        Tape = 0x08,
-        LinkTape = 0x09,    // "Universal Streamer board" (CPU Option slot)
+        Link = 0x01,        // Universal
+        Ether = 0x02,       // OIO only
+        Canon = 0x04,       // MLO or OIO
+        EthCan = 0x06,      // Shortcut for popular OIO config
+        Tape = 0x08,        // MLO 9-track -or- OIO Streamer!?
+        LinkTape = 0x09,    // OIO or "Universal Streamer board" (CPU Option)
         CanTape = 0x0c,     // Another shortcut, useful on PERQ-2s w/EIO
-        EthCanTape = 0x0e,  // Rare, but not unusual
-        SMD = 0x10          // EIO/PERQ2 only (on MLO board)
+        EthCanTape = 0x0e,  // OIO, rare but not unusual
+        SMD = 0x10          // MLO only
     }
 
     public enum DisplayType
