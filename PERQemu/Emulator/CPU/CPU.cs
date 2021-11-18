@@ -20,7 +20,6 @@
 using System;
 using System.Text;
 using System.Threading;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 using PERQemu.Memory;
@@ -973,7 +972,7 @@ namespace PERQemu.Processor
 
         #endregion CPU Helper Functions
 
-        #region Debugger Commands
+        #region Debugger support
 
         /// <summary>
         /// Provide access to the microstore for the debugger/disassembler.

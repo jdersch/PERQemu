@@ -147,3 +147,265 @@ options will be IO Options under the hood.  This would theoretically allow for
 a PERQ with an Ether3 or MLO board to also support the Link and Streamer.  All
 of this is very far away and subject to change!
 
+
+Storage Options
+---------------
+
+From the Configurator's point of view, only three things are needed:
+
+    Device type:    which controller to attach a drive to
+    Unit number:    a unique identifier (per-type?)
+    Media file:     path to the archived disk or tape image
+
+The actual contents of the media file are only the concern of the Emulator,
+which uses various Formatters to attempt to validate and load the file at run
+time.  The CLI interface to add drives will be included in the "configure"
+subsystem, though a separate "storage" subsystem might be less cluttered.  For
+compatibility with the existing PERQemu syntax, the "load floppy" and "load
+harddisk" commands will be aliased.
+
+The practical and maximum limits for devices in a single system:
+
+      Drive type    #      Max
+        Floppy      1       2
+        Disk14      1       2
+        Disk8       2       2
+        Disk5       2       4
+        DiskSMD     -       4?
+        TapeQIC     1       1?
+        Tape9Trk    -       1?
+                   ---     ---
+                    7       16
+
+The Configuration class will contain a list of storage devices that are
+appropriate to the machine being described.  The initial goal is to obviously
+allow any valid PERQ configuration that can be realized with software and
+firmware support.  Once PERQemu can emulate the real hardware, some interesting
+future enhancements could relax the configuration rules a bit, to accommodate
+some interesting (and more realistic) tweaks:
+
+    A second Shugart SA851 floppy drive is a no-brainer; the hardware
+    only allows one unit to be selected but the changes required to enable
+    the second select line and update the microcode/Pascal to allow it are
+    not too difficult.
+
+    A second Shugart SA4000-series hard drive is not physically possible
+    in a real PERQ-1 chassis, and similar hardware/firmware limits to allow
+    unit selection in a multiple-drive system are present (but adding a second
+    SA4000 drive in an external enclosure is entirely feasible, though).
+    However, enabling support for the SA4104 drive (48MB!) may only require a
+    few small tweaks -- it's just a 4008 with extra platters and 16 heads!
+    In the so-called Real World this drive is made of pure unobtanium.  Never
+    actually seen one; just mentions of it in datasheets or obscure articles.
+
+    Several places in the later PERQ literature allude to a 4-disk option in
+    the 5.25"/MFM systems.  Did they intend to build a new DIB with all four
+    channels present?  Or allow two 2-port DIBs to be daisy chained?  Unknown.
+    But the POS G filesystem's volume support and the relative simplicity of
+    expanding the I/O code to allow units 2 & 3 to be selected are something
+    of a no-brainer.
+       
+Those little relaxations of the "rules" would allow for much larger emulated
+systems to be built.  Bigger PERQs ... <handwave> ... world domination!  HA!
+
+Because we don't yet support the MLO at all, and have never determined what
+specific Multibus controllers Three Rivers wrote the code to support, it's
+just an educated guess that four SMD hard drives is a reasonable maximum that
+could be attached.  PERQ literature suggests two CDC 9766's for a 600MB file
+server, for instance.  The 9-track tape drive is also a complete mystery, but
+we'll figure on maybe one (or two?) Pertec-interfaced drives?  This is light
+years away on the to-do list, unfortunately.
+
+The possibility of supporting GPIB-connected disk or tape drives is tantalizing,
+as there is no hardware impediment to doing so; it's just a matter of writing
+the software support (likely the HP "CS-80" (?) stack).  While it would likely
+be unusably slow on a PERQ-1 given the anemic GPIB throughput available on the
+old IOB, an EIO or custom OIO controller and aggressive memory caching could
+conceivably be used to create a "bulk" or "archival" storage tier -- nearline
+storage for backups, say.  Later GPIB silicon that offered much higher data
+rates, coupled with some local cache memory and taking advantage of the full
+DMA bandwidth of the IO Option slot would be an interesting option.  This is
+another curious "what if?" that may be explored at some point in the distant
+future, probably around 2022, between forays into the barren desert hellscape
+of our collapsed society to scavenge a few drops of water to brew our precious,
+precious coffee.  Speaking of which...
+
+
+(Plans for refactoring) Storage Devices & Media Types
+-----------------------------------------------------
+
+To more easily accommodate the range of 5.25" devices available for the PERQ-2
+machines, I'd like to pull the Geometries out and load them dynamically at
+startup.  Perhaps only the baseline Shugart24 will be "baked in" just in case
+the distribution file gets corrupted (like having a default configuration if
+the "prefabs" are missing or won't load).
+
+    Conf/DriveGeometries.cfg
+        Would contain the abbreviated one-liner that defines the complete
+        geometry of a storage device.  This could be added to without having
+        to recompile.  In Release builds, a "discreet" command to read the
+        file in would be provided; in Debug mode a fully interactive CLI
+        subsystem would allow creation or editing of geometries.
+
+All PERQ storage devices would share the following characteristics:
+
+    Class       -- a DriveType, which defines the connection point (i.e.,
+                   which controller type to attach the drive to (validated
+                   by the configurator). These are "baked in" since they
+                   are tied to a specific IStorageController type:
+                        Floppy      - Shugart SA850/851
+                        Disk14Inch  - Shugart SA4000-series
+                        Disk8Inch   - Micropolis 8" 1200-series
+                        Disk5Inch   - Numerous 5.25" MFM/ST506 drives
+                        DiskSMD     - (MLO) dream of a rosy future
+                        DiskGPIB    - A possibility, pending software/ucode
+                        TapeQIC     - The Archive Sidewinder QIC streamer
+                        Tape9Track  - (MLO) no idea what model(s)
+                        TapeGPIB    - HP made these, maybe others?
+    Name        -- a short, unique name or key.  The predefined ones will
+                   include, at a minimum:
+                        Floppy      - SSSD, SSDD, DSSD, DSDD
+                        Disk14Inch  - Shugart12, Shugart24 (Shugart48? :-)
+                        Disk8Inch   - Microp34 (?)
+                        Disk5Inch   - Microp43, V150, Maxtor1085, Maxtor1140,
+                                      etc. (many supported types)
+                        DiskSMD     - CDC9762, CDC9766, Priam? Fujitsu456?
+                        TapeQIC     - DC300, DC600?
+                    and so on.
+    Cylinders,
+    Heads (Tracks),
+    Sectors,
+    BytesPerSector,
+    HeaderBytes,
+    RPM         -- required numeric parameters that describe the actual drive
+                   geometry.  Obviously for the common ones we'll pre-define
+                   them in the distribution; all the floppy types, the Shugart
+                   and Micropolis drives, and the basic 3RCC-supplied 5.25"
+                   types.  At first focus on those we get real images of, but
+                   almost any other 5.25" type (or, eventually, SMD) can be
+                   synthesized and a floppy (or, eventually, tape!) install
+                   performed to create a new image.
+    Flags       -- an enum of optional flags.  The most obvious one is:
+                        IsRemovable - can the media be mounted/ejected while
+                                      the PERQ is running?  True (obviously)
+                                      for floppy and tape drives, but the
+                                      big CDC SMD drives are cartridge based
+                                      (while a Fujitsu Eagle or Priam SMD drive
+                                      would be fixed)
+                   Others tbd.  A simple 8- or 16-bit value should suffice.
+    Description -- a nice "human readable" description.
+
+Note that we can describe the tape drives as very long, skinny disk drives and
+not have to special case them.  I think.  QIC tapes are typically 4 tracks, so
+we could desribe a cartridge as n cylinders x 4 heads x n sectors and fudge the
+numbers to achieve the required storage capacity.  If we range limit the actual
+geometry to what the hardware/microcode can use (16 bits for cylinder, 8 bits
+for heads/tracks, 8 bits for sectors) that still gives us a 4GB capacity which
+is way beyond the available early 1980s drives.  Until the QIC is actually
+implemented, though, this is all kind of speculative.
+
+Part of the goal of abstracting the Geometry data and unifying the approach to
+physical media is to allow one common PERQemu-specific storage format.  The
+idea is that each controller type will allow Formatters to read in any number
+of media formats, and in some cases (floppy, mostly) write them back out as
+well.  But the common on-disk format will greatly simplify the loading and
+saving of any virtual drive type.
+
+    IStorageController ->
+        HardDiskController (Shugart, Microp, MFM, SMD, GPIB?)
+            Each implements a drive class; Shugart for Disk14Inch, Micropolis
+            for Disk8Inch, and so on)
+
+            PHDFormatter reads in the current (Shugart-only) "PERQ Hard Disk"
+            drive images, with the ability to detect old dumps without the bad
+            sector flag
+
+            PRQFormatter reads/writes the common PERQ media format, which will
+            clearly need to have a clever/unique acronym and file extension so
+            it can be made double-clickable and browsable in modern OS GUIs :)
+
+        FloppyController
+            Since the PERQ only ever supported the Shugart SA850/851, this one
+            Z80-attached controller is the only one we need.
+
+            IMDFormatter will read/write images in the IMD archiving format,
+            since this is common (and Josh already wrote it). :-)
+
+            DMKFormatter is not necessary, since the very oldest PERQ floppies
+            archived on Bitsavers can be converted using "dmk2raw", then
+
+            PFDFormatter will read the old "raw" images, which may optionally 
+            include the "PFD" cookie.  This "PERQ Floppy Disk" format was sort
+            of half-assed; the only advantage was that it tucked its little
+            "cookie" into sector 0/0/0 which nothing on the PERQ actually uses,
+            so it could provide hints to external programs about the contents
+            of the file.  For compatibility, it'd be nice to be able to read in
+            those files without having to go convert them all "by hand".  (My
+            custom verson of "imd2raw" ("imd2pfd") would create these; fixes and
+            enhancements there will be rolled into the IMDFormatter proper.)
+
+            PRQFormatter will read and write floppy images from the new unified
+            format.
+
+        TapeController (QIC, 9Track, GPIB?)
+            While the other types are pretty blue sky, the QIC was a pretty
+            popular peripheral even though 3RCC never did support a proper
+            "production quality" version of the board AFAIK (every one I've
+            seen is wire wrapped!)  Loading a huge stack of floppies got to
+            be a real drag once a complete OS install could be done from one
+            or two cartridge tapes!
+
+            TAPFormatter should read in the fairly "raw" .TAP images that have
+            been created from early archival efforts.  I'm not real clear on
+            the specifics; there are many, many more QIC tapes to be saved but
+            due to their age the process seems very difficult and time intensive.
+            Whatever format the data is recovered in is essentially read-only
+            as far as PERQemu is concerned...
+
+            PRQFormatter will be able to read AND write QIC images, naturally.
+
+
+A side goal of this is to create a separate, standalone PERQ media editor that
+can run independently of the emulator.  The original "PERQDisk" (and "PERQTape")
+projects in C# can extract files from the early disk dump format and the raw
+tape dumps.  A Perl program called PERQFloppy can read and write RT-11 floppy
+images converted from DMK/IMD into RAW/PFD format, but it can't deal with PNX
+or POS "filesystem floppies".  A new C# utility that can read and write all of
+the supported formats, leveraging the code from PERQemu directly, would be
+really darn cool.  This would allow the sexier side of the as-yet-unnamed PERQ
+common media format to be exploited:
+
+    Text header:
+        allow an arbitrary block of text to describe the contents and any 
+        relevant archival data to be stored with the media, with a unique
+        cookie at the start (and entries for /etc/magic, for us old-timers
+        who still use the shell) :-P
+
+    Image header:
+        many of the original floppy and tape labels were photographed or scanned
+        when the contents were archived; it'd be really slick to include this
+        IN the media file too.  PNG or JPG should be pretty straightforward.
+        Being able to preview (in the Finder, even!?) the image in an Open File
+        dialog box would be very, very nice.
+
+    Hints, dates, format/geometry info:
+        It would be really nice to have an archive date stored in the media
+        file, separate from the filesystem's create or modification dates.
+        Hints about whether a floppy is bootable, what OS it's for (type of
+        filesystem or data format) and of course the complete Geometry record
+        described above would allow PERQemu to sanity check/validate the loading
+        of media.
+
+    Image data:
+        Perhaps we'd store the actual sectors using the same formatting scheme
+        as IMD, including the simple compression scheme?  Better still, apply
+        a standard compression like zip/gzip, since most of the bigger hard
+        drive images crunch down pretty well.
+
+
+In the interim, work proceeds to start shifting things in this direction as the
+Configurator and Emulator are slowly expanded to incorporate PERQ-2 support.
+
+
+--
+Last update: skeezics    Tue Nov 16 16:24:30 PST 2021

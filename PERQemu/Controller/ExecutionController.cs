@@ -98,11 +98,12 @@ namespace PERQemu
 
             Console.WriteLine("Power ON requested.");
 
-            if (PERQemu.Config.Current.IsModified)
-            {
-                _system = null;     // release?
-                Initialize(PERQemu.Config.Current);
-            }
+            // Is this worth it?  For now, just force it until things are all hooked up
+            //if (PERQemu.Config.Current.IsModified)
+            //{
+                _system = null;                         // release
+                Initialize(PERQemu.Config.Current);     // reconfigure
+            //}
 
             _system.State = RunState.WarmingUp;
             _system.Execute();

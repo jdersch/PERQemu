@@ -212,6 +212,8 @@
     <Compile Include="Emulator\IO\Z80\Z80SIO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80System.cs" />
     <Compile Include="UI\SDL\KeyboardMap.cs" />
+    <Compile Include="UI\CLI\SettingsCommands.cs" />
+    <Compile Include="Configurator\StorageCommands.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

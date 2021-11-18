@@ -19,14 +19,12 @@
 
 using SDL2;
 using System;
-using System.Windows.Forms;
-using System.Drawing;
-using System.Drawing.Imaging;
+//using System.Windows.Forms;
+//using System.Drawing;
+//using System.Drawing.Imaging;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
-
-using PERQemu.Config;
 
 namespace PERQemu.UI
 {
@@ -61,7 +59,7 @@ namespace PERQemu.UI
 
             _keymap = new KeyboardMap(_system.Config.Chassis);
 
-            _clickFlag = false;
+            _mouseOffTablet = false;
             _mouseButton = 0x0;
             _mouseX = 0;
             _mouseY = 0;
@@ -89,12 +87,9 @@ namespace PERQemu.UI
 
             if (_sdlRunning)
             {
-                Console.WriteLine("** InitializeSDL called while already running!?");
+                Trace.Log(LogType.Errors, "** InitializeSDL called while already running!?");
                 return;
             }
-
-            // debug
-            Console.WriteLine("Initializing SDL, WasInit reports " + SDL.SDL_WasInit(SDL.SDL_INIT_EVERYTHING));
 
             SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
 
@@ -142,7 +137,7 @@ namespace PERQemu.UI
 
             // todo: initialize in our slightly greenish/grayish background color :-)
             // during "warmup" we'll fade in to full brightness.  because why not.
-            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x0f, 0x0f, 0x0f, 0xff);
+            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x04, 0x4f, 0x04, 0xff);
 
             // Set up our custom event, if not already done.
             if (_renderEventType == 0)
@@ -258,6 +253,10 @@ namespace PERQemu.UI
                     OnMouseUp(e.button.button);
                     break;
 
+                case SDL.SDL_EventType.SDL_MOUSEWHEEL:
+                    OnMouseWheel(e.wheel);
+                    break;
+
                 case SDL.SDL_EventType.SDL_KEYDOWN:
                     OnKeyDown(e.key.keysym.sym);
                     break;
@@ -304,7 +303,7 @@ namespace PERQemu.UI
             // Update FPS count
             _frame++;
 
-            if (_frame > 180)       // configurable? :-)
+            if (_frame > 180)       // todo: configurable? :-)
             {
                 UpdateFPS(_frame);
                 _frame = 0;
@@ -326,11 +325,12 @@ namespace PERQemu.UI
             _stopwatch.Restart();
 
             double inst = _system.CPU.Clocks - _prevClock;
-            double fps = (frames * 1000.0) / elapsed;
-            double ns = (elapsed / inst) * 1000000.0;
+            double fps = frames / (elapsed * Conversion.MsecToSec);
+            double ns = (elapsed * (double)Conversion.MsecToNsec) / inst;
             _prevClock = _system.CPU.Clocks;
 
             SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} frames / sec, {1:N2}ns / cycle", fps, ns));
+            Console.WriteLine("inst={0} elapsed={1} ns={2}", inst, elapsed, ns);  // raw / debug
         }
 
         /// <summary>
@@ -392,20 +392,23 @@ namespace PERQemu.UI
         //  Mouse & Keyboard handling
         //
 
-        void OnMouseWheel(object sender, MouseEventArgs e)
+        void OnMouseWheel(SDL.SDL_MouseWheelEvent e)
         {
-            _clickFlag = e.Delta > 0;
-
+            if (e.y > 0)
+            {
             /*
-            if (_clickFlag)
-            {
-                _dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;
-            }
-            else
-            {
-                _dispBox.Top = 0;
-            }
+                TODO/FIXME  have to test on a display that's too short
+                and figure out how to scroll the SDL display (scaling the
+                1bpp screen is way too ugly on a non-high dpi screen)
             */
+                //Console.WriteLine("scroll up!");
+                // _dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;
+            }
+            else if (e.y < 0)
+            {
+                //Console.WriteLine("scroll down!");
+                // _dispBox.Top = 0;
+            }
         }
 
         void OnMouseMove(int x, int y)
@@ -456,10 +459,18 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Handles keyboard input from the Host side, handling "special" keys locally.
-        /// Key translation is then done, and applicable results are queued on the Z80
-        /// keyboard input buffer.
+        /// Handles keyboard input from the Host side, handling "special" keys
+        /// locally.  Key translation is then done, and applicable results are
+        /// queued on the Z80 keyboard input buffer.
         /// </summary>
+        /// <remarks>
+        /// The following special modifiers make Kriz or BitPadOne tablet
+        /// manipulation using a standard PC mouse easier:
+        ///  - If Alt is held down, the Kriz tablet is put into "puck off tablet"
+        ///    mode which allows relative mode to work better
+        ///  - If Ctrl is held down, the mouse button mappings are altered to
+        ///    allow a 3-button mouse emulate the 4-button GPIB puck (see above)
+        /// </remarks>
         void OnKeyDown(SDL.SDL_Keycode keycode)
         {
             byte perqCode = 0;
@@ -473,15 +484,13 @@ namespace PERQemu.UI
             {
                 // Allow Home/PageUp and End/PageDown keys to scroll the display.
                 // Useful on laptop touchpads which don't simulate (or mice that
-                // don't have) scroll wheels.
+                // don't have) scroll wheels.  TODO: do SDL equivalent
                 case SDL.SDL_Keycode.SDLK_HOME:
-                //case SDL.SDL_Keycode.SDLK_PAGEUP:         pass this to map as PERQ-2 "SETUP" key...
                     //_dispBox.Top = 0;                    
                     handled = true;
                     break;
 
                 case SDL.SDL_Keycode.SDLK_END:
-                //case SDL.SDL_Keycode.SDLK_PAGEDOWN:       pass this to map as PERQ-2 "LINEFEED" key...
                     //_dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;                    
                     handled = true;
                     break;
@@ -489,15 +498,14 @@ namespace PERQemu.UI
                 // Toggle the "lock" keys... this needs work.
                 case SDL.SDL_Keycode.SDLK_CAPSLOCK:
                 case SDL.SDL_Keycode.SDLK_NUMLOCKCLEAR:
-                // case SDL.SDL_Keycode.SDLK_SCROLLLOCK:    pass this to map as PERQ-2 "NOSCRL" key
                     _keymap.SetLockKeyState(keycode);
                     handled = true;
                     break;
 
-                // Quirks: On Windows, the Control, Shift and Alt keys repeat when held down even
-                // briefly.  The PERQ never needs to receive a plain modifier key event like that;
-                // it's just a lot of noise, so skip the mapping step and quietly handle them here
-                // (though they are still checked below for mouse options).
+                // Quirks: On Windows, the Control, Shift and Alt keys repeat when
+                // held down even briefly.  The PERQ never needs to receive a plain
+                // modifier key event like that, so skip the mapping step and quietly
+                // handle them here.  TODO: WinForms did this; does SDL as well?
                 case SDL.SDL_Keycode.SDLK_LSHIFT:
                 case SDL.SDL_Keycode.SDLK_RSHIFT:
                     _shift = true;
@@ -513,20 +521,21 @@ namespace PERQemu.UI
                 case SDL.SDL_Keycode.SDLK_LALT:
                 case SDL.SDL_Keycode.SDLK_RALT:
                 case SDL.SDL_Keycode.SDLK_MENU:
-                    // Since the PERQ doesn't _have_ an "Alt" key, just ignore these entirely?
+                    _alt = true;
+                    _mouseOffTablet = true;
                     handled = true;
                     break;
 
+                // Provide a key to jump into the debugger when focus is on the PERQ,
+                // rather than having to select the console window to hit ^C.
                 case SDL.SDL_Keycode.SDLK_PAUSE:            // Windows keyboards
-                case SDL.SDL_Keycode.SDLK_F8:               // Create a Mac equivalent...
-                    // Provide a key to jump into the debugger when focus is on the PERQ,
-                    // rather than select the console and hit ^C.
+                case SDL.SDL_Keycode.SDLK_F8:               // Mac equivalent...
                     _system.Break();
                     handled = true;
                     break;
             }
 
-            // If the key wasn't handled above, let's see if we can get the ASCII equivalent.
+            // If the key wasn't handled above, see if there's an ASCII equivalent
             if (!handled)
             {
                 perqCode = _keymap.GetKeyMapping(keycode, _shift, _ctrl);
@@ -536,27 +545,6 @@ namespace PERQemu.UI
                     handled = true;
                 }
             }
-
-            //
-            // The following allow special modifiers that make Kriz tablet / BitPadOne tablet
-            // manipulation using a standard PC mouse easier:
-            //  - If Alt is held down, the Kriz tablet is put into "puck off tablet" mode
-            //    which allows relative mode to work better (though it's still pretty clumsy)
-            //  - If Ctrl is held down, The Left mouse button simulates Kriz/GPIB middle button
-            //    and the Right mouse button simulates GPIB button 4 (blue; n/a on Kriz)
-            //
-
-            /*
-            if (e.Alt)
-            {
-                _mouseOffTablet = true;
-            }
-
-            if (e.Control)
-            {
-                _mouseAltButton = true;
-            }
-            */
         }
 
         /// <summary>
@@ -575,20 +563,13 @@ namespace PERQemu.UI
                 case SDL.SDL_Keycode.SDLK_RCTRL:
                     _ctrl = false;
                     break;
-            }
 
-            /*
-            // Reset mouse tweaks if modifier keys are released
-            if (!e.Alt)
-            {
-                _mouseOffTablet = false;
+                case SDL.SDL_Keycode.SDLK_LALT:
+                case SDL.SDL_Keycode.SDLK_RALT:
+                    _alt = false;
+                    _mouseOffTablet = false;
+                    break;
             }
-
-            if (!e.Control)
-            {
-                _mouseAltButton = false;
-            }
-            */
         }
 
         //
@@ -597,24 +578,29 @@ namespace PERQemu.UI
 
         public void SaveScreenshot(string path)
         {
-            EncoderParameters p = new EncoderParameters(1);
-            p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
+            // TODO: have to rewrite for SDL2, which can only save as BMP!?
+            // maybe we can fake up a WinForms-style bitmap directly from our
+            // local copy of the perq's frame buffer and render that using the
+            // jpg, png or other encoders...
+
+            //EncoderParameters p = new EncoderParameters(1);
+            //p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
             //_buffer.Save(path, GetEncoderForFormat(ImageForm, p);
         }
 
-        private ImageCodecInfo GetEncoderForFormat(ImageFormat format)
-        {
-            ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
+        //private ImageCodecInfo GetEncoderForFormat(ImageFormat format)
+        //{
+        //    ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
 
-            foreach (ImageCodecInfo codec in codecs)
-            {
-                if (codec.FormatID == format.Guid)
-                {
-                    return codec;
-                }
-            }
-            return null;
-        }
+        //    foreach (ImageCodecInfo codec in codecs)
+        //    {
+        //        if (codec.FormatID == format.Guid)
+        //        {
+        //            return codec;
+        //        }
+        //    }
+        //    return null;
+        //}
 
         // todo: remove (eventually); for debugging
         public void Status()
@@ -666,17 +652,15 @@ namespace PERQemu.UI
         private int _mouseX;
         private int _mouseY;
         private int _mouseButton;
-        private bool _clickFlag;
-
-        // Mouse tweaks
         private bool _mouseOffTablet;
-        private bool _mouseAltButton;
 
-        // Keyboard Stuff
+        // Keyboard
         private bool _shift;
         private bool _ctrl;
+        private bool _alt;
         private KeyboardMap _keymap;
 
+        // Parent
         private PERQSystem _system;
 
         // Frame count
@@ -701,10 +685,8 @@ namespace PERQemu.UI
         private delegate void DisplayDelegate();
         private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
 
-        private Event _sdlPumpEvent;
-
-        //private Thread _sdlThread;
         private bool _sdlRunning;
+        private Event _sdlPumpEvent;
     }
 }
 

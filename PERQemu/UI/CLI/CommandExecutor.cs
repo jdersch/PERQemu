@@ -190,7 +190,7 @@ namespace PERQemu.UI
                     if (invokeParams[paramIndex] == null)
                     {
                         // Should/will have been sanity checked by the parser...
-                        throw new ArgumentException(String.Format("Unknown value for parameter {0}.", argIndex));
+                        throw new ArgumentException(string.Format("Unknown value for parameter {0}.", argIndex));
                     }
 
                     argIndex++;
@@ -232,7 +232,7 @@ namespace PERQemu.UI
                     }
                     else
                     {
-                        throw new ArgumentException(String.Format("Unhandled type for parameter {0}, type {1}", paramIndex, p.ParameterType));
+                        throw new ArgumentException(string.Format("Unhandled type for parameter {0}, type {1}", paramIndex, p.ParameterType));
                     }
                 }
             }
@@ -276,7 +276,7 @@ namespace PERQemu.UI
                             sb.Clear();
                             state = ParseState.WhiteSpace;
                         }
-                        else if (c == '\"')
+                        else if (c == '"')
                         {
                             // Start of quoted string
                             state = ParseState.QuotedString;
@@ -292,7 +292,7 @@ namespace PERQemu.UI
                         if (!char.IsWhiteSpace(c))
                         {
                             // Start of new token
-                            if (c != '\"')
+                            if (c != '"')
                             {
                                 sb.Append(c);
                                 state = ParseState.NonWhiteSpace;
@@ -307,7 +307,7 @@ namespace PERQemu.UI
                         break;
 
                     case ParseState.QuotedString:
-                        if (c == '\"')
+                        if (c == '"')
                         {
                             // End of quoted string.  Include the closing '"'!
                             sb.Append(c);
@@ -329,7 +329,7 @@ namespace PERQemu.UI
                 // If they left a dangling quoted string, complete it!
                 if (state == ParseState.QuotedString)
                 {
-                    sb.Append('\"');
+                    sb.Append('"');
                 }
                 // Add the last token to the args list
                 args.Add(sb.ToString());
@@ -382,9 +382,9 @@ namespace PERQemu.UI
                     }
                     else
                     {
-                        cmdWords[0].Trim('\"'); // Okay to strip quotes now
-                        argWords.Add(cmdWords[0]);  // Save it
-                        current = argNode;          // Advance
+                        // Save and advance; ok to trim quotes around strings now!
+                        argWords.Add(cmdWords[0].Trim('"'));
+                        current = argNode;
                     }
                 }
                 cmdWords.RemoveAt(0);
@@ -450,11 +450,11 @@ namespace PERQemu.UI
             }
             catch (System.OverflowException)
             {
-                throw new ArgumentException(String.Format("{0} out of range for a 32-bit {1} value.", arg, r));
+                throw new ArgumentException(string.Format("{0} out of range for a 32-bit {1} value.", arg, r));
             }
             catch (System.FormatException)
             {
-                throw new ArgumentException(String.Format("{0} is not a valid 32-bit {1} value.", arg, r));
+                throw new ArgumentException(string.Format("{0} is not a valid 32-bit {1} value.", arg, r));
             }
 
             return result;
@@ -471,11 +471,11 @@ namespace PERQemu.UI
             }
             catch (System.OverflowException)
             {
-                throw new ArgumentException(String.Format("{0} out of range for a 16-bit {1} value.", arg, r));
+                throw new ArgumentException(string.Format("{0} out of range for a 16-bit {1} value.", arg, r));
             }
             catch (System.FormatException)
             {
-                throw new ArgumentException(String.Format("{0} is not a valid 16-bit {1} value.", arg, r));
+                throw new ArgumentException(string.Format("{0} is not a valid 16-bit {1} value.", arg, r));
             }
 
             return result;
@@ -492,11 +492,11 @@ namespace PERQemu.UI
             }
             catch (System.OverflowException)
             {
-                throw new ArgumentException(String.Format("{0} out of range for an 8-bit {1} value.", arg, r));
+                throw new ArgumentException(string.Format("{0} out of range for an 8-bit {1} value.", arg, r));
             }
             catch (System.FormatException)
             {
-                throw new ArgumentException(String.Format("{0} is not a valid 8-bit {1} value.", arg, r));
+                throw new ArgumentException(string.Format("{0} is not a valid 8-bit {1} value.", arg, r));
             }
 
             return result;

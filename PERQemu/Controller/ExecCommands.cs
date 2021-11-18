@@ -103,8 +103,13 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(imagePath);
-                Console.WriteLine("Loaded.");
+                PERQemu.Config.Current.AssignMedia(imagePath, 0);
+
+                if (PERQemu.Sys.State != RunState.Off)
+                {
+                    PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(imagePath);
+                    Console.WriteLine("Loaded.");
+                }
             }
             catch (Exception e)
             {
@@ -121,7 +126,7 @@ namespace PERQemu
         // todo: floppy remembers the path we loaded from so we don't have to?
         // todo: make relative to Disks/ dir
 
-        [Command("save floppy", "Saves the current in memory floppy disk to an image file")]
+        [Command("save floppy", "Save the current in memory floppy disk to an image file")]
         private void SaveFloppy(string imagePath)
         {
             try
@@ -138,20 +143,30 @@ namespace PERQemu
         // todo: allow for all supported types, not just shugart
         // todo: allow for multiple units in perq 2 models
         // todo: allow user to define new types here?  or just use built-in ones?
-        [Command("create harddisk", "Creates and mounts a new, unformatted hard disk image")]
+        [Command("create harddisk", "Create and mounts a new, unformatted hard disk image")]
         private void CreateHardDisk()
         {
             PERQemu.Sys.IOB.DiskController.LoadImage(null);
             Console.WriteLine("Created.");
         }
 
-        [Command("load harddisk", "Mounts an existing hard disk image")]
-        private void LoadHardDisk(string imagePath)
+        [Command("load harddisk", "Mount an existing hard disk image")]
+        private void LoadHardDisk(string imagePath, int unit = 1)
         {
             try
             {
-                PERQemu.Sys.IOB.DiskController.LoadImage(imagePath);
-                Console.WriteLine("Loaded.");
+                // Save the image path into the configuration record so the
+                // drive will be loaded at power up.  If the machine is already
+                // configured, then dynamically load it -- a "hot swap" if you
+                // will, even though the fixed disk types didn't support that!
+                // (Someday a mountable SMD pack option would take advantage, tho)
+                PERQemu.Config.Current.AssignMedia(imagePath, unit);
+
+                if (PERQemu.Sys.State != RunState.Off)
+                {
+                    PERQemu.Sys.IOB.DiskController.LoadImage(imagePath);
+                    Console.WriteLine("Loaded.");
+                }
             }
             catch (Exception e)
             {
@@ -180,13 +195,17 @@ namespace PERQemu
         // Miscellany
         //
 
-        [Command("set bootchar", "Set the boot character (selects the OS to boot)")]
-        private void SetBootChar(char bootChar)
+        // fixme crap.  have to fix the ambiguity issue in the commandprompt where an
+        // exact match that's a substring of a longer match is "ambiguous" even
+        // when the user types a space or tab -- "set" and "settings" conflict, but
+        // somehow it's not accepting the "set bootchar" even when typing it in full...
+        [Command("bootchar", "Set the boot character (selects the OS to boot)")]
+        private void SetBootChar(char ch)
         {
-            PERQemu.Controller.BootChar = (byte)bootChar;
+            PERQemu.Controller.BootChar = (byte)ch;
         }
 
-        [Command("show bootchar", "Show the boot character")]
+        [Command("bootchar", "Show the boot character")]
         private void ShowBootChar()
         {
             Console.Write("Bootchar is ");
@@ -203,7 +222,7 @@ namespace PERQemu
         // todo: on eio/nio, allow for port b... hmm.
         // todo: move the interface to PERQsystem? or provide a hook to Z80system
         // todo: move these to SettingsCommands so they can be saved/reloaded
-        [Command("set rs232", "Configure the emulated serial port to use the specified device")]
+        //[Command("set rs232", "Configure the emulated serial port to use the specified device")]
         private void SetSerialPort(string devName)
         {
             ISerialDevice dev = null;
@@ -238,7 +257,7 @@ namespace PERQemu
             }
         }
 
-        [Command("show rs232", "Displays the current rs232 device")]
+        //[Command("show rs232", "Displays the current rs232 device")]
         private void ShowSerialPort()
         {
             Console.WriteLine("RS232 port is set to {0}", PERQemu.Sys.IOB.Z80System.GetSerialPort());

@@ -404,6 +404,7 @@ namespace PERQemu.IO.HardDisk
 
             if (path != null)
             {
+                Console.WriteLine("Shugart: loading " + path);
                 // Load the disk image into it...
                 FileStream fs = new FileStream(path, FileMode.Open);
                 _disk.Load(fs);

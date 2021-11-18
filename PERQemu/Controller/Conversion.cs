@@ -40,5 +40,10 @@ namespace PERQemu
         /// Conversion from microseconds to seconds
         /// </summary>
         public static readonly double UsecToSec = 0.000001;
+
+        /// <summary>
+        /// Conversion from seconds to milliseconds
+        /// </summary>
+        public static readonly double MsecToSec = 0.001;
     }
 }

@@ -74,8 +74,6 @@ namespace PERQemu
             CanonFormat = ImageFormat.Tiff;
             CanonTemplate = "{0}_{1:000}.{2}";
 
-            //  LogDir, LogTemplate, LogSize, LogLimit = see Log.cs
-
             Reason = "Settings reset to defaults.";
             Changed = false;
         }
@@ -100,6 +98,7 @@ namespace PERQemu
         public static string CanonTemplate { get; private set; }
 
         // Logging
+        //  LogDir, LogTemplate, LogSize, LogLimit = see Log.cs
 
         // Host Devices
         //public string HostRSADevice _devRSA;
@@ -107,6 +106,7 @@ namespace PERQemu
         //public string HostAudioDevice _devAudio;
         //public string HostEtherDevice _devEther;
         //public EtherEncapsulationType _netEncap;
+        //public bool _netUse3rccMAC;
 
         // Housekeeping
         public static string Reason { get; set; }
@@ -119,8 +119,6 @@ namespace PERQemu
         /// </summary>
         public static void Load()
         {
-            //Log.Write("Settings.Load: settings file is " + Paths.SettingsPath);
-
             try
             {
                 PERQemu.CLI.ReadScript(Paths.SettingsPath);
@@ -159,17 +157,16 @@ namespace PERQemu
                     sw.WriteLine("autosave harddisk " + SaveDiskOnShutdown);
                     sw.WriteLine("autosave floppy " + SaveFloppyOnEject);
                     sw.WriteLine("pause on reset " + PauseOnReset);
-                    sw.WriteLine("# debug radix " + DebugRadix);
-                    sw.WriteLine("# z80 debug radix " + Z80Radix);
+                    sw.WriteLine("debug radix " + DebugRadix);
+                    sw.WriteLine("z80 debug radix " + Z80Radix);
+                    sw.WriteLine("screenshot format " + ScreenshotFormat);
+                    sw.WriteLine("canon format " + CanonFormat);
 
                     if (!string.IsNullOrEmpty(OutputDirectory))
                     {
                         sw.WriteLine("output directory \"" + OutputDirectory + "\"");
                     }
-                    sw.WriteLine("# screenshot format " + ScreenshotFormat);
-                    sw.WriteLine("# screenshot template \"" + ScreenshotTemplate + "\"");
-                    sw.WriteLine("# canon format " + CanonFormat);
-                    sw.WriteLine("# canon template \"" + CanonTemplate + "\"");
+
                     sw.WriteLine("done");
 
                     // If the user has selected a valid PERQ, save it so it's
@@ -177,7 +174,7 @@ namespace PERQemu
                     if (PERQemu.Config.Current.IsValid &&
                         PERQemu.Config.Current.Name != "default")
                     {
-                        sw.WriteLine("#\n# Most recent configuration:");
+                        sw.WriteLine("#\n# Most recent loaded configuration:");
                         sw.WriteLine("configure select " + PERQemu.Config.Current.Name);
                     }
 

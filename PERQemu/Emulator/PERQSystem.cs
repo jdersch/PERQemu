@@ -119,7 +119,7 @@ namespace PERQemu
                 case IOBoardType.EIO:
                 case IOBoardType.NIO:
                     throw new UnimplementedHardwareException(
-                        string.Format("Sorry, IO board type {0} is not implemented.", _conf.IOBoard));
+                        string.Format("IO board type {0} is not implemented.", _conf.IOBoard));
 
                 default:
                     throw new InvalidConfigurationException(
@@ -146,7 +146,7 @@ namespace PERQemu
                 case OptionBoardType.Ether3:
                 case OptionBoardType.MLO:
                     throw new UnimplementedHardwareException(
-                        string.Format("Sorry, IO Option board type {0} is not implemented.", _conf.IOOptionBoard));
+                        string.Format("IO Option board type {0} is not implemented.", _conf.IOOptionBoard));
 
                 default:
                     throw new InvalidConfigurationException(
@@ -158,6 +158,28 @@ namespace PERQemu
 
             // Set up our IO bus; devices will check in at Reset
             _ioBus = new IOBus(this);
+
+            // Load media!!
+            foreach (var drive in _conf.Drives)
+            {
+                if (!string.IsNullOrEmpty(drive.MediaPath))
+                {
+                    switch (drive.Device)
+                    {
+                        case DriveType.Floppy:
+                            _iob.Z80System.LoadFloppyDisk(drive.MediaPath);
+                            break;
+
+                        case DriveType.Disk14Inch:
+                            _iob.DiskController.LoadImage(drive.MediaPath);
+                            break;
+
+                        default:
+                            throw new UnimplementedHardwareException(
+                                string.Format("Support for drive type {0} is not implemented.", drive.Device));
+                    }
+                }
+            }
 
             // Create a lock to protect state transitions
             _stLock = new object();
@@ -204,7 +226,7 @@ namespace PERQemu
         {
             if (PERQemu.Controller.BootChar != 0)
             {
-                _scheduler.Schedule((ulong)(10.0 * Conversion.MsecToNsec), BootCharCallback);
+                _scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback);
             }
         }
 

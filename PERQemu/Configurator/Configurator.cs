@@ -42,10 +42,8 @@ namespace PERQemu.Config
 
         public void Initialize()
         {
-            //Log.Debug(Category.EmuState, "Configurator: initializing.");
-
             Configuration conf;
-            StorageConfiguration[] drives;
+            StorageDevice[] drives;
 
             // For now, we just build up a set of the standard PERQ models.
             // This really ought to be read in from a file instead.  Ugly...
@@ -54,9 +52,9 @@ namespace PERQemu.Config
             // PERQ-1 drive setup: one floppy, one Shugart.  Should be a 12MB drive;
             // for now we'll default to the POS F.0 image (but should find a D.6!)
             //
-            drives = new StorageConfiguration[2];
-            drives[0] = new StorageConfiguration(DriveType.Floppy, 0, "");
-            drives[1] = new StorageConfiguration(DriveType.Disk14Inch, 1, Paths.BuildDiskPath("f0.phd"));
+            drives = new StorageDevice[2];
+            drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
+            drives[1] = new StorageDevice(DriveType.Disk14Inch, 1, Paths.BuildDiskPath("f0.phd"));
 
             //
             // The original machine: 4K, 256K MEM, Portrait
@@ -98,9 +96,9 @@ namespace PERQemu.Config
             // first, original PERQ-2 model could actually support two 8" drives
             // so to slightly differentiate it, we'll just allow one.
             //
-            drives = new StorageConfiguration[2];
-            drives[0] = new StorageConfiguration(DriveType.Floppy, 0, "");
-            drives[1] = new StorageConfiguration(DriveType.Disk8Inch, 1, "");
+            drives = new StorageDevice[2];
+            drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
+            drives[1] = new StorageDevice(DriveType.Disk8Inch, 1, "");
 
             conf = new Configuration("PERQ2",
                                     "PERQ-2 w/16K CPU, 1MB",
@@ -118,10 +116,10 @@ namespace PERQemu.Config
             //
             // Let's say the T1 added support for the second 8" drive
             //
-            drives = new StorageConfiguration[3];
-            drives[0] = new StorageConfiguration(DriveType.Floppy, 0, "");
-            drives[1] = new StorageConfiguration(DriveType.Disk8Inch, 1, "");
-            drives[2] = new StorageConfiguration(DriveType.Disk8Inch, 2, "");
+            drives = new StorageDevice[3];
+            drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
+            drives[1] = new StorageDevice(DriveType.Disk8Inch, 1, "");
+            drives[2] = new StorageDevice(DriveType.Disk8Inch, 2, "");
 
             //
             // The PERQ-2/T1 came with a 1MB Portrait by default
@@ -142,8 +140,8 @@ namespace PERQemu.Config
             //
             // PERQ-2 T2 and T4 used 5.25" drives
             //
-            drives[1] = new StorageConfiguration(DriveType.Disk5Inch, 1, "");
-            drives[2] = new StorageConfiguration(DriveType.Disk5Inch, 1, "");
+            drives[1] = new StorageDevice(DriveType.Disk5Inch, 1, "");
+            drives[2] = new StorageDevice(DriveType.Disk5Inch, 1, "");
 
             //
             // Our PERQ-2/T2 comes with 2MB, Landscape by default
@@ -199,6 +197,12 @@ namespace PERQemu.Config
             set { _current = value; }
         }
 
+        public bool Changed
+        {
+            get { return _current.IsModified; }     // fixme this is silly; move the
+            set { _current.IsModified = value; }    // flags OUT of the config object
+        }
+
         /// <summary>
         /// Gets the list of pre-defined configurations.
         /// </summary>
@@ -229,7 +233,6 @@ namespace PERQemu.Config
             }
             else if (_prefabs.ContainsKey(name.ToUpper()))
             {
-
                 return (Configuration)_prefabs[name.ToUpper()];
             }
             else
@@ -265,7 +268,6 @@ namespace PERQemu.Config
             }
             catch (Exception e)
             {
-                // Uh... this is ugly.  Not sure what to do here...
                 // If called by the CLI, error messages should appear on the
                 // console; the GUI can choose to restore the previous config
                 // or set flags appropriately?
@@ -325,12 +327,14 @@ namespace PERQemu.Config
                     // Write out the storage configuration.  We can only assume
                     // they haven't created something bogus.
                     //
-                    foreach (StorageConfiguration disk in _current.Drives)
+                    foreach (var dev in _current.Drives)
                     {
-                        // This is the most likely to change?
-                        sw.WriteLine("storage unit {0} type {1}{2}",  // can't do this yet :-(
-                                     disk.Unit, disk.Device,
-                                     (string.IsNullOrEmpty(disk.MediaPath) ? "" : " filename " + disk.MediaPath));
+                        // Is there a configured media file?
+                        // FIXME just save pathnames (by unit id) -- board type creates the device list
+                        if (!string.IsNullOrEmpty(dev.MediaPath))
+                        {
+                            sw.WriteLine("storage load {0} {1} {2}", dev.Device, dev.Unit, dev.MediaPath);
+                        }
                     }
 
                     sw.WriteLine("done");
@@ -368,7 +372,6 @@ namespace PERQemu.Config
             // reason will be set but IsValid will still be true.
             conf.Reason = "";
 
-            // If this is too slow, call out the tests one by one...
             if (CheckCPU(conf) &&
                 CheckMemory(conf) &&
                 CheckIO(conf) &&
@@ -388,6 +391,11 @@ namespace PERQemu.Config
         /// Checks that the CPU selected is compatible with the configuration.
         /// Note that the individual functions do NOT modify the IsValid flag!
         /// </summary>
+        public bool CheckCPU()
+        {
+            return CheckCPU(_current);
+        }
+
         public bool CheckCPU(Configuration conf)
         {
             switch (conf.CPU)
@@ -433,7 +441,7 @@ namespace PERQemu.Config
                 case CPUType.PERQ24:
                     if (conf.Chassis != ChassisType.PERQ2T2)
                     {
-                        conf.Reason = "24-bit CPU requires PERQ-2/T4 type chassis.";
+                        conf.Reason = "24-bit CPU requires PERQ-2/T2 type chassis.";
                         return false;
                     }
                     break;
@@ -454,6 +462,11 @@ namespace PERQemu.Config
         /// unlikely any PERQ OS supported 8MB or 16MB.  A 32MB board in the
         /// PERQ form factor in 1985 would have been outrageously expensive.
         /// </remarks>
+        public bool CheckMemory()
+        {
+            return CheckMemory(_current);
+        }
+
         public bool CheckMemory(Configuration conf)
         {
             if (conf.CPU == CPUType.PERQ1 || conf.CPU == CPUType.PERQ1A)
@@ -494,6 +507,11 @@ namespace PERQemu.Config
         /// Check the IO board against the chassis type, and see if the tablet
         /// selection makes sense.
         /// </summary>
+        public bool CheckIO()
+        {
+            return CheckIO(_current);
+        }
+
         public bool CheckIO(Configuration conf)
         {
             if (((conf.IOBoard == IOBoardType.IOB || conf.IOBoard == IOBoardType.CIO) && conf.Chassis != ChassisType.PERQ1) ||
@@ -530,6 +548,11 @@ namespace PERQemu.Config
         ///     - Both Link and Streamer options are "universal" (but aren't
         ///       implemented yet).
         /// </remarks>
+        public bool CheckOptions()
+        {
+            return CheckOptions(_current);
+        }
+
         public bool CheckOptions(Configuration conf)
         {
             switch (conf.IOOptionBoard)
@@ -607,6 +630,11 @@ namespace PERQemu.Config
         /// If any genuine 8" Micropolis images can be found that came from a
         /// PERQ-1, we'll allow that configuration (with a CIO board) as well.
         /// </remarks>
+        public bool CheckDisks()
+        {
+            return CheckDisks(_current);
+        }
+
         public bool CheckDisks(Configuration conf)
         {
             bool gotFloppy = false;
@@ -640,7 +668,8 @@ namespace PERQemu.Config
                         {
                             case IOBoardType.IOB:
                             case IOBoardType.CIO:
-                                if (drive.Device != DriveType.Disk14Inch)
+                                if (!((drive.Device == DriveType.Disk14Inch) ||
+                                      (drive.Device == DriveType.Disk8Inch && conf.IOBoard == IOBoardType.CIO)))
                                 {
                                     conf.Reason = string.Format("IO board type '{0}' does not support disks of type '{1}'.", conf.IOBoard, drive.Device);
                                     return false;
@@ -648,13 +677,13 @@ namespace PERQemu.Config
                                 driveCount++;
                                 if (driveCount > 1)
                                 {
-                                    conf.Reason = string.Format("IO board type '{0}' only supports one Shugart hard disk.", conf.IOBoard);
+                                    conf.Reason = string.Format("IO board type '{0}' only supports one hard disk.", conf.IOBoard);
                                     return false;
                                 }
                                 break;
 
-                            case IOBoardType.NIO:
                             case IOBoardType.EIO:
+                            case IOBoardType.NIO:
                                 if ((conf.Chassis == ChassisType.PERQ2 && drive.Device != DriveType.Disk8Inch) ||
                                     (conf.Chassis == ChassisType.PERQ2T2 && drive.Device != DriveType.Disk5Inch))
                                 {
@@ -694,6 +723,16 @@ namespace PERQemu.Config
 
             // Must be good then...
             return true;
+        }
+
+        public void UpdateStorage(IOBoardType newType)
+        {
+            UpdateStorage(_current, newType);
+        }
+
+        public void UpdateStorage(Configuration conf, IOBoardType newType)
+        {
+            Console.WriteLine("* Updating storage from {0} to {1}", conf.IOBoard, newType);
         }
 
         // Common memory sizes in bytes

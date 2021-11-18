@@ -33,7 +33,7 @@ namespace PERQemu
         public CommandProcessor()
         {
             // Catch interrupts in the console
-            Console.CancelKeyPress += new ConsoleCancelEventHandler(OnCtrlC);
+            Console.CancelKeyPress += OnCtrlC;
 
             // List of classes to interrogate for CommandAttributes
             var commandObjects = new List<object> {
@@ -41,8 +41,8 @@ namespace PERQemu
                     new ExecCommands(),
                     new DebugCommands(),
                     new ConfigCommands(),
-                    // new StorageCommands(),
-                    // new SettingsCommands()
+                    new StorageCommands(),
+                    new SettingsCommands()
                 };
 
             // Build the tree
@@ -66,7 +66,7 @@ namespace PERQemu
             {
                 try
                 {
-                    string cmd = _editor.Prompt().Trim();
+                    string cmd = _editor.GetLine().Trim();
 
                     if (cmd != string.Empty)
                     {
@@ -115,7 +115,7 @@ namespace PERQemu
             }
         }
 
-#region CLI Utility Routines
+        #region CLI Utility Routines
 
         /// <summary>
         /// Print a nice columnar list of (reasonably short) strings.
@@ -168,7 +168,7 @@ namespace PERQemu
                     char.IsPunctuation(c));
         }
 
-#endregion
+        #endregion
 
         //
         // Basic built-in commands
@@ -253,7 +253,7 @@ namespace PERQemu
 
             // TODO: build a flippin' Windows machine and try out the PERQolator
             // GUI there.  At least maybe we'd have a way to continue development...
-            
+
             //Console.WriteLine("[Console now read-only; close the GUI to return.]");
 
             //// When started manually, return to the console if the user closes

@@ -42,13 +42,13 @@ namespace PERQemu.Config
             _ioBoard = IOBoardType.IOB;
             _ioOptionBoard = OptionBoardType.OIO;
             _ioOptions = IOOptionType.Link | IOOptionType.Ether;
-            _memSize = 1024 * 1024 * 2;
+            _memSize = 1024 * 1024;
             _displayType = DisplayType.Portrait;
             _tabletType = TabletType.BitPad;
 
-            _drives = new List<StorageConfiguration>();
-            _drives.Add(new StorageConfiguration(DriveType.Floppy, 0, ""));
-            _drives.Add(new StorageConfiguration(DriveType.Disk14Inch, 1, ""));
+            _drives = new StorageDevice[4];
+            _drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
+            _drives[1] = new StorageDevice(DriveType.Disk14Inch, 1, "");
 
             _validated = true;
             _modified = false;      // these don't belong here!?
@@ -60,7 +60,7 @@ namespace PERQemu.Config
                              CPUType cpu, int mem, IOBoardType io,
                              OptionBoardType optio, IOOptionType ioopts,
                              DisplayType disp, TabletType tab,
-                             StorageConfiguration[] drives)
+                             StorageDevice[] drives)
         {
             _name = name;
             _key = _name.ToLower();
@@ -75,9 +75,9 @@ namespace PERQemu.Config
             _displayType = disp;
             _tabletType = tab;
 
-            _drives = new List<StorageConfiguration>();
+            _drives = new StorageDevice[4];
 
-            foreach (var d in drives) { _drives.Add(d); }
+            drives.CopyTo(_drives, 0);
 
             _validated = false;
             _modified = false;
@@ -94,6 +94,11 @@ namespace PERQemu.Config
                 _name = value;
                 _key = _name.Trim().ToLower();
             }
+        }
+
+        public string Key
+        {
+            get { return _key; }
         }
 
         public string Description
@@ -180,7 +185,7 @@ namespace PERQemu.Config
             set { _tabletType = value; }
         }
 
-        public List<StorageConfiguration> Drives
+        public StorageDevice[] Drives
         {
             get { return _drives; }
             set { _drives = value; }        // ack!
@@ -201,20 +206,20 @@ namespace PERQemu.Config
             }
 
             sb.AppendLine("--------------");
-            sb.AppendLine("Machine type:   " + Chassis);
-            sb.AppendLine("CPU type:       " + CPU);
-            sb.AppendLine("Memory size:    " + MemSizeToString());
-            sb.AppendLine("Display type:   " + Display);
-            sb.AppendLine("Tablet type:    " + Tablet);
-            sb.AppendLine("IO board:       " + IOBoard);
+            sb.AppendLine("Machine type:  " + Chassis);
+            sb.AppendLine("CPU type:      " + CPU);
+            sb.AppendLine("Memory size:   " + MemSizeToString());
+            sb.AppendLine("Display type:  " + Display);
+            sb.AppendLine("Tablet type:   " + Tablet);
+            sb.AppendLine("IO board:      " + IOBoard);
 
             if (IOOptionBoard != OptionBoardType.None)
             {
-                sb.AppendFormat("IO Option board: {0}", IOOptionBoard);
+                sb.Append("Option board:  " + IOOptionBoard);
 
                 if (IOOptions != IOOptionType.None)
                 {
-                    sb.AppendFormat("  Options: {0}", IOOptions);
+                    sb.Append("  Options: " + IOOptions);
                 }
                 sb.AppendLine();
             }
@@ -225,10 +230,12 @@ namespace PERQemu.Config
 
             foreach (var drive in Drives)
             {
-                sb.AppendFormat("Unit: {0}   Type: {1}\n", drive.Unit, drive.Device);
-                if (drive.MediaPath != string.Empty)
+                if (drive.Device != DriveType.None)
                 {
-                    sb.AppendLine("File: " + drive.MediaPath);
+                    var hack = sb.Length;
+                    sb.AppendFormat("Unit: {0}  Type: {1}", drive.Unit, drive.Device);
+                    sb.AppendFormat("{0}File: {1}\n", " ".PadLeft(hack + 28 - sb.Length),
+                                    (string.IsNullOrEmpty(drive.MediaPath) ? "<not assigned>" : drive.MediaPath));
                 }
             }
 
@@ -252,6 +259,21 @@ namespace PERQemu.Config
             }
         }
 
+        public void AssignMedia(string file, int unit = 0)
+        {
+            _drives[unit].MediaPath = file;
+        }
+
+        //public int GetDriveByUnit(int unit)
+        //{
+        //    return _drives.FindIndex(d => (d.Unit == unit));
+        //}
+
+        //public List<StorageDevice> GetDriveByType(DriveType t)
+        //{
+        //    return _drives.FindAll(d => (d.Device == t));
+        //}
+
         private string _name;               // short name
         private string _key;                // unique key for matching
         private string _description;        // brief description
@@ -265,7 +287,7 @@ namespace PERQemu.Config
         private IOOptionType _ioOptions;
         private DisplayType _displayType;
         private TabletType _tabletType;
-        private List<StorageConfiguration> _drives;
+        private StorageDevice[] _drives;
 
         private string _reason;
         private bool _validated;

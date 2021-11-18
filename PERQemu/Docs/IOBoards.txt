@@ -153,9 +153,9 @@ and the type of hard disk interface are different:
               In the early (rare) PERQ-2 (K1? T0?) or the T1 chassis, supports
               one or two 8" Micropolis hard drives.  In the T2 or 24-bit T4,
               the disk controller supports one or two 5.25" MFM disks.  The
-              same EIO will support 20- or 24-bit configurations (by loading
-              the slightly different ROM image); there's no need to build a
-              separate "24-bit EIO".
+              same emulated EIO will support 20- or 24-bit configurations (by
+              loading the slightly different ROM image); there's no need to
+              build a separate 24-bit EIO.
 
     NIO.cs  - wherever the EIO can go, the NIO is there without the network
               interface.  Until we actually write the emulation of the
@@ -172,6 +172,7 @@ The Ethernet driver will likely be split in half:  the PERQ emulation of its
 fully-custom TTL implementation and homegrown microcode interface will run
 on the CPU thread, while the actual host-side packet handling will run on a
 background thread as it does in Contralto/Darkstar?
+
 
 This is a whole lot of typing that nobody else will read or care about...
 

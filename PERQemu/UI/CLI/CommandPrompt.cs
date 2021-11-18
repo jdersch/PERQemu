@@ -80,7 +80,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Runs a nifty interactive debugger prompt.
         /// </summary>
-        public string Prompt()
+        public string GetLine()
         {
             DisplayPrompt();
             ClearInput();
@@ -193,7 +193,13 @@ namespace PERQemu.UI
 
         private void DisplayPrompt()
         {
-            Console.Write(_prompt + "> ");
+            // (Hack) This is soooooper cheesy but if there's a "cleaner" way to
+            // do it, it'd be sweet to have the editor do this automatically. :-)
+            if ((_commandTree.Name == "configure" && PERQemu.Config.Changed) ||
+                (_commandTree.Name == "settings" && Settings.Changed))
+                Console.Write(_prompt + "*> ");
+            else
+                Console.Write(_prompt + "> ");
         }
 
 
@@ -513,7 +519,7 @@ namespace PERQemu.UI
                         {
                             foreach (CommandNode c in root.SubNodes)
                             {
-                                result.Completions.Add(c.Name);
+                                result.Completions.Add(c.ToString());  // .name?
                             }
                         }
 
