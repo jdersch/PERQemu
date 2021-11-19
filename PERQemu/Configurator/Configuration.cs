@@ -46,7 +46,7 @@ namespace PERQemu.Config
             _displayType = DisplayType.Portrait;
             _tabletType = TabletType.BitPad;
 
-            _drives = new StorageDevice[4];
+            _drives = new StorageDevice[MAX_DRIVES];
             _drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
             _drives[1] = new StorageDevice(DriveType.Disk14Inch, 1, "");
 
@@ -75,7 +75,7 @@ namespace PERQemu.Config
             _displayType = disp;
             _tabletType = tab;
 
-            _drives = new StorageDevice[4];
+            _drives = new StorageDevice[MAX_DRIVES];
 
             drives.CopyTo(_drives, 0);
 
@@ -273,6 +273,9 @@ namespace PERQemu.Config
         //{
         //    return _drives.FindAll(d => (d.Device == t));
         //}
+
+        // For now...
+        public const int MAX_DRIVES = 4;
 
         private string _name;               // short name
         private string _key;                // unique key for matching

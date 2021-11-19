@@ -25,24 +25,25 @@ using PERQemu.IO.Z80;
 namespace PERQemu.IO
 {
     /// <summary>
-    /// Represents an IOB card in a PERQ1 system.  This contains hardware for
-    /// the Shugart disk controller and a Z80 for controlling low-speed devices.
+    /// Represents an IOB card in a PERQ1 system updated to a "CIO" (with new
+    /// Z80 firmware).  This contains hardware for the Shugart disk controller
+    /// and a Z80 for controlling low-speed devices.
     /// </summary>
-    public class IOB : IOBoard
+    public class CIO : IOBoard
     {
-        static IOB()
+        static CIO()
         {
-            Console.WriteLine("IOB static constructor called.");
+            Console.WriteLine("CIO static constructor called.");
 
-            _name = "IOB";
-            _desc = "PERQ-1 I/O Board, old Z80, Shugart";
+            _name = "CIO";
+            _desc = "PERQ-1 I/O Board, new Z80, Shugart/Micropolis";
 
             _z80CycleTime = 407;    // 2.4576Mhz
         }
 
-        public IOB(PERQSystem system) : base(system)
+        public CIO(PERQSystem system) : base(system)
         {
-            Console.WriteLine("IOB constructor called.");
+            Console.WriteLine("CIO constructor called.");
             _hardDiskController = new ShugartDiskController(system);
             _z80System = new Z80System(system);
 
@@ -62,9 +63,6 @@ namespace PERQemu.IO
 
                 case 0x46:  // Read Z80 data
                     return _z80System.ReadData();
-
-                //case 0x55:  // Read Z80 status -- not used in IOB/CIO -- remove
-                //    return _z80System.ReadStatus();
 
                 default:
                     Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", port);
@@ -108,6 +106,10 @@ namespace PERQemu.IO
                     _hardDiskController.LoadBlockRegister(value);
                     break;
 
+                case 0xcc:  // Micropolis Sector Number register?
+                    // TODO: investigate how the early Micropolis support differed
+                    break;
+
                 case 0xd0:  // Shugart Data Buffer Address High register
                     _hardDiskController.LoadDataBufferAddrHighRegister(value);
                     break;
@@ -149,6 +151,7 @@ namespace PERQemu.IO
             0xc9,       // 311 DskFSNlo: (FileL) load Shugart file serial # low bits
             0xca,       // 312 DskFSNhi: (FileH)   "     "      "     "    high bits
             0xcb,       // 313 DskLBN: (Block) load Shugart logical block #
+            0xcc,       // 314 MicSecNo: extra Micropolis reg? CIO only?
             0xd0,       // 320 DatAdrH: load Shugart data buffer address high bits
             0xd1,       // 321 CWAdrH:    "     "    header  "      "      "    "
             0xd8,       // 330 DatAdrL: load Shugart data buffer address low bits

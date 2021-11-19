@@ -53,25 +53,6 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Runs the Z80, synchronously.
-        /// </summary>
-        public override uint Clock()
-        {
-            return _z80System.SingleStep();
-        }
-
-        public void RunAsync()
-        {
-            _z80System.RunAsync();
-        }
-
-        public void Stop()
-        {
-            _z80System.Stop();
-        }
-
-
-        /// <summary>
         /// Reads a word from the given I/O port.
         /// </summary>
         public override int IORead(byte port)

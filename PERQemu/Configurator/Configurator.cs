@@ -199,8 +199,8 @@ namespace PERQemu.Config
 
         public bool Changed
         {
-            get { return _current.IsModified; }     // fixme this is silly; move the
-            set { _current.IsModified = value; }    // flags OUT of the config object
+            get { return _current.IsModified; }
+            set { _current.IsModified = value; }
         }
 
         /// <summary>
@@ -730,10 +730,115 @@ namespace PERQemu.Config
             UpdateStorage(_current, newType);
         }
 
+        /// <summary>
+        /// If the user configures a new IO board, we try to map over any
+        /// already defined drives so they don't have to specify them again.
+        /// Types are remapped for the kind of controller present on the new
+        /// board, and media paths removed (assuming incompatibilities).  This
+        /// is kind of a giant hack, one case where a GUI actually makes a LOT
+        /// more sense.  Sigh.
+        /// </summary>
         public void UpdateStorage(Configuration conf, IOBoardType newType)
         {
             Console.WriteLine("* Updating storage from {0} to {1}", conf.IOBoard, newType);
+
+            foreach (var d in conf.Drives)
+            {
+                bool keepMedia = false;
+
+                switch (d.Device)
+                {
+                    case DriveType.Floppy:
+                    case DriveType.None:
+                        // These are compatible with all IO board types
+                        keepMedia = true;
+                        break;
+
+                    case DriveType.DiskSMD:
+                    case DriveType.TapeQIC:
+                    case DriveType.Tape9Track:
+                        // Not implemented - ignore?  throw?
+                        break;
+
+                    case DriveType.Disk14Inch:
+                        // Shugart 14" drives only valid on IOB or CIO (PERQ-1).
+                        // Remapped to 8" or 5.25" on EIO/NIO depending on chassis.
+                        switch (newType)
+                        {
+                            case IOBoardType.IOB:
+                            case IOBoardType.CIO:
+                                // Okay!
+                                keepMedia = true;
+                                break;
+
+                            case IOBoardType.EIO:
+                            case IOBoardType.NIO:
+                                // Nope, change it
+                                if (conf.Chassis == ChassisType.PERQ2)
+                                    conf.Drives[d.Unit].Device = DriveType.Disk8Inch;
+                                else if (conf.Chassis == ChassisType.PERQ2T2)
+                                    conf.Drives[d.Unit].Device = DriveType.Disk5Inch;
+                                break;
+                        }
+                        break;
+
+                    case DriveType.Disk8Inch:
+                        // Micropolis 8" drives are valid in PERQ1 on CIO (rare
+                        // but allowed) or PERQ2 on EIO/NIO.  Change to Shugart 14"
+                        // if switching to IOB, or MFM 5.25" for EIO/NIO (PERQ2T2)
+                        switch (newType)
+                        {
+                            case IOBoardType.IOB:
+                                // Nope
+                                conf.Drives[d.Unit].Device = DriveType.Disk14Inch;
+                                break;
+
+                            case IOBoardType.CIO:
+                                // Allow in the rare/weird case of a "CIO Micropolis"
+                                // configuration, even if they were only theoretical
+                                if (conf.Chassis == ChassisType.PERQ1)
+                                    keepMedia = true;
+                                break;
+
+                            case IOBoardType.EIO:
+                            case IOBoardType.NIO:
+                                if (conf.Chassis == ChassisType.PERQ2)
+                                    keepMedia = true;
+                                else
+                                    conf.Drives[d.Unit].Device = DriveType.Disk5Inch;
+                                break;
+                        }
+                        break;
+
+                    case DriveType.Disk5Inch:
+                        // 5.25" MFM drives only valid on EIO/NIO in the PERQ2T2-type
+                        // chassis; remapped to 8" in PERQ2 or 14" on PERQ1 IOB/CIO.
+                        switch (newType)
+                        {
+                            case IOBoardType.IOB:
+                            case IOBoardType.CIO:
+                                conf.Drives[d.Unit].Device = DriveType.Disk14Inch;
+                                break;
+
+                            case IOBoardType.EIO:
+                            case IOBoardType.NIO:
+                                if (conf.Chassis == ChassisType.PERQ2T2)
+                                    keepMedia = true;
+                                else
+                                    conf.Drives[d.Unit].Device = DriveType.Disk8Inch;
+                                break;
+                        }
+                        break;
+                }
+
+                if (!keepMedia)
+                {
+                    Console.WriteLine("--> media for unit {0} unloaded", d.Unit);
+                    conf.Drives[d.Unit].MediaPath = string.Empty;
+                }
+            }
         }
+
 
         // Common memory sizes in bytes
         public const int HALF_MEG = 512 * 1024;
@@ -744,6 +849,5 @@ namespace PERQemu.Config
         private Hashtable _prefabs;
         private Configuration _default;
         private Configuration _current;
-
     }
 }

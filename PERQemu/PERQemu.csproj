@@ -214,6 +214,7 @@
     <Compile Include="UI\SDL\KeyboardMap.cs" />
     <Compile Include="UI\CLI\SettingsCommands.cs" />
     <Compile Include="Configurator\StorageCommands.cs" />
+    <Compile Include="Emulator\IO\CIO.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

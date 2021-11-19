@@ -63,12 +63,12 @@ namespace PERQemu.IO
         // public IStorageController DiskController
         public ShugartDiskController DiskController
         {
-        	get { return _hardDiskController; }
+            get { return _hardDiskController; }
         }
 
         public bool HandlesPort(byte port)
         {
-        	return _portsHandled[port];
+            return _portsHandled[port];
         }
 
         public bool SupportsAsync
@@ -88,7 +88,23 @@ namespace PERQemu.IO
             Trace.Log(LogType.IOState, "{0}: Board reset.", _name);
         }
 
-        public abstract uint Clock();
+        public virtual void RunAsync()
+        {
+            _z80System.RunAsync();
+        }
+
+        public virtual void Stop()
+        {
+            _z80System.Stop();
+        }
+
+        /// <summary>
+        /// Runs the Z80, synchronously.
+        /// </summary>
+        public virtual uint Clock()
+        {
+            return _z80System.SingleStep();
+        }
 
         public abstract int IORead(byte port);
 
@@ -126,7 +142,7 @@ namespace PERQemu.IO
             _hardDiskController.SaveImage(mediaPath /*, unit */);
             return true;    // assume it worked, ugh.
         }
-            
+
         public virtual void UnloadDisk(int unit = 0)
         {
             // FIXME the CDC 976x drives could be unloaded :-)
@@ -142,15 +158,15 @@ namespace PERQemu.IO
         /// </summary>
         protected void RegisterPorts(byte[] ports)
         {
-        	foreach (var p in ports)
-        	{
-        		if (_portsHandled[p])
-        		{
-        			Trace.Log(LogType.Errors, "Port {0:x} already registered!", p);
-        		}
+            foreach (var p in ports)
+            {
+                if (_portsHandled[p])
+                {
+                    Trace.Log(LogType.Errors, "Port {0:x} already registered!", p);
+                }
 
-        		_portsHandled[p] = true;
-        	}
+                _portsHandled[p] = true;
+            }
         }
 
         // Describe the specific board

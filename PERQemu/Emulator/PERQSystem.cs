@@ -97,10 +97,10 @@ namespace PERQemu
                     _cpu.LoadROM(Paths.BuildPROMPath("boot.bin"));  // 4K or 16K, old Z80
                     break;
 
-                //case IOBoardType.CIO:
-                //_iob = new CIO(this);
-                //_cpu.LoadROM("cioboot.bin");          // 4K or 16K, new Z80
-                //break;
+                case IOBoardType.CIO:
+                _iob = new CIO(this);
+                _cpu.LoadROM("cioboot.bin");          // 4K or 16K, new Z80
+                break;
 
                 //case IOBoardType.EIO:
                 //case IOBoardType.NIO:
@@ -115,7 +115,6 @@ namespace PERQemu
                 //}
                 //break;
 
-                case IOBoardType.CIO:
                 case IOBoardType.EIO:
                 case IOBoardType.NIO:
                     throw new UnimplementedHardwareException(
@@ -385,9 +384,7 @@ namespace PERQemu
         /// </summary>
         /// <remarks>
         /// This method is transitioned to by the state machine, not called
-        /// asynchronously or directly.  It sets the next state to Paused;
-        /// the controller will transition to Running as appropriate (based
-        /// usually on Settings.PauseOnReset).
+        /// asynchronously or directly.
         /// </remarks>
         private void Reset()
         {
@@ -440,9 +437,7 @@ namespace PERQemu
         /// restarting it, enabling the keyboard to read the boot character,
         /// then turning everything off again while it continues the bootstrap.
         /// With only 2-3 retries at approximately 11.9ms of delay between each
-        /// one, there's actually a very short window to sneak the boot key in
-        /// there!  Adding a new run state is a little cheesy but should be
-        /// more accurate (and reliable) than before.
+        /// one, there's a very short window to sneak the boot key in there!
         /// </remarks>
         private void BootCharCallback(ulong skewNsec, object context)
         {
@@ -465,7 +460,7 @@ namespace PERQemu
         private Scheduler _scheduler;
         private MemoryBoard _mem;
         private CPU _cpu;
-        private IOB _iob;
+        private IOBoard _iob;
         private IOBus _ioBus;
         private OIO _oio;
         private Display _display;
