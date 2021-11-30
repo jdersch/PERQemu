@@ -31,14 +31,20 @@ namespace PERQemu
     {
         Off = 0,        // Power is off or no PERQ configured
         WarmingUp,      // Power is on and the GUI is warming up :-)
-        Reset,          // Held-in-reset state if PauseOnReset
+        Reset,          // Transitional reset state
         Paused,         // User- or program-requested Pause
         Running,        // Run, run like the wind
         SingleStep,     // Debugger is single stepping execution
         RunInst,        // Debugger is running one opcode
         RunZ80Inst,     // Debugger is running one Z80 opcode
-        Halted,         // Power off exception or grievous error
+        Halted,         // Exception or grievous error stopped execution
         ShuttingDown    // Program is shutting down, PERQ deconfiguring
+    }
+
+    public enum ExecutionMode
+    {
+        Synchronous,
+        Asynchronous
     }
 
     /// <summary>
@@ -55,35 +61,42 @@ namespace PERQemu
             _bootChar = 0;
         }
 
+        public PERQSystem System
+        {
+            get { return _system; }
+        }
+
         public RunState State
         {
             get { return (_system == null ? RunState.Off : _system.State); }
+            set { if (_system != null) _system.State = value; }
         }
 
-        /// <summary>
-        /// Allows overriding the default OS boot character.
-        /// (This is a key that, when held down at boot time will cause the PERQ
-        /// microcode to select a different OS to boot.)
-        /// </summary>
         public byte BootChar
         {
             get { return _bootChar; }
             set { _bootChar = value; }
         }
 
-        public PERQSystem System
+        public bool Initialize(Configuration conf)
         {
-            get { return _system; }
-        }
-
-        public void Initialize(Configuration conf)
-        {
-            _system = new PERQSystem(conf);
+            try
+            {
+                _system = new PERQSystem(conf);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("The system could not be initialized:");
+                Console.WriteLine(e.Message);
+                Console.WriteLine("Please check the configuration and try again.");
+                return false;
+            }
         }
 
         public void PowerOn()
         {
-            if (_system != null && _system.State != RunState.Off)
+            if (State != RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered on.");
                 return;
@@ -98,31 +111,42 @@ namespace PERQemu
 
             Console.WriteLine("Power ON requested.");
 
-            // Is this worth it?  For now, just force it until things are all hooked up
-            //if (PERQemu.Config.Current.IsModified)
-            //{
-                _system = null;                         // release
-                Initialize(PERQemu.Config.Current);     // reconfigure
-            //}
+            // FIXME: it seems stupid to initialize the "default" perq (or the
+            // last saved config, then immediately throw it out and recreate it
+            // (as in the case of a startup script that loads and goes).  trust
+            // the "changed" or "modified" flag in the configurator and/or add
+            // a method that can cleanly free up resources rather than just let
+            // the runtime take care of it...?  oof.
+            // Out with the old
+            _system = null;
 
-            _system.State = RunState.WarmingUp;
-            _system.Execute();
+            // In with the new
+            if (Initialize(PERQemu.Config.Current))
+            {
+                // Load the configured storage devices
+                _system.LoadAllMedia();
+                _system.Run(RunState.WarmingUp);
+            }
         }
 
         public void Reset()
         {
             // If no system, quietly no-op (since we always pass
             // through Reset when bringing the system up)
-            if (_system != null && _system.State != RunState.Off)
+            if (State != RunState.Off)
             {
-                _system.State = RunState.Reset;
-                _system.Execute();
+                State = RunState.Reset;
+
+                if (!Settings.PauseOnReset)
+                {
+                    State = RunState.Running;
+                }
             }
         }
 
         public void PowerOff()
         {
-           if (_system == null || _system.State == RunState.Off)
+            if (State == RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered off.");
                 return;
@@ -134,14 +158,28 @@ namespace PERQemu
             //      proceed to shutdown (stops SDL loop, closes display)
 
             Console.WriteLine("Power OFF requested.");
-            _system.State = RunState.ShuttingDown;
-            _system.Execute();
+            State = RunState.ShuttingDown;
+            // fixme wait for sync here!!
         }
 
+        /// <summary>
+        /// Change the state of the virtual machine.  If the RunMode is
+        /// synchronous, blocks until the execution stops (pause, fault,
+        /// or shutdown).  In asynchronous mode, returns the state when
+        /// all threads have registered the new state.
+        /// </summary>
+        /// <remarks>
+        /// If the system is not powered on, TransitionTo will first execute
+        /// the PowerOn sequence; similarly, a PowerOff request will initiate
+        /// a PowerOff.  Any exceptions thrown will result in a Halted state,
+        /// or an Off state if the machine cannot be instantiated.  See the
+        /// file Docs/Controller.txt for more details.
+        /// </remarks>
         public RunState TransitionTo(RunState nextState)
         {
-            var current = _system.State;
+            var current = State;
 
+            // todo Trace.Log()
             Console.WriteLine("Transition request from {0} to {1}", current, nextState);
 
             // Are we already in the requested state?
@@ -152,14 +190,12 @@ namespace PERQemu
             if (current == RunState.Off)
                 PowerOn();
 
-            _system.State = nextState;
-            _system.Execute();
+            State = nextState;
 
-            return PERQemu.Controller.State;
+            return State;
         }
 
         private static byte _bootChar;
-
         private PERQSystem _system;
     }
 }

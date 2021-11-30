@@ -61,6 +61,8 @@ namespace PERQemu.IO
 
         public void AddDevice(IIODevice device)
         {
+            if (device == null) return;
+
             if (_devices.Contains(device))
             {
                 throw new InvalidOperationException("This component has already been added to the bus.");

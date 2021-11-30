@@ -1,4 +1,5 @@
-// oio.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+//
+// OIO.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -22,58 +23,50 @@ namespace PERQemu.IO
 {
     /// <summary>
     /// Represents an Option IO (OIO) card in a PERQ system.
-    /// It comes in several configurations, containing hardware for some or all of the following options:
+    /// It comes in several configurations, containing hardware for some or all
+    /// of the following options:
     ///     PERQLink -- parallel interface for microcode debugging;
-    ///     Canon Laser Printer -- sends a bitstream to the Canon LBP-10 or CX laser marking engine;
-    ///     Ethernet -- 10Mbit Ethernet (3Mbit boards were separate, never a "production" option);
+    ///     Canon    -- bitstream interface to the LBP-10 or CX laser marking engine;
+    ///     Ethernet -- 10Mbit Ethernet interface;
     ///     Streamer -- QIC tape interface.
-    /// Eventually this OIO implementation should support dynamic configuration so that individual options
-    /// may be selected at runtime!
+    /// OIO configures itself from the Configuration record at runtime.
     /// </summary>
-    public sealed class OIO : IIODevice
+    public sealed class OIO : OptionBoard
     {
-        public OIO()
+        static OIO()
+        {
+            _name = "OIO";
+            _desc = "Option IO Board";
+        }
+
+        public OIO(PERQSystem system) : base(system)
         {
             _link = new PERQLink();
             // _canon = new CanonPrinter();
             // _ether = new 10MbEthernet();
             // _streamer = new QICTape();
-            //Reset();
+            
+            RegisterPorts(_handledPorts);
         }
 
-        public void Reset()
+        public override void Reset()
         {
             _link.Reset();
 
-            Trace.Log(LogType.IOState, "OIO: Board reset.");
+            base.Reset();
         }
 
-        public bool HandlesPort(byte ioPort)
-        {
-            // Lazy slow routine to indicate whether this device handles the given port
-            // right now this is set up to assume that if the device handles the port for
-            // input then it also handles it for output; this may not be correct.
-            for (int i = 0; i < _handledPorts.Length; i++)
-            {
-                if (ioPort == _handledPorts[i])
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         /// <summary>
         /// Does a read from the given port
         /// </summary>
-        /// <param name="ioPort"></param>
+        /// <param name="port"></param>
         /// <returns></returns>
-        public int IORead(byte ioPort)
+        public override int IORead(byte port)
         {
             int retVal = 0xffff;        // Return -1?  Assume IO devices are active low?
 
-            switch (ioPort)
+            switch (port)
             {
                 case 0x06:
                 case 0x07:  // lo, hi Ethernet bit counter
@@ -96,7 +89,7 @@ namespace PERQemu.IO
                 //  read loopback/diagnostic?
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled OIO Read from port {0:x2}.", ioPort);
+                    Trace.Log(LogType.Warnings, "Unhandled OIO Read from port {0:x2}.", port);
                     break;
             }
 
@@ -108,7 +101,7 @@ namespace PERQemu.IO
         /// </summary>
         /// <param name="ioPort"></param>
         /// <param name="value"></param>
-        public void IOWrite(byte ioPort, int value)
+        public override void IOWrite(byte ioPort, int value)
         {
             switch (ioPort)
             {
@@ -135,7 +128,7 @@ namespace PERQemu.IO
             }
         }
 
-        public uint Clock()
+        public override uint Clock()
         {
             _link.Clock();
 

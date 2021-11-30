@@ -84,21 +84,22 @@ namespace PERQemu
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Clock()
+        public void Clock(int steps = 1)
         {
-            //
-            // Move one system clock forward in time.
-            //
-            _currentTimeNsec += _timeStepNsec;
-
-            //
-            // See if we have any events waiting to fire at this timestep.
-            //
-            while (_schedule.Top != null && _currentTimeNsec >= _schedule.Top.TimestampNsec)
+            while (steps > 0)
             {
-                // Pop the top event and fire the callback.
-                Event e = _schedule.Pop();
-                e.EventCallback(_currentTimeNsec - e.TimestampNsec, e.Context);
+                // Move one system clock forward in time
+                _currentTimeNsec += _timeStepNsec;
+
+                // See if we have any events waiting to fire at this timestep
+                while (_schedule.Top != null && _currentTimeNsec >= _schedule.Top.TimestampNsec)
+                {
+                    // Pop the top event and fire the callback
+                    Event e = _schedule.Pop();
+                    e.EventCallback(_currentTimeNsec - e.TimestampNsec, e.Context);
+                }
+
+                steps--;
             }
         }
 

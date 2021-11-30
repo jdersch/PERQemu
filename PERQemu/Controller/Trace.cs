@@ -35,11 +35,11 @@ namespace PERQemu
         EmuState =          0x8,
         CpuState =          0x10,
         AluState =          0x20,
-        RegisterAssignment = 0x40,
+        Register =          0x40,
         IOState =           0x80,
         MemoryState =       0x100,
         Z80State =          0x200,
-        MicrocodeStore =    0x400,
+        Microstore =        0x400,
         Shifter =           0x800,
         HardDisk =          0x1000,
         MemoryFetch =       0x2000,
@@ -52,7 +52,7 @@ namespace PERQemu
         EStack =            0x100000,
         RasterOp =          0x200000,
         GPIB =              0x400000,
-        Z80FIFO =           0x800000,
+        Timer =             0x800000,
         Speech =            0x1000000,
         RS232 =             0x2000000,
         Tablet =            0x4000000,
@@ -62,6 +62,7 @@ namespace PERQemu
         MulDiv =            0x40000000,
         Z80SIO =            0x80000000,
         Z80DMA =            0x100000000,
+        Z80FIFO =           0x200000000,
         All =               0xffffffffffffffff,
     }
 
@@ -157,7 +158,7 @@ namespace PERQemu
                     color = ConsoleColor.Magenta;
                     break;
 
-                case LogType.RegisterAssignment:
+                case LogType.Register:
                 case LogType.Shifter:
                     color = ConsoleColor.DarkRed;
                     break;

@@ -19,6 +19,7 @@
 
 using System;
 using System.Text;
+using System.Diagnostics;
 using System.Collections.Generic;
 
 using PERQemu.Debugger;
@@ -88,10 +89,20 @@ namespace PERQemu
             PERQemu.Controller.TransitionTo(RunState.RunInst);
         }
 
-        [Command("debug z80 inst", "Run one Z80 opcode")]
-        public void DebugZ80Inst()
+        [Command("debug set execution mode", "Set the execution mode for the virtual PERQ")]
+        private void SetZ80ExecutionMode(ExecutionMode mode)
         {
-            PERQemu.Controller.TransitionTo(RunState.RunZ80Inst);
+            if (PERQemu.Sys.Mode != mode)
+            {
+                PERQemu.Sys.Mode = mode;
+                Console.WriteLine("Execution mode changed to {0}.", mode);
+            }
+        }
+
+        [Command("debug show execution mode", "Show the execution mode for the virtual PERQ")]
+        private void ShowZ80ExecutionMode()
+        {
+            Console.WriteLine(PERQemu.Sys.Mode);
         }
 
 #if TRACING_ENABLED
@@ -180,14 +191,13 @@ namespace PERQemu
             Console.WriteLine("R[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
 
-#if DEBUG
+        [Conditional("DEBUG")]
         [Command("debug set xy register", "Change the value of an XY register")]
         private void SetRegister(byte reg, uint val)
         {
             PERQemu.Sys.CPU.WriteRegister(reg, (int)val);   // Clips to 20-24 bits
             Console.WriteLine("R[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
-#endif
 
         //
         // Memory and RasterOp
@@ -370,8 +380,6 @@ namespace PERQemu
             Console.WriteLine("Disabling breakpoints");
         }
 
-
-
         //
         // Microcode
         //
@@ -446,5 +454,11 @@ namespace PERQemu
             PERQemu.Sys.Scheduler.DumpEvents();
         }
 
+        [Conditional("DEBUG")]
+        [Command("debug dump timers")]
+        private void DumpTimers()
+        {
+            HighResolutionTimer.DumpTimers();
+        }
     }
 }

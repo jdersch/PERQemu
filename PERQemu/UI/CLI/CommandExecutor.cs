@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
@@ -609,8 +610,8 @@ namespace PERQemu.UI
             }
         }
 
-#if DEBUG
-        public void DumpCommandTree(CommandNode node)
+        [Conditional("DEBUG")]
+        public void DumpCommandTree(CommandNode node, int _indent)
         {
             Console.Write("".PadLeft(_indent));
             Console.WriteLine("Node: {0} - {1} (subnodes={2} hidden={3})",
@@ -642,8 +643,7 @@ namespace PERQemu.UI
                 if (argNode.Arguments != null)
                 {
                     _indent += 2;
-
-                    DumpCommandTree(argNode);
+                    DumpCommandTree(argNode, _indent);
                     _indent -= 2;
                 }
             }
@@ -653,14 +653,11 @@ namespace PERQemu.UI
                 foreach (CommandNode sub in node.SubNodes)
                 {
                     _indent += 2;
-                    DumpCommandTree(sub);
+                    DumpCommandTree(sub, _indent);
                     _indent -= 2;
                 }
             }
         }
-
-        private int _indent = 0;
-#endif
 
         private CommandNode _commandRoot;
         private CommandNode _currentRoot;

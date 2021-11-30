@@ -1,5 +1,5 @@
 //
-// iob.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+// CIO.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -8,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -29,12 +29,10 @@ namespace PERQemu.IO
     /// Z80 firmware).  This contains hardware for the Shugart disk controller
     /// and a Z80 for controlling low-speed devices.
     /// </summary>
-    public class CIO : IOBoard
+    public sealed class CIO : IOBoard
     {
         static CIO()
         {
-            Console.WriteLine("CIO static constructor called.");
-
             _name = "CIO";
             _desc = "PERQ-1 I/O Board, new Z80, Shugart/Micropolis";
 
@@ -43,13 +41,11 @@ namespace PERQemu.IO
 
         public CIO(PERQSystem system) : base(system)
         {
-            Console.WriteLine("CIO constructor called.");
             _hardDiskController = new ShugartDiskController(system);
             _z80System = new Z80System(system);
 
             RegisterPorts(_handledPorts);
         }
-
 
         /// <summary>
         /// Reads a word from the given I/O port.

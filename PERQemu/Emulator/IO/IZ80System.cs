@@ -25,19 +25,16 @@ using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO
 {
-    public enum ExecutionMode
-    {
-        Synchronous,
-        Asynchronous
-    }
-
     /// <summary>
     /// IZ80System provides an abstracted view of the IOB's Z80 subsystem.
     /// This interface is temporary while the new Z80 implementation is underway.
     /// </summary>
     public interface IZ80System
     {
+        RunState State { get; }
+        bool IsRunning { get; }
         bool SupportsAsync { get; }
+        ulong Clocks { get; }
 
         /// <summary>
         /// Resets the Z80 system.
@@ -54,7 +51,7 @@ namespace PERQemu.IO
         /// If system is running asynchronously, processor is halted afterwards.
         /// </summary>
         /// <returns></returns>
-        uint SingleStep();
+        uint Run();
 
         /// <summary>
         /// Stops execution.  Only applicable to Asynchronous mode.

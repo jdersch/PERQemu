@@ -237,7 +237,7 @@ precious coffee.  Speaking of which...
 To more easily accommodate the range of 5.25" devices available for the PERQ-2
 machines, I'd like to pull the Geometries out and load them dynamically at
 startup.  Perhaps only the baseline Shugart24 will be "baked in" just in case
-the distribution file gets corrupted (like having a default configuration if
+the distribution file gets corrupted (like having a default Configuration if
 the "prefabs" are missing or won't load).
 
     Conf/DriveGeometries.cfg
@@ -269,7 +269,7 @@ All PERQ storage devices would share the following characteristics:
                         Disk8Inch   - Microp34 (?)
                         Disk5Inch   - Microp43, V150, Maxtor1085, Maxtor1140,
                                       etc. (many supported types)
-                        DiskSMD     - CDC9762, CDC9766, Priam? Fujitsu456?
+                        DiskSMD     - CDC9762, CDC9766, Priam? FujitsuEagle?
                         TapeQIC     - DC300, DC600?
                     and so on.
     Cylinders,

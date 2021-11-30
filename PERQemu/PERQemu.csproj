@@ -162,13 +162,12 @@
     <Compile Include="Emulator\IO\IIODevice.cs" />
     <Compile Include="Emulator\IO\IOB.cs" />
     <Compile Include="Emulator\IO\IOBus.cs" />
-    <Compile Include="Emulator\IO\IZ80System.cs" />
     <Compile Include="Emulator\IO\OIO.cs" />
     <Compile Include="Emulator\IO\PERQLink.cs" />
     <Compile Include="Emulator\IO\SerialDevices\ISerialDevice.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RealPort.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RSXFilePort.cs" />
-    <Compile Include="Emulator\Memory\Memory.cs" />
+    <Compile Include="Emulator\Memory\MemoryBoard.cs" />
     <Compile Include="Emulator\Memory\MemoryController.cs" />
     <Compile Include="Emulator\PhysicalDisk\FloppyDisk.cs" />
     <Compile Include="Emulator\PhysicalDisk\HardDisk.cs" />
@@ -197,7 +196,7 @@
     <Compile Include="Emulator\IO\Z80\DMARouter.cs" />
     <Compile Include="Emulator\IO\Z80\HardDiskSeekControl.cs" />
     <Compile Include="Emulator\IO\Z80\IDMADevice.cs" />
-    <Compile Include="Emulator\IO\Z80\IOBBus.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80IOBus.cs" />
     <Compile Include="Emulator\IO\Z80\IOReg1.cs" />
     <Compile Include="Emulator\IO\Z80\IOReg3.cs" />
     <Compile Include="Emulator\IO\Z80\ISIODevice.cs" />
@@ -215,6 +214,12 @@
     <Compile Include="UI\CLI\SettingsCommands.cs" />
     <Compile Include="Configurator\StorageCommands.cs" />
     <Compile Include="Emulator\IO\CIO.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80MemoryBus.cs" />
+    <Compile Include="Emulator\IO\OptionBoard.cs" />
+    <Compile Include="Controller\Events.cs" />
+    <Compile Include="Emulator\CPUBoard.cs" />
+    <Compile Include="Controller\HighResolutionTimer.cs" />
+    <Compile Include="Emulator\SystemTimer.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -598,6 +603,8 @@
     <None Include="Debugger\Debugger.cs" />
     <None Include="Debugger\DebuggerPrompt.cs" />
     <None Include="Docs\Configuration.txt" />
+    <None Include="Docs\Controller.txt" />
+    <None Include="Emulator\IO\IZ80System.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />

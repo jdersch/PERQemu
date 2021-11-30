@@ -47,7 +47,7 @@ namespace PERQemu
     /// Bitmap to filter what categories of output to log.  Default is None.
     /// </summary>
     [Flags]
-    public enum Category
+    public enum Category : ulong
     {
         None        = 0x0,
         EmuState    = 0x1,
@@ -118,7 +118,6 @@ namespace PERQemu
 #else
             _loggingAvailable = false;
 #endif
-            Write("Log: constructor called.");
         }
 
         public static Severity Level
@@ -139,35 +138,42 @@ namespace PERQemu
 
         public static bool LoggingAvailable => _loggingAvailable;
 
-#if DEBUG
         /// <summary>
         /// A plain Write() is always displayed.
         /// </summary>
-        public static void Write(string msg, params object[] args)
+        public static void Write(string fmt, params object[] args)
         {
-            Write(Severity.None, Category.All, msg, args);
+            WriteInternal(Severity.None, Category.All, fmt, args);
         }
 
         /// <summary>
         /// A shortcut for logging debugging output.  Makes a slow process just
         /// that much slower but saves a tiny amount of typing.  Feh.
         /// </summary>
-        public static void Debug(Category c, string msg, params object[] args)
+        [Conditional("TRACING_ENABLED")]
+        public static void Debug(Category c, string fmt, params object[] args)
         {
-            Write(Severity.Debug, c, msg, args);
+            WriteInternal(Severity.Debug, c, fmt, args);
         }
 
-        public static void Write(Category c, string msg, params object[] args)
+        [Conditional("TRACING_ENABLED")]
+        public static void Write(Category c, string fmt, params object[] args)
         {
-            Write(Severity.Normal, c, msg, args);
+            WriteInternal(Severity.Normal, c, fmt, args);
         }
 
-        public static void Write(Severity s, Category c, string msg, params object[] args)
+        [Conditional("TRACING_ENABLED")]
+        public static void Write(Severity s, Category c, string fmt, params object[] args)
+        {
+            WriteInternal(s, c, fmt, args);
+        }
+
+        private static void WriteInternal(Severity s, Category c, string fmt, params object[] args)
         {
             // Apply filters before we do the work to format the output
             if ((s >= _level) && ((c & _categories) != 0))
             {
-                var output = String.Format((c == Category.All ? "" : c.ToString() + ": ") + msg, args);
+                var output = String.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
 
                 if (_logToConsole)
                 {
@@ -199,6 +205,8 @@ namespace PERQemu
                     // Reset to default colors  TODO: configurable
                     Console.BackgroundColor = ConsoleColor.Black;
                     Console.ForegroundColor = ConsoleColor.Green;
+
+                    System.Threading.Thread.Sleep(0);   // Give it a rest why dontcha
                 }
 
                 if (_logToFile)
@@ -211,13 +219,6 @@ namespace PERQemu
                 }
             }
         }
-#else
-        // No-ops
-        public static void Write(string msg, params object[] args) { }
-        public static void Debug(Category c, string msg, params object[] args) { }
-        public static void Write(Category c, string msg, params object[] args) { }
-        public static void Write(Severity s, Category c, string msg, params object[] args) { }
-#endif
 
         /// <summary>
         /// Sets up a dictionary for mapping Categories to console colors.
@@ -266,18 +267,17 @@ namespace PERQemu
             _colors.Add(Category.All, ConsoleColor.White);
         }
 
-#if DEBUG
+        [Conditional("DEBUG")]
         public static void ShowColors()
         {
             foreach (Severity s in Enum.GetValues(typeof(Severity)))
             {
                 foreach (Category c in Enum.GetValues(typeof(Category)))
                 {
-                    Write(s, c, "Test!");
+                    WriteInternal(s, c, "Test!");
                 }
             }
         }
-#endif
 
         private static Severity _level;
         private static Category _categories;

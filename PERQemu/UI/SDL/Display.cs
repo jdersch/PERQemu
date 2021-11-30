@@ -19,12 +19,9 @@
 
 using SDL2;
 using System;
-//using System.Windows.Forms;
-//using System.Drawing;
-//using System.Drawing.Imaging;
 using System.Threading;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Diagnostics;
 
 namespace PERQemu.UI
 {
@@ -49,13 +46,15 @@ namespace PERQemu.UI
             _system = system;
 
             _sdlRunning = false;
-            _sdlPumpEvent = null;
-            _renderEventType = 0;
-            _textureLock = new ReaderWriterLockSlim();
 
-            _stopwatch = new Stopwatch();
-            _frame = 0;
+            _renderEventType = 0;
+
+            _fpsTimerId = -1;
+
+            _last = 0;
+            _frames = 0;
             _prevClock = 0;
+            _prevZ80Clock = 0;
 
             _keymap = new KeyboardMap(_system.Config.Chassis);
 
@@ -70,6 +69,9 @@ namespace PERQemu.UI
 
             // Allocate our hunka hunka burnin' pixels
             _32bppDisplayBuffer = new int[(_displayWidth * _displayHeight)];
+
+            // Is this actually needed!?
+            _textureLock = new ReaderWriterLockSlim();
         }
 
         public int MouseX => _mouseX;
@@ -91,10 +93,9 @@ namespace PERQemu.UI
                 return;
             }
 
-            SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
-
-            // Necessary?
+            // Necessary?  Helpful?
             SDL.SDL_SetMainReady();
+            SDL.SDL_SetHint("SDL_WINDOWS_DISABLE_THREAD_NAMING", "1");
 
             // Get SDL humming
             if ((retVal = SDL.SDL_Init(SDL.SDL_INIT_EVERYTHING)) < 0)
@@ -137,28 +138,39 @@ namespace PERQemu.UI
 
             // todo: initialize in our slightly greenish/grayish background color :-)
             // during "warmup" we'll fade in to full brightness.  because why not.
-            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x04, 0x4f, 0x04, 0xff);
+            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x04, 0xf4, 0x04, 0xff);
 
-            // Set up our custom event, if not already done.
+            // Set up our custom SDL render event, if not already done
             if (_renderEventType == 0)
             {
-                // Register a User event for rendering.
                 _renderEventType = SDL.SDL_RegisterEvents(1);
                 _renderEvent = new SDL.SDL_Event();
                 _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
+                _renderEvent.user.code = RENDER_FRAME;
+
+                _fpsUpdateEvent = new SDL.SDL_Event();
+                _fpsUpdateEvent.type = (SDL.SDL_EventType)_renderEventType;
+                _fpsUpdateEvent.user.code = UPDATE_FPS;
             }
 
-            _stopwatch.Start();     // todo: could we use the SDL timer, if this is redundant?
+            // Register a timer and callback to update the FPS display
+            if (_fpsTimerId < 0)
+            {
+                _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
+                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
+            }
 
             _sdlRunning = true;
 
-            SDL.SDL_PumpEvents();   // so the mac will render the bloody window frame
-            Reset();                // kick off our periodic polling loop
+            HighResolutionTimer.Enable(_fpsTimerId, true);
+
+            // Force one update so the Mac will render the bloody window frame
+            SDL.SDL_PumpEvents();
         }
 
         private void CreateDisplayTexture(bool filter)
         {
-            _textureLock.EnterWriteLock();
+            _textureLock.EnterWriteLock();  // todo why a lock around this?!  only called once...
             SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, filter ? "linear" : "nearest");
 
             _displayTexture = SDL.SDL_CreateTexture(
@@ -181,6 +193,7 @@ namespace PERQemu.UI
         /// Expand the 1-bit pixels from the PERQ into 32-bit SDL pixels, one
         /// full scanline at a time.  Use the precomputed table to go faster.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DrawScanline(int scanline, byte[] scanlineData)
         {
             int rgbIndex = scanline * _displayWidth;
@@ -203,41 +216,63 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Run the SDL message loop.  (For now!) Relies on the PERQ scheduler to
-        /// check the loop ~ 16ms, which is plenty fast to poll for mouse, keyboard
-        /// and screen refresh events at 60fps.  FIXME: move to another polling or
-        /// scheduling mechanism -- like, interleaved with the CLI ReadKey call so
-        /// the console and GUI may appear to run simultaneously?
+        /// Queue up a render event to update the FPS display.
         /// </summary>
-        private void SDLMessageLoop(ulong skewNsec, object context)
+        public void RefreshFPS(HRTimerElapsedEventArgs a)
+        {
+            // Thread safe, so we can call it in our timer callback
+            SDL.SDL_PushEvent(ref _fpsUpdateEvent);
+        }
+
+        /// <summary>
+        /// Process any pending SDL events.  If the SDL window has not been
+        /// initialized, this is a no-op.  This must be run on the main thread
+        /// (on Mac, maybe not on Windows/Linux?) or events will be quietly
+        /// ignored, because reasons.
+        /// </summary>
+        public void SDLMessageLoop()
         {
             SDL.SDL_Event e;
 
-            // Run main message loop
-            while (SDL.SDL_PollEvent(out e) != 0)
+            if (_sdlRunning)
             {
-                SDLMessageHandler(e);
-            }
+                if (_system.Mode == ExecutionMode.Synchronous)
+                {
+                    while (SDL.SDL_PollEvent(out e) != 0)
+                    {
+                        SDLMessageHandler(e);
+                    }
+                }
+                else
+                {
+                    while (SDL.SDL_WaitEvent(out e) != 0)
+                    {
+                        SDLMessageHandler(e);
 
-            // Reschedule to poll again at a reasonable interval
-            // let's try 60ish per second? At least for now. Increase it if my
-            // poor old Mac ever comes close to 60fps :-)
-            _sdlPumpEvent = _system.Scheduler.Schedule((16 * Conversion.MsecToNsec), SDLMessageLoop);
+                        if (_system.State != RunState.Running)
+                            return;
+                    }
+                }
+            }
         }
 
         /// <summary>
         /// Handle SDL events.  This executes in the UI context (main thread).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SDLMessageHandler(SDL.SDL_Event e)
         {
             switch (e.type)
             {
                 case SDL.SDL_EventType.SDL_USEREVENT:
-                    // This should always be the case since we only define one
-                    // user event, but just to be truly pedantic...
-                    if (e.user.type == _renderEventType)
+                    // <rant elided>
+                    if (e.user.code == RENDER_FRAME)
                     {
                         RenderDisplay();
+                    }
+                    else if (e.user.code == UPDATE_FPS)
+                    {
+                        UpdateFPS();
                     }
                     break;
 
@@ -271,6 +306,7 @@ namespace PERQemu.UI
                     break;
 
                 default:
+                    //Console.WriteLine("Unhandled event type {0}, user.type {1}", e.type, e.user.type);
                     break;
             }
         }
@@ -278,14 +314,9 @@ namespace PERQemu.UI
         /// <summary>
         /// Paint the completed frame on the screen.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RenderDisplay()
         {
-            // todo: figure out some kind of frame dropping for slow hosts
-            // (consult Settings.RateLimit) but in "fast" mode just run 'em
-            // as fast as the cpu can go?  (that might make the clocks run
-            // too fast, but that'd be a nice problem to have...)
-            // --> perhaps gate with a waithandle (fairly fast, lightweight)?
-
             IntPtr textureBits = IntPtr.Zero;
             int pitch = 0;
 
@@ -297,17 +328,11 @@ namespace PERQemu.UI
             // Render the display texture to the renderer
             SDL.SDL_RenderCopy(_sdlRenderer, _displayTexture, IntPtr.Zero, IntPtr.Zero);
 
-            // And show it to us.
+            // And show it to us
             SDL.SDL_RenderPresent(_sdlRenderer);
 
             // Update FPS count
-            _frame++;
-
-            if (_frame > 180)       // todo: configurable? :-)
-            {
-                UpdateFPS(_frame);
-                _frame = 0;
-            }
+            _frames++;
         }
 
         /// <summary>
@@ -318,34 +343,36 @@ namespace PERQemu.UI
         /// (or only in DEBUG mode?) or moved to a footer area where other status
         /// info, like caps lock or mouse capture status is displayed...
         /// </remarks>
-        private void UpdateFPS(long frames)
+        private void UpdateFPS()
         {
-            _stopwatch.Stop();
-            var elapsed = _stopwatch.ElapsedMilliseconds;
-            _stopwatch.Restart();
+            var now = HighResolutionTimer.ElapsedHiRes();
+            var elapsed = now - _last;
 
             double inst = _system.CPU.Clocks - _prevClock;
-            double fps = frames / (elapsed * Conversion.MsecToSec);
-            double ns = (elapsed * (double)Conversion.MsecToNsec) / inst;
+            double z80inst = _system.IOB.Z80System.Clocks - _prevZ80Clock;
+            double fps = _frames / (elapsed * Conversion.MsecToSec);
+            double ns = (elapsed * Conversion.MsecToNsec) / inst;
             _prevClock = _system.CPU.Clocks;
+            _prevZ80Clock = _system.IOB.Z80System.Clocks;
+            _last = now;
+            _frames = 0;
 
-            SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} frames / sec, {1:N2}ns / cycle", fps, ns));
-            Console.WriteLine("inst={0} elapsed={1} ns={2}", inst, elapsed, ns);  // raw / debug
-        }
-
-        /// <summary>
-        /// Reset, restart the message loop.
-        /// </summary>
-        public void Reset()
-        {
-            if (_sdlRunning)
+            var state = PERQemu.Sys.State;
+            if (state == RunState.Running)
             {
-                if (_sdlPumpEvent != null)
-                    _system.Scheduler.Cancel(_sdlPumpEvent);
-
-                SDLMessageLoop(0, null);
+                SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} fps, {1:N2}ns / cycle", fps, ns));
+                //Console.WriteLine("elapsed={0} inst={1} ns={2} z80inst={3}", elapsed, inst, ns, z80inst);  // aw / debug
+            }
+            else
+            {
+                SDL.SDL_SetWindowTitle(_sdlWindow,
+                         string.Format("PERQ is {0}", ((state == RunState.RunInst) ||
+                                                       (state == RunState.RunZ80Inst) ||
+                                                       (state == RunState.SingleStep)) ?
+                                                      "single stepping" : state.ToString()));
             }
         }
+
 
         /// <summary>
         /// Close down the display and free SDL resources.
@@ -356,20 +383,19 @@ namespace PERQemu.UI
 
             if (_sdlRunning)
             {
-                //
-                // Shut things down nicely.
-                //
-                _stopwatch.Stop();
+                // Disable and stop our timer
+                if (_fpsTimerId >= 0)
+                {
+                    HighResolutionTimer.Unregister(_fpsTimerId);
+                    _fpsTimerId = -1;
+                }
 
                 // Clear out our custom events
                 SDL.SDL_FlushEvent((SDL.SDL_EventType)_renderEventType);
 
-                if (_sdlPumpEvent != null)
-                {
-                    _system.Scheduler.Cancel(_sdlPumpEvent);
-                    _sdlPumpEvent = null;
-                }
-
+                //
+                // Shut things down nicely.
+                //
                 if (_sdlRenderer != IntPtr.Zero)
                 {
                     SDL.SDL_DestroyRenderer(_sdlRenderer);
@@ -382,9 +408,9 @@ namespace PERQemu.UI
                     _sdlWindow = IntPtr.Zero;
                 }
 
-                _sdlRunning = false;
-
                 SDL.SDL_Quit();
+
+                _sdlRunning = false;
             }
         }
 
@@ -396,11 +422,11 @@ namespace PERQemu.UI
         {
             if (e.y > 0)
             {
-            /*
-                TODO/FIXME  have to test on a display that's too short
-                and figure out how to scroll the SDL display (scaling the
-                1bpp screen is way too ugly on a non-high dpi screen)
-            */
+                /*
+                    TODO/FIXME  have to test on a display that's too short
+                    and figure out how to scroll the SDL display (scaling the
+                    1bpp screen is way too ugly on a non-high dpi screen)
+                */
                 //Console.WriteLine("scroll up!");
                 // _dispBox.Top = _display.ClientRectangle.Height - VideoController.PERQ_DISPLAYHEIGHT;
             }
@@ -605,10 +631,10 @@ namespace PERQemu.UI
         // todo: remove (eventually); for debugging
         public void Status()
         {
-            Console.WriteLine("_sdlRunning={0}, _sdlPumpEvent={1}, _renderEventType={2}",
-                              _sdlRunning, _sdlPumpEvent?.EventCallback.Method.Name, _renderEventType);
-            Console.WriteLine("_frame={0}, _mouseX,Y={1},{2}",
-                             _frame, _mouseX, _mouseY);
+            Console.WriteLine("_sdlRunning={0}, _renderEventType={1}",
+                              _sdlRunning, _renderEventType);
+            Console.WriteLine("_frame={0} _mouseX,Y={1},{2} _alt={3}",
+                              _frames, _mouseX, _mouseY, _alt);
         }
 
         /// <summary>
@@ -664,9 +690,10 @@ namespace PERQemu.UI
         private PERQSystem _system;
 
         // Frame count
-        private Stopwatch _stopwatch;
-        private long _frame;
+        private long _frames;
         private ulong _prevClock;
+        private ulong _prevZ80Clock;
+        private double _last;
 
         //
         // SDL
@@ -681,12 +708,18 @@ namespace PERQemu.UI
         // Events and stuff
         private UInt32 _renderEventType;
         private SDL.SDL_Event _renderEvent;
+        private SDL.SDL_Event _fpsUpdateEvent;
 
-        private delegate void DisplayDelegate();
-        private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
+        private const int RENDER_FRAME = 1;
+        private const int UPDATE_FPS = 2;
+
+        private int _fpsTimerId;
+        private HRTimerElapsedCallback _fpsTimerCallback;
+
+        //private delegate void DisplayDelegate();
+        //private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
 
         private bool _sdlRunning;
-        private Event _sdlPumpEvent;
     }
 }
 

@@ -25,12 +25,12 @@ namespace PERQemu.IO.Z80
     {
         public Keyboard()
         {
+            _lastKeycode = 0;
             Reset();
         }
 
         public void Reset()
         {
-            _lastKeycode = 0;
             _interruptsEnabled = false;
             _interruptActive = false;
         }
@@ -39,14 +39,14 @@ namespace PERQemu.IO.Z80
 
         public byte[] Ports => _ports;
 
-        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
+        public bool IntLineIsActive => _interruptActive && _interruptsEnabled;
 
         public byte? ValueOnDataBus => 0x28; //KBDVEC
 
-        public bool InterruptsEnabled 
-        { 
+        public bool InterruptsEnabled
+        {
             get { return _interruptsEnabled; }
-            set { _interruptsEnabled = value; } 
+            set { _interruptsEnabled = value; }
         }
 
         public event EventHandler NmiInterruptPulse;

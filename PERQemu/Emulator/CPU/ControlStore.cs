@@ -237,7 +237,7 @@ namespace PERQemu.Processor
             /// currently expects a ROM built by PRQMIC, from microcode sources,
             /// not an actual ROM dump from the PERQ.
             /// </summary>
-            public void LoadBootROM(string path)
+            public void LoadROM(string path)
             {
                 FileStream fs = new FileStream(path, FileMode.Open);
 

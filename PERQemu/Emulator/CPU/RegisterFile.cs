@@ -1,4 +1,4 @@
-﻿// registerfile.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
+// registerfile.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -97,12 +97,12 @@ namespace PERQemu.Processor
                 if (addr < 0x40)
                 {
                     _registers[addr | _registerBase] = val;
-                    Trace.Log(LogType.RegisterAssignment, "%XY[{0:x2}]={1:x6}", (addr | _registerBase), val);
+                    Trace.Log(LogType.Register, "%XY[{0:x2}]={1:x6}", (addr | _registerBase), val);
                 }
                 else
                 {
                     _registers[addr] = val;
-                    Trace.Log(LogType.RegisterAssignment, "XY[{0:x2}]={1:x6}", addr, val);
+                    Trace.Log(LogType.Register, "XY[{0:x2}]={1:x6}", addr, val);
                 }
             }
 

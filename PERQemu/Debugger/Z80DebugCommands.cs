@@ -39,24 +39,10 @@ namespace PERQemu
             PERQemu.CLI.ShowCommands("debug z80");
         }
 
-        [Command("debug z80 set execution mode", "Set the execution mode for the IO board's Z80 coprocessor")]
-        private void SetZ80ExecutionMode(ExecutionMode mode)
-        {
-            if (mode == ExecutionMode.Asynchronous && !PERQemu.Sys.IOB.SupportsAsync)
-            {
-                Console.WriteLine("The current implementation does not support asynchronous execution.");
-                PERQemu.Sys.Z80ExecutionMode = ExecutionMode.Synchronous;
-            }
-            else
-            {
-                PERQemu.Sys.Z80ExecutionMode = mode;
-            }
-        }
-
-        [Command("debug z80 show execution mode", "Show the execution mode for the IO board's Z80 coprocessor")]
-        private void ShowZ80ExecutionMode()
-        {
-            Console.WriteLine(PERQemu.Sys.Z80ExecutionMode);
+[Command("debug z80 inst", "Run one Z80 opcode")]
+public void DebugZ80Inst()
+{
+	PERQemu.Controller.TransitionTo(RunState.RunZ80Inst);
         }
 
         [Command("debug z80 show registers", "Display the values of the Z80 registers")]

@@ -80,6 +80,7 @@ namespace PERQemu
                 //Log.Level = Severity.Debug;
                 //Log.Categories = Category.All;
             }
+
             // Since we use reflection to build up our CLI and GUI, let the
             // user know this might take a while.  It's the polite thing to do.
             Console.WriteLine("Initializing, please wait...");
@@ -121,7 +122,7 @@ namespace PERQemu
             // If the GUI is requested, start up the FrontPanel display
             if (_switches.startGUI)
             {
-                // _gui.Run("FrontPanel");      // Sigh.
+                // _gui.Run("FrontPanel");          // Sigh.
                 Console.WriteLine("No GUI for you!");
             }
             //else
@@ -129,6 +130,8 @@ namespace PERQemu
                 // Run the CLI
                 _cli.Run();
             //}
+
+            HighResolutionTimer.Shutdown();
         }
 
         public static void PrintBanner()
@@ -140,11 +143,12 @@ namespace PERQemu
             Console.WriteLine("[DEBUG version]");
             Console.WriteLine("[Working directory is {0}]", Environment.CurrentDirectory);
             Console.WriteLine("[Host is configured for {0} processor(s)]", Environment.ProcessorCount);
+            Console.WriteLine("[High resolution timer {0} available]",
+                              HighResolutionTimer.IsHighResolution ? "is" : "is not");
 #endif
 #if TRACING_ENABLED
             Console.WriteLine("[Tracing is available]");
-#endif
-
+#endif                             
             if (HostIsUnix && !_switches.startGUI)
             {
                 Console.WriteLine("Type 'help' for console commands, or 'gui' to start the GUI.");

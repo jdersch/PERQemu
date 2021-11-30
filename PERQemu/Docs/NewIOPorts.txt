@@ -24,7 +24,7 @@ oct     hex     name            function                            source
 
 ------
 
-Perq-1 IO board (iob), or early Perq-2? (cio)
+Perq-1 IO board (iob), or "new Z80" (cio)
 
 iob address
 oct     hex     name            function                            source

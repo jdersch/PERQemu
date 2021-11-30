@@ -1,5 +1,5 @@
 //
-// Z80system.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Z80System.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -24,22 +24,34 @@ using Konamiman.Z80dotNet;
 
 using PERQemu.Processor;
 using PERQemu.Debugger;
+using PERQemu.IO;
 using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO.Z80
 {
-    public class Z80System : IZ80System
+    /// <summary>
+    /// The Z80System is an embedded system that runs the PERQ's "low speed"
+    /// peripherals.  It has its own ROM, RAM, DMA and peripheral bus and runs
+    /// independently of the main CPU.  This class directly implements both the
+    /// "old" Z80 (PERQ-1 IOB or CIO boards) and the "new" Z80 (PERQ-2 EIO or
+    /// NIO boards), as the differences are not yet perceived to warrant any
+    /// kind of subclassing, he said, blissfully ignorant of the world of pain
+    /// he was about to enter.
+    /// </summary>
+    public class Z80System
     {
         public Z80System(PERQSystem system)
         {
             _system = system;
-            _scheduler = new Scheduler(407); // IOB Z80 clock runs at 2.4576Mhz, ~407nSec per clock tick.
+            _localState = RunState.Off;
 
-            _bus = new IOBIOBus(this);
-            _memory = new IOBMemoryBus();
+            _scheduler = new Scheduler(IOBoard.Z80CycleTime);
+            _bus = new Z80IOBus(this);
+            _memory = new Z80MemoryBus();
             _cpu = new Z80Processor();
             _cpu.Memory = _memory;
             _cpu.PortsSpace = _bus;
+            _cpu.ClockSynchronizer = null;  // we'll do our own rate limiting
 
             _fdc = new NECuPD765A(_scheduler);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
@@ -56,7 +68,7 @@ namespace PERQemu.IO.Z80
 
             _z80dma.AttachDeviceA(_dmaRouter);
             _z80dma.AttachDeviceB(_memory);
-            
+
             // Put devices on the bus
             _bus.RegisterDevice(_fdc);
             _bus.RegisterDevice(_perqToZ80Fifo);
@@ -71,73 +83,83 @@ namespace PERQemu.IO.Z80
             _bus.RegisterDevice(_ioReg3);
 
             // Attach peripherals
+
+            // todo: consult the configuration record to decide which
+            // tablet (or both) to attach
+            // todo: finish the gpib and attach the bitpad if selected
+            // todo: serial port "b"
+            // todo: rtc chip
+
             KrizTablet tablet = new KrizTablet(_scheduler, system);
             _z80sio.AttachDevice(1, tablet);
-            
+
             _floppyDrive = new FloppyDrive();
             _fdc.AttachDrive(0, _floppyDrive);
 
             _z80Debugger = new Z80Debugger();
             _running = false;
-        }
+            _cycles = 0;
 
-        public void Reset()
-        {
-            _scheduler.Reset();
-            _cpu.Reset();
-            _bus.Reset();
+            // Do 10 rate adjustments / second?  Balance overhead v. accuracy
+            _heartbeat = new SystemTimer(10f);
+
+            // Compute how often (in CPU cycles) to sync the emulated processor
+            // to real-time (used if Settings.RateLimit != Fast mode)
+            _adjustInterval = (int)(_heartbeat.Interval / (IOBoard.Z80CycleTime * Conversion.NsecToMsec));
+            Console.WriteLine("Z80 rate adjust every {0} cycles", _adjustInterval);
         }
 
         public bool SupportsAsync => true;
+        public ulong Clocks => _cycles;
+        public RunState State => _localState;
+        public bool IsRunning => _running;
 
-        //[DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
-        public void ShowZ80State()
+        public Z80Processor CPU => _cpu;
+        public Queue<byte> FIFO { get; }
+        public Keyboard Keyboard => _keyboard;
+
+        // DMA Capable devices
+        public NECuPD765A FDC => _fdc;
+        public PERQToZ80FIFO PERQReadFIFO => _perqToZ80Fifo;
+        public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
+        public Z80SIO SIOA => _z80sio;
+        public TMS9914A GPIB => _tms9914a;
+
+
+        public void Reset()
         {
-            IZ80Registers regs = _cpu.Registers;
-
-            // TODO: should display shadow regs?
-            Console.WriteLine("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}",
-                              regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
-            Console.WriteLine("    IX=${0:x4} IY=${1:x4}", regs.IX, regs.IY);
-
-            // TODO: this doesn't really belong here
-            ushort offset = 0;
-            string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
-            string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
-
-            Console.WriteLine();
-            Console.WriteLine("{0}+0x{1:x} : {2}", symbol, offset, source);
+            _cycles = 0;
+            _scheduler.Reset();
+            _cpu.Reset();
+            _bus.Reset();
+            Trace.Log(LogType.Z80State, "Z80 system reset.");
         }
 
         /// <summary>
-        /// Runs the Z80 for one instruction.
+        /// Runs the Z80 for one instruction (either mode).  If the Z80 is
+        /// "turned off" by the PERQ, it's a no-op.
         /// </summary>
-        /// <returns></returns>
-        public uint SingleStep()
+        public uint Run(int steps = 1)
         {
-            if (_asyncThread != null)
-            {
-                throw new InvalidOperationException("Cannot single-step while Z80 is running asynchronously; Stop first.");
-            }
-
-            _lastExecutionMode = ExecutionMode.Synchronous;
-
             if (_running)
             {
-                uint clocks = (uint)_cpu.ExecuteNextInstruction();
-                _z80dma.Execute();
+                var clocks = 0;
 
-                // This is TERRIBLE
-                for (uint i = 0; i < clocks; i++)
+                do
                 {
-                    _scheduler.Clock();
-                }
+                    clocks = _cpu.ExecuteNextInstruction();
+                    _z80dma.Execute();
+                    _scheduler.Clock(clocks);
 
-                return clocks;
+                    _cycles += (uint)clocks;
+                    steps -= clocks;
+                } while (steps > 0);
+
+                return (uint)clocks;
             }
             else
             {
-                return 4; // nice round fudged number to fill time
+                return (uint)steps * 4;      // fixme
             }
         }
 
@@ -151,17 +173,28 @@ namespace PERQemu.IO.Z80
                 throw new InvalidOperationException("Z80 thread is already running; Stop first.");
             }
 
-            _lastExecutionMode = ExecutionMode.Asynchronous;
-
-            // Do not start the thread if the Z80 has been turned off
-            if (!_running)
-            {
-                return;
-            }
-
+            _localState = RunState.Running;
             _stopAsyncExecution = false;
             _asyncThread = new Thread(AsyncThread);
             _asyncThread.Start();
+        }
+
+        /// <summary>
+        /// The thread proc for asynchronous Z80 execution.
+        /// </summary>
+        private void AsyncThread()
+        {
+            _heartbeat.Reset();
+            _heartbeat.StartTimer(true);
+
+            Console.WriteLine("[Z80 thread starting]");
+            while (!_stopAsyncExecution)
+            {
+                Run(_adjustInterval);
+                _heartbeat.WaitForHeartbeat();
+            }
+
+            _heartbeat.StartTimer(false);
         }
 
         /// <summary>
@@ -174,38 +207,19 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            // Tell the thread to exit.
+            // Tell the thread to exit
             _stopAsyncExecution = true;
 
-            // Wait.
+            // Waaaaait for it
             _asyncThread.Join();
             _asyncThread = null;
+            _localState = RunState.Paused;
+            Console.WriteLine("[Z80 thread stopped]");
         }
-
-        /// <summary>
-        /// The thread proc for asynchronous Z80 execution.
-        /// </summary>
-        private void AsyncThread()
-        {
-            while (_running && !_stopAsyncExecution)
-            {
-                int clocks = _cpu.ExecuteNextInstruction();
-                _z80dma.Execute();
-
-                // This is *STILL* TERRIBLE
-                for (uint i = 0; i < clocks; i++)
-                {
-                    _scheduler.Clock();
-                }
-            }
-        }
-
-        private Thread _asyncThread;
-        private volatile bool _stopAsyncExecution;
 
         /// <summary>
         /// Sends data to the Z80.
-        /// Corresponds to IOB port 0xc7 (octal 307).
+        /// Corresponds to IOB port 0xc7 (octal 307).   TODO: ports have to be configurable
         ///
         ///  The IOB schematic (p. 49 of the PDF, "IOA DECODE") sheds some light on the Z80 "input"
         ///  interrupt.  This is actually labeled as "Z80 READY INT L" (meaning it's active Low)
@@ -278,82 +292,88 @@ namespace PERQemu.IO.Z80
             {
                 Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
                 _running = false;
-                Stop();
+                // Stop();
             }
             else if (status == 0 && !_running)
             {
                 Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
                 _running = true;
                 Reset();
-
-                if (_lastExecutionMode == ExecutionMode.Asynchronous)
-                {
-                    // Restart execution thread
-                    RunAsync();
-                }
             }
         }
-        
-        public void LoadFloppyDisk(string path) 
+
+        public void LoadFloppyDisk(string path)
         {
             _floppyDrive.LoadDisk(new PhysicalDisk.FloppyDisk(path));
         }
 
-        public void SaveFloppyDisk(string path) 
+        public void SaveFloppyDisk(string path)
         {
             _floppyDrive.Disk.Save(path);
         }
 
-        public void UnloadFloppyDisk() 
+        public void UnloadFloppyDisk()
         {
             _floppyDrive.UnloadDisk();
         }
 
         public void SetSerialPort(ISerialDevice dev) { }
 
-        public string GetSerialPort() { return String.Empty; }
+        public string GetSerialPort() { return string.Empty; }
 
-        public Z80Processor CPU => _cpu;
+        // todo:  move this into Z80DebugCommands?
+        //[DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
+        public void ShowZ80State()
+        {
+            IZ80Registers regs = _cpu.Registers;
 
-        public Queue<byte> FIFO { get; }
+            // TODO: should display shadow regs?
+            Console.WriteLine("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}",
+                              regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
+            Console.WriteLine("    IX=${0:x4} IY=${1:x4}", regs.IX, regs.IY);
 
-        public Keyboard Keyboard => _keyboard;
+            // TODO: this doesn't really belong here
+            ushort offset = 0;
+            string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
+            string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
 
-        // DMA Capable devices
-        public NECuPD765A FDC => _fdc;
-        public PERQToZ80FIFO PERQReadFIFO => _perqToZ80Fifo;
+            Console.WriteLine();
+            Console.WriteLine("{0}+0x{1:x} : {2}", symbol, offset, source);
+        }
 
-        public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
-
-        public Z80SIO SIOA => _z80sio;
-
-        public TMS9914A GPIB => _tms9914a;
-
-        private PERQSystem _system;
+        //
+        // Z80System is a big sucka!
+        //
         private Z80Processor _cpu;
-        private IOBIOBus _bus;
-        private IOBMemoryBus _memory;
+        private Z80MemoryBus _memory;
+        private Z80IOBus _bus;
         private IOReg1 _ioReg1;
         private IOReg3 _ioReg3;
-        private NECuPD765A _fdc;
-        private PERQToZ80FIFO _perqToZ80Fifo;
-        private Z80ToPERQFIFO _z80ToPerqFifo;
+        private Z80SIO _z80sio;
         private Z80CTC _z80ctc;
         private Z80DMA _z80dma;
-        private HardDiskSeekControl _seekControl;
-        private Keyboard _keyboard;
-        private Z80SIO _z80sio;
-        private TMS9914A _tms9914a;
         private DMARouter _dmaRouter;
+        private PERQToZ80FIFO _perqToZ80Fifo;
+        private Z80ToPERQFIFO _z80ToPerqFifo;
+        private HardDiskSeekControl _seekControl;
+        private NECuPD765A _fdc;
+        private TMS9914A _tms9914a;
 
+        private Keyboard _keyboard;
         private FloppyDrive _floppyDrive;
 
-        private Scheduler _scheduler;
-
         private Z80Debugger _z80Debugger;
+        private Scheduler _scheduler;
+        private PERQSystem _system;
 
+        private ulong _cycles;
         private volatile bool _running;
 
-        private ExecutionMode _lastExecutionMode;
+        private RunState _localState;
+        private SystemTimer _heartbeat;
+        private int _adjustInterval;
+
+        private Thread _asyncThread;
+        private volatile bool _stopAsyncExecution;
     }
 }

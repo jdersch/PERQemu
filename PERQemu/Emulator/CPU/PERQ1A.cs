@@ -22,7 +22,7 @@ namespace PERQemu.Processor
     /// The 20-bit PERQ-1A processor, aka "16K CPU", is the workhorse of
     /// the PERQ line.  It can be used in any of the configurations.
     /// </summary>
-    public class PERQ1A : CPU
+    public sealed class PERQ1A : CPU
     {
         static PERQ1A()
         {

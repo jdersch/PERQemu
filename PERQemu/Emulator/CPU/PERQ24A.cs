@@ -23,7 +23,7 @@ namespace PERQemu.Processor
     /// the "PERQ 2.0" lineup of workstations and servers from the famed
     /// Retrocomputing Division of Boondoggle Heavy Industries, Ltd.
     /// </summary>
-    public class PERQ24A : CPU
+    public sealed class PERQ24A : CPU
     {
         static PERQ24A()
         {

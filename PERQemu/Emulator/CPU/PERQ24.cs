@@ -22,7 +22,7 @@ namespace PERQemu.Processor
     /// This is the rare 24-bit, 16K CPU.  It is available when the
     /// "PERQ-2/T4" (aka "PERQ-4" or "PQ4000") configuration is selected.
     /// </summary>
-    public class PERQ24 : CPU
+    public sealed class PERQ24 : CPU
     {
         static PERQ24()
         {

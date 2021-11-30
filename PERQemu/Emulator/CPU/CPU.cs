@@ -18,8 +18,6 @@
 //
 
 using System;
-using System.Text;
-using System.Threading;
 using System.Runtime.CompilerServices;
 
 using PERQemu.Memory;
@@ -27,16 +25,6 @@ using PERQemu.Debugger;
 
 namespace PERQemu.Processor
 {
-
-    public class PowerOffException : Exception
-    {
-        public PowerOffException()
-        {
-            // Thrown when the PERQ-1 powers itself off.
-            // (The PERQ-2 didn't have "soft" power.)
-        }
-    }
-
 
     /// <summary>
     /// PERQ hardware interrupts, listed in order of priority.
@@ -193,7 +181,7 @@ namespace PERQemu.Processor
                 uOp.CND == Condition.True &&
                 uOp.JMP == JumpOperation.Goto)
             {
-                throw new UnimplementedInstructionException(String.Format("CPU has halted in a loop at {0:x4}", PC));
+                throw new UnimplementedInstructionException(string.Format("CPU has halted in a loop at {0:x4}", PC));
             }
 #endif
 
@@ -551,7 +539,7 @@ namespace PERQemu.Processor
                     break;
 
                 default:
-                    throw new UnimplementedInstructionException(String.Format("Unimplemented AMUX {0}", uOp.A));
+                    throw new UnimplementedInstructionException(string.Format("Unimplemented AMUX {0}", uOp.A));
             }
 
             return amux;
@@ -956,18 +944,20 @@ namespace PERQemu.Processor
             // This is a little hacky, but since just about every PERQ
             // ever made used standard boot ROMs and the standard SYSB
             // microcode, having this hook here isn't too terrible...
-            if (_dds == 150)
+            if (_dds == 149)
             {
                 _system.PressBootKey();
             }
+            // Send the event and let the updates fall where they may
+            // _system.MachineStateChange(DDSChanged, _dds);
 
             // TODO: a general event-based way to provide hooks or
             // breakpoints when the DDS reaches a particular value might
             // be a cleaner way to allow a GUI, the debugger, or the boot
             // key-holder-downer-thingie to hook in...
 
-            // TODO: This should be moved elsewhere
-            Console.Title = String.Format("DDS {0:d3}", _dds % 1000);
+            // TODO: This should be moved elsewhere - catch it in the CLI!?
+            Console.Title = string.Format("DDS {0:d3}", _dds % 1000);
         }
 
         #endregion CPU Helper Functions
@@ -1001,20 +991,11 @@ namespace PERQemu.Processor
         }
 
         /// <summary>
-        /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
-        /// called once.  Called by PERQsystem based on CPU and I/O Board type.
+        /// Load the boot ROM into the microstore.
         /// </summary>
-        public void LoadROM(string path)
+        public void LoadROM(string romFile)
         {
-        	try
-        	{
-        		_ustore.LoadBootROM(path);
-        	}
-        	catch
-        	{
-        		Console.WriteLine("Could not load boot ROM from {0}!", path);
-                // fixme: should be fatal; return fail or throw
-        	}
+            _ustore.LoadROM(romFile);
         }
 
         public void ShowPC()
@@ -1060,10 +1041,6 @@ namespace PERQemu.Processor
         protected static int _wcsMask;
 
         protected static ulong _cycleTime;
-
-        // Timing regulation
-        protected ulong _clocks;                // elapsed cycles
-        protected ulong _cpuSecond;             // cycles per second
 
         // Major components, common to all CPU types
         private RasterOp _rasterOp;
@@ -1114,6 +1091,7 @@ namespace PERQemu.Processor
         //
         // Housekeeping
         //
+        protected ulong _clocks;
 
         // Diagnostic counter
         private int _dds;
@@ -1125,6 +1103,5 @@ namespace PERQemu.Processor
         // Trace/debugging support
         private ushort _lastPC;
         private Instruction _lastInstruction;
-
     }
 }

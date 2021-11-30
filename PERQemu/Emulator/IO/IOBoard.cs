@@ -19,6 +19,7 @@
 
 using System;
 
+using PERQemu.IO.Z80;
 using PERQemu.IO.HardDisk;
 
 namespace PERQemu.IO
@@ -29,35 +30,30 @@ namespace PERQemu.IO
     /// <remarks>
     /// Each PERQ requires one IO board which contains (at minimum) a Z80
     /// subsystem and hard disk controller.  The EIO board introduced with
-    /// the PERQ-2 series adds additional features like an on-board Ethernet
-    /// controller a real-time clock chip.
-    /// 
-    /// The 5-slot card cage also contains two option slots: CPU Option, for
-    /// which no dedicated boards were designed, and the IO Option, which
-    /// offered a number of configurations.  Because the interface for these
-    /// is basically identical (as far as emulation is concerned), all of the
-    /// IO and IO Option boards can share this same parent class.  See the
-    /// file Docs/IOBoards.txt for more information.
+    /// the PERQ-2 series adds an on-board Ethernet controller, and additional
+    /// Z80 peripherals like a second serial port and real-time clock chip.
     /// </remarks>
-
     public abstract class IOBoard : IIODevice
     {
         static IOBoard()
         {
             // Our derived classes customize themselves in the static
             // constructor, setting up ports and other goodies
-            Console.WriteLine("IOBoard static constructor called.");
         }
 
         public IOBoard(PERQSystem system)
         {
-            Console.WriteLine("IOBoard constructor called.");
             _sys = system;
         }
 
-        public IZ80System Z80System
+        public Z80System Z80System
         {
             get { return _z80System; }
+        }
+
+        public static ulong Z80CycleTime
+        {
+            get { return _z80CycleTime; }
         }
 
         // public IStorageController DiskController
@@ -74,6 +70,11 @@ namespace PERQemu.IO
         public bool SupportsAsync
         {
             get { return _z80System.SupportsAsync; }
+        }
+
+        public RunState State
+        {
+            get { return _z80System.State; }
         }
 
         //
@@ -99,11 +100,11 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Runs the Z80, synchronously.
+        /// Runs one Z80 instruction, synchronously.
         /// </summary>
         public virtual uint Clock()
         {
-            return _z80System.SingleStep();
+            return _z80System.Run();
         }
 
         public abstract int IORead(byte port);
@@ -128,8 +129,7 @@ namespace PERQemu.IO
         public virtual bool SaveDisk(int unit = 0)
         {
             // FIXME:
-            // new storage controllers will remember the name of the image
-            // and use it when saving by default
+            // the name of the image is in the Config record; use when saving by default
             // will also handle multiple units
             // will handle error checking here and return a nice boolean
 
@@ -175,7 +175,8 @@ namespace PERQemu.IO
         protected static ulong _z80CycleTime;
 
         // Devices required by all I/O boards
-        protected IZ80System _z80System;
+        protected Z80System _z80System;
+
         // protected IStorageController _hardDisk;
         protected ShugartDiskController _hardDiskController;
 

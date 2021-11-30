@@ -1,5 +1,5 @@
 //
-// iob.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+// IOB.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -8,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -28,12 +28,10 @@ namespace PERQemu.IO
     /// Represents an IOB card in a PERQ1 system.  This contains hardware for
     /// the Shugart disk controller and a Z80 for controlling low-speed devices.
     /// </summary>
-    public class IOB : IOBoard
+    public sealed class IOB : IOBoard
     {
         static IOB()
         {
-            Console.WriteLine("IOB static constructor called.");
-
             _name = "IOB";
             _desc = "PERQ-1 I/O Board, old Z80, Shugart";
 
@@ -42,13 +40,11 @@ namespace PERQemu.IO
 
         public IOB(PERQSystem system) : base(system)
         {
-            Console.WriteLine("IOB constructor called.");
             _hardDiskController = new ShugartDiskController(system);
             _z80System = new Z80System(system);
 
             RegisterPorts(_handledPorts);
         }
-
 
         /// <summary>
         /// Reads a word from the given I/O port.
@@ -62,9 +58,6 @@ namespace PERQemu.IO
 
                 case 0x46:  // Read Z80 data
                     return _z80System.ReadData();
-
-                //case 0x55:  // Read Z80 status -- not used in IOB/CIO -- remove
-                //    return _z80System.ReadStatus();
 
                 default:
                     Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", port);

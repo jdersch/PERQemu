@@ -28,7 +28,7 @@ namespace PERQemu.Processor
     /// much of the really interesting software (Accent and PNX) eventually
     /// dropped support for it.
     /// </remarks>
-    public class PERQ1 : CPU
+    public sealed class PERQ1 : CPU
     {
         static PERQ1()
         {

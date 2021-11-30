@@ -1,0 +1,121 @@
+//
+// Z80MemoryBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// This file is part of PERQemu.
+//
+// PERQemu is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
+//
+
+using Konamiman.Z80dotNet;
+using System;
+using System.IO;
+using System.Text;
+using System.Collections.Generic;
+
+namespace PERQemu.IO.Z80
+{   
+
+    /// <summary>
+    /// Z80MemoryBus implements the Konamiman Z80dotNet IMemory interface to
+    /// provide access to the IO board's Z80 Memory space.
+    /// </summary>
+    public class Z80MemoryBus : IMemory, IDMADevice
+    {
+        public Z80MemoryBus()
+        {
+            LoadROM();
+        }
+
+        //
+        // IMemory Implementation
+        //
+        public byte this[int address]
+        {
+            get { return ReadByte(address); }
+            set { WriteByte(address, value); }
+        }
+
+        public int Size
+        {
+            get { return 0x10000; } // 64K address space
+        }
+
+        public bool ReadDataReady => true;      // Always ready
+
+        public bool WriteDataReady => true;     // Always ready
+
+        public byte[] GetContents(int startAddress, int length) { return null; }
+        public void SetContents(int startAddress, byte[] contents, int startIndex = 0, int? length = null) { }
+
+        //
+        // Implementation
+        //
+        private byte ReadByte(int address)
+        {
+            if (address < ROM_SIZE)
+            {
+                return _rom[address];
+            }
+            else if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
+            {
+                return _ram[address - RAM_ADDRESS];
+            }
+            else
+            {
+                // throw for now so I can see what's going on
+                throw new InvalidOperationException(string.Format("Unexpected memory read at address 0x{0:x}.", address));
+            }
+        }
+
+        private void WriteByte(int address, byte value)
+        {
+            if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
+            {
+                _ram[address - RAM_ADDRESS] = value;
+            }
+            else
+            {
+                // throw for now so I can see what's going on
+                throw new InvalidOperationException(string.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}.", address, value));
+            }
+        }
+
+        public void DMATerminate()
+        {
+
+        }
+
+        private void LoadROM()
+        {
+            // TODO: have to prepare CIO and EIO/NIO versions of the Z80 ROM!
+            using (FileStream fs = new FileStream(Paths.BuildPROMPath("pz80.bin"), FileMode.Open, FileAccess.Read))
+            {
+                if (fs.Read(_rom, 0, _rom.Length) != _rom.Length)
+                {
+                    throw new InvalidOperationException("Invalid Z80 ROM size.");
+                }
+            }
+        }
+
+        // TODO: these are different for EIO; make 'em configurable at runtime
+
+        private const int RAM_SIZE = 0x400;      // 1K of ram
+        private const int RAM_ADDRESS = 0x2c00;
+        private const int ROM_SIZE = 0x2000;     // 8K of rom
+        private const int ROM_ADDRESS = 0x0;
+
+        private byte[] _rom = new byte[ROM_SIZE];
+        private byte[] _ram = new byte[RAM_SIZE];
+    }
+}

@@ -1,4 +1,4 @@
-﻿//
+//
 // Z80DMA.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -26,7 +26,7 @@ namespace PERQemu.IO.Z80
     /// </summary>
     public class Z80DMA : IZ80Device
     {
-        public Z80DMA(byte baseAddress, IOBMemoryBus memoryBus, IOBIOBus ioBus)
+        public Z80DMA(byte baseAddress, Z80MemoryBus memoryBus, Z80IOBus ioBus)
         {
             _memoryBus = memoryBus;
             _ioBus = ioBus;
@@ -423,8 +423,8 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private IOBIOBus _ioBus;
-        private IOBMemoryBus _memoryBus;
+        private Z80IOBus _ioBus;
+        private Z80MemoryBus _memoryBus;
         private IDMADevice _deviceA;
         private IDMADevice _deviceB;
         private byte _baseAddress;

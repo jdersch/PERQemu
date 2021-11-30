@@ -1,5 +1,5 @@
 ﻿//
-// IOBBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Z80IOBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -26,12 +26,12 @@ using System.Collections.Generic;
 namespace PERQemu.IO.Z80
 {   
     /// <summary>
-    /// IOBIOBus implements the Konamiman Z80dotNet IMemory interface for the
-    /// purposes of providing access to the IOB's Z80 Port I/O space.
+    /// Z80IOBus implements the Konamiman Z80dotNet IMemory interface for the
+    /// purposes of providing access to the IO board's Z80 Port I/O space.
     /// </summary>
-    public class IOBIOBus : IMemory
+    public class Z80IOBus : IMemory
     {
-        public IOBIOBus(Z80System system)
+        public Z80IOBus(Z80System system)
         {
             _devices = new IZ80Device[Size];
             _z80System = system;
@@ -66,10 +66,11 @@ namespace PERQemu.IO.Z80
 
         public int Size 
         { 
-            get { return 0x100; } // 256 IO addresses
+            get { return 0x100; }       // 256 IO addresses
         }
         
         public byte[] GetContents(int startAddress, int length) { return null; }
+
         public void SetContents(int startAddress, byte[] contents, int startIndex = 0, int? length = null) { }
 
         //
@@ -77,12 +78,12 @@ namespace PERQemu.IO.Z80
         //
         public void RegisterDevice(IZ80Device device)
         {
-            foreach(ushort portAddress in device.Ports)
+            foreach (ushort portAddress in device.Ports)
             {
                 if (_devices[portAddress] != null)
                 {
                     throw new InvalidOperationException(
-                        String.Format("Z80 I/O Port conflict: Device {0} already registered at port 0x{1}",
+                        string.Format("Z80 I/O Port conflict: Device {0} already registered at port 0x{1}",
                         _devices[portAddress], portAddress));
                 }
                 else
@@ -97,6 +98,7 @@ namespace PERQemu.IO.Z80
         {
             IZ80Device device = _devices[port];
             byte value = 0x0;
+
             if (device != null)
             {
                 value = device.Read((byte)port);
@@ -114,6 +116,7 @@ namespace PERQemu.IO.Z80
         private void WritePort(int port, byte value)
         {
             IZ80Device device = _devices[port];
+
             if (device != null)
             {
                 device.Write((byte)port, value);
@@ -128,95 +131,5 @@ namespace PERQemu.IO.Z80
 
         private IZ80Device[] _devices;
         private Z80System _z80System;
-    }
-
-    /// <summary>
-    /// IOBIOBus implements the Konamiman Z80dotNet IMemory interface for the purposes of
-    /// providing access to the IOB's Z80 Memory space.
-    /// </summary>
-    public class IOBMemoryBus : IMemory, IDMADevice
-    {
-        public IOBMemoryBus()
-        {
-            LoadROM();
-        }
-
-        //
-        // IMemory Implementation
-        //
-        public byte this[int address]
-        {
-            get { return ReadByte(address); }
-            set { WriteByte(address, value); }
-        }
-
-        public int Size
-        {
-            get { return 0x10000; } // 64K address space
-        }
-
-        public bool ReadDataReady => true;      // Always ready
-
-        public bool WriteDataReady => true;     // Always ready
-
-        public byte[] GetContents(int startAddress, int length) { return null; }
-        public void SetContents(int startAddress, byte[] contents, int startIndex = 0, int? length = null) { }
-
-        //
-        // Implementation
-        //
-        private byte ReadByte(int address)
-        {
-            if (address < ROM_SIZE)
-            {
-                return _rom[address];
-            }
-            else if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
-            {
-                return _ram[address - RAM_ADDRESS];
-            }
-            else
-            {
-                // throw for now so I can see what's going on
-                throw new InvalidOperationException(string.Format("Unexpected memory read at address 0x{0:x}.", address));
-            }
-        }
-
-        private void WriteByte(int address, byte value)
-        {
-            if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
-            {
-                _ram[address - RAM_ADDRESS] = value;
-            }
-            else
-            {
-                // throw for now so I can see what's going on
-                throw new InvalidOperationException(string.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}.", address, value));
-            }
-        }
-
-        public void DMATerminate()
-        {
-
-        }
-
-        private void LoadROM()
-        {
-            using (FileStream fs = new FileStream(Paths.BuildPROMPath("pz80.bin"), FileMode.Open, FileAccess.Read))
-            {
-                if (fs.Read(_rom, 0, _rom.Length) != _rom.Length)
-                {
-                    throw new InvalidOperationException("Invalid Z80 ROM size.");
-                }
-            }
-        }
-
-        private const int RAM_SIZE = 0x400;      // 1K of ram
-        private const int RAM_ADDRESS = 0x2c00;
-        private const int ROM_SIZE = 0x2000;     // 8K of rom
-        private const int ROM_ADDRESS = 0x0;
-
-        private byte[] _rom = new byte[ROM_SIZE];
-        private byte[] _ram = new byte[RAM_SIZE];
     }
 }

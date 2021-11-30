@@ -1,4 +1,5 @@
-// memory.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// MemoryBoard.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -58,10 +59,16 @@ namespace PERQemu.Memory
     }
 
     /// <summary>
-    /// Implements the PERQ's Memory board and memory state machine,
-    /// which is also connected to the IO bus.
+    /// Implements the PERQ's Memory board and memory state machine, and
+    /// attaches the video controller (which is connected to the IO bus).
     /// </summary>
-    public sealed class MemoryBoard     // TODO : ISystemBoard
+    /// <remarks>
+    /// Rather than split hairs, the VideoController class handles all of the
+    /// IO bus interaction for the MemoryBoard.  The only non-video-related IO
+    /// registers would be the parity error read/clear, and that's not really
+    /// implemented anyway.
+    /// </remarks>
+    public sealed class MemoryBoard
     {
         public MemoryBoard(PERQSystem system)
         {
@@ -109,9 +116,9 @@ namespace PERQemu.Memory
 
 
         /// <summary>
-        /// First half of the memory cycle: clocks the state counter, clocks the MDI and
-        /// MDO queues, then sets up executes the current Fetch (if any).  Asserts the
-        /// Wait signal if the CPU should abort this cycle.
+        /// First half of the memory cycle: clocks the state counter, clocks the
+        /// MDI and MDO queues, then sets up executes the current Fetch (if any).
+        /// Asserts the Wait signal if the CPU should abort this cycle.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tick(MemoryCycle cycleType)
@@ -140,11 +147,9 @@ namespace PERQemu.Memory
                 _mdi = FetchWord(_madr);
             }
 
-            //
             // Set the wait flag if we need to abort the current instruction.
-            // If output is pending, we never wait; otherwise we let the combined
+            // If output is pending, we never wait; otherwise, let the combined
             // status of the request queues determine our result.
-            //
             if (MDONeeded)
             {
                 _wait = false;
@@ -156,10 +161,9 @@ namespace PERQemu.Memory
         }
 
         /// <summary>
-        /// Second half of the memory cycle: if a store is pending, writes the output
-        /// (from the ALU or current RasterOp result) to memory.
+        /// Second half of the memory cycle: if a store is pending, writes the
+        /// output (from the ALU or current RasterOp result) to memory.
         /// </summary>
-        /// <param name="input">Word to write (MDO)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tock(ushort input)
         {
@@ -181,7 +185,7 @@ namespace PERQemu.Memory
         public bool LoadOpFile()
         {
             // If currently executing a Fetch4, start the refill on the
-            // next T2 state (i.e., next cycle).
+            // next T2 state (i.e., next cycle)
             if (_mdiQueue.Cycle == MemoryCycle.Fetch4 && _Tstate == 1)
             {
                 return true;
@@ -191,9 +195,9 @@ namespace PERQemu.Memory
 
 
         /// <summary>
-        /// Requests a specific memory cycle type at the specified address.  Here we route
-        /// the request to the separate fetch and store queues, which vastly simplifies the
-        /// complicated overlapped operation of RasterOp.
+        /// Requests a specific memory cycle type at the specified address.
+        /// Routes the request to the separate fetch and store queues, which
+        /// vastly simplifies the complicated overlapped operation of RasterOp.
         /// </summary>
         public void RequestMemoryCycle(int address, MemoryCycle cycleType)
         {

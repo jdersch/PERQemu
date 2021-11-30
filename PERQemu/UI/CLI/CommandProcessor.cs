@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 
 using PERQemu.UI;
@@ -288,14 +289,14 @@ namespace PERQemu
             _running = false;
         }
 
-#if DEBUG
+        [Conditional("DEBUG")]
         [Command("debug dump command tree")]
         public void DumpCommandTree()
         {
             Console.WriteLine("\nCommand tree:");
-            _exec.DumpCommandTree(_exec.CurrentRoot);
+            _exec.DumpCommandTree(_exec.CurrentRoot, 0);
         }
-#endif
+
 
         private bool _running;
         private CommandExecutor _exec;

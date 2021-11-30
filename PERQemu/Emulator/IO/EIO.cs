@@ -28,7 +28,7 @@ namespace PERQemu.IO
     /// Represents an IOB card in a PERQ1 system.  This contains hardware for
     /// the Shugart disk controller and a Z80 for controlling low-speed devices.
     /// </summary>
-    public class EIO : IOBoard
+    public sealed class EIO : IOBoard
     {
         static EIO()
         {
