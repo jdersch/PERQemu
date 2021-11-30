@@ -37,12 +37,19 @@ namespace PERQemu.IO
             _desc = "PERQ-1 I/O Board, new Z80, Shugart/Micropolis";
 
             _z80CycleTime = 407;    // 2.4576Mhz
+
+            _z80RamSize = 0x400;    // 1K of RAM
+            _z80RamAddr = 0x2c00;
+            _z80RomSize = 0x2000;   // 8K of ROM
+            _z80RomAddr = 0x0;
         }
 
         public CIO(PERQSystem system) : base(system)
         {
             _hardDiskController = new ShugartDiskController(system);
+
             _z80System = new Z80System(system);
+            _z80System.LoadZ80ROM("cioz80.bin");    // "new" Z80 ROM
 
             RegisterPorts(_handledPorts);
         }

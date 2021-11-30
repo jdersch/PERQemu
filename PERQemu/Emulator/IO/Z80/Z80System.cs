@@ -46,12 +46,16 @@ namespace PERQemu.IO.Z80
             _localState = RunState.Off;
 
             _scheduler = new Scheduler(IOBoard.Z80CycleTime);
+
             _bus = new Z80IOBus(this);
             _memory = new Z80MemoryBus();
             _cpu = new Z80Processor();
             _cpu.Memory = _memory;
             _cpu.PortsSpace = _bus;
-            _cpu.ClockSynchronizer = null;  // we'll do our own rate limiting
+            _cpu.ClockSynchronizer = null;      // We'll do our own rate limiting
+
+            // todo: assign ports/base addresses of each peripheral chip
+            // based on the configured IO Board type.
 
             _fdc = new NECuPD765A(_scheduler);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
@@ -125,6 +129,21 @@ namespace PERQemu.IO.Z80
         public Z80SIO SIOA => _z80sio;
         public TMS9914A GPIB => _tms9914a;
 
+        /// <summary>
+        /// Load the ROM code for this IO Board.
+        /// </summary>
+        public void LoadZ80ROM(string file)
+        {
+            try
+            {
+                _memory.LoadROM(Paths.BuildPROMPath(file));
+            }
+            catch (Exception e)
+            {
+                throw new UnhandledIORequestException(
+                    string.Format("Could not open Z80 ROM '{0}': {1}", file, e.Message));
+            }
+        }
 
         public void Reset()
         {

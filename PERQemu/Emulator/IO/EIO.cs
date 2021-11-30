@@ -25,29 +25,39 @@ using PERQemu.IO.Z80;
 namespace PERQemu.IO
 {
     /// <summary>
-    /// Represents an IOB card in a PERQ1 system.  This contains hardware for
-    /// the Shugart disk controller and a Z80 for controlling low-speed devices.
+    /// Represents an EIO or NIO card in a PERQ2 system.  This contains hardware
+    /// for a Micropolis or MFM disk controller, an Ethernet controller (not
+    /// present on the NIO) and a Z80 for controlling low-speed devices.
     /// </summary>
     public sealed class EIO : IOBoard
     {
         static EIO()
         {
-            Console.WriteLine("EIO static constructor called.");
-
             _name = "EIO";
             _desc = "PERQ-2 I/O Board, new Z80, MFM, Ethernet";
 
             _z80CycleTime = 250;    // 4Mhz!
 
-            // TODO: load the correct Z80 ROM
+            _z80RamSize = 0x4000;   // 16K of RAM?
+            _z80RamAddr = 0x2c00;
+            _z80RomSize = 0x2000;   // 8K of ROM
+            _z80RomAddr = 0x0;
+
+            // TODO: load the correct Z80 ROM (eio vs. eio24?)
+            // TODO: identify the ports, memory config, addresses
             // TODO: write the Micropolis and MFM controllers
+            // TODO: determine if 24-bit version or NIO version
+            //       warrants a separate class entirely... like
+            //       the "EIO5" for T2/T4 systems with MFM, and
+            //       plain EIO for Microp in T0/T1 configs
         }
 
         public EIO(PERQSystem system) : base(system)
         {
-            Console.WriteLine("EIO constructor called.");
             _hardDiskController = new ShugartDiskController(system);
+
             _z80System = new Z80System(system);
+            _z80System.LoadZ80ROM("eioz80.bin");      // "new" Z80 ROM
 
             RegisterPorts(_handledPorts);
         }
@@ -71,7 +81,7 @@ namespace PERQemu.IO
                 //    return _z80System.ReadStatus();
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", port);
+                    Trace.Log(LogType.Warnings, "Unhandled EIO Read from port {0:x2}", port);
                     return 0xff;
             }
         }
@@ -133,13 +143,13 @@ namespace PERQemu.IO
                 //    break;
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled IOB Write to port {0:x2}, data {1:x4}", port, value);
+                    Trace.Log(LogType.Warnings, "Unhandled EIO Write to port {0:x2}, data {1:x4}", port, value);
                     break;
             }
         }
 
         /// <summary>
-        /// Ports handled by the EIO.
+        /// Ports handled by the EIO.  (But no Ethernet on NIO.)
         /// </summary>
         private byte[] _handledPorts =
         {

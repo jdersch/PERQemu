@@ -34,7 +34,13 @@ namespace PERQemu.IO.Z80
     {
         public Z80MemoryBus()
         {
-            LoadROM();
+            RAM_SIZE = IOBoard.Z80_RAM_SIZE;
+            RAM_ADDRESS = IOBoard.Z80_RAM_ADDRESS;
+            ROM_SIZE = IOBoard.Z80_ROM_SIZE;
+            ROM_ADDRESS = IOBoard.Z80_ROM_ADDRESS;
+
+            _rom = new byte[ROM_SIZE];
+            _ram = new byte[RAM_SIZE];
         }
 
         //
@@ -52,7 +58,6 @@ namespace PERQemu.IO.Z80
         }
 
         public bool ReadDataReady => true;      // Always ready
-
         public bool WriteDataReady => true;     // Always ready
 
         public byte[] GetContents(int startAddress, int length) { return null; }
@@ -96,10 +101,9 @@ namespace PERQemu.IO.Z80
 
         }
 
-        private void LoadROM()
+        public void LoadROM(string path)
         {
-            // TODO: have to prepare CIO and EIO/NIO versions of the Z80 ROM!
-            using (FileStream fs = new FileStream(Paths.BuildPROMPath("pz80.bin"), FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
                 if (fs.Read(_rom, 0, _rom.Length) != _rom.Length)
                 {
@@ -108,14 +112,13 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        // TODO: these are different for EIO; make 'em configurable at runtime
+        // Configured by the IO Board
+        private int RAM_SIZE;
+        private int RAM_ADDRESS;
+        private int ROM_SIZE;
+        private int ROM_ADDRESS;
 
-        private const int RAM_SIZE = 0x400;      // 1K of ram
-        private const int RAM_ADDRESS = 0x2c00;
-        private const int ROM_SIZE = 0x2000;     // 8K of rom
-        private const int ROM_ADDRESS = 0x0;
-
-        private byte[] _rom = new byte[ROM_SIZE];
-        private byte[] _ram = new byte[RAM_SIZE];
+        private byte[] _rom;
+        private byte[] _ram;
     }
 }

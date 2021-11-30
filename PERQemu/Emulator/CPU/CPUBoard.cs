@@ -21,7 +21,6 @@ using System;
 using System.Threading;
 using System.Runtime.CompilerServices;
 
-using PERQemu.IO;
 using PERQemu.Config;
 
 namespace PERQemu.Processor

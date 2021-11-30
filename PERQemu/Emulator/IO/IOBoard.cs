@@ -46,14 +46,17 @@ namespace PERQemu.IO
             _sys = system;
         }
 
+        public static string Name => _name;
+        public static string Description => _desc;
+        public static ulong Z80CycleTime => _z80CycleTime;
+        public static int Z80_RAM_SIZE => _z80RamSize;
+        public static int Z80_RAM_ADDRESS => _z80RamAddr;
+        public static int Z80_ROM_SIZE => _z80RomSize;
+        public static int Z80_ROM_ADDRESS => _z80RomAddr;
+
         public Z80System Z80System
         {
             get { return _z80System; }
-        }
-
-        public static ulong Z80CycleTime
-        {
-            get { return _z80CycleTime; }
         }
 
         // public IStorageController DiskController
@@ -173,6 +176,10 @@ namespace PERQemu.IO
         protected static string _name;
         protected static string _desc;
         protected static ulong _z80CycleTime;
+        protected static int _z80RamSize;
+        protected static int _z80RamAddr;
+        protected static int _z80RomSize;
+        protected static int _z80RomAddr;
 
         // Devices required by all I/O boards
         protected Z80System _z80System;
