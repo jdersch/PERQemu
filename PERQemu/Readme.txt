@@ -24,7 +24,7 @@
     a separate thread for SDL's event loop, but on the Mac this is apparently
     impossible; thus, I've temporarily forced it back onto the main thread.
    
-    Verified that this version runs on MacOS X 10.11 (Yosemite) AND on
+    Verified that this version runs on MacOS X 10.11 (El Capitan) AND on
     10.13 (High Sierra).  These are the newest versions I have available
     for testing.  They run in both 32- and 64-bit mode!  The horrible Mac
     keyboard hack is no longer required, which is good since we can't
@@ -74,6 +74,20 @@
     own thread will finally get me closer to 170ns/60fps emulation (on my
     "old" hardware).  Then I can drop in the rate-limiting stuff for those
     of you with hardware built in the last decade, where it should really fly.
+
+    December update:
+
+    The PERQ now runs on its own thread, and some "improvements" to speed up
+    video have been removed, because apparently writing worse code somehow
+    makes it go faster.  Sure.  Removing the 1bpp to 32bpp translation loop
+    adds 10-12fps (shaves 80-90ns off the average microcycle time) so there
+    has to be a way to speed that up and/or move it off the CPU thread that
+    isn't too horrible.  Although doing it in the most idiotic way possible
+    will probably make it go even faster, so I need to clearly bash myself
+    over the head with a shovel and snort a fifth of Chivas Regal before
+    coding that up.  Maybe throw in some GOTOs and really make it fly.
+
+    All of the documentation clearly needs to be rewritten.  More to come.
 
 
 Original README.Source follows.
