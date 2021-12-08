@@ -27,26 +27,6 @@ namespace PERQemu.Processor
 {
 
     /// <summary>
-    /// PERQ hardware interrupts, listed in order of priority.
-    /// </summary>
-    // TODO: separate these so they can be raised/cleared without contention!
-    // (possibly removing the need for write locks entirely)
-    [Flags]
-    public enum InterruptType
-    {
-        None = 0x00,
-        Z80DataOutReady = 0x01,
-        Y = 0x02,
-        HardDisk = 0x04,
-        Network = 0x08,
-        Z80DataInReady = 0x10,
-        LineCounter = 0x20,
-        X = 0x40,
-        Parity = 0x80,
-    }
-
-
-    /// <summary>
     /// Implements the PERQ's custom microengine.
     /// </summary>
     public partial class CPU
@@ -66,16 +46,14 @@ namespace PERQemu.Processor
             _ustore = new ControlStore();
             _usequencer = new Sequencer(this);
 
-            _alu = new ALU();
             _xy = new RegisterFile();
+            _alu = new ALU();
             _estack = new ExpressionStack();
-
             _shifter = new Shifter();
-            _rasterOp = new RasterOp(_memory);
-
             _mqShifter = new Shifter();
+            _interrupt = new InterruptEncoder();
 
-            _intLock = new object();
+            _rasterOp = new RasterOp(_memory);
         }
 
         /// <summary>
@@ -89,6 +67,7 @@ namespace PERQemu.Processor
             _estack.Reset();
             _ustore.Reset();
             _rasterOp.Reset();
+            _interrupt.Reset();
             _usequencer.Reset();
 
             // Clear the op file
@@ -106,7 +85,6 @@ namespace PERQemu.Processor
             _lastBmux = 0;
             _refillOp = false;
             _incrementBPC = false;
-            _interruptFlag = InterruptType.None;
 
             _mq = 0;
             _mqEnabled = false;
@@ -404,40 +382,33 @@ namespace PERQemu.Processor
         /// The current interrupt status.
         /// </summary>
         [DebugProperty("int")]
-        public InterruptType InterruptFlag
+        public InterruptFlag InterruptFlag
         {
-            get { return _interruptFlag; }
+            get { return _interrupt.Flag; }
         }
 
         /// <summary>
         /// Raises the specified interrupt.
         /// </summary>
-        public void RaiseInterrupt(InterruptType i)
+        public void RaiseInterrupt(InterruptSource i)
         {
-            lock (_intLock)
+            // Log it if it wasn't already set
+            if (_interrupt.Raise(i) == 0)
             {
-                _interruptFlag |= i;
+                Trace.Log(LogType.Interrupt, "Interrupt {0} raised, active now {1}", i, _interrupt.Flag);
             }
-
-            Trace.Log(LogType.Interrupt, "Interrupt {0} raised, active now {1}", i, _interruptFlag);
         }
 
         /// <summary>
         /// Clears the specified interrupt, if set.
         /// </summary>
-        public void ClearInterrupt(InterruptType i)
+        public void ClearInterrupt(InterruptSource i)
         {
-            lock (_intLock)
+            // Log it if it wasn't already clear
+            if (_interrupt.Clear(i) != 0)
             {
-                _interruptFlag &= ~i;
+                Trace.Log(LogType.Interrupt, "Interrupt {0} cleared, active now {1}", i, _interrupt.Flag);
             }
-
-#if TRACING_ENABLED
-            if ((_interruptFlag & ~i) != _interruptFlag)
-            {
-                Trace.Log(LogType.Interrupt, "Interrupt {0} cleared, active now {1}", i, _interruptFlag & ~i);
-            }
-#endif
         }
 
         /// <summary>
@@ -723,7 +694,7 @@ namespace PERQemu.Processor
 
                         default:
                             throw new UnimplementedInstructionException(
-                                String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                                string.Format("Unimplemented Special Function {0:x1}", uOp.SF));
                     }
                     break;
 
@@ -876,7 +847,7 @@ namespace PERQemu.Processor
                     {
                         // Not possible...
                         throw new UnimplementedInstructionException(
-                            String.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                            string.Format("Unimplemented Special Function {0:x1}", uOp.SF));
                     }
                     break;
 
@@ -886,7 +857,7 @@ namespace PERQemu.Processor
 
                 default:
                     throw new UnimplementedInstructionException(
-                        String.Format("Unimplemented Function {0:x1}", uOp.F));
+                        string.Format("Unimplemented Function {0:x1}", uOp.F));
             }
         }
 
@@ -912,25 +883,6 @@ namespace PERQemu.Processor
             {
                 _refillOp = false;
             }
-        }
-
-        /// <summary>
-        /// Implements the behavior of the CPU's interrupt priority encoder.
-        /// </summary>
-        private int InterruptPriority()
-        {
-            if (_interruptFlag != 0)
-            {
-                for (int i = 7; i >= 0; i--)
-                {
-                    if ((((int)_interruptFlag) & ((0x1) << i)) != 0)
-                    {
-                        return i;
-                    }
-                }
-            }
-
-            return 0;
         }
 
         /// <summary>
@@ -1052,6 +1004,7 @@ namespace PERQemu.Processor
         // Shared with the sequencer
         protected ALU _alu;
         protected Shifter _shifter;
+        protected InterruptEncoder _interrupt;
 
         // Memory card reference
         private MemoryBoard _memory;
@@ -1083,10 +1036,6 @@ namespace PERQemu.Processor
 
         // IO data
         private int _iod;
-
-        // Interrupt flags
-        protected InterruptType _interruptFlag;
-        private object _intLock;
 
         //
         // Housekeeping

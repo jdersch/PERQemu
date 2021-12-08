@@ -19,6 +19,7 @@
 
 using System;
 using System.Threading;
+using System.Collections.Generic;
 
 using PERQemu.Config;
 
@@ -111,14 +112,14 @@ namespace PERQemu
 
             Console.WriteLine("Power ON requested.");
 
-            // FIXME: it seems stupid to initialize the "default" perq (or the
-            // last saved config, then immediately throw it out and recreate it
-            // (as in the case of a startup script that loads and goes).  trust
-            // the "changed" or "modified" flag in the configurator and/or add
-            // a method that can cleanly free up resources rather than just let
-            // the runtime take care of it...?  oof.
-            // Out with the old
-            _system = null;
+            if (PERQemu.Config.Changed)
+            {
+                // Out with the old
+                _system = null;
+
+                // Reset
+                PERQemu.Config.Changed = false;
+            }
 
             // In with the new
             if (Initialize(PERQemu.Config.Current))
@@ -188,13 +189,22 @@ namespace PERQemu
             // Now, how do we get theyah from heeyah?
             // this gets real stupid real fast
             if (current == RunState.Off)
+            {
                 PowerOn();
+            }
 
             State = nextState;
 
             return State;
         }
 
+        private void InitStateMachine()
+        {
+            
+        }
+
+        // To encode our state machine transitions
+        
         private static byte _bootChar;
         private PERQSystem _system;
     }

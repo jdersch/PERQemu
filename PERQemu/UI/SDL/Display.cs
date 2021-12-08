@@ -18,6 +18,7 @@
 //
 
 using SDL2;
+
 using System;
 using System.Threading;
 using System.Runtime.CompilerServices;
@@ -70,8 +71,8 @@ namespace PERQemu.UI
             // Allocate our hunka hunka burnin' pixels
             _32bppDisplayBuffer = new int[(_displayWidth * _displayHeight)];
 
-            // Is this actually needed!?
-            _textureLock = new ReaderWriterLockSlim();
+            // And our intermediate one
+            _8bppDisplayBuffer = new long[(_displayWidth / 8 * _displayHeight)];
         }
 
         public int MouseX => _mouseX;
@@ -108,6 +109,9 @@ namespace PERQemu.UI
                 throw new InvalidOperationException("SDL_SetHint failed to set scale quality.");
             }
 
+            //
+            // Create the display window
+            //
             _sdlWindow = SDL.SDL_CreateWindow(
                 "PERQ",
                 SDL.SDL_WINDOWPOS_UNDEFINED,
@@ -121,6 +125,9 @@ namespace PERQemu.UI
                 throw new InvalidOperationException("SDL_CreateWindow failed.");
             }
 
+            //
+            // Create the renderer
+            //
             _sdlRenderer = SDL.SDL_CreateRenderer(_sdlWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
             if (_sdlRenderer == IntPtr.Zero)
             {
@@ -134,11 +141,30 @@ namespace PERQemu.UI
                 }
             }
 
-            CreateDisplayTexture(false);
-
+            // todo: setting the renderer's "logical size" may help with the scaling
+            // issue on displays too short to hold the entire screen?
+            // SDL.SDL_RenderSetLogicalSize(_sdlRenderer, w, h);
             // todo: initialize in our slightly greenish/grayish background color :-)
             // during "warmup" we'll fade in to full brightness.  because why not.
             SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x04, 0xf4, 0x04, 0xff);
+
+            //
+            // Create the display texture
+            //
+            _displayTexture = SDL.SDL_CreateTexture(
+                _sdlRenderer,
+                SDL.SDL_PIXELFORMAT_ARGB8888,
+                (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
+                _displayWidth,
+                _displayHeight);
+
+            if (_displayTexture == IntPtr.Zero)
+            {
+                throw new InvalidOperationException(
+                    string.Format("SDL_CreateTexture failed: {0}", SDL.SDL_GetError()));
+            }
+
+            SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
 
             // Set up our custom SDL render event, if not already done
             if (_renderEventType == 0)
@@ -157,7 +183,7 @@ namespace PERQemu.UI
             if (_fpsTimerId < 0)
             {
                 _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
-                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
+                _fpsTimerId = HighResolutionTimer.Register(3000d, _fpsTimerCallback);
             }
 
             _sdlRunning = true;
@@ -168,42 +194,20 @@ namespace PERQemu.UI
             SDL.SDL_PumpEvents();
         }
 
-        private void CreateDisplayTexture(bool filter)
-        {
-            _textureLock.EnterWriteLock();  // todo why a lock around this?!  only called once...
-            SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, filter ? "linear" : "nearest");
-
-            _displayTexture = SDL.SDL_CreateTexture(
-                _sdlRenderer,
-                SDL.SDL_PIXELFORMAT_ARGB8888,
-                (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
-                _displayWidth,
-                _displayHeight);
-
-            if (_displayTexture == IntPtr.Zero)
-            {
-                throw new InvalidOperationException("SDL_CreateTexture failed.");
-            }
-
-            SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
-            _textureLock.ExitWriteLock();
-        }
 
         /// <summary>
-        /// Expand the 1-bit pixels from the PERQ into 32-bit SDL pixels, one
-        /// full scanline at a time.  Use the precomputed table to go faster.
+        /// Expand the 1-bit pixels from the PERQ into a local intermediate
+        /// 8-bit pixel buffer, one full scanline at a time.  This runs on the
+        /// CPU thread (ugh, fix this) so it has to be fast.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DrawScanline(int scanline, byte[] scanlineData)
         {
-            int rgbIndex = scanline * _displayWidth;
+            int rgbIndex = (_displayWidth / 8) * scanline;
 
             for (int i = 0; i < scanlineData.Length; i++)
             {
-                for (int bit = 7; bit >= 0; bit--)
-                {
-                    _32bppDisplayBuffer[rgbIndex++] = _bitToPixel[scanlineData[i], bit];
-                }
+                _8bppDisplayBuffer[rgbIndex++] = _bitToPixel[scanlineData[i]];
             }
         }
 
@@ -230,6 +234,7 @@ namespace PERQemu.UI
         /// (on Mac, maybe not on Windows/Linux?) or events will be quietly
         /// ignored, because reasons.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SDLMessageLoop()
         {
             SDL.SDL_Event e;
@@ -317,8 +322,29 @@ namespace PERQemu.UI
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RenderDisplay()
         {
+            const uint WHITE = 0xfff0f0ff;
+            const uint BLACK = 0xff000000;
+
             IntPtr textureBits = IntPtr.Zero;
             int pitch = 0;
+            int j = 0;
+
+            // Expand our "fake palletized" 8 bits to 32, manually, because all
+            // the faffing around with SDL-CS surfaces is just a complete waste
+            // of time (on Mono, anyway).  This is painfully stupid.  But doing
+            // this here (on the main/SDL thread) boosts frame rates by 10fps.
+            for (int i = 0; i < _8bppDisplayBuffer.Length; i++)
+            {
+                ulong quad = (ulong)_8bppDisplayBuffer[i];
+                _32bppDisplayBuffer[j++] = (int)((quad & 0xff00000000000000U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x00ff000000000000U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x0000ff0000000000U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x000000ff00000000U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x00000000ff000000U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x0000000000ff0000U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x000000000000ff00U) != 0 ? BLACK : WHITE);
+                _32bppDisplayBuffer[j++] = (int)((quad & 0x00000000000000ffU) != 0 ? BLACK : WHITE);
+            }
 
             // Stuff the display data into the display texture
             SDL.SDL_LockTexture(_displayTexture, IntPtr.Zero, out textureBits, out pitch);
@@ -328,7 +354,7 @@ namespace PERQemu.UI
             // Render the display texture to the renderer
             SDL.SDL_RenderCopy(_sdlRenderer, _displayTexture, IntPtr.Zero, IntPtr.Zero);
 
-            // And show it to us
+            //// And show it to us
             SDL.SDL_RenderPresent(_sdlRenderer);
 
             // Update FPS count
@@ -352,15 +378,16 @@ namespace PERQemu.UI
             double z80inst = _system.IOB.Z80System.Clocks - _prevZ80Clock;
             double fps = _frames / (elapsed * Conversion.MsecToSec);
             double ns = (elapsed * Conversion.MsecToNsec) / inst;
+            double zns = (elapsed * Conversion.MsecToNsec) / z80inst;
             _prevClock = _system.CPU.Clocks;
             _prevZ80Clock = _system.IOB.Z80System.Clocks;
             _last = now;
-            _frames = 0;
+            _frames = 0;    // not safe.  don't even care anymore.
 
             var state = PERQemu.Sys.State;
             if (state == RunState.Running)
             {
-                SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} fps, {1:N2}ns / cycle", fps, ns));
+                SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} fps, CPU {1:N2}ns, Z80 {2:N2}ns", fps, ns, zns));
                 //Console.WriteLine("elapsed={0} inst={1} ns={2} z80inst={3}", elapsed, inst, ns, z80inst);  // aw / debug
             }
             else
@@ -639,24 +666,26 @@ namespace PERQemu.UI
 
         /// <summary>
         /// A hack to speed up pixel operations, inspired by Contralto.  As each
-        /// scanline is drawn, the 1bpp PERQ data is expanded into SDL's 32bpp
-        /// color pixels.  Rather than shift, mask and conditionally set every
-        /// pixel on every line at 60fps, we precompute all that ONCE at startup
-        /// then look up and copy 8 values in a tight loop.  Nanoseconds count!
+        /// scanline is drawn, the 1bpp PERQ data is expanded into 8-bit pseudo-
+        /// palletized pixels eight at a time.
         /// </summary>
         private static void MakePixelExpansionTable()
         {
-            _bitToPixel = new int[256, 8];
+            _bitToPixel = new long[256];
+            ulong tmp;
 
             for (int i = 0; i < 256; i++)
             {
-                for (int b = 0; b < 8; b++)
-                {
-                    // TODO: Accurately render Clinton P104 phosphor color? :-)
-                    // For now, make it subtly more bluish white.
-                    uint color = (i & (1 << b)) == 0 ? 0xfff0f0ff : 0xff000000;
-                    _bitToPixel[i, b] = (int)color;
-                }
+                tmp  = ((i & 0x01) != 0 ? 0x00000000000000ffU : 0U);
+                tmp |= ((i & 0x02) != 0 ? 0x000000000000ff00U : 0U);
+                tmp |= ((i & 0x04) != 0 ? 0x0000000000ff0000U : 0U);
+                tmp |= ((i & 0x08) != 0 ? 0x00000000ff000000U : 0U);
+                tmp |= ((i & 0x10) != 0 ? 0x000000ff00000000U : 0U);
+                tmp |= ((i & 0x20) != 0 ? 0x0000ff0000000000U : 0U);
+                tmp |= ((i & 0x40) != 0 ? 0x00ff000000000000U : 0U);
+                tmp |= ((i & 0x80) != 0 ? 0xff00000000000000U : 0U);
+
+                _bitToPixel[i] = (long)tmp;
             }
         }
 
@@ -666,13 +695,15 @@ namespace PERQemu.UI
         private int _displayWidth;
         private int _displayHeight;
 
-        // Buffer for rendering pixels.  SDL doesn't support 1bpp pixel formats,
-        // so to keep things simple we use an array of ints and a 32bpp format.
-        // What's a few extra megabytes between friends.
+        // Buffers for rendering pixels.  The two-step shuffle blows a ton of
+        // memory for a reasonable boost in speed, even though it makes that
+        // vein in my temple throb.  What's a few dozen wasted megabytes
+        // between friends?
         private int[] _32bppDisplayBuffer;
+        private long[] _8bppDisplayBuffer;
 
         // Table of precomputed pixel expansions
-        private static int[,] _bitToPixel;
+        private static long[] _bitToPixel;
 
         // Mouse
         private int _mouseX;
@@ -703,7 +734,6 @@ namespace PERQemu.UI
 
         // Rendering textures
         private IntPtr _displayTexture = IntPtr.Zero;
-        private ReaderWriterLockSlim _textureLock;
 
         // Events and stuff
         private UInt32 _renderEventType;

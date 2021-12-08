@@ -1,4 +1,4 @@
-﻿//
+//
 // DebugCommands.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -323,13 +323,13 @@ namespace PERQemu
         //
 
         [Command("debug raise interrupt", "Assert a specific CPU interrupt")]
-        public void RaiseInterrupt(InterruptType i)
+        public void RaiseInterrupt(InterruptSource i)
         {
             PERQemu.Sys.CPU.RaiseInterrupt(i);
         }
 
         [Command("debug clear interrupt", "Clear a specific CPU interrupt")]
-        public void ClearInterrupt(InterruptType i)
+        public void ClearInterrupt(InterruptSource i)
         {
             PERQemu.Sys.CPU.ClearInterrupt(i);
         }

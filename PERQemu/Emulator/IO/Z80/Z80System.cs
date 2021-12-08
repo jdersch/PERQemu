@@ -194,7 +194,7 @@ namespace PERQemu.IO.Z80
 
             _localState = RunState.Running;
             _stopAsyncExecution = false;
-            _asyncThread = new Thread(AsyncThread);
+            _asyncThread = new Thread(AsyncThread) { Name = "Z80" };
             _asyncThread.Start();
         }
 
@@ -228,6 +228,7 @@ namespace PERQemu.IO.Z80
 
             // Tell the thread to exit
             _stopAsyncExecution = true;
+            _heartbeat.Reset();
 
             // Waaaaait for it
             _asyncThread.Join();
@@ -261,7 +262,7 @@ namespace PERQemu.IO.Z80
                 Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
 
                 // TODO: move this logic into PERQToZ80FIFO?
-                _system.CPU.ClearInterrupt(InterruptType.Z80DataInReady);
+                _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(false);
             }
             else
@@ -396,3 +397,37 @@ namespace PERQemu.IO.Z80
         private volatile bool _stopAsyncExecution;
     }
 }
+
+/*
+ * Z80 I/O addresses:
+ * 
+ * IOB ports from Floppies/P14/cbackup[12] files
+ * EIO ports from Tapes/20210528/sperial/extracted/user/EIO.DR/param.eio
+ *              IOB             EIO
+ * device   base address    base address
+ * KBD:     200     0x80
+ * REG1:    210     0x88
+ * CTC:     220     0x90    120
+ * CTC1:     -       --     124
+ * DMA:     230     0x98    070
+ * PRQIN:   240     0xa0    160
+ * FLP:     250     0xa8    040
+ * SIO:     260     0xb0    020
+ * SIO1:     -       --     100
+ * GPIB:    270     0xb8    000             GPIB int 0 & 1 at 0 & 1!? Aux @ 3, Data @ 7!?
+ * GPIBCTL:                 173             "PE" signal
+ * GPIBTS:                  174             "other" signal fixme
+ * RTC:      -       --     166             csr; data on 167
+ * REG3:    310     0xc8
+ * PRQOUT:  320     0xd0    161
+ * PRQSTAT:  -       --     162
+ * PRQRDY:   -       --     170
+ * REG2:    330     0xd8
+ * 
+ * 
+ * EIO extras -- figure out if IOB analogues:
+ * Z80 DMA Channel addresses from 060..067 (four addr/word count pairs)
+ * Z80 Interrupt Controller data, csr at 140, 141
+ * the 9914 can't be at bus addr 0... can it?  looks like...
+ * 
+ */

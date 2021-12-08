@@ -169,7 +169,7 @@ namespace PERQemu.Memory
                     }
 
                     // Clear interrupt
-                    _system.CPU.ClearInterrupt(InterruptType.LineCounter);
+                    _system.CPU.ClearInterrupt(InterruptSource.LineCounter);
 
                     Trace.Log(LogType.Display, "Line counter set to {0} scanlines. (write was {1:x4})",
                                                _lineCounterInit, value);
@@ -180,7 +180,7 @@ namespace PERQemu.Memory
                     // Display Addr (341 W) Address of first pixel on display. Must be a
                     // multiple of 256 words.
                     //  15:4    address >> 4 for .5-2MB boards; address >> 1 for old 256K boards
-                    //   3:2    address bits 21:20 on cards > 2 MB (not yet supported)
+                    //   3:2    address bits 21:20 on cards > 2 MB (todo: need to support this now!)
                     //   1:0    not used
                     _displayAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
 
@@ -216,14 +216,12 @@ namespace PERQemu.Memory
 
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
                     {
-                        //_system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VBlankScanline;
                         RunStateMachine();
                     }
 
                     if ((_videoStatus & StatusRegister.EnableDisplay) != 0)
                     {
-                        //_system.Scheduler.Cancel(_currentEvent);
                         _state = VideoState.VisibleScanline;
                         RunStateMachine();
                     }
@@ -247,19 +245,12 @@ namespace PERQemu.Memory
 
                 default:
                     throw new UnhandledIORequestException(
-                        string.Format("Unhandled Memory IO Write to port {0:x2}, data {1:x4}", ioPort, value));
+                        string.Format("Unhandled IO Write to port {0:x2}, data {1:x4}", ioPort, value));
             }
         }
 
-        /// <summary>
-        /// Not long for this world
-        /// </summary>
-        public uint Clock()
-        {
-            return 0;
-        }
 
-        public void RunStateMachine()
+        private void RunStateMachine()
         {
 
             switch (_state)
@@ -267,9 +258,6 @@ namespace PERQemu.Memory
                 case VideoState.Idle:
                     // Do nothing.  The microcode will program the control
                     // register(s) to set things in motion again.
-                    Trace.Log(LogType.Display, "Video RunSM in {0} at {1}, scan={2} count={3}",
-                                             _state, _system.Scheduler.CurrentTimeNsec,
-                                             _scanLine, _lineCounter);
                     break;
 
                 case VideoState.VisibleScanline:
@@ -353,7 +341,7 @@ namespace PERQemu.Memory
                 if (ParityInterruptsEnabled && !_lineCountOverflow)     // Just trigger it once...
                 {
                     Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt @ scanline {0}", _scanLine);
-                    _system.CPU.RaiseInterrupt(InterruptType.LineCounter);
+                    _system.CPU.RaiseInterrupt(InterruptSource.LineCounter);
                 }
 
                 // Set our flag; this will be reset when _lineCounterInit is reloaded
@@ -404,12 +392,18 @@ namespace PERQemu.Memory
         /// </summary>
         public void RenderScanline(int renderLine)
         {
+            // Set the start of this scanline, offset from start of display (by quads)
+            int dispAddress = (_displayAddress / 4) + (renderLine * _displayQuads);
+
+            // The "fast" loop gobbles up quad words
+            for (int w = 0; w < _displayQuads; w++)
+            {
+                _scanlineData.Quads[w] = TransformDisplayQuad(_system.Memory.FetchQuad(dispAddress + w));
+            }
+
+            // Now overlay the cursor bytes if enabled
             if (CursorEnabled)
             {
-                // Set the start of this scanline, offset from start of display
-                int dispAddress = _displayAddress + (renderLine * _displayWords);
-                int dispByte = 0;
-
                 // Calc the starting address of this line of cursor data
                 int cursorAddress = (_cursorAddress / 4) + _cursorY++;
 
@@ -419,41 +413,16 @@ namespace PERQemu.Memory
                 int cursorStartByte = _cursorX;
                 int cursByte = 0;
 
-                // The "slow" loop mixes in the cursor as we go
-                for (int w = 0; w < _displayWords; w++)
+                for (int dispByte = cursorStartByte; dispByte < cursorStartByte + 8; dispByte++)
                 {
-                    var word = TransformDisplayWord(_system.Memory.FetchWord(dispAddress + w));
-
-                    // First the high byte...
-                    if (dispByte >= cursorStartByte && dispByte < cursorStartByte + 8)
+                    // Could be much cleverer about this and shorten the loop
+                    // if the cursor is off the edge; for now, just clip to range
+                    if ((dispByte >= 0) && (dispByte < _scanlineData.Bytes.Length))
                     {
-                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)((word & 0xff00) >> 8), _cursorData[cursByte++]);
+                        _scanlineData.Bytes[dispByte] = TransformCursorByte(_scanlineData.Bytes[dispByte],
+																			_cursorData[cursByte]);
                     }
-                    else
-                    {
-                        _scanlineData.Bytes[dispByte++] = (byte)((word & 0xff00) >> 8);
-                    }
-
-                    // Now the low byte
-                    if (dispByte >= cursorStartByte && dispByte < cursorStartByte + 8)
-                    {
-                        _scanlineData.Bytes[dispByte++] = TransformCursorByte((byte)(word & 0x00ff), _cursorData[cursByte++]);
-                    }
-                    else
-                    {
-                        _scanlineData.Bytes[dispByte++] = (byte)(word & 0x00ff);
-                    }
-                }
-            }
-            else
-            {
-                // Set the start of this scanline, offset from start of display (by quads)
-                int dispAddress = (_displayAddress / 4) + (renderLine * _displayQuads);
-
-                // The "fast" loop gobbles up quad words
-                for (int w = 0; w < _displayQuads; w++)
-                {
-                    _scanlineData.Quads[w] = TransformDisplayQuad(_system.Memory.FetchQuad(dispAddress + w));
+                    cursByte++;
                 }
             }
 
@@ -614,17 +583,24 @@ namespace PERQemu.Memory
             0xe4                // Load Cursor X position
         };
 
-        /// <summary>
-        /// These timings are constant for both supported Displays!
-        /// </summary>
-        private readonly ulong _scanLineTimeNsec = 70 * 170;    // CPU.CycleTime
-        private readonly ulong _hBlankTimeNsec = 22 * 170;      // See Video.txt
+        //
+        // Note: These timings are constant for both supported Displays!
+        // This is strictly based on 60Hz refresh tied to the original 170ns
+        // microcycle time; run the CPU faster or slower and the refresh rate
+        // varies with it.  On a fast host, rate limiting the CPU (Settings)
+        // will yield 60fps; running faster than that might produce some
+        // strange behavior in OSes that rely on a 60Hz vertical retrace to
+        // run their clocks, but that'd be a nice problem to have... :-|
+        //
+        private readonly ulong _scanLineTimeNsec = 70 * CPU.MicroCycleTime;
+        private readonly ulong _hBlankTimeNsec = 22 * CPU.MicroCycleTime;
 
-        private int _displayWidth;                              // Configurable!
-        private const int _displayHeight = 1024;                // Fixed, for now
+        // Width is configurable; both displays are the same height
+        private int _displayWidth;
+        private const int _displayHeight = 1024;
         private const int _lastVisibleScanLine = _displayHeight - 1;
 
-        // Trade speed for space
+        // Trade a little space for speed
         private int _displayQuads;
         private int _displayWords;
         private int _displayBytes;

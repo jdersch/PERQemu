@@ -162,18 +162,31 @@ field is reached, a refresh operation is called to paint the completed frame
 on screen.
 
 Display.cs manages the 32bpp buffer that is copied from system memory into an
-SDL texture (in GPU memory) and ultimately rendered to the display.  To help
-speed this up -- in theory, anyway -- a table is generated at startup to map
-a byte of pixel data from the PERQ into 8 x 32-bit pixels.  As the scanline
-data is delivered from the VideoController, a simple table lookup-and-copy
-"paints" 8 pixels at a time into the 32bpp buffer with no bit twiddling or
-conditionals required.
+SDL texture (in GPU memory) and ultimately rendered to the display.  If SDL2 had
+*any* support for 1-bit monochrome or even 8-bit indexed color/greyscale pixels
+we'd be done, but no, why in the world would ANYONE EVER put up with just 256
+colors?  Bloody savages!  You'll use nothing but 32-bit color and like it!  We
+have always been at war with Oceana!
+
+Even if there was support for monochrome bitmaps, we couldn't get away with some
+sort of clever direct mapping from the MemoryBoard's image of the framebuffer
+because the video function and cursor mixing have to be accounted for.  So as
+the scanline data is delivered from the VideoController, the 1 bit PERQ pixels
+are painted into the Display's local buffer.  To help speed this up a table is
+generated at startup to map the bits to bytes as quickly as possible (i.e., we
+expand 256 byte values into 256 long words) and use an intermediate 8bpp buffer.
+This part of the loop runs on the CPU thread so it has to be minimal impact.
+
+On the SDL2 thread, the 8bpp buffer is expanded to 32bpp and copied to the GPU
+texture required to render it on the screen.  This is ugly and pointless and
+stupid but it yields around 10-12fps in performance and after trying 147,635
+other approaches I'm tired of screwing around with it.  Good enough.  Moving on.
 
 
 Video Controller State Machine
 ------------------------------
 
-Dramatically simplified?  Before we were managing all of the video state
+Dramatically simplified!  Before we were managing all of the video state
 transitions, but now the microcode does the work, which it's doing anyway! :-)
 
 Two small corrections made:
@@ -182,7 +195,7 @@ Two small corrections made:
     is now where we reset our scanline counter to the top of the field.
 
     The VBlank timing was too short - had to add in the HBlank AND the
-    visible field.  Hey, a microsecond or two here and there can add up...
+    visible field.
 
 The state machine now starts in Idle mode.  The microcode sets up the Enable
 bit first when it wants to access RAM, since the video refresh also performs
@@ -222,28 +235,13 @@ Memory.cs now uses a Core struct to simulate a union type that can be accessed
 by word or by quad word.  That is, all "normal" accesses through the FetchWord()
 method work just as before, but the video can use FetchQuad() to grab bigger
 chunks.  We can then zip through an entire scanline in 12 meaty slabs (portrait
-display, 20 for Landscape).  When the cursor is enabled, the old method of
-drawing the cursor on top of the just-completed scanline is replaced by one
-unified loop.  It still walks through 48 words, mixing in the cursor at the
-appropriate starting byte.  This is slower but simpler, since it doesn't require
-a bunch of fussing with masking or aligning the cursor bytes.  At most it's only
-done for 64 lines out of the 1024 on the screen, so I'll live with it for now.
+display, 20 for Landscape).
 
-On the receiving end, DrawScanline() now uses a pre-computed table to quickly
-do pixel doub..qu..octoubling?  I like that, let's go with "octoubling".  For
-each byte of PERQ pixel data, a simple table lookup provides eight 32-bit SDL
-pixel values that are dropped into the 32bpp buffer.  Of course, the tradeoff
-is that we burn more memory and bandwidth but avoid a bunch of shifts, masking
-ops and a conditional for all 768 (or 1280) individual bits of each horizontal
-line.  Is it actually worth it?  Are modern CPUs with their large cache lines
-actually faster at bit banging this:
-    p[i] = (i & (1 << b) == 0 ? foo : bar);
-than this?
-    p[i] = t[i, b];
-
-Who knows?  Literally nobody knows.  It's an eternal mystery.  (NO I haven't
-benchmarked it yet, it's just simpler and cleaner and it SHOULD be faster
-even if it isn't, SO THERE.)
+When the cursor is enabled, the old method of drawing the cursor on top of the
+just-completed scanline is updated to pre-fetch the cursor as a quad word, then
+mix the bytes in (clipped to screen boundaries).  It's a little clunky but is
+still faster than before, and at most it's only used to update 64 lines out of
+1024 so fairly low impact.
 
 
 Other Stuff
@@ -267,4 +265,4 @@ Note that the "CRT signals" register bit for LandscapeDisplay is inverted
 
 
 ---
-Last update: skeezics    Sat Nov 13 18:53:13 PST 2021
+Last update: skeezics    Wed Dec  8 11:56:35 PST 2021

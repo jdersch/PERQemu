@@ -128,7 +128,7 @@ namespace PERQemu.Processor
                         break;
 
                     case Condition.IntrPend:
-                        conditionSatisfied = _cpu._interruptFlag != InterruptType.None;
+                        conditionSatisfied = _cpu._interrupt.Flag != InterruptFlag.None;
                         break;
 
                     case Condition.CarryH:
@@ -181,7 +181,8 @@ namespace PERQemu.Processor
                         break;
 
                     default:
-                        throw new UnimplementedInstructionException(String.Format("Unimplemented Condition {0}", uOp.CND));
+                        throw new UnimplementedInstructionException(
+                            string.Format("Unimplemented Condition {0}", uOp.CND));
                 }
 
                 // Dispatch jump action
@@ -263,7 +264,7 @@ namespace PERQemu.Processor
                             if (uOp.H == 0)
                             {
                                 // Vector
-                                _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (_cpu.InterruptPriority() << 2));
+                                _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (_cpu._interrupt.Priority << 2));
                             }
                             else
                             {
@@ -394,7 +395,8 @@ namespace PERQemu.Processor
                         break;
 
                     default:
-                        throw new UnimplementedInstructionException(String.Format("Unhandled Jump type {0}", uOp.JMP));
+                        throw new UnimplementedInstructionException(
+                            string.Format("Unhandled Jump type {0}", uOp.JMP));
                 }
             }
 

@@ -1,4 +1,5 @@
-// shugartcontroller.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
+//
+// ShugartController.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -18,6 +19,7 @@
 
 using PERQemu.Processor;
 using PERQemu.PhysicalDisk;
+
 using System;
 using System.IO;
 
@@ -46,19 +48,9 @@ namespace PERQemu.IO.HardDisk
             _sector = 0;
             _seekState = SeekState.WaitForStepSet;
 
-            // TODO: IO Board should start the drives spinning when
-            // the execution controller actually spins up the machine!
-			// Get the index pulse generator running.
 			IndexPulseStart(0, null);
         }
 
-        /// <summary>
-        /// Soon to die.
-        /// </summary>
-        public void Clock()
-        {
-
-        }
 
         public int ReadStatus()
         {
@@ -74,14 +66,13 @@ namespace PERQemu.IO.HardDisk
         {
             Trace.Log(LogType.HardDisk, "Shugart command data: {0:x4}", data);
 
-            // Note:  Most of the info gleaned about the Shugart controller register behavior is from
-            // sysb.micro source.
+            // Note:  Most of the info gleaned about the Shugart controller register
+            // behavior is from sysb.micro source.
             // Command bits:
             //  0:3     drive command data
             //    4     seek direction flag
             //    5     pulses a single seek
             Command command = (Command)(data & 0x7);
-
 
             Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
 
@@ -89,7 +80,7 @@ namespace PERQemu.IO.HardDisk
             {
                 case Command.Idle:
                     // Clear any pending interrupts.
-                    _system.CPU.ClearInterrupt(InterruptType.HardDisk);
+                    _system.CPU.ClearInterrupt(InterruptSource.HardDisk);
                     break;
 
                 case Command.Reset:
@@ -123,6 +114,7 @@ namespace PERQemu.IO.HardDisk
 
                 default:
                     Console.WriteLine("Unhandled Shugart command {0}", command);
+                    // throw or Trace.Log()?
                     break;
             }
 
@@ -156,7 +148,6 @@ namespace PERQemu.IO.HardDisk
         public void LoadSerialHighRegister(int value)
         {
             _serialNumberHigh = value & 0xffff;
-
 
             Trace.Log(LogType.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
         }
@@ -238,7 +229,7 @@ namespace PERQemu.IO.HardDisk
                     DoSingleSeek();
                     _seekComplete = 1;
                     _seekState = SeekState.WaitForStepSet;
-                    _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
+                    _system.CPU.RaiseInterrupt(InterruptSource.HardDisk);
 
                     Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
                     break;
@@ -353,7 +344,6 @@ namespace PERQemu.IO.HardDisk
             // Write the sector to the disk...
             _disk.SetSector(sectorData, _cylinder, _head, _sector);
 
-
             Trace.Log(LogType.HardDisk,
                       "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
@@ -404,7 +394,6 @@ namespace PERQemu.IO.HardDisk
 
             if (path != null)
             {
-                Console.WriteLine("Shugart: loading " + path);
                 // Load the disk image into it...
                 FileStream fs = new FileStream(path, FileMode.Open);
                 _disk.Load(fs);
@@ -421,13 +410,11 @@ namespace PERQemu.IO.HardDisk
         }
 
         /// <summary>
-        /// Low words of Data & Header buffer addresses come in XNOR'd with 0x3ff for unknown reasons
-        /// (must be some weird quirk with the controller hardware).
+        /// Low words of Data & Header buffer addresses come in XNOR'd with 0x3ff for
+        /// unknown reasons (must be some weird quirk with the controller hardware).
         ///
         /// To get the real address, we do the XNOR operation again...
         /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
         private int Unfrob(int value)
         {
             return (0x3ff & value) | ((~0x3ff) & (~value));
@@ -448,7 +435,7 @@ namespace PERQemu.IO.HardDisk
             _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
             {
                 _controllerStatus = Status.Done;
-                _system.CPU.RaiseInterrupt(InterruptType.HardDisk);
+                _system.CPU.RaiseInterrupt(InterruptSource.HardDisk);
             });
         }
 

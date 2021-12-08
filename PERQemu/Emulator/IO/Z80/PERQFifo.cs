@@ -68,7 +68,7 @@ namespace PERQemu.IO.Z80
             if (_fifo.Count == 0)
             {
                 // No data left, clear the PERQ interrupt.
-                _system.CPU.ClearInterrupt(InterruptType.Z80DataOutReady);
+                _system.CPU.ClearInterrupt(InterruptSource.Z80DataOut);
             }
 
             //_lock.ExitUpgradeableReadLock();
@@ -104,7 +104,7 @@ namespace PERQemu.IO.Z80
                                         value, _fifo.Count);
 
             // Since there's data available, let the PERQ know
-            _system.CPU.RaiseInterrupt(InterruptType.Z80DataOutReady);
+            _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
         }
 
         private PERQSystem _system;
@@ -205,7 +205,7 @@ namespace PERQemu.IO.Z80
             {
                 if (_dataReadyInterruptRequested)
                 {
-                    _system.CPU.RaiseInterrupt(InterruptType.Z80DataInReady);
+                    _system.CPU.RaiseInterrupt(InterruptSource.Z80DataIn);
                 }
                 _interruptActive = false;
             }

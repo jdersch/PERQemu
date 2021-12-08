@@ -16,13 +16,127 @@
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
+
 using System;
-namespace PERQemu
+using System.Threading;
+
+namespace PERQemu.Processor
 {
+
+    /// <summary>
+    /// PERQ hardware interrupts, listed from lowest to highest priority.
+    /// </summary>
+    public enum InterruptSource
+    {
+    	Z80DataOut = 0,
+    	Y = 1,
+    	HardDisk = 2,
+    	Network = 3,
+    	Z80DataIn = 4,
+    	LineCounter = 5,
+    	X = 6,
+    	Parity = 7
+    }
+
+    /// <summary>
+    /// In this format, group them all together for display.  Cheese.
+    /// </summary>
+    [Flags]
+    public enum InterruptFlag
+    {
+        None = 0x00,
+        Z80DataOutReady = 0x01,
+        Y = 0x02,
+        HardDisk = 0x04,
+        Network = 0x08,
+        Z80DataInReady = 0x10,
+        LineCounter = 0x20,
+        X = 0x40,
+        Parity = 0x80
+    }
+
+    /// <summary>
+    /// InterruptEncoder manages the thread-safe raising and lowering of
+    /// interrupt flags by the peripheral controllers.
+    /// </summary>
+    /// <remarks>
+    /// We want this to be fast, while still being reasonably safe, so a few
+    /// liberties are taken (like, we only protect the raise/clear but don't
+    /// use Interlocked.Read). Preliminary benchmarks/tests indicate that we
+    /// shave a few nanoseconds off the microcycle time, but a test with NO
+    /// Interlocks also shows that just setting/clearing the array values not
+    /// only seems to run without conflicts or threading issues, but that it's
+    /// just as fast WITH the interlocks.  Go figure.
+    /// </remarks>
     public class InterruptEncoder
     {
         public InterruptEncoder()
         {
+            _intr = new long[(int)InterruptSource.Parity + 1];
         }
+
+        public void Reset()
+        {
+            _intr.Initialize();
+        }
+
+        public long Raise(InterruptSource i)
+        {
+            return Interlocked.Exchange(ref _intr[(int)i], (1 << (int)i));
+        }
+
+        public long Clear(InterruptSource i)
+        {
+            return Interlocked.Exchange(ref _intr[(int)i], 0);
+        }
+
+        /// <summary>
+        /// Returns the integer vector of the highest priority interrupt
+        /// currently signalled.
+        /// </summary>
+        /// <remarks>
+        /// Tests show it's safe to avoid Interlocked.Read() on all these
+        /// since the only possible ill effect is if Z80DataIn/Out changes,
+        /// but the protocol itself should cope just fine (the state machine
+        /// can wait a blown cycle *or* deal with a read from an empty FIFO).
+        /// I'm probably just handwaving away potential thread-safety issues
+        /// but feh, if something blows up we can revisit it.  La la la la la...
+        /// </remarks>
+        public int Priority
+        {
+            get
+            {
+                return ((_intr[(int)InterruptSource.Parity] > 0) ? 7 :
+                        (_intr[(int)InterruptSource.X] > 0) ? 6 :
+                        (_intr[(int)InterruptSource.LineCounter] > 0) ? 5 :
+                        (_intr[(int)InterruptSource.Z80DataIn] > 0) ? 4 :
+                        (_intr[(int)InterruptSource.Network] > 0) ? 3 :
+                        (_intr[(int)InterruptSource.HardDisk] > 0) ? 2 :
+                        (_intr[(int)InterruptSource.Y] > 0) ? 1 :
+                        0);
+            }
+        }
+
+        /// <summary>
+        /// Gets the current status of all the interrupts in one "flag word"
+        /// like the original implementation.  Since this is only used by the
+        /// debugger it doesn't have to be fast...
+        /// </summary>
+        public InterruptFlag Flag
+        {
+            get
+            {
+                return (InterruptFlag)(_intr[(int)InterruptSource.Parity] |
+                                       _intr[(int)InterruptSource.X] |
+                                       _intr[(int)InterruptSource.LineCounter] |
+                                       _intr[(int)InterruptSource.Z80DataIn] |
+                                       _intr[(int)InterruptSource.Network] |
+                                       _intr[(int)InterruptSource.HardDisk] |
+                                       _intr[(int)InterruptSource.Y] |
+                                       _intr[(int)InterruptSource.Z80DataOut]);
+            }
+        }
+
+        private long[] _intr;
     }
 }

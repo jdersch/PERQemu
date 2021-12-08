@@ -32,11 +32,6 @@ namespace PERQemu.IO
         void Reset();
 
         /// <summary>
-        /// Clocks the IO device one cycle
-        /// </summary>
-        uint Clock();
-
-        /// <summary>
         /// Does a read from the given port
         /// </summary>
         int IORead(byte ioPort);

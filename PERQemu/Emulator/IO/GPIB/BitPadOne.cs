@@ -45,12 +45,9 @@ namespace PERQemu.IO.GPIB
             // the rate is reduced a bit from the BitPad's hardware setting.  In any
             // case, choose a speed that balances overhead with responsiveness.
             //
-            // (NB: computed, not constant, since we may someday offer on-the-fly
-            // configuration of IO board types; the EIO ran the Z80 at 4Mhz, faster
-            // than the older IOB @ 2.45Mhz, so the IO "fudge" might change.  This
-            // is very silly.)
+            // todo: have the scheduler send these at the sample rate selected.
             //
-            _sampleRate = 18382;    // (CPU.Frequency / 40) / CPU.IOFudge; (constants removed)
+            _sampleRate = 40; 
 
             Reset();
         }
@@ -173,7 +170,7 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         private void WriteIntAsStringToQueue(int i, ref Queue<byte> fifo)
         {
-            string str = String.Format("{0:d4}", i);
+            string str = string.Format("{0:d4}", i);
 
             for (int j = 0; j < str.Length; j++)
             {

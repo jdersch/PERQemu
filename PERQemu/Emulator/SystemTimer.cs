@@ -56,10 +56,14 @@ namespace PERQemu
             set { _interval = value; }
         }
 
+        /// <summary>
+        /// Reset disables the timer and clears the wait handle (freeing the
+        /// thread if it was blocked).  This may be slighty counterintuitive.
+        /// </summary>
         public void Reset()
         {
             HighResolutionTimer.Enable(_handle, false);
-            _sync.Reset();
+            _sync.Set();
         }
 
         public void StartTimer(bool enabled)
@@ -70,7 +74,10 @@ namespace PERQemu
 
         public void WaitForHeartbeat()
         {
-            _sync.Wait();
+            // If we're running fast, block; if too slow, blow through
+            if (!_sync.IsSet)
+                _sync.Wait();
+            
             _sync.Reset();
         }
 

@@ -170,7 +170,7 @@ namespace PERQemu
         public void Break()
         {
             _userInterrupt = true;
-            State = RunState.Paused;
+            _state = RunState.Paused;
         }
 
         /// <summary>
@@ -182,17 +182,17 @@ namespace PERQemu
             bool running = true;
 
             _state = s;
-            Console.WriteLine("[PERQsystem {0} in {1} mode]", _state, _mode);
 
             while (running)
             {
-                Trace.Log(LogType.EmuState, "Executing state " + State);
+                Trace.Log(LogType.EmuState, "[PERQsystem {0} in {1} mode]", _state, _mode);
+                Console.WriteLine("[PERQsystem {0} in {1} mode]", _state, _mode);
 
                 switch (_state)
                 {
                     case RunState.WarmingUp:
                         _display.InitializeSDL();
-                        State = RunState.Reset;
+                        _state = RunState.Reset;
                         break;
 
                     case RunState.Running:
@@ -224,11 +224,12 @@ namespace PERQemu
 
                                         // Calculate the fudge factor
                                         clocks = (uint)(clocks * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
-
-                                        _cpu.Run((int)clocks);
-
                                         count += clocks;
 
+                                        // Run the main CPU.  Rate limiting?  Hmm.
+                                        _cpu.Run((int)clocks);
+
+                                        // Run the SDL loop.  There has to be a better way.
                                         if (count > _uiEventInterval)
                                         {
                                             _display.SDLMessageLoop();
@@ -252,7 +253,7 @@ namespace PERQemu
                                 _cpu.Run();
                             });
 
-                        State = RunState.Paused;
+                        _state = RunState.Paused;
                         break;
 
                     case RunState.RunInst:
@@ -268,21 +269,15 @@ namespace PERQemu
                                 } while (!CPU.IncrementBPC);
                             });
 
-                        State = RunState.Paused;
+                        _state = RunState.Paused;
                         break;
 
                     case RunState.Reset:
                         Reset();
 
-                        if (_userInterrupt || Settings.PauseOnReset)
-                        {
-                            State = RunState.Paused;
-                            _userInterrupt = false;
-                        }
-                        else
-                        {
-                            State = RunState.Running;
-                        }
+                        _state = (_userInterrupt || Settings.PauseOnReset) ? RunState.Paused : RunState.Running;
+                        
+                        _userInterrupt = false;
                         break;
 
                     case RunState.Off:
@@ -293,7 +288,7 @@ namespace PERQemu
 
                     case RunState.ShuttingDown:
                         _display.ShutdownSDL();
-                        State = RunState.Off;
+                        _state = RunState.Off;
                         break;
                 }
             }
@@ -303,38 +298,38 @@ namespace PERQemu
         /// <summary>
         /// Wait for the background threads to sync up at a given RunState.
         /// </summary>
-        public RunState WaitForSync(RunState s)
-        {
-            bool sync = false;
+        //public RunState WaitForSync(RunState s)
+        //{
+        //    bool sync = false;
 
-            Console.WriteLine("[Waiting for thread sync in {0} state]", s);
+        //    Console.WriteLine("[Waiting for thread sync in {0} state]", s);
 
-            do
-            {
-                // fixme this is rudimentary; can't just loop forever...
-                // should/may be able to check for error conditions, or
-                // timeout if something is stuck?
-                var cpuState = _cpu.State;
-                var z80State = _iob.Z80System.IsRunning ? _iob.State : s;   // hack
+        //    do
+        //    {
+        //        // fixme this is rudimentary; can't just loop forever...
+        //        // should/may be able to check for error conditions, or
+        //        // timeout if something is stuck?
+        //        var cpuState = _cpu.State;
+        //        var z80State = _iob.Z80System.IsRunning ? _iob.State : s;   // hack
 
-                if (cpuState == s && z80State == s)
-                {
-                    sync = true;
-                }
-                else if (cpuState == RunState.Halted || z80State == RunState.Halted)
-                {
-                    // fixme this is an error condition... throw?
-                    // but what about when the z80 is "turned off"?
-                    // in async mode it should just spin in Paused mode... fmuta
-                    s = RunState.Halted;
-                    sync = true;
-                }
-                else Thread.Sleep(1);
+        //        if (cpuState == s && z80State == s)
+        //        {
+        //            sync = true;
+        //        }
+        //        else if (cpuState == RunState.Halted || z80State == RunState.Halted)
+        //        {
+        //            // fixme this is an error condition... throw?
+        //            // but what about when the z80 is "turned off"?
+        //            // in async mode it should just spin in Paused mode... fmuta
+        //            s = RunState.Halted;
+        //            sync = true;
+        //        }
+        //        else Thread.Sleep(1);
 
-            } while (!sync);
+        //    } while (!sync);
 
-            return s;
-        }
+        //    return s;
+        //}
 
         /// <summary>
         /// Reset the virtual machine.
@@ -363,7 +358,7 @@ namespace PERQemu
             catch (Exception e)
             {
                 // The emulation has hit a serious error.  Enter the debugger...
-                State = RunState.Halted;
+                _state = RunState.Halted;
 
                 Console.WriteLine("\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
 #if DEBUG

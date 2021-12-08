@@ -83,7 +83,7 @@ namespace PERQemu.Processor
             _scheduler.Reset();
             _processor.Reset();
             _heartbeat.Reset();
-            Trace.Log(LogType.CpuState, "{0}: CPU board reset.", CPU.Name);
+            Trace.Log(LogType.CpuState, "CPU board reset.");
         }
 
         /// <summary>
@@ -107,13 +107,12 @@ namespace PERQemu.Processor
         {
             if (_asyncThread != null)
             {
-                // or... just return?
                 throw new InvalidOperationException("CPU thread is already running; Stop first.");
             }
 
             _localState = RunState.WarmingUp;
             _stopAsyncExecution = false;
-            _asyncThread = new Thread(AsyncThread);
+            _asyncThread = new Thread(AsyncThread) { Name = "CPU" };
             _asyncThread.Start();
         }
 
@@ -124,15 +123,28 @@ namespace PERQemu.Processor
         {
             _heartbeat.Reset();
             _heartbeat.StartTimer(true);
+            _localState = RunState.Running;
 
+            // todo/fixme: should be a mechanism like RunGuarded here
+            // to catch exceptions and return them in an orderly manner
             Console.WriteLine("[CPU thread starting]");
-            while (!_stopAsyncExecution)
+            try
             {
-                Run(_adjustInterval);
-                _heartbeat.WaitForHeartbeat();
-            }
+                while (!_stopAsyncExecution)
+                {
+                    Run(_adjustInterval);
 
-            _heartbeat.StartTimer(false);
+                    if (Settings.Performance != RateLimit.Fast)
+                        _heartbeat.WaitForHeartbeat();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Uncaught exception on async thread: " + e.Message);
+                _stopAsyncExecution = true;
+                _localState = RunState.Halted;
+                //throw e;    // ???
+            }
         }
 
         /// <summary>
@@ -148,6 +160,9 @@ namespace PERQemu.Processor
             // Tell the thread to exit
             _stopAsyncExecution = true;
 
+            // If blocked, release
+            _heartbeat.Reset();
+
             // Waaaaait for it
             _asyncThread.Join();
             _asyncThread = null;
@@ -156,8 +171,7 @@ namespace PERQemu.Processor
         }
 
         /// <summary>
-        /// Load the Boot ROM image appropriate for this CPU.  Only needs to be
-        /// called once.  Called by PERQsystem based on CPU and I/O Board type.
+        /// Load the Boot ROM image appropriate for this CPU and I/O Board type.
         /// </summary>
         public void LoadBootROM(string file)
         {
@@ -167,7 +181,7 @@ namespace PERQemu.Processor
             }
             catch
             {
-                Console.WriteLine("Could not load boot ROM from {0}!" + file);
+                Console.WriteLine("Could not load boot ROM from {0}!", file);
                 throw;
             }
         }

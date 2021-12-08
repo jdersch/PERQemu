@@ -259,12 +259,13 @@ namespace PERQemu.Config
                 // fields will have been set except Filename.
                 _current.Filename = path;
 
+                // Flag so the ExecutionController will reinitialize the
+                // PERQSystem object at power on.
+                _current.IsModified = true;
+
                 // Run the validator just to be sure; we might be loading a
                 // hand-written file that might not be 100% kosher.
-                Validate();
-
-                // Let the GUI know we were successful, we think.
-                return true;
+                return Validate();
             }
             catch (Exception e)
             {

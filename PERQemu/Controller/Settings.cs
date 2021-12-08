@@ -63,7 +63,7 @@ namespace PERQemu
             SaveDiskOnShutdown = Ask.Maybe;
             PauseOnReset = true;
 
-            Performance = RateLimit.Accurate;
+            Performance = RateLimit.Fast;       // todo: accurate by default?
 
             DebugRadix = Radix.Decimal;
             Z80Radix = Radix.Decimal;

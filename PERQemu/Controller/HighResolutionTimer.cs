@@ -249,8 +249,7 @@ namespace PERQemu
             if (_thread == null)
             {
                 _runThread = true;
-                _thread = new Thread(ExecuteTimer);
-                _thread.Name = "HighResTimer";
+                _thread = new Thread(ExecuteTimer) { Name = "HighResTimer" };
                 _thread.Start();
             }
             Trace.Log(LogType.Timer, "Timer thread started.");
@@ -276,8 +275,8 @@ namespace PERQemu
             if (_thread == null) return;
 
             Stop();
-            _runThread = false;     // flag that we're ready to exit
-            _throttle.Set();        // if we're in Wait(), release the hold
+            _runThread = false;     // Flag that we're ready to exit
+            _throttle.Set();        // If we're in Wait(), release the hold
 
             if (_thread != null && Thread.CurrentThread != _thread)
             {

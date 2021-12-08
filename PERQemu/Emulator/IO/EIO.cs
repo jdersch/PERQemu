@@ -38,8 +38,17 @@ namespace PERQemu.IO
 
             _z80CycleTime = 250;    // 4Mhz!
 
-            _z80RamSize = 0x4000;   // 16K of RAM?
-            _z80RamAddr = 0x2c00;
+            // Hmm.  The EIO schematic very clearly shows an 8Kx8 ROM (2764)
+            // and 8 x 16Kx1 SRAMs (2167s) but the ROM that's built seems to
+            // limit the Z80 assembler's view to 4K ROM and the upper 6K of RAM
+            // (including pre-allocated buffers and working space). This may be
+            // to reserve 10K for uploading ZBoot files?
+            // TODO: figure out if these mappings are accurate.  As long as we
+            // have enough space allocated at the right starting addresses,
+            // provisioning extra space isn't a big deal, but the ROM loader
+            // wants to match the RomSize to the length of the actual file...
+            _z80RamSize = 0x4000;   // 16K of RAM
+            _z80RamAddr = 0x4000;
             _z80RomSize = 0x2000;   // 8K of ROM
             _z80RomAddr = 0x0;
 
