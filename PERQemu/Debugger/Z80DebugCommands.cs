@@ -26,6 +26,9 @@ namespace PERQemu
 {
     public partial class DebugCommands
     {
+        //
+        // Z80 Debugging
+        //
 
         [Command("debug z80", "Enter the Z80 debugging subsystem")]
         private void SetZ80DebugPrefix()
@@ -39,10 +42,18 @@ namespace PERQemu
             PERQemu.CLI.ShowCommands("debug z80");
         }
 
-[Command("debug z80 inst", "Run one Z80 opcode")]
-public void DebugZ80Inst()
-{
-	PERQemu.Controller.TransitionTo(RunState.RunZ80Inst);
+        [Command("debug z80 inst", "Run one Z80 opcode")]
+        public void DebugZ80Inst()
+        {
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The PERQ is currently turned off.");
+            }
+            else
+            {
+                PERQemu.Controller.TransitionTo(RunState.RunZ80Inst);
+                PERQemu.Sys.PrintStatus();
+            }
         }
 
         [Command("debug z80 show registers", "Display the values of the Z80 registers")]
@@ -51,5 +62,6 @@ public void DebugZ80Inst()
             PERQemu.Sys.IOB.Z80System.ShowZ80State();
         }
 
+        // todo: interrogate memory, fifos, peripheral controllers & registers, etc.
     }
 }

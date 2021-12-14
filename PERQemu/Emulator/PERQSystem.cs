@@ -41,12 +41,11 @@ namespace PERQemu
     {
         public PERQSystem(Configuration conf)
         {
-            //
             // Everything we need to know to build the virtual PERQ
-            //
             _conf = conf;
 
-            _userInterrupt = false;
+            // Set our initial state; instantiated but not yet initialized...
+            _state = RunState.Off;
 
             //
             // TODO: There are some ugly dependencies here...
@@ -97,11 +96,6 @@ namespace PERQemu
                         string.Format("No such IO board type '{0}'", _conf.IOBoard));
             }
 
-            // Assume async mode if the implementation supports it.
-            // Might want to select sync mode on uniprocessor systems?  What is
-            // a "uniprocessor"?  Is that like a "land line" or a "glacier"?
-            _mode = (_iob.SupportsAsync && _cpu.SupportsAsync) ? ExecutionMode.Asynchronous : ExecutionMode.Synchronous;
-
             // If any IO options are defined, instantiate the board
             // which will contain them (and set them up)
             switch (conf.IOOptionBoard)
@@ -130,12 +124,29 @@ namespace PERQemu
             // Set up the IO Bus and check in the boards
             _ioBus = new IOBus(this);
 
-            // Set our initial state; instantiated but not yet initialized...
-            _state = RunState.Off;
+            // Set the user's preferred run mode.  We assume async mode if the
+            // implementation supports it, but might want to select sync mode
+            // for debugging, or on uniprocessor systems.  (A "uniprocessor"?
+            // Is that like a "land line" or a "glacier"?)
+            _mode = Settings.RunMode;
+
+            if (_mode == ExecutionMode.Asynchronous && !(_iob.SupportsAsync && _cpu.SupportsAsync))
+            {
+                _mode = ExecutionMode.Synchronous;
+                Console.WriteLine("Asynchronous execution not supported; falling back to Synchronous mode.");
+            }
 
             // Compute how many cycles between runs of the GUI's event loop (in
-            // this case, the SDL2 message loop).  This is gross.
+            // this case, the SDL2 message loop).  In Synchronous mode we explicitly
+            // call on the Display to run the loop; in Asynch mode it just sits in a
+            // wait rather than poll.  FIXME.  This is gross.
             _uiEventInterval = (uint)((16.6667 * Conversion.MsecToNsec) / CPU.MicroCycleTime);
+
+            // Okay!  We have a PERQ!  Now listen for state change events
+            // from the Controller (or Debugger)
+            //PERQemu.Controller.RunStateChanged += OnRunStateChange;
+            // Does this need to be undone in a destructor so we don't have problems
+            // instantiating a new object?  we'll find out!
         }
 
         public Configuration Config => _conf;
@@ -161,175 +172,114 @@ namespace PERQemu
         public RunState State
         {
             get { return _state; }
-            set { _state = value; }
         }
 
-        /// <summary>
-        /// User- or emulator-initiated pause in execution.
-        /// </summary>
-        public void Break()
-        {
-            _userInterrupt = true;
-            _state = RunState.Paused;
-        }
-
-        /// <summary>
-        /// Transition to and run the PERQ in a given state, in the current
-        /// execution mode.
-        /// </summary>
         public void Run(RunState s)
         {
-            bool running = true;
-
             _state = s;
 
-            while (running)
+            Trace.Log(LogType.EmuState, "PERQsystem state changing to {0} ({1} mode)", _state, _mode);
+
+            switch (_state)
             {
-                Trace.Log(LogType.EmuState, "[PERQsystem {0} in {1} mode]", _state, _mode);
-                Console.WriteLine("[PERQsystem {0} in {1} mode]", _state, _mode);
+                case RunState.WarmingUp:
+                    _display.InitializeSDL();
+                    break;
 
-                switch (_state)
-                {
-                    case RunState.WarmingUp:
-                        _display.InitializeSDL();
-                        _state = RunState.Reset;
-                        break;
+                case RunState.Running:
+                    if (_mode == ExecutionMode.Asynchronous)
+                    {
+                        // Start up the background threads
+                        _iob.RunAsync();
+                        _cpu.RunAsync();
 
-                    case RunState.Running:
-                        if (_mode == ExecutionMode.Asynchronous)
-                        {
-                            // Start up the background threads
-                            _iob.RunAsync();
-                            _cpu.RunAsync();
+                        // Run the event loop until State changes
+                        _display.SDLMessageLoop();
 
-                            // Run the event loop until State changes
-                            _display.SDLMessageLoop();
-
-                            // Stop the threads and loop for State transition
-                            _cpu.Stop();
-                            _iob.Stop();
-                        }
-                        else
-                        {
-                            // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
-                            RunGuarded(() =>
-                                {
-                                    uint count = 0;
-
-                                    while (_state == RunState.Running)
-                                    {
-                                        // Run the IOB for one Z80 instruction, then run the PERQ CPU for
-                                        // the number of microinstructions equivalent to that wall-clock time.
-                                        var clocks = _iob.Clock();
-
-                                        // Calculate the fudge factor
-                                        clocks = (uint)(clocks * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
-                                        count += clocks;
-
-                                        // Run the main CPU.  Rate limiting?  Hmm.
-                                        _cpu.Run((int)clocks);
-
-                                        // Run the SDL loop.  There has to be a better way.
-                                        if (count > _uiEventInterval)
-                                        {
-                                            _display.SDLMessageLoop();
-                                            count = 0;
-                                        }
-                                    }
-                                });
-                        }
-                        break;
-
-                    case RunState.SingleStep:
-                    case RunState.RunZ80Inst:
-                        // For now:   Run the IOB for one Z80 instruction, then
-                        // run the PERQ CPU for one instruction.  Timing-wise
-                        // this is very inaccurate.  It would be nice to allow
-                        // single-stepping either processor and have the timings
-                        // be more correct.
+                        // Stop the threads
+                        _cpu.Stop();
+                        _iob.Stop();
+                    }
+                    else
+                    {
+                        // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
                         RunGuarded(() =>
+                            {
+                                uint count = 0;
+
+                                while (_state == RunState.Running)
+                                {
+                                    // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                                    // the number of microinstructions equivalent to that wall-clock time.
+                                    var clocks = _iob.Clock();
+
+                                    // Calculate the fudge factor
+                                    clocks = (uint)(clocks * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
+                                    count += clocks;
+
+                                    // Run the main CPU.  Rate limiting?  Hmm.
+                                    _cpu.Run((int)clocks);
+
+                                    // Run the SDL loop.  There has to be a better way.
+                                    if (count > _uiEventInterval)
+                                    {
+                                        _display.SDLMessageLoop();
+                                        count = 0;
+                                    }
+                                }
+                            });
+                    }
+                    break;
+
+                case RunState.SingleStep:
+                case RunState.RunZ80Inst:
+                    // For now:   Run the IOB for one Z80 instruction, then
+                    // run the PERQ CPU for one instruction.  Timing-wise
+                    // this is very inaccurate.  It would be nice to allow
+                    // single-stepping either processor and have the timings
+                    // be more correct.
+                    RunGuarded(() =>
+                        {
+                            _iob.Clock();
+                            _cpu.Run();
+                            _state = RunState.Paused;
+                        });
+
+                    break;
+
+                case RunState.RunInst:
+                    // Run a single QCode.  As above, except we execute
+                    // PERQ CPU instructions until the start of the next QCode.
+                    RunGuarded(() =>
+                        {
+                            do
                             {
                                 _iob.Clock();
                                 _cpu.Run();
-                            });
 
-                        _state = RunState.Paused;
-                        break;
+                            } while (!CPU.IncrementBPC);
 
-                    case RunState.RunInst:
-                        // Run a single QCode.  As above, except we execute
-                        // PERQ CPU instructions until the start of the next QCode.
-                        RunGuarded(() =>
-                            {
-                                do
-                                {
-                                    _iob.Clock();
-                                    _cpu.Run();
+                            _state = RunState.Paused;
+                        });
+                    break;
 
-                                } while (!CPU.IncrementBPC);
-                            });
+                case RunState.ShuttingDown:
+                    _display.ShutdownSDL();
+                    _state = RunState.Off;
+                    break;
 
-                        _state = RunState.Paused;
-                        break;
+                case RunState.Reset:
+                    Reset();
+                    _state = RunState.Paused;
+                    break;
 
-                    case RunState.Reset:
-                        Reset();
-
-                        _state = (_userInterrupt || Settings.PauseOnReset) ? RunState.Paused : RunState.Running;
-                        
-                        _userInterrupt = false;
-                        break;
-
-                    case RunState.Off:
-                    case RunState.Paused:
-                    case RunState.Halted:
-                        running = false;
-                        break;
-
-                    case RunState.ShuttingDown:
-                        _display.ShutdownSDL();
-                        _state = RunState.Off;
-                        break;
-                }
+                case RunState.Off:
+                case RunState.Paused:
+                case RunState.Halted:
+                    break;
             }
-            PrintStatus();  // fixme move to command prompt?
+            Trace.Log(LogType.EmuState, "PERQSystem transitioned to {0}", _state);
         }
-
-        /// <summary>
-        /// Wait for the background threads to sync up at a given RunState.
-        /// </summary>
-        //public RunState WaitForSync(RunState s)
-        //{
-        //    bool sync = false;
-
-        //    Console.WriteLine("[Waiting for thread sync in {0} state]", s);
-
-        //    do
-        //    {
-        //        // fixme this is rudimentary; can't just loop forever...
-        //        // should/may be able to check for error conditions, or
-        //        // timeout if something is stuck?
-        //        var cpuState = _cpu.State;
-        //        var z80State = _iob.Z80System.IsRunning ? _iob.State : s;   // hack
-
-        //        if (cpuState == s && z80State == s)
-        //        {
-        //            sync = true;
-        //        }
-        //        else if (cpuState == RunState.Halted || z80State == RunState.Halted)
-        //        {
-        //            // fixme this is an error condition... throw?
-        //            // but what about when the z80 is "turned off"?
-        //            // in async mode it should just spin in Paused mode... fmuta
-        //            s = RunState.Halted;
-        //            sync = true;
-        //        }
-        //        else Thread.Sleep(1);
-
-        //    } while (!sync);
-
-        //    return s;
-        //}
 
         /// <summary>
         /// Reset the virtual machine.
@@ -373,10 +323,10 @@ namespace PERQemu
         /// on or off one or both disassemblies?).  (A graphical debugger would
         /// update itself based on the runstate/machinestate change events.)
         /// </summary>
-        private void PrintStatus()
+        public void PrintStatus()
         {
             _iob.Z80System.ShowZ80State();
-            CPU.ShowPC();
+            _cpu.Processor.ShowPC();
 
             Console.WriteLine("ucode {0}",
                         Disassembler.Disassemble(CPU.PC, CPU.GetInstruction(CPU.PC)));
@@ -393,29 +343,43 @@ namespace PERQemu
         /// </summary>
         public void LoadAllMedia()
         {
-            // todo: deal with multiple units once the disk controllers can handle that
-            // route qic tape, 9track and smd to the option board, gpib devs someday...
             foreach (var drive in _conf.Drives)
             {
                 if (!string.IsNullOrEmpty(drive.MediaPath))
                 {
-                    switch (drive.Device)
-                    {
-                        case DriveType.Floppy:
-                            _iob.Z80System.LoadFloppyDisk(drive.MediaPath);
-                            break;
-
-                        case DriveType.Disk14Inch:
-                            _iob.DiskController.LoadImage(drive.MediaPath);
-                            break;
-
-                        default:
-                            throw new UnimplementedHardwareException(
-                                string.Format("Support for drive type {0} is not implemented.", drive.Device));
-                    }
+                    LoadMedia(drive.Device, drive.MediaPath, drive.Unit);
                 }
             }
         }
+
+        /// <summary>
+        /// Load a media file (floppy, hard disk or tape).
+        /// </summary>
+        public void LoadMedia(DriveType type, string path, int unit)
+        {
+            switch (type)
+            {
+                case DriveType.Floppy:
+                    _iob.Z80System.LoadFloppyDisk(path);
+                    break;
+
+                // case DriveType.Disk5Inch:
+                // case DriveType.Disk8Inch:
+                case DriveType.Disk14Inch:
+                    _iob.DiskController.LoadImage(path); // unit...
+                    break;
+
+                // case DriveType.DiskSMD:
+                // case DriveType.Tape*:
+                //      _oio.LoadImage();
+
+                default:
+                    throw new UnimplementedHardwareException(
+                        string.Format("Support for drive type {0} is not implemented.", type));
+            }
+        }
+
+        // todo: SaveAllMedia()
 
         /// <summary>
         /// If the user has specified an alternate boot character, kick off
@@ -466,11 +430,11 @@ namespace PERQemu
         private IOBus _ioBus;
 
         // Controlly bits
-        private volatile RunState _state;
         private ExecutionMode _mode;
-        private uint _uiEventInterval;
+        private volatile RunState _state;
 
-        private bool _userInterrupt;
+        // This is a hack, and should move elsewhere...?
+        private uint _uiEventInterval;
 
         private delegate void RunDelegate();
     }

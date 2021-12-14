@@ -35,7 +35,6 @@ namespace PERQemu.Processor
         public CPUBoard(PERQSystem sys)
         {
             _system = sys;
-            _localState = RunState.Off;
 
             // Instantiate our CPU
             switch (sys.Config.CPU)
@@ -64,7 +63,7 @@ namespace PERQemu.Processor
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Rate limiter
-            _heartbeat = new SystemTimer(100f);
+            _heartbeat = new SystemTimer(20f);
 
             // Compute how often (in CPU cycles) to sync the emulated processor
             _adjustInterval = (int)(_heartbeat.Interval / (CPU.MicroCycleTime * Conversion.NsecToMsec));
@@ -74,9 +73,7 @@ namespace PERQemu.Processor
         public CPU Processor => _processor;
         public Scheduler Scheduler => _scheduler;
 
-        public RunState State => _localState;
         public bool SupportsAsync => true;
-
 
         public void Reset()
         {
@@ -110,7 +107,6 @@ namespace PERQemu.Processor
                 throw new InvalidOperationException("CPU thread is already running; Stop first.");
             }
 
-            _localState = RunState.WarmingUp;
             _stopAsyncExecution = false;
             _asyncThread = new Thread(AsyncThread) { Name = "CPU" };
             _asyncThread.Start();
@@ -123,28 +119,20 @@ namespace PERQemu.Processor
         {
             _heartbeat.Reset();
             _heartbeat.StartTimer(true);
-            _localState = RunState.Running;
 
             // todo/fixme: should be a mechanism like RunGuarded here
             // to catch exceptions and return them in an orderly manner
             Console.WriteLine("[CPU thread starting]");
-            try
-            {
-                while (!_stopAsyncExecution)
-                {
-                    Run(_adjustInterval);
 
-                    if (Settings.Performance != RateLimit.Fast)
-                        _heartbeat.WaitForHeartbeat();
-                }
-            }
-            catch (Exception e)
+            while (!_stopAsyncExecution)
             {
-                Console.WriteLine("Uncaught exception on async thread: " + e.Message);
-                _stopAsyncExecution = true;
-                _localState = RunState.Halted;
-                //throw e;    // ???
+                Run(_adjustInterval);
+
+                if (Settings.Performance != RateLimit.Fast)
+                    _heartbeat.WaitForHeartbeat();
             }
+
+            _heartbeat.StartTimer(false);
         }
 
         /// <summary>
@@ -159,14 +147,11 @@ namespace PERQemu.Processor
 
             // Tell the thread to exit
             _stopAsyncExecution = true;
-
-            // If blocked, release
             _heartbeat.Reset();
 
             // Waaaaait for it
             _asyncThread.Join();
             _asyncThread = null;
-            _localState = RunState.Off;
             Console.WriteLine("[CPU thread stopped]");
         }
 
@@ -190,7 +175,6 @@ namespace PERQemu.Processor
         private Scheduler _scheduler;
         private PERQSystem _system;
 
-        private RunState _localState;
         private SystemTimer _heartbeat;
         private int _adjustInterval;
 

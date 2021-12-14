@@ -79,14 +79,30 @@ namespace PERQemu
         [Command("debug step", "Run one microinstruction")]
         public void DebugStep()
         {
-            PERQemu.Controller.TransitionTo(RunState.SingleStep);
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The PERQ is currently turned off.");
+            }
+            else
+            {
+                PERQemu.Controller.TransitionTo(RunState.SingleStep);
+                PERQemu.Sys.PrintStatus();
+            }
         }
 
         [Command("inst")]
         [Command("debug inst", "Run one opcode")]
         public void DebugInst()
         {
-            PERQemu.Controller.TransitionTo(RunState.RunInst);
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The PERQ is currently turned off.");
+            }
+            else
+            {
+                PERQemu.Controller.TransitionTo(RunState.RunInst);
+                PERQemu.Sys.PrintStatus();
+            }
         }
 
         [Command("debug set execution mode", "Set the execution mode for the virtual PERQ")]
@@ -105,13 +121,13 @@ namespace PERQemu
             Console.WriteLine(PERQemu.Sys.Mode);
         }
 
-#if TRACING_ENABLED
         //
         // Logging
         //
 
         [Command("debug set logging", "Set logging for specific events")]
         [Command("debug z80 set logging", "Set logging for specific events")]
+        [Conditional("TRACING_ENABLED")]
         public void SetLogging(LogType category)
         {
             Trace.TraceLevel |= category;
@@ -120,6 +136,7 @@ namespace PERQemu
 
         [Command("debug clear logging", "Clear logging for certain events")]
         [Command("debug z80 clear logging", "Clear logging for certain events")]
+        [Conditional("TRACING_ENABLED")]
         public void ClearLogging(LogType category)
         {
             Trace.TraceLevel &= ~category;
@@ -133,17 +150,26 @@ namespace PERQemu
         //}
 
         [Command("debug enable logging", "Enable logging")]
+        [Conditional("TRACING_ENABLED")]
         public void EnableLogging()
         {
-            Console.WriteLine("Logging enabled");
+            if (!Trace.TraceOn)
+            {
+                Trace.TraceOn = true;
+                Console.WriteLine("Logging enabled");
+            }
         }
 
         [Command("debug disable logging", "Disable logging")]
+        [Conditional("TRACING_ENABLED")]
         public void DisableLogging()
         {
-            Console.WriteLine("Logging disabled");
+            if (Trace.TraceOn)
+            {
+                Trace.TraceOn = false;
+                Console.WriteLine("Logging disabled");
+            }
         }
-#endif
 
         //
         // Registers and Stacks

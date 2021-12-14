@@ -114,6 +114,8 @@ namespace PERQemu.IO.Z80
                 {
                     throw new InvalidOperationException("Invalid Z80 ROM size.");
                 }
+
+                Trace.Log(LogType.Z80State, "Read Z80 ROM from {0}.", Paths.Canonicalize(path));
             }
         }
 

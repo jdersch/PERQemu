@@ -187,7 +187,6 @@
     <Compile Include="Configurator\ConfigTypes.cs" />
     <Compile Include="Configurator\ConfigCommands.cs" />
     <Compile Include="Controller\ExecCommands.cs" />
-    <Compile Include="Controller\Settings.cs" />
     <Compile Include="Debugger\DebugCommands.cs" />
     <Compile Include="Debugger\Z80DebugCommands.cs" />
     <Compile Include="Debugger\QCode.cs" />
@@ -211,7 +210,6 @@
     <Compile Include="Emulator\IO\Z80\Z80SIO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80System.cs" />
     <Compile Include="UI\SDL\KeyboardMap.cs" />
-    <Compile Include="UI\CLI\SettingsCommands.cs" />
     <Compile Include="Configurator\StorageCommands.cs" />
     <Compile Include="Emulator\IO\CIO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80MemoryBus.cs" />
@@ -221,6 +219,8 @@
     <Compile Include="Emulator\SystemTimer.cs" />
     <Compile Include="Emulator\CPU\CPUBoard.cs" />
     <Compile Include="Emulator\CPU\InterruptEncoder.cs" />
+    <Compile Include="Configurator\Settings.cs" />
+    <Compile Include="Configurator\SettingsCommands.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

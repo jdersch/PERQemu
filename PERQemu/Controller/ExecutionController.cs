@@ -48,10 +48,35 @@ namespace PERQemu
         Asynchronous
     }
 
+    public sealed class SMKey : Tuple<RunState, RunState>
+    {
+        public SMKey(RunState from, RunState to) : base(from, to) { }
+
+        public RunState From => Item1;
+        public RunState To => Item2;
+    }
+
+    public delegate void TransitionDelegate();
+
+    public sealed class Transition
+    {
+        public Transition(TransitionDelegate thingToDo, RunState expectedResult, bool blocking = true)
+        {
+            DoTheThing = thingToDo;
+            ExpectedResult = expectedResult;
+            WaitForIt = blocking;
+        }
+
+        public TransitionDelegate DoTheThing;
+        public RunState ExpectedResult;
+        public bool WaitForIt;
+    }
+
     /// <summary>
     /// Top-level control for managing the execution of a configured PERQ.
 	/// It knows how to start, pause and stop the machine, as well as the
-    /// debug modes(step, inst, auto).
+    /// debug modes(step, inst, auto), shifting gears through the RunStates
+    /// in response to user input (or uncaught Emulator exceptions).
     /// </summary>
     public sealed class ExecutionController
     {
@@ -60,6 +85,8 @@ namespace PERQemu
         {
             _system = null;
             _bootChar = 0;
+
+            InitStateMachine();
         }
 
         public PERQSystem System
@@ -70,7 +97,6 @@ namespace PERQemu
         public RunState State
         {
             get { return (_system == null ? RunState.Off : _system.State); }
-            set { if (_system != null) _system.State = value; }
         }
 
         public byte BootChar
@@ -84,6 +110,10 @@ namespace PERQemu
             try
             {
                 _system = new PERQSystem(conf);
+
+                // Reset upon successful build
+                PERQemu.Config.Changed = false;
+
                 return true;
             }
             catch (Exception e)
@@ -91,17 +121,14 @@ namespace PERQemu
                 Console.WriteLine("The system could not be initialized:");
                 Console.WriteLine(e.Message);
                 Console.WriteLine("Please check the configuration and try again.");
+                _system = null;
                 return false;
             }
         }
 
         public void PowerOn()
         {
-            if (State != RunState.Off)
-            {
-                Console.WriteLine("The PERQ is already powered on.");
-                return;
-            }
+            Console.WriteLine("Power ON requested.");
 
             if (!PERQemu.Config.Current.IsValid)
             {
@@ -110,101 +137,243 @@ namespace PERQemu
                 return;
             }
 
-            Console.WriteLine("Power ON requested.");
-
             if (PERQemu.Config.Changed)
             {
                 // Out with the old
                 _system = null;
 
-                // Reset
-                PERQemu.Config.Changed = false;
-            }
+                // In with the new?
+                if (!Initialize(PERQemu.Config.Current))
+                {
+                    return;     // Fail.
+                }
 
-            // In with the new
-            if (Initialize(PERQemu.Config.Current))
-            {
                 // Load the configured storage devices
                 _system.LoadAllMedia();
-                _system.Run(RunState.WarmingUp);
             }
+
+            // (Re-)Start the machine
+            _system.Run(RunState.WarmingUp);
         }
 
         public void Reset()
         {
-            // If no system, quietly no-op (since we always pass
-            // through Reset when bringing the system up)
+            Console.WriteLine("ExecutionController Reset called.");
+
+            // If no system, quietly no-op.
             if (State != RunState.Off)
             {
-                State = RunState.Reset;
+                TransitionTo(RunState.Reset);
 
-                if (!Settings.PauseOnReset)
+                if (State == RunState.Paused && !Settings.PauseOnReset)
                 {
-                    State = RunState.Running;
+                    TransitionTo(RunState.Running);
                 }
+            }
+        }
+
+        public void Break()
+        {
+            if (State != RunState.Off && State != RunState.Halted)
+            {
+                // Break out of the Running state
+                TransitionTo(RunState.Paused);
+
+                // No, really, I mean it
+                SetState(RunState.Paused);
             }
         }
 
         public void PowerOff()
         {
-            if (State == RunState.Off)
-            {
-                Console.WriteLine("The PERQ is already powered off.");
-                return;
-            }
+            Console.WriteLine("Power OFF requested.");
 
-            // todo:
+            // todo: get the sequence right!
             //      stop if running
             //      save disks? -- graphical dialog!?  consult Settings.*
             //      proceed to shutdown (stops SDL loop, closes display)
-
-            Console.WriteLine("Power OFF requested.");
-            State = RunState.ShuttingDown;
-            // fixme wait for sync here!!
+            //      then properly shut down and release the PERQsystem and
+            //      ALL of its timers, handles, media, etc. -- so that a new
+            //      machine can be configured OR the current one reinstantiated
+            //      fix the SDL reinit (again!? WTF, i had fixed this, FMUTA)
+            TransitionTo(RunState.Off);
         }
 
         /// <summary>
-        /// Change the state of the virtual machine.  If the RunMode is
-        /// synchronous, blocks until the execution stops (pause, fault,
-        /// or shutdown).  In asynchronous mode, returns the state when
-        /// all threads have registered the new state.
+        /// Change the state of the virtual machine.  For now, will block on all
+        /// state transitions (even when running in Asynchronous mode).
         /// </summary>
         /// <remarks>
-        /// If the system is not powered on, TransitionTo will first execute
-        /// the PowerOn sequence; similarly, a PowerOff request will initiate
-        /// a PowerOff.  Any exceptions thrown will result in a Halted state,
-        /// or an Off state if the machine cannot be instantiated.  See the
-        /// file Docs/Controller.txt for more details.
+        /// See Docs/Controller.txt for more details.
         /// </remarks>
-        public RunState TransitionTo(RunState nextState)
+        public void TransitionTo(RunState nextState)
         {
             var current = State;
+            var key = new SMKey(current, nextState);
 
-            // todo Trace.Log()
-            Console.WriteLine("Transition request from {0} to {1}", current, nextState);
+            // Bail if already in the requested state
+            if (current == nextState) return;
 
-            // Are we already in the requested state?
-            if (current == nextState) return current;
+			Trace.Log(LogType.EmuState, "Controller requesting transition from {0} to {1}", current, nextState);
 
-            // Now, how do we get theyah from heeyah?
-            // this gets real stupid real fast
-            if (current == RunState.Off)
+            // Now, how do we get there?  Let's consult the runes...
+            if (_SMDict.ContainsKey(key))
             {
-                PowerOn();
+                List<Transition> steps;
+
+                if (_SMDict.TryGetValue(key, out steps))
+                {
+                    foreach (var step in steps)
+                    {
+                        // All steps execute Synchronously except the Running
+                        // step, if Asynch mode is selected.  So we will block
+                        // here until the delegate completes...
+                        step.DoTheThing();
+
+                        do
+                        {
+                            current = State;
+
+                            // If we got the expected RunState (or an error, in
+                            // which case we halt) then continue to the next step
+                            if ((current == step.ExpectedResult) ||
+                                (current == RunState.Halted))
+                            {
+                                break;
+                            }
+
+                            Trace.Log(LogType.EmuState, "Waiting for {0}, got {1}...",
+                                                        step.ExpectedResult, current);
+
+                            // Pause and try again.  There should probably be
+                            // a limit to our patience...
+                            Thread.Sleep(10);
+
+                        } while (step.WaitForIt);
+                    }
+                }
+                else
+                {
+                    // fixme: this shouldn't happen if our state machine is complete... 
+                    // so make this an error or just remove it once finally debugged
+                    Console.WriteLine("What, bad steps!? Key {0} yeilded no value!", key);
+                }
+            }
+            else
+            {
+                // throw new InvalidOperationException()
+                Console.WriteLine("Sorry, ya cahnt get theyah from heeyah.");
             }
 
-            State = nextState;
+            Trace.Log(LogType.EmuState, "Controller transition result is {0}", State);
+       }
 
-            return State;
+        /// <summary>
+        /// Initiate a state change in the current PERQsystem.
+        /// </summary>
+        private void SetState(RunState s)
+        {
+            _system?.Run(s);
         }
 
+        /// <summary>
+        /// Set up table of legal transitions and the steps needed to get there.
+        /// This is either brilliant, or insane.  ¯\_(ツ)_/¯
+        /// </summary>
         private void InitStateMachine()
         {
-            
+            _SMDict = new Dictionary<SMKey, List<Transition>>() {
+                {
+                    new SMKey(RunState.Off, RunState.Paused), new List<Transition>() {
+                        new Transition(() => { PowerOn(); }, RunState.WarmingUp),
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Off, RunState.Running), new List<Transition>() {
+                        new Transition(() => { PowerOn(); }, RunState.WarmingUp),
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
+                },
+                {
+                    new SMKey(RunState.WarmingUp, RunState.Paused), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.WarmingUp, RunState.Off), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                },
+                {
+                    new SMKey(RunState.WarmingUp, RunState.Running), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.Off), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.Reset), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.RunInst), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.RunInst); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.RunZ80Inst), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.RunZ80Inst); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.SingleStep), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.SingleStep); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.Running), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
+                },
+                {
+                    new SMKey(RunState.Running, RunState.Paused), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Running, RunState.Reset), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Running, RunState.RunInst), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.RunInst); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Running, RunState.RunZ80Inst), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.RunZ80Inst); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Running, RunState.SingleStep), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.SingleStep); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Running, RunState.Off), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                },
+                {
+                    new SMKey(RunState.Halted, RunState.Reset), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
+                },
+                {
+                    new SMKey(RunState.Halted, RunState.Off), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                }
+            };
         }
 
         // To encode our state machine transitions
-        
+        private Dictionary<SMKey, List<Transition>> _SMDict;
+
         private static byte _bootChar;
         private PERQSystem _system;
     }

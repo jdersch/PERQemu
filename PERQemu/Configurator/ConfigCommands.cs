@@ -18,8 +18,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 using PERQemu.Config;
 
@@ -86,6 +84,7 @@ namespace PERQemu.UI
             {
                 Console.WriteLine("Setting the machine to defaults.");
                 PERQemu.Config.Current = PERQemu.Config.Default;
+                PERQemu.Config.Changed = true;
             }
         }
 
@@ -258,9 +257,9 @@ namespace PERQemu.UI
             {
                 if (perq != PERQemu.Config.Current.Chassis)
                 {
-                    Console.WriteLine("{0} chassis selected.", perq);
                     PERQemu.Config.Current.Chassis = perq;
                     PERQemu.Config.Changed = true;
+                    Console.WriteLine("{0} chassis selected.", perq);
                 }
             }
         }
@@ -281,9 +280,9 @@ namespace PERQemu.UI
             {
                 if (cpu != PERQemu.Config.Current.CPU)
                 {
-                    Console.WriteLine("{0} CPU selected.", cpu);
                     PERQemu.Config.Current.CPU = cpu;
                     PERQemu.Config.Changed = true;
+                    Console.WriteLine("{0} CPU selected.", cpu);
                 }
 
                 if (!PERQemu.Config.CheckCPU())
@@ -322,7 +321,7 @@ namespace PERQemu.UI
             {
                 if (size > 0 && size <= 16)
                 {
-                    // shortcut - assume they mean megabytes
+                    // Shortcut: assume they mean megabytes
                     size = RoundToPowerOf2(size) * 1024;
                 }
                 else if (size == 256 || size == 512)
@@ -331,21 +330,22 @@ namespace PERQemu.UI
                 }
                 else if (size >= 1024 && size <= 32768)
                 {
-                    // round to the nearest supported capacity
+                    // Round to the nearest supported capacity
                     size = RoundToPowerOf2(size / 1024) * 1024;
                 }
                 else
                 {
                     Console.WriteLine("That's a silly amount of memory.");
+                    return;
                 }
 
-                size *= 1024;               // in bytes
+                size *= 1024;               // In bytes
 
                 if ((int)size != PERQemu.Config.Current.MemorySizeInBytes)
                 {
-                    Console.WriteLine("Memory size set to {0}.", PERQemu.Config.Current.MemSizeToString());
                     PERQemu.Config.Current.MemorySizeInBytes = (int)size;
                     PERQemu.Config.Changed = true;
+                    Console.WriteLine("Memory size set to {0}.", PERQemu.Config.Current.MemSizeToString());
                 }
 
                 if (!PERQemu.Config.CheckMemory())
@@ -403,9 +403,9 @@ namespace PERQemu.UI
             {
                 if (oio != PERQemu.Config.Current.IOOptionBoard)
                 {
-                    Console.WriteLine("IO Option board type {0} selected.", oio);
                     PERQemu.Config.Current.IOOptionBoard = oio;
                     PERQemu.Config.Changed = true;
+                    Console.WriteLine("IO Option board type {0} selected.", oio);
 
                     // Board changed; reset the selected options to defaults
                     if (oio == OptionBoardType.OIO)
@@ -448,9 +448,9 @@ namespace PERQemu.UI
                     case IOOptionType.None:
                         if (PERQemu.Config.Current.IOOptions != opt)
                         {
-                            Console.WriteLine("IO options reset.");
                             PERQemu.Config.Current.IOOptions = opt;
                             PERQemu.Config.Changed = true;
+                            Console.WriteLine("IO options reset.");
                         }
                         break;
 
@@ -461,9 +461,9 @@ namespace PERQemu.UI
                         if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
                             PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
                         {
-                            Console.WriteLine("IO option '{0}' selected.", opt);
                             PERQemu.Config.Current.IOOptions |= opt;
                             PERQemu.Config.Changed = true;
+                            Console.WriteLine("IO option '{0}' selected.", opt);
                         }
                         else
                         {
@@ -485,9 +485,9 @@ namespace PERQemu.UI
                             // machine configured with an NIO board, I'll just switch
                             // to the EIO and remove the optional (incompatible) Ethernet
                             // option.  This is silly.
-                            Console.WriteLine("* Adding Ethernet option to an NIO changes it to an EIO; reconfiguring.");
                             PERQemu.Config.Current.IOBoard = IOBoardType.EIO;
                             PERQemu.Config.Current.IOOptions &= ~(IOOptionType.Ether);
+                            Console.WriteLine("* Adding Ethernet option to an NIO changes it to an EIO; reconfiguring.");
 
                             if (PERQemu.Config.Current.IOOptions == IOOptionType.None)
                             {
@@ -499,9 +499,9 @@ namespace PERQemu.UI
                         }
                         else if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO)
                         {
-                            Console.WriteLine("IO option '{0}' selected.", opt);
                             PERQemu.Config.Current.IOOptions |= opt;
                             PERQemu.Config.Changed = true;
+                            Console.WriteLine("IO option '{0}' selected.", opt);
                         }
                         else
                         {
@@ -532,9 +532,9 @@ namespace PERQemu.UI
             {
                 if (disp != PERQemu.Config.Current.Display)
                 {
-                    Console.WriteLine("{0} display option selected.", disp);
                     PERQemu.Config.Current.Display = disp;
                     PERQemu.Config.Changed = true;
+                    Console.WriteLine("{0} display option selected.", disp);
                }
 
                 if (!PERQemu.Config.CheckMemory())
@@ -559,9 +559,9 @@ namespace PERQemu.UI
             {
                 if (tab != PERQemu.Config.Current.Tablet)
                 {
-                    Console.WriteLine("Tablet option {0} selected.", tab);
                     PERQemu.Config.Current.Tablet = tab;
                     PERQemu.Config.Changed = true;
+                    Console.WriteLine("Tablet option {0} selected.", tab);
                 }
             }
         }

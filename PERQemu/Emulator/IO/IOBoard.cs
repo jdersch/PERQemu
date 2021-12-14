@@ -75,10 +75,6 @@ namespace PERQemu.IO
             get { return _z80System.SupportsAsync; }
         }
 
-        public RunState State
-        {
-            get { return _z80System.State; }
-        }
 
         //
         // Basic operations

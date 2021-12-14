@@ -55,8 +55,8 @@ namespace PERQemu.UI
         //      storage define Floppy "DSDD" 77 2 26 256 0 360
         //      storage define Disk5Inch "XT2190" 918 15 16 512 16 0 3600 "Maxtor XT2190 159MB MFM"
         //      storage define (subsystem)
-        //          class <class>       -- DriveType
-        //          type <string>       -- short name/key
+        //          type <class>       -- DriveType
+        //          name <string>       -- short name/key
         //          cylinders, heads,
         //          sectors, bytes,
         //          header bytes, rpm   -- numeric, required
@@ -81,7 +81,6 @@ namespace PERQemu.UI
             PERQemu.CLI.ResetPrefix();
         }
 
-
         [Command("storage load media", "Attach a media file to a storage unit")]
         public void LoadMedia(byte unit, string filename)
         {
@@ -95,6 +94,121 @@ namespace PERQemu.UI
             Console.WriteLine("Geometry {0}/{1}/{2} with {3}-byte sectors ({4} KB capacity)",
                               cyl, heads, sec, bps, (cyl * heads * sec * bps) / 1024);
         }
+
+
+        // todo: move the interface to the floppy/hard disk loading and saving
+        // to PERQsystem?
+        // todo: allow for second hard drive in perq2 models
+
+        [Command("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
+        private void CreateFloppyDisk()
+        {
+            // todo: allow specification of sssd, ssdd, dssd, dsdd
+            // all floppies created in imd format by default?
+            PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(null);
+            Console.WriteLine("Created.");
+        }
+
+        [Command("load floppy", "Mounts a floppy disk image")]
+        private void LoadFloppy(string imagePath)
+        {
+            try
+            {
+                PERQemu.Config.Current.AssignMedia(imagePath, 0);
+
+                if (PERQemu.Sys.State != RunState.Off)
+                {
+                    PERQemu.Sys.LoadMedia(DriveType.Floppy, imagePath, 0);
+                    Console.WriteLine("Loaded.");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to load disk image {0} - {1}", imagePath, e.Message);
+            }
+        }
+
+        [Command("unload floppy", "Unmounts a floppy disk image")]
+        private void UnloadFloppy()
+        {
+            PERQemu.Sys.IOB.Z80System.UnloadFloppyDisk();
+        }
+
+        // todo: floppy remembers the path we loaded from so we don't have to?
+        // todo: make relative to Disks/ dir
+
+        [Command("save floppy", "Save the current in-memory floppy disk to an image file")]
+        private void SaveFloppy(string imagePath)
+        {
+            try
+            {
+                PERQemu.Sys.IOB.Z80System.SaveFloppyDisk(imagePath);
+                Console.WriteLine("Saved.");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to save disk image {0} - {1}", imagePath, e.Message);
+            }
+        }
+
+        // todo: allow for all supported types, not just shugart
+        // todo: allow for multiple units in perq 2 models
+        // todo: allow user to define new types here?  or just use built-in ones?
+        [Command("create harddisk", "Create and mounts a new, unformatted hard disk image")]
+        private void CreateHardDisk()
+        {
+            PERQemu.Sys.IOB.DiskController.LoadImage(null);
+            Console.WriteLine("Created.");
+        }
+
+        [Command("load harddisk", "Mount an existing hard disk image")]
+        private void LoadHardDisk(string imagePath, int unit = 1)
+        {
+            try
+            {
+                // Save the image path into the configuration record so the
+                // drive will be loaded at power up.  If the machine is already
+                // configured, then dynamically load it -- a "hot swap" if you
+                // will, even though the fixed disk types didn't support that!
+                // (Someday a mountable SMD pack option would take advantage, tho)
+                PERQemu.Config.Current.AssignMedia(imagePath, unit);
+
+                if (PERQemu.Sys.State != RunState.Off)
+                {
+                    PERQemu.Sys.LoadMedia(DriveType.Disk14Inch, imagePath, unit);
+                    Console.WriteLine("Loaded.");
+                }
+                else
+                {
+                    Console.WriteLine("Assigned '{0}' to unit {1}.",
+                                      Paths.Canonicalize(imagePath), unit);
+                    
+                    // Force a reload at power on
+                    PERQemu.Config.Changed = true;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to load disk image {0} - {1}", imagePath, e.Message);
+            }
+        }
+
+        // todo: like floppy, controller should/will remember name of file loaded
+        // todo: allow user to specify unit # when appropriate (default 0)
+        [Command("save harddisk", "Save the current hard disk to an image file")]
+        private void SaveHardDisk(string imagePath)
+        {
+            try
+            {
+                PERQemu.Sys.IOB.DiskController.SaveImage(imagePath); // FIXME
+                Console.WriteLine("Saved.");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to save disk image {0} - {1}", imagePath, e.Message);
+            }
+        }
+
 
         /// <summary>
         /// Get the next available defined unit number of a particular type. naw

@@ -60,6 +60,8 @@ namespace PERQemu.UI
             {
                 Console.WriteLine("Reading from '{0}'...", scriptFile);
 
+                // todo: scripts should always execute from the top level
+                // of the command hierarchy; set/restore the prefix
                 while (!sr.EndOfStream)
                 {
                     string line = sr.ReadLine();
@@ -449,11 +451,11 @@ namespace PERQemu.UI
             {
                 result = Convert.ToUInt32(arg, (int)r);
             }
-            catch (System.OverflowException)
+            catch (OverflowException)
             {
                 throw new ArgumentException(string.Format("{0} out of range for a 32-bit {1} value.", arg, r));
             }
-            catch (System.FormatException)
+            catch (FormatException)
             {
                 throw new ArgumentException(string.Format("{0} is not a valid 32-bit {1} value.", arg, r));
             }
@@ -470,11 +472,11 @@ namespace PERQemu.UI
             {
                 result = Convert.ToUInt16(arg, (int)r);
             }
-            catch (System.OverflowException)
+            catch (OverflowException)
             {
                 throw new ArgumentException(string.Format("{0} out of range for a 16-bit {1} value.", arg, r));
             }
-            catch (System.FormatException)
+            catch (FormatException)
             {
                 throw new ArgumentException(string.Format("{0} is not a valid 16-bit {1} value.", arg, r));
             }
@@ -491,11 +493,11 @@ namespace PERQemu.UI
             {
                 result = Convert.ToByte(arg, (int)r);
             }
-            catch (System.OverflowException)
+            catch (OverflowException)
             {
                 throw new ArgumentException(string.Format("{0} out of range for an 8-bit {1} value.", arg, r));
             }
-            catch (System.FormatException)
+            catch (FormatException)
             {
                 throw new ArgumentException(string.Format("{0} is not a valid 8-bit {1} value.", arg, r));
             }

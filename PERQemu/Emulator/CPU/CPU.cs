@@ -815,7 +815,6 @@ namespace PERQemu.Processor
                                     if (uOp.LongConstant != _alu.R.Value)
                                     {
                                         Console.WriteLine("Push long const discrepancy: R={0:x6}, uOp={1:x6}!", _alu.R.Value, uOp.LongConstant);
-                                        _system.Break();
                                     }
 #endif
                                     _estack.Push(uOp.LongConstant);

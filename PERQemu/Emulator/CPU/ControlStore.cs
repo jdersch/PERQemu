@@ -255,7 +255,7 @@ namespace PERQemu.Processor
                 }
                 fs.Close();
 
-                Trace.Log(LogType.CpuState, "Read boot ROM from {0}.", path);
+                Trace.Log(LogType.CpuState, "Read boot ROM from {0}.", Paths.Canonicalize(path));
             }
 
             /// <summary>

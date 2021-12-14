@@ -52,35 +52,6 @@ namespace PERQemu
             // Start up the line editor
             _editor = new CommandPrompt(_exec.CommandTreeRoot);
         }
-
-        public void ReadScript(string script)
-        {
-            // Ignore the result...
-            _exec.ExecuteScript(script);
-        }
-
-        public void Run()
-        {
-            _running = true;
-
-            while (_running)
-            {
-                try
-                {
-                    string cmd = _editor.GetLine().Trim();
-
-                    if (cmd != string.Empty)
-                    {
-                        _exec.ExecuteLine(cmd);
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-            }
-        }
-
         public CommandNode Prefix
         {
             get { return _exec.CurrentRoot; }
@@ -110,20 +81,46 @@ namespace PERQemu
             e.Cancel = true;
             Console.WriteLine("^C");
 
-            if (PERQemu.Sys != null)
+            PERQemu.Controller.Break();
+        }
+
+        public void ReadScript(string script)
+        {
+            // Ignore the result...
+            _exec.ExecuteScript(script);
+        }
+
+        /// <summary>
+        /// Run the main CLI loop.
+        /// </summary>
+        public void Run()
+        {
+            _running = true;
+
+            while (_running)
             {
-                PERQemu.Sys.Break();
+                try
+                {
+                    string cmd = _editor.GetLine().Trim();
+
+                    if (cmd != string.Empty)
+                    {
+                        _exec.ExecuteLine(cmd);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                }
             }
         }
+
 
         #region CLI Utility Routines
 
         /// <summary>
         /// Print a nice columnar list of (reasonably short) strings.
         /// </summary>
-        /// <param name="items">Strings to print</param>
-        /// <param name="leftCol">Left indent</param>
-        /// <param name="tabWidth">Column width</param>
         public void Columnify(string[] items, int leftCol = 4, int tabWidth = 15)
         {
             Console.Write(" ".PadLeft(leftCol));
@@ -279,13 +276,15 @@ namespace PERQemu
         [Command("quit", "Leave PERQemu")]
         private void Quit()
         {
+            PERQemu.Controller.PowerOff();
             _running = false;
         }
 
         [Command("quit without save", "Leave PERQemu without committing changes")]
         private void QuitNow()
         {
-            Settings.Changed = false;   // Force the "without save" part :-)
+            PERQemu.Controller.PowerOff();  // Stop the machine, if running
+            Settings.Changed = false;       // Force the "without save" part :-)
             _running = false;
         }
 

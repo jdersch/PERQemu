@@ -183,12 +183,11 @@ namespace PERQemu.Config
             // and the GUI form can initialize properly.
             //
             _current = _default;
-
         }
 
         public Configuration Default
         {
-            get { return _default; }
+            get { return _default = new Configuration(); }
         }
 
         public Configuration Current
@@ -325,16 +324,14 @@ namespace PERQemu.Config
                     }
 
                     //
-                    // Write out the storage configuration.  We can only assume
-                    // they haven't created something bogus.
+                    // Write out the storage configuration.  We only need to save
+                    // any devices with an assigned media file.
                     //
                     foreach (var dev in _current.Drives)
                     {
-                        // Is there a configured media file?
-                        // FIXME just save pathnames (by unit id) -- board type creates the device list
                         if (!string.IsNullOrEmpty(dev.MediaPath))
                         {
-                            sw.WriteLine("storage load {0} {1} {2}", dev.Device, dev.Unit, dev.MediaPath);
+                            sw.WriteLine("storage load {0} {1} {2}", dev.Device, dev.MediaPath, dev.Unit);
                         }
                     }
 
@@ -343,7 +340,8 @@ namespace PERQemu.Config
                 }
 
                 _current.IsSaved = true;
-                _current.Reason = string.Format("Configuration '{0}' saved to {1}.", _current.Name, _current.Filename);
+                _current.Reason = string.Format("Configuration '{0}' saved to {1}.",
+                                                _current.Name, Paths.Canonicalize(_current.Filename));
                 return true;
             }
             catch (Exception e)

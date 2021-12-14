@@ -18,6 +18,7 @@
 //
 
 using SDL2;
+using System;
 using System.Collections.Generic;
 
 using PERQemu.Config;
@@ -36,15 +37,16 @@ namespace PERQemu.UI
             else
                 SetupPERQ2Map();
 
-            // TODO: Get the state of the CAPS LOCK and NUM LOCK keys; set our local booleans
-            _lockCaps = false;
-            _lockNums = false;
+            // Set the initial state of the CAPS LOCK and NUM LOCK keys,
+            // based on the Console's setting?
+            _lockCaps = Console.CapsLock;
+            _lockNums = Console.NumberLock;
         }
 
         public bool CapsLock => _lockCaps;
         public bool NumLock => _lockNums;
 
-        // Toggle the state of a given "lock" key (CAPS, NUM, SCROLL)
+        // Toggle the state of a given "lock" key
         public void SetLockKeyState(SDL.SDL_Keycode keycode)
         {
             switch (keycode)

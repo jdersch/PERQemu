@@ -235,7 +235,7 @@ namespace PERQemu.Config
                     var hack = sb.Length;
                     sb.AppendFormat("Unit: {0}  Type: {1}", drive.Unit, drive.Device);
                     sb.AppendFormat("{0}File: {1}\n", " ".PadLeft(hack + 28 - sb.Length),
-                                    (string.IsNullOrEmpty(drive.MediaPath) ? "<not assigned>" : drive.MediaPath));
+                                    (string.IsNullOrEmpty(drive.MediaPath) ? "<not assigned>" : Paths.Canonicalize(drive.MediaPath)));
                 }
             }
 

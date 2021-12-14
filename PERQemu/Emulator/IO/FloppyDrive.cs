@@ -47,7 +47,7 @@ namespace PERQemu.IO
 
         public bool IsWriteProtected
         {
-            get { return _disk != null ? _disk.IsWriteProtected : false; }
+            get { return _disk != null && _disk.IsWriteProtected; }
         }
 
         public bool IsSingleSided

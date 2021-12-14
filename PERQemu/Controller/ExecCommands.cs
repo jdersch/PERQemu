@@ -24,8 +24,7 @@ using PERQemu.IO.SerialDevices;
 namespace PERQemu
 {
     /// <summary>
-    /// Implements basic execution controls: starting, stopping, loading and
-    /// saving ejectable media (floppies or tapes), screenshots, etc.
+    /// Implements basic execution controls.
     /// </summary>
     public class ExecCommands
     {
@@ -39,8 +38,8 @@ namespace PERQemu
                 return;
             }
 
-            Console.WriteLine("Current run state is " + PERQemu.Sys.State);
             Console.WriteLine("Current configuration is " + PERQemu.Sys.Config.Name);
+            Console.WriteLine("Current run state is " + PERQemu.Sys.State);
 
             // todo: check and show floppy and disk drive IsModified
         }
@@ -48,30 +47,25 @@ namespace PERQemu
         [Command("power on", "Turn on the configured PERQ!")]
         public void PowerOn()
         {
+            if (PERQemu.Controller.State != RunState.Off)
+            {
+                Console.WriteLine("The PERQ is already powered on.");
+                return;
+            }
+
             PERQemu.Controller.PowerOn();
         }
 
-        // todo: warn if the modified disks aren't saved
         [Command("power off", "Turn off the PERQ")]
         public void PowerOff()
         {
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The PERQ is already powered off.");
+                return;
+            }
+
             PERQemu.Controller.PowerOff();
-        }
-
-        [Command("go")]
-        [Command("debug go")]
-        [Command("start", "Start or restart the PERQ")]
-        [Command("debug start", "Start or restart the PERQ")]
-        public void Start()
-        {
-            PERQemu.Controller.TransitionTo(RunState.Running);
-        }
-
-        [Command("stop", "Stop or pause the PERQ")]
-        [Command("debug stop", "Stop or pause the PERQ")]
-        public void Stop()
-        {
-            PERQemu.Controller.TransitionTo(RunState.Paused);
         }
 
         [Command("reset", "Reset the PERQ")]
@@ -81,112 +75,25 @@ namespace PERQemu
             PERQemu.Controller.Reset();
         }
 
-        //
-        // Media: Floppies and Hard Disks
-        //
-
-        // todo: move the interface to the floppy/hard disk loading and saving
-        // to PERQsystem?
-        // todo: allow for second hard drive in perq2 models
-
-        [Command("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
-        private void CreateFloppyDisk()
+        [Command("go")]
+        [Command("debug go")]
+        [Command("start", "Start or restart the PERQ")]
+        [Command("debug start", "Start or restart the PERQ")]
+        public void Start()
         {
-            // todo: allow specification of sssd, ssdd, dssd, dsdd
-            // all floppies created in imd format by default?
-            PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(null);
-            Console.WriteLine("Created.");
+            // Implicitly power on (shortcut) if not already done
+            PERQemu.Controller.TransitionTo(RunState.Running);
+            PERQemu.Sys.PrintStatus();
         }
 
-        [Command("load floppy", "Mounts a floppy disk image")]
-        private void LoadFloppy(string imagePath)
+        [Command("stop", "Stop or pause the PERQ")]
+        [Command("debug stop", "Stop or pause the PERQ")]
+        public void Stop()
         {
-            try
+            // A quiet no-op if the machine isn't on...
+            if (PERQemu.Controller.State != RunState.Off)
             {
-                PERQemu.Config.Current.AssignMedia(imagePath, 0);
-
-                if (PERQemu.Sys.State != RunState.Off)
-                {
-                    PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(imagePath);
-                    Console.WriteLine("Loaded.");
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to load disk image {0} - {1}", imagePath, e.Message);
-            }
-        }
-
-        [Command("unload floppy", "Unmounts a floppy disk image")]
-        private void UnloadFloppy()
-        {
-            PERQemu.Sys.IOB.Z80System.UnloadFloppyDisk();
-        }
-
-        // todo: floppy remembers the path we loaded from so we don't have to?
-        // todo: make relative to Disks/ dir
-
-        [Command("save floppy", "Save the current in memory floppy disk to an image file")]
-        private void SaveFloppy(string imagePath)
-        {
-            try
-            {
-                PERQemu.Sys.IOB.Z80System.SaveFloppyDisk(imagePath);
-                Console.WriteLine("Saved.");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to save disk image {0} - {1}", imagePath, e.Message);
-            }
-        }
-
-        // todo: allow for all supported types, not just shugart
-        // todo: allow for multiple units in perq 2 models
-        // todo: allow user to define new types here?  or just use built-in ones?
-        [Command("create harddisk", "Create and mounts a new, unformatted hard disk image")]
-        private void CreateHardDisk()
-        {
-            PERQemu.Sys.IOB.DiskController.LoadImage(null);
-            Console.WriteLine("Created.");
-        }
-
-        [Command("load harddisk", "Mount an existing hard disk image")]
-        private void LoadHardDisk(string imagePath, int unit = 1)
-        {
-            try
-            {
-                // Save the image path into the configuration record so the
-                // drive will be loaded at power up.  If the machine is already
-                // configured, then dynamically load it -- a "hot swap" if you
-                // will, even though the fixed disk types didn't support that!
-                // (Someday a mountable SMD pack option would take advantage, tho)
-                PERQemu.Config.Current.AssignMedia(imagePath, unit);
-
-                if (PERQemu.Sys.State != RunState.Off)
-                {
-                    PERQemu.Sys.IOB.DiskController.LoadImage(imagePath);
-                    Console.WriteLine("Loaded.");
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to load disk image {0} - {1}", imagePath, e.Message);
-            }
-        }
-
-        // todo: like floppy, controller should/will remember name of file loaded
-        // todo: allow user to specify unit # when appropriate (default 0)
-        [Command("save harddisk", "Save the current hard disk to an image file")]
-        private void SaveHardDisk(string imagePath)
-        {
-            try
-            {
-                PERQemu.Sys.IOB.DiskController.SaveImage(imagePath); // FIXME
-                Console.WriteLine("Saved.");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to save disk image {0} - {1}", imagePath, e.Message);
+                PERQemu.Controller.TransitionTo(RunState.Paused);
             }
         }
 

@@ -35,13 +35,15 @@ namespace PERQemu.PhysicalDisk
             _tracks = new Track[2, 77];
             _cylinderCount = 77;
             _isSingleSided = true;
-            _isWriteProtected = false;
             _isModified = false;
 
             using (FileStream fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
             {
                 LoadIMD(fs);
             }
+
+            // If we got here we know the file exists :-)
+            _isWriteProtected = new FileInfo(imagePath).IsReadOnly;
         }
 
         public FloppyDisk()
@@ -152,17 +154,17 @@ namespace PERQemu.PhysicalDisk
 
                 if (t.Cylinder < 0 || t.Cylinder > 76)
                 {
-                    throw new InvalidOperationException(String.Format("Invalid cylinder value {0}", t.Cylinder));
+                    throw new InvalidOperationException(string.Format("Invalid cylinder value {0}", t.Cylinder));
                 }
 
                 if (t.Head < 0 || t.Head > 1)
                 {
-                    throw new InvalidOperationException(String.Format("Invalid head value {0}", t.Head));
+                    throw new InvalidOperationException(string.Format("Invalid head value {0}", t.Head));
                 }
 
                 if (_tracks[t.Head, t.Cylinder] != null)
                 {
-                    throw new InvalidOperationException(String.Format("Duplicate head/track", t.Head, t.Cylinder));
+                    throw new InvalidOperationException(string.Format("Duplicate head/track", t.Head, t.Cylinder));
                 }
 
                 if (t.Head != 0)
@@ -377,7 +379,9 @@ namespace PERQemu.PhysicalDisk
             //
             for (int i = 0; i < _sectorCount; i++)
             {
-                _sectors.TryGetValue(_sectorOrdering[i], out Sector sector);
+                Sector sector;
+
+                _sectors.TryGetValue(_sectorOrdering[i], out sector);
                 if (sector == null)
                 {
                     // Mark this as unavailable.
@@ -422,7 +426,8 @@ namespace PERQemu.PhysicalDisk
 
         public Sector ReadSector(int sector)
         {
-            _sectors.TryGetValue(sector, out Sector s);
+            Sector s;
+            _sectors.TryGetValue(sector, out s);
             return s;
         }
 

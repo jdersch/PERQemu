@@ -485,10 +485,10 @@ namespace PERQemu.Memory
                 case CursorFunction.CTInvert:
                 case CursorFunction.CTInvCursCompl:
                     return ~quad;
-
-                default:
-                    throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
             }
+
+            // Can't actually happen
+            throw new Exception("Bad _cursorFunc in TransformDisplayQuad");
         }
 
         /// <summary>
@@ -501,7 +501,7 @@ namespace PERQemu.Memory
             {
                 case CursorFunction.CTInvBlackHole:
                 case CursorFunction.CTWhite:
-                    return (byte)cursByte;
+                    return cursByte;
 
                 case CursorFunction.CTBlackHole:
                 case CursorFunction.CTCursorOnly:
@@ -518,10 +518,9 @@ namespace PERQemu.Memory
 
                 case CursorFunction.CTInvCursCompl:
                     return (byte)(~cursByte ^ ~dispByte);
-
-                default:
-                    throw new ArgumentOutOfRangeException("Unexpected cursor function value.");
             }
+
+            throw new Exception("Bad _cursorFunc in TransformCursorByte");
         }
 
         [Flags]

@@ -93,6 +93,7 @@ namespace PERQemu.UI
                 Trace.Log(LogType.Errors, "** InitializeSDL called while already running!?");
                 return;
             }
+            Console.WriteLine("[Initializing SDL on {0}]", Thread.CurrentThread.ManagedThreadId);
 
             // Necessary?  Helpful?
             SDL.SDL_SetMainReady();
@@ -250,6 +251,7 @@ namespace PERQemu.UI
                 }
                 else
                 {
+                    Console.WriteLine("[Entering SDLMessageLoop on {0}]", Thread.CurrentThread.ManagedThreadId);
                     while (SDL.SDL_WaitEvent(out e) != 0)
                     {
                         SDLMessageHandler(e);
@@ -257,6 +259,7 @@ namespace PERQemu.UI
                         if (_system.State != RunState.Running)
                             return;
                     }
+                    Console.WriteLine("[Exiting SDLMessageLoop]");
                 }
             }
         }
@@ -306,8 +309,8 @@ namespace PERQemu.UI
                     break;
 
                 case SDL.SDL_EventType.SDL_QUIT:
-                    PERQemu.Controller.PowerOff();  // Hit the brakes!
-                    ShutdownSDL();                  // Now clobber the window
+                    // Stop the virtual machine, which will call ShutdownSDL()
+                    PERQemu.Controller.PowerOff();
                     break;
 
                 default:
@@ -387,16 +390,16 @@ namespace PERQemu.UI
             var state = PERQemu.Sys.State;
             if (state == RunState.Running)
             {
-                SDL.SDL_SetWindowTitle(_sdlWindow, string.Format("PERQ - {0:N2} fps, CPU {1:N2}ns, Z80 {2:N2}ns", fps, ns, zns));
-                //Console.WriteLine("elapsed={0} inst={1} ns={2} z80inst={3}", elapsed, inst, ns, z80inst);  // aw / debug
+                SDL.SDL_SetWindowTitle(_sdlWindow,
+                        string.Format("PERQ - {0:N2} fps, CPU {1:N2}ns, Z80 {2:N2}ns", fps, ns, zns));
             }
             else
             {
                 SDL.SDL_SetWindowTitle(_sdlWindow,
-                         string.Format("PERQ is {0}", ((state == RunState.RunInst) ||
-                                                       (state == RunState.RunZ80Inst) ||
-                                                       (state == RunState.SingleStep)) ?
-                                                      "single stepping" : state.ToString()));
+                    string.Format("PERQ is {0}", ((state == RunState.RunInst) ||
+                                                  (state == RunState.RunZ80Inst) ||
+                                                  (state == RunState.SingleStep)) ?
+                                                  "single stepping" : state.ToString()));
             }
         }
 
@@ -583,7 +586,7 @@ namespace PERQemu.UI
                 // rather than having to select the console window to hit ^C.
                 case SDL.SDL_Keycode.SDLK_PAUSE:            // Windows keyboards
                 case SDL.SDL_Keycode.SDLK_F8:               // Mac equivalent...
-                    _system.Break();
+                    PERQemu.Controller.Break();
                     handled = true;
                     break;
             }
