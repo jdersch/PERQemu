@@ -69,7 +69,7 @@ namespace PERQemu
         public Scheduler(ulong timeStepNsec)
         {
             _timeStepNsec = timeStepNsec;
-            Reset();
+            _schedule = new SchedulerQueue();
         }
 
         public ulong CurrentTimeNsec
@@ -79,8 +79,8 @@ namespace PERQemu
 
         public void Reset()
         {
-            _schedule = new SchedulerQueue();
             _currentTimeNsec = 0;
+            _schedule.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -138,12 +138,10 @@ namespace PERQemu
 
         public ulong TimeStepNsec => _timeStepNsec;
 
-        private ulong _currentTimeNsec;
-
-        private SchedulerQueue _schedule;
-
-        // The time-base for the scheduler.
+        // The time-base for the scheduler
         private ulong _timeStepNsec;
+        private ulong _currentTimeNsec;
+        private SchedulerQueue _schedule;
     }
 
     /// <summary>
@@ -157,6 +155,9 @@ namespace PERQemu
             _queue = new LinkedList<Event>();
         }
 
+        /// <summary>
+        /// The Top of the queue (null if queue is empty).
+        /// </summary>
         public Event Top
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -166,9 +167,9 @@ namespace PERQemu
             }
         }
 
-        public bool Contains(Event e)
+        public void Clear()
         {
-            return _queue.Contains(e);
+            _queue.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -183,11 +184,11 @@ namespace PERQemu
             }
 
             //
-            // Do a linear search to find the place to put this in.
-            // Since we maintain a sorted list with every insertion we only needy
-            // to find the first entr that the new entry is earlier (or equal) to.
-            // This will likely be adequate as the queue should never get incredibly
-            // deep; a binary search may be more performant if this is not the case.
+            // Do a linear search to find the place to put this in.  Since we
+            // maintain a sorted list with every insertion we only need to find
+            // the first entr that the new entry is earlier (or equal) to. This
+            // will likely be adequate as the queue should never get incredibly
+            // deep; a binary search may be more performant if this isn't the case.
             //
             LinkedListNode<Event> current = _queue.First;
             while (current != null)
@@ -237,10 +238,6 @@ namespace PERQemu
         }
 
         private LinkedList<Event> _queue;
-
-        /// <summary>
-        /// The Top of the queue (null if queue is empty).
-        /// </summary>
         private Event _top;
     }
 }

@@ -63,10 +63,11 @@ namespace PERQemu.Processor
     /// We want this to be fast, while still being reasonably safe, so a few
     /// liberties are taken (like, we only protect the raise/clear but don't
     /// use Interlocked.Read). Preliminary benchmarks/tests indicate that we
-    /// shave a few nanoseconds off the microcycle time, but a test with NO
-    /// Interlocks also shows that just setting/clearing the array values not
-    /// only seems to run without conflicts or threading issues, but that it's
-    /// just as fast WITH the interlocks.  Go figure.
+    /// shave a few nanoseconds off the microcycle time compared to other lock
+    /// methods, but a test with NO Interlocks also shows that just setting/
+    /// clearing the array values seems to run without conflicts or threading
+    /// issues (since generally the only code that raises an interrupt also
+    /// clears it).  But it seems to be just as fast WITH the interlocks, so...
     /// </remarks>
     public class InterruptEncoder
     {
@@ -119,8 +120,7 @@ namespace PERQemu.Processor
 
         /// <summary>
         /// Gets the current status of all the interrupts in one "flag word"
-        /// like the original implementation.  Since this is only used by the
-        /// debugger it doesn't have to be fast...
+        /// like the original implementation.
         /// </summary>
         public InterruptFlag Flag
         {

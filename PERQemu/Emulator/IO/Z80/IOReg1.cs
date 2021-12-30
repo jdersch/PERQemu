@@ -18,10 +18,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace PERQemu.IO.Z80
 {
@@ -40,22 +36,13 @@ namespace PERQemu.IO.Z80
 
         public void Reset()
         {
-
         }
 
         public string Name => "I/O REG 1";
-
         public byte[] Ports => _ports;
-
-        public bool IntLineIsActive => false;
-
         public byte? ValueOnDataBus => null;
-
-        public bool InterruptsEnabled
-        {
-            get { return false; }
-            set { }
-        }
+        public bool IntLineIsActive => false;
+        public bool InterruptsEnabled => false;
 
         public event EventHandler NmiInterruptPulse;
 
@@ -69,9 +56,8 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException();
         }
 
-        private byte[] _ports = new byte[] { 0x88 };
+        private byte[] _ports = { 0x88 };
 
         private Z80ToPERQFIFO _z80PerqFifo;
-        
     }
 }

@@ -25,21 +25,16 @@ namespace PERQemu.IO.Z80
     {
         public TMS9914A()
         {
-
         }
 
         public void Reset()
         {
-            
         }
 
         public string Name => "TMS9914A";
-
         public byte[] Ports => _ports;
-
-        public bool IntLineIsActive => _interruptActive;
-
         public byte? ValueOnDataBus => 0x22;    // GPIVEC
+        public bool IntLineIsActive => _interruptActive;
 
         public event EventHandler NmiInterruptPulse;
 

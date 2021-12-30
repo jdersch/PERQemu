@@ -152,6 +152,7 @@ namespace PERQemu.UI
             settings::logging template [str]    -- hmm.
             settings::logging keep [n]          -- how many files
             settings::logging filesize [n]      -- in mb?  kb?
+            -- oh hey, i know, let's use log4j instead of rolling our own... :-P
 
             Host interface to the network, serial and audio output devices
             is globally set for all virtual machines:

@@ -18,10 +18,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace PERQemu.IO.Z80
 {
@@ -41,22 +37,13 @@ namespace PERQemu.IO.Z80
 
         public void Reset()
         {
-
         }
 
         public string Name  => "I/O REG 3";
-
         public byte[] Ports => _ports;
-
+        public byte? ValueOnDataBus => null;
         public bool IntLineIsActive => false;
-
-        public byte? ValueOnDataBus =>  null;
-
-        public bool InterruptsEnabled
-        {
-            get => false;
-            set { }
-        }
+        public bool InterruptsEnabled => false;
 
         public event EventHandler NmiInterruptPulse;
 
@@ -67,6 +54,7 @@ namespace PERQemu.IO.Z80
 
         public void Write(byte portAddress, byte value)
         {
+            Console.WriteLine("reg3 write to {0:x}, value {1:x}", portAddress, value);
             //
             // Configure DMA:
             // From v87.z80:

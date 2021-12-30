@@ -1,4 +1,5 @@
-// registerfile.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
+//
+// RegisterFile.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -48,18 +49,7 @@ namespace PERQemu.Processor
             public byte RegisterBase
             {
                 get { return _registerBase; }
-            }
-
-            public void SetRegisterBase(byte rb)
-            {
-                if (Is4K)
-                {
-                    _registerBase = 0;      // Doesn't exist on 4K; ignore it
-                }
-                else
-                {
-                    _registerBase = rb;
-                }
+                set { _registerBase = value; }
             }
 
             /// <summary>

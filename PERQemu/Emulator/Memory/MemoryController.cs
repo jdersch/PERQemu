@@ -1,4 +1,5 @@
-// memorycontroller.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// MemoryController.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -36,47 +37,22 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            _startAddr = -1;
-            _cycleType = MemoryCycle.None;
-            _bookmark = 0;
-            _active = false;
+            StartAddress = -1;
+            CycleType = MemoryCycle.None;
+            Bookmark = 0;
+            Active = false;
         }
 
         public override string ToString()
         {
-            return String.Format("Addr={0:x6} cycle={1} bookmark={2} active={3}",
-                                _startAddr, _cycleType, _bookmark, _active);
+            return string.Format("Addr={0:x6} cycle={1} bookmark={2} active={3}",
+                                StartAddress, CycleType, Bookmark, Active);
         }
 
-        public int StartAddress
-        {
-            get { return _startAddr; }
-            set { _startAddr = value; }
-        }
-
-        public MemoryCycle CycleType
-        {
-            get { return _cycleType; }
-            set { _cycleType = value; }
-        }
-
-        public int Bookmark
-        {
-            get { return _bookmark; }
-            set { _bookmark = value; }
-        }
-
-        public bool Active
-        {
-            get { return _active; }
-            set { _active = value; }
-        }
-
-
-        private int _startAddr;
-        private MemoryCycle _cycleType;
-        private int _bookmark;
-        private bool _active;
+        public int StartAddress;
+        public MemoryCycle CycleType;
+        public int Bookmark;
+        public bool Active;
     }
 
 
@@ -162,30 +138,11 @@ namespace PERQemu.Memory
             Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
         }
 
-        public bool Wait
-        {
-            get { return _wait; }
-        }
-
-        public bool Valid
-        {
-            get { return _valid; }
-        }
-
-        public int Address
-        {
-            get { return _address; }
-        }
-
-        public int WordIndex
-        {
-            get { return _index; }
-        }
-
-        public MemoryCycle Cycle
-        {
-            get { return _current.CycleType; }
-        }
+        public bool Wait => _wait;
+        public bool Valid => _valid;
+        public int Address => _address; 
+        public int WordIndex =>  _index;
+        public MemoryCycle Cycle => _current.CycleType;
 
 
         /// <summary>
@@ -197,7 +154,8 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock(MemoryCycle nextCycle)
         {
-            Trace.Log(LogType.MemoryState, "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+            Trace.Log(LogType.MemoryState,
+                      "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
                      _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
 
             // Update the current op
@@ -209,7 +167,8 @@ namespace PERQemu.Memory
             // Update bookmarks for the next cycle
             UpdateBookmarks(nextCycle);
 
-            Trace.Log(LogType.MemoryState, "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+            Trace.Log(LogType.MemoryState,
+                      "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
                      _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
         }
 

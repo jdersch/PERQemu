@@ -119,7 +119,7 @@ namespace PERQemu.Processor
 
         public override string ToString()
         {
-            return String.Format("Addr={0:x6} Idx={1} Data={2:x4} Mask={3}",
+            return string.Format("Addr={0:x6} Idx={1} Data={2:x4} Mask={3}",
                                  Address, Index, Data, Mask);
         }
 
@@ -147,7 +147,7 @@ namespace PERQemu.Processor
 
         public RasterOp(MemoryBoard mem)
         {
-            _ropShifter = new CPU.Shifter();        // Our own private Idaho
+            _ropShifter = new CPU.Shifter();            // Our own private Idaho
             _srcFifo = new Queue<ROpWord>(16);      // 4 quads (hardware limit)
             _destFifo = new Queue<ROpWord>(4);      // 1 quad
             _halfPipe = new ROpWord();              // 1 word, for overlap
@@ -419,8 +419,8 @@ namespace PERQemu.Processor
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ROpWord ComputeResult(ROpWord dest)
         {
-            ROpWord src = dest;                         // init to silence the Xamarin compiler...
-            EdgeStrategy e = EdgeStrategy.NoPopNoPeek;  // assume nothing!  n/a in non-edge cases anyway
+            ROpWord src = dest;
+            EdgeStrategy e = EdgeStrategy.NoPopNoPeek;
             ushort aligned, combined;
 
             Trace.Log(LogType.RasterOp, "RasterOp: Result dest word: {0}", dest);
@@ -753,7 +753,7 @@ namespace PERQemu.Processor
 
                 default:
                     throw new InvalidOperationException(
-                        String.Format("Unexpected state {0} in phase {1} NextState", _state, _phase));
+                        string.Format("Unexpected state {0} in phase {1} NextState", _state, _phase));
             }
             return next;
         }
@@ -1059,7 +1059,7 @@ namespace PERQemu.Processor
         }
 
         // This is an expensive debugging aid...
-        private void DumpFifo(String line, Queue<ROpWord> q)
+        private void DumpFifo(string line, Queue<ROpWord> q)
         {
             if (_ropDebug && Trace.TraceOn)
             {
@@ -1069,7 +1069,7 @@ namespace PERQemu.Processor
 
                     for (int i = 0; i < q.Count; i++)
                     {
-                        line += String.Format("{0}\t{1}\n", i, a[i]);
+                        line += string.Format("{0}\t{1}\n", i, a[i]);
                     }
                 }
                 else
@@ -1085,7 +1085,7 @@ namespace PERQemu.Processor
 #endif
         #endregion
 
-        // Can't use the protected _memory from CPU parent class?
+        // Can't reference the protected _memory from CPU parent class?
         private MemoryBoard _memory;
 
         // RasterOp state
@@ -1150,6 +1150,6 @@ namespace PERQemu.Processor
         // Edge lookup table:  Encodes edge processing rules for aligning the
         // source words, sort of what the RSC03 PROM does.
         private static EdgeStrategy[] _rscTable;
-
     }
 }
+

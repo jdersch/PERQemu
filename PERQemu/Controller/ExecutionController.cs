@@ -114,6 +114,7 @@ namespace PERQemu
                 // Reset upon successful build
                 PERQemu.Config.Changed = false;
 
+                Console.WriteLine("PERQSystem initialized.");
                 return true;
             }
             catch (Exception e)
@@ -137,7 +138,7 @@ namespace PERQemu
                 return;
             }
 
-            if (PERQemu.Config.Changed)
+            if (_system == null || PERQemu.Config.Changed)
             {
                 // Out with the old
                 _system = null;
@@ -145,6 +146,7 @@ namespace PERQemu
                 // In with the new?
                 if (!Initialize(PERQemu.Config.Current))
                 {
+                    Console.WriteLine("Initialization failed.");
                     return;     // Fail.
                 }
 
@@ -186,6 +188,8 @@ namespace PERQemu
 
         public void PowerOff()
         {
+            if (State == RunState.Off) return;
+
             Console.WriteLine("Power OFF requested.");
 
             // todo: get the sequence right!
@@ -195,7 +199,8 @@ namespace PERQemu
             //      then properly shut down and release the PERQsystem and
             //      ALL of its timers, handles, media, etc. -- so that a new
             //      machine can be configured OR the current one reinstantiated
-            //      fix the SDL reinit (again!? WTF, i had fixed this, FMUTA)
+            TransitionTo(RunState.Paused);
+            _system.SaveAllMedia();
             TransitionTo(RunState.Off);
         }
 
@@ -273,6 +278,7 @@ namespace PERQemu
         /// </summary>
         private void SetState(RunState s)
         {
+            // or do the Event-based way if/when the GUI and Debuggers need to be informed too
             _system?.Run(s);
         }
 

@@ -1,4 +1,5 @@
-﻿// sequencer.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
+﻿//
+// Sequencer.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -30,7 +31,7 @@ namespace PERQemu.Processor
         /// call stack, S register, and microcode jumps.  We also roll in
         /// the "2-bit kluge", the PC, and the Victim register.
         /// </summary>
-        protected class Sequencer
+        protected sealed class Sequencer
         {
             public Sequencer(CPU parent)
             {
@@ -103,6 +104,12 @@ namespace PERQemu.Processor
             /// The Am2910 FULL pin is not wired up on the real PERQ, but allow
             /// access here for curiousity/debugging.
             /// </summary>
+            /// <remarks>
+            /// This is enabled in the PERQ24A CPU, whose sequencer has a 33-deep
+            /// internal stack.  A field upgrade of original CPUs to the Am29C10
+            /// could allow for an 8-level stack.  Exposing the FULL pin through
+            /// the uState register would allow the microcode to detect this.
+            /// </remarks>
             public bool StackFull
             {
                 get { return _callStack.StackFull; }

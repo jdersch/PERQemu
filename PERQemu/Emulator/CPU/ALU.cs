@@ -1,4 +1,5 @@
-﻿// alu.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+﻿//
+// ALU.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -55,9 +56,8 @@ namespace PERQemu.Processor
 
             public override string ToString()
             {
-                return
-                    String.Format("C{0}={1} Cry={2} Ovf={3}\n\tLeq={4} Lss={5} Geq={6} Gtr={7} Neq={8} Eql={9}",
-                                  (_bits - 1), CarryH, Cry, Ovf, Leq, Lss, Geq, Gtr, Neq, Eql);
+                return string.Format("C{0}={1} Cry={2} Ovf={3} Leq={4} Lss={5} Geq={6} Gtr={7} Neq={8} Eql={9}",
+                                    (_bits - 1), CarryH, Cry, Ovf, Leq, Lss, Geq, Gtr, Neq, Eql);
             }
         }
 
@@ -128,8 +128,7 @@ namespace PERQemu.Processor
                 // but save the original value for use in addition/subtraction w/carry
                 int lastCarry15 = _flags.Cry ? 1 : 0;
 
-                _flags.CarryH = false;
-
+                bool carryH = false;
                 bool carry15 = false;
                 bool arithX = false;
                 bool arithY = false;
@@ -189,7 +188,7 @@ namespace PERQemu.Processor
                         arithY = true;
 
                         // Check for carry-out from bit 19 / 23
-                        _flags.CarryH = ((amux + bmux) > _mask);
+                        carryH = ((amux + bmux) > _mask);
 
                         // Check for carry-out from bit 15
                         carry15 = ((amux & 0xffff) + (bmux & 0xffff) > 0xffff);
@@ -200,7 +199,7 @@ namespace PERQemu.Processor
                         arithY = true;
 
                         // Check for carry-out from bit 19 / 23
-                        _flags.CarryH = ((amux + bmux + lastCarry15) > _mask);
+                        carryH = ((amux + bmux + lastCarry15) > _mask);
 
                         // Check for carry-out from bit 15
                         carry15 = ((amux & 0xffff) + (bmux & 0xffff) + lastCarry15 > 0xffff);
@@ -210,8 +209,7 @@ namespace PERQemu.Processor
                         _r.Value = (amux - bmux);
                         arithX = true;
 
-                        _flags.CarryH = !((amux - bmux) < 0);
-
+                        carryH = !((amux - bmux) < 0);
                         carry15 = ((amux & 0xffff) - (bmux & 0xffff) >= 0);
                         break;
 
@@ -219,13 +217,12 @@ namespace PERQemu.Processor
                         _r.Value = (amux - bmux - (~lastCarry15 & 0x1));
                         arithX = true;
 
-                        _flags.CarryH = !((amux - bmux - (~lastCarry15 & 0x1)) < 0);
-
+                        carryH = !((amux - bmux - (~lastCarry15 & 0x1)) < 0);
                         carry15 = ((amux & 0xffff) - (bmux & 0xffff) - (~lastCarry15 & 0x1) >= 0);
                         break;
 
                     default:
-                        throw new UnimplementedInstructionException(String.Format("Unhandled ALU operation {0:x1}", op));
+                        throw new UnimplementedInstructionException(string.Format("Unhandled ALU operation {0:x1}", op));
                 }
 
                 // Inputs to the condition code PAL, used to build an index into the PAL array.
@@ -235,28 +232,21 @@ namespace PERQemu.Processor
                 bool Lb15 = (bmux & 0x8000) != 0;
                 bool La15 = (amux & 0x8000) != 0;
 
-                // Set flags that don't require heavy lifting
+                int index = (r15 ? 0x1 : 0) |
+                            (La15 ? 0x2 : 0) |
+                            (Lb15 ? 0x4 : 0) |
+                            (LAeqB ? 0x8 : 0) |
+                            (arithX ? 0x10 : 0) |
+                            (arithY ? 0x20 : 0);
+
+                // Get the precomputed ALU PAL results (Ovf, Lss, Leq, Geq, Gtr)
+                _flags = _palFlags[index];
+
+                // Set remaining flags for this op
+                _flags.CarryH = carryH;
                 _flags.Cry = carry15;
                 _flags.Neq = LAeqB;
                 _flags.Eql = !LAeqB;
-
-                // Look up precomputed ALU PAL results
-                int index = (r15 ? 0x1 : 0) |
-                    (La15 ? 0x2 : 0) |
-                    (Lb15 ? 0x4 : 0) |
-                    (LAeqB ? 0x8 : 0) |
-                    (arithX ? 0x10 : 0) |
-                    (arithY ? 0x20 : 0);
-
-                // TODO: could make this faster by having an unsafe array
-                int flags = _palFlags[index];
-
-                // Set flags based on the returned table value
-                _flags.Ovf = (flags & 0x1) != 0;
-                _flags.Leq = (flags & 0x2) != 0;
-                _flags.Lss = (flags & 0x4) != 0;
-                _flags.Geq = (flags & 0x8) != 0;
-                _flags.Gtr = (flags & 0x10) != 0;
 
                 Trace.Log(LogType.AluState, "ALU: Result: {0} {1}", _r.Value, Flags);
             }
@@ -357,7 +347,7 @@ namespace PERQemu.Processor
             /// </summary>
             private static void BuildFlagTable()
             {
-                _palFlags = new int[64];
+                _palFlags = new ALUFlags[64];
 
                 // TODO: figure out how to incorporate the MulDiv/16K flags
                 //  to clean up the crazy MulDiv mess?
@@ -393,7 +383,7 @@ namespace PERQemu.Processor
                                         bool bArithY = arithY == 0 ? false : true;
 
                                         // Set flags based on the PAL equations
-                                        bool ovf =
+                                        _palFlags[index].Ovf =
                                             !((bR15 & !bLa15) |
                                             //(arithX & arithY & r15) |
                                             (!bArithX & bR15 & !bLb15) |
@@ -403,7 +393,7 @@ namespace PERQemu.Processor
                                             (!bArithX & !bArithY & !bR15) |
                                             (bArithX & !bR15 & !bLb15));
 
-                                        bool leq =
+                                        _palFlags[index].Leq =
                                             !((bArithX & !bArithY & !bR15 & bLAeqB & bLb15 & !bLa15) |
                                             (!bArithX & bArithY & !bR15 & bLAeqB & !bLb15 & !bLa15) |
                                             (bR15 & bLAeqB & !bLa15) |
@@ -411,7 +401,7 @@ namespace PERQemu.Processor
                                             (!bArithX & bR15 & bLAeqB & !bLb15) |
                                             (!bArithY & bR15 & bLAeqB & bLb15));
 
-                                        bool lss =
+                                        _palFlags[index].Lss =
                                             !((bArithX & !bArithY & !bR15 & bLb15 & !bLa15) |
                                             (!bArithX & bArithY & !bR15 & !bLb15 & !bLa15) |
                                             (bR15 & !bLa15) |
@@ -419,7 +409,7 @@ namespace PERQemu.Processor
                                             (!bArithX & bR15 & !bLb15) |
                                             (!bArithY & bR15 & bLb15));
 
-                                        bool geq =
+                                        _palFlags[index].Geq =
                                             !((bArithX & !bArithY & bR15 & !bLb15 & bLa15) |
                                             (!bArithX & bArithY & bR15 & bLb15 & bLa15) |
                                             (!bR15 & bLa15) |
@@ -427,7 +417,7 @@ namespace PERQemu.Processor
                                             (bArithX & !bR15 & !bLb15) |
                                             (bArithY & !bR15 & bLb15));
 
-                                        bool gtr =
+                                        _palFlags[index].Gtr =
                                             !((!bLAeqB) |
                                             (bArithX & !bArithY & bR15 & !bLb15 & bLa15) |
                                             (!bArithX & bArithY & bR15 & bLb15 & bLa15) |
@@ -435,14 +425,6 @@ namespace PERQemu.Processor
                                             (!bArithX & !bArithY & !bR15) |
                                             (bArithX & !bR15 & !bLb15) |
                                             (bArithY & !bR15 & bLb15));
-
-                                        int value = (ovf ? 0x1 : 0) |
-                                            (leq ? 0x2 : 0) |
-                                            (lss ? 0x4 : 0) |
-                                            (geq ? 0x8 : 0) |
-                                            (gtr ? 0x10 : 0);
-
-                                        _palFlags[index] = value;
                                     }
                                 }
                             }
@@ -456,7 +438,7 @@ namespace PERQemu.Processor
             private ALUFlags _flags;
             private ALUFlags _oldFlags;
 
-            private static int[] _palFlags;
+            private static ALUFlags[] _palFlags;
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿// expressionstack.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
+﻿//
+// ExpressionStack.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -70,7 +71,7 @@ namespace PERQemu.Processor
             }
 
             /// <summary>
-            /// Gets the stack empty flag (used in Microstate register)
+            /// Gets the stack empty flag (used in Microstate register).
             /// </summary>
             public bool StackEmpty
             {
@@ -99,7 +100,7 @@ namespace PERQemu.Processor
                 _stack[_stackPointer] = value & CPUMask;    // TOS = value;
 
                 Trace.Log(LogType.EStack, "Estack pushed {0:x6}, pointer now {1}.",
-                          _stack[_stackPointer], _stackPointer);
+                                          _stack[_stackPointer], _stackPointer);
             }
 
             /// <summary>

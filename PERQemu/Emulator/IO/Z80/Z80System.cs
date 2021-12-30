@@ -20,6 +20,8 @@
 using System;
 using System.Threading;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+
 using Konamiman.Z80dotNet;
 
 using PERQemu.Processor;
@@ -100,7 +102,7 @@ namespace PERQemu.IO.Z80
             _fdc.AttachDrive(0, _floppyDrive);
 
             _z80Debugger = new Z80Debugger();
-            _running = false;
+            _running = true;
             _cycles = 0;
 
             // Do 10 rate adjustments / second?  Balance overhead v. accuracy
@@ -138,30 +140,32 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Runs the Z80 for one instruction (either mode).  If the Z80 is
-        /// "turned off" by the PERQ, it's a no-op.
+        /// "turned off" by the PERQ, it's effectively a no-op.
         /// </summary>
-        public uint Run(int steps = 1)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public uint Run(int clocks = 1)
         {
-          if (_running)
-            {
-                var clocks = 0;
+            var ticks = 0;  // How many actual clock ticks elapsed
 
-                do
+            do
+            {
+                if (_running)
                 {
-                    clocks = _cpu.ExecuteNextInstruction();
+                    ticks = _cpu.ExecuteNextInstruction();
                     _z80dma.Execute();
-                    _scheduler.Clock(clocks);
+                    _scheduler.Clock(ticks);
 
-                    _cycles += (uint)clocks;
-                    steps -= clocks;
-                } while (steps > 0);
+                    _cycles += (uint)ticks;
+                    clocks -= ticks;
+                }
+                else
+                {
+                    ticks += 1;
+                    clocks -= 1;
+                }
+            } while (clocks > 0);
 
-                return (uint)clocks;
-            }
-            else
-            {
-                return (uint)steps * 4;
-            }
+            return (uint)ticks;
         }
 
         /// <summary>
@@ -253,7 +257,7 @@ namespace PERQemu.IO.Z80
             }
 
             // Only queue up this write if we're actually running.
-            // TODO: is this correct? may be why bootchar isn't working
+            // TODO: is this correct?
             //if (_running)
             //{
                 _perqToZ80Fifo.Enqueue((byte)data);
@@ -292,13 +296,15 @@ namespace PERQemu.IO.Z80
             if (status == 0x80 && _running)
             {
                 Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
+                Console.WriteLine("Z80 system shut down by write to Status register.");
                 _running = false;
             }
             else if (status == 0 && !_running)
             {
                 Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
-                _running = true;
+                Console.WriteLine("Z80 system started by write to Status register.");
                 Reset();
+                _running = true;
             }
         }
 

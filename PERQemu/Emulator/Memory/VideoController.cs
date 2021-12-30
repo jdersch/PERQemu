@@ -85,6 +85,7 @@ namespace PERQemu.Memory
 
         public void Reset()
         {
+            _state = VideoState.Idle;
             _crtSignals = CRTSignals.None;
             _scanLine = 0;
             _displayAddress = 0;
@@ -96,15 +97,13 @@ namespace PERQemu.Memory
             _lineCounterInit = 0;
             _lineCountOverflow = false;
 
-            Trace.Log(LogType.Display, "Video Controller: Reset.");
-
             if (_currentEvent != null)
             {
                 _system.Scheduler.Cancel(_currentEvent);
                 _currentEvent = null;
             }
 
-            _state = VideoState.Idle;
+            Trace.Log(LogType.Display, "Video Controller: Reset.");
 
             // Kick off initial tick
             RunStateMachine();
@@ -451,20 +450,8 @@ namespace PERQemu.Memory
         }
 
         /// <summary>
-        /// Transforms the display word based on the current Cursor function.
+        /// Transforms a display quad word based on the current Cursor function.
         /// </summary>
-        /// <remarks>
-        /// Will probably change the "broken" ones to display _something_ rather
-        /// than nothing... although a POS test program will need to be written to
-        /// see all the combinations.  Remember, when the screen is shrunk the
-        /// bottom part can be forced on, off, or complemented... 
-        /// </remarks>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ushort TransformDisplayWord(ushort word)
-        {
-            return (ushort)(TransformDisplayQuad(word) & 0xffff);
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ulong TransformDisplayQuad(ulong quad)
         {

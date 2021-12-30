@@ -18,7 +18,6 @@
 //
 
 using System;
-using System.Threading;
 
 using PERQemu.Config;
 using PERQemu.Debugger;
@@ -81,11 +80,11 @@ namespace PERQemu
                     //  _iob = new EIO(this);
                     //  if (_conf.CPU == CPUType.PERQ24)
                     //  {
-                    //    _cpu.LoadROM("eio24boot.bin");    // 16K 24-bit, new Z80
+                    //    _cpu.LoadBootROM("eio24boot.bin");    // 16K 24-bit, new Z80
                     //  }
                     //  else
                     //  {
-                    //    _cpu.LoadROM("eioboot.bin");      // 16K, new Z80
+                    //    _cpu.LoadBootROM("eioboot.bin");      // 16K, new Z80
                     //  }
                     //  break;
                     throw new UnimplementedHardwareException(
@@ -174,6 +173,8 @@ namespace PERQemu
             get { return _state; }
         }
 
+        // todo: somehow decompose this into discrete steps that correspond to
+        // state change events?
         public void Run(RunState s)
         {
             _state = s;
@@ -194,7 +195,7 @@ namespace PERQemu
                         _cpu.RunAsync();
 
                         // Run the event loop until State changes
-                        _display.SDLMessageLoop();
+                        _display.SDLMessageLoop(_mode);
 
                         // Stop the threads
                         _cpu.Stop();
@@ -223,7 +224,7 @@ namespace PERQemu
                                     // Run the SDL loop.  There has to be a better way.
                                     if (count > _uiEventInterval)
                                     {
-                                        _display.SDLMessageLoop();
+                                        _display.SDLMessageLoop(_mode);
                                         count = 0;
                                     }
                                 }
@@ -357,6 +358,7 @@ namespace PERQemu
         /// </summary>
         public void LoadMedia(DriveType type, string path, int unit)
         {
+            Console.WriteLine("PERQSystem loading media " + path);
             switch (type)
             {
                 case DriveType.Floppy:
@@ -366,7 +368,7 @@ namespace PERQemu
                 // case DriveType.Disk5Inch:
                 // case DriveType.Disk8Inch:
                 case DriveType.Disk14Inch:
-                    _iob.DiskController.LoadImage(path); // unit...
+                    _iob.LoadDisk(path); // unit...
                     break;
 
                 // case DriveType.DiskSMD:
@@ -379,7 +381,41 @@ namespace PERQemu
             }
         }
 
-        // todo: SaveAllMedia()
+        /// <summary>
+        /// Optionally saves all modified storage devices, depending on user
+        /// preferences.  Not yet implemented.
+        /// </summary>
+        /// <remarks>
+        /// We should keep a list of the status of each mounted device here.  The
+        /// Config just tells us what slots are defined, but each call to Load()
+        /// (floppy, hard, tape) should update a list of mounted drives and their
+        /// actual status (mounted, readonly, modified) that can be checked against
+        /// the Settings.AutoSave* flags.  SaveAll() calls Save() which dispatches
+        /// based on drive/media type.
+        /// </remarks>
+        public void SaveAllMedia()
+        {
+            Console.WriteLine("Checking for unsaved media...");
+            foreach (var drive in _conf.Drives)
+            {
+                if (!string.IsNullOrEmpty(drive.MediaPath))
+                    Console.WriteLine("--> " + drive.MediaPath);
+            }
+        }
+
+        // todo: SaveMedia()
+        /*
+         * if (drive.IsMounted && drive.IsModified)
+         *      switch (Settings.AutoSave<type>)
+         *          no:     skip it
+         *          yes:    save it     -- must have a path defined!
+         *          maybe:  ask user, then skip/save accordingly
+         * 
+         *      switch (drivetype)
+         *          floppy:     _iob.SaveFloppyDisk(path)
+         *          hard:       _iob.SaveHardDisk(path)
+         *          tape:       _oio.SaveTape(path)
+         */
 
         /// <summary>
         /// If the user has specified an alternate boot character, kick off

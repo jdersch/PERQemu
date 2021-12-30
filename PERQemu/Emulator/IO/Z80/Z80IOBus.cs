@@ -19,9 +19,6 @@
 
 using Konamiman.Z80dotNet;
 using System;
-using System.IO;
-using System.Text;
-using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80
 {   

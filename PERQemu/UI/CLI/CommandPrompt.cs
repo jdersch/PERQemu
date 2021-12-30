@@ -147,13 +147,6 @@ namespace PERQemu.UI
                         }
                         break;
 
-                    case ConsoleKey.Enter:
-                        DoCompletion(true /* silent */);
-                        UpdateDisplay();
-                        Console.WriteLine();
-                        entryDone = true;
-                        break;
-
                     case ConsoleKey.Spacebar:
                         if (!InsideString() &&
                             !_input.EndsWith(" ", StringComparison.CurrentCulture) &&
@@ -165,6 +158,14 @@ namespace PERQemu.UI
                         {
                             InsertChar(key.KeyChar);
                         }
+                        break;
+
+                    case ConsoleKey.Enter:
+                        DoCompletion(true /* silent */);
+
+                        UpdateDisplay();
+                        Console.WriteLine();
+                        entryDone = true;
                         break;
 
                     default:
@@ -365,7 +366,6 @@ namespace PERQemu.UI
         private int TextPosition
         {
             get { return _textPosition; }
-
             set
             {
                 // Clip input between 0 and the length of input (+1, to allow adding text at end)
@@ -377,7 +377,6 @@ namespace PERQemu.UI
         private int HistoryIndex
         {
             get { return _historyIndex; }
-
             set
             {
                 _historyIndex = Math.Min(_commandHistory.Count - 1, value);
@@ -423,7 +422,7 @@ namespace PERQemu.UI
             }
 
             // Did our input line change?
-            if (result.Match != String.Empty)
+            if (result.Match != string.Empty)
             {
                 changed = _input.Trim().ToLower() != result.Match.Trim().ToLower();
 
@@ -519,7 +518,7 @@ namespace PERQemu.UI
                         {
                             foreach (CommandNode c in root.SubNodes)
                             {
-                                result.Completions.Add(c.ToString());  // .name?
+                                result.Completions.Add(c.ToString());
                             }
                         }
 
@@ -573,7 +572,7 @@ namespace PERQemu.UI
                 {
                     match.SearchRoot = c;
                     match.Match = c.Name;
-                    match.Completions.Add(c.ToString());    // include (#subs)
+                    match.Completions.Add(c.ToString());
                 }
             }
 

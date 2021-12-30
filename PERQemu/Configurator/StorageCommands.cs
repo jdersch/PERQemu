@@ -24,12 +24,12 @@ using PERQemu.Config;
 namespace PERQemu.UI
 {
     /// <summary>
-    /// Commands for configuring storage devices, including top-level
-    /// shortcuts for loading and unloading media files.
+    /// Commands for configuring storage devices (floppy, tape and hard drives),
+    /// including top-level shortcuts for loading and unloading media files.
     /// </summary>
     public class StorageCommands
     {
-
+        // top-level shortcuts (for compat w/previous perqemu cli):
         //      load floppy <file>          -- only one drive, assumes unit 0
         //      load harddisk <file>        -- assumes unit 1
         //      load harddisk <file> <n>    -- specifies unit in two-drive systems
@@ -95,21 +95,19 @@ namespace PERQemu.UI
                               cyl, heads, sec, bps, (cyl * heads * sec * bps) / 1024);
         }
 
-
         // todo: move the interface to the floppy/hard disk loading and saving
         // to PERQsystem?
-        // todo: allow for second hard drive in perq2 models
-
+        // todo: allow specification of sssd, ssdd, dssd, dsdd
+        // all floppies created in imd format by default?
         [Command("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
         private void CreateFloppyDisk()
         {
-            // todo: allow specification of sssd, ssdd, dssd, dsdd
-            // all floppies created in imd format by default?
             PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(null);
             Console.WriteLine("Created.");
         }
 
         [Command("load floppy", "Mounts a floppy disk image")]
+        [Command("storage load floppy", "Mounts a floppy disk image")]
         private void LoadFloppy(string imagePath)
         {
             try
@@ -129,6 +127,7 @@ namespace PERQemu.UI
         }
 
         [Command("unload floppy", "Unmounts a floppy disk image")]
+        [Command("storage unload floppy", "Unmounts a floppy disk image")]
         private void UnloadFloppy()
         {
             PERQemu.Sys.IOB.Z80System.UnloadFloppyDisk();
@@ -152,12 +151,13 @@ namespace PERQemu.UI
         }
 
         // todo: allow for all supported types, not just shugart
-        // todo: allow for multiple units in perq 2 models
-        // todo: allow user to define new types here?  or just use built-in ones?
+        // todo: all media requires a pathname, though the actual file doesn't get
+        //       written until it's saved.
+        // todo: make relative to Disks/ dir
         [Command("create harddisk", "Create and mounts a new, unformatted hard disk image")]
         private void CreateHardDisk()
         {
-            PERQemu.Sys.IOB.DiskController.LoadImage(null);
+            PERQemu.Sys.IOB.DiskController.LoadImage(null); // fixme 
             Console.WriteLine("Created.");
         }
 
@@ -173,7 +173,7 @@ namespace PERQemu.UI
                 // (Someday a mountable SMD pack option would take advantage, tho)
                 PERQemu.Config.Current.AssignMedia(imagePath, unit);
 
-                if (PERQemu.Sys.State != RunState.Off)
+                if (PERQemu.Controller.State != RunState.Off)
                 {
                     PERQemu.Sys.LoadMedia(DriveType.Disk14Inch, imagePath, unit);
                     Console.WriteLine("Loaded.");

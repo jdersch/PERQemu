@@ -31,10 +31,12 @@ namespace PERQemu.UI
     /// window and do keyboard/mouse input. The actual interrupt/IO/Rendering
     /// logic is handled by the VideoController class, which is responsible for
     /// invoking Refresh() when a display frame is ready.
-    ///
-    /// Since we only ever want to have one of these it makes sense to have this
-    /// be a singleton.
     /// </summary>
+    /// <remarks>
+    /// All SDL2 interactions are wrapped up here, though it'd be much better to
+    /// move the event loop and keyboard/mouse handling somewhere else (especially
+    /// if/when a proper GUI is defined).  Like that'll happen.
+    /// </remarks>
     public sealed class Display
     {
         static Display()
@@ -170,6 +172,11 @@ namespace PERQemu.UI
             // Set up our custom SDL render event, if not already done
             if (_renderEventType == 0)
             {
+                // So, you have to "register" event types, the first of which
+                // *just happens* to be SDL_USEREVENT, but you can't actually
+                // _use_ them in the message handling loop (because C# insists
+                // that the selector be a constant type, of course it does) so
+                // just what the hell is the point of this, then?
                 _renderEventType = SDL.SDL_RegisterEvents(1);
                 _renderEvent = new SDL.SDL_Event();
                 _renderEvent.type = (SDL.SDL_EventType)_renderEventType;
@@ -236,13 +243,13 @@ namespace PERQemu.UI
         /// ignored, because reasons.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SDLMessageLoop()
+        public void SDLMessageLoop(ExecutionMode mode)
         {
             SDL.SDL_Event e;
 
             if (_sdlRunning)
             {
-                if (_system.Mode == ExecutionMode.Synchronous)
+                if (mode == ExecutionMode.Synchronous)
                 {
                     while (SDL.SDL_PollEvent(out e) != 0)
                     {
@@ -255,9 +262,7 @@ namespace PERQemu.UI
                     while (SDL.SDL_WaitEvent(out e) != 0)
                     {
                         SDLMessageHandler(e);
-
-                        if (_system.State != RunState.Running)
-                            return;
+                        if (_system.State != RunState.Running) break;
                     }
                     Console.WriteLine("[Exiting SDLMessageLoop]");
                 }
@@ -365,7 +370,8 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Update the FPS counter.
+        /// Update the FPS counter.  This is slow and horrible but necessary for
+        /// debugging.  It should be improved...
         /// </summary>
         /// <remarks>
         /// For now(?) this is in the title bar, but it could be made optional
@@ -420,11 +426,19 @@ namespace PERQemu.UI
                     _fpsTimerId = -1;
                 }
 
+                // Make sure the PERQ has shut down and isn't firing events
+                while (PERQemu.Controller.State != RunState.ShuttingDown &&
+                       PERQemu.Controller.State != RunState.Off)
+                {
+                    Console.WriteLine("Waiting for PERQ to shut down...");
+                    Thread.Sleep(25);
+                }
+                
                 // Clear out our custom events
                 SDL.SDL_FlushEvent((SDL.SDL_EventType)_renderEventType);
 
                 //
-                // Shut things down nicely.
+                // Now shut things down nicely
                 //
                 if (_sdlRenderer != IntPtr.Zero)
                 {

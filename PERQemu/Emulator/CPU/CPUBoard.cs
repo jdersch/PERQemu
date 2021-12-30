@@ -120,10 +120,7 @@ namespace PERQemu.Processor
             _heartbeat.Reset();
             _heartbeat.StartTimer(true);
 
-            // todo/fixme: should be a mechanism like RunGuarded here
-            // to catch exceptions and return them in an orderly manner
             Console.WriteLine("[CPU thread starting]");
-
             while (!_stopAsyncExecution)
             {
                 Run(_adjustInterval);

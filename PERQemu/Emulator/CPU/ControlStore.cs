@@ -1,4 +1,5 @@
-﻿// controlstore.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
+﻿//
+// ControlStore.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -40,7 +41,7 @@ namespace PERQemu.Processor
         {
             public ControlStore()
             {
-                // For now, the only difference is size: 4K or 16K.
+                // For now, the only difference is size: 4K or 16K
                 _microcode = new ulong[_wcsSize];
                 _microcodeCache = new Instruction[_wcsSize];
 
@@ -50,8 +51,7 @@ namespace PERQemu.Processor
                 _rom = new ulong[_romSize];
 
                 Trace.Log(LogType.CpuState, "Allocated {0}K RAM, {1:n}K ROM",
-                            _wcsSize / 1024, (float)(_romSize / 1024f));
-                Reset();
+                                            _wcsSize / 1024, _romSize / 1024f);
             }
 
             public void Reset()
@@ -67,7 +67,7 @@ namespace PERQemu.Processor
                 _wcsHold = false;
                 _romEnabled = true;
 
-                Trace.Log(LogType.CpuState, "WCS Reset, ROM enabled.");
+                Trace.Log(LogType.CpuState, "WCS reset, ROM enabled.");
             }
 
             public bool Hold
@@ -255,15 +255,15 @@ namespace PERQemu.Processor
                 }
                 fs.Close();
 
-                Trace.Log(LogType.CpuState, "Read boot ROM from {0}.", Paths.Canonicalize(path));
+                Trace.Log(LogType.CpuState, "Loaded boot ROM from {0}.", Paths.Canonicalize(path));
             }
 
             /// <summary>
             /// Load microcode from a file into RAM.
             /// </summary>
-            public void LoadMicrocode(string ucodeFile)
+            public void LoadMicrocode(string path)
             {
-                FileStream fs = new FileStream(ucodeFile, FileMode.Open);
+                FileStream fs = new FileStream(path, FileMode.Open);
                 bool done = false;
 
                 // Read instruction words in...
@@ -286,6 +286,8 @@ namespace PERQemu.Processor
                 fs.Close();
 
                 _romEnabled = false;
+
+                Trace.Log(LogType.CpuState, "Loaded microcode from {0}.", Paths.Canonicalize(path));
             }
 
             /// <summary>

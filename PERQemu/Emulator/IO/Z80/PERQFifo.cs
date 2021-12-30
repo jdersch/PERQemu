@@ -18,9 +18,7 @@
 //
 
 using System;
-using System.Threading;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 
 using PERQemu.Processor;
 
@@ -35,27 +33,20 @@ namespace PERQemu.IO.Z80
         public Z80ToPERQFIFO(PERQSystem system)
         {
             _system = system;
-            //_lock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
             Reset();
         }
 
         public void Reset()
         {
-            //_lock.EnterWriteLock();
-            //_fifo = new Queue<byte>();
-            //_lock.ExitWriteLock();
             _fifo = new ConcurrentQueue<byte>();
         }
 
         public byte Dequeue()
         {
-            //_lock.EnterUpgradeableReadLock();
             byte value = 0;
             if (_fifo.Count > 0)
             {
-                //_lock.EnterWriteLock();
                 var ok = _fifo.TryDequeue(out value);
-                //_lock.ExitWriteLock();
 
                 Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO read {0:x2}, {1:x4} items left in queue.",
                                             value, _fifo.Count);
@@ -71,22 +62,16 @@ namespace PERQemu.IO.Z80
                 _system.CPU.ClearInterrupt(InterruptSource.Z80DataOut);
             }
 
-            //_lock.ExitUpgradeableReadLock();
-
             return value;
         }
 
         public string Name => "Z80->PERQ FIFO";
-
         public byte[] Ports => _ports;
-
-        public bool IntLineIsActive => false;    // Never interrupts
-
-        public byte? ValueOnDataBus => null;     // As above
+        public byte? ValueOnDataBus => null;
+        public bool IntLineIsActive => false;       // Never interrupts
+        public bool IsReady => true;                // For now we provide an "infinite" FIFO
 
         public event EventHandler NmiInterruptPulse;
-
-        public bool IsReady => true;            // For now we provide an "infinite" FIFO
 
         public byte Read(byte portAddress)
         {
@@ -96,9 +81,7 @@ namespace PERQemu.IO.Z80
 
         public void Write(byte portAddress, byte value)
         {
-            //_lock.EnterWriteLock();
             _fifo.Enqueue(value);
-            //_lock.ExitWriteLock();
 
             Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO enqueued byte {0:x2}, {1} items in queue.",
                                         value, _fifo.Count);
@@ -108,17 +91,11 @@ namespace PERQemu.IO.Z80
         }
 
         private PERQSystem _system;
-        // private Queue<byte> _fifo;
         private ConcurrentQueue<byte> _fifo;
 
-        private byte[] _ports =
-        {
-            0xd0            // PERQW
-        };
-
-        // TODO: investigate using something more lightweight?
-        //private ReaderWriterLockSlim _lock;
+        private byte[] _ports = { 0xd0 };       // PERQW
     }
+
 
     /// <summary>
     /// Input TO the Z80, FROM the PERQ
@@ -128,27 +105,21 @@ namespace PERQemu.IO.Z80
         public PERQToZ80FIFO(PERQSystem system)
         {
             _system = system;
-            //_lock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
             Reset();
         }
 
         public void Reset()
         {
-            //_lock.EnterWriteLock();
-            //_fifo = new Queue<byte>();
             _fifo = new ConcurrentQueue<byte>();
             _interruptsEnabled = false;
             _interruptActive = false;
-            //_lock.ExitWriteLock();
         }       
 
         public string Name => "PERQ->Z80 FIFO";
-
         public byte[] Ports => _ports;
+        public byte? ValueOnDataBus => 0x20;    // PRQVEC
 
         public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
-
-        public byte? ValueOnDataBus => 0x20; // PRQVEC
 
         public bool InterruptsEnabled 
         { 
@@ -160,14 +131,11 @@ namespace PERQemu.IO.Z80
 
         public void SetDataReadyInterruptRequested(bool requested)
         {
-            //_lock.EnterWriteLock();
             _dataReadyInterruptRequested = requested;
-            //_lock.ExitWriteLock();
         }
 
         public void Enqueue(byte value)
         {
-            //_lock.EnterWriteLock();
             _fifo.Enqueue(value);
 
             // Interrupt the Z80 to let it know we have data to be read
@@ -175,21 +143,16 @@ namespace PERQemu.IO.Z80
 
             Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO enqueued byte {0:x2}, {1} items in queue.",
                                         value, _fifo.Count);
-            //_lock.ExitWriteLock();
         }
 
         public byte Read(byte portAddress)
         {
             byte value = 0;
 
-            //_lock.EnterWriteLock();
-            //if (_fifo.Count == 0)
-            //{
             if (!_fifo.TryDequeue(out value))
             {
                 Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO read from empty fifo (int active {0}), returning 0.",
                                             _interruptActive);
-                //_lock.ExitWriteLock();
                 return 0;
             }
 
@@ -209,7 +172,6 @@ namespace PERQemu.IO.Z80
                 }
                 _interruptActive = false;
             }
-            //_lock.ExitWriteLock();
 
             return value;
         }
@@ -222,18 +184,12 @@ namespace PERQemu.IO.Z80
         }
 
         private PERQSystem _system;
-        //private Queue<byte> _fifo;
         private ConcurrentQueue<byte> _fifo;
+
         private bool _interruptsEnabled;
         private bool _interruptActive;
         private bool _dataReadyInterruptRequested;
 
-        // TODO: investigate using something more lightweight?
-        //private ReaderWriterLockSlim _lock;
-
-        private byte[] _ports =
-        {
-            0xa0            // PERQR
-        };
+        private byte[] _ports = { 0xa0 };   // PERQR
     }
 }

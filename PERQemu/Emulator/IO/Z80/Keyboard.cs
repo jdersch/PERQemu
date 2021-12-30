@@ -18,6 +18,7 @@
 //
 
 using System;
+using PERQemu.Processor;
 
 namespace PERQemu.IO.Z80
 {
@@ -36,17 +37,14 @@ namespace PERQemu.IO.Z80
         }
 
         public string Name => "Keyboard";
-
         public byte[] Ports => _ports;
-
+        public byte? ValueOnDataBus => 0x28; // KBDVEC
         public bool IntLineIsActive => _interruptActive && _interruptsEnabled;
-
-        public byte? ValueOnDataBus => 0x28; //KBDVEC
 
         public bool InterruptsEnabled
         {
             get { return _interruptsEnabled; }
-            set { _interruptsEnabled = value; }
+            set { _interruptsEnabled = value; Console.WriteLine("--> Kbd intr is {0} (at dds {1}, {2} cycles)", value, PERQemu.Sys.CPU.DDS, PERQemu.Sys.IOB.Z80System.Clocks); }
         }
 
         public event EventHandler NmiInterruptPulse;
@@ -55,11 +53,13 @@ namespace PERQemu.IO.Z80
         {
             _lastKeycode = key;
             _interruptActive = true;
+            Console.WriteLine("--> Kbd queued " + _lastKeycode);
         }
 
         public byte Read(byte portAddress)
         {
             _interruptActive = false;
+            Console.WriteLine("<-- Kbd read " + _lastKeycode);
             return _lastKeycode;
         }
 

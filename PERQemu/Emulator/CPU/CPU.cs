@@ -45,14 +45,13 @@ namespace PERQemu.Processor
             // Create CPU components
             _ustore = new ControlStore();
             _usequencer = new Sequencer(this);
+            _interrupt = new InterruptEncoder();
 
             _xy = new RegisterFile();
             _alu = new ALU();
             _estack = new ExpressionStack();
             _shifter = new Shifter();
             _mqShifter = new Shifter();
-            _interrupt = new InterruptEncoder();
-
             _rasterOp = new RasterOp(_memory);
         }
 
@@ -801,7 +800,7 @@ namespace PERQemu.Processor
                                     break;
 
                                 case 0x3:   // Load base register (not R)
-                                    _xy.SetRegisterBase((byte)(~_alu.R.Lo));
+                                    _xy.RegisterBase = (byte)(~_alu.R.Lo);
                                     break;
 
                                 case 0x4:   // (R) := product or quotient
@@ -895,7 +894,7 @@ namespace PERQemu.Processor
             // This is a little hacky, but since just about every PERQ
             // ever made used standard boot ROMs and the standard SYSB
             // microcode, having this hook here isn't too terrible...
-            if (_dds == 149)
+            if (_dds == 148)
             {
                 _system.PressBootKey();
             }
@@ -923,6 +922,11 @@ namespace PERQemu.Processor
             return _ustore.GetInstruction(addr);
         }
 
+        public void LoadROM(string romFile)
+        {
+            _ustore.LoadROM(romFile);
+        }
+
         public void LoadMicrocode(string ucodeFile)
         {
         	_ustore.LoadMicrocode(ucodeFile);
@@ -941,13 +945,6 @@ namespace PERQemu.Processor
             _xy.WriteRegister(r, v);
         }
 
-        /// <summary>
-        /// Load the boot ROM into the microstore.
-        /// </summary>
-        public void LoadROM(string romFile)
-        {
-            _ustore.LoadROM(romFile);
-        }
 
         public void ShowPC()
         {
