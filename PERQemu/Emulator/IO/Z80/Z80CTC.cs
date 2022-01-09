@@ -57,7 +57,7 @@ namespace PERQemu.IO.Z80
             _interruptEnabled = false;
             _interruptVector = null;
 
-            Trace.Log(LogType.Z80CTC, "{0} reset.", Name);
+            Log.Debug(Category.CTC, "Reset.");
         }
 
         public string Name => "Z80 CTC";
@@ -78,7 +78,7 @@ namespace PERQemu.IO.Z80
 
             if ((_channels[ch].Control & ControlFlags.TimeConstant) != 0)
             {
-                Trace.Log(LogType.Z80CTC, "Channel {0} loading TC {1}", ch, value);
+                Log.Debug(Category.CTC, "Channel {0} loading TC {1}", ch, value);
 
                 // TimeConstant bit was set in the last control byte,
                 // so this byte sets the time constant for this channel.
@@ -145,12 +145,12 @@ namespace PERQemu.IO.Z80
                 {
                     _interruptEnabled = true;
                     _interruptVector = (byte)(_interruptVectorBase + ch * 2);
-                    Trace.Log(LogType.Z80CTC, "CTC interrupt raised (chan={0})", ch);
+                    Log.Debug(Category.CTC, "Interrupt raised (chan={0})", ch);
                     return;
                 }
             }
 
-            if (_interruptEnabled) Trace.Log(LogType.Z80CTC, "CTC interrupt cleared");
+            if (_interruptEnabled) Log.Debug(Category.CTC, "Interrupt cleared");
 
             // Nobody's home
             _interruptEnabled = false;
@@ -212,7 +212,7 @@ namespace PERQemu.IO.Z80
 
                 Trigger = null;
 
-                Trace.Log(LogType.Z80CTC, "Channel {0} initialized.", Number);
+                Log.Debug(Category.CTC, "Channel {0} initialized.", Number);
             }
 
             public ControlFlags Control;
@@ -250,7 +250,7 @@ namespace PERQemu.IO.Z80
                         Running = true;
                     }
 
-                    Trace.Log(LogType.Z80CTC, "Channel {0} started (running={1})", Number, Running);
+                    Log.Debug(Category.CTC, "Channel {0} started (running={1})", Number, Running);
                 }
             }
 
@@ -287,7 +287,7 @@ namespace PERQemu.IO.Z80
                 Running = false;
                 InterruptRequested = false;
                 _ctc._scheduler.Cancel(Trigger);
-                Trace.Log(LogType.Z80CTC, "Channel {0} stopped.", Number);
+                Log.Debug(Category.CTC, "Channel {0} stopped.", Number);
             }
 
             /// <summary>
@@ -304,7 +304,7 @@ namespace PERQemu.IO.Z80
                     Counter *= (((Control & ControlFlags.Prescaler) != 0) ? 256 : 16);
                 }
 
-                Trace.Log(LogType.Z80CTC, "Channel {0} counter reset ({1})", Number, Counter);
+                Log.Debug(Category.CTC, "Channel {0} counter reset ({1})", Number, Counter);
             }
 
             /// <summary>
@@ -348,7 +348,7 @@ namespace PERQemu.IO.Z80
 #endif
                 Trigger = _ctc._scheduler.Schedule(interval, Number, TimerTickCallback);
 
-                //Trace.Log(LogType.Z80CTC, "Channel {0} timer scheduled ({1})", Number, interval);
+                //Log.Debug(Category.CTC, "Channel {0} timer scheduled ({1})", Number, interval);
             }
 
             /// <summary>
@@ -357,7 +357,7 @@ namespace PERQemu.IO.Z80
             /// </summary>
             private void TimerTickCallback(ulong skewNsec, object context)
             {
-                //Trace.Log(LogType.Z80CTC, "Channel {0} timer callback fired", context);
+                //Log.Debug(Category.CTC, "Channel {0} timer callback fired", context);
 
                 if (Running && ((Control & ControlFlags.Interrupt) != 0))
                 {
@@ -377,7 +377,7 @@ namespace PERQemu.IO.Z80
                     // simulated devices aren't clocking actual bit streams fercryinoutloud.
                     Trigger = null;
                     InterruptRequested = false;
-                    Trace.Log(LogType.Z80CTC, "Channel {0} timer not renewed.", context);
+                    Log.Debug(Category.CTC, "Channel {0} timer not renewed.", context);
                 }
             }
         }

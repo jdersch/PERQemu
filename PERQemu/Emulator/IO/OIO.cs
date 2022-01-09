@@ -58,13 +58,11 @@ namespace PERQemu.IO
 
 
         /// <summary>
-        /// Does a read from the given port
+        /// Does a read from the given port.
         /// </summary>
-        /// <param name="port"></param>
-        /// <returns></returns>
         public override int IORead(byte port)
         {
-            int retVal = 0xffff;        // Return -1?  Assume IO devices are active low?
+            int retVal = 0xffff;        // Assume IO devices are active low?
 
             switch (port)
             {
@@ -89,7 +87,7 @@ namespace PERQemu.IO
                 //  read loopback/diagnostic?
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled OIO Read from port {0:x2}.", port);
+                    Log.Warn(Category.IO, "Unhandled OIO Read from port {0:x2}.", port);
                     break;
             }
 
@@ -97,13 +95,11 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Does a write to the given port
+        /// Does a write to the given port.
         /// </summary>
-        /// <param name="ioPort"></param>
-        /// <param name="value"></param>
-        public override void IOWrite(byte ioPort, int value)
+        public override void IOWrite(byte port, int value)
         {
-            switch (ioPort)
+            switch (port)
             {
                 case 0x99:  // fake Ethernet control register
                     _fakeEtherCSR = value;
@@ -123,7 +119,7 @@ namespace PERQemu.IO
                 //  dummy write/diagnostic?
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled OIO Write to port {0:x2}, data {1:x4}", ioPort, value);
+                    Log.Warn(Category.IO, "Unhandled OIO Write to port {0:x2}, data {1:x4}", port, value);
                     break;
             }
         }

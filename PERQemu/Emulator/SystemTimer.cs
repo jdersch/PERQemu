@@ -34,7 +34,7 @@ namespace PERQemu
             _handle = HighResolutionTimer.Register(_interval, _callback);
             _sync = new ManualResetEventSlim(false);
 
-            Trace.Log(LogType.Timer, "SystemTimer constructed, HR timer handle is {0}", _handle);
+            Log.Debug(Category.Timer, "SystemTimer constructed, HR timer handle is {0}", _handle);
         }
 
         ~SystemTimer()
@@ -46,7 +46,7 @@ namespace PERQemu
             }
             catch
             {
-                Trace.Log(LogType.Timer, "Barfed trying to unregister SystemTimer " + _handle);
+                Log.Debug(Category.Timer, "Barfed trying to unregister SystemTimer " + _handle);
             }
         }
 
@@ -69,7 +69,7 @@ namespace PERQemu
         {
             HighResolutionTimer.Enable(_handle, enabled);
             _sync.Set();
-            Trace.Log(LogType.Timer, "Heartbeat {0} {1}", _handle, (enabled ? "started" : "stopped"));
+            Log.Debug(Category.Timer, "Heartbeat {0} {1}", _handle, (enabled ? "started" : "stopped"));
         }
 
         public void WaitForHeartbeat()

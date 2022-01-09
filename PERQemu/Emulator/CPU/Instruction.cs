@@ -1,4 +1,5 @@
-﻿// instruction.cs - Copyright 2006-2021 Josh Dersch (derschjo@gmail.com)
+﻿//
+// Instruction.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,14 +8,15 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
+
 using System;
 
 using PERQemu.Memory;
@@ -55,7 +57,7 @@ namespace PERQemu.Processor
 
             public override string ToString()
             {
-                return String.Format("uCode={0:x12} X={1:x1} Y={2:x1} A={3} B={4:x1} W={5:x1} H={6:x1} ALU={7} F={8:x1} SF={9:x1} Z={10:x1} CND={11} JMP={12}",
+                return string.Format("uCode={0:x12} X={1:x1} Y={2:x1} A={3} B={4:x1} W={5:x1} H={6:x1} ALU={7} F={8:x1} SF={9:x1} Z={10:x1} CND={11} JMP={12}",
                                      UCode, X, Y, A, B, W, H, ALU, F, SF, Z, CND, JMP);
             }
 
@@ -99,8 +101,8 @@ namespace PERQemu.Processor
 
                             if (Is4K)
                             {
-                                Trace.Log(LogType.Warnings,
-                                        "Leap not implemented on the 4K CPU.  Jumped to {0:x4} instead, not {1:x4}",
+                                Log.Warn(Category.Instruction,
+                                        "Leap not implemented on the 4K CPU.  Jump to {0:x4} instead, not {1:x4}",
                                         NextAddress, (ushort)((NotZ) | ((0xff & (~Y)) << 8)) & _wcsMask);
                             }
                         }

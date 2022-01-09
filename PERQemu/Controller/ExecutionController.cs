@@ -232,7 +232,7 @@ namespace PERQemu
             // Bail if already in the requested state
             if (current == nextState) return;
 
-			Trace.Log(LogType.EmuState, "Controller requesting transition from {0} to {1}", current, nextState);
+			Log.Debug(Category.Controller, "Requesting transition from {0} to {1}", current, nextState);
 
             // Now, how do we get there?  Let's consult the runes...
             var key = new SMKey(current, nextState);
@@ -262,8 +262,8 @@ namespace PERQemu
                                 break;
                             }
 
-                            Trace.Log(LogType.EmuState, "Waiting for {0}, got {1}...",
-                                                        step.ExpectedResult, current);
+                            Log.Debug(Category.Controller, "Waiting for {0}, got {1}...",
+                                                            step.ExpectedResult, current);
 
                             // Pause and try again.  There should probably be
                             // a limit to our patience...
@@ -276,7 +276,7 @@ namespace PERQemu
                 {
                     // fixme: this shouldn't happen if our state machine is complete... 
                     // so make this an error or just remove it once finally debugged
-                    Console.WriteLine("What, bad steps!? Key {0} yeilded no value!", key);
+                    Log.Error(Category.Controller, "What, bad steps!? Key {0} yeilded no value!", key);
                 }
             }
             else
@@ -285,7 +285,7 @@ namespace PERQemu
                 Console.WriteLine("Sorry, ya cahnt get theyah from heeyah.");
             }
 
-            Trace.Log(LogType.EmuState, "Controller transition result is {0}", State);
+            Log.Debug(Category.Controller, "Transition result is {0}", State);
        }
 
         /// <summary>

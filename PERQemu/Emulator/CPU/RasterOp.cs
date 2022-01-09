@@ -164,7 +164,7 @@ namespace PERQemu.Processor
 #if DEBUG
             _ropDebug = false;
 #endif
-            Trace.Log(LogType.RasterOp, "RasterOp: Reset.");
+            Log.Debug(Category.RasterOp, "Reset.");
         }
 
         public bool Enabled
@@ -223,8 +223,8 @@ namespace PERQemu.Processor
                 }
             }
 
-            Trace.Log(LogType.RasterOp,
-                      "RasterOpCtl:  {0} ({1:x2})\n\tPhase={2} Dir={3} XtraSrcWord={4} Latch={5}",
+            Log.Debug(Category.RasterOp,
+                      "Control:  {0} ({1:x2})\n\tPhase={2} Dir={3} XtraSrcWord={4} Latch={5}",
                       (_enabled ? "Enabled" : "Disabled"), value, _phase, _direction, _extraSrcWord, _latchOn);
 #if DEBUG
             if (_ropDebug)
@@ -258,9 +258,8 @@ namespace PERQemu.Processor
             _destFifo.Clear();
             _halfPipe.Clear();
 
-            Trace.Log(LogType.RasterOp,
-                      "WidRasterOp:  XtraWords={0} XtraBits={1} MulDiv={2}",
-                      _widthExtraWords, _widthExtraBits, _muldivInst);
+            Log.Debug(Category.RasterOp, "Wid:  XtraWords={0} XtraBits={1} MulDiv={2}",
+                                        _widthExtraWords, _widthExtraBits, _muldivInst);
         }
 
         /// <summary>
@@ -286,8 +285,8 @@ namespace PERQemu.Processor
             // builds an instruction that does a dummy assignment to this register,
             // which means a massive amount of spurious log spewage.
 
-            // Trace.Log(LogType.RasterOp, "Dst:  Func={0} WordPos={1} BitOffset={2}",
-            //                              _function, _destWordPosition, _destBitOffset);
+             Log.Debug(Category.RasterOp, "Dst:  Func={0} WordPos={1} BitOffset={2}",
+                                         _function, _destWordPosition, _destBitOffset);
         }
 
         /// <summary>
@@ -306,13 +305,12 @@ namespace PERQemu.Processor
             {
                 if (PERQemu.Sys.Config.Chassis == ChassisType.PERQ1)
                 {
-                    PERQemu.Controller.PowerOff();
+                    PERQemu.Controller.PowerOff();  // fixme.  this just ain't right yet
                 }
             }
 
-            Trace.Log(LogType.RasterOp,
-                      "SrcRasterOp:  Func={0} WordPos={1} BitOffset={2}",
-                      _function, _srcWordPosition, _srcBitOffset);
+            Log.Debug(Category.RasterOp, "Src:  Func={0} WordPos={1} BitOffset={2}",
+                                        _function, _srcWordPosition, _srcBitOffset);
         }
 
         /// <summary>
@@ -331,8 +329,8 @@ namespace PERQemu.Processor
                 return;
             }
 
-            Trace.Log(LogType.RasterOp,
-                      "RasterOp: Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
+            Log.Debug(Category.RasterOp,
+                      "Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
                       _phase, _state, _memory.TState, _srcNeedsAligned, _leftOver);
 
             switch (_state)
@@ -406,7 +404,7 @@ namespace PERQemu.Processor
                 throw new InvalidOperationException("Destination FIFO empty and result needed");
             }
 
-            Trace.Log(LogType.RasterOp, "RasterOp: Returning result word: {0:x4}", dest.Data);
+            Log.Debug(Category.RasterOp, "Returning result word: {0:x4}", dest.Data);
 
             return dest.Data;
         }
@@ -423,7 +421,7 @@ namespace PERQemu.Processor
             EdgeStrategy e = EdgeStrategy.NoPopNoPeek;
             ushort aligned, combined;
 
-            Trace.Log(LogType.RasterOp, "RasterOp: Result dest word: {0}", dest);
+            Log.Debug(Category.RasterOp, "Result dest word: {0}", dest);
 
             #region Align Words
 
@@ -463,7 +461,7 @@ namespace PERQemu.Processor
 #if DEBUG
                         src.Mask = SrcWordMask(src.Index);  // for debugging, not necessary otherwise
 #endif
-                        Trace.Log(LogType.RasterOp, "RasterOp: Dropped src word: {0}", src);
+                        Log.Debug(Category.RasterOp, "Dropped src word: {0}", src);
                     }
                     return dest;
 
@@ -479,9 +477,9 @@ namespace PERQemu.Processor
                     catch (InvalidOperationException)
                     {
 #if DEBUG
-                        Console.WriteLine("Source FIFO empty at Full word!");   // continuing will probably fail...
+                        Log.Error(Category.RasterOp, "Source FIFO empty at Full word!");   // continuing will probably fail...
 #else
-                            throw new InvalidOperationException("Source FIFO empty and Result expected");
+                        throw new InvalidOperationException("Source FIFO empty and Result expected");
 #endif
                     }
                     break;
@@ -510,9 +508,9 @@ namespace PERQemu.Processor
                     else
                     {
 #if DEBUG
-                        Console.WriteLine("Source FIFO empty at {0} word!", dest.Mask);   // continuing will probably fail...
+                        Log.Error(Category.RasterOp, "Source FIFO empty at {0} word!", dest.Mask);   // continuing will probably fail...
 #else
-                            throw new InvalidOperationException("Source FIFO empty and Result expected");
+                        throw new InvalidOperationException("Source FIFO empty and Result expected");
 #endif
                     }
                     break;
@@ -530,9 +528,9 @@ namespace PERQemu.Processor
                     catch (InvalidOperationException)
                     {
 #if DEBUG
-                        Console.WriteLine("Source FIFO empty at Both edges word!");    // continuing will probably fail..
+                        Log.Error(Category.RasterOp, "Source FIFO empty at Both edges word!");    // continuing will probably fail..
 #else
-                            throw new InvalidOperationException("Source FIFO empty and Result expected");
+                        throw new InvalidOperationException("Source FIFO empty and Result expected");
 #endif
                     }
                     break;
@@ -556,7 +554,7 @@ namespace PERQemu.Processor
                 src.Mask = SrcWordMask(src.Index);
             }
 
-            Trace.Log(LogType.RasterOp, "RasterOp: Next source word: {0}", src);
+            Log.Debug(Category.RasterOp, "Next source word: {0}", src);
 
             #endregion
 
@@ -571,12 +569,12 @@ namespace PERQemu.Processor
             {
                 if (_direction == Direction.LeftToRight)
                 {
-                    Trace.Log(LogType.RasterOp, "RasterOp: Result xtra (hi): {0:x4}", _halfPipe);
+                    Log.Debug(Category.RasterOp, "Result xtra (hi): {0:x4}", _halfPipe);
                     _ropShifter.Shift(src.Data, _halfPipe.Data);
                 }
                 else
                 {
-                    Trace.Log(LogType.RasterOp, "RasterOp: Result xtra (lo): {0:x4}", _halfPipe);
+                    Log.Debug(Category.RasterOp, "Result xtra (lo): {0:x4}", _halfPipe);
                     _ropShifter.Shift(_halfPipe.Data, src.Data);
                 }
 
@@ -592,7 +590,7 @@ namespace PERQemu.Processor
                 aligned = src.Data;
             }
 
-            Trace.Log(LogType.RasterOp, "RasterOp: Result aligned:  {0:x4}", aligned);
+            Log.Debug(Category.RasterOp, "Result aligned:  {0:x4}", aligned);
             #endregion
 
             #region Combine 'em
@@ -621,7 +619,7 @@ namespace PERQemu.Processor
                     break;
             }
 
-            Trace.Log(LogType.RasterOp, "RasterOp: Result combined: {0:x4} (func={1})", combined, _function);
+            Log.Debug(Category.RasterOp, "Result combined: {0:x4} (func={1})", combined, _function);
 
             #endregion
 
@@ -691,10 +689,10 @@ namespace PERQemu.Processor
                 _srcNeedsAligned = true;        // The Pittsburgh variable
                 _setupDone = true;
 
-                Trace.Log(LogType.RasterOp,
-                          "RasterOp:  Setup:\n\txOffset={0} lastSrc={1} Left={2:x4} Right={3:x4} Full={4:x4}",
+                Log.Debug(Category.RasterOp,
+                          "Setup:\n\txOffset={0} lastSrc={1} Left={2:x4} Right={3:x4} Full={4:x4}",
                              _xOffset, _lastSrcPosition, _leftEdgeMask, _rightEdgeMask, _bothEdgesMask);
-                Trace.Log(LogType.RasterOp,
+                Log.Debug(Category.RasterOp,
                           "\tspanSrc={0} spanDst={1} width={2}", spanSrcWords, spanDestWords, width);
             }
         }
@@ -779,7 +777,7 @@ namespace PERQemu.Processor
             {
 #if DEBUG
                 // For debugging we just try to continue, but we're pretty hosed at this point...
-                Console.WriteLine("RasterOp: FetchNextWord in {0} while MDI was invalid!", _state);
+                Log.Error(Category.RasterOp, "FetchNextWord in {0} while MDI was invalid!", _state);
                 w.Clear();
 #else
                 throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
@@ -804,7 +802,7 @@ namespace PERQemu.Processor
             // Annnnd return the result!
             CombinerFlags result = _rdsTable[lookup];
 
-            Trace.Log(LogType.RasterOp, "RasterOp: DestWordMask lookup {0:x} --> {1}", lookup, result);
+            Log.Debug(Category.RasterOp, "DestWordMask lookup {0:x} --> {1}", lookup, result);
             return result;
         }
 
@@ -824,7 +822,7 @@ namespace PERQemu.Processor
             // Same table as the dest word for source word mask!
             CombinerFlags result = _rdsTable[lookup];
 
-            Trace.Log(LogType.RasterOp, "RasterOp: SrcWordMask lookup {0:x} --> {1}", lookup, result);
+            Log.Debug(Category.RasterOp, "SrcWordMask lookup {0:x} --> {1}", lookup, result);
             return result;
         }
 
@@ -843,11 +841,11 @@ namespace PERQemu.Processor
 
             EdgeStrategy result = _rscTable[lookup];
 
-            Trace.Log(LogType.RasterOp, "RasterOp: EdgeStrategy lookup {0:x3} --> {1}", lookup, result);
+            Log.Debug(Category.RasterOp, "EdgeStrategy lookup {0:x3} --> {1}", lookup, result);
 #if DEBUG
             // Draw attention for debugging; should throw an exception in release version...
             if (result == EdgeStrategy.Unknown)
-                Console.WriteLine("==> Unknown edge strategy {0:x3}! <==", lookup);
+                Log.Error(Category.RasterOp, "==> Unknown edge strategy {0:x3}! <==", lookup);
 #endif
             return result;
         }
@@ -877,7 +875,7 @@ namespace PERQemu.Processor
 
                 if (_srcNeedsAligned)
                 {
-                    Trace.Log(LogType.RasterOp, "RasterOp: --> Dropping leading word ({0})", w.Mask);
+                    Log.Debug(Category.RasterOp, "--> Dropping leading word ({0})", w.Mask);
                     _srcFifo.Dequeue();
                 }
             }
@@ -901,7 +899,7 @@ namespace PERQemu.Processor
                     _leftOver = false;
                     _srcNeedsAligned = true;
 
-                    Trace.Log(LogType.RasterOp, "RasterOp: --> Reset for first edge");
+                    Log.Debug(Category.RasterOp, "<-- Reset for first edge");
                 }
                 else
                 {
@@ -916,13 +914,13 @@ namespace PERQemu.Processor
                         _leftOver = false;
                         _srcNeedsAligned = true;
 
-                        Trace.Log(LogType.RasterOp, "RasterOp: --> End of scan line, reset for first edge ({0})", w.Mask);
+                        Log.Debug(Category.RasterOp, "<-- End of scan line, reset for first edge ({0})", w.Mask);
                         _srcFifo.Dequeue();
                     }
 
                     if (_leftOver)
                     {
-                        Trace.Log(LogType.RasterOp, "RasterOp: --> Clearing extra word ({0})", w.Mask);
+                        Log.Debug(Category.RasterOp, "--> Clearing extra word ({0})", w.Mask);
                         _srcFifo.Dequeue();
                     }
                 }
@@ -995,7 +993,7 @@ namespace PERQemu.Processor
             }
             fs.Close();
 
-            Trace.Log(LogType.EmuState, "Initialized RDS ROM lookup table.");
+            Log.Info(Category.Emulator, "Initialized RDS ROM lookup table.");
 
             // RSC is a lookup table with an 7-bit index, returning an EdgeStrategy
             fs = new FileStream(Paths.BuildPROMPath("rsc03emu.rom"), FileMode.Open);
@@ -1006,7 +1004,7 @@ namespace PERQemu.Processor
             }
             fs.Close();
 
-            Trace.Log(LogType.EmuState, "Initialized RSC ROM lookup table.");
+            Log.Info(Category.Emulator, "Initialized RSC ROM lookup table.");
         }
 
 
@@ -1061,7 +1059,7 @@ namespace PERQemu.Processor
         // This is an expensive debugging aid...
         private void DumpFifo(string line, Queue<ROpWord> q)
         {
-            if (_ropDebug && Trace.TraceOn)
+            if (_ropDebug && (Log.ToConsole || Log.ToFile))
             {
                 if (q.Count > 0)
                 {
@@ -1076,7 +1074,7 @@ namespace PERQemu.Processor
                 {
                     line += "\t<empty>\n";
                 }
-                Trace.Log(LogType.RasterOp, line);
+                Log.Write(line);
             }
         }
 

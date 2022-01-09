@@ -129,7 +129,7 @@ namespace PERQemu.IO.Z80
             switch ((Register)portAddress)
             {
                 case Register.Status:
-                    Trace.Log(LogType.FloppyDisk, "FDC Status read: {0} (0x{1:x}).", _status, (byte)_status);
+                    Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x}).", _status, (byte)_status);
                     return (byte)_status;
 
                 case Register.Data:
@@ -222,7 +222,7 @@ namespace PERQemu.IO.Z80
                         if ((value & data.Mask) == (int)data.Command)
                         {
                             _currentCommand = data;
-                            Trace.Log(LogType.FloppyDisk, "Floppy command is {0}.", _currentCommand.Command);
+                            Log.Debug(Category.FloppyDisk, "Command is {0}.", _currentCommand.Command);
                             break;
                         }
                     }
@@ -321,7 +321,7 @@ namespace PERQemu.IO.Z80
                 _drives[_unitSelect].SeekTo(0);
             }
 
-            Trace.Log(LogType.FloppyDisk, "Floppy unit {0} recalibrated.", _unitSelect);
+            Log.Debug(Category.FloppyDisk, "Unit {0} recalibrated.", _unitSelect);
 
             _interruptActive = true;
             FinishCommand();
@@ -365,10 +365,10 @@ namespace PERQemu.IO.Z80
                     _status &= ~((Status)(0x1 << _unitSelect));
                     _interruptActive = true;
 
-                    Trace.Log(LogType.FloppyDisk, "Floppy unit {0} seek to {1} completed", _unitSelect, cylinder);
+                    Log.Debug(Category.FloppyDisk, "Unit {0} seek to {1} completed", _unitSelect, cylinder);
                 });
 
-                Trace.Log(LogType.FloppyDisk, "Floppy unit {0} seek to {1} scheduled", _unitSelect, cylinder);
+                Log.Debug(Category.FloppyDisk, "Unit {0} seek to {1} scheduled", _unitSelect, cylinder);
             }
 
             // Return to Command state.
@@ -448,9 +448,8 @@ namespace PERQemu.IO.Z80
                 _transferRequest.SectorLength = 128 << _transferRequest.Number;
             }
 
-            Trace.Log(
-                LogType.FloppyDisk,
-                "Floppy {0} from unit {1}, C/H/S {2}/{3}/{4} to sector {5} of length {6}.",
+            Log.Debug(Category.FloppyDisk,
+                "{0} from unit {1}, C/H/S {2}/{3}/{4} to sector {5} of length {6}.",
                 _transferRequest.Type == Command.ReadData ? "Read" : "Write",
                 _unitSelect,
                 _transferRequest.Cylinder,
@@ -674,7 +673,7 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Trace.Log(LogType.FloppyDisk, "Wrote byte 0x{0} to index {1}",
+            Log.Debug(Category.FloppyDisk, "Wrote byte 0x{0} to index {1}",
                                           _writeByte, _transferRequest.TransferIndex);
 
             // Write the next byte:
@@ -694,7 +693,7 @@ namespace PERQemu.IO.Z80
         private void FinishSectorTransfer()
         { 
 
-            Trace.Log(LogType.FloppyDisk, "Sector {0} transfer complete.", _transferRequest.Sector);
+            Log.Debug(Category.FloppyDisk, "Sector {0} transfer complete.", _transferRequest.Sector);
 
             // Always increment the sector counter
             _transferRequest.Sector++;
@@ -711,7 +710,7 @@ namespace PERQemu.IO.Z80
             {
                 _scheduler.Schedule(_sectorTimeNsec, SectorTransferCallback);
              
-                Trace.Log(LogType.FloppyDisk, "Next sector transfer queued.", _transferRequest.Sector);
+                Log.Debug(Category.FloppyDisk, "Next sector transfer queued.", _transferRequest.Sector);
             }
         }
 
@@ -729,7 +728,7 @@ namespace PERQemu.IO.Z80
             _interruptActive = true;
             FinishCommand();
 
-            Trace.Log(LogType.FloppyDisk, "Transfer completed.", _transferRequest.Sector);
+            Log.Debug(Category.FloppyDisk, "Transfer completed.", _transferRequest.Sector);
         }
 
         private void SelectUnitHead(byte select)

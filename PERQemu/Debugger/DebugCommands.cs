@@ -72,9 +72,25 @@ namespace PERQemu
         public void ShowDebugSettings()
         {
             Console.WriteLine("Current debugger settings:");
-            Console.WriteLine("Logging: {0}", Trace.TraceLevel);
+            if (Log.LoggingAvailable)
+            {
+                Console.WriteLine("Console logging {0} enabled.", Log.ToConsole ? "is" : "is not");
 
-            // logging, radix, step mode, whatever
+                if (Log.ToFile)
+                {
+                    Console.WriteLine("File logging is enabled, current file is {0}",
+                                      Paths.Canonicalize(Log.OutputFile));
+                }
+
+                Console.WriteLine("Log level: {0}", Log.Level);
+                Console.WriteLine("Logging categories:");
+                PERQemu.CLI.Columnify(Log.Categories.ToString().Split(' '));
+            }
+            else
+            {
+                Console.WriteLine("Logging is not available.");
+            }
+            // radix, step mode, whatever
         }
 
         [Command("step")]
@@ -128,48 +144,74 @@ namespace PERQemu
         //
 
         [Command("debug set logging", "Set logging for specific events")]
-        [Command("debug z80 set logging", "Set logging for specific events")]
         [Conditional("TRACING_ENABLED")]
-        public void SetLogging(LogType category)
+        public void SetLogging(Category category)
         {
-            Trace.TraceLevel |= category;
-            Console.WriteLine("Logging: {0}", Trace.TraceLevel);
+            Log.Categories |= category;
+            Console.WriteLine("Logging: {0}", Log.Categories);
         }
 
         [Command("debug clear logging", "Clear logging for certain events")]
-        [Command("debug z80 clear logging", "Clear logging for certain events")]
         [Conditional("TRACING_ENABLED")]
-        public void ClearLogging(LogType category)
+        public void ClearLogging(Category category)
         {
-            Trace.TraceLevel &= ~category;
-            Console.WriteLine("Logging: {0}", Trace.TraceLevel);
+            Log.Categories &= ~category;
+            Console.WriteLine("Logging: {0}", Log.Categories);
         }
 
-        //[Command("debug set loglevel", "Set logging threshold")]
-        //public void SetSeverity(Severity s)
-        //{
-        //    Console.WriteLine("Logging level set to " + s);
-        //}
-
-        [Command("debug enable logging", "Enable logging")]
-        [Conditional("TRACING_ENABLED")]
-        public void EnableLogging()
+        [Command("debug set loglevel", "Set logging threshold")]
+        public void SetSeverity(Severity severity)
         {
-            if (!Trace.TraceOn)
+            if (severity != Log.Level)
             {
-                Trace.TraceOn = true;
-                Console.WriteLine("Logging enabled.");
+                Log.Level = severity;
+                Console.WriteLine("Logging level set to " + severity);
             }
         }
 
-        [Command("debug disable logging", "Disable logging")]
+        [Command("debug enable logging to console", "Enable logging to the console")]
+        [Conditional("TRACING_ENABLED")]
+        public void EnableLogging()
+        {
+            if (!Log.ToConsole)
+            {
+                Log.ToConsole = true;
+                Console.WriteLine("Console logging enabled.");
+            }
+        }
+
+        [Command("debug disable logging to console", "Disable logging to the console")]
         [Conditional("TRACING_ENABLED")]
         public void DisableLogging()
         {
-            if (Trace.TraceOn)
+            if (Log.ToConsole)
             {
-                Trace.TraceOn = false;
-                Console.WriteLine("Logging disabled.");
+                Log.ToConsole = false;
+                Console.WriteLine("Console logging disabled.");
+            }
+        }
+
+        [Command("debug enable logging to file", "Enable logging to file")]
+        [Conditional("TRACING_ENABLED")]
+        public void EnableFileLogging()
+        {
+            if (!Log.ToFile)
+            {
+                Log.ToConsole = true;
+                // todo: call to init current log file?
+                Console.WriteLine("File logging enabled.");
+            }
+        }
+
+        [Command("debug disable logging to file", "Disable logging to file")]
+        [Conditional("TRACING_ENABLED")]
+        public void DisableFileLogging()
+        {
+            if (Log.ToFile)
+            {
+                Log.ToFile = false;
+                // todo: call to close current log file
+                Console.WriteLine("File logging disabled.");
             }
         }
 

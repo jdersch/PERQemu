@@ -67,7 +67,7 @@ namespace PERQemu.Processor
 
             // Compute how often (in CPU cycles) to sync the emulated processor
             _adjustInterval = (int)(_heartbeat.Interval / (CPU.MicroCycleTime * Conversion.NsecToMsec));
-            Console.WriteLine("CPU rate adjust every {0} cycles", _adjustInterval);
+            Log.Info(Category.Emulator, "CPU rate adjust every {0} cycles", _adjustInterval);
         }
 
         public CPU Processor => _processor;
@@ -81,7 +81,7 @@ namespace PERQemu.Processor
             _scheduler.Reset();
             _processor.Reset();
 
-            Trace.Log(LogType.CpuState, "CPU board reset.");
+            Log.Debug(Category.CPU, "Board reset.");
             _scheduler.DumpEvents("CPU");
         }
 
@@ -152,7 +152,7 @@ namespace PERQemu.Processor
                 return;
             }
 
-            Console.WriteLine("[CPU thread stopping]");
+            Console.WriteLine("[Stopping CPU thread]");
 
             // Tell the thread to exit
             if (Thread.CurrentThread != _asyncThread)
@@ -177,7 +177,7 @@ namespace PERQemu.Processor
             }
             catch
             {
-                Console.WriteLine("Could not load boot ROM from {0}!", file);
+                Log.Error(Category.CPU, "Could not load boot ROM from {0}!", file);
                 throw;
             }
         }

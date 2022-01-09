@@ -21,7 +21,9 @@
 //
 
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu
 {
@@ -44,44 +46,56 @@ namespace PERQemu
     }
 
     /// <summary>
-    /// Bitmap to filter what categories of output to log.  Default is None.
+    /// Bitmap to filter what categories of output to log.
     /// </summary>
     [Flags]
     public enum Category : ulong
     {
         None        = 0x0,
-        EmuState    = 0x1,
-        CPUState    = 0x2,
-        Microstore  = 0x4,
-        Instruction = 0x8,
-        Registers   = 0x10,
-        EStack      = 0x20,
-        OpFile      = 0x40,
-        QCode       = 0x80,
-        Shifter     = 0x100,
-        ALUState    = 0x200,
-        MulDiv      = 0x400,
-        MemState    = 0x800,
-        MemCycle    = 0x1000,
-        RasterOp    = 0x2000,
-        Display     = 0x4000,
-        IOState     = 0x8000,
-        Interrupt   = 0x10000,
-        Link        = 0x20000,
-        HardDisk    = 0x40000,
-        Ethernet    = 0x80000,
-        Z80State    = 0x100000,
-        Floppy      = 0x200000,
-        Keyboard    = 0x400000,
-        Tablet      = 0x800000,
-        GPIB        = 0x1000000,
-        RS232       = 0x2000000,
-        Speech      = 0x4000000,
-        Canon       = 0x8000000,
-        Streamer    = 0x10000000,
-        Scheduler   = 0x20000000,
-        Timer       = 0x40000000,
-        All         = 0x7fffffff
+        Emulator    = 0x1,
+        Controller  = 0x2,
+        Timer       = 0x4,
+        Scheduler   = 0x8,
+        CPU         = 0x10,
+        Sequencer   = 0x20,
+        Microstore  = 0x40,
+        Instruction = 0x80,
+        Registers   = 0x100,
+        EStack      = 0x200,
+        OpFile      = 0x400,
+        QCode       = 0x800,
+        Shifter     = 0x1000,
+        ALU         = 0x2000,
+        MulDiv      = 0x4000,
+        MemState    = 0x8000,
+        MemCycle    = 0x10000,
+        RasterOp    = 0x20000,
+        Display     = 0x40000,
+        IO          = 0x80000,
+        Interrupt   = 0x100000,
+        DMA         = 0x200000,
+        FIFO        = 0x400000,
+        DDS         = 0x800000,
+        Z80CPU      = 0x1000000,
+        Z80Interrupt= 0x2000000,
+        Z80DMA      = 0x4000000,
+        CTC         = 0x8000000,
+        SIO         = 0x10000000,
+        RTC         = 0x20000000,
+        FloppyDisk  = 0x40000000,
+        Keyboard    = 0x80000000,
+        Tablet      = 0x100000000,
+        GPIB        = 0x200000000,
+        RS232       = 0x400000000,
+        Speech      = 0x800000000,
+        Link        = 0x1000000000,
+        HardDisk    = 0x2000000000,
+        Ethernet    = 0x4000000000,
+        Canon       = 0x8000000000,
+        Streamer    = 0x10000000000,
+        Multibus    = 0x20000000000,
+        SMD         = 0x40000000000,
+        All         = 0xffffffffffffffff
     }
 
     /// <summary>
@@ -107,13 +121,19 @@ namespace PERQemu
             _logFilePattern = "debug{0}.log";   // Default log file name
             _logDirectory = Paths.OutputDir;    // Default log directory
 
+            _currentFile = string.Empty;
+            _lastOutput = string.Empty;
+            _repeatCount = 0;
+
             SetColors();
 
 #if DEBUG
             // for debugging
             _level = Severity.All;
             _categories = Category.All;
+#endif
 
+#if TRACING_ENABLED
             _loggingAvailable = true;
 #else
             _loggingAvailable = false;
@@ -132,37 +152,78 @@ namespace PERQemu
             set { _categories = value; }
         }
 
-        public static bool ToConsole => _logToConsole;
+        public static bool ToFile
+        {
+            get { return _logToFile; }
+            set { _logToFile = value; }
+        }
 
-        public static bool ToFile => _logToFile;
+        public static bool ToConsole
+        {
+            get { return _logToConsole; }
+            set { _logToConsole = value; }
+        }
 
         public static bool LoggingAvailable => _loggingAvailable;
+        public static string OutputFile => _currentFile;
 
         /// <summary>
         /// A plain Write() is always displayed.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(string fmt, params object[] args)
         {
             WriteInternal(Severity.None, Category.All, fmt, args);
         }
 
         /// <summary>
-        /// A shortcut for logging debugging output.  Makes a slow process just
-        /// that much slower but saves a tiny amount of typing.  Feh.
+        /// Shortcut for displaying informational messages (verbose mode,
+        /// not in performance-critical situations).
         /// </summary>
-        [Conditional("TRACING_ENABLED")]
+        public static void Info(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Info, c, fmt, args);
+        }
+
+        /// <summary>
+        /// Shortcut for displaying a serious error.
+        /// </summary>
+        public static void Error(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Error, c, fmt, args);
+        }
+
+        /// <summary>
+        /// A shortcut for logging debugging output.  Makes a slow Debug process
+        /// that much slower but is compiled out entirely in Release builds.
+        /// </summary>
+        [Conditional("DEBUG")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Debug(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Debug, c, fmt, args);
         }
 
+        /// <summary>
+        /// Shortcut for debug warnings that should stand out (but are non-fatal
+        /// and can be ignored in Release builds).
+        /// </summary>
+        [Conditional("DEBUG")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Warn(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Warning, c, fmt, args);
+        }
+
         [Conditional("TRACING_ENABLED")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Normal, c, fmt, args);
         }
 
         [Conditional("TRACING_ENABLED")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(Severity s, Category c, string fmt, params object[] args)
         {
             WriteInternal(s, c, fmt, args);
@@ -173,15 +234,28 @@ namespace PERQemu
             // Apply filters before we do the work to format the output
             if ((s >= _level) && ((c & _categories) != 0))
             {
-                var output = String.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
+                var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
+
+                // Cut down on the noise: things like the processor looping to
+                // check an I/O status byte spews a lot... summarize that.
+                if (output == _lastOutput && _repeatCount < 100)
+                {
+                    _repeatCount++;
+                    return;
+                }
 
                 if (_logToConsole)
                 {
-                    // Set the text color
-                    Console.ForegroundColor = _colors[c];
+                    // Was the last message repeated?
+                    if (_repeatCount > 0)
+                    {
+                        if (_repeatCount == 1)
+                            Console.WriteLine(_lastOutput);     // one repeat is ok :-)
+                        else
+                            Console.WriteLine("[Last message repeated {0} times.]", _repeatCount);
+                    }
 
-                    // Set the background color
-                    // In severe cases, force the foreground for readability
+                    // Set the text color; in severe cases, override them to standout
                     switch (s)
                     {
                         case Severity.Warning:
@@ -196,15 +270,15 @@ namespace PERQemu
                             break;
 
                         default:
-                            Console.BackgroundColor = ConsoleColor.Black;
+                            Console.ForegroundColor = _colors[c];
                             break;
+                            
                     }
 
                     Console.WriteLine(output);
 
-                    // Reset to default colors  TODO: configurable
-                    Console.BackgroundColor = ConsoleColor.Black;
-                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.BackgroundColor = _defaultBackground;
+                    Console.ForegroundColor = _defaultForeground;
 
                     System.Threading.Thread.Sleep(0);   // Give it a rest why dontcha
                 }
@@ -215,14 +289,18 @@ namespace PERQemu
                     // check the length of the current file
                     //      if curlen + len(output) > _logSize
                     //          RotateFile();
+                    // check for repeats (as above)
                     //_stream.WriteLine(datestamp + output);
                 }
+
+                _lastOutput = output;
+                _repeatCount = 0;
             }
         }
 
         /// <summary>
-        /// Sets up a dictionary for mapping Categories to console colors.
-        /// It might be nice if this was a user configurable mapping!
+        /// Sets up a dictionary for mapping Categories to console colors,
+        /// to aid in distinguishing output when debugging.
         /// </summary>
         private static void SetColors()
         {
@@ -230,41 +308,64 @@ namespace PERQemu
 
             //
             // TODO: actually put some thought into these defaults and test 'em
-            // out on both Mac terminal and Win console
+            // out on both Mac terminal and Win console.  Better still, make
+            // them user preferences and save 'em in the Settings file. :-)
             //
+
+            // General messages
+            _colors.Add(Category.All, ConsoleColor.White);
             _colors.Add(Category.None, ConsoleColor.Black);     // HeartOfGold theme
-            _colors.Add(Category.EmuState, ConsoleColor.White);
-            _colors.Add(Category.CPUState, ConsoleColor.Cyan);
+            _colors.Add(Category.Emulator, ConsoleColor.White);
+            _colors.Add(Category.Controller, ConsoleColor.Yellow);
+            _colors.Add(Category.Scheduler, ConsoleColor.Green);
+            _colors.Add(Category.Timer, ConsoleColor.Green);
+            _colors.Add(Category.DDS, ConsoleColor.Yellow);
+
+            // CPU components
+            _colors.Add(Category.CPU, ConsoleColor.Cyan);
+            _colors.Add(Category.Sequencer, ConsoleColor.DarkCyan);
             _colors.Add(Category.Microstore, ConsoleColor.Magenta);
             _colors.Add(Category.Instruction, ConsoleColor.Magenta);
             _colors.Add(Category.Registers, ConsoleColor.Red);
             _colors.Add(Category.EStack, ConsoleColor.Red);
             _colors.Add(Category.OpFile, ConsoleColor.Magenta);
             _colors.Add(Category.QCode, ConsoleColor.Magenta);
-            _colors.Add(Category.Shifter, ConsoleColor.DarkGreen);
-            _colors.Add(Category.ALUState, ConsoleColor.Green);
+            _colors.Add(Category.ALU, ConsoleColor.Green);
             _colors.Add(Category.MulDiv, ConsoleColor.DarkGreen);
+            _colors.Add(Category.Shifter, ConsoleColor.DarkGreen);
+
+            // Memory and Video
             _colors.Add(Category.MemState, ConsoleColor.Cyan);
             _colors.Add(Category.MemCycle, ConsoleColor.DarkCyan);
             _colors.Add(Category.RasterOp, ConsoleColor.Green);
-            _colors.Add(Category.Display, ConsoleColor.Gray);
-            _colors.Add(Category.IOState, ConsoleColor.Cyan);
+            _colors.Add(Category.Display, ConsoleColor.DarkGreen);
+
+            // Z80 and I/O controllers
+            _colors.Add(Category.IO, ConsoleColor.Gray);
+            _colors.Add(Category.DMA, ConsoleColor.Yellow);
             _colors.Add(Category.Interrupt, ConsoleColor.Red);
-            _colors.Add(Category.Link, ConsoleColor.DarkGreen);
-            _colors.Add(Category.HardDisk, ConsoleColor.DarkGray);
-            _colors.Add(Category.Ethernet, ConsoleColor.DarkGray);
-            _colors.Add(Category.Z80State, ConsoleColor.Green);
-            _colors.Add(Category.Floppy, ConsoleColor.Blue);
-            _colors.Add(Category.Keyboard, ConsoleColor.Blue);
-            _colors.Add(Category.Tablet, ConsoleColor.Blue);
+            _colors.Add(Category.FIFO, ConsoleColor.DarkYellow);
+            _colors.Add(Category.Z80CPU, ConsoleColor.Green);
+            _colors.Add(Category.Z80DMA, ConsoleColor.DarkGreen);
+            _colors.Add(Category.Z80Interrupt, ConsoleColor.DarkRed);
+            _colors.Add(Category.CTC, ConsoleColor.Cyan);
+            _colors.Add(Category.SIO, ConsoleColor.DarkCyan);
+            _colors.Add(Category.RTC, ConsoleColor.DarkBlue);
             _colors.Add(Category.GPIB, ConsoleColor.Blue);
-            _colors.Add(Category.RS232, ConsoleColor.Blue);
+            _colors.Add(Category.RS232, ConsoleColor.DarkBlue);
             _colors.Add(Category.Speech, ConsoleColor.DarkBlue);
-            _colors.Add(Category.Canon, ConsoleColor.DarkGray);
-            _colors.Add(Category.Streamer, ConsoleColor.DarkGray);
-            _colors.Add(Category.Scheduler, ConsoleColor.Green);
-            _colors.Add(Category.Timer, ConsoleColor.Green);
-            _colors.Add(Category.All, ConsoleColor.White);
+
+            // Peripherals
+            _colors.Add(Category.Tablet, ConsoleColor.Blue);
+            _colors.Add(Category.Keyboard, ConsoleColor.Blue);
+            _colors.Add(Category.FloppyDisk, ConsoleColor.DarkCyan);
+            _colors.Add(Category.Multibus, ConsoleColor.DarkBlue);
+            _colors.Add(Category.HardDisk, ConsoleColor.DarkGreen);
+            _colors.Add(Category.Ethernet, ConsoleColor.Gray);
+            _colors.Add(Category.Streamer, ConsoleColor.Gray);
+            _colors.Add(Category.Canon, ConsoleColor.Gray);
+            _colors.Add(Category.Link, ConsoleColor.Gray);
+            _colors.Add(Category.SMD, ConsoleColor.DarkBlue);
         }
 
         [Conditional("DEBUG")]
@@ -283,11 +384,17 @@ namespace PERQemu
         private static Category _categories;
         private static Dictionary<Category, ConsoleColor> _colors;
 
+        private static ConsoleColor _defaultForeground = Console.ForegroundColor;
+        private static ConsoleColor _defaultBackground = Console.BackgroundColor;
+
         private static bool _loggingAvailable;
         private static bool _logToConsole;
         private static bool _logToFile;
         private static string _logDirectory;
         private static string _logFilePattern;
+        private static string _currentFile;
+        private static string _lastOutput;
+        private static int _repeatCount;
         private static int _logSize;
         private static int _logLimit;
     }

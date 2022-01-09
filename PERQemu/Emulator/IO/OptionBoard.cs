@@ -53,7 +53,7 @@ namespace PERQemu.IO
 
         public virtual void Reset()
         {
-            Trace.Log(LogType.IOState, "{0}: Board reset.", _name);
+            Log.Info(Category.IO, "{0} board reset.", _name);
         }
 
         public abstract uint Clock();
@@ -71,7 +71,7 @@ namespace PERQemu.IO
             {
                 if (_portsHandled[p])
                 {
-                    Trace.Log(LogType.Errors, "Port {0:x} already registered!", p);
+                    Log.Warn(Category.IO, "Port {0:x} already registered!", p);
                 }
 
                 _portsHandled[p] = true;

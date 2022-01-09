@@ -52,8 +52,16 @@ namespace PERQemu.IO.Z80
             // Clear the fifo
             while (_fifo.TryDequeue(out dummy)) { }
 
-            Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO reset.");
+            Log.Debug(Category.FIFO, "Z80->PERQ FIFO reset.");
         }
+
+        public string Name => "Z80->PERQ FIFO";
+        public byte[] Ports => _ports;
+        public byte? ValueOnDataBus => null;
+        public bool IntLineIsActive => false;       // Never interrupts
+        public bool IsReady => true;                // WTF _fifo.Count == 0;
+
+        public event EventHandler NmiInterruptPulse;
 
         public byte Dequeue()
         {
@@ -61,12 +69,12 @@ namespace PERQemu.IO.Z80
 
             if (_fifo.TryDequeue(out value))
             {
-                Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO read {0:x2}, {1} items left in queue.",
+                Log.Debug(Category.FIFO, "Z80->PERQ read {0:x2}, {1} items left in queue.",
                                             value, _fifo.Count);
             }
             else
             {
-                Trace.Log(LogType.Warnings, "Z80->PERQ read from empty FIFO, returning 0.");
+                Log.Debug(Category.FIFO, "Z80->PERQ read from empty FIFO, returning 0.");
             }
 
             if (_fifo.Count == 0)
@@ -78,13 +86,6 @@ namespace PERQemu.IO.Z80
             return value;
         }
 
-        public string Name => "Z80->PERQ FIFO";
-        public byte[] Ports => _ports;
-        public byte? ValueOnDataBus => null;
-        public bool IntLineIsActive => false;       // Never interrupts
-        public bool IsReady => true;                // For now we provide an "infinite" FIFO
-
-        public event EventHandler NmiInterruptPulse;
 
         public byte Read(byte portAddress)
         {
@@ -96,13 +97,12 @@ namespace PERQemu.IO.Z80
         {
             _fifo.Enqueue(value);
 
-            Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO enqueued byte {0:x2}, {1} items in queue.",
+            Log.Debug(Category.FIFO, "Z80->PERQ enqueued byte {0:x2}, {1} items in queue.",
                                         value, _fifo.Count);
 
             // Since there's data available, let the PERQ know
             _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
         }
-
         private PERQSystem _system;
         private ConcurrentQueue<byte> _fifo;
 
@@ -131,7 +131,7 @@ namespace PERQemu.IO.Z80
             _interruptsEnabled = false;
             _interruptActive = false;
 
-            Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO reset.");
+            Log.Debug(Category.FIFO, "PERQ->Z80 FIFO reset.");
         }
 
         public string Name => "PERQ->Z80 FIFO";
@@ -159,7 +159,7 @@ namespace PERQemu.IO.Z80
             // Interrupt the Z80 to let it know we have data to be read
             _interruptActive = true;
 
-            Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO enqueued byte {0:x2}, {1} items in queue.",
+            Log.Debug(Category.FIFO, "PERQ->Z80 enqueued byte {0:x2}, {1} items in queue.",
                                         value, _fifo.Count);
         }
 
@@ -169,12 +169,12 @@ namespace PERQemu.IO.Z80
 
             if (!_fifo.TryDequeue(out value))
             {
-                Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO read from empty fifo (int active {0}), returning 0.",
+                Log.Debug(Category.FIFO, "PERQ->Z80 read from empty fifo (int active {0}), returning 0.",
                                             _interruptActive);
             }
             else
             {
-                Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO dequeued byte {0:x2}, {1} items left in queue.",
+                Log.Debug(Category.FIFO, "PERQ->Z80 dequeued byte {0:x2}, {1} items left in queue.",
                                             value, _fifo.Count);
             }
 

@@ -45,7 +45,7 @@ namespace PERQemu.Processor
                 }
 
                 _stackPointer = 0;
-                Trace.Log(LogType.EStack, "Estack: Reset.");
+                Log.Debug(Category.EStack, "Reset.");
             }
 
             /// <summary>
@@ -54,7 +54,7 @@ namespace PERQemu.Processor
             public void StackReset()
             {
                 _stackPointer = 0;
-                Trace.Log(LogType.EStack, "StackReset.");
+                Log.Debug(Category.EStack, "StackReset.");
             }
 
             /// <summary>
@@ -66,7 +66,7 @@ namespace PERQemu.Processor
                 set
                 {
                     _stack[_stackPointer] = value & CPUMask;
-                    Trace.Log(LogType.EStack, "TOS set to {0:x6}.", value);
+                    Log.Debug(Category.EStack, "TOS set to {0:x6}.", value);
                 }
             }
 
@@ -93,13 +93,13 @@ namespace PERQemu.Processor
                 // The hardware doesn't enforce stack limits, so we don't either.
                 if (_stackPointer > 15)
                 {
-                    Trace.Log(LogType.Errors, "Estack Overflow!");
+                    Log.Warn(Category.EStack, "Overflow!");
                     _stackPointer = 0;
                 }
 
                 _stack[_stackPointer] = value & CPUMask;    // TOS = value;
 
-                Trace.Log(LogType.EStack, "Estack pushed {0:x6}, pointer now {1}.",
+                Log.Debug(Category.EStack, "Pushed {0:x6}, pointer now {1}.",
                                           _stack[_stackPointer], _stackPointer);
             }
 
@@ -113,11 +113,11 @@ namespace PERQemu.Processor
                 // Check for stack underflow.  See Push().
                 if (_stackPointer < 0)
                 {
-                    Trace.Log(LogType.Errors, "Estack Underflow!");
+                    Log.Warn(Category.EStack, "Underflow!");
                     _stackPointer = 15;
                 }
 
-                Trace.Log(LogType.EStack, "Estack popped, pointer now {0}.", _stackPointer);
+                Log.Debug(Category.EStack, "Popped, pointer now {0}.", _stackPointer);
             }
 
             /// <summary>

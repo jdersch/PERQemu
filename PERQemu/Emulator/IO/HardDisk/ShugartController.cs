@@ -65,7 +65,7 @@ namespace PERQemu.IO.HardDisk
 
             IndexPulseStart(0, null);
 
-            Trace.Log(LogType.HardDisk, "HardDisk: Shugart disk controller reset.");
+            Log.Debug(Category.HardDisk, "Shugart controller reset.");
         }
 
 
@@ -74,14 +74,14 @@ namespace PERQemu.IO.HardDisk
             // Reading status DOES NOT clear pending interrupts.
             // (See behavior in disktest.mic)
 
-            Trace.Log(LogType.HardDisk, "Read Shugart status register, returned {0:x4}", DiskStatus);
+            Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4}", DiskStatus);
             return DiskStatus;
         }
 
 
         public void LoadCommandRegister(int data)
         {
-            Trace.Log(LogType.HardDisk, "Shugart command data: {0:x4}", data);
+            Log.Debug(Category.HardDisk, "Shugart command data: {0:x4}", data);
 
             // Note:  Most of the info gleaned about the Shugart controller register
             // behavior is from sysb.micro source.
@@ -93,7 +93,7 @@ namespace PERQemu.IO.HardDisk
             //  6:7     unit select!?      /    Z80 control bit (conflict!)
             Command command = (Command)(data & 0x7);
 
-            Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
+            Log.Debug(Category.HardDisk, "Shugart command is {0}", command);
 
             switch (command)
             {
@@ -110,7 +110,7 @@ namespace PERQemu.IO.HardDisk
                     // It will interrupt when done.
                     ResetFlags();
 
-                    Trace.Log(LogType.HardDisk, "HardDisk: Shugart disk and state machine reset.");
+                    Log.Debug(Category.HardDisk, "Shugart disk and state machine reset.");
                     SetBusyState();
                     break;
 
@@ -135,8 +135,8 @@ namespace PERQemu.IO.HardDisk
                     break;
 
                 default:
-                    Console.WriteLine("Unhandled Shugart command {0}", command);
-                    // throw or Trace.Log()?
+                    Log.Error(Category.HardDisk, "Unhandled Shugart command {0}", command);
+                    // throw or Log.Debug()?
                     break;
             }
 
@@ -148,7 +148,7 @@ namespace PERQemu.IO.HardDisk
         {
             _head = value & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart head set to {0:x4}", _head);
+            Log.Debug(Category.HardDisk, "Shugart head set to {0:x4}", _head);
         }
 
         public void LoadCylSecRegister(int value)
@@ -157,56 +157,56 @@ namespace PERQemu.IO.HardDisk
             _head = (value & 0xe0) >> 5;
             _cylinder = (value & 0xff80) >> 8;
 
-            Trace.Log(LogType.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
+            Log.Debug(Category.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
         }
 
         public void LoadSerialLowRegister(int value)
         {
             _serialNumberLow = value & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
+            Log.Debug(Category.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
         }
 
         public void LoadSerialHighRegister(int value)
         {
             _serialNumberHigh = value & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
+            Log.Debug(Category.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
         }
 
         public void LoadBlockRegister(int value)
         {
             _blockNumber = (value & 0xffff);
 
-            Trace.Log(LogType.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
+            Log.Debug(Category.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
         }
 
         public void LoadHeaderAddrLowRegister(int value)
         {
             _headerAddressLow = (Unfrob(value)) & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
+            Log.Debug(Category.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
         }
 
         public void LoadHeaderAddrHighRegister(int value)
         {
             _headerAddressHigh = (~value) & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
+            Log.Debug(Category.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
         }
 
         public void LoadDataBufferAddrLowRegister(int value)
         {
             _dataBufferLow = (Unfrob(value)) & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
+            Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
         }
 
         public void LoadDataBufferAddrHighRegister(int value)
         {
             _dataBufferHigh = (~value) & 0xffff;
 
-            Trace.Log(LogType.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
+            Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
         }
 
         public int DiskStatus
@@ -232,7 +232,7 @@ namespace PERQemu.IO.HardDisk
                     {
                         _seekState = SeekState.WaitForStepRelease;
 
-                        Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                        Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
                         _seekComplete = 0;
                     }
                     break;
@@ -242,7 +242,7 @@ namespace PERQemu.IO.HardDisk
                     {
                         _seekState = SeekState.SeekComplete;
 
-                        Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                        Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
                     }
                     break;
 
@@ -253,7 +253,7 @@ namespace PERQemu.IO.HardDisk
                     _seekState = SeekState.WaitForStepSet;
                     _system.CPU.RaiseInterrupt(InterruptSource.HardDisk);
 
-                    Trace.Log(LogType.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                    Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
                     break;
             }
         }
@@ -269,7 +269,7 @@ namespace PERQemu.IO.HardDisk
                 SeekTo(_physCylinder + 1);
             }
 
-            Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
+            Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
         }
 
         public void DoMultipleSeek(int cylCount)
@@ -283,7 +283,7 @@ namespace PERQemu.IO.HardDisk
                 SeekTo(_physCylinder + cylCount);
             }
 
-            Trace.Log(LogType.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
+            Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
         }
 
         private void SeekTo(int cylinder)
@@ -323,7 +323,7 @@ namespace PERQemu.IO.HardDisk
                 _system.Memory.StoreWord(headerAddr + (i >> 1), (ushort)word);
             }
 
-            Trace.Log(LogType.HardDisk,
+            Log.Debug(Category.HardDisk,
                       "Shugart sector read complete from {0}/{1}/{2}, wrote to memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
@@ -368,7 +368,7 @@ namespace PERQemu.IO.HardDisk
             // Write the sector to the disk...
             _disk.SetSector(sectorData, _cylinder, _head, _sector);
 
-            Trace.Log(LogType.HardDisk,
+            Log.Debug(Category.HardDisk,
                       "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
@@ -404,7 +404,7 @@ namespace PERQemu.IO.HardDisk
             // Write the sector to the disk...
             _disk.SetSector(sectorData, _cylinder, _head, _sector);
 
-            Trace.Log(LogType.HardDisk,
+            Log.Debug(Category.HardDisk,
                       "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
@@ -568,7 +568,7 @@ namespace PERQemu.IO.HardDisk
 
         //
         // Index timing:
-        // Your average SA4000 series drive spun at 3000rpm or 50 revs/sec, or
+        // Your average SA4000 series drive spun at 2964 RPM or ~50 revs/sec, or
         // one rev every 20ms. The index pulse duration is approximately 1.1uS.
         //
         private ulong _discRotationTimeNsec = 20 * Conversion.MsecToNsec;

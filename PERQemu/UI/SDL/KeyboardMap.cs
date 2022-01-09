@@ -53,12 +53,12 @@ namespace PERQemu.UI
             {
                 case SDL.SDL_Keycode.SDLK_CAPSLOCK:
                     _lockCaps = ! _lockCaps;
-                    Trace.Log(LogType.Keyboard, "CAPS LOCK is {0}", _lockCaps);
+                    Log.Debug(Category.Keyboard, "CAPS LOCK is {0}", _lockCaps);
                     break;
 
                 case SDL.SDL_Keycode.SDLK_NUMLOCKCLEAR:
                     _lockNums = ! _lockNums;
-                    Trace.Log(LogType.Keyboard, "NUM LOCK is {0}", _lockNums);
+                    Log.Debug(Category.Keyboard, "NUM LOCK is {0}", _lockNums);
                     break;
             }
         }
@@ -172,7 +172,7 @@ namespace PERQemu.UI
             SetKeyMapping(SDL.SDL_Keycode.SDLK_CLEAR, 0x15, 0x15);      // OOPS (^u)    (Mac)
             SetKeyMapping(SDL.SDL_Keycode.SDLK_F3, 0x0a, 0x0a);         // LINEFEED (^j)
 
-            Trace.Log(LogType.Keyboard, "PERQ-1 keyboard map initialized.");
+            Log.Debug(Category.Keyboard, "PERQ-1 map initialized.");
         }
 
         /// <summary>
@@ -285,7 +285,7 @@ namespace PERQemu.UI
             SetKeyMapping(SDL.SDL_Keycode.SDLK_KP_8, 0x60, 0x60);       // NumPad 8
             SetKeyMapping(SDL.SDL_Keycode.SDLK_KP_9, 0x5f, 0x5f);       // NumPad 9
 
-            Trace.Log(LogType.Keyboard, "PERQ-2 (VT100) keyboard map initialized.");
+            Log.Debug(Category.Keyboard, "PERQ-2 (VT100) map initialized.");
         }
 
         // Maps for normal and shifted keys

@@ -1,4 +1,5 @@
-﻿// physicaldisk.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+﻿//
+// FloppyDisk.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -289,7 +290,7 @@ namespace PERQemu.PhysicalDisk
             // This can happen on tracks with missing sector data.
             if (_sectorCount != 26)
             {
-                Trace.Log(LogType.FloppyDisk, "Cylinder {0} head {1} has only {2} sectors.", 
+                Log.Debug(Category.FloppyDisk, "Cylinder {0} head {1} has only {2} sectors.", 
                     _cylinder, _head, _sectorCount);
             }
 
@@ -353,7 +354,8 @@ namespace PERQemu.PhysicalDisk
                         break;
 
                     default:
-                        throw new InvalidOperationException(string.Format("Unexpected IMD sector data type {0}", type));
+                        throw new InvalidOperationException(
+                            string.Format("Unexpected IMD sector data type {0}", type));
                 }
             }
         }

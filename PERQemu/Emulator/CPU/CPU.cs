@@ -88,7 +88,7 @@ namespace PERQemu.Processor
             _mq = 0;
             _mqEnabled = false;
 
-            Trace.Log(LogType.CpuState, "CPU: Reset.");
+            Log.Debug(Category.CPU, "{0} reset.", _name);
         }
 
 
@@ -132,8 +132,8 @@ namespace PERQemu.Processor
             if (_ustore.Hold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid))
             {
                 // Waiting for the next T3 or T2 cycle to come around on the guitar
-                Trace.Log(LogType.MemoryState,
-                    "CPU: Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
+                Log.Debug(Category.CPU,
+                    "Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
                     _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _ustore.Hold);
 
                 // On aborts, no memory writes occur - no Tock()                    
@@ -147,9 +147,9 @@ namespace PERQemu.Processor
 
 #if TRACING_ENABLED
             // This is a very expensive log, so only call it if we have to
-            if (Trace.TraceOn && (LogType.Instruction & Trace.TraceLevel) != 0)
+            if ((Log.Categories & Category.Instruction) != 0)
             {
-                Trace.Log(LogType.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
+                Log.Debug(Category.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
             }
 #endif
 #if DEBUG
@@ -169,7 +169,7 @@ namespace PERQemu.Processor
                 _bpc++;
                 _incrementBPC = false;
 
-                Trace.Log(LogType.OpFile, "OpFile: BPC incremented to {0:x1}", BPC);
+                Log.Debug(Category.OpFile, "BPC incremented to {0:x1}", BPC);
             }
 
             // Latch the ALU result and flags from the last micro-op before we
@@ -394,7 +394,7 @@ namespace PERQemu.Processor
             // Log it if it wasn't already set
             if (_interrupt.Raise(i) == 0)
             {
-                Trace.Log(LogType.Interrupt, "Interrupt {0} raised, active now {1}", i, _interrupt.Flag);
+                Log.Debug(Category.Interrupt, "{0} raised, active now {1}", i, _interrupt.Flag);
             }
         }
 
@@ -406,7 +406,7 @@ namespace PERQemu.Processor
             // Log it if it wasn't already clear
             if (_interrupt.Clear(i) != 0)
             {
-                Trace.Log(LogType.Interrupt, "Interrupt {0} cleared, active now {1}", i, _interrupt.Flag);
+                Log.Debug(Category.Interrupt, "{0} cleared, active now {1}", i, _interrupt.Flag);
             }
         }
 
@@ -474,14 +474,14 @@ namespace PERQemu.Processor
                         {
                             _usequencer.Victim = _usequencer.PC;    // 12 or 14 bits
 
-                            Trace.Log(LogType.OpFile, "Victim register is now {0:x4}", _usequencer.Victim);
+                            Log.Debug(Category.Sequencer, "Victim register is now {0:x4}", _usequencer.Victim);
                         }
                     }
 
                     amux = _opFile[BPC];
                     _incrementBPC = true;   // Increment BPC at the beginning of the next instruction
 
-                    Trace.Log(LogType.QCode, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
+                    Log.Debug(Category.OpFile, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
                     break;
 
                 case AField.IOD:
@@ -550,7 +550,7 @@ namespace PERQemu.Processor
                     // Calculate shifter output when F=2
                     if (uOp.F == 0x2)
                     {
-                        Trace.Log(LogType.Shifter, "ShiftOnZ");
+                        Log.Debug(Category.Shifter, "ShiftOnZ");
                         _shifter.SetShifterCommand(uOp.Z);
                     }
 
@@ -563,7 +563,7 @@ namespace PERQemu.Processor
                         case 0x1:   // ShiftOnR
                             if (uOp.F == 0)
                             {
-                                Trace.Log(LogType.Shifter, "ShiftOnR");
+                                Log.Debug(Category.Shifter, "ShiftOnR");
                                 _shifter.SetShifterCommand(~(_alu.R.Value));
                             }
                             break;
@@ -614,19 +614,19 @@ namespace PERQemu.Processor
                                 {
                                     case MulDivCommand.Off:
                                         if (_mqEnabled)
-                                            Trace.Log(LogType.MulDiv, "MulDiv: Unit disabled.");
+                                            Log.Debug(Category.MulDiv, "Unit disabled.");
                                         _mqEnabled = false;
                                         break;
 
                                     case MulDivCommand.UnsignedDivide:
-                                        Trace.Log(LogType.MulDiv, "MulDiv Enabled: Divide");
+                                        Log.Debug(Category.MulDiv, "Enabled: Divide");
                                         _mqShifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
                                         _mqEnabled = true;
                                         break;
 
                                     case MulDivCommand.UnsignedMultiply:
                                     case MulDivCommand.SignedMultiply:
-                                        Trace.Log(LogType.MulDiv, "MulDiv Enabled: Multiply");
+                                        Log.Debug(Category.MulDiv, "Enabled: {0}", _rasterOp.MulDivInst);
                                         _mqShifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
                                         _mqEnabled = true;
                                         break;
@@ -644,12 +644,12 @@ namespace PERQemu.Processor
 
                             if (_refillOp)
                             {
-                                Trace.Log(LogType.OpFile, "OpFile: Load init.");
+                                Log.Debug(Category.OpFile, "Load init.");
                             }
 #if DEBUG
                             else
                             {
-                                Trace.Log(LogType.Errors, "LoadOp called in wrong cycle?");
+                                Log.Warn(Category.OpFile, "LoadOp called in wrong cycle?");
                             }
 #endif
 
@@ -661,7 +661,7 @@ namespace PERQemu.Processor
 
                         case 0xb:   // BPC := (R)
                             _bpc = _alu.R.Lo & 0xf;     // bottom 4 bits of R
-                            Trace.Log(LogType.OpFile, "BPC set to {0:x1}", BPC);
+                            Log.Debug(Category.OpFile, "BPC set to {0:x1}", BPC);
                             break;
 
                         case 0xc:   // WCSL
@@ -711,16 +711,16 @@ namespace PERQemu.Processor
                             {
                                 case 0x0:
                                     _alu.SetResult(0);
-                                    Trace.Log(LogType.Errors, "Read from Victim latch ignored (4K)");
+                                    Log.Warn(Category.CPU, "Read from Victim latch ignored (4K)");
                                     break;
 
                                 case 0x4:
                                     _alu.SetResult(0);
-                                    Trace.Log(LogType.Errors, "Read from MQ ignored (4K)");
+                                    Log.Warn(Category.CPU, "Read from MQ ignored (4K)");
                                     break;
 
                                 default:
-                                    Trace.Log(LogType.Errors, "Extended special function {0} ignored (4K)", uOp.SF);
+                                    Log.Warn(Category.CPU, "Extended special function {0} ignored (4K)", uOp.SF);
                                     break;
                             }
                         }
@@ -734,14 +734,14 @@ namespace PERQemu.Processor
                                     _alu.SetResult(_usequencer.Victim);
                                     _xy.WriteRegister(uOp.X, _alu.R.Value);
 
-                                    Trace.Log(LogType.OpFile, "Read from Victim latch {0:x4}", _usequencer.Victim);
+                                    Log.Debug(Category.Sequencer, "Read from Victim latch {0:x4}", _usequencer.Victim);
 
                                     // ReadVictim clears the latch, does not set PC
                                     _usequencer.Victim = 0xffff;
                                     break;
 
                                 case 0x1:   // Multiply / DivideStep
-                                    Trace.Log(LogType.MulDiv, "MulDiv step: MQ in ={0:x4} R={1:x6} R<15>={2}",
+                                    Log.Debug(Category.MulDiv, "Step: MQ in ={0:x4} R={1:x6} R<15>={2}",
                                                                _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
                                     //
                                     // For the hardware assisted Multiply/Divide steps, we've already done
@@ -775,7 +775,7 @@ namespace PERQemu.Processor
 #if DEBUG
                                             else
                                             {
-                                                Trace.Log(LogType.MulDiv, "MulDiv Step: Q0 bit skipped");
+                                                Log.Debug(Category.MulDiv, "Step: Q0 bit skipped");
                                             }
 #endif
                                             break;
@@ -791,12 +791,12 @@ namespace PERQemu.Processor
                                             _mq = _mqShifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
                                             break;
                                     }
-                                    Trace.Log(LogType.MulDiv, "MulDiv Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
+                                    Log.Debug(Category.MulDiv, "Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
                                     break;
 
                                 case 0x2:   // Load multiplier / dividend
                                     _mq = _alu.R.Lo;        // MQ reg is 16 bits wide
-                                    Trace.Log(LogType.MulDiv, "MulDiv Load: MQ={0:x4}", _mq);
+                                    Log.Debug(Category.MulDiv, "Load: MQ={0:x4}", _mq);
                                     break;
 
                                 case 0x3:   // Load base register (not R)
@@ -806,14 +806,15 @@ namespace PERQemu.Processor
                                 case 0x4:   // (R) := product or quotient
                                     _alu.SetResult(_mq & 0xffff);
                                     _xy.WriteRegister(uOp.X, _alu.R.Value);
-                                    Trace.Log(LogType.MulDiv, "Read: MQ={0:x4}", _mq);
+                                    Log.Debug(Category.MulDiv, "Read: MQ={0:x4}", _mq);
                                     break;
 
                                 case 0x5:   // Push long constant
 #if DEBUG
                                     if (uOp.LongConstant != _alu.R.Value)
                                     {
-                                        Console.WriteLine("Push long const discrepancy: R={0:x6}, uOp={1:x6}!", _alu.R.Value, uOp.LongConstant);
+                                        Log.Warn(Category.CPU, "Push long const discrepancy: R={0:x6}, uOp={1:x6}!",
+                                                 _alu.R.Value, uOp.LongConstant);
                                     }
 #endif
                                     _estack.Push(uOp.LongConstant);
@@ -871,11 +872,8 @@ namespace PERQemu.Processor
             _opFile[opAddr] = (byte)(_memory.MDI & 0xff);
             _opFile[opAddr + 1] = (byte)((_memory.MDI & 0xff00) >> 8);
 
-            if (Trace.TraceOn)
-            {
-                Trace.Log(LogType.OpFile, "Loaded {0:x2} into OpFile[{1:x}] from {2:x6}", _opFile[opAddr], opAddr, _memory.MADR);
-                Trace.Log(LogType.OpFile, "Loaded {0:x2} into OpFile[{1:x}] from {2:x6}", _opFile[opAddr + 1], opAddr + 1, _memory.MADR);
-            }
+            Log.Debug(Category.OpFile, "Loaded {0:x2} into Op[{1:x}] from {2:x6}", _opFile[opAddr], opAddr, _memory.MADR);
+            Log.Debug(Category.OpFile, "Loaded {0:x2} into Op[{1:x}] from {2:x6}", _opFile[opAddr + 1], opAddr + 1, _memory.MADR);
 
             if (_memory.MIndex == 3)
             {
@@ -889,12 +887,12 @@ namespace PERQemu.Processor
         public void IncrementDDS()
         {
             _dds++;
-            Trace.Log(LogType.DDS, "DDS is now {0:d3}", _dds % 1000);
+            Log.Debug(Category.DDS, "Set to {0:d3}", _dds % 1000);
 
             // This is a little hacky, but since just about every PERQ
             // ever made used standard boot ROMs and the standard SYSB
             // microcode, having this hook here isn't too terrible...
-            if (_dds == 148)
+            if (_dds == 149)
             {
                 _system.PressBootKey();
             }
@@ -903,10 +901,8 @@ namespace PERQemu.Processor
 
             // TODO: a general event-based way to provide hooks or
             // breakpoints when the DDS reaches a particular value might
-            // be a cleaner way to allow a GUI, the debugger, or the boot
-            // key-holder-downer-thingie to hook in...
-
-            // TODO: This should be moved elsewhere - catch it in the CLI!?
+            // be a cleaner way to allow a GUI, the debugger, the console
+            // or the boot key-holder-downer-thingie to hook in...
             Console.Title = string.Format("DDS {0:d3}", _dds % 1000);
         }
 

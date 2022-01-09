@@ -1,4 +1,5 @@
-// perqlink.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
+//
+// PERQLink.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -92,7 +93,7 @@ namespace PERQemu.IO
             _bufCycLatch = 0;
 
 #if TRACING_ENABLED
-           // if (Trace.TraceOn) Trace.Log(LogType.Link, "PERQLink CSR read {0:x1}.", (value & 0xf));
+           // if (Trace.TraceOn) Log.Debug(Category.Link, "PERQLink CSR read {0:x1}.", (value & 0xf));
 #endif
 
             return value;
@@ -116,16 +117,13 @@ namespace PERQemu.IO
             }
 
 #if TRACING_ENABLED
-            if (Trace.TraceOn)
-            {
-                Trace.Log(LogType.Link, "PERQLink Data debugger {0:x4}.", _linkData.DataDebugger);
-                Trace.Log(LogType.Link, "PERQLink Data target {0:x4}.", _linkData.DataTarget);
-                Trace.Log(LogType.Link, "PERQLink Data read {0:x4}.", value);
-            }
+                Log.Debug(Category.Link, "PERQLink Data debugger {0:x4}.", _linkData.DataDebugger);
+                Log.Debug(Category.Link, "PERQLink Data target {0:x4}.", _linkData.DataTarget);
+                Log.Debug(Category.Link, "PERQLink Data read {0:x4}.", value);
 
             if (value == 0x14e5)        // Hello
             {
-                if (Trace.TraceOn) Trace.Log(LogType.Link, "Read HELLO!", value);
+                Log.Debug(Category.Link, "Read HELLO!", value);
             }
 #endif
 
@@ -139,7 +137,7 @@ namespace PERQemu.IO
         {
 #if PERQLINK
 #if TRACING_ENABLED
-            // if (Trace.TraceOn) Trace.Log(LogType.Link, "PERQLink CSR write {0:x1}.", (value & 0xf));
+            // Log.Debug(Category.Link, "PERQLink CSR write {0:x1}.", (value & 0xf));
 #endif
 
             if (_linkData.EndPoint == Endpoint.Debugger)
@@ -160,19 +158,19 @@ namespace PERQemu.IO
 
             if (value == 0x14e5)        // Hello
             {
-                if (Trace.TraceOn) Trace.Log(LogType.Link, "Wrote HELLO!", value);
+                Log.Debug(Category.Link, "Wrote HELLO!", value);
             }
 #endif
 
             if (_linkData.EndPoint == Endpoint.Debugger)
             {
                 _linkData.DataDebugger = value;
-                // if (Trace.TraceOn) Trace.Log(LogType.Link, "PERQLink Data write {0:x4}.", _linkData.DataDebugger);
+                // Log.Debug(Category.Link, "PERQLink Data write {0:x4}.", _linkData.DataDebugger);
             }
             else
             {
                 _linkData.DataTarget = value;
-               // if (Trace.TraceOn) Trace.Log(LogType.Link, "PERQLink Data write {0:x4}.", _linkData.DataTarget);
+               // Log.Debug(Category.Link, "PERQLink Data write {0:x4}.", _linkData.DataTarget);
             }
 #endif
         }

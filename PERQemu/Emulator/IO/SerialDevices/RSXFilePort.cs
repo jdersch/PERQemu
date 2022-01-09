@@ -1,5 +1,6 @@
-﻿// rsxfileport.cs - Copyright 2006-2016 Josh Dersch (derschjo@gmail.com)
-//  
+﻿//
+// RSXFilePort.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
 // This file is part of PERQemu.
 //
 // PERQemu is free software: you can redistribute it and/or modify
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -84,39 +85,39 @@ namespace PERQemu.IO.SerialDevices
             _inputQueue = new Queue<byte>(128);
             _fileStream = null;
             _transferState = TransferState.WaitingForCtrlQ;
-            _fileName = String.Empty;
-            _rsxCommand = String.Empty;
+            _fileName = string.Empty;
+            _rsxCommand = string.Empty;
             _isOpen = false;
         }
 
         public string Port
         {
-            set { throw new InvalidOperationException("Cannot specify the port on an RSX file port."); }
             get { return "RSX:"; }
+            set { throw new InvalidOperationException("Cannot specify the port on an RSX file port."); }
         }
 
-        public int BaudRate 
+        public int BaudRate
         {
             get { return 9600; }
-            set {  }
+            set { }
         }
 
         public Parity Parity
         {
             get { return Parity.None; }
-            set {  }
+            set { }
         }
 
-        public StopBits StopBits 
+        public StopBits StopBits
         {
             get { return StopBits.None; }
             set { }
         }
 
-        public int DataBits 
+        public int DataBits
         {
             get { return 8; }
-            set {  }
+            set { }
         }
 
         public int ByteCount
@@ -144,14 +145,14 @@ namespace PERQemu.IO.SerialDevices
             if (_inputQueue.Count == 0)
             {
                 throw new InvalidOperationException("RSX input stream is empty on read!");
-            }          
+            }
 
-            byte b = _inputQueue.Dequeue();            
+            byte b = _inputQueue.Dequeue();
 
             // If this is the last byte in the queue for an Input read, we are done.
-            if (_inputQueue.Count == 0 && 
-                _fileAccess == FileAccess.Read && 
-                _transferState == TransferState.Transferring) 
+            if (_inputQueue.Count == 0 &&
+                _fileAccess == FileAccess.Read &&
+                _transferState == TransferState.Transferring)
             {
                 if (_fileStream != null)
                 {
@@ -159,12 +160,10 @@ namespace PERQemu.IO.SerialDevices
                     _fileStream = null;
                 }
 
-#if TRACING_ENABLED
-                if (Trace.TraceOn) Trace.Log(LogType.RS232, "Transfer of {0} from host is complete.", _fileName);
-#endif
-                ResetState();                    
+                Log.Write(Category.RS232, "Transfer of {0} from host is complete.", _fileName);
+                ResetState();
             }
-        
+
 
             return b;
         }
@@ -173,7 +172,7 @@ namespace PERQemu.IO.SerialDevices
         {
             for (int i = 0; i < length; i++)
             {
-                byte b = data[i + index];                
+                byte b = data[i + index];
 
                 //
                 // The RSX transfer needs the simulated RSX machine to echo back data
@@ -193,13 +192,13 @@ namespace PERQemu.IO.SerialDevices
                         _inputQueue.Enqueue(b);
                     }
                 }
-                                
+
                 switch (_transferState)
                 {
                     case TransferState.WaitingForCtrlQ:
                         if (b == _ctrlQ)
                         {
-                            _rsxCommand = String.Empty;
+                            _rsxCommand = string.Empty;
                             _transferState = TransferState.WaitingForRSXCommand;
                         }
                         break;
@@ -236,7 +235,7 @@ namespace PERQemu.IO.SerialDevices
                                 {
                                     _fileStream = new FileStream(_fileName, _fileMode, _fileAccess);
                                 }
-                                catch(Exception e)
+                                catch (Exception e)
                                 {
                                     //
                                     // Couldn't open the filestream for whatever reason.
@@ -247,11 +246,8 @@ namespace PERQemu.IO.SerialDevices
                                     //
                                     _errorString = e.Message;
 
-#if TRACING_ENABLED
-                                    if (Trace.TraceOn)
-                                        Trace.Log(LogType.RS232, "Could not open {0} on host. Error: {1}",
-                                                                 _fileName, _errorString);
-#endif
+                                    Log.Write(Category.RS232, "Could not open {0} on host. Error: {1}",
+                                                             _fileName, _errorString);
                                 }
 
                                 if (_fileAccess == FileAccess.Read)
@@ -259,14 +255,14 @@ namespace PERQemu.IO.SerialDevices
                                     // Read the file into the input queue, and append the special
                                     // eol/eot marker.
                                     UploadFileToBuffer();
-                                }                             
+                                }
                             }
                             else
                             {
                                 //
                                 // Command input was invalid, return to start of state machine.
                                 //
-                                ResetState();                                
+                                ResetState();
                             }
                         }
                         break;
@@ -300,15 +296,12 @@ namespace PERQemu.IO.SerialDevices
                                 //                                
                                 _inputQueue.Enqueue(_lf);
 
-#if TRACING_ENABLED
-                                if (Trace.TraceOn)
-                                    Trace.Log(LogType.RS232, "Transfer of {0} to host is complete.", _fileName);
-#endif
+                                Log.Write(Category.RS232, "Transfer of {0} to host is complete.", _fileName);
                             }
                         }
                         break;
-                }                              
-            }            
+                }
+            }
         }
 
         private void ResetState()
@@ -361,10 +354,7 @@ namespace PERQemu.IO.SerialDevices
 
             if (success)
             {
-#if TRACING_ENABLED
-                if (Trace.TraceOn)
-                    Trace.Log(LogType.RS232, "Host filename for RSX: transfer is {0}.", _fileName);
-#endif                
+                Log.Write(Category.RS232, "Host filename for RSX: transfer is {0}.", _fileName);
             }
 
             return success;
@@ -395,7 +385,7 @@ namespace PERQemu.IO.SerialDevices
                 for (int i = 0; i < _errorString.Length; i++)
                 {
                     _inputQueue.Enqueue((byte)_errorString[i]);
-                }                
+                }
                 _inputQueue.Enqueue(_cr);
                 _inputQueue.Enqueue(_lf);
             }
@@ -413,23 +403,23 @@ namespace PERQemu.IO.SerialDevices
             WaitingForRSXCommand,
             Transferring
         }
-        
-        private Queue<byte>     _inputQueue;
-        private bool            _isOpen;
-        private TransferState   _transferState;
-        private FileMode        _fileMode;
-        private FileAccess      _fileAccess;
-        private string          _rsxCommand;
-        private string          _fileName;
-        private string          _errorString;
-        private FileStream      _fileStream;
 
-        private const byte      _ctrlQ = 0x11;      // ^Q
-        private const byte      _ctrlS = 0x13;      // ^S
-        private const byte      _ctrlZ = 0x1a;      // ^Z
-        private const byte      _lf    = 0x0a;      // LF
-        private const byte      _cr    = 0x0d;      // CR/EOL
-        private const byte      _eot   = (byte)'>'; // special EOT token for RSX transfer from PERQ
+        private bool _isOpen;
+        private Queue<byte> _inputQueue;
+        private FileMode _fileMode;
+        private FileAccess _fileAccess;
+        private FileStream _fileStream;
+        private TransferState _transferState;
+        private string _rsxCommand;
+        private string _fileName;
+        private string _errorString;
+
+        private const byte _ctrlQ = 0x11;      // ^Q
+        private const byte _ctrlS = 0x13;      // ^S
+        private const byte _ctrlZ = 0x1a;      // ^Z
+        private const byte _lf    = 0x0a;      // LF
+        private const byte _cr    = 0x0d;      // CR/EOL
+        private const byte _eot   = (byte)'>'; // special EOT token for RSX transfer from PERQ
 
         private const string _pipToken = "Pip";
         private const string _TIToken = "TI:";

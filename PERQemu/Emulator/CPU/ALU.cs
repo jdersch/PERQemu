@@ -92,7 +92,7 @@ namespace PERQemu.Processor
                 _flags.Clear();
                 _oldFlags.Clear();
 
-                Trace.Log(LogType.AluState, "ALU: Reset.");
+                Log.Debug(Category.ALU, "Reset.");
             }
 
             public ExtendedRegister R
@@ -122,7 +122,7 @@ namespace PERQemu.Processor
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Execute(ALUOperation op, int amux, int bmux)
             {
-                Trace.Log(LogType.AluState, "ALU: In: Amux={0:x6} Bmux={1:x6}", amux, bmux);
+                Log.Debug(Category.ALU, "In: Amux={0:x6} Bmux={1:x6}", amux, bmux);
 
                 // Reset carry flag (arithmetic ops will set it as necessary)
                 // but save the original value for use in addition/subtraction w/carry
@@ -248,7 +248,7 @@ namespace PERQemu.Processor
                 _flags.Neq = LAeqB;
                 _flags.Eql = !LAeqB;
 
-                Trace.Log(LogType.AluState, "ALU: Result: {0} {1}", _r.Value, Flags);
+                Log.Debug(Category.ALU, "Result: {0} {1}", _r.Value, Flags);
             }
 
             /// <summary>
@@ -260,7 +260,7 @@ namespace PERQemu.Processor
             {
                 ALUOperation modOp = curOp;
 
-                Trace.Log(LogType.MulDiv, "ALUop: IN  op={0} amux={1:x6} mq={2:x4}", curOp, amux, mq);
+                Log.Debug(Category.MulDiv, "IN  op={0} amux={1:x6} mq={2:x4}", curOp, amux, mq);
 
                 if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
                 {
@@ -268,7 +268,7 @@ namespace PERQemu.Processor
                     {
                         case MulDivCommand.Off:
                             // Should never happen!
-                            throw new InvalidOperationException("DoMulDivALUOp called with MulDivInst=OFF!?");
+                            throw new InvalidOperationException("ALU MulDiv Op called with MulDivInst=OFF!?");
 
                         case MulDivCommand.UnsignedDivide:
                             //
@@ -317,7 +317,7 @@ namespace PERQemu.Processor
                     }
                 }
 
-                Trace.Log(LogType.MulDiv, "ALUop: OUT op={0} amux={1:x6}", modOp, amux);
+                Log.Debug(Category.MulDiv, "OUT op={0} amux={1:x6}", modOp, amux);
 
                 Execute(modOp, amux, bmux);
             }

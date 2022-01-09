@@ -44,6 +44,8 @@ namespace PERQemu.Processor
                 }
 
                 _registerBase = 0;
+
+                Log.Debug(Category.Registers, "Reset.");
             }
 
             public byte RegisterBase
@@ -87,12 +89,12 @@ namespace PERQemu.Processor
                 if (addr < 0x40)
                 {
                     _registers[addr | _registerBase] = val;
-                    Trace.Log(LogType.Register, "%XY[{0:x2}]={1:x6}", (addr | _registerBase), val);
+                    Log.Debug(Category.Registers, "%XY[{0:x2}]={1:x6}", (addr | _registerBase), val);
                 }
                 else
                 {
                     _registers[addr] = val;
-                    Trace.Log(LogType.Register, "XY[{0:x2}]={1:x6}", addr, val);
+                    Log.Debug(Category.Registers, "XY[{0:x2}]={1:x6}", addr, val);
                 }
             }
 

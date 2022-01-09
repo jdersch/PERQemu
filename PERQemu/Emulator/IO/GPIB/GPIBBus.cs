@@ -29,6 +29,8 @@ namespace PERQemu.IO.GPIB
             _devices = new List<IGPIBDevice>(16);
 
             //
+            // FIXME:  move this and only attach the BitPad if the user has
+            // configured it (in PERQSystem, probably)
             // Attach devices.  This should eventually be configurable,
             // though I have no idea what aside from the BitPadOne digitizer we'd
             // ever expect to support.  (Actually, the POS Print command supports
@@ -75,13 +77,13 @@ namespace PERQemu.IO.GPIB
         {
             if (_deviceDispatch[deviceId] == null)
             {
-                Trace.Log(LogType.Warnings, "No device is registered for GPIB ID {0:x2} write ({1:x2})",
-                          deviceId, value);
+                Log.Warn(Category.GPIB, "No device is registered for ID {0:x2} write ({1:x2})",
+                                        deviceId, value);
                 return;
             }
 
-            Trace.Log(LogType.GPIB, "Output sent to GPIB device {0:x2} ({1:x2}) handled by {2}",
-                      deviceId, value, _deviceDispatch[deviceId]);
+            Log.Debug(Category.GPIB, "Output sent to device {0:x2} ({1:x2}) handled by {2}",
+                                     deviceId, value, _deviceDispatch[deviceId]);
 
             _deviceDispatch[deviceId].Write(value);
         }

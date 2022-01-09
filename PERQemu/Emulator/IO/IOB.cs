@@ -67,7 +67,7 @@ namespace PERQemu.IO
                     return _z80System.ReadData();
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled IOB Read from port {0:x2}", port);
+                    Log.Warn(Category.IO, "Unhandled IOB Read from port {0:x2}", port);
                     return 0xff;
             }
         }
@@ -127,7 +127,7 @@ namespace PERQemu.IO
                     break;
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled IOB Write to port {0:x2}, data {1:x4}", port, value);
+                    Log.Warn(Category.IO, "Unhandled IOB Write to port {0:x2}, data {1:x4}", port, value);
                     break;
             }
         }

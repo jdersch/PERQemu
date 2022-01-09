@@ -34,9 +34,8 @@ namespace PERQemu.Processor
         /// Implements the PERQ's 32-bit barrel shifter, which can do left and
         /// right shifts, rotates, or bitfield extractions every cycle.  Though
         /// the hardware only has one shared shifter datapath, we cheat a little
-        /// here and allow the MQ/MulDiv unit to have its own, and the RasterOp
-        /// unit to have one too.  That's a pretty big efficiency win, since we
-        /// don't have to potentially reprogram the shifter command on every cycle.
+        /// for efficiency and allow the MQ/MulDiv unit to have its own, and the
+        /// RasterOp unit to have one too.
         /// </summary>
         public sealed class Shifter
         {
@@ -58,7 +57,7 @@ namespace PERQemu.Processor
             {
                 _params = _shifterTable[input & 0xff];
 
-                Trace.Log(LogType.Shifter, "Command={0} amount={1} mask={2:x4}",
+                Log.Debug(Category.Shifter, "Command={0} amount={1} mask={2:x4}",
                           _params.Command, _params.ShiftAmount, _params.ShiftMask);
             }
 
@@ -71,7 +70,7 @@ namespace PERQemu.Processor
                 _params.ShiftAmount = amt;
                 _params.ShiftMask = mask;
 
-                Trace.Log(LogType.Shifter, "Command={0} amount={1} mask={2:x4}",
+                Log.Debug(Category.Shifter, "Command={0} amount={1} mask={2:x4}",
                           _params.Command, _params.ShiftAmount, _params.ShiftMask);
             }
 
@@ -98,14 +97,14 @@ namespace PERQemu.Processor
                     case ShifterCommand.LeftShift:
                         _output = (ushort)(low << _params.ShiftAmount);
 
-                        Trace.Log(LogType.Shifter, "Left shift by {0}: in={1:x4} out={2:x4}",
+                        Log.Debug(Category.Shifter, "Left shift by {0}: in={1:x4} out={2:x4}",
                                   _params.ShiftAmount, low, _output);
                         break;
 
                     case ShifterCommand.RightShift:
                         _output = (ushort)((low & 0x0ffff) >> _params.ShiftAmount);    // logical, not arithmetic
 
-                        Trace.Log(LogType.Shifter, "Right shift by {0}: in={1:x4} out={2:x4}",
+                        Log.Debug(Category.Shifter, "Right shift by {0}: in={1:x4} out={2:x4}",
                                   _params.ShiftAmount, low, _output);
                         break;
 
@@ -113,7 +112,7 @@ namespace PERQemu.Processor
                         d = (uint)(((high & 0xffff) << 16) | (low & 0xffff));   // 32 bits
                         _output = (ushort)(0xffff & (d >> _params.ShiftAmount));
 
-                        Trace.Log(LogType.Shifter, "Rotate by {0}: in={1:x4}{2:x4} out={3:x4}",
+                        Log.Debug(Category.Shifter, "Rotate by {0}: in={1:x4}{2:x4} out={3:x4}",
                                   _params.ShiftAmount, high, low, _output);
                         break;
 
@@ -121,7 +120,7 @@ namespace PERQemu.Processor
                         d = (uint)(((high & 0xffff) << 16) | (low & 0xffff));   // 32 bits
                         _output = (ushort)(((d >> _params.ShiftAmount)) & _params.ShiftMask);
 
-                        Trace.Log(LogType.Shifter, "Field mask {0} rotated by {1} out={2:x4}",
+                        Log.Debug(Category.Shifter, "Field mask {0} rotated by {1} out={2:x4}",
                                   _params.ShiftMask, _params.ShiftAmount, _output);
                         break;
                 }

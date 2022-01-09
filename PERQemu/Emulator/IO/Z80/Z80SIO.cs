@@ -45,7 +45,7 @@ namespace PERQemu.IO.Z80
             _channels[0].Reset();
             _channels[1].Reset();
 
-            Trace.Log(LogType.Z80SIO, "SIO reset.");
+            Log.Debug(Category.SIO, "Reset.");
         }
 
         public string Name => "Z80 SIO";
@@ -161,7 +161,7 @@ namespace PERQemu.IO.Z80
 
                 UpdateFlags();
 
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} reset.", _channelNumber);
+                Log.Debug(Category.SIO, "Channel {0} reset.", _channelNumber);
             }
 
             public bool InterruptLatched => _rxInterruptLatched || _txInterruptLatched;
@@ -179,13 +179,13 @@ namespace PERQemu.IO.Z80
                 if (_selectedRegister < 3)
                 {
                     byte value = _readRegs[_selectedRegister];
-                    Trace.Log(LogType.Z80SIO, "SIO Channel {0} read {1:x} from register {2}",
+                    Log.Debug(Category.SIO, "Channel {0} read {1:x} from register {2}",
                               _channelNumber, value, _selectedRegister);
                     return value;
                 }
                 else
                 {
-                    Trace.Log(LogType.Z80SIO, "SIO Channel {0} read from invalid register {2}",
+                    Log.Debug(Category.SIO, "Channel {0} read from invalid register {2}",
                               _channelNumber, _selectedRegister);
                     return 0;
                 }
@@ -201,21 +201,21 @@ namespace PERQemu.IO.Z80
                     UpdateFlags();
                 }
 
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} data read: {1:x2}",
+                Log.Debug(Category.SIO, "Channel {0} data read: {1:x2}",
                           _channelNumber, data);
                 return data;
             }
 
             public void WriteData(byte value)
             {
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} data write: {1:x2}",
+                Log.Debug(Category.SIO, "Channel {0} data write: {1:x2}",
                           _channelNumber, value);
                 // Nothing right now.
             }
 
             public void WriteRegister(byte value)
             {
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} write {1:x2} to register {2}",
+                Log.Debug(Category.SIO, "Channel {0} write {1:x2} to register {2}",
                           _channelNumber, value, _selectedRegister);
 
                 _writeRegs[_selectedRegister] = value;
@@ -274,7 +274,7 @@ namespace PERQemu.IO.Z80
                     _selectedRegister = 0;
                 }
 
-                Trace.Log(LogType.Z80SIO, "SIO Channel {0} register pointer now {1}",
+                Log.Debug(Category.SIO, "Channel {0} register pointer now {1}",
                           _channelNumber, _selectedRegister);
             }
 
@@ -292,7 +292,7 @@ namespace PERQemu.IO.Z80
                         {
                             if (data == _writeRegs[7])  // 8-bit sync value
                             {
-                                 Trace.Log(LogType.Z80SIO, "SIO Channel {0} sync word matched", _channelNumber);
+                                 Log.Debug(Category.SIO, "Channel {0} sync word matched", _channelNumber);
                                 _huntMode = false;  // exit hunt mode
                             }
                         }
@@ -300,7 +300,8 @@ namespace PERQemu.IO.Z80
                         {
                             _rxFifo.Enqueue(data);
                             UpdateFlags();
-                            Trace.Log(LogType.Z80SIO, "SIO Channel {0} enqueued byte {1:x2}, fifo depth now {2}", _channelNumber, data, _rxFifo.Count);
+                            Log.Debug(Category.SIO, "Channel {0} enqueued byte {1:x2}, fifo depth now {2}",
+                                      _channelNumber, data, _rxFifo.Count);
                         }
                     }
                     else // Async mode

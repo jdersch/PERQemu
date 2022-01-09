@@ -50,8 +50,8 @@ namespace PERQemu.Processor
                 _romSize = 512;
                 _rom = new ulong[_romSize];
 
-                Trace.Log(LogType.Microstore, "Allocated {0}K RAM, {1:n}K ROM",
-                                            _wcsSize / 1024, _romSize / 1024f);
+                Log.Debug(Category.Microstore, "Allocated {0}K RAM, {1:n}K ROM",
+                                               _wcsSize / 1024, _romSize / 1024f);
             }
 
             public void Reset()
@@ -67,7 +67,7 @@ namespace PERQemu.Processor
                 _wcsHold = false;
                 _romEnabled = true;
 
-                Trace.Log(LogType.Microstore, "WCS reset, ROM enabled.");
+                Log.Debug(Category.Microstore, "WCS reset, ROM enabled.");
             }
 
             public bool Hold
@@ -160,7 +160,7 @@ namespace PERQemu.Processor
                 // Set the hold bit to inject a wait state
                 _wcsHold = true;
 
-                Trace.Log(LogType.Microstore,
+                Log.Debug(Category.Microstore,
                           "Wrote {0:x4} at WCS {1:x4} ({2}) -- now contains {3:x12}",
                           data, addr, word, _microcode[addr]);
             }
@@ -255,7 +255,7 @@ namespace PERQemu.Processor
                 }
                 fs.Close();
 
-                Trace.Log(LogType.Microstore, "Loaded boot ROM from {0}.", Paths.Canonicalize(path));
+                Log.Debug(Category.Microstore, "Loaded boot ROM from {0}.", Paths.Canonicalize(path));
             }
 
             /// <summary>
@@ -290,7 +290,7 @@ namespace PERQemu.Processor
 
                 _romEnabled = false;
 
-                Trace.Log(LogType.Microstore, "Loaded microcode from {0}.", Paths.Canonicalize(path));
+                Log.Debug(Category.Microstore, "Loaded microcode from {0}.", Paths.Canonicalize(path));
             }
 
             /// <summary>

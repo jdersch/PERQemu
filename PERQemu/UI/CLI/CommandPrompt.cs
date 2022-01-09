@@ -54,7 +54,7 @@ namespace PERQemu.UI
 
                 if (newRoot == null)
                 {
-                    Trace.Log(LogType.Errors, "Bad call to SetPrefix: couldn't set root to " + subsys);
+                    Log.Error(Category.Emulator, "Bad call to SetPrefix: couldn't set root to {0}", subsys);
                     return _commandTree;
                 }
             }

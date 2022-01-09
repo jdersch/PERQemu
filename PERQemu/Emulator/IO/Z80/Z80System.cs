@@ -109,7 +109,7 @@ namespace PERQemu.IO.Z80
             // Compute how often (in CPU cycles) to sync the emulated processor
             // to real-time (used if Settings.RateLimit != Fast mode)
             _adjustInterval = (int)(_heartbeat.Interval / (IOBoard.Z80CycleTime * Conversion.NsecToMsec));
-            Console.WriteLine("Z80 rate adjust every {0} cycles", _adjustInterval);
+            Log.Info(Category.Emulator, "Z80 rate adjust every {0} cycles", _adjustInterval);
         }
 
         public bool SupportsAsync => true;
@@ -147,7 +147,7 @@ namespace PERQemu.IO.Z80
             {
                 // A power-on or "hard" reset does everything
                 _bus.Reset();
-                Trace.Log(LogType.Z80State, "Z80 system reset.");
+                Log.Debug(Category.Z80CPU, "System reset.");
             }
             else
             {
@@ -234,7 +234,7 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Console.WriteLine("[Z80 thread stopping]");
+            Console.WriteLine("[Stopping Z80 thread]");
 
             if (Thread.CurrentThread != _asyncThread)
             {
@@ -268,7 +268,7 @@ namespace PERQemu.IO.Z80
             //
             if ((data & 0x100) == 0)
             {
-                Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt disabled, clearing interrupt.");
+                Log.Debug(Category.Z80Interrupt, "DataInReady disabled, clearing interrupt.");
 
                 // TODO: move this logic into PERQToZ80FIFO?
                 _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
@@ -276,7 +276,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                Trace.Log(LogType.Z80State, "Z80 DataInReady interrupt enabled.");
+                Log.Debug(Category.Z80Interrupt, "DataInReady enabled.");
 
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
             }
@@ -316,12 +316,12 @@ namespace PERQemu.IO.Z80
         {
             if (status == 0x80 && _running)
             {
-                Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
+                Log.Debug(Category.Z80CPU, "Shut down by write to Status register.");
                 _running = false;
             }
             else if (status == 0 && !_running)
             {
-                Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
+                Log.Debug(Category.Z80CPU, "Started by write to Status register.");
                 Reset(true);
             }
         }
@@ -376,7 +376,7 @@ namespace PERQemu.IO.Z80
             }
             catch
             {
-                Console.WriteLine("Could not open Z80 ROM from {0}!", file);
+                Log.Error(Category.Emulator, "Could not open Z80 ROM from {0}!", file);
                 throw;
             }
         }

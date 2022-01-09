@@ -42,7 +42,7 @@ namespace PERQemu
             // Set a platform flag
             _hostIsUnix = (Environment.OSVersion.Platform == PlatformID.Unix ||
                            Environment.OSVersion.Platform == PlatformID.MacOSX);
-            
+
             //
             // "Man is born to trouble, as the sparks fly upwards" - Job Ch.5
             //      -- Change log in Layered/mulReal.High
@@ -77,14 +77,38 @@ namespace PERQemu
 
             if (_switches.debug)
             {
-                //Log.Level = Severity.Debug;
-                //Log.Categories = Category.All;
+                Log.Level = Severity.Debug;
+                Log.Categories = Category.All;
             }
 
             // Since we use reflection to build up our CLI and GUI, let the
             // user know this might take a while.  It's the polite thing to do.
             Console.WriteLine("Initializing, please wait...");
             Console.Out.Flush();
+
+#if false
+            // ------ debug
+            Log.ShowColors();
+
+            Log.Write(Severity.Error, Category.All, "First test log!");
+
+            for (var i = 0; i < 10; i++)
+                Log.Debug(Category.All, "Test repeat message, ten times");
+
+            Log.Debug(Category.All, "Did it go ten times?");
+
+            Log.Debug(Category.All, "Test repeat message, two times");
+            Log.Debug(Category.All, "Test repeat message, two times");
+            Log.Debug(Category.Emulator, "Reset.");
+            Log.Debug(Category.Controller, "Reset.");
+
+            Log.Write(Severity.Verbose, Category.Controller, "Reset.");
+            Log.Write(Severity.Info, Category.Controller, "Reset.");
+            Log.Debug(Category.All, "Diff severity should have repeated, no?");
+
+            return;
+            // ------ debug
+#endif
 
             // Set up command-line parser and GUI manager
             _cli = new CommandProcessor();
@@ -99,7 +123,7 @@ namespace PERQemu
             Console.WriteLine(Settings.Reason);     // DEBUG
 
             // Initialize the ExecutionController and default PERQ
-            _controller.Initialize(_config.Current);
+            //_controller.Initialize(_config.Current);
 
             // Start 'er up!
             Run();

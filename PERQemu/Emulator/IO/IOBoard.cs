@@ -85,7 +85,7 @@ namespace PERQemu.IO
             _z80System.Reset();
             _hardDiskController.Reset();
 
-            Trace.Log(LogType.IOState, "{0}: Board reset.", _name);
+            Log.Debug(Category.IO, "{0} board reset.", _name);
         }
 
         public virtual void RunAsync()
@@ -161,7 +161,7 @@ namespace PERQemu.IO
             {
                 if (_portsHandled[p])
                 {
-                    Trace.Log(LogType.Errors, "Port {0:x} already registered!", p);
+                    Log.Warn(Category.IO, "Port {0:x} already registered!", p);
                 }
 
                 _portsHandled[p] = true;

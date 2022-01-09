@@ -92,7 +92,7 @@ namespace PERQemu.UI
 
             if (_sdlRunning)
             {
-                Trace.Log(LogType.Errors, "** InitializeSDL called while already running!?");
+                Log.Error(Category.Emulator, "** InitializeSDL called while already running!?");
                 return;
             }
             Console.WriteLine("[Initializing SDL on {0}]", Thread.CurrentThread.ManagedThreadId);
@@ -417,7 +417,7 @@ namespace PERQemu.UI
         /// </summary>
         public void ShutdownSDL()
         {
-            Console.WriteLine("SDL Shutdown requested.");    // Debug
+            Log.Debug(Category.Display, "SDL Shutdown requested.");
 
             if (_sdlRunning)
             {
@@ -432,7 +432,7 @@ namespace PERQemu.UI
                 while (PERQemu.Controller.State != RunState.ShuttingDown &&
                        PERQemu.Controller.State != RunState.Off)
                 {
-                    Console.WriteLine("Waiting for PERQ to shut down...");
+                    Log.Debug(Category.Display, "Waiting for PERQ to shut down...");
                     Thread.Sleep(25);
                 }
                 
@@ -765,6 +765,7 @@ namespace PERQemu.UI
         private int _fpsTimerId;
         private HRTimerElapsedCallback _fpsTimerCallback;
 
+        // unused... 
         //private delegate void DisplayDelegate();
         //private delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
 

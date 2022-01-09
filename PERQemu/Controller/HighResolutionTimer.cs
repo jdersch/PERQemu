@@ -144,7 +144,7 @@ namespace PERQemu
             int tag = 0;
             double next = period;
 
-            Trace.Log(LogType.None, "Register called, requesters length = " + _requesters.Count);
+            Log.Debug(Category.Timer, "Register called, requesters length = " + _requesters.Count);
 
             // Loop to see if we have an existing subscriber with the same
             // period; if so, adjust our new request to fire at the same time,
@@ -154,7 +154,7 @@ namespace PERQemu
                 if (!_requesters[i].Free && Math.Abs(_requesters[i].Interval - period) < Tolerance)
                 {
                     next = _requesters[i].NextTrigger;
-                    Trace.Log(LogType.Timer, "Coalesced new timer at " + next);
+                    Log.Debug(Category.Timer, "Coalesced new timer at " + next);
                     break;
                 }
             }
@@ -169,7 +169,7 @@ namespace PERQemu
                     _requesters[tag].Interval = period;
                     _requesters[tag].NextTrigger = next;
                     _requesters[tag].Callback = cb;
-                    Trace.Log(LogType.Timer,
+                    Log.Debug(Category.Timer,
                               "Registered timer {0}, interval {1:N3}, next trigger {2:N3}",
                               tag, period, next);
 
@@ -179,7 +179,7 @@ namespace PERQemu
 
             // None free?  Extend...
             _requesters.Add(new TimerThing(period, cb));
-            Trace.Log(LogType.Timer,
+            Log.Debug(Category.Timer,
                       "Added new timer {0}, interval {1:N3}, next trigger {2:N3}",
                       tag, period, next);
 
@@ -206,7 +206,7 @@ namespace PERQemu
             }
             catch
             {
-                Trace.Log(LogType.Errors, "Failed to set enable for tag " + tag);
+                Log.Error(Category.Timer, "Failed to set enable for tag " + tag);
             }
         }
 
@@ -219,7 +219,7 @@ namespace PERQemu
             {
                 if (_requesters[tag].Free)
                 {
-                    Trace.Log(LogType.Errors, "Request to unregister alread freed timer " + tag);
+                    Log.Error(Category.Timer, "Request to unregister alread freed timer " + tag);
                 }
                 else
                 {
@@ -231,7 +231,7 @@ namespace PERQemu
             }
             catch
             {
-                Trace.Log(LogType.Errors, "Bad call to unregister a timer!");
+                Log.Error(Category.Timer, "Bad call to unregister a timer!");
                 // do proper exception handling here...
             }
         }
@@ -253,7 +253,7 @@ namespace PERQemu
                 _thread = new Thread(ExecuteTimer) { Name = "HighResTimer", IsBackground = true };
                 _thread.Start();
             }
-            Trace.Log(LogType.Timer, "Timer thread started.");
+            Log.Debug(Category.Timer, "Thread started.");
         }
 
         /// <summary>
@@ -265,7 +265,7 @@ namespace PERQemu
 
             _runTimers = false;
             _throttle.Reset();
-            Trace.Log(LogType.Timer, "Timer thread paused.");
+            Log.Debug(Category.Timer, "Thread paused.");
         }
 
         /// <summary>
@@ -281,7 +281,7 @@ namespace PERQemu
 
             _thread.Join();
             _thread = null;
-            Trace.Log(LogType.Timer, "Timer thread shut down.");
+            Log.Debug(Category.Timer, "Thread shut down.");
         }
 
         /// <summary>
@@ -303,7 +303,7 @@ namespace PERQemu
             // Of course, the OS is free to ignore this.
             Thread.BeginThreadAffinity();
 
-            Trace.Log(LogType.Timer,
+            Log.Debug(Category.Timer,
                       "Stopwatch initialized, HRT thread {0} running {1} timers",
                       Thread.CurrentThread.ManagedThreadId, _requesters.Count);
 
@@ -393,9 +393,9 @@ namespace PERQemu
 
 #if DEBUG
             // For posterity
-            Trace.Log(LogType.Timer, "Stopwatch stopped, HRT thread exiting");
-            Trace.Log(LogType.Timer, "--> SpinWaits short={0} long={1}", shortSpin, longSpin);
-            Trace.Log(LogType.Timer, "--> Sleeps    short={0} long={1}", shortSleep, longSleep);
+            Log.Debug(Category.Timer, "Stopwatch stopped, HRT thread exiting");
+            Log.Debug(Category.Timer, "--> SpinWaits short={0} long={1}", shortSpin, longSpin);
+            Log.Debug(Category.Timer, "--> Sleeps    short={0} long={1}", shortSleep, longSleep);
 #endif
         }
 
@@ -437,7 +437,7 @@ namespace PERQemu
             else
             {
                 _runTimers = false;
-                Trace.Log(LogType.Timer, "No active requesters, pausing HR timer.");
+                Log.Debug(Category.Timer, "No active requesters, pausing HR timer.");
 
                 return now;
             }
@@ -453,7 +453,7 @@ namespace PERQemu
             {
                 _requesters[i].NextTrigger = _requesters[i].Interval;
             }
-            Trace.Log(LogType.Timer, "Interval timers reset.");
+            Log.Debug(Category.Timer, "Intervals reset.");
         }
 
         [Conditional("DEBUG")]

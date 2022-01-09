@@ -137,7 +137,7 @@ namespace PERQemu
             if (_mode == ExecutionMode.Asynchronous && !(_iob.SupportsAsync && _cpu.SupportsAsync))
             {
                 _mode = ExecutionMode.Synchronous;
-                Console.WriteLine("Asynchronous execution not supported; falling back to Synchronous mode.");
+                Log.Info(Category.Emulator, "Asynchronous execution not supported; falling back to Synchronous mode.");
             }
 
             // Compute how many cycles between runs of the GUI's event loop (in
@@ -186,7 +186,7 @@ namespace PERQemu
         {
             _state = s.State;
 
-            Trace.Log(LogType.EmuState, "PERQSystem state changing to {0} ({1} mode)", _state, _mode);
+            Log.Debug(Category.Emulator, "PERQSystem state changing to {0} ({1} mode)", _state, _mode);
 
             switch (_state)
             {
@@ -246,7 +246,7 @@ namespace PERQemu
                 case RunState.Off:
                     break;
             }
-            Trace.Log(LogType.EmuState, "PERQSystem transitioned to {0}", _state);
+            Log.Debug(Category.Emulator, "PERQSystem transitioned to {0}", _state);
         }
 
         /// <summary>
@@ -309,7 +309,6 @@ namespace PERQemu
         /// </remarks>
         private void Reset()
         {
-            Console.WriteLine("PERQSystem Reset called.");
             _cpu.Reset();
             _mem.Reset();
             _ioBus.Reset();
@@ -323,9 +322,9 @@ namespace PERQemu
             // The emulation has hit a serious error.  Enter the debugger...
             _state = RunState.Halted;
 
-            Console.WriteLine("\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
+            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
 #if DEBUG
-            Console.WriteLine(Environment.StackTrace);
+            Log.Write(Environment.StackTrace);
 #endif
         }
 
@@ -385,7 +384,6 @@ namespace PERQemu
         /// </summary>
         public void LoadMedia(DriveType type, string path, int unit)
         {
-            Console.WriteLine("PERQSystem loading media " + path);
             switch (type)
             {
                 case DriveType.Floppy:
@@ -472,13 +470,13 @@ namespace PERQemu
         /// </remarks>
         private void BootCharCallback(ulong skewNsec, object context)
         {
-            if (CPU.DDS < 152)
+            if (CPU.DDS < 151)
             {
                 // Send the key:    fixme: iob and eio interfaces slightly different :-/
                 _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
 
                 // And do it again.
-                _cpu.Scheduler.Schedule(100 * Conversion.MsecToNsec, BootCharCallback);
+                Scheduler.Schedule(100 * Conversion.MsecToNsec, BootCharCallback);
             }
         }
 

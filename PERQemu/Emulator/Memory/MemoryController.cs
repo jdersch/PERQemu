@@ -135,7 +135,7 @@ namespace PERQemu.Memory
             _current.Clear();
             _pending.Clear();
 
-            Trace.Log(LogType.MemoryState, "{0} queue: Reset.", _name);
+            Log.Debug(Category.MemState, "{0} queue reset.", _name);
         }
 
         public bool Wait => _wait;
@@ -154,7 +154,7 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock(MemoryCycle nextCycle)
         {
-            Trace.Log(LogType.MemoryState,
+            Log.Debug(Category.MemState,
                       "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
                      _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
 
@@ -167,7 +167,7 @@ namespace PERQemu.Memory
             // Update bookmarks for the next cycle
             UpdateBookmarks(nextCycle);
 
-            Trace.Log(LogType.MemoryState,
+            Log.Debug(Category.MemState,
                       "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
                      _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
         }
@@ -202,7 +202,7 @@ namespace PERQemu.Memory
                 _pending = old;
                 _bookmark = _current.Bookmark;
 
-                Trace.Log(LogType.MemoryState, "{0} queue: Recognized {1}", _name, _current);
+                Log.Debug(Category.MemState, "{0} queue: Recognized {1}", _name, _current);
 
                 _pending.Clear();
             }
@@ -256,7 +256,7 @@ namespace PERQemu.Memory
             // If this is the last word in a cycle, retire the current op
             if (flags.Complete)
             {
-                Trace.Log(LogType.MemoryState, "{0} queue: Retired {1}", _name, _current);
+                Log.Debug(Category.MemState, "{0} queue: Retired {1}", _name, _current);
 
                 _current.Clear();
                 _bookmark = 0;
@@ -391,7 +391,7 @@ namespace PERQemu.Memory
                 // if a Fetch is overlapped)
                 if (flags.Complete)
                 {
-                    Trace.Log(LogType.MemoryState, "{0} queue: Terminated {1}", _name, _current);
+                    Log.Debug(Category.MemState, "{0} queue: Terminated {1}", _name, _current);
                     _current.Clear();
                 }
 
@@ -416,7 +416,7 @@ namespace PERQemu.Memory
             //
             int lookup = (((int)book & 0x0f) << 4) | ((int)state << 2) | _mem.TState;
 
-            Trace.Log(LogType.MemoryState, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
+            Log.Debug(Category.MemState, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
             return _bkmTable[lookup];
         }
 
@@ -435,7 +435,7 @@ namespace PERQemu.Memory
             }
             fs.Close();
 
-            Trace.Log(LogType.EmuState, "Initialized BKM ROM lookup table.");
+            Log.Info(Category.Emulator, "Initialized BKM ROM lookup table.");
         }
 
 #if DEBUG

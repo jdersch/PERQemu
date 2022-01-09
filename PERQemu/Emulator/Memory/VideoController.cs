@@ -105,7 +105,7 @@ namespace PERQemu.Memory
                 _currentEvent = null;
             }
 
-            Trace.Log(LogType.Display, "Video Controller: Reset.");
+            Log.Debug(Category.Display, "Video controller reset.");
         }
 
         public int DisplayWidth => _displayWidth;
@@ -127,15 +127,15 @@ namespace PERQemu.Memory
             switch (ioPort)
             {
                 case 0x65:   // Read CRT signals
-                    Trace.Log(LogType.Display, "Read CRT signals, returned {0}", _crtSignals);
+                    Log.Debug(Category.Display, "Read CRT signals, returned {0}", _crtSignals);
                     return (int)_crtSignals;
 
                 case 0x66:   // Read Hi address parity (unimplemented)
-                    Trace.Log(LogType.Display, "STUB: Read Hi address parity, returned 0.");
+                    Log.Debug(Category.Display, "STUB: Read Hi address parity, returned 0.");
                     return 0x0;
 
                 case 0x67:   // Read Low address parity (unimplemented)
-                    Trace.Log(LogType.Display, "STUB: Read Low address parity, returned 0.");
+                    Log.Debug(Category.Display, "STUB: Read Low address parity, returned 0.");
                     return 0x0;
 
                 default:
@@ -168,7 +168,7 @@ namespace PERQemu.Memory
                     // Clear interrupt
                     _system.CPU.ClearInterrupt(InterruptSource.LineCounter);
 
-                    Trace.Log(LogType.Display, "Line counter set to {0} scanlines. (write was {1:x4})",
+                    Log.Debug(Category.Display, "Line counter set to {0} scanlines. (write was {1:x4})",
                                                _lineCounterInit, value);
                     break;
 
@@ -178,7 +178,7 @@ namespace PERQemu.Memory
                     // multiple of 256 words.
                     _displayAddress = UnFrobAddress(value);
 
-                    Trace.Log(LogType.Display, "Display Address Register set to {0:x6}", _displayAddress);
+                    Log.Debug(Category.Display, "Display Address Register set to {0:x6}", _displayAddress);
                     break;
 
                 case 0xe2:  // Load cursor address register
@@ -186,7 +186,7 @@ namespace PERQemu.Memory
                     // Same format as display address
                     _cursorAddress = UnFrobAddress(value);
 
-                    Trace.Log(LogType.Display, "Cursor Address Register set to {0:x6}", _cursorAddress);
+                    Log.Debug(Category.Display, "Cursor Address Register set to {0:x6}", _cursorAddress);
                     break;
 
                 case 0xe3:  // Video control port
@@ -205,7 +205,7 @@ namespace PERQemu.Memory
                     if ((_videoStatus & StatusRegister.EnableCursor) != 0)
                     {
                         _cursorY = 0;
-                        Trace.Log(LogType.Display, "Cursor Y enabled at line {0}", _scanLine);
+                        Log.Debug(Category.Display, "Cursor Y enabled at line {0}", _scanLine);
                     }
 
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
@@ -220,7 +220,7 @@ namespace PERQemu.Memory
                         RunStateMachine();
                     }
 
-                    Trace.Log(LogType.Display, "Video status port set to {0}", _videoStatus);
+                    Log.Debug(Category.Display, "Video status port set to {0}", _videoStatus);
                     break;
 
                 case 0xe4:  // Load cursor X position
@@ -234,7 +234,7 @@ namespace PERQemu.Memory
                     // in software by shifting the cursor bitmap to match.  Fun.
                     _cursorX = (240 - (value & 0xff));
 
-                    Trace.Log(LogType.Display, "Cursor X set to {0} (value={1})", _cursorX, value);
+                    Log.Debug(Category.Display, "Cursor X set to {0} (value={1})", _cursorX, value);
                     break;
 
                 default:
@@ -365,7 +365,7 @@ namespace PERQemu.Memory
             {
                 if (ParityInterruptsEnabled && !_lineCountOverflow)     // Just trigger it once...
                 {
-                    Trace.Log(LogType.Display, "Line counter overflow, triggering interrupt @ scanline {0}", _scanLine);
+                    Log.Debug(Category.Display, "Line counter overflow @ scanline {0}", _scanLine);
                     _system.CPU.RaiseInterrupt(InterruptSource.LineCounter);
                 }
 

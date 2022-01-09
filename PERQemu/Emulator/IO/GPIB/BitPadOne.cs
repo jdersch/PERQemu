@@ -63,7 +63,7 @@ namespace PERQemu.IO.GPIB
             _talking = false;
             _listening = false;
 
-            Trace.Log(LogType.GPIB, "BitPadOne: Reset (address={0}).", _myAddress);
+            Log.Debug(Category.GPIB, "BitPadOne reset (address={0}).", _myAddress);
         }
 
         /// <summary>
@@ -74,7 +74,7 @@ namespace PERQemu.IO.GPIB
         {
             _talking = (address == _myAddress);
 
-            Trace.Log(LogType.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
+            Log.Debug(Category.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
 
             if (_talking)
             {
@@ -91,7 +91,7 @@ namespace PERQemu.IO.GPIB
         {
             _listening = (address == _myAddress);
 
-            Trace.Log(LogType.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
+            Log.Debug(Category.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
         }
 
         /// <summary>
@@ -148,7 +148,7 @@ namespace PERQemu.IO.GPIB
                 fifo.Enqueue(_delimiter2);
 
                 // For debugging GPIB, too much noise; log these updates on the Kriz channel :-)
-                Trace.Log(LogType.Tablet, "BitPadOne polled: x={0} y={1} button={2} ({3}) update={4}",
+                Log.Debug(Category.Tablet, "BitPadOne polled: x={0} y={1} button={2} ({3}) update={4}",
                                            x, y, button, (char)_buttonMapping[button], _lastUpdate);
                 _lastUpdate = 0;
             }
@@ -161,7 +161,7 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         public void Write(byte b)
         {
-            Trace.Log(LogType.GPIB, "BitPadOne: write requested ({0:x2})!?", b);
+            Log.Warn(Category.GPIB, "BitPadOne: write requested ({0:x2})!?", b);
         }
 
         /// <summary>

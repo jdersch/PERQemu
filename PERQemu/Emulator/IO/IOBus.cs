@@ -75,14 +75,12 @@ namespace PERQemu.IO
 
             if (_deviceDispatch[ioPort] == null)
             {
-                Trace.Log(LogType.Warnings,
-                         "No device registered for IO port {0:x2} write ({1:x4})", ioPort, value);
+                Log.Warn(Category.IO, "No device registered for port {0:x2} write ({1:x4})", ioPort, value);
                 return;
             }
 
-            if (Trace.TraceOn && !(_deviceDispatch[ioPort] is VideoController))
-                Trace.Log(LogType.IOState,
-                         "Output sent to port {0:x2} ({1:x4}) handled by {2}",
+            if (!(_deviceDispatch[ioPort] is VideoController))  // This generates a lot of output
+                Log.Debug(Category.IO, "Output sent to port {0:x2} ({1:x4}) handled by {2}",
                           ioPort, value, _deviceDispatch[ioPort]);
 
             _deviceDispatch[ioPort].IOWrite(ioPort, value);
@@ -92,20 +90,18 @@ namespace PERQemu.IO
         {
             if (_deviceDispatch[ioPort] == null)
             {
-                Trace.Log(LogType.Warnings,
-                         "No device registered for IO port {0:x2} read, returning 0", ioPort);
+                Log.Warn(Category.IO, "No device registered for port {0:x2} read, returning 0", ioPort);
                 return 0;
             }
 
-            if (Trace.TraceOn && !(_deviceDispatch[ioPort] is VideoController))
-                Trace.Log(LogType.IOState,
-                         "Input request from port {0:x2} handled by {1}",
+            if (!(_deviceDispatch[ioPort] is VideoController))
+                Log.Debug(Category.IO, "Input request from port {0:x2} handled by {1}",
                           ioPort, _deviceDispatch[ioPort]);
 
             int retVal = _deviceDispatch[ioPort].IORead(ioPort);
 
-            if (Trace.TraceOn && !(_deviceDispatch[ioPort] is VideoController))
-                Trace.Log(LogType.IOState, "Input received is {0:x4}", retVal);
+            if (!(_deviceDispatch[ioPort] is VideoController))
+                Log.Debug(Category.IO, "Input received is {0:x4}", retVal);
 
             return retVal;
         }
@@ -117,7 +113,8 @@ namespace PERQemu.IO
         /// </summary>
         private void UpdateDispatchTable(IIODevice device)
         {
-            Console.WriteLine("Update dispatch table for IO device " + device);
+            Log.Debug(Category.IO, "Updating dispatch table for device {0}", device);
+
             for (int i = 0; i < 255; i++)
             {
                 if (device.HandlesPort((byte)i))

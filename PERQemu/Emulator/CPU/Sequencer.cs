@@ -54,7 +54,7 @@ namespace PERQemu.Processor
                 _victim.Value = 0xffff;           // all 1s means unset
                 _callStack.Reset();
 
-                Trace.Log(LogType.Sequencer, "Sequencer reset.");
+                Log.Debug(Category.Sequencer, "Reset.");
             }
 
             /// <summary>
@@ -225,7 +225,7 @@ namespace PERQemu.Processor
                                 throw new InvalidOperationException("Revive from unset victim latch!");
                             }
 
-                            Trace.Log(LogType.Sequencer, "PC restored from victim ({0:x4})", Victim);
+                            Log.Debug(Category.Sequencer, "PC restored from victim ({0:x4})", Victim);
                            
                             _pc.Value = Victim;     // Restore
                             Victim = 0xffff;        // Clear the latch
@@ -244,7 +244,7 @@ namespace PERQemu.Processor
                         break;
 
                     case JumpOperation.PushLoad:
-                        Trace.Log(LogType.Sequencer, "PushLoad: cond={0} S={1:x4}",
+                        Log.Debug(Category.Sequencer, "PushLoad: cond={0} S={1:x4}",
                                   conditionSatisfied, uOp.NextAddress);
 
                         if (conditionSatisfied)
@@ -279,7 +279,7 @@ namespace PERQemu.Processor
                                 _cpu._shifter.Shift(_cpu._alu.OldR.Lo);
                                 _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
                             }
-                            Trace.Log(LogType.Sequencer, "Dispatch to {0:x4}", _pc.Lo);
+                            Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Lo);
                         }
                         else
                         {
@@ -307,13 +307,13 @@ namespace PERQemu.Processor
                     case JumpOperation.Repeat:
                         if (_s.Lo != 0)
                         {
-                            Trace.Log(LogType.Sequencer, "Repeat S={0:x4}", _s.Lo);
+                            Log.Debug(Category.Sequencer, "Repeat S={0:x4}", _s.Lo);
                             _pc.Lo = uOp.NextAddress;
                             _s.Lo--;
                         }
                         else
                         {
-                            Trace.Log(LogType.Sequencer, "Repeat done.");
+                            Log.Debug(Category.Sequencer, "Repeat done.");
                             _pc.Lo++;
                         }
                         break;
@@ -352,7 +352,7 @@ namespace PERQemu.Processor
                         _s.Value = uOp.NextAddress;
                         _pc.Lo++;
 
-                        Trace.Log(LogType.Sequencer, "Load S={0:x4}", _s.Value);
+                        Log.Debug(Category.Sequencer, "Load S={0:x4}", _s.Value);
                         break;
 
                     case JumpOperation.Loop:
@@ -415,17 +415,17 @@ namespace PERQemu.Processor
             {
                 byte next = _cpu._opFile[_cpu.BPC];
 
-                if (Trace.TraceOn)
+                if (Log.ToConsole || Log.ToFile)
                 {
-                    Trace.TraceLevel &= (~LogType.Instruction);
-                    Trace.Log(LogType.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}",
-                              next, QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, _cpu.BPC);
+                    Log.Categories &= (~Category.Instruction);
+                    Log.Debug(Category.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
+                              QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, _cpu.BPC);
                 }
 
                 _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
                 _cpu._incrementBPC = true;
 
-                Trace.Log(LogType.OpFile, "NextInst Branch to {0:x4} ", _pc.Value);
+                Log.Debug(Category.Sequencer, "NextInst Branch to {0:x4} ", _pc.Value);
             }
 
             /// <summary>

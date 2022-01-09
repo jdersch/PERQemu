@@ -57,6 +57,8 @@ namespace PERQemu.IO.Z80
             _interruptVector = 0;
             _interruptActive = false;
             _enableDMA = false;
+
+            Log.Debug(Category.Z80DMA, "Reset.");
         }
 
         public string Name => "Z80 DMA";
@@ -142,8 +144,8 @@ namespace PERQemu.IO.Z80
                     // Update addresses & counters
                     _byteCounter--;
 
-                    Trace.Log(LogType.Z80DMA,
-                              "DMA transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left.",
+                    Log.Debug(Category.Z80DMA,
+                              "Transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left.",
                               data, source, sourceAddress, dest, destAddress, _byteCounter);
 
 
@@ -176,7 +178,7 @@ namespace PERQemu.IO.Z80
                 // interrupt, restart, etc.
                 if (_byteCounter == 0)
                 {
-                    Trace.Log(LogType.Z80DMA, "DMA transfer complete.");
+                    Log.Debug(Category.Z80DMA, "Transfer complete.");
 
                     if ((_interruptControl & 0x2) != 0)
                     {
@@ -191,7 +193,7 @@ namespace PERQemu.IO.Z80
                         _portAddressA = _portAddressAInit;
                         _portAddressB = _portAddressBInit;
 
-                        Trace.Log(LogType.Z80DMA, "DMA transfer auto-restarting.");
+                        Log.Debug(Category.Z80DMA, "Transfer auto-restarting.");
                     }
                     else
                     {
@@ -228,7 +230,7 @@ namespace PERQemu.IO.Z80
                     }
                 }
 
-                Trace.Log(LogType.Z80DMA, "Write of 0x{0:x2} to Z80 DMA base register {1}",
+                Log.Debug(Category.Z80DMA, "Write of 0x{0:x2} to base register {1}",
                                            value, _baseRegister);
                 WriteBaseRegister(value);
             }
@@ -287,28 +289,28 @@ namespace PERQemu.IO.Z80
                         _portAddressAInit = (ushort)((_portAddressAInit & 0xff00) | value);
                         _wr[_baseRegister] &= 0xf7;
 
-                        Trace.Log(LogType.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
+                        Log.Debug(Category.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
                     }
                     else if ((regVal & 0x10) != 0)
                     {
                         _portAddressAInit = (ushort)((_portAddressAInit & 0x00ff) | (value << 8));
                         _wr[_baseRegister] &= 0xef;
 
-                        Trace.Log(LogType.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
+                        Log.Debug(Category.Z80DMA, "Port A address now 0x{0:x4}", _portAddressAInit);
                     }
                     else if ((regVal & 0x20) != 0)
                     {
                         _blockLength = (ushort)((_blockLength & 0xff00) | value);
                         _wr[_baseRegister] &= 0xdf;
 
-                        Trace.Log(LogType.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
+                        Log.Debug(Category.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
                     }
                     else if ((regVal & 0x20) != 0)
                     {
                         _blockLength = (ushort)((_blockLength & 0x00ff) | (value << 8));
                         _wr[_baseRegister] &= 0xbf;
 
-                        Trace.Log(LogType.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
+                        Log.Debug(Category.Z80DMA, "Block length now 0x{0:x4}", _blockLength);
                     }
                     _writeBaseRegister = (value & 0x78) == 0;
                     break;
@@ -339,14 +341,14 @@ namespace PERQemu.IO.Z80
                         _portAddressBInit = (ushort)((_portAddressBInit & 0xff00) | value);
                         _wr[_baseRegister] &= 0xfb;
 
-                        Trace.Log(LogType.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
+                        Log.Debug(Category.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
                     }
                     else if ((regVal & 0x08) != 0)
                     {
                         _portAddressBInit = (ushort)((_portAddressBInit & 0x00ff) | (value << 8));
                         _wr[_baseRegister] &= 0xf7;
 
-                        Trace.Log(LogType.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
+                        Log.Debug(Category.Z80DMA, "Port Address B now 0x{0:x4}", _portAddressBInit);
                     }
                     else if ((regVal & 0x10) != 0)
                     {
@@ -363,7 +365,7 @@ namespace PERQemu.IO.Z80
                         _interruptVector = value;
                         _interruptControl &= 0xef;
 
-                        Trace.Log(LogType.Z80DMA, "Interrupt vector now 0x{0:x4}", _interruptVector);
+                        Log.Debug(Category.Z80DMA, "Interrupt vector now 0x{0:x4}", _interruptVector);
                     }
                     _writeBaseRegister = ((regVal & 0x1c) == 0) && ((_interruptControl & 0x18) == 0);
                     break;
@@ -507,7 +509,7 @@ namespace PERQemu.IO.Z80
             public byte Value;
         }
 
-        private RegisterDecodes[] _decodes = new RegisterDecodes[]
+        private RegisterDecodes[] _decodes =  
         {
             new RegisterDecodes(0x80, 0x00),    // WR0, not actually decoded (assumed if no matches are found)
             new RegisterDecodes(0x87, 0x04),

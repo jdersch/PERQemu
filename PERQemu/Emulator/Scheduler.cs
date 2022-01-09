@@ -100,7 +100,7 @@ namespace PERQemu
         {
             _currentTimeNsec = 0;
             _schedule.Clear();
-            Trace.Log(LogType.Timer, "Scheduler ({0}) reset.", _timeStepNsec);
+            Log.Debug(Category.Scheduler, "Reset ({0}).", _timeStepNsec);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

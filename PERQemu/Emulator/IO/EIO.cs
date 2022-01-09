@@ -90,7 +90,7 @@ namespace PERQemu.IO
                 //    return _z80System.ReadStatus();
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled EIO Read from port {0:x2}", port);
+                    Log.Warn(Category.IO, "Unhandled EIO Read from port {0:x2}", port);
                     return 0xff;
             }
         }
@@ -152,7 +152,7 @@ namespace PERQemu.IO
                 //    break;
 
                 default:
-                    Trace.Log(LogType.Warnings, "Unhandled EIO Write to port {0:x2}, data {1:x4}", port, value);
+                    Log.Warn(Category.IO, "Unhandled EIO Write to port {0:x2}, data {1:x4}", port, value);
                     break;
             }
         }

@@ -179,7 +179,6 @@
     <Compile Include="UI\SDL\Display.cs" />
     <Compile Include="Controller\Conversion.cs" />
     <Compile Include="Controller\Paths.cs" />
-    <Compile Include="Controller\Trace.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Configurator\Configurator.cs" />
     <Compile Include="Controller\ExecutionController.cs" />
@@ -221,6 +220,7 @@
     <Compile Include="Emulator\CPU\InterruptEncoder.cs" />
     <Compile Include="Configurator\Settings.cs" />
     <Compile Include="Configurator\SettingsCommands.cs" />
+    <Compile Include="Controller\Log.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -591,7 +591,6 @@
     <None Include="Disks\f1.phd" />
     <None Include="Docs\Video.txt" />
     <None Include="Emulator\CPU\PERQ24A.cs" />
-    <None Include="Controller\Log.cs" />
     <None Include="Docs\PERQ_Chart.jpg" />
     <None Include="Docs\Configurator.png" />
     <Content Include="Docs\Old\Changes.txt" />
@@ -606,6 +605,7 @@
     <None Include="Docs\Configuration.txt" />
     <None Include="Docs\Controller.txt" />
     <None Include="Emulator\IO\IZ80System.cs" />
+    <None Include="Controller\Trace.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
