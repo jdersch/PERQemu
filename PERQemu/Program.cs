@@ -86,31 +86,7 @@ namespace PERQemu
             Console.WriteLine("Initializing, please wait...");
             Console.Out.Flush();
 
-#if false
-            // ------ debug
-            Log.ShowColors();
-
-            Log.Write(Severity.Error, Category.All, "First test log!");
-
-            for (var i = 0; i < 10; i++)
-                Log.Debug(Category.All, "Test repeat message, ten times");
-
-            Log.Debug(Category.All, "Did it go ten times?");
-
-            Log.Debug(Category.All, "Test repeat message, two times");
-            Log.Debug(Category.All, "Test repeat message, two times");
-            Log.Debug(Category.Emulator, "Reset.");
-            Log.Debug(Category.Controller, "Reset.");
-
-            Log.Write(Severity.Verbose, Category.Controller, "Reset.");
-            Log.Write(Severity.Info, Category.Controller, "Reset.");
-            Log.Debug(Category.All, "Diff severity should have repeated, no?");
-
-            return;
-            // ------ debug
-#endif
-
-            // Set up command-line parser and GUI manager
+           // Set up command-line parser and GUI manager
             _cli = new CommandProcessor();
             //_gui = new FormsManager();
 
@@ -120,7 +96,7 @@ namespace PERQemu
 
             // Read user settings file, or set defaults if it doesn't yet exist
             Settings.Load();
-            Console.WriteLine(Settings.Reason);     // DEBUG
+            Log.Info(Category.All, Settings.Reason);
 
             // Initialize the ExecutionController and default PERQ
             //_controller.Initialize(_config.Current);
@@ -130,7 +106,7 @@ namespace PERQemu
 
             // Save the settings if they've changed
             Settings.Save();
-            Console.WriteLine(Settings.Reason);     // DEBUG
+            Log.Info(Category.All, Settings.Reason);
         }
 
         public static void Run()

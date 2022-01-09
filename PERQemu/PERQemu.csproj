@@ -605,7 +605,6 @@
     <None Include="Docs\Configuration.txt" />
     <None Include="Docs\Controller.txt" />
     <None Include="Emulator\IO\IZ80System.cs" />
-    <None Include="Controller\Trace.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
