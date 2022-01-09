@@ -18,10 +18,14 @@
 //
 
 using System;
-using PERQemu.Processor;
 
 namespace PERQemu.IO.Z80
 {
+    /// <summary>
+    /// The PERQ-1 IOB Keyboard is an 8-bit parallel register that stores one
+    /// byte from the keyboard.  TODO: on the EIO, the keyboard uses a serial
+    /// channel on the SIO chip, so it's totally different.  Oof.
+    /// </summary>
     public class Keyboard : IZ80Device
     {
         public Keyboard()
@@ -53,13 +57,11 @@ namespace PERQemu.IO.Z80
         {
             _lastKeycode = key;
             _interruptActive = true;
-            Console.WriteLine("--> Kbd queued " + _lastKeycode);
         }
 
         public byte Read(byte portAddress)
         {
             _interruptActive = false;
-            Console.WriteLine("<-- Kbd read " + _lastKeycode);
             return _lastKeycode;
         }
 

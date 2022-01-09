@@ -22,9 +22,18 @@ using System.Collections.Concurrent;
 
 using PERQemu.Processor;
 
-
 namespace PERQemu.IO.Z80
 {
+
+    // TODO/FIXME:  Damn.  The PERQ-1 IOB appears to have just a single byte
+    // latch in each direction ('374s), while the PERQ-2 EIO has an actual
+    // 16x10 (two '225s) FIFO.  We could possibly make the PERQ-1 implementation
+    // more efficient by not using a Queue (perhaps use an Interlocked scalar 
+    // instead) or just limit the depth to more accurately simulate the hardware.
+    // Of course, all the microcode is written with the hardware limitations in
+    // mind, so maybe we ditch the Queue altogether and just use a fixed array?
+
+
     /// <summary>
     /// Output TO the PERQ, FROM the Z80.
     /// </summary>
@@ -33,22 +42,26 @@ namespace PERQemu.IO.Z80
         public Z80ToPERQFIFO(PERQSystem system)
         {
             _system = system;
-            Reset();
+            _fifo = new ConcurrentQueue<byte>();
         }
 
         public void Reset()
         {
-            _fifo = new ConcurrentQueue<byte>();
+            byte dummy;
+
+            // Clear the fifo
+            while (_fifo.TryDequeue(out dummy)) { }
+
+            Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO reset.");
         }
 
         public byte Dequeue()
         {
             byte value = 0;
-            if (_fifo.Count > 0)
-            {
-                var ok = _fifo.TryDequeue(out value);
 
-                Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO read {0:x2}, {1:x4} items left in queue.",
+            if (_fifo.TryDequeue(out value))
+            {
+                Trace.Log(LogType.Z80FIFO, "Z80->PERQ FIFO read {0:x2}, {1} items left in queue.",
                                             value, _fifo.Count);
             }
             else
@@ -105,24 +118,29 @@ namespace PERQemu.IO.Z80
         public PERQToZ80FIFO(PERQSystem system)
         {
             _system = system;
-            Reset();
+            _fifo = new ConcurrentQueue<byte>();
         }
 
         public void Reset()
         {
-            _fifo = new ConcurrentQueue<byte>();
+            byte dummy;
+
+            // Clear the fifo
+            while (_fifo.TryDequeue(out dummy)) { }
+
             _interruptsEnabled = false;
             _interruptActive = false;
-        }       
+
+            Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO reset.");
+        }
 
         public string Name => "PERQ->Z80 FIFO";
         public byte[] Ports => _ports;
         public byte? ValueOnDataBus => 0x20;    // PRQVEC
-
         public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
 
-        public bool InterruptsEnabled 
-        { 
+        public bool InterruptsEnabled
+        {
             get { return _interruptsEnabled; }
             set { _interruptsEnabled = value; }
         }
@@ -153,17 +171,16 @@ namespace PERQemu.IO.Z80
             {
                 Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO read from empty fifo (int active {0}), returning 0.",
                                             _interruptActive);
-                return 0;
+            }
+            else
+            {
+                Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO dequeued byte {0:x2}, {1} items left in queue.",
+                                            value, _fifo.Count);
             }
 
-            Trace.Log(LogType.Z80FIFO, "PERQ->Z80 FIFO dequeued byte {0:x2}, {1} items left in queue.",
-                                        value, _fifo.Count);
-
-            //
             // If the input FIFO is empty, we will interrupt if the PERQ has
             // asked us to.  We will also clear the Z80 interrupt since there's
             // no data left to be consumed by the Z80.
-            //
             if (_fifo.Count == 0)
             {
                 if (_dataReadyInterruptRequested)

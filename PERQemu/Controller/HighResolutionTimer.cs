@@ -165,6 +165,7 @@ namespace PERQemu
                 if (_requesters[tag].Free)
                 {
                     _requesters[tag].Free = false;
+                    _requesters[tag].Enabled = false;
                     _requesters[tag].Interval = period;
                     _requesters[tag].NextTrigger = next;
                     _requesters[tag].Callback = cb;

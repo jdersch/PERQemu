@@ -47,12 +47,12 @@ namespace PERQemu
             _state = RunState.Off;
 
             //
-            // TODO: There are some ugly dependencies here...
-            //      CPU needs Memory;
-            //      Scheduler "needs" CPU;
-            //      Display, Video need Memory, CPU, and (eventually IOB);
-            //      IOBus needs IOB, OIO;
-            //      new Z80 needs IOB?
+            // NB: There are still some dependencies here which require these
+            // components to be created in order.  Memory must be set up first,
+            // then the processor!  After the rest of the system objects are
+            // instantiated, ROM images loaded, boards checked in, etc. the
+            // machine must be Reset before it is fully initialized and ready
+            // to run (ExecutionController sees to this).
             //
 
             // Memory board configures itself and the VideoController
@@ -121,7 +121,12 @@ namespace PERQemu
             _display = new Display(this);
 
             // Set up the IO Bus and check in the boards
-            _ioBus = new IOBus(this);
+            _ioBus = new IOBus();
+
+            // Attach devices
+            _ioBus.AddDevice(_mem.Video);
+            _ioBus.AddDevice(_iob);
+            _ioBus.AddDevice(_oio);
 
             // Set the user's preferred run mode.  We assume async mode if the
             // implementation supports it, but might want to select sync mode
@@ -143,9 +148,7 @@ namespace PERQemu
 
             // Okay!  We have a PERQ!  Now listen for state change events
             // from the Controller (or Debugger)
-            //PERQemu.Controller.RunStateChanged += OnRunStateChange;
-            // Does this need to be undone in a destructor so we don't have problems
-            // instantiating a new object?  we'll find out!
+            PERQemu.Controller.RunStateChanged += OnRunStateChange;
         }
 
         public Configuration Config => _conf;
@@ -157,9 +160,9 @@ namespace PERQemu
         public VideoController VideoController => _mem.Video;
         public Display Display => _display;
 
+        public IOBus IOBus => _ioBus;
         public IOBoard IOB => _iob;
         public OptionBoard OIO => _oio;
-        public IOBus IOBus => _ioBus;
 
 
         public ExecutionMode Mode
@@ -173,13 +176,17 @@ namespace PERQemu
             get { return _state; }
         }
 
-        // todo: somehow decompose this into discrete steps that correspond to
-        // state change events?
-        public void Run(RunState s)
+        public void Shutdown()
         {
-            _state = s;
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
+        }
 
-            Trace.Log(LogType.EmuState, "PERQsystem state changing to {0} ({1} mode)", _state, _mode);
+        private void OnRunStateChange(RunStateChangeEventArgs s)
+        {
+            _state = s.State;
+
+            Trace.Log(LogType.EmuState, "PERQSystem state changing to {0} ({1} mode)", _state, _mode);
 
             switch (_state)
             {
@@ -188,48 +195,7 @@ namespace PERQemu
                     break;
 
                 case RunState.Running:
-                    if (_mode == ExecutionMode.Asynchronous)
-                    {
-                        // Start up the background threads
-                        _iob.RunAsync();
-                        _cpu.RunAsync();
-
-                        // Run the event loop until State changes
-                        _display.SDLMessageLoop(_mode);
-
-                        // Stop the threads
-                        _cpu.Stop();
-                        _iob.Stop();
-                    }
-                    else
-                    {
-                        // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
-                        RunGuarded(() =>
-                            {
-                                uint count = 0;
-
-                                while (_state == RunState.Running)
-                                {
-                                    // Run the IOB for one Z80 instruction, then run the PERQ CPU for
-                                    // the number of microinstructions equivalent to that wall-clock time.
-                                    var clocks = _iob.Clock();
-
-                                    // Calculate the fudge factor
-                                    clocks = (uint)(clocks * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
-                                    count += clocks;
-
-                                    // Run the main CPU.  Rate limiting?  Hmm.
-                                    _cpu.Run((int)clocks);
-
-                                    // Run the SDL loop.  There has to be a better way.
-                                    if (count > _uiEventInterval)
-                                    {
-                                        _display.SDLMessageLoop(_mode);
-                                        count = 0;
-                                    }
-                                }
-                            });
-                    }
+                    Run();
                     break;
 
                 case RunState.SingleStep:
@@ -245,7 +211,6 @@ namespace PERQemu
                             _cpu.Run();
                             _state = RunState.Paused;
                         });
-
                     break;
 
                 case RunState.RunInst:
@@ -257,8 +222,8 @@ namespace PERQemu
                             {
                                 _iob.Clock();
                                 _cpu.Run();
-
-                            } while (!CPU.IncrementBPC);
+                            }
+                            while (!CPU.IncrementBPC);
 
                             _state = RunState.Paused;
                         });
@@ -274,12 +239,65 @@ namespace PERQemu
                     _state = RunState.Paused;
                     break;
 
-                case RunState.Off:
                 case RunState.Paused:
                 case RunState.Halted:
                     break;
+
+                case RunState.Off:
+                    break;
             }
             Trace.Log(LogType.EmuState, "PERQSystem transitioned to {0}", _state);
+        }
+
+        /// <summary>
+        /// Run the machine until the state changes.  For now, calls the SDL message
+        /// loop directly, which is horrible awful no good very bad and I am deeply
+        /// ashamed by this.
+        /// </summary>
+        public void Run()
+        {
+            if (_mode == ExecutionMode.Asynchronous)
+            {
+                // Start up the background threads
+                _iob.RunAsync();
+                _cpu.RunAsync();
+
+                // Run the event loop until State changes
+                _display.SDLMessageLoop(_mode);
+
+                // Stop the threads
+                _cpu.Stop();
+                _iob.Stop();
+            }
+            else
+            {
+                // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
+                RunGuarded(() =>
+                    {
+                        uint count = 0;
+
+                        while (_state == RunState.Running)
+                        {
+                            // Run the IOB for one Z80 instruction, then run the PERQ CPU for
+                            // the number of microinstructions equivalent to that wall-clock time.
+                            var clocks = _iob.Clock();
+
+                            // Calculate the fudge factor
+                            clocks = (uint)(clocks * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
+                            count += clocks;
+
+                            // Run the main CPU.  Rate limiting?  Hmm.
+                            _cpu.Run((int)clocks);
+
+                            // Run the SDL loop.  There has to be a better way.
+                            if (count > _uiEventInterval)
+                            {
+                                _display.SDLMessageLoop(_mode);
+                                count = 0;
+                            }
+                        }
+                    });
+            }
         }
 
         /// <summary>
@@ -291,9 +309,24 @@ namespace PERQemu
         /// </remarks>
         private void Reset()
         {
+            Console.WriteLine("PERQSystem Reset called.");
             _cpu.Reset();
             _mem.Reset();
             _ioBus.Reset();
+        }
+
+        /// <summary>
+        /// Provide a hook to catch errors and halt execution.
+        /// </summary>
+        public void Halt(Exception e)
+        {
+            // The emulation has hit a serious error.  Enter the debugger...
+            _state = RunState.Halted;
+
+            Console.WriteLine("\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
+#if DEBUG
+            Console.WriteLine(Environment.StackTrace);
+#endif
         }
 
         /// <summary>
@@ -308,13 +341,7 @@ namespace PERQemu
             }
             catch (Exception e)
             {
-                // The emulation has hit a serious error.  Enter the debugger...
-                _state = RunState.Halted;
-
-                Console.WriteLine("\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
-#if DEBUG
-                Console.WriteLine(Environment.StackTrace);
-#endif
+                Halt(e);
             }
         }
 
@@ -447,7 +474,7 @@ namespace PERQemu
         {
             if (CPU.DDS < 152)
             {
-                // Send the key:
+                // Send the key:    fixme: iob and eio interfaces slightly different :-/
                 _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
 
                 // And do it again.
@@ -458,12 +485,12 @@ namespace PERQemu
 
         // The PERQ
         private Configuration _conf;
-        private MemoryBoard _mem;
         private CPUBoard _cpu;
-        private IOBoard _iob;
-        private OptionBoard _oio;
+        private MemoryBoard _mem;
         private Display _display;
         private IOBus _ioBus;
+        private IOBoard _iob;
+        private OptionBoard _oio;
 
         // Controlly bits
         private ExecutionMode _mode;

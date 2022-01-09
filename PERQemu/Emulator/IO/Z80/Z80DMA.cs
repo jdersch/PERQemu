@@ -24,6 +24,12 @@ namespace PERQemu.IO.Z80
     /// <summary>
     /// Implements most of the Z80 DMA controller.
     /// </summary>
+    /// <remarks>
+    /// Aw, crap.  The PERQ-1 IOB uses a Mostek MK3883N DMA chip (second source
+    /// for the Zilog Z8410) which has one channel.  The PERQ-2 EIO uses the
+    /// Am9517 4-channel DMA chip (which Intel calls the i8237).  We'll have to
+    /// refactor things so each I/O Board loads its own DMA controller.
+    /// </remarks>
     public class Z80DMA : IZ80Device
     {
         public Z80DMA(byte baseAddress, Z80MemoryBus memoryBus, Z80IOBus ioBus)
@@ -31,12 +37,12 @@ namespace PERQemu.IO.Z80
             _memoryBus = memoryBus;
             _ioBus = ioBus;
             _baseAddress = baseAddress;
-
-            Reset();
+            _wr = new byte[7];
         }
 
         public void Reset()
         {
+            _wr.Initialize();
             _writeBaseRegister = true;
             _baseRegister = 0;
 
@@ -51,17 +57,12 @@ namespace PERQemu.IO.Z80
             _interruptVector = 0;
             _interruptActive = false;
             _enableDMA = false;
-
-            _wr = new byte[7];
         }
 
         public string Name => "Z80 DMA";
-
         public byte[] Ports => new byte[] { _baseAddress };
-
-        public bool IntLineIsActive => _interruptEnabled && _interruptActive;
-
         public byte? ValueOnDataBus => _interruptVector;    // TODO: implement dynamic vector based on type
+        public bool IntLineIsActive => _interruptEnabled && _interruptActive;
 
         public event EventHandler NmiInterruptPulse;
 
@@ -141,7 +142,7 @@ namespace PERQemu.IO.Z80
                     // Update addresses & counters
                     _byteCounter--;
 
-                    Trace.Log(LogType.Z80DMA, 
+                    Trace.Log(LogType.Z80DMA,
                               "DMA transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left.",
                               data, source, sourceAddress, dest, destAddress, _byteCounter);
 
@@ -242,7 +243,7 @@ namespace PERQemu.IO.Z80
         {
             _wr[_baseRegister] = value;
 
-            switch(_baseRegister)
+            switch (_baseRegister)
             {
                 case 0:
                     // bits D3-D6 indicate sub-registers to be written to,
@@ -277,7 +278,8 @@ namespace PERQemu.IO.Z80
         private void WriteSubRegister(byte value)
         {
             byte regVal = _wr[_baseRegister];
-            switch(_baseRegister)
+
+            switch (_baseRegister)
             {
                 case 0:
                     if ((regVal & 0x08) != 0)
@@ -370,10 +372,10 @@ namespace PERQemu.IO.Z80
                     throw new InvalidOperationException("Unexpected subregister write.");
             }
         }
-        
+
         private void ExecuteCommand(byte command)
         {
-            switch(command)
+            switch (command)
             {
                 case 0xc3: // Reset
                 case 0xa3: // TODO: this is a slightly different reset
@@ -413,7 +415,7 @@ namespace PERQemu.IO.Z80
                     break;
 
                 case 0xbb:
-                    //_readMask = 
+                //_readMask = 
 
                 case 0xb3:
                 case 0x88:

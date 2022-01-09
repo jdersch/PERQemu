@@ -97,6 +97,8 @@ namespace PERQemu.Memory
             _lineCounterInit = 0;
             _lineCountOverflow = false;
 
+            UpdateSignals();
+
             if (_currentEvent != null)
             {
                 _system.Scheduler.Cancel(_currentEvent);
@@ -104,14 +106,10 @@ namespace PERQemu.Memory
             }
 
             Trace.Log(LogType.Display, "Video Controller: Reset.");
-
-            // Kick off initial tick
-            RunStateMachine();
         }
 
         public int DisplayWidth => _displayWidth;
         public int DisplayHeight => _displayHeight;
-
 
         public bool HandlesPort(byte ioPort)
         {
@@ -178,10 +176,7 @@ namespace PERQemu.Memory
 
                     // Display Addr (341 W) Address of first pixel on display. Must be a
                     // multiple of 256 words.
-                    //  15:4    address >> 4 for .5-2MB boards; address >> 1 for old 256K boards
-                    //   3:2    address bits 21:20 on cards > 2 MB (todo: need to support this now!)
-                    //   1:0    not used
-                    _displayAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
+                    _displayAddress = UnFrobAddress(value);
 
                     Trace.Log(LogType.Display, "Display Address Register set to {0:x6}", _displayAddress);
                     break;
@@ -189,7 +184,7 @@ namespace PERQemu.Memory
                 case 0xe2:  // Load cursor address register
 
                     // Same format as display address
-                    _cursorAddress = (_system.Memory.MemSize < 0x40000 ? value << 1 : value << 4);
+                    _cursorAddress = UnFrobAddress(value);
 
                     Trace.Log(LogType.Display, "Cursor Address Register set to {0:x6}", _cursorAddress);
                     break;
@@ -248,10 +243,41 @@ namespace PERQemu.Memory
             }
         }
 
+        /// <summary>
+        /// Decode the display or cursor address:
+        ///    15:4    addr >> 4 for .5-2MB boards; addr >> 1 for old 256K boards
+        ///     3:2    address bits 21:20 on cards > 2 MB (24-bit systems)
+        ///     1:0    not used
+        /// </summary>
+        /// <remarks>
+        /// Currently the Configurator allows up to 8MB (4MW) of memory.  There
+        /// were a few obscure references to Accent supporting this much RAM but
+        /// no 8MB boards are known to have been produced.  To support the full
+        /// 32MB/16MW address range, the display and cursor address registers
+        /// and microcode/software support would have to be rewritten and the
+        /// full 16 bits used as the base address.
+        /// </remarks>
+        private int UnFrobAddress(int value)
+        {
+            // Early PERQ-1 256K memory board
+            if (_system.Memory.MemSize < 0x80000)
+            {
+                return (value << 1);
+            }
+
+            // Half-meg through two meg boards
+            if (_system.Memory.MemSize < 0x400000)
+            {
+                return (value << 4);
+            }
+
+            // Rare 4MB board (T4)
+            return ((value & 0xc) << 18 | (value & 0xfff0) << 4);
+        }
+
 
         private void RunStateMachine()
         {
-
             switch (_state)
             {
                 case VideoState.Idle:

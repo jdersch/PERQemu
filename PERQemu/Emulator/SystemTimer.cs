@@ -56,19 +56,19 @@ namespace PERQemu
             set { _interval = value; }
         }
 
-        /// <summary>
-        /// Reset disables the timer and clears the wait handle (freeing the
-        /// thread if it was blocked).  This may be slighty counterintuitive.
-        /// </summary>
         public void Reset()
         {
-            HighResolutionTimer.Enable(_handle, false);
-            _sync.Set();
+            Enable(false);
         }
 
-        public void StartTimer(bool enabled)
+        /// <summary>
+        /// Enable or disable the heartbeat timer.  Clears the wait handle (freeing
+        /// the thread if it was blocked).  This may be slighty counterintuitive.
+        /// </summary>
+        public void Enable(bool enabled)
         {
             HighResolutionTimer.Enable(_handle, enabled);
+            _sync.Set();
             Trace.Log(LogType.Timer, "Heartbeat {0} {1}", _handle, (enabled ? "started" : "stopped"));
         }
 

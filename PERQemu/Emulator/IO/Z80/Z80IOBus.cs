@@ -48,26 +48,15 @@ namespace PERQemu.IO.Z80
         //
         // IMemory Implementation
         //
-        public byte this[int address] 
-        { 
-            get 
-            {
-                return ReadPort(address);
-            }
+        public int Size => 0x100;        // 256 IO addresses
 
-            set 
-            {
-                WritePort(address, value);
-            }
+        public byte this[int address]
+        { 
+            get { return ReadPort(address); }
+            set { WritePort(address, value); }
         }
 
-        public int Size 
-        { 
-            get { return 0x100; }       // 256 IO addresses
-        }
-        
         public byte[] GetContents(int startAddress, int length) { return null; }
-
         public void SetContents(int startAddress, byte[] contents, int startIndex = 0, int? length = null) { }
 
         //

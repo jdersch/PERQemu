@@ -63,6 +63,8 @@ namespace PERQemu
         Z80SIO =            0x80000000,
         Z80DMA =            0x100000000,
         Z80FIFO =           0x200000000,
+        Z80CTC =            0x400000000,
+        Sequencer =         0x800000000,
         All =               0xffffffffffffffff,
     }
 

@@ -1,4 +1,5 @@
-// iobus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// IOBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -7,10 +8,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -40,15 +41,10 @@ namespace PERQemu.IO
     /// </summary>
     public sealed class IOBus
     {
-        public IOBus(PERQSystem system)
+        public IOBus()
         {
             _deviceDispatch = new IIODevice[256];
             _devices = new List<IIODevice>(16);
-
-            // Attach devices
-            AddDevice(system.VideoController);
-            AddDevice(system.IOB);
-            AddDevice(system.OIO);
         }
 
         public void Reset()
@@ -121,6 +117,7 @@ namespace PERQemu.IO
         /// </summary>
         private void UpdateDispatchTable(IIODevice device)
         {
+            Console.WriteLine("Update dispatch table for IO device " + device);
             for (int i = 0; i < 255; i++)
             {
                 if (device.HandlesPort((byte)i))

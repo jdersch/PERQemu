@@ -283,8 +283,8 @@ namespace PERQemu
         [Command("quit without save", "Leave PERQemu without committing changes")]
         private void QuitNow()
         {
-            PERQemu.Controller.PowerOff();  // Stop the machine, if running
-            Settings.Changed = false;       // Force the "without save" part :-)
+            PERQemu.Controller.PowerOff(false);     // Stop the machine, if running
+            Settings.Changed = false;               // Force the "without save" part
             _running = false;
         }
 

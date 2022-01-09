@@ -196,8 +196,6 @@ namespace PERQemu.UI
 
             _sdlRunning = true;
 
-            HighResolutionTimer.Enable(_fpsTimerId, true);
-
             // Force one update so the Mac will render the bloody window frame
             SDL.SDL_PumpEvents();
         }
@@ -249,6 +247,8 @@ namespace PERQemu.UI
 
             if (_sdlRunning)
             {
+                HighResolutionTimer.Enable(_fpsTimerId, true);
+
                 if (mode == ExecutionMode.Synchronous)
                 {
                     while (SDL.SDL_PollEvent(out e) != 0)
@@ -266,6 +266,8 @@ namespace PERQemu.UI
                     }
                     Console.WriteLine("[Exiting SDLMessageLoop]");
                 }
+
+                HighResolutionTimer.Enable(_fpsTimerId, false);
             }
         }
 

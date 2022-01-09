@@ -54,7 +54,7 @@ namespace PERQemu.Processor
                 _loStackPtr = 0;
                 _hiStackPtr = 0;
 
-                Trace.Log(LogType.CpuState, "Call stack: Reset.");
+                Trace.Log(LogType.Sequencer, "Call stack: Reset.");
             }
 
             /// <summary>
@@ -75,7 +75,7 @@ namespace PERQemu.Processor
 
                 _loStack[_loStackPtr] = (ushort)(address & 0xfff);
 
-                Trace.Log(LogType.CpuState, "Pushed {0:x4} onto call stack (lo).", address & 0xfff);
+                Trace.Log(LogType.Sequencer, "Pushed {0:x4} onto call stack (lo).", address & 0xfff);
             }
 
             /// <summary>
@@ -87,7 +87,7 @@ namespace PERQemu.Processor
 
                 if (_loStackPtr > 0) { _loStackPtr--; }
 
-                Trace.Log(LogType.CpuState, "Popped {0:x4} from call stack (lo).", address);
+                Trace.Log(LogType.Sequencer, "Popped {0:x4} from call stack (lo).", address);
                 return address;
             }
 
@@ -96,7 +96,7 @@ namespace PERQemu.Processor
             /// </summary>
             public ushort TopLo()
             {
-                Trace.Log(LogType.CpuState, "Returned {0:x4} from top of call stack.", _loStack[_loStackPtr]);
+                Trace.Log(LogType.Sequencer, "Returned {0:x4} from top of call stack.", _loStack[_loStackPtr]);
                 return _loStack[_loStackPtr];
             }
 
@@ -111,7 +111,7 @@ namespace PERQemu.Processor
                 _loStack[_loStackPtr] = (ushort)(address & 0xfff);
                 _hiStack[_hiStackPtr] = (ushort)(address & _wcsHiMask);
 
-                Trace.Log(LogType.CpuState, "Pushed {0:x4} onto call stack.", address & _wcsMask);
+                Trace.Log(LogType.Sequencer, "Pushed {0:x4} onto call stack.", address & _wcsMask);
             }
 
             /// <summary>
@@ -124,7 +124,7 @@ namespace PERQemu.Processor
                 if (_loStackPtr > 0) { _loStackPtr--; }
                 if (_hiStackPtr > 0) { _hiStackPtr--; }
 
-                Trace.Log(LogType.CpuState, "Popped {0:x4} from call stack.", address);
+                Trace.Log(LogType.Sequencer, "Popped {0:x4} from call stack.", address);
                 return address;
             }
 
@@ -135,7 +135,7 @@ namespace PERQemu.Processor
             {
                 ushort address = (ushort)(_loStack[_loStackPtr] | _hiStack[_hiStackPtr]);
 
-                Trace.Log(LogType.CpuState, "Returned {0:x4} from top of call stack.", address);
+                Trace.Log(LogType.Sequencer, "Returned {0:x4} from top of call stack.", address);
                 return address;
             }
 

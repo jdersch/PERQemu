@@ -25,23 +25,6 @@ using PERQemu.Config;
 
 namespace PERQemu
 {
-    /// <summary>
-    /// Defines the run state of the virtual PERQ.
-    /// </summary>
-    public enum RunState
-    {
-        Off = 0,        // Power is off or no PERQ configured
-        WarmingUp,      // Power is on and the GUI is warming up :-)
-        Reset,          // Transitional reset state
-        Paused,         // User- or program-requested Pause
-        Running,        // Run, run like the wind
-        SingleStep,     // Debugger is single stepping execution
-        RunInst,        // Debugger is running one opcode
-        RunZ80Inst,     // Debugger is running one Z80 opcode
-        Halted,         // Exception or grievous error stopped execution
-        ShuttingDown    // Program is shutting down, PERQ deconfiguring
-    }
-
     public enum ExecutionMode
     {
         Synchronous,
@@ -71,6 +54,7 @@ namespace PERQemu
         public RunState ExpectedResult;
         public bool WaitForIt;
     }
+
 
     /// <summary>
     /// Top-level control for managing the execution of a configured PERQ.
@@ -105,6 +89,11 @@ namespace PERQemu
             set { _bootChar = value; }
         }
 
+        public event RunStateChangeEventHandler RunStateChanged;
+
+        /// <summary>
+        /// Instantiate a new PERQSystem from the given Configuration.
+        /// </summary>
         public bool Initialize(Configuration conf)
         {
             try
@@ -127,6 +116,11 @@ namespace PERQemu
             }
         }
 
+        /// <summary>
+        /// Powers on the PERQSystem, initializing a new machine if the config has
+        /// changed, and places it in "warming up" mode.  At this point, the SDL
+        /// Display window is created and the machine is made ready to run.
+        /// </summary>
         public void PowerOn()
         {
             Console.WriteLine("Power ON requested.");
@@ -141,6 +135,7 @@ namespace PERQemu
             if (_system == null || PERQemu.Config.Changed)
             {
                 // Out with the old
+                _system?.Shutdown();
                 _system = null;
 
                 // In with the new?
@@ -155,9 +150,17 @@ namespace PERQemu
             }
 
             // (Re-)Start the machine
-            _system.Run(RunState.WarmingUp);
+            SetState(RunState.WarmingUp);
         }
 
+        /// <summary>
+        /// Resets the virtual PERQ.
+        /// </summary>
+        /// <remarks>
+        /// If PauseOnReset is set, leaves the machine in Paused and waits for the
+        /// user to issue run (or step) commands.  If not, acts like the hardware
+        /// boot/reset button and starts the machine running again.
+        /// </remarks>
         public void Reset()
         {
             Console.WriteLine("ExecutionController Reset called.");
@@ -174,34 +177,45 @@ namespace PERQemu
             }
         }
 
+        /// <summary>
+        /// Pauses the virtual PERQ, if it's running.
+        /// </summary>
         public void Break()
         {
             if (State != RunState.Off && State != RunState.Halted)
             {
                 // Break out of the Running state
-                TransitionTo(RunState.Paused);
-
-                // No, really, I mean it
                 SetState(RunState.Paused);
             }
+           
+            // DEBUGGING
+            HighResolutionTimer.DumpTimers();
+            PERQemu.Sys.Scheduler.DumpEvents("CPU");
+            PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 
-        public void PowerOff()
+        /// <summary>
+        /// Shuts down the virtual machine, asks or saves changed media (depending
+        /// on user preferences), then deconfigures the PERQSystem.  The machine
+        /// may only be restarted by a subsequent PowerOn.
+        /// </summary>
+        public void PowerOff(bool save = true)
         {
             if (State == RunState.Off) return;
 
             Console.WriteLine("Power OFF requested.");
 
-            // todo: get the sequence right!
-            //      stop if running
-            //      save disks? -- graphical dialog!?  consult Settings.*
-            //      proceed to shutdown (stops SDL loop, closes display)
-            //      then properly shut down and release the PERQsystem and
-            //      ALL of its timers, handles, media, etc. -- so that a new
-            //      machine can be configured OR the current one reinstantiated
-            TransitionTo(RunState.Paused);
-            _system.SaveAllMedia();
-            TransitionTo(RunState.Off);
+            // Force the machine to pause if in any other state
+            Break();
+
+            // Give opportunity to save disks
+            if (save)
+            {
+                _system.SaveAllMedia();
+            }
+
+            // Now clobber the Display and close down
+            SetState(RunState.ShuttingDown);
         }
 
         /// <summary>
@@ -214,7 +228,6 @@ namespace PERQemu
         public void TransitionTo(RunState nextState)
         {
             var current = State;
-            var key = new SMKey(current, nextState);
 
             // Bail if already in the requested state
             if (current == nextState) return;
@@ -222,6 +235,8 @@ namespace PERQemu
 			Trace.Log(LogType.EmuState, "Controller requesting transition from {0} to {1}", current, nextState);
 
             // Now, how do we get there?  Let's consult the runes...
+            var key = new SMKey(current, nextState);
+
             if (_SMDict.ContainsKey(key))
             {
                 List<Transition> steps;
@@ -276,10 +291,12 @@ namespace PERQemu
         /// <summary>
         /// Initiate a state change in the current PERQsystem.
         /// </summary>
-        private void SetState(RunState s)
+        private void SetState(RunState a)
         {
-            // or do the Event-based way if/when the GUI and Debuggers need to be informed too
-            _system?.Run(s);
+            RunStateChangeEventHandler handler = RunStateChanged;
+            handler?.Invoke(new RunStateChangeEventArgs(a));
+
+            // use Begin/EndInvoke in order to get back result code?
         }
 
         /// <summary>
@@ -315,7 +332,7 @@ namespace PERQemu
                 },
                 {
                     new SMKey(RunState.Paused, RunState.Off), new List<Transition>() {
-                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                        new Transition(() => { PowerOff(); }, RunState.Off) }
                 },
                 {
                     new SMKey(RunState.Paused, RunState.Reset), new List<Transition>() {
@@ -363,8 +380,7 @@ namespace PERQemu
                 },
                 {
                     new SMKey(RunState.Running, RunState.Off), new List<Transition>() {
-                        new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
-                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                        new Transition(() => { PowerOff(); }, RunState.Off) }
                 },
                 {
                     new SMKey(RunState.Halted, RunState.Reset), new List<Transition>() {
@@ -372,7 +388,7 @@ namespace PERQemu
                 },
                 {
                     new SMKey(RunState.Halted, RunState.Off), new List<Transition>() {
-                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                        new Transition(() => { PowerOff(); }, RunState.Off) }
                 }
             };
         }

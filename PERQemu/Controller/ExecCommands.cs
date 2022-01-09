@@ -42,6 +42,10 @@ namespace PERQemu
             Console.WriteLine("Current run state is " + PERQemu.Sys.State);
 
             // todo: check and show floppy and disk drive IsModified
+
+            // DEBUG
+            PERQemu.Sys.Display.Status();
+            PERQemu.Sys.VideoController.Status();
         }
 
         [Command("power on", "Turn on the configured PERQ!")]
@@ -53,7 +57,7 @@ namespace PERQemu
                 return;
             }
 
-            PERQemu.Controller.PowerOn();
+            PERQemu.Controller.TransitionTo(RunState.Paused);
         }
 
         [Command("power off", "Turn off the PERQ")]
@@ -65,7 +69,7 @@ namespace PERQemu
                 return;
             }
 
-            PERQemu.Controller.PowerOff();
+            PERQemu.Controller.TransitionTo(RunState.Off);
         }
 
         [Command("reset", "Reset the PERQ")]

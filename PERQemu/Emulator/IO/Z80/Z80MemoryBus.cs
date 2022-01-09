@@ -20,12 +20,9 @@
 using Konamiman.Z80dotNet;
 using System;
 using System.IO;
-using System.Text;
-using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80
 {   
-
     /// <summary>
     /// Z80MemoryBus implements the Konamiman Z80dotNet IMemory interface to
     /// provide access to the IO board's Z80 Memory space.
@@ -55,11 +52,7 @@ namespace PERQemu.IO.Z80
             set { WriteByte(address, value); }
         }
 
-        public int Size
-        {
-            get { return 0x10000; } // 64K address space
-        }
-
+        public int Size => 0x10000;             // 64K address space
         public bool ReadDataReady => true;      // Always ready
         public bool WriteDataReady => true;     // Always ready
 

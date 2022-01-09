@@ -32,14 +32,22 @@ namespace PERQemu.IO.Z80
         {
             _scheduler = scheduler;
             _system = system;
-
-            Reset();
+            _sendEvent = null;
         }
 
         public void Reset()
         {
-            // Schedule the first Kriz data event, which runs once every 1/60th of a second, forever.
-            _scheduler.Schedule(_dataInterval, SendData);
+            // Schedule the first Kriz data event, which runs once every 1/60th
+            // of a second, forever.  But don't re-register it again and again...
+            // TODO: find out WHY this is called FOUR TIMES in a row at startup.
+            if (_sendEvent != null)
+            {
+                _scheduler.Cancel(_sendEvent);
+                Console.WriteLine("Old Kriz tablet event canceled!");
+            }
+
+            _sendEvent = _scheduler.Schedule(_dataInterval, SendData);
+            Console.WriteLine("New Kriz tablet SendData event scheduled!");
         }
 
         public void RegisterReceiveDelegate(ReceiveDelegate rxDelegate)
@@ -106,13 +114,14 @@ namespace PERQemu.IO.Z80
             _rxDelegate(0);     // for some reason, it throws away the last two
 
             // Wait 1/60th of a second and do it again
-            _scheduler.Schedule(_dataInterval, SendData);
+            _sendEvent = _scheduler.Schedule(_dataInterval, SendData);
         }
 
         private static readonly ulong _dataInterval = (ulong)(16.666667 * Conversion.MsecToNsec);
 
         private ReceiveDelegate _rxDelegate;
         private Scheduler _scheduler;
+        private Event _sendEvent;
         private PERQSystem _system;
     }
 }

@@ -60,19 +60,16 @@ namespace PERQemu.IO.Z80
                     break;
 
                 default:
-                    throw new NotImplementedException(String.Format("DMA not implemented for device {0}.", device));
+                    throw new NotImplementedException(string.Format("DMA not implemented for device {0}.", device));
             }
 
-#if TRACING_ENABLED
             if (device != SelectedDMADevice.None)
             {
-                if (Trace.TraceOn) Trace.Log(LogType.Z80DMA, "Selected DMA device {0}", device);
+                Trace.Log(LogType.Z80DMA, "Selected DMA device {0}", device);
             }
-#endif
         }
 
         public bool ReadDataReady => _selectedDevice.ReadDataReady;
-
         public bool WriteDataReady => _selectedDevice.WriteDataReady;
 
         public void DMATerminate()

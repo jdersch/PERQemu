@@ -19,7 +19,6 @@
 
 using System;
 using System.Threading;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using Konamiman.Z80dotNet;
@@ -45,6 +44,7 @@ namespace PERQemu.IO.Z80
         public Z80System(PERQSystem system)
         {
             _system = system;
+            _running = false;
 
             _scheduler = new Scheduler(IOBoard.Z80CycleTime);
 
@@ -102,8 +102,6 @@ namespace PERQemu.IO.Z80
             _fdc.AttachDrive(0, _floppyDrive);
 
             _z80Debugger = new Z80Debugger();
-            _running = true;
-            _cycles = 0;
 
             // Do 10 rate adjustments / second?  Balance overhead v. accuracy
             _heartbeat = new SystemTimer(20f);
@@ -116,10 +114,10 @@ namespace PERQemu.IO.Z80
 
         public bool SupportsAsync => true;
         public bool IsRunning => _running;
-        public ulong Clocks => _cycles;
+        public ulong Clocks => _cpu.TStatesElapsedSinceReset;
 
+        public Scheduler Scheduler => _scheduler;       // DEBUG only...
         public Z80Processor CPU => _cpu;
-        public Queue<byte> FIFO { get; }
         public Keyboard Keyboard => _keyboard;
 
         // DMA Capable devices
@@ -129,13 +127,39 @@ namespace PERQemu.IO.Z80
         public Z80SIO SIOA => _z80sio;
         public TMS9914A GPIB => _tms9914a;
 
-        public void Reset()
+        /// <summary>
+        /// Resets the Z80 subsystem and starts it running.
+        /// </summary>
+        /// <remarks>
+        /// The Z80 starts up automatically on hardware reset.  The CPU boot ROMs
+        /// turn it off after VFY/SYSB are loaded.  SYSB turns it on to read the
+        /// boot char from the keyboard and turns it off again!  Then the OS and
+        /// IO microcode finally turn it on for good during system establishment.
+        /// Dizzying.
+        /// </remarks>
+        public void Reset(bool soft = false)
         {
-            _cycles = 0;
+            _heartbeat.Reset();
             _scheduler.Reset();
             _cpu.Reset();
-            _bus.Reset();
-            Trace.Log(LogType.Z80State, "Z80 system reset.");
+
+            if (!soft)
+            {
+                // A power-on or "hard" reset does everything
+                _bus.Reset();
+                Trace.Log(LogType.Z80State, "Z80 system reset.");
+            }
+            else
+            {
+                // During a "soft" reset (where the PERQ initiates through a
+                // control register) the hardware only actually resets these:
+                _z80ctc.Reset();
+                _z80sio.Reset();
+                _tms9914a.Reset();
+            }
+
+            _running = true;
+            _scheduler.DumpEvents("Z80");
         }
 
         /// <summary>
@@ -154,8 +178,6 @@ namespace PERQemu.IO.Z80
                     ticks = _cpu.ExecuteNextInstruction();
                     _z80dma.Execute();
                     _scheduler.Clock(ticks);
-
-                    _cycles += (uint)ticks;
                     clocks -= ticks;
                 }
                 else
@@ -178,7 +200,6 @@ namespace PERQemu.IO.Z80
                 throw new InvalidOperationException("Z80 thread is already running; Stop first.");
             }
 
-            _stopAsyncExecution = false;
             _asyncThread = new Thread(AsyncThread) { Name = "Z80" };
             _asyncThread.Start();
         }
@@ -188,17 +209,19 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void AsyncThread()
         {
-            _heartbeat.Reset();
-            _heartbeat.StartTimer(true);
-
+            _heartbeat.Enable(true);
             Console.WriteLine("[Z80 thread starting]");
-            while (!_stopAsyncExecution)
+            _scheduler.DumpEvents("Z80 at RunAsync");
+
+            while (_system.State == RunState.Running)
             {
                 Run(_adjustInterval);
+                //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
                 _heartbeat.WaitForHeartbeat();
             }
 
-            _heartbeat.StartTimer(false);
+            _heartbeat.Enable(false);
+            Console.WriteLine("[Z80 thread stopped]");
         }
 
         /// <summary>
@@ -211,14 +234,16 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            // Tell the thread to exit
-            _stopAsyncExecution = true;
-            _heartbeat.Reset();
+            Console.WriteLine("[Z80 thread stopping]");
 
-            // Waaaaait for it
-            _asyncThread.Join();
+            if (Thread.CurrentThread != _asyncThread)
+            {
+                Console.WriteLine("[Z80 thread join...]");
+                _asyncThread?.Join();
+            }
+
             _asyncThread = null;
-            Console.WriteLine("[Z80 thread stopped]");
+            Console.WriteLine("[Z80 thread exited]");
         }
 
         /// <summary>
@@ -256,12 +281,8 @@ namespace PERQemu.IO.Z80
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
             }
 
-            // Only queue up this write if we're actually running.
-            // TODO: is this correct?
-            //if (_running)
-            //{
-                _perqToZ80Fifo.Enqueue((byte)data);
-            //}
+            // Queue up the byte 
+            _perqToZ80Fifo.Enqueue((byte)data);
         }
 
         public int ReadData()
@@ -296,15 +317,12 @@ namespace PERQemu.IO.Z80
             if (status == 0x80 && _running)
             {
                 Trace.Log(LogType.Z80State, "Z80 system shut down by write to Status register.");
-                Console.WriteLine("Z80 system shut down by write to Status register.");
                 _running = false;
             }
             else if (status == 0 && !_running)
             {
                 Trace.Log(LogType.Z80State, "Z80 system started by write to Status register.");
-                Console.WriteLine("Z80 system started by write to Status register.");
-                Reset();
-                _running = true;
+                Reset(true);
             }
         }
 
@@ -388,13 +406,10 @@ namespace PERQemu.IO.Z80
         private Scheduler _scheduler;
         private PERQSystem _system;
 
-        private ulong _cycles;
-        private volatile bool _running;
-
+        private Thread _asyncThread;
         private SystemTimer _heartbeat;
         private int _adjustInterval;
 
-        private Thread _asyncThread;
-        private volatile bool _stopAsyncExecution;
+        private volatile bool _running;
     }
 }

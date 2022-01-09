@@ -33,10 +33,14 @@ namespace PERQemu.IO.HardDisk
         public ShugartDiskController(PERQSystem system)
         {
             _system = system;
-            //Reset();      must be explicit
-            LoadImage(null);
+            _disk = null;
+            _busyEvent = null;
+            _indexEvent = null;
         }
 
+        /// <summary>
+        /// Perform a "hardware reset".
+        /// </summary>
         public void Reset()
         {
             ResetFlags();
@@ -48,7 +52,20 @@ namespace PERQemu.IO.HardDisk
             _sector = 0;
             _seekState = SeekState.WaitForStepSet;
 
-			IndexPulseStart(0, null);
+            if (_busyEvent != null)
+            {
+                _system.Scheduler.Cancel(_busyEvent);
+                _busyEvent = null;
+            }
+
+            if (_indexEvent != null)
+            {
+                _system.Scheduler.Cancel(_indexEvent);
+            }
+
+            IndexPulseStart(0, null);
+
+            Trace.Log(LogType.HardDisk, "HardDisk: Shugart disk controller reset.");
         }
 
 
@@ -69,9 +86,11 @@ namespace PERQemu.IO.HardDisk
             // Note:  Most of the info gleaned about the Shugart controller register
             // behavior is from sysb.micro source.
             // Command bits:
-            //  0:3     drive command data
-            //    4     seek direction flag
-            //    5     pulses a single seek
+            //  0:2     drive command data      passed to state machine
+            //    3     seek direction flag \
+            //    4     pulses a single seek >  passed through to drive
+            //    5     fault clear         /
+            //  6:7     unit select!?      /    Z80 control bit (conflict!)
             Command command = (Command)(data & 0x7);
 
             Trace.Log(LogType.HardDisk, "Shugart command is {0}", command);
@@ -79,7 +98,10 @@ namespace PERQemu.IO.HardDisk
             switch (command)
             {
                 case Command.Idle:
-                    // Clear any pending interrupts.
+                    // Clear any running busy event...
+                    _system.Scheduler.Cancel(_busyEvent);
+
+                    // Now clear any currently pending interrupts (avoids DDS 163)
                     _system.CPU.ClearInterrupt(InterruptSource.HardDisk);
                     break;
 
@@ -277,6 +299,7 @@ namespace PERQemu.IO.HardDisk
 
         /// <summary>
         /// Does a read from the cyl/head/sec specified by the controller registers.
+        /// TODO: This is a DMA operation...
         /// </summary>
         private void ReadBlock()
         {
@@ -310,6 +333,7 @@ namespace PERQemu.IO.HardDisk
         /// <summary>
         /// Does a write to the cyl/head/sec specified by the controller registers.
         /// Does NOT commit to disk, only in memory copy is affected.
+        /// TODO: This is a DMA operation...
         /// </summary>
         private void WriteBlock(bool writeHeader)
         {
@@ -428,17 +452,22 @@ namespace PERQemu.IO.HardDisk
                 return;
             }
 
-            // Set busy flag (code 7), and queue a workitem for resetting it and firing an interrupt.
-            // time would normally vary based on platter rotation, etc.  5 is fine for now.
+            // Set busy flag (code 7), and queue a workitem for resetting it and
+            // firing an interrupt.  Time would normally vary based on platter
+            // rotation, seek and head settling time, etc.  5 is fine for now.
             _controllerStatus = Status.Busy;
+            Console.WriteLine("Shugart: setting busy state");
 
-            _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
+            _busyEvent = _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
             {
                 _controllerStatus = Status.Done;
                 _system.CPU.RaiseInterrupt(InterruptSource.HardDisk);
             });
         }
 
+        /// <summary>
+        /// Resets the flags ("soft" reset under microcode control).
+        /// </summary>
         private void ResetFlags()
         {
             _controllerStatus = Status.Done;
@@ -455,22 +484,53 @@ namespace PERQemu.IO.HardDisk
             _dataBufferHigh = 0;
         }
 
+        // todo: move this to the disk itself!
         private void IndexPulseStart(ulong skew, object context)
         {
             // Raise the index signal
             _index = 1;
 
             // Keep it held for 1.1uS
-            _system.Scheduler.Schedule(_indexPulseDurationNsec, IndexPulseEnd);
+            _indexEvent = _system.Scheduler.Schedule(_indexPulseDurationNsec, IndexPulseEnd);
         }
 
+        // todo: move this to the disk itself
         private void IndexPulseEnd(ulong skew, object context)
         {
             // Clear the index signal.
             _index = 0;
 
             // Wait for the disc to spin around again (20ms).
-            _system.Scheduler.Schedule(_discRotationTimeNsec, IndexPulseStart);
+            _indexEvent = _system.Scheduler.Schedule(_discRotationTimeNsec, IndexPulseStart);
+        }
+
+
+        private enum SeekState
+        {
+            WaitForStepSet = 0,
+            WaitForStepRelease,
+            SeekComplete
+        }
+
+        /// <summary>
+        /// Disk command.  See diskde.pas (line 917) for POS G or PerqDisk (Accent).
+        /// </summary>
+        private enum Command
+        {
+            Idle = 0x0,
+            ReadChk = 0x1,
+            ReadDiag = 0x2,
+            WriteChk = 0x3,
+            WriteFirst = 0x4,
+            Format = 0x5,
+            Seek = 0x6,
+            Reset = 0x7
+        }
+
+        private enum Status
+        {
+            Done = 0x0,
+            Busy = 0x7
         }
 
         // The physical disk data
@@ -509,8 +569,7 @@ namespace PERQemu.IO.HardDisk
         //
         // Index timing:
         // Your average SA4000 series drive spun at 3000rpm or 50 revs/sec, or
-        // one rev every 20ms.
-        // The index pulse duration is approximately 1.1uS.
+        // one rev every 20ms. The index pulse duration is approximately 1.1uS.
         //
         private ulong _discRotationTimeNsec = 20 * Conversion.MsecToNsec;
         private ulong _indexPulseDurationNsec = (ulong)(1.1 * Conversion.UsecToNsec);
@@ -518,34 +577,8 @@ namespace PERQemu.IO.HardDisk
         // Work timing for reads/writes.  Assume 1ms for now.
         private ulong _busyDurationNsec = 1 * Conversion.MsecToNsec;
 
+        private Event _indexEvent;
+        private Event _busyEvent;
         private PERQSystem _system;
-
-        private enum SeekState
-        {
-            WaitForStepSet = 0,
-            WaitForStepRelease,
-            SeekComplete
-        }
-
-        /// <summary>
-        /// Disk command.  See diskde.pas (line 917).
-        /// </summary>
-        private enum Command
-        {
-            Idle = 0x0,
-            ReadChk = 0x1,
-            ReadDiag = 0x2,
-            WriteChk = 0x3,
-            WriteFirst = 0x4,
-            Format = 0x5,
-            Seek = 0x6,
-            Reset = 0x7
-        }
-
-        private enum Status
-        {
-            Done = 0x0,
-            Busy = 0x7
-        }
     }
 }

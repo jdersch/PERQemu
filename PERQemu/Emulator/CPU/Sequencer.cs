@@ -54,7 +54,7 @@ namespace PERQemu.Processor
                 _victim.Value = 0xffff;           // all 1s means unset
                 _callStack.Reset();
 
-                Trace.Log(LogType.CpuState, "Sequencer reset.");
+                Trace.Log(LogType.Sequencer, "Sequencer reset.");
             }
 
             /// <summary>
@@ -225,7 +225,7 @@ namespace PERQemu.Processor
                                 throw new InvalidOperationException("Revive from unset victim latch!");
                             }
 
-                            Trace.Log(LogType.CpuState, "PC restored from victim ({0:x4})", Victim);
+                            Trace.Log(LogType.Sequencer, "PC restored from victim ({0:x4})", Victim);
                            
                             _pc.Value = Victim;     // Restore
                             Victim = 0xffff;        // Clear the latch
@@ -244,7 +244,7 @@ namespace PERQemu.Processor
                         break;
 
                     case JumpOperation.PushLoad:
-                        Trace.Log(LogType.CpuState, "PushLoad: cond={0} S={1:x4}",
+                        Trace.Log(LogType.Sequencer, "PushLoad: cond={0} S={1:x4}",
                                   conditionSatisfied, uOp.NextAddress);
 
                         if (conditionSatisfied)
@@ -279,7 +279,7 @@ namespace PERQemu.Processor
                                 _cpu._shifter.Shift(_cpu._alu.OldR.Lo);
                                 _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
                             }
-                            Trace.Log(LogType.CpuState, "Dispatch to {0:x4}", _pc.Lo);
+                            Trace.Log(LogType.Sequencer, "Dispatch to {0:x4}", _pc.Lo);
                         }
                         else
                         {
@@ -307,13 +307,13 @@ namespace PERQemu.Processor
                     case JumpOperation.Repeat:
                         if (_s.Lo != 0)
                         {
-                            Trace.Log(LogType.CpuState, "Repeat S={0:x4}", _s.Lo);
+                            Trace.Log(LogType.Sequencer, "Repeat S={0:x4}", _s.Lo);
                             _pc.Lo = uOp.NextAddress;
                             _s.Lo--;
                         }
                         else
                         {
-                            Trace.Log(LogType.CpuState, "Repeat done.");
+                            Trace.Log(LogType.Sequencer, "Repeat done.");
                             _pc.Lo++;
                         }
                         break;
@@ -352,7 +352,7 @@ namespace PERQemu.Processor
                         _s.Value = uOp.NextAddress;
                         _pc.Lo++;
 
-                        Trace.Log(LogType.CpuState, "Load S={0:x4}", _s.Value);
+                        Trace.Log(LogType.Sequencer, "Load S={0:x4}", _s.Value);
                         break;
 
                     case JumpOperation.Loop:

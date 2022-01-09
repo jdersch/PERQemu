@@ -17,11 +17,7 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-
 using System;
-using System.Collections.Generic;
-
-using PERQemu.IO.HardDisk;
 
 namespace PERQemu.IO.Z80
 {
@@ -33,23 +29,19 @@ namespace PERQemu.IO.Z80
         public HardDiskSeekControl(PERQSystem system)
         {
             _system = system;
-            Reset();
         }
 
         public void Reset()
         {
-            
         }
+
+        public string Name => "Shugart Seek Control";
+        public byte[] Ports => _ports;
+        public bool IntLineIsActive => false;
+        public byte? ValueOnDataBus => null;
 
         public event EventHandler NmiInterruptPulse;
 
-        public string Name => "Shugart Seek Control";
-
-        public byte[] Ports => _ports;
-
-        public bool IntLineIsActive => false;
-
-        public byte? ValueOnDataBus => null;
 
         public byte Read(byte portAddress)
         {
@@ -67,8 +59,8 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private PERQSystem _system;
 
         private byte[] _ports = { 0xd8 };
+        private PERQSystem _system;
     }
 }

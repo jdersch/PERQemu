@@ -40,15 +40,15 @@ namespace PERQemu.Processor
             switch (sys.Config.CPU)
             {
                 case CPUType.PERQ1:
-                    _processor = new PERQ1(_system);
+                    _processor = new PERQ1(sys);
                     break;
 
                 case CPUType.PERQ1A:
-                    _processor = new PERQ1A(_system);
+                    _processor = new PERQ1A(sys);
                     break;
 
                 case CPUType.PERQ24:
-                    _processor = new PERQ24(_system);
+                    _processor = new PERQ24(sys);
                     break;
 
                 case CPUType.PERQ24A:
@@ -63,7 +63,7 @@ namespace PERQemu.Processor
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Rate limiter
-            _heartbeat = new SystemTimer(20f);
+            _heartbeat = new SystemTimer(10f);
 
             // Compute how often (in CPU cycles) to sync the emulated processor
             _adjustInterval = (int)(_heartbeat.Interval / (CPU.MicroCycleTime * Conversion.NsecToMsec));
@@ -77,10 +77,12 @@ namespace PERQemu.Processor
 
         public void Reset()
         {
+            _heartbeat.Reset();
             _scheduler.Reset();
             _processor.Reset();
-            _heartbeat.Reset();
+
             Trace.Log(LogType.CpuState, "CPU board reset.");
+            _scheduler.DumpEvents("CPU");
         }
 
         /// <summary>
@@ -91,14 +93,15 @@ namespace PERQemu.Processor
         {
             do
             {
-                _scheduler.Clock();
                 _processor.Execute();
+                _scheduler.Clock();
                 clocks--;
-            } while (clocks > 0);
+            }
+            while (clocks > 0);
         }
 
         /// <summary>
-        /// Start the background thread for the CPU and Scheduler (asynch mode).
+        /// Start the thread for the CPU and Scheduler (asynch mode).
         /// </summary>
         public void RunAsync()
         {
@@ -107,7 +110,6 @@ namespace PERQemu.Processor
                 throw new InvalidOperationException("CPU thread is already running; Stop first.");
             }
 
-            _stopAsyncExecution = false;
             _asyncThread = new Thread(AsyncThread) { Name = "CPU" };
             _asyncThread.Start();
         }
@@ -117,19 +119,26 @@ namespace PERQemu.Processor
         /// </summary>
         private void AsyncThread()
         {
-            _heartbeat.Reset();
-            _heartbeat.StartTimer(true);
-
+            _heartbeat.Enable(true);
             Console.WriteLine("[CPU thread starting]");
-            while (!_stopAsyncExecution)
-            {
-                Run(_adjustInterval);
+            _scheduler.DumpEvents("CPU at RunAsync");
 
-                if (Settings.Performance != RateLimit.Fast)
+            while (_system.State == RunState.Running)
+            {
+                try
+                {
+                    Run(_adjustInterval);
+                    //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
                     _heartbeat.WaitForHeartbeat();
+                }
+                catch (Exception e)
+                {
+                    _system.Halt(e);
+                }
             }
 
-            _heartbeat.StartTimer(false);
+            _heartbeat.Enable(false);
+            Console.WriteLine("[CPU thread stopped]");
         }
 
         /// <summary>
@@ -139,17 +148,22 @@ namespace PERQemu.Processor
         {
             if (_asyncThread == null)
             {
+                Console.WriteLine("[CPU Stop called on null thread]");
                 return;
             }
 
-            // Tell the thread to exit
-            _stopAsyncExecution = true;
-            _heartbeat.Reset();
+            Console.WriteLine("[CPU thread stopping]");
 
-            // Waaaaait for it
-            _asyncThread.Join();
+            // Tell the thread to exit
+            if (Thread.CurrentThread != _asyncThread)
+            {
+                Console.WriteLine("[CPU thread join...]");
+                // Waaaaait for it
+                _asyncThread?.Join();
+            }
+
             _asyncThread = null;
-            Console.WriteLine("[CPU thread stopped]");
+            Console.WriteLine("[CPU thread exited]");
         }
 
         /// <summary>
@@ -176,6 +190,5 @@ namespace PERQemu.Processor
         private int _adjustInterval;
 
         private Thread _asyncThread;
-        private volatile bool _stopAsyncExecution;
     }
 }

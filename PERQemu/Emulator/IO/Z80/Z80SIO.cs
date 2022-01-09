@@ -38,8 +38,6 @@ namespace PERQemu.IO.Z80
             _channels = new Channel[2];
             _channels[0] = new Channel(0);
             _channels[1] = new Channel(1);
-
-            Reset();
         }
 
         public void Reset()
@@ -51,7 +49,6 @@ namespace PERQemu.IO.Z80
         }
 
         public string Name => "Z80 SIO";
-
         public byte[] Ports => _ports;
 
         public bool IntLineIsActive
@@ -69,12 +66,10 @@ namespace PERQemu.IO.Z80
 
         // IDMADevice implementation
         public bool ReadDataReady => true;
-
         public bool WriteDataReady => true;
 
         public void DMATerminate()
-        {
-            
+        {            
         }
 
         public void AttachDevice(int channel, ISIODevice device)
@@ -138,21 +133,25 @@ namespace PERQemu.IO.Z80
             public Channel(int channelNumber)
             {
                 _channelNumber = channelNumber;
-                Reset();
-            }
 
-            public void Reset()
-            {
                 _writeRegs = new byte[8];
                 _readRegs = new byte[3];
 
                 _rxFifo = new Queue<byte>();
                 _txFifo = new Queue<byte>();
+            }
+
+            public void Reset()
+            {
+                _writeRegs.Initialize();
+                _readRegs.Initialize();
+                _rxFifo.Clear();
+                _txFifo.Clear();
 
                 _selectedRegister = 0;
-                _rxInterruptLatched = false;
+                _huntMode = true;               // re-entered after Reset
                 _txInterruptLatched = false;
-                _huntMode = true;       // re-entered after Reset
+                _rxInterruptLatched = false;
                 _rxIntOnNextCharacter = false;
 
                 if (_device != null)

@@ -307,11 +307,11 @@ namespace PERQemu.UI
         [Command("configure memory")]
         public void SetMemory()
         {
-            Console.WriteLine("Configure the memory board, from 256KB to 16MB.  The amount of memory");
+            Console.WriteLine("Configure the memory board, from 256KB to 8MB.  The amount of memory");
             Console.WriteLine("supported depends on the CPU type, and must be a power of two.");
             Console.WriteLine("\t20-bit CPU: 256, 512, 1024 or 2048 (KB)");
-            Console.WriteLine("\t24-bit CPU: 2048, 4096, 8192, or 16384 (KB)");
-            Console.WriteLine("Or enter 1, 2, 4, 8 or 16 for MB.  PERQemu will round up to the nearest\nlegal value.");
+            Console.WriteLine("\t24-bit CPU: 2048, 4096 or 8192 (KB)");
+            Console.WriteLine("Or enter 1, 2, 4 or 8 for MB.  PERQemu will round up to the nearest legal value.");
         }
 
         [Command("configure memory", "Set the memory size")]
@@ -319,7 +319,7 @@ namespace PERQemu.UI
         {
             if (OKtoReconfig())
             {
-                if (size > 0 && size <= 16)
+                if (size > 0 && size <= 8)
                 {
                     // Shortcut: assume they mean megabytes
                     size = RoundToPowerOf2(size) * 1024;
@@ -328,7 +328,7 @@ namespace PERQemu.UI
                 {
                     // 256 and 512 are valid for quarter & half-meg boards
                 }
-                else if (size >= 1024 && size <= 32768)
+                else if (size >= 1024 && size <= 8192)
                 {
                     // Round to the nearest supported capacity
                     size = RoundToPowerOf2(size / 1024) * 1024;

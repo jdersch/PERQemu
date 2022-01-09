@@ -21,6 +21,22 @@ using System;
 
 namespace PERQemu
 {
+    /// <summary>
+    /// Defines the run state of the virtual PERQ.
+    /// </summary>
+    public enum RunState
+    {
+        Off = 0,        // Power is off or no PERQ configured
+        WarmingUp,      // Power is on and the GUI is warming up :-)
+        Reset,          // Transitional reset state
+        Paused,         // User- or program-requested Pause
+        Running,        // Run, run like the wind
+        SingleStep,     // Debugger is single stepping execution
+        RunInst,        // Debugger is running one opcode
+        RunZ80Inst,     // Debugger is running one Z80 opcode
+        Halted,         // Exception or grievous error stopped execution
+        ShuttingDown    // Program is shutting down, PERQ deconfigu
+    }
 
     public class RunStateChangeEventArgs : EventArgs
     {
@@ -29,10 +45,7 @@ namespace PERQemu
             _state = s;
         }
 
-        public RunState State
-        {
-            get { return _state; }
-        }
+        public RunState State => _state;
 
         private RunState _state;
     }

@@ -66,7 +66,8 @@ are to be made.
 ConfigForm.cs is the WinForms implementation of a graphical Configurator.  It
 is not (yet) part of PERQemu.  The GUI version works with its own Configuration
 object, so the user can make whatever changes they like but only apply them if
-they choose; a Cancel button leaves the current configuration intact.
+they choose; a Cancel button leaves the current configuration intact.  Since it
+runs as a modal dialog, it can only be brought up when the PERQ isn't running.
 
 Configurator.cs is the top-level object that manages loading, saving and
 verification of Configurations.  While it might make more sense to have the
@@ -151,7 +152,8 @@ of this is very far away and subject to change!
 Storage Options
 ---------------
 
-From the Configurator's point of view, only three things are needed:
+From the Configurator's point of view, only three things are needed for any
+storage device:
 
     Device type:    which controller to attach a drive to
     Unit number:    a unique identifier (per-type?)
@@ -191,13 +193,16 @@ some interesting (and more realistic) tweaks:
 
     A second Shugart SA4000-series hard drive is not physically possible
     in a real PERQ-1 chassis, and similar hardware/firmware limits to allow
-    unit selection in a multiple-drive system are present (but adding a second
-    SA4000 drive in an external enclosure is entirely feasible, though).
-    However, enabling support for the SA4104 drive (48MB!) may only require a
-    few small tweaks -- it's just a 4008 with extra platters and 16 heads!
-    In the so-called Real World this drive is made of pure unobtanium.  Never
-    actually seen one; just mentions of it in datasheets or obscure articles.
-
+    unit selection in a multiple-drive system are present.  The PERQ-1 IOB
+    hardwires DS1 to GND, while DS2 and DS3 are passed through (but never
+    used by the standard software).  The DS4 line is configured for Seek
+    Complete operation by hardware jumper, and the DS3 line is potentially
+    in conflict with the Z80 control reg (selecting drive 3 would also turn
+    off the Z80, and the seek control function).  However, a simple hardware
+    mod could enable DS2 to select between drives 1 & 2 with only minor 
+    changes to the microcode.  Enabling support for the mythical SA4104 48MB
+    drive would similarly be feasible, if the thing actually exists.
+      
     Several places in the later PERQ literature allude to a 4-disk option in
     the 5.25"/MFM systems.  Did they intend to build a new DIB with all four
     channels present?  Or allow two 2-port DIBs to be daisy chained?  Unknown.
@@ -292,6 +297,10 @@ All PERQ storage devices would share the following characteristics:
                                       big CDC SMD drives are cartridge based
                                       (while a Fujitsu Eagle or Priam SMD drive
                                       would be fixed)
+                        IsReadOnly -  based on the host filesystem permission
+                                      bits, and/or settable in the file (maybe
+                                      so distribution floppies aren't modified
+                                      inadvertently)?
                    Others tbd.  A simple 8- or 16-bit value should suffice.
     Description -- a nice "human readable" description.
 
@@ -362,7 +371,7 @@ saving of any virtual drive type.
             Whatever format the data is recovered in is essentially read-only
             as far as PERQemu is concerned...
 
-            PRQFormatter will be able to read AND write QIC images, naturally.
+            PRQFormatter will be able to read AND write tape images, naturally.
 
 
 A side goal of this is to create a separate, standalone PERQ media editor that
@@ -408,4 +417,4 @@ Configurator and Emulator are slowly expanded to incorporate PERQ-2 support.
 
 
 --
-Last update: skeezics    Tue Nov 16 16:24:30 PST 2021
+Last update: skeezics    Wed Jan  5 13:35:12 PST 2022

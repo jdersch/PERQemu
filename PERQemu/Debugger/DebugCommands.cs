@@ -72,6 +72,8 @@ namespace PERQemu
         public void ShowDebugSettings()
         {
             Console.WriteLine("Current debugger settings:");
+            Console.WriteLine("Logging: {0}", Trace.TraceLevel);
+
             // logging, radix, step mode, whatever
         }
 
@@ -131,7 +133,7 @@ namespace PERQemu
         public void SetLogging(LogType category)
         {
             Trace.TraceLevel |= category;
-            Console.WriteLine("Logging: " + Trace.TraceLevel);
+            Console.WriteLine("Logging: {0}", Trace.TraceLevel);
         }
 
         [Command("debug clear logging", "Clear logging for certain events")]
@@ -140,7 +142,7 @@ namespace PERQemu
         public void ClearLogging(LogType category)
         {
             Trace.TraceLevel &= ~category;
-            Console.WriteLine("Logging: " + Trace.TraceLevel);
+            Console.WriteLine("Logging: {0}", Trace.TraceLevel);
         }
 
         //[Command("debug set loglevel", "Set logging threshold")]
@@ -156,7 +158,7 @@ namespace PERQemu
             if (!Trace.TraceOn)
             {
                 Trace.TraceOn = true;
-                Console.WriteLine("Logging enabled");
+                Console.WriteLine("Logging enabled.");
             }
         }
 
@@ -167,7 +169,7 @@ namespace PERQemu
             if (Trace.TraceOn)
             {
                 Trace.TraceOn = false;
-                Console.WriteLine("Logging disabled");
+                Console.WriteLine("Logging disabled.");
             }
         }
 
@@ -214,7 +216,7 @@ namespace PERQemu
         [Command("debug show xy register", "Display the value of an XY register")]
         private void ShowRegister(byte reg)
         {
-            Console.WriteLine("R[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
+            Console.WriteLine("XY[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
 
         [Conditional("DEBUG")]
@@ -222,7 +224,7 @@ namespace PERQemu
         private void SetRegister(byte reg, uint val)
         {
             PERQemu.Sys.CPU.WriteRegister(reg, (int)val);   // Clips to 20-24 bits
-            Console.WriteLine("R[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
+            Console.WriteLine("XY[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
 
         //
@@ -472,15 +474,15 @@ namespace PERQemu
         // Miscellany and temporary/debugging hacks
         //
 
-        [Command("debug dump scheduler queue")]
+        //[Conditional("DEBUG")]
+        [Command("debug dump scheduler queues")]
         private void DumpScheduler()
         {
-            PERQemu.Sys.Display.Status();
-            PERQemu.Sys.VideoController.Status();
-            PERQemu.Sys.Scheduler.DumpEvents();
+            PERQemu.Sys.Scheduler.DumpEvents("CPU");
+            PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 
-        [Conditional("DEBUG")]
+        //[Conditional("DEBUG")]
         [Command("debug dump timers")]
         private void DumpTimers()
         {

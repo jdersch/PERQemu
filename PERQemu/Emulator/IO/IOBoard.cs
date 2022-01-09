@@ -82,8 +82,8 @@ namespace PERQemu.IO
 
         public virtual void Reset()
         {
-            _hardDiskController.Reset();
             _z80System.Reset();
+            _hardDiskController.Reset();
 
             Trace.Log(LogType.IOState, "{0}: Board reset.", _name);
         }

@@ -1,4 +1,23 @@
-﻿
+﻿//
+// Scheduler.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// This file is part of PERQemu.
+//
+// PERQemu is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
+//
+
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -81,6 +100,7 @@ namespace PERQemu
         {
             _currentTimeNsec = 0;
             _schedule.Clear();
+            Trace.Log(LogType.Timer, "Scheduler ({0}) reset.", _timeStepNsec);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -130,9 +150,10 @@ namespace PERQemu
             }
         }
 
-        public void DumpEvents()
+        // DEBUG
+        public void DumpEvents(string name)
         {
-            System.Console.WriteLine("Time is {0}.  Queue:", _currentTimeNsec);
+            Console.WriteLine("Time is {0}.  {1} Queue:", _currentTimeNsec, name);
             _schedule.Dump();
         }
 
@@ -148,7 +169,7 @@ namespace PERQemu
     /// Provides an "ordered" queue based on timestamp -- the top of the queue is always the 
     /// next event to be fired; a "push" places a new event in order on the current queue.
     /// </summary>
-    public class SchedulerQueue
+    internal class SchedulerQueue
     {
         public SchedulerQueue()
         {
@@ -191,6 +212,7 @@ namespace PERQemu
             // deep; a binary search may be more performant if this isn't the case.
             //
             LinkedListNode<Event> current = _queue.First;
+
             while (current != null)
             {
                 if (current.Value.TimestampNsec >= e.TimestampNsec)
@@ -210,8 +232,8 @@ namespace PERQemu
         public Event Pop()
         {
             Event e = _top;
-            _queue.RemoveFirst();
 
+            _queue.RemoveFirst();
             _top = _queue.First != null ? _queue.First.Value : null;
 
             return e;
@@ -226,14 +248,21 @@ namespace PERQemu
             }
         }
 
-        // debugging
+        // DEBUG
         public void Dump()
         {
-            foreach (var e in _queue)
+            if (_queue.Count > 0)
             {
-                System.Console.WriteLine("event {0} at {1}",
-                                         e.EventCallback.Method.Name,
-                                         e.TimestampNsec);
+                foreach (var e in _queue)
+                {
+                    Console.WriteLine("event {0} at {1}",
+                                      e.EventCallback.Method.Name,
+                                      e.TimestampNsec);
+                }
+            }
+            else
+            {
+                Console.WriteLine("<queue is empty>");
             }
         }
 

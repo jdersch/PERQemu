@@ -17,15 +17,10 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace PERQemu.IO.Z80
 {
     public delegate void ReceiveDelegate(byte rxValue);
+
     /// <summary>
     /// Generic interface for devices connected to a Z80 SIO controller.
     /// "Transmit" functions are FROM the SIO, TO the device implementation;

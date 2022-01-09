@@ -17,10 +17,11 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using Konamiman.Z80dotNet;
-using PERQemu.PhysicalDisk;
 using System;
 using System.Collections.Generic;
+
+using Konamiman.Z80dotNet;
+using PERQemu.PhysicalDisk;
 
 namespace PERQemu.IO.Z80
 {
@@ -39,6 +40,7 @@ namespace PERQemu.IO.Z80
             _commandData = new Queue<byte>();
             _statusData = new Queue<byte>();
             _drives = new FloppyDrive[4];
+            _pcn = new byte[4];
 
             _commands = new CommandData[]
             {
@@ -59,19 +61,19 @@ namespace PERQemu.IO.Z80
                 new CommandData(Command.Seek, 0xff, 3, SeekExecutor),
             };
 
-            Reset();
+            //Reset();
         }
 
         public void Reset()
         {
-            _pcn = new byte[4];
+            _pcn.Initialize();
+            _commandData.Clear();
+            _statusData.Clear();
             _interruptsEnabled = false;
             _interruptActive = false;
             _nonDMAMode = false;
             _status = Status.RQM;
             _state = State.Command;
-            _commandData.Clear();
-            _statusData.Clear();
             _readByte = 0;
             _readDataReady = false;
             _writeByte = 0;
@@ -82,12 +84,9 @@ namespace PERQemu.IO.Z80
         }
 
         public string Name => "uPD765A FDC";
-
         public byte[] Ports => _ports;
-
-        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
-
         public byte? ValueOnDataBus => 0x24; // FLPVEC
+        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
 
         public bool InterruptsEnabled
         {
@@ -98,7 +97,6 @@ namespace PERQemu.IO.Z80
         // IDMADevice Implementation
 
         bool IDMADevice.ReadDataReady => _readDataReady;
-
         bool IDMADevice.WriteDataReady => _writeDataReady;
 
         void IDMADevice.DMATerminate()
@@ -206,7 +204,7 @@ namespace PERQemu.IO.Z80
 
                 default:
                     throw new NotImplementedException(
-                        string.Format("Unexpected FDC register write to 0x{0}", portAddress));
+                        string.Format("Unexpected FDC register write to 0x{0:x}", portAddress));
             }
         }
 
