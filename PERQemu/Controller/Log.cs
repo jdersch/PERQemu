@@ -64,7 +64,7 @@ namespace PERQemu
         Shifter     = 0x1000,
         ALU         = 0x2000,
         MulDiv      = 0x4000,
-        MemState    = 0x8000,
+        Memory      = 0x8000,
         MemCycle    = 0x10000,
         RasterOp    = 0x20000,
         Display     = 0x40000,
@@ -73,8 +73,8 @@ namespace PERQemu
         DMA         = 0x200000,
         FIFO        = 0x400000,
         DDS         = 0x800000,
-        Z80CPU      = 0x1000000,
-        Z80Interrupt= 0x2000000,
+        Z80         = 0x1000000,
+        Z80IRQ      = 0x2000000,
         Z80DMA      = 0x4000000,
         CTC         = 0x8000000,
         SIO         = 0x10000000,
@@ -332,7 +332,7 @@ namespace PERQemu
             _colors.Add(Category.Shifter, ConsoleColor.DarkGreen);
 
             // Memory and Video
-            _colors.Add(Category.MemState, ConsoleColor.Cyan);
+            _colors.Add(Category.Memory, ConsoleColor.Cyan);
             _colors.Add(Category.MemCycle, ConsoleColor.DarkCyan);
             _colors.Add(Category.RasterOp, ConsoleColor.Green);
             _colors.Add(Category.Display, ConsoleColor.DarkGreen);
@@ -342,9 +342,9 @@ namespace PERQemu
             _colors.Add(Category.DMA, ConsoleColor.Yellow);
             _colors.Add(Category.Interrupt, ConsoleColor.Red);
             _colors.Add(Category.FIFO, ConsoleColor.DarkYellow);
-            _colors.Add(Category.Z80CPU, ConsoleColor.Green);
+            _colors.Add(Category.Z80, ConsoleColor.Green);
             _colors.Add(Category.Z80DMA, ConsoleColor.DarkGreen);
-            _colors.Add(Category.Z80Interrupt, ConsoleColor.DarkRed);
+            _colors.Add(Category.Z80IRQ, ConsoleColor.DarkRed);
             _colors.Add(Category.CTC, ConsoleColor.Cyan);
             _colors.Add(Category.SIO, ConsoleColor.DarkCyan);
             _colors.Add(Category.RTC, ConsoleColor.DarkBlue);

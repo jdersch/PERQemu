@@ -1,4 +1,4 @@
-﻿//
+//
 // Z80IOBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -89,11 +89,11 @@ namespace PERQemu.IO.Z80
             {
                 value = device.Read((byte)port);
 
-                Log.Debug(Category.Z80CPU, "Port Read from 0x{0:x} ({1}), returning 0x{2:x}", port, device.Name, value);
+                Log.Debug(Category.Z80, "Port Read from 0x{0:x} ({1}), returning 0x{2:x}", port, device.Name, value);
             }
             else
             {
-                Log.Debug(Category.Z80CPU, "Port Read from 0x{0:x} unhandled, returning 0xff.", port);
+                Log.Debug(Category.Z80, "Port Read from 0x{0:x} unhandled, returning 0xff.", port);
             }
 
             return value;
@@ -107,11 +107,11 @@ namespace PERQemu.IO.Z80
             {
                 device.Write((byte)port, value);
 
-                Log.Debug(Category.Z80CPU, "Port Write of 0x{0:x} to 0x{1:x} ({2})", value, port, device.Name);
+                Log.Debug(Category.Z80, "Port Write of 0x{0:x} to 0x{1:x} ({2})", value, port, device.Name);
             }
             else
             {
-                Log.Debug(Category.Z80CPU, "Port Write of 0x{0:x} to 0x{1:x} unhandled, returning 0.", value, port);
+                Log.Debug(Category.Z80, "Port Write of 0x{0:x} to 0x{1:x} unhandled, returning 0.", value, port);
             }
         }
 

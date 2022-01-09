@@ -95,7 +95,7 @@ namespace PERQemu.Memory
             _mdiQueue.Reset();
             _mdoQueue.Reset();
 
-            Log.Debug(Category.MemState, "Reset.");
+            Log.Debug(Category.Memory, "Reset.");
         }
 
         public int MemSize => _memSize;
@@ -126,7 +126,7 @@ namespace PERQemu.Memory
             // Bump cycle counter
             _Tstate = (_Tstate + 1) & 0x3;
 
-            Log.Debug(Category.MemState, "Tick! T{0} cycle={1}", _Tstate, cycleType);
+            Log.Debug(Category.MemCycle, "Tick! T{0} cycle={1}", _Tstate, cycleType);
 
             // Segregate Fetches and Stores into separate queues
             if (IsFetch(cycleType))
@@ -167,7 +167,7 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tock(ushort input)
         {
-            Log.Debug(Category.MemState, "Tock! T{0} mdoNeeded={1} data={2:x4}",
+            Log.Debug(Category.MemCycle, "Tock! T{0} mdoNeeded={1} data={2:x4}",
                                          _Tstate, MDONeeded, input);
 
             // Execute the store
@@ -201,7 +201,7 @@ namespace PERQemu.Memory
         /// </summary>
         public void RequestMemoryCycle(int address, MemoryCycle cycleType)
         {
-            Log.Debug(Category.MemState, "Requested {0} cycle in T{1} addr={2:x6}",
+            Log.Debug(Category.MemCycle, "Requested {0} in T{1} addr={2:x6}",
                                          cycleType, _Tstate, address);
 
             //
@@ -244,8 +244,8 @@ namespace PERQemu.Memory
             // Clip address to memsize range and read
             ushort data = _memory.Words[address & _memSizeMask];
 
-            Log.Debug(Category.MemCycle, "Fetch addr {0:x6} --> {1:x4}",
-                                         address & _memSizeMask, data);
+            Log.Debug(Category.Memory, "Fetch addr {0:x6} --> {1:x4}",
+                                        address & _memSizeMask, data);
 
             return data;
         }
@@ -256,8 +256,8 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void StoreWord(int address, ushort data)
         {
-            Log.Debug(Category.MemCycle, "Store addr {0:x6} <-- {1:x4}",
-                                         address & _memSizeMask, data);
+            Log.Debug(Category.Memory, "Store addr {0:x6} <-- {1:x4}",
+                                        address & _memSizeMask, data);
 
             // Clip address to memsize range and write
             _memory.Words[address & _memSizeMask] = data;

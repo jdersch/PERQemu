@@ -39,7 +39,7 @@ namespace PERQemu.IO.Z80
             _rom = new byte[ROM_SIZE];
             _ram = new byte[RAM_SIZE];
 
-            Log.Debug(Category.Z80CPU, "Allocated {0:N1}KB ROM, {1:N1}KB RAM.",
+            Log.Debug(Category.Z80, "Allocated {0:N1}KB ROM, {1:N1}KB RAM.",
                                         ROM_SIZE / 1024, RAM_SIZE / 1024);
         }
 
@@ -108,7 +108,7 @@ namespace PERQemu.IO.Z80
                     throw new InvalidOperationException("Invalid Z80 ROM size.");
                 }
 
-                Log.Debug(Category.Z80CPU, "Read Z80 ROM from {0}.", Paths.Canonicalize(path));
+                Log.Debug(Category.Z80, "Read Z80 ROM from {0}.", Paths.Canonicalize(path));
             }
         }
 

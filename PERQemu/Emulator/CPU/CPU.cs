@@ -132,7 +132,7 @@ namespace PERQemu.Processor
             if (_ustore.Hold || _memory.Wait || (uOp.WantMDI && !_memory.MDIValid))
             {
                 // Waiting for the next T3 or T2 cycle to come around on the guitar
-                Log.Debug(Category.CPU,
+                Log.Debug(Category.Memory,
                     "Abort in T{0}\n\twait={1} needMDO={2} wantMDI={3} MDIvalid={4} WCShold={5}",
                     _memory.TState, _memory.Wait, _memory.MDONeeded, uOp.WantMDI, _memory.MDIValid, _ustore.Hold);
 
@@ -509,7 +509,8 @@ namespace PERQemu.Processor
                     break;
 
                 default:
-                    throw new UnimplementedInstructionException(string.Format("Unimplemented AMUX {0}", uOp.A));
+                    throw new UnimplementedInstructionException(
+                        string.Format("Unimplemented AMUX {0}", uOp.A));
             }
 
             return amux;

@@ -147,7 +147,7 @@ namespace PERQemu.IO.Z80
             {
                 // A power-on or "hard" reset does everything
                 _bus.Reset();
-                Log.Debug(Category.Z80CPU, "System reset.");
+                Log.Debug(Category.Z80, "System reset.");
             }
             else
             {
@@ -268,7 +268,7 @@ namespace PERQemu.IO.Z80
             //
             if ((data & 0x100) == 0)
             {
-                Log.Debug(Category.Z80Interrupt, "DataInReady disabled, clearing interrupt.");
+                Log.Debug(Category.Z80IRQ, "DataInReady disabled, clearing interrupt.");
 
                 // TODO: move this logic into PERQToZ80FIFO?
                 _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
@@ -276,7 +276,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                Log.Debug(Category.Z80Interrupt, "DataInReady enabled.");
+                Log.Debug(Category.Z80IRQ, "DataInReady enabled.");
 
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
             }
@@ -316,12 +316,12 @@ namespace PERQemu.IO.Z80
         {
             if (status == 0x80 && _running)
             {
-                Log.Debug(Category.Z80CPU, "Shut down by write to Status register.");
+                Log.Debug(Category.Z80, "Shut down by write to Status register.");
                 _running = false;
             }
             else if (status == 0 && !_running)
             {
-                Log.Debug(Category.Z80CPU, "Started by write to Status register.");
+                Log.Debug(Category.Z80, "Started by write to Status register.");
                 Reset(true);
             }
         }
