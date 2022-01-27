@@ -1,5 +1,5 @@
 //
-// Z80System.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Z80System.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -58,16 +58,16 @@ namespace PERQemu.IO.Z80
             // todo: assign ports/base addresses of each peripheral chip
             // based on the configured IO Board type.
 
-            _fdc = new NECuPD765A(_scheduler);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
+            _fdc = new NECuPD765A(_scheduler);
             _z80ctc = new Z80CTC(0x90, _scheduler);
-            _z80dma = new Z80DMA(0x98, _memory, _bus);
-            _seekControl = new HardDiskSeekControl(system);
-            _keyboard = new Keyboard();
             _z80sio = new Z80SIO(0xb0, _scheduler);
-            _tms9914a = new TMS9914A();
+            _z80dma = new Z80DMA(0x98, _memory, _bus);
             _dmaRouter = new DMARouter(this);
+            _tms9914a = new TMS9914A();
+            _keyboard = new Keyboard();
+            _seekControl = new HardDiskSeekControl(system);
             _ioReg1 = new IOReg1(_z80ToPerqFifo);
             _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc, _dmaRouter);
 
@@ -116,8 +116,8 @@ namespace PERQemu.IO.Z80
         public bool IsRunning => _running;
         public ulong Clocks => _cpu.TStatesElapsedSinceReset;
 
-        public Scheduler Scheduler => _scheduler;       // DEBUG only...
         public Z80Processor CPU => _cpu;
+        public Scheduler Scheduler => _scheduler;       // DEBUG only...
         public Keyboard Keyboard => _keyboard;
 
         // DMA Capable devices
@@ -139,23 +139,34 @@ namespace PERQemu.IO.Z80
         /// </remarks>
         public void Reset(bool soft = false)
         {
+            bool cpr = _heartbeat.IsEnabled;
+
             _heartbeat.Reset();
             _scheduler.Reset();
             _cpu.Reset();
 
-            if (!soft)
-            {
-                // A power-on or "hard" reset does everything
-                _bus.Reset();
-                Log.Debug(Category.Z80, "System reset.");
-            }
-            else
+            if (soft)
             {
                 // During a "soft" reset (where the PERQ initiates through a
                 // control register) the hardware only actually resets these:
                 _z80ctc.Reset();
                 _z80sio.Reset();
                 _tms9914a.Reset();
+
+                // If our heartbeat stopped, restart it (relevant only in
+                // asynch mode!)
+                if (cpr)
+                {
+                    _heartbeat.Enable(true);
+                }
+
+                Log.Debug(Category.Z80, "System (soft) reset.");
+            }
+            else
+            {
+                // A power-on or "hard" reset does everything
+                _bus.Reset();
+                Log.Debug(Category.Z80, "System reset.");
             }
 
             _running = true;
@@ -200,6 +211,11 @@ namespace PERQemu.IO.Z80
                 throw new InvalidOperationException("Z80 thread is already running; Stop first.");
             }
 
+            // Catch events from the controller
+            PERQemu.Controller.RunStateChanged += OnRunStateChange;
+
+            // Fire off the Z80 thread
+            _stopAsyncThread = false;
             _asyncThread = new Thread(AsyncThread) { Name = "Z80" };
             _asyncThread.Start();
         }
@@ -213,12 +229,25 @@ namespace PERQemu.IO.Z80
             Console.WriteLine("[Z80 thread starting]");
             _scheduler.DumpEvents("Z80 at RunAsync");
 
-            while (_system.State == RunState.Running)
+            do
             {
-                Run(_adjustInterval);
-                //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
-                _heartbeat.WaitForHeartbeat();
+                try
+                {
+                    Run(_adjustInterval);
+
+                    if (!_stopAsyncThread)
+                    {
+                        // I think we'll always rate limit the Z80?
+                        //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                        _heartbeat.WaitForHeartbeat();
+                    }
+                }
+                catch (Exception e)
+                {
+                    _system.Halt(e);
+                }
             }
+            while (!_stopAsyncThread);
 
             _heartbeat.Enable(false);
             Console.WriteLine("[Z80 thread stopped]");
@@ -235,6 +264,7 @@ namespace PERQemu.IO.Z80
             }
 
             Console.WriteLine("[Stopping Z80 thread]");
+            _stopAsyncThread = true;
 
             if (Thread.CurrentThread != _asyncThread)
             {
@@ -244,6 +274,15 @@ namespace PERQemu.IO.Z80
 
             _asyncThread = null;
             Console.WriteLine("[Z80 thread exited]");
+
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
+        }
+
+        private void OnRunStateChange(RunStateChangeEventArgs s)
+        {
+            if (s.State != RunState.Running && _asyncThread != null)
+                Stop();
         }
 
         /// <summary>
@@ -411,5 +450,6 @@ namespace PERQemu.IO.Z80
         private int _adjustInterval;
 
         private volatile bool _running;
+        private volatile bool _stopAsyncThread;
     }
 }

@@ -1,5 +1,5 @@
 ﻿//
-// RSXFilePort.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// RSXFilePort.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -160,7 +160,7 @@ namespace PERQemu.IO.SerialDevices
                     _fileStream = null;
                 }
 
-                Log.Write(Category.RS232, "Transfer of {0} from host is complete.", _fileName);
+                Log.Write("Transfer of {0} from host is complete.", _fileName);
                 ResetState();
             }
 
@@ -246,8 +246,8 @@ namespace PERQemu.IO.SerialDevices
                                     //
                                     _errorString = e.Message;
 
-                                    Log.Write(Category.RS232, "Could not open {0} on host. Error: {1}",
-                                                             _fileName, _errorString);
+                                    Log.Write("Could not open {0} on host. Error: {1}",
+                                              _fileName, _errorString);
                                 }
 
                                 if (_fileAccess == FileAccess.Read)
@@ -296,7 +296,7 @@ namespace PERQemu.IO.SerialDevices
                                 //                                
                                 _inputQueue.Enqueue(_lf);
 
-                                Log.Write(Category.RS232, "Transfer of {0} to host is complete.", _fileName);
+                                Log.Write("Transfer of {0} to host is complete.", _fileName);
                             }
                         }
                         break;
@@ -354,7 +354,7 @@ namespace PERQemu.IO.SerialDevices
 
             if (success)
             {
-                Log.Write(Category.RS232, "Host filename for RSX: transfer is {0}.", _fileName);
+                Log.Write("Host filename for RSX: transfer is {0}.", _fileName);
             }
 
             return success;

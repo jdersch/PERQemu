@@ -1,5 +1,5 @@
 //
-// PERQSystem.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// PERQSystem.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -42,9 +42,6 @@ namespace PERQemu
         {
             // Everything we need to know to build the virtual PERQ
             _conf = conf;
-
-            // Set our initial state; instantiated but not yet initialized...
-            _state = RunState.Off;
 
             //
             // NB: There are still some dependencies here which require these
@@ -128,17 +125,11 @@ namespace PERQemu
             _ioBus.AddDevice(_iob);
             _ioBus.AddDevice(_oio);
 
-            // Set the user's preferred run mode.  We assume async mode if the
-            // implementation supports it, but might want to select sync mode
-            // for debugging, or on uniprocessor systems.  (A "uniprocessor"?
-            // Is that like a "land line" or a "glacier"?)
-            _mode = Settings.RunMode;
+            // Set our initial state; instantiated but not yet initialized...
+            // shouldn't this just be... "On"?  Sigh.
+            _state = RunState.Off;
 
-            if (_mode == ExecutionMode.Asynchronous && !(_iob.SupportsAsync && _cpu.SupportsAsync))
-            {
-                _mode = ExecutionMode.Synchronous;
-                Log.Info(Category.Emulator, "Asynchronous execution not supported; falling back to Synchronous mode.");
-            }
+            SetMode();
 
             // Compute how many cycles between runs of the GUI's event loop (in
             // this case, the SDL2 message loop).  In Synchronous mode we explicitly
@@ -164,22 +155,24 @@ namespace PERQemu
         public IOBoard IOB => _iob;
         public OptionBoard OIO => _oio;
 
+        public ExecutionMode Mode => _mode;
+        public RunState State => _state;
 
-        public ExecutionMode Mode
+        /// <summary>
+        /// Set the user's preferred run mode.  We assume async mode if the
+        /// implementation supports it, but might want to select sync mode
+        /// for debugging, or on uniprocessor systems.  (A "uniprocessor"?
+        /// Is that like a "land line" or a "glacier"?)
+        /// </summary>
+        private void SetMode()
         {
-            get { return _mode; }
-            set { _mode = value; }
-        }
+            _mode = PERQemu.Controller.Mode;
 
-        public RunState State
-        {
-            get { return _state; }
-        }
-
-        public void Shutdown()
-        {
-            // Detach
-            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
+            if (_mode == ExecutionMode.Asynchronous && !(_iob.SupportsAsync && _cpu.SupportsAsync))
+            {
+                _mode = ExecutionMode.Synchronous;
+                Log.Info(Category.Emulator, "Asynchronous execution not supported; falling back to Synchronous mode.");
+            }
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)
@@ -256,6 +249,9 @@ namespace PERQemu
         /// </summary>
         public void Run()
         {
+            // Get the current run mode from the Controller
+            SetMode();
+
             if (_mode == ExecutionMode.Asynchronous)
             {
                 // Start up the background threads
@@ -265,9 +261,10 @@ namespace PERQemu
                 // Run the event loop until State changes
                 _display.SDLMessageLoop(_mode);
 
-                // Stop the threads
-                _cpu.Stop();
-                _iob.Stop();
+                // Stop the threads - they do this directly now
+                // this is a mess.  consider doing the whole effing TAP thing :-/
+                //_cpu.Stop();
+                //_iob.Stop();
             }
             else
             {
@@ -309,6 +306,8 @@ namespace PERQemu
         /// </remarks>
         private void Reset()
         {
+            Console.WriteLine("ExecutionController Reset called.");
+
             _cpu.Reset();
             _mem.Reset();
             _ioBus.Reset();
@@ -320,12 +319,17 @@ namespace PERQemu
         public void Halt(Exception e)
         {
             // The emulation has hit a serious error.  Enter the debugger...
-            _state = RunState.Halted;
-
             Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
 #if DEBUG
             Log.Write(Environment.StackTrace);
 #endif
+            PERQemu.Controller.Halt();
+        }
+
+        public void Shutdown()
+        {
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
         /// <summary>

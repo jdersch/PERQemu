@@ -1,5 +1,5 @@
 //
-// IOBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// IOBus.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -69,43 +69,47 @@ namespace PERQemu.IO
             UpdateDispatchTable(device);
         }
 
+        public int IORead(byte ioPort)
+        {
+            int value = 0x0;
+            IIODevice device = _deviceDispatch[ioPort];
+
+            if (device != null)
+            {
+                value = device.IORead(ioPort);
+
+                // Add this back in if there's too much log spewage
+                //if (!(_deviceDispatch[ioPort] is VideoController))
+                Log.Debug(Category.IO, "Read from 0x{0:x2} ({1}), returning 0x{2:x4}",
+                          ioPort, device.ToString(), value);
+            }
+            else
+            {
+                Log.Warn(Category.IO, "Unhandled Read from 0x{0:x2}, returning 0x00", ioPort);
+            }
+
+            return value;
+        }
+
         public void IOWrite(byte ioPort, int value)
         {
             value &= 0xffff;    // IOD is 16 bits wide; trim upper bits
+            IIODevice device = _deviceDispatch[ioPort];
 
-            if (_deviceDispatch[ioPort] == null)
+            if (device != null)
             {
-                Log.Warn(Category.IO, "No device registered for port {0:x2} write ({1:x4})", ioPort, value);
-                return;
+                device.IOWrite(ioPort, value);
+
+                // Put this back if it spews too much
+                //if (!(_deviceDispatch[ioPort] is VideoController))
+                Log.Debug(Category.IO, "Write of 0x{0:x4} to 0x{1:x2} ({2})",
+                          value, ioPort, device.ToString());
             }
-
-            if (!(_deviceDispatch[ioPort] is VideoController))  // This generates a lot of output
-                Log.Debug(Category.IO, "Output sent to port {0:x2} ({1:x4}) handled by {2}",
-                          ioPort, value, _deviceDispatch[ioPort]);
-
-            _deviceDispatch[ioPort].IOWrite(ioPort, value);
-        }
-
-        public int IORead(byte ioPort)
-        {
-            if (_deviceDispatch[ioPort] == null)
+            else
             {
-                Log.Warn(Category.IO, "No device registered for port {0:x2} read, returning 0", ioPort);
-                return 0;
+                Log.Warn(Category.IO, "Unhandled Write of 0x{0:x4} to 0x{1:x2})", value, ioPort);
             }
-
-            if (!(_deviceDispatch[ioPort] is VideoController))
-                Log.Debug(Category.IO, "Input request from port {0:x2} handled by {1}",
-                          ioPort, _deviceDispatch[ioPort]);
-
-            int retVal = _deviceDispatch[ioPort].IORead(ioPort);
-
-            if (!(_deviceDispatch[ioPort] is VideoController))
-                Log.Debug(Category.IO, "Input received is {0:x4}", retVal);
-
-            return retVal;
         }
-
 
         /// <summary>
         /// Adds a new device to the dispatch table.

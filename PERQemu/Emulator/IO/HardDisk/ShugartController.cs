@@ -1,5 +1,5 @@
 //
-// ShugartController.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// ShugartController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -63,7 +63,11 @@ namespace PERQemu.IO.HardDisk
                 _system.Scheduler.Cancel(_indexEvent);
             }
 
+            // todo: the drive itself should manage index pulses
             IndexPulseStart(0, null);
+
+            // Force a soft reset (calls ResetFlags)
+            LoadCommandRegister((int)Command.Reset);
 
             Log.Debug(Category.HardDisk, "Shugart controller reset.");
         }
@@ -456,7 +460,6 @@ namespace PERQemu.IO.HardDisk
             // firing an interrupt.  Time would normally vary based on platter
             // rotation, seek and head settling time, etc.  5 is fine for now.
             _controllerStatus = Status.Busy;
-            Console.WriteLine("Shugart: setting busy state");
 
             _busyEvent = _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
             {
@@ -472,8 +475,8 @@ namespace PERQemu.IO.HardDisk
         {
             _controllerStatus = Status.Done;
             _driveFault = 0;
-            _seekComplete = 0;
-            _unitReady = 1;
+            _seekComplete = 1;  // ??? check the manual...
+            _unitReady = 0;     // active low
 
             _serialNumberHigh = 0;
             _serialNumberLow = 0;

@@ -1,5 +1,5 @@
 ﻿//
-// SystemTimer.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// SystemTimer.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -27,14 +27,15 @@ namespace PERQemu
     /// </summary>
     public class SystemTimer
     {
-        public SystemTimer(float ival)
+        public SystemTimer(double ival)
         {
             _interval = ival;
             _callback = new HRTimerElapsedCallback(OnElapsed);
             _handle = HighResolutionTimer.Register(_interval, _callback);
             _sync = new ManualResetEventSlim(false);
+            _isEnabled = false;
 
-            Log.Debug(Category.Timer, "SystemTimer constructed, HR timer handle is {0}", _handle);
+            Log.Debug(Category.Timer, "SystemTimer constructed, HRT handle is {0}", _handle);
         }
 
         ~SystemTimer()
@@ -46,14 +47,19 @@ namespace PERQemu
             }
             catch
             {
-                Log.Debug(Category.Timer, "Barfed trying to unregister SystemTimer " + _handle);
+                Log.Error(Category.Timer, "Barfed trying to unregister SystemTimer {0}", _handle);
             }
         }
 
-        public float Interval
+        public double Interval
         {
             get { return _interval; }
             set { _interval = value; }
+        }
+
+        public bool IsEnabled
+        {
+            get { return _isEnabled; }
         }
 
         public void Reset()
@@ -67,8 +73,10 @@ namespace PERQemu
         /// </summary>
         public void Enable(bool enabled)
         {
+            _isEnabled = enabled;
             HighResolutionTimer.Enable(_handle, enabled);
             _sync.Set();
+
             Log.Debug(Category.Timer, "Heartbeat {0} {1}", _handle, (enabled ? "started" : "stopped"));
         }
 
@@ -87,7 +95,8 @@ namespace PERQemu
         }
 
         private int _handle;
-        private float _interval;
+        private bool _isEnabled;
+        private double _interval;
         private HRTimerElapsedCallback _callback;
         private ManualResetEventSlim _sync;
     }

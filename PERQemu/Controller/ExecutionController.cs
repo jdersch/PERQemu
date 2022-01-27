@@ -1,5 +1,5 @@
-﻿//
-// ExecutionController.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// ExecutionController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -69,6 +69,7 @@ namespace PERQemu
         {
             _system = null;
             _bootChar = 0;
+            _mode = Settings.RunMode;
 
             InitStateMachine();
         }
@@ -76,6 +77,12 @@ namespace PERQemu
         public PERQSystem System
         {
             get { return _system; }
+        }
+
+        public ExecutionMode Mode
+        {
+        	get { return _mode; }
+        	set { _mode = value; }
         }
 
         public RunState State
@@ -142,7 +149,7 @@ namespace PERQemu
                 if (!Initialize(PERQemu.Config.Current))
                 {
                     Console.WriteLine("Initialization failed.");
-                    return;     // Fail.
+                    return;
                 }
 
                 // Load the configured storage devices
@@ -194,6 +201,12 @@ namespace PERQemu
             PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 
+        // sigh.
+        public void Halt()
+        {
+            SetState(RunState.Halted);
+        }
+
         /// <summary>
         /// Shuts down the virtual machine, asks or saves changed media (depending
         /// on user preferences), then deconfigures the PERQSystem.  The machine
@@ -232,7 +245,7 @@ namespace PERQemu
             // Bail if already in the requested state
             if (current == nextState) return;
 
-			Log.Debug(Category.Controller, "Requesting transition from {0} to {1}", current, nextState);
+            Log.Debug(Category.Controller, "Requesting transition from {0} to {1}", current, nextState);
 
             // Now, how do we get there?  Let's consult the runes...
             var key = new SMKey(current, nextState);
@@ -286,7 +299,7 @@ namespace PERQemu
             }
 
             Log.Debug(Category.Controller, "Transition result is {0}", State);
-       }
+        }
 
         /// <summary>
         /// Initiate a state change in the current PERQsystem.
@@ -396,6 +409,7 @@ namespace PERQemu
         // To encode our state machine transitions
         private Dictionary<SMKey, List<Transition>> _SMDict;
 
+        private ExecutionMode _mode;
         private static byte _bootChar;
         private PERQSystem _system;
     }

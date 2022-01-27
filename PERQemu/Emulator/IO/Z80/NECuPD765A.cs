@@ -1,5 +1,5 @@
 ﻿//
-// NECuPD765A.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// NECuPD765A.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -20,7 +20,6 @@
 using System;
 using System.Collections.Generic;
 
-using Konamiman.Z80dotNet;
 using PERQemu.PhysicalDisk;
 
 namespace PERQemu.IO.Z80
@@ -60,8 +59,6 @@ namespace PERQemu.IO.Z80
                 new CommandData(Command.ScanHighOrEqual, 0x1f, 9, StubExecutor),
                 new CommandData(Command.Seek, 0xff, 3, SeekExecutor),
             };
-
-            //Reset();
         }
 
         public void Reset()
@@ -69,6 +66,7 @@ namespace PERQemu.IO.Z80
             _pcn.Initialize();
             _commandData.Clear();
             _statusData.Clear();
+
             _interruptsEnabled = false;
             _interruptActive = false;
             _nonDMAMode = false;
@@ -81,6 +79,8 @@ namespace PERQemu.IO.Z80
             _unitSelect = 0;
             _headSelect = 0;
             _seekEnd = false;
+
+            Log.Debug(Category.FloppyDisk, "Controller reset.");
         }
 
         public string Name => "uPD765A FDC";
@@ -810,8 +810,8 @@ namespace PERQemu.IO.Z80
 
 
         // From v87.z80:
-        // FLPSTA  EQU     250Q                    ;FLOPPY STATUS    OLD ADDRESS WAS 320Q
-        // FLPDAT  EQU     251Q                    ;FLOPPY DATA   OLD ADDRESS WAS 321Q
+        // FLPSTA  EQU     250Q         ;FLOPPY STATUS  OLD ADDRESS WAS 320Q
+        // FLPDAT  EQU     251Q         ;FLOPPY DATA    OLD ADDRESS WAS 321Q
         private enum Register
         {
             Status = 0xa8,
@@ -829,14 +829,14 @@ namespace PERQemu.IO.Z80
         [Flags]
         private enum Status
         {
-            D0B = 0x1,  // FDD N Busy
+            D0B = 0x1,      // FDD N Busy
             D1B = 0x2,
             D2B = 0x4,
             D3B = 0x8,
-            CB = 0x10,  // Controller Busy (read/write in process, FDC will not accept commands.)
-            EXM = 0x20, // Execution phase in non-DMA mode
-            DIO = 0x40, // Transfer direction - 1 = to processor, 0 = from processor
-            RQM = 0x80, // Request for Master - Data Reg is ready to xfer data
+            CB = 0x10,      // Controller Busy (r/w in process, FDC will not accept commands)
+            EXM = 0x20,     // Execution phase in non-DMA mode
+            DIO = 0x40,     // Transfer direction - 1 = to processor, 0 = from processor
+            RQM = 0x80,     // Request for Master - Data Reg is ready to xfer data
         }
 
         [Flags]

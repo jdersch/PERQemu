@@ -1,5 +1,5 @@
 ﻿//
-// PERQFifo.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// PERQFifo.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -59,7 +59,7 @@ namespace PERQemu.IO.Z80
         public byte[] Ports => _ports;
         public byte? ValueOnDataBus => null;
         public bool IntLineIsActive => false;       // Never interrupts
-        public bool IsReady => true;                // WTF _fifo.Count == 0;
+        public bool IsReady => (_fifo.Count < 5);   // FIFO Empty?  XXX
 
         public event EventHandler NmiInterruptPulse;
 

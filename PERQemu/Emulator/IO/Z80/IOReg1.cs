@@ -1,5 +1,5 @@
 ﻿//
-// IOReg1.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// IOReg1.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -48,7 +48,7 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
-            return (byte)(_z80PerqFifo.IsReady ? 0x0 : 0x40);
+            return (byte)(_z80PerqFifo.IsReady ? 0x0 : 0x20);
         }
 
         public void Write(byte portAddress, byte value)

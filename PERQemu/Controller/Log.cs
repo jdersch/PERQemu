@@ -1,5 +1,5 @@
 ﻿//
-// Log.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Log.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -234,8 +234,9 @@ namespace PERQemu
                 var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
 
                 // Cut down on the noise: things like the processor looping to
-                // check an I/O status byte spews a lot... summarize that.
-                if (output == _lastOutput && _repeatCount < 100)
+                // check an I/O status byte spews a lot... summarize that (but
+                // not endlessly to show progress)
+                if (output == _lastOutput && _repeatCount < 256)
                 {
                     _repeatCount++;
                     return;

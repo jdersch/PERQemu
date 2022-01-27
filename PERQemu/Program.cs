@@ -1,6 +1,5 @@
 //
-// Program.cs - Copyright (c) 2019-2021 S. Boondoggle (skeezicsb@gmail.com)
-// was: EntryPoint - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Program.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -159,7 +158,7 @@ namespace PERQemu
             }
         }
 
-        public static string Copyright = "Copyright (c) 2006-2021, J. Dersch (derschjo@gmail.com)\n" +
+        public static string Copyright = "Copyright (c) 2006-2022, J. Dersch (derschjo@gmail.com)\n" +
                                          "Feebly assisted by S. Boondoggle (skeezicsb@gmail.com)";
 
         public static string Version

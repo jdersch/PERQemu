@@ -1,5 +1,5 @@
 ﻿//
-// ALU.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// ALU.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -95,25 +95,10 @@ namespace PERQemu.Processor
                 Log.Debug(Category.ALU, "Reset.");
             }
 
-            public ExtendedRegister R
-            {
-                get { return _r; }
-            }
-
-            public ExtendedRegister OldR
-            {
-                get { return _oldR; }
-            }
-
-            public ALUFlags Flags
-            {
-                get { return _flags; }
-            }
-
-            public ALUFlags OldFlags
-            {
-                get { return _oldFlags; }
-            }
+            public ExtendedRegister R => _r;
+            public ExtendedRegister OldR => _oldR;
+            public ALUFlags Flags => _flags;
+            public ALUFlags OldFlags => _oldFlags;
 
             /// <summary>
             /// Normal two-input ALU operation: combine AMUX and BMUX inputs
@@ -225,8 +210,8 @@ namespace PERQemu.Processor
                         throw new UnimplementedInstructionException(string.Format("Unhandled ALU operation {0:x1}", op));
                 }
 
-                // Inputs to the condition code PAL, used to build an index into the PAL array.
-                // NOTE: these are actually the CCSR0 bits that appear in the uState register?!
+                // Inputs to the condition code PAL, used to build an index into
+                // the PAL array.  Are these the CCSR0 bits in the uState register?
                 bool r15 = (_r.Value & 0x8000) == 0;
                 bool LAeqB = (_r.Value & 0xffff) != 0;      // 16-bit equality
                 bool Lb15 = (bmux & 0x8000) != 0;
@@ -288,14 +273,7 @@ namespace PERQemu.Processor
                             // do this if the current op is add/sub (first use of
                             // DivideStep is a shift).
                             //
-                            if ((_oldR.Value & 0x8000) != 0)    // sign of previous R + or -?
-                            {
-                                modOp = ALUOperation.AplusB;
-                            }
-                            else
-                            {
-                                modOp = ALUOperation.AminusB;
-                            }
+                            modOp = ((_oldR.Value & 0x8000) != 0) ? ALUOperation.AplusB : ALUOperation.AminusB;
                             break;
 
                         case MulDivCommand.UnsignedMultiply:
@@ -305,14 +283,7 @@ namespace PERQemu.Processor
                             // MQ register); if set, do an add, else pass thru unmolested.
                             // This happens before the MQ is shifted in DispatchFunction().
                             //
-                            if ((mq & 0x1) == 1)
-                            {
-                                modOp = ALUOperation.AplusB;
-                            }
-                            else
-                            {
-                                modOp = ALUOperation.A;
-                            }
+                            modOp = ((mq & 0x1) == 1) ? ALUOperation.AplusB : ALUOperation.A;
                             break;
                     }
                 }
@@ -374,7 +345,7 @@ namespace PERQemu.Processor
                                     {
                                         int index = r15 | (la15 << 1) | (lb15 << 2) | (lAeqB << 3) | (arithX << 4) | (arithY << 5);
 
-                                        // this is ugly
+                                        // This is ugly (but it only runs once)
                                         bool bR15 = r15 == 0 ? false : true;
                                         bool bLa15 = la15 == 0 ? false : true;
                                         bool bLb15 = lb15 == 0 ? false : true;

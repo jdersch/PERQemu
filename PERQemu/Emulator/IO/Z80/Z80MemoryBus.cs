@@ -1,5 +1,5 @@
 //
-// Z80MemoryBus.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Z80MemoryBus.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -40,7 +40,7 @@ namespace PERQemu.IO.Z80
             _ram = new byte[RAM_SIZE];
 
             Log.Debug(Category.Z80, "Allocated {0:N1}KB ROM, {1:N1}KB RAM.",
-                                        ROM_SIZE / 1024, RAM_SIZE / 1024);
+                                    ROM_SIZE / 1024, RAM_SIZE / 1024);
         }
 
         //
@@ -108,7 +108,7 @@ namespace PERQemu.IO.Z80
                     throw new InvalidOperationException("Invalid Z80 ROM size.");
                 }
 
-                Log.Debug(Category.Z80, "Read Z80 ROM from {0}.", Paths.Canonicalize(path));
+                Log.Info(Category.Emulator, "Loaded Z80 ROM from {0}.", Paths.Canonicalize(path));
             }
         }
 

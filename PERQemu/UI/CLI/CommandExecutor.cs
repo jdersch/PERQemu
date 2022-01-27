@@ -1,5 +1,5 @@
 ﻿//
-// CommandExecutor.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// CommandExecutor.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -193,7 +193,8 @@ namespace PERQemu.UI
                     if (invokeParams[paramIndex] == null)
                     {
                         // Should/will have been sanity checked by the parser...
-                        throw new ArgumentException(string.Format("Unknown value for parameter {0}.", argIndex));
+                        throw new ArgumentException(
+                            string.Format("Unknown value for parameter {0}.", argIndex));
                     }
 
                     argIndex++;
@@ -235,7 +236,9 @@ namespace PERQemu.UI
                     }
                     else
                     {
-                        throw new ArgumentException(string.Format("Unhandled type for parameter {0}, type {1}", paramIndex, p.ParameterType));
+                        throw new ArgumentException(
+                            string.Format("Unhandled type for parameter {0}, type {1}",
+                                          paramIndex, p.ParameterType));
                     }
                 }
             }

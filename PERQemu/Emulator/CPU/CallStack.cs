@@ -1,5 +1,5 @@
 ﻿//
-// CallStack.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// CallStack.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //

@@ -1,5 +1,5 @@
 ﻿//
-// StorageCommands.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// StorageCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -49,6 +49,7 @@ namespace PERQemu.UI
         //
         //      unless DEBUG, storage define IsDescreet!
         //
+        //      storage list            -- show the list of known devices
         //      storage define <class> <type> <cyls> <heads> <sectors> <bytes> <hdr> <flags> <rpm> <desc>
         //      storage create media <type> <file>
         // SO,

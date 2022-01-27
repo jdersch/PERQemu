@@ -1,5 +1,5 @@
 ﻿//
-// IOReg3.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// IOReg3.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -54,7 +54,6 @@ namespace PERQemu.IO.Z80
 
         public void Write(byte portAddress, byte value)
         {
-            Console.WriteLine("reg3 write to {0:x}, value {1:x}", portAddress, value);
             //
             // Configure DMA:
             // From v87.z80:
@@ -81,7 +80,7 @@ namespace PERQemu.IO.Z80
             _fdc.InterruptsEnabled = ((value & 0x01) != 0);
         }
 
-        private byte[] _ports = new byte[] { 0xc8 };
+        private byte[] _ports = { 0xc8 };
 
         private PERQToZ80FIFO _perqZ80fifo;
         private Keyboard _keyboard;

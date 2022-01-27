@@ -1,5 +1,5 @@
-﻿//
-// CPUBoard.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+//
+// CPUBoard.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -63,7 +63,7 @@ namespace PERQemu.Processor
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Rate limiter
-            _heartbeat = new SystemTimer(10f);
+            _heartbeat = new SystemTimer(20f);
 
             // Compute how often (in CPU cycles) to sync the emulated processor
             _adjustInterval = (int)(_heartbeat.Interval / (CPU.MicroCycleTime * Conversion.NsecToMsec));
@@ -110,6 +110,11 @@ namespace PERQemu.Processor
                 throw new InvalidOperationException("CPU thread is already running; Stop first.");
             }
 
+            // Catch events from the controller
+            PERQemu.Controller.RunStateChanged += OnRunStateChange;
+
+            // Fire off the CPU thread
+            _stopAsyncThread = false;
             _asyncThread = new Thread(AsyncThread) { Name = "CPU" };
             _asyncThread.Start();
         }
@@ -123,19 +128,25 @@ namespace PERQemu.Processor
             Console.WriteLine("[CPU thread starting]");
             _scheduler.DumpEvents("CPU at RunAsync");
 
-            while (_system.State == RunState.Running)
+            do
             {
                 try
                 {
                     Run(_adjustInterval);
-                    //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
-                    _heartbeat.WaitForHeartbeat();
+
+                    // Do rate limiting if configured (and we haven't left run mode)
+                    if (!_stopAsyncThread &&
+                        Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                    {
+                        _heartbeat.WaitForHeartbeat();
+                    }
                 }
                 catch (Exception e)
                 {
                     _system.Halt(e);
                 }
             }
+            while (!_stopAsyncThread);
 
             _heartbeat.Enable(false);
             Console.WriteLine("[CPU thread stopped]");
@@ -153,8 +164,8 @@ namespace PERQemu.Processor
             }
 
             Console.WriteLine("[Stopping CPU thread]");
+            _stopAsyncThread = true;
 
-            // Tell the thread to exit
             if (Thread.CurrentThread != _asyncThread)
             {
                 Console.WriteLine("[CPU thread join...]");
@@ -164,6 +175,15 @@ namespace PERQemu.Processor
 
             _asyncThread = null;
             Console.WriteLine("[CPU thread exited]");
+
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
+        }
+
+        private void OnRunStateChange(RunStateChangeEventArgs s)
+        {
+            if (s.State != RunState.Running && _asyncThread != null)
+                Stop();
         }
 
         /// <summary>
@@ -190,5 +210,6 @@ namespace PERQemu.Processor
         private int _adjustInterval;
 
         private Thread _asyncThread;
+        private volatile bool _stopAsyncThread;
     }
 }

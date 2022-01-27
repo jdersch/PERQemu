@@ -1,5 +1,5 @@
 ﻿//
-// ControlStore.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// ControlStore.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -255,7 +255,7 @@ namespace PERQemu.Processor
                 }
                 fs.Close();
 
-                Log.Debug(Category.Microstore, "Loaded boot ROM from {0}.", Paths.Canonicalize(path));
+                Log.Info(Category.Emulator, "Loaded boot ROM from {0}.", Paths.Canonicalize(path));
             }
 
             /// <summary>

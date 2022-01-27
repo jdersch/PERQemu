@@ -1,5 +1,5 @@
 ﻿//
-// FloppyDrive.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// FloppyDrive.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -89,6 +89,8 @@ namespace PERQemu.IO
             _singleSided = false;
             _diskChange = false;
             _driveSelect = false;
+
+            Log.Debug(Category.FloppyDisk, "Drive reset.");
         }
 
         public void LoadDisk(FloppyDisk disk)

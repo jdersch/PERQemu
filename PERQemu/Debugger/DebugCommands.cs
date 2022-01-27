@@ -1,5 +1,5 @@
 //
-// DebugCommands.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// DebugCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -124,19 +124,19 @@ namespace PERQemu
         }
 
         [Command("debug set execution mode", "Set the execution mode for the virtual PERQ")]
-        private void SetZ80ExecutionMode(ExecutionMode mode)
+        private void SetExecutionMode(ExecutionMode mode)
         {
-            if (PERQemu.Sys.Mode != mode)
+            if (PERQemu.Controller.Mode != mode)
             {
-                PERQemu.Sys.Mode = mode;
+                PERQemu.Controller.Mode = mode;
                 Console.WriteLine("Execution mode changed to {0}.", mode);
             }
         }
 
         [Command("debug show execution mode", "Show the execution mode for the virtual PERQ")]
-        private void ShowZ80ExecutionMode()
+        private void ShowExecutionMode()
         {
-            Console.WriteLine(PERQemu.Sys.Mode);
+            Console.WriteLine(PERQemu.Controller.Mode);
         }
 
         //
@@ -521,6 +521,7 @@ namespace PERQemu
         private void DumpScheduler()
         {
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
+            Console.WriteLine("---");
             PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 

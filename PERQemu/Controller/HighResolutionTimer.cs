@@ -1,5 +1,5 @@
 //
-// HighResolutionTimer.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// HighResolutionTimer.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -104,17 +104,17 @@ namespace PERQemu
         /// <summary>
         /// "Close enough" value for coalescing or firing timers.
         /// </summary>
-        public static double Tolerance = 0.001d;
-
-        /// <summary>
-        /// Tick time length in milliseconds.
-        /// </summary>
-        public static readonly double TickLength = 1000f / Stopwatch.Frequency;
+        public static double Tolerance = 0.01d;
 
         /// <summary>
         /// Tick frequency of the underlying mechanism.
         /// </summary>
         public static readonly double Frequency = Stopwatch.Frequency;
+
+        /// <summary>
+        /// Tick time length in milliseconds.
+        /// </summary>
+        public static readonly double TickLength = 1000d / Frequency;
 
         /// <summary>
         /// True if the system/operating system supports HighResolution timer.
@@ -164,11 +164,12 @@ namespace PERQemu
             {
                 if (_requesters[tag].Free)
                 {
-                    _requesters[tag].Free = false;
                     _requesters[tag].Enabled = false;
                     _requesters[tag].Interval = period;
                     _requesters[tag].NextTrigger = next;
                     _requesters[tag].Callback = cb;
+                    _requesters[tag].Free = false;
+
                     Log.Debug(Category.Timer,
                               "Registered timer {0}, interval {1:N3}, next trigger {2:N3}",
                               tag, period, next);
@@ -179,6 +180,7 @@ namespace PERQemu
 
             // None free?  Extend...
             _requesters.Add(new TimerThing(period, cb));
+
             Log.Debug(Category.Timer,
                       "Added new timer {0}, interval {1:N3}, next trigger {2:N3}",
                       tag, period, next);
@@ -225,8 +227,8 @@ namespace PERQemu
                 {
                     // Be sure to shut it down first
                     _requesters[tag].Enabled = false;
-                    _requesters[tag].Free = true;
                     _requesters[tag].Callback = null;
+                    _requesters[tag].Free = true;
                 }
             }
             catch

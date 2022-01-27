@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Death")]
 [assembly: AssemblyProduct("PERQemu")]
-[assembly: AssemblyCopyright("Copyright © J. Dersch 2006-2021")]
+[assembly: AssemblyCopyright("Copyright © J. Dersch 2006-2022")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

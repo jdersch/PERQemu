@@ -604,7 +604,6 @@
     <None Include="Debugger\DebuggerPrompt.cs" />
     <None Include="Docs\Configuration.txt" />
     <None Include="Docs\Controller.txt" />
-    <None Include="Emulator\IO\IZ80System.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />

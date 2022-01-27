@@ -1,5 +1,5 @@
 //
-// Display.cs - Copyright (c) 2006-2021 Josh Dersch (derschjo@gmail.com)
+// Display.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -385,8 +385,8 @@ namespace PERQemu.UI
             var now = HighResolutionTimer.ElapsedHiRes();
             var elapsed = now - _last;
 
-            double inst = _system.CPU.Clocks - _prevClock;
-            double z80inst = _system.IOB.Z80System.Clocks - _prevZ80Clock;
+            var inst = _system.CPU.Clocks - _prevClock;
+            var z80inst = _system.IOB.Z80System.Clocks - _prevZ80Clock;
             double fps = _frames / (elapsed * Conversion.MsecToSec);
             double ns = (elapsed * Conversion.MsecToNsec) / inst;
             double zns = (elapsed * Conversion.MsecToNsec) / z80inst;

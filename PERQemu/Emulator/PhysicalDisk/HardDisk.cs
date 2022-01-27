@@ -197,17 +197,17 @@ namespace PERQemu.PhysicalDisk
         {
             if (cylinder < 0 || cylinder >= _diskType.Cylinders)
             {
-                throw new ArgumentOutOfRangeException("cylinder");
+                throw new ArgumentOutOfRangeException(nameof(cylinder));
             }
 
             if (track < 0 || track >= _diskType.Tracks)
             {
-                throw new ArgumentOutOfRangeException("track");
+                throw new ArgumentOutOfRangeException(nameof(track));
             }
 
             if (sector < 0 || sector >= _diskType.Sectors)
             {
-                throw new ArgumentOutOfRangeException("sector");
+                throw new ArgumentOutOfRangeException(nameof(sector));
             }
         }
 
