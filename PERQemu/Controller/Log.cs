@@ -92,6 +92,7 @@ namespace PERQemu
         Streamer    = 0x10000000000,
         Multibus    = 0x20000000000,
         SMD         = 0x40000000000,
+        MediaLoader = 0x100000000000000,
         All         = 0xffffffffffffffff
     }
 

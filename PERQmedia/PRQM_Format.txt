@@ -1,0 +1,287 @@
+﻿
+PERQmedia File Format
+=====================
+
+Overview
+--------
+
+The PERQmedia file format is a container for all virtual PERQ storage devices,
+including floppy disk, hard disk and streamer tape images.  It is meant to be
+a superset of previous formats (PHD, IMD, TAP, "raw") and is designed to allow
+interchange between them.  See the ReadMe file for a general overview.
+
+The default file extension for all PERQmedia images is ".prqm".  This should
+be unique and allow for various OS file association schemes, for things like
+filtering files in open/save dialogs, "quick look" or other previewers, etc.
+
+
+File Layout
+-----------
+
+A .prqm file consists of a fixed-length Header followed by four distinct,
+variable-length data sections:
+
+Offset  Bytes   Type        Field
+------  ------  ----------  -------------------------------------------------
+0       4       byte[4]     Cookie: literal 0x50 0x52 0x51 0x45 ('PRQM')
+4       1       byte        Version: literal 0x30 ('0')
+5       1       byte        DriveType: byte (enum DeviceType)
+6       32      uint[8]     Directory: start, offset of each section
+38      n       byte[n]     Section data, as follows:
+
+dir[0]  dir[1]  byte[]      TextLabel: variable length byte array (UTF8 encoded
+                            string by default, but could be user-defined)
+
+dir[2]  dir[3]  byte[]      ImageLabel: variable length byte array
+                            contains whatever image data the user desires
+
+dir[4]  dir[5]  byte[]      Info section: fixed and variable data fields from
+                            the MediaInfo, FileInfo, DeviceGeometry and
+                            DevicePerformance fields of the StorageDevice
+
+dir[6]  dir[7]  byte[]      Data section: a list of fixed size Sectors using
+                            the Geometry data from the Info section.  This
+                            whole section is compressed before writing and
+                            decompressed when reading!
+
+EOF-4   4       uint        CRC: a standard 32-bit CRC computed for the entire
+                            file.  In theory (if my implementation is correct)
+                            it ought to be possible to validate this using
+                            external tools.  (The variant used is CRC-32B.)
+
+All multi-byte values are written MSB-first.  Extension methods in StreamHelper
+ensure that the files can be read and written consistently across architectures
+[not yet exhaustively tested or verified].  This strategy is the same as that
+employed by the PHD format.  IMD and raw floppies use byte-oriented formats not
+subject to byte ordering issues.
+
+String values are written with an explicit null terminator.  This makes it much
+simpler to scan them back in and allows arbitrary-length strings rather than
+forcing the use of fixed byte arrays or storing length bytes.  (Also eases the
+implementation in other languages, too, in case I ever do a Perl port. :-)
+
+
+Field Descriptions
+------------------
+
+The header "cookie" is the four bytes 'PRQM', followed by a version number
+and drive type code.  These six bytes are unique and allow the PERQmedia
+loader, as well as command-line tools such as "file" (using /etc/magic) to
+quickly and positively identify the file type.
+
+The DriveType code is a one-byte value taken from POS itself.  I have used
+some of the "reserved" codes for future encoding of tape images.
+
+The Directory is only used by the Formatters during the reading and writing of
+PRQM files; it is not part of the StorageDevice, but is computed from the size
+of the data to be written.  It allows the Formatter to properly interpret the
+incoming byte stream when reconstituting a saved image.
+
+
+Text Label
+----------
+
+This optional section allows for an arbitrary amount of text that describes
+the contents of the file.  IMD format comments are preserved/transferred here
+when transcribing IMD floppies.  This section is stored as an array of UTF8-
+encoded bytes and the directory entry records the length of the data.  It is
+copied to the MediaInfo struct where clients may access it as a C# string.
+
+
+Image Label
+-----------
+
+This optional section allows for an arbitrarily large image to be stored in
+the archive.  The goal is to allow a graphical client to let scans of the
+physical media to be stored IN the archive directly, in any of the currently
+common formats: JPG, PNG, and even TIFF or GIF.  For flexibility, PERQmedia
+does not impose any structure or restriction on the field (besides a 32-bit
+total size limit); it is recorded as an array of bytes.  All data in the image
+label section is copied directly to/from the MediaInfo struct.  [This feature
+is not yet fully developed or tested.]
+
+
+Device Info
+-----------
+
+The Info section of the file is a collection of three[*] separate structs from
+the StorageDevice object.  Not all clients of the PERQmedia library will be
+concerned with every field, so they are grouped accordingly.  From the start
+of the Info section:
+
+Offset  Bytes   Type        Struct/Field
+------  ------  ----------  -------------------------------------------------
+0       1       byte        MediaInfo.FSHint: byte cast of FilesystemHint enum
+1       8       long        MediaInfo.ArchiveDate:  DateTime.ToBinary()
+9       1-n     string      MediaInfo.ArchivedBy
+
+                            The TextLabel, ImageLabel, Version byte and a code
+                            identifying the Formatter are also copied to/from
+                            the MediaInfo struct.
+    
+10+n    1-o     string      DeviceInfo.Name:  A "key" or short string that
+                            uniquely identifies the device, i.e. Shugart24,
+                            XT1140, etc.  This should actually be a value in
+                            a dictionary that gathers up all the device data
+                            "known" to the library to make it simpler for client
+                            programs to present that to users...
+11+no   1-p     string      DeviceInfo.Description
+12+nop  2       ushort      DeviceInfo.Flags: encoding of several boolean flags
+
+                            The DriveType byte from the file header is copied
+                            into the DeviceInfo struct.
+
+14+nop  2       ushort      DeviceGeometry.Cylinders
+16+nop  1       byte        DeviceGeometry.Heads
+17+nop  2       ushort      DeviceGeometry.Sectors
+19+nop  2       ushort      DeviceGeometry.SectorSize
+21+nop  1       byte        DeviceGeometry.HeaderSize
+
+22+nop  4       int         DevicePerformance.RPM
+26+nop  4       int         DevicePerformance.IndexPulse
+30+nop  4       int         DevicePerformance.StartupDelay
+34+nop  4       int         DevicePerformance.MinimumSeek
+38+nop  4       int         DevicePerformance.MaximumSeek
+42+nop  4       int         DevicePerformance.HeadSettling
+46+nop  4       int         DevicePerformance.TransferRate
+
+Thus, the Info section is 50 bytes plus any variable-length string data.
+
+[*] I'm not entirely sold on the use of these structs; may decide to fold the
+Info fields into the StorageDevice directly.  The generally immutable Geometry
+and Performance structs could be renamed or combined... 
+
+
+The type and amount of device info present in the StorageDevice class allows
+for all the available data from previous formats to be captured (and recreated)
+with PERQmedia providing "reasonable defaults" when necessary to fill in gaps.
+Because the Device Info section contains all of the data to fully characterize
+a device, the emulator can load and run it directly, even if it is not "known"
+to the library in advance.
+
+
+Data Section
+------------
+
+The data section of the file stores a linear list of Sectors in a fixed format:
+
+Offset  Bytes   Type        Struct/Field
+------  ------  ----------  -------------------------------------------------
+0       2       ushort      Sector.CylinderID
+2       1       byte        Sector.HeadID
+3       2       ushort      Sector.SectorID
+5       1       byte        Sector.IsBad  (boolean good/bad sector flag)
+6       0-n     byte[]      Sector.Header
+6+n     0-m     byte[]      Sector.Data
+
+This is the same basic layout of the PHD format, except that PRQM includes the
+"physical address" in _each_ block.  While PHD (and the "raw" floppy format)
+expects the sectors to be stored in a specific order, PRQM doesn't necessarily
+care how the 3-dimentional Data[C, H, S] array is transcribed into the linear
+sector array for storage.
+
+Note that PERQmedia doesn't know or care about interleaving, and leaves that
+up to the discretion of the specific output formatters.  The only format that
+currently knows or cares about interleave is IMD, and that information isn't
+relevant to the emulator once the data is read in.  If necessary to write out
+a specific interleave pattern (for instance, to create or modify a floppy
+image on the emulator, then write it out to physical media to load into a real
+PERQ) the IMDFormatter can impose a specific interleave on output.
+
+
+CRC
+---
+
+Offset  Bytes   Type        Struct/Field
+------  ------  ----------  -------------------------------------------------
+EOF-4   4       uint        CRC-32B
+
+The PRQM format includes a checksum at the end of the file.  This is computed
+for the entire contents of the file, including the header section.  The Reader
+and Writer classes generate and check these automatically with no intervention
+from the clients.  The algorithm used has been cursorily checked against other
+CRC-32B implementations to make sure it's correct. ;-)
+
+
+Notes
+=====
+
+One change from the PHD format is to store two bytes for the number of sectors
+per track, rather than just one.  The typical 20MB QIC-02 streamer (Archive
+Sidewinder) can be thought of as a drive with one cylinder, four heads 
+(accessing the four serpentine tracks on the tape), and approximately 10,000
+sectors per track.  This maps very easily to the StorageDevice model (blocks
+is blocks!) and the TapeController can actually use the "head change" to
+simulate the direction reversal that the drive's physical mechanism has to do.
+
+
+The DevicePerformance data is probably ridiculously over-the-top, but the goal
+of any emulator is to provide a realistic user experience of an older system.
+However, PERQemu doesn't have to be as precise as (say) a game console emulator,
+so giving the user the option to turn OFF any of the super-pedantic settings is
+likely the default.  But someday to have the hard drive actually use DMA to
+transfer words to memory, and have seek times actually reflect the performance
+difference between the old Shugart and the 5.25" MFM drives would be fun.  Of
+course, clients are free to completely ignore this extra performance data.
+
+
+Compression
+-----------
+
+By default the PRQM format uses the Deflate method to compress the data in the
+archive.  During writes, the in-memory sector data is presented to the file
+formatter as a simple byte array, which is streamed through the compressor.
+The archive's directory is updated with the new size and the entire section is
+serialized to disk in one shot.  The CRC calculation is applied to the final
+form of the data, whether compressed or not.  [There is not yet a switch to let
+the user optionally turn this feature off.]
+
+When read back in, the entire data section is slurped up in one Read().  If
+the directory indicates fewer bytes of data are present than the full geometry
+of the device would normally store, the data is assumed to have been compressed.
+It is then streamed through the uncompressor to "reinflate" it back into full-
+size Sectors and stored in the StorageDevice.  Note that the compression is
+largely opaque, so any built-in checksums or transformations of the byte stream
+is not known to the PRQM formatter; the overall CRC ensures that the contents
+of the archive are intact whether compression has been applied or not.
+
+On a typical PERQ disk image, space savings on the typically sparse data are
+around 80-95% (so a newly-formatted 159MB disk image comes in under 2MB!).
+
+
+Performance
+-----------
+
+TBD (once compression is included, and some refactoring done).  Early tests
+show the CRC-32B algorithm used adds about 200ms (in Debug builds) to a typical
+Shugart24 hard drive image:
+
+        /// <remarks>
+        /// Can load and checksum a standard 24MB Shugart disk image in ~210ms
+        /// (just ripping through the raw data in 64KB chunks, not parsing it
+        /// through the formatters).
+        /// 
+        /// For the XT2190 (156868014 bytes):
+        ///         Debug:      1258ms  (run from Xamarin Studio)
+        ///         Debug:       791ms  ("run without debugging")
+        ///         Release:     687ms  (command line)
+        ///         Release:     671ms  (--aot --optimize=all)
+        /// 
+        /// So in terms of raw speed, I think I can live with it for now. :-)
+        /// </remarks>
+
+Compression with Deflate is pretty reasonable, but no performance tests or
+measurements have been done yet.
+
+
+History
+-------
+
+v0.1 - File version '0'
+    Initial definition and implementation.  Modified PERQdisk to work with
+    the prototype code with PERQmedia as a subproject.  Still refinining and
+    honing the API.  Will have to consider how to make the code accessible
+    in a reasonable way (packaging/integration TBD).
+
+--
+Last update: skeezics   Thu Jan 20 21:22:23 PST 2022

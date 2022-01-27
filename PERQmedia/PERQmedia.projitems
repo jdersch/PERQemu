@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{647D398C-0C45-4678-AF44-C4721C7CEE9D}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>PERQmedia</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\IMediaFormatter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\PHDFormatter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\PRQFormatter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\PRQFormatHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\IMDFormatter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\RawFormatter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\StreamHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\CRC32Stream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\Reader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\Writer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Types\DevicePerformance.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Types\DeviceGeometry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Types\DeviceInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Types\MediaInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Types\Sector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StorageDevice.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\IMDFormatHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)FileUtilities.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)Loader\" />
+    <Folder Include="$(MSBuildThisFileDirectory)Types\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)PRQM_Format.txt" />
+    <None Include="$(MSBuildThisFileDirectory)ReadMe.txt" />
+  </ItemGroup>
+</Project>
