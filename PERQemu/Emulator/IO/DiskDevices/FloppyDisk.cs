@@ -22,7 +22,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace PERQemu.PhysicalDisk
+namespace PERQemu.IO.DiskDevices
 {
     /// <summary>
     /// Presents data for a floppy disk, organized by cylinder, head, and sector,

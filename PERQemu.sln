@@ -5,8 +5,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PERQemu", "PERQemu\PERQemu.
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{79DF7F82-71B7-4DCF-AF69-DCC0DA4B1634}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PERQmedia", "PERQmedia", "{AFA372FC-60C9-4BBD-ADDB-C45D98E8FFE6}"
-EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "PERQmedia", "PERQmedia\PERQmedia.shproj", "{647D398C-0C45-4678-AF44-C4721C7CEE9D}"
 EndProject
 Global
@@ -85,6 +83,5 @@ Global
 		$6.IncludeInNewFiles = True
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{647D398C-0C45-4678-AF44-C4721C7CEE9D} = {AFA372FC-60C9-4BBD-ADDB-C45D98E8FFE6}
 	EndGlobalSection
 EndGlobal

@@ -87,10 +87,13 @@ namespace PERQemu
 
            // Set up command-line parser and GUI manager
             _cli = new CommandProcessor();
+
             //_gui = new FormsManager();
 
             // Create main objects
             _config = new Configurator();
+            _config.Initialize();
+
             _controller = new ExecutionController();
 
             // Read user settings file, or set defaults if it doesn't yet exist

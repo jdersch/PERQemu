@@ -99,7 +99,7 @@ namespace PERQmedia
                 dev.Info.IsWritable = !(new FileInfo(pathname).IsReadOnly);
 
                 // For grins, check the POS boot signature and set flag
-                if (dev.Info.Type == DeviceType.DFloppy)
+                if (dev.Info.Type == DeviceType.Floppy)
                 {
                     if (dev.Sectors[1, 0, 0].ReadByte(0) == 0x55 &&
                         dev.Sectors[1, 0, 0].ReadByte(1) == 0xaa)

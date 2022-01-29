@@ -19,6 +19,8 @@
 
 using System;
 
+using PERQmedia;
+
 using PERQemu.Config;
 using PERQemu.Debugger;
 using PERQemu.Processor;
@@ -374,11 +376,13 @@ namespace PERQemu
         /// </summary>
         public void LoadAllMedia()
         {
-            foreach (var drive in _conf.Drives)
+            for (var unit = 0; unit < _conf.Drives.Length; unit++)
             {
+                var drive = _conf.Drives[unit];
+
                 if (!string.IsNullOrEmpty(drive.MediaPath))
                 {
-                    LoadMedia(drive.Device, drive.MediaPath, drive.Unit);
+                    LoadMedia(drive.Type, drive.MediaPath, unit);
                 }
             }
         }
@@ -386,17 +390,17 @@ namespace PERQemu
         /// <summary>
         /// Load a media file (floppy, hard disk or tape).
         /// </summary>
-        public void LoadMedia(DriveType type, string path, int unit)
+        public void LoadMedia(DeviceType type, string path, int unit)
         {
             switch (type)
             {
-                case DriveType.Floppy:
+                case DeviceType.Floppy:
                     _iob.Z80System.LoadFloppyDisk(path);
                     break;
 
                 // case DriveType.Disk5Inch:
                 // case DriveType.Disk8Inch:
-                case DriveType.Disk14Inch:
+                case DeviceType.Disk14Inch:
                     _iob.LoadDisk(path); // unit...
                     break;
 
@@ -440,10 +444,7 @@ namespace PERQemu
          *          yes:    save it     -- must have a path defined!
          *          maybe:  ask user, then skip/save accordingly
          * 
-         *      switch (drivetype)
-         *          floppy:     _iob.SaveFloppyDisk(path)
-         *          hard:       _iob.SaveHardDisk(path)
-         *          tape:       _oio.SaveTape(path)
+         *      drive.Save()
          */
 
         /// <summary>

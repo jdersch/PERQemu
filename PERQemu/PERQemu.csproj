@@ -154,11 +154,9 @@
     <Compile Include="Emulator\CPU\RegisterFile.cs" />
     <Compile Include="Emulator\CPU\Sequencer.cs" />
     <Compile Include="Emulator\CPU\Shifter.cs" />
-    <Compile Include="Emulator\IO\FloppyDrive.cs" />
     <Compile Include="Emulator\IO\GPIB\BitPadOne.cs" />
     <Compile Include="Emulator\IO\GPIB\GPIBBus.cs" />
     <Compile Include="Emulator\IO\GPIB\IGPIBDevice.cs" />
-    <Compile Include="Emulator\IO\HardDisk\ShugartController.cs" />
     <Compile Include="Emulator\IO\IIODevice.cs" />
     <Compile Include="Emulator\IO\IOB.cs" />
     <Compile Include="Emulator\IO\IOBus.cs" />
@@ -169,10 +167,6 @@
     <Compile Include="Emulator\IO\SerialDevices\RSXFilePort.cs" />
     <Compile Include="Emulator\Memory\MemoryBoard.cs" />
     <Compile Include="Emulator\Memory\MemoryController.cs" />
-    <Compile Include="Emulator\PhysicalDisk\FloppyDisk.cs" />
-    <Compile Include="Emulator\PhysicalDisk\HardDisk.cs" />
-    <Compile Include="Emulator\PhysicalDisk\HardDiskSector.cs" />
-    <Compile Include="Emulator\PhysicalDisk\ShugartDisk.cs" />
     <Compile Include="Emulator\PERQSystem.cs" />
     <Compile Include="Emulator\Scheduler.cs" />
     <Compile Include="Emulator\Memory\VideoController.cs" />
@@ -221,6 +215,10 @@
     <Compile Include="Configurator\Settings.cs" />
     <Compile Include="Configurator\SettingsCommands.cs" />
     <Compile Include="Controller\Log.cs" />
+    <Compile Include="Emulator\IO\HardDisk\ShugartController.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\HardDisk.cs" />
+    <Compile Include="Emulator\IO\FloppyDrive.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\FloppyDisk.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -604,6 +602,12 @@
     <None Include="Debugger\DebuggerPrompt.cs" />
     <None Include="Docs\Configuration.txt" />
     <None Include="Docs\Controller.txt" />
+    <None Include="Conf\StorageDevices.precfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\StandardModels.precfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
@@ -635,11 +639,12 @@
     <Folder Include="Emulator\CPU\" />
     <Folder Include="Emulator\IO\" />
     <Folder Include="Emulator\Memory\" />
-    <Folder Include="Emulator\PhysicalDisk\" />
     <Folder Include="Configurator\" />
     <Folder Include="UI\SDL\" />
     <Folder Include="Controller\" />
     <Folder Include="Docs\Old\" />
+    <Folder Include="Conf\" />
+    <Folder Include="Emulator\IO\DiskDevices\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

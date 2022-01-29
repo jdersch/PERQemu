@@ -17,7 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -44,6 +43,7 @@ namespace PERQemu.UI
         public MethodInfo Method;
         public object Instance;
     }
+
 
     /// <summary>
     /// Argument nodes are fancy CommandNodes (allows for command completion of
@@ -95,10 +95,8 @@ namespace PERQemu.UI
                     {
                         return Helpers.Exists(x => x.StartsWith(arg, StringComparison.InvariantCultureIgnoreCase));
                     }
-                    else
-                    {
-                        return Helpers.Exists(x => x.Equals(arg, StringComparison.InvariantCultureIgnoreCase));
-                    }
+
+                    return Helpers.Exists(x => x.Equals(arg, StringComparison.InvariantCultureIgnoreCase));
                 }
                 else if (Param.ParameterType == typeof(char))
                 {
@@ -107,6 +105,11 @@ namespace PERQemu.UI
                 else if (Param.ParameterType == typeof(string))
                 {
                     return !string.IsNullOrEmpty(arg);
+                }
+                else if (Param.ParameterType == typeof(int))
+                {
+                    //CommandExecutor.TryParseUint(arg);
+                    return true;
                 }
                 else if (Param.ParameterType == typeof(uint))
                 {
@@ -152,25 +155,29 @@ namespace PERQemu.UI
                 Helpers.Add("true");
                 Helpers.Add("false");
             }
+            else if (Param.ParameterType == typeof(int))
+            {
+                Helpers.Add($"[integer] ({Param.Name})");
+            }
             else if (Param.ParameterType == typeof(uint))
             {
-                Helpers.Add(String.Format("[unsigned int] ({0})", Param.Name));
+                Helpers.Add($"[unsigned int] ({Param.Name})");
             }
             else if (Param.ParameterType == typeof(ushort))
             {
-                Helpers.Add(String.Format("[0..65535] ({0})", Param.Name));
+                Helpers.Add($"[0..65535] ({Param.Name})");
             }
             else if (Param.ParameterType == typeof(byte))
             {
-                Helpers.Add(String.Format("[0..255] ({0})", Param.Name));
+                Helpers.Add($"[0..255] ({Param.Name})");
             }
             else if (Param.ParameterType == typeof(string))
             {
-                Helpers.Add(String.Format("[string] ({0})", Param.Name));
+                Helpers.Add($"[string] ({Param.Name})");
             }
             else if (Param.ParameterType == typeof(float))
             {
-                Helpers.Add(String.Format("[float] ({0})", Param.Name));
+                Helpers.Add($"[float] ({Param.Name})");
             }
             else if (Param.ParameterType == typeof(char))
             {
@@ -181,6 +188,12 @@ namespace PERQemu.UI
                 // Anything we don't handle yet...
                 Helpers.Add(Param.ParameterType.ToString());
             }
+        }
+
+        private void SetHelperStrings(string[] words)
+        {
+            foreach (var w in words)
+                Helpers.Add(w.ToLower());
         }
     }
 
@@ -218,12 +231,10 @@ namespace PERQemu.UI
         {
             if (SubNodes.Count > 1)
             {
-                return string.Format("{0}... ({1})", Name, SubNodes.Count);
+                return $"{Name} ({SubNodes.Count})... ";
             }
-            else
-            {
-                return Name;
-            }
+
+            return Name;
         }
 
         /// <summary>
@@ -252,11 +263,9 @@ namespace PERQemu.UI
                     SubNodes.Add(cmd);          // Add the new node here
                     return;                     // and we're done
                 }
-                else
-                {
-                    subNode = new CommandNode(words[0], "");
-                    SubNodes.Add(subNode);      // Add a glue node, continue
-                }
+
+                subNode = new CommandNode(words[0], "");
+                SubNodes.Add(subNode);      // Add a glue node, continue
             }
             else
             {
@@ -264,14 +273,38 @@ namespace PERQemu.UI
                 if (words.Count == 1)
                 {
                     // Yes... so update in place.  Oof.
-                    if (subNode.Arguments == null && cmd.Arguments != null)
+                    //if (subNode.Arguments == null && cmd.Arguments != null)
+                    if (cmd.Arguments != null)
                     {
-                        subNode.Arguments = cmd.Arguments;
+                        if (subNode.Arguments == null)
+                        {
+                            subNode.Arguments = cmd.Arguments;
+                        }
+                        else
+                        {
+                            // If the existing argument node matches the new cmd,
+                            // then check if they match; if so, the cmd's argument
+                            // node has the method we want to attach!  Allowing
+                            // overloaded parameter lists is hairy...
+                            if ((cmd.Arguments.Name == subNode.Arguments.Name) &&
+                                (cmd.Arguments.Method != null) &&
+                                (subNode.Arguments.Method == null))
+                            {
+                                subNode.Arguments.Method = cmd.Arguments.Method;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (subNode.Arguments != null) // && cmd.Arguments == null)
+                        {
+                            cmd.Arguments = subNode.Arguments;  // XXX
+                        }
                     }
 
                     if (subNode.Method == null && cmd.Method != null)
                     {
-                        subNode.Method = cmd.Method;
+                            subNode.Method = cmd.Method;
                     }
 
                     return;     // Done
@@ -294,5 +327,6 @@ namespace PERQemu.UI
             }
             return null;
         }
+
     }
 }

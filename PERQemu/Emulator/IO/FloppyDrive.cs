@@ -19,9 +19,7 @@
 
 using System;
 
-using PERQemu.PhysicalDisk;
-
-namespace PERQemu.IO
+namespace PERQemu.IO.DiskDevices
 {
     public class FloppyDrive
     {

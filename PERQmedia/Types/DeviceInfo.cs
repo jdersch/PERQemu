@@ -39,19 +39,19 @@ namespace PERQmedia
     /// </remarks>
     public enum DeviceType
     {
-        D5Inch = 0,         // Various 5.25" -- EIO5 only
+        Disk5Inch = 0,          // Various 5.25" -- EIO5 only
         Unused = 1,
-        D14Inch = 2,        // Shugart hard drive -- IOB
-        D8Inch = 3,         // Micropolis 8" -- CIO or EIO
-        DSMD = 4,           // SMD -- MLO board
-        DFloppy = 5,        // Shugart floppy drive -- All IO boards
-        DCIOShugart = 6,    // The CIO board was an IOB with updated
-        DCIOMicrop = 7,     // Z80 ROMs; also required a hardware mod?
+        Disk14Inch = 2,         // Shugart hard drive -- IOB
+        Disk8Inch = 3,          // Micropolis 8" -- CIO or EIO
+        DiskSMD = 4,            // SMD -- MLO board
+        Floppy = 5,             // Shugart floppy drive -- All IO boards
+        DCIOShugart = 6,        // The CIO board was an IOB with updated
+        DCIOMicrop = 7,         // Z80 ROMs; also required a hardware mod?
         Reserved7 = 8,
         Reserved6 = 9,
         Reserved5 = 10,
-        TStreamer = 11,     // QIC Streamer - OIO board
-        T9Track = 12,       // 9-Track - MLO board (someday!?)
+        TapeStreamer = 11,      // QIC Streamer - OIO board
+        Tape9Track = 12,        // 9-Track - MLO board (someday!?)
         Reserved2 = 13,
         Reserved1 = 14,
         Reserved0 = 15

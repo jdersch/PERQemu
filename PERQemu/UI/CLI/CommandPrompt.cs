@@ -563,7 +563,7 @@ namespace PERQemu.UI
         /// </summary>
         private CompletionList FindCompletions(CommandNode root, string word)
         {
-            var match = new CompletionList(null, String.Empty);
+            var match = new CompletionList(null, string.Empty);
 
             // Always look for a SubNode match first
             foreach (CommandNode c in root.SubNodes)

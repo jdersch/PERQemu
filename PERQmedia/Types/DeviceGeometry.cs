@@ -83,67 +83,15 @@ namespace PERQmedia
 
         //
         // All PERQ-1s came with Shugart SA4000-series drives in either the
-        // 12MB (SA4004) or 24MB (SA4008) variety.  If the 48MB SA4104 ever
-        // actually existed, it wouldn't work on the PERQ without some fairly
-        // involved microcode and hardware bodges, because they didn't reserve
-        // four bits for the head select lines.  And POS couldn't deal with a
-        // disk larger than 32MB.  SIGH.  We can still fake it out in PERQemu,
-        // though? :-)
+        // 12MB (SA4004) or 24MB (SA4008) variety.
         //
         public static DeviceGeometry Shugart12 = new DeviceGeometry(202, 4, 30, 512, 16);
         public static DeviceGeometry Shugart24 = new DeviceGeometry(202, 8, 30, 512, 16);
-        public static DeviceGeometry Shugart48 = new DeviceGeometry(202, 16, 30, 512, 16);
 
         //
-        // The only officially-supported 8" Micropolis drive used in the early
-        // PERQ-2 models were the 120x series, with ~20-70MB formatted capacity.
-        // These should not be confused with the 43MB Micropolis 13xx series
-        // 5.25" MFM drive they introduced later in the T2.
+        // All of the standard 8", 5.25" and even SMD drives are loaded or
+        // defined at run-time.
         //
-        public static DeviceGeometry Microp21 = new DeviceGeometry(580, 3, 24, 512, 16);
-        public static DeviceGeometry Microp35 = new DeviceGeometry(580, 5, 24, 512, 16);
-        public static DeviceGeometry Microp70 = new DeviceGeometry(1160, 5, 24, 512, 16);
-
-        //
-        // These are actually in the PERQ documentation. :-)  150MB and 300MB SMD!
-        //
-        public static DeviceGeometry CDC9764 = new DeviceGeometry(411, 19, 32, 512, 16);
-        public static DeviceGeometry CDC9766 = new DeviceGeometry(823, 19, 32, 512, 16);
-
-        //
-        // Fujitsu Eagle series SMD - if we're dreaming, dream big...
-        //
-        public static DeviceGeometry Eagle474 = new DeviceGeometry(842, 20, 48, 512, 16);
-        public static DeviceGeometry Eagle689 = new DeviceGeometry(842, 20, 69, 512, 16);
-
-        //
-        // There were lots of 5.25" MFM drives, but I'll just define the standard
-        // offerings from Three Rivers and define other types when I've been able
-        // to either test the real hardware or do a POS install onto a new image.
-        //
-        public static DeviceGeometry M1303 = new DeviceGeometry(830, 5, 16, 512, 16);
-        public static DeviceGeometry M1304 = new DeviceGeometry(830, 6, 16, 512, 16);
-
-        public static DeviceGeometry MK53 = new DeviceGeometry(830, 5, 16, 512, 16);
-        public static DeviceGeometry MK54 = new DeviceGeometry(830, 7, 16, 512, 16);
-        public static DeviceGeometry MK56 = new DeviceGeometry(830, 10, 16, 512, 16);
-        public static DeviceGeometry MK134 = new DeviceGeometry(733, 7, 16, 512, 16);
-
-        public static DeviceGeometry V150 = new DeviceGeometry(987, 5, 16, 512, 16);
-        public static DeviceGeometry V170 = new DeviceGeometry(987, 7, 16, 512, 16);
-        public static DeviceGeometry V185 = new DeviceGeometry(1166, 7, 16, 512, 16);
-
-        public static DeviceGeometry XT1085 = new DeviceGeometry(1024, 8, 16, 512, 16);
-        public static DeviceGeometry XT1105 = new DeviceGeometry(918, 11, 16, 512, 16);
-        public static DeviceGeometry XT1140 = new DeviceGeometry(918, 15, 16, 512, 16);
-        public static DeviceGeometry XT2190 = new DeviceGeometry(1224, 15, 16, 512, 16);
-
-        //
-        // The only QIC streamer 3RCC sold was (probably) the Sidewinder, but
-        // other QIC-02 compatible drives should work too.  This is an experiment
-        // to see if we can use a common on-disk AND in-memory storage format.
-        //
-        public static DeviceGeometry QIC20 = new DeviceGeometry(1, 4, 10207, 512, 17);
     }
 }
 

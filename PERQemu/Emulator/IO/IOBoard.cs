@@ -20,7 +20,7 @@
 using System;
 
 using PERQemu.IO.Z80;
-using PERQemu.IO.HardDisk;
+using PERQemu.IO.DiskDevices;
 
 namespace PERQemu.IO
 {
@@ -49,6 +49,7 @@ namespace PERQemu.IO
         public static string Name => _name;
         public static string Description => _desc;
         public static ulong Z80CycleTime => _z80CycleTime;
+
         public static int Z80_RAM_SIZE => _z80RamSize;
         public static int Z80_RAM_ADDRESS => _z80RamAddr;
         public static int Z80_ROM_SIZE => _z80RomSize;

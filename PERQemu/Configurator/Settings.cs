@@ -44,9 +44,10 @@ namespace PERQemu
         Fast = 0,                               // 110% on the reactor
         AccurateCPUSpeedEmulation = 0x1,        // strive for accuracy
         AccurateDiskSpeedEmulation = 0x2,       // feel the pain
-        AllowFrameSkipping = 0x4,               // because mono winforms sucks
-        Accurate = 0x7,                         // keep it real
-    	SlowWhenMinimized = 0x08,               // save the salmon
+        AccurateStartupDelays = 0x04,           // for the truly hardcore
+        Accurate = 0x0f,                        // shortcut (leave some room)
+        AllowFrameSkipping = 0x10,              // sigh
+    	SlowWhenMinimized = 0x20,               // save the salmon
     }
 
     public static class Settings

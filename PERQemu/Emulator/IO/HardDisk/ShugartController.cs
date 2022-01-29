@@ -17,16 +17,16 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using PERQemu.Processor;
-using PERQemu.PhysicalDisk;
-
 using System;
-using System.IO;
 
-namespace PERQemu.IO.HardDisk
+using PERQmedia;
+using PERQemu.Processor;
+
+namespace PERQemu.IO.DiskDevices
 {
     /// <summary>
-    /// Represents a PERQ 1's Shugart hard drive controller
+    /// Represents a PERQ 1's Shugart hard drive controller which manages
+    /// drives in the Disk14Inch class (SA4000 interface).
     /// </summary>
     public sealed class ShugartDiskController
     {
@@ -35,7 +35,6 @@ namespace PERQemu.IO.HardDisk
             _system = system;
             _disk = null;
             _busyEvent = null;
-            _indexEvent = null;
         }
 
         /// <summary>
@@ -47,7 +46,6 @@ namespace PERQemu.IO.HardDisk
 
             _cylinder = 0;
             _physCylinder = 0;
-            _trackZero = 1;
             _head = 0;
             _sector = 0;
             _seekState = SeekState.WaitForStepSet;
@@ -58,14 +56,6 @@ namespace PERQemu.IO.HardDisk
                 _busyEvent = null;
             }
 
-            if (_indexEvent != null)
-            {
-                _system.Scheduler.Cancel(_indexEvent);
-            }
-
-            // todo: the drive itself should manage index pulses
-            IndexPulseStart(0, null);
-
             // Force a soft reset (calls ResetFlags)
             LoadCommandRegister((int)Command.Reset);
 
@@ -73,6 +63,13 @@ namespace PERQemu.IO.HardDisk
         }
 
 
+        public void AttachDisk(HardDisk dev)
+        {
+            _disk = dev;
+            Log.Debug(Category.HardDisk, "Attached disk '{0}'", _disk.Info.Name);
+        }
+
+        //
         public int ReadStatus()
         {
             // Reading status DOES NOT clear pending interrupts.
@@ -81,7 +78,6 @@ namespace PERQemu.IO.HardDisk
             Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4}", DiskStatus);
             return DiskStatus;
         }
-
 
         public void LoadCommandRegister(int data)
         {
@@ -150,16 +146,17 @@ namespace PERQemu.IO.HardDisk
 
         public void LoadHeadRegister(int value)
         {
-            _head = value & 0xffff;
+            // Hardware latches 4 bits
+            _head = (byte)(value & 0x0f);
 
-            Log.Debug(Category.HardDisk, "Shugart head set to {0:x4}", _head);
+            Log.Debug(Category.HardDisk, "Shugart head set to {0x2}", _head);
         }
 
         public void LoadCylSecRegister(int value)
         {
-            _sector = (value & 0x1f);
-            _head = (value & 0xe0) >> 5;
-            _cylinder = (value & 0xff80) >> 8;
+            _sector = (ushort)(value & 0x1f);
+            _head = (byte)((value & 0xe0) >> 5);
+            _cylinder = (ushort)((value & 0xff80) >> 8);
 
             Log.Debug(Category.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
         }
@@ -219,11 +216,11 @@ namespace PERQemu.IO.HardDisk
             {
                 return (
                     (int)_controllerStatus |
-                    (_index << 3) |
-                    (_trackZero << 4) |
-                    (_driveFault << 5) |
-                    (_seekComplete << 6) |
-                    (_unitReady << 7));
+                    (_disk.Index ? HardStatus.Index : 0) |
+                    (_disk.Trk00 ? HardStatus.TrackZero : 0) |
+                    (_disk.Fault ? HardStatus.DriveFault : 0) |
+                    (_disk.SeekComplete ? HardStatus.SeekComplete : 0) |
+                    (_disk.Ready ? HardStatus.UnitReady : 0));
             }
         }
 
@@ -290,15 +287,14 @@ namespace PERQemu.IO.HardDisk
             Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
         }
 
-        private void SeekTo(int cylinder)
+        private void SeekTo(ushort cylinder)
         {
             _physCylinder = cylinder;
 
             // Clip cylinder into range
-            _physCylinder = Math.Min((int)_disk.Cylinders - 1, _physCylinder);
+            _physCylinder = Math.Min((int)_disk.Geometry.Cylinders - 1, _physCylinder);
             _physCylinder = Math.Max(0, _physCylinder);
 
-            _trackZero = (_physCylinder == 0 ? 1 : 0);
         }
 
         /// <summary>
@@ -308,7 +304,7 @@ namespace PERQemu.IO.HardDisk
         private void ReadBlock()
         {
             // Read the sector from the disk...
-            HardDiskSector sectorData = _disk.GetSector(_cylinder, _head, _sector);
+            Sector sectorData = _disk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -341,7 +337,9 @@ namespace PERQemu.IO.HardDisk
         /// </summary>
         private void WriteBlock(bool writeHeader)
         {
-            HardDiskSector sectorData = new HardDiskSector(_cylinder, _head, _sector, _disk.DiskGeometry);
+            Sector sectorData = new Sector(_cylinder, _head, _sector,
+                                           _disk.Geometry.SectorSize,
+                                           _disk.Geometry.HeaderSize);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -365,7 +363,7 @@ namespace PERQemu.IO.HardDisk
             else
             {
                 // Keep the original header data.
-                HardDiskSector origSector = _disk.GetSector(_cylinder, _head, _sector);
+                Sector origSector = _disk.GetSector(_cylinder, _head, _sector);
                 origSector.Header.CopyTo(sectorData.Header, 0);
             }
 
@@ -385,7 +383,9 @@ namespace PERQemu.IO.HardDisk
         /// </summary>
         private void FormatBlock()
         {
-            HardDiskSector sectorData = new HardDiskSector(_cylinder, _head, _sector, _disk.DiskGeometry);
+            Sector sectorData = new Sector(_cylinder, _head, _sector,
+                                           _disk.Geometry.SectorSize,
+                                           _disk.Geometry.HeaderSize);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -406,35 +406,13 @@ namespace PERQemu.IO.HardDisk
             }
 
             // Write the sector to the disk...
-            _disk.SetSector(sectorData, _cylinder, _head, _sector);
+            _disk.SetSector(sectorData);
 
             Log.Debug(Category.HardDisk,
                       "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
             SetBusyState();
-        }
-
-        public void LoadImage(string path)
-        {
-            // Create a new PhysicalDisk for a 24mb Shugart drive...
-            _disk = new ShugartDisk(true /* 24mb */);
-
-            if (path != null)
-            {
-                // Load the disk image into it...
-                FileStream fs = new FileStream(path, FileMode.Open);
-                _disk.Load(fs);
-                fs.Close();
-            }
-        }
-
-        public void SaveImage(string path)
-        {
-            // Load the disk image into it...
-            FileStream fs = new FileStream(path, FileMode.OpenOrCreate);
-            _disk.Save(fs);
-            fs.Close();
         }
 
         /// <summary>
@@ -474,9 +452,7 @@ namespace PERQemu.IO.HardDisk
         private void ResetFlags()
         {
             _controllerStatus = Status.Done;
-            _driveFault = 0;
             _seekComplete = 1;  // ??? check the manual...
-            _unitReady = 0;     // active low
 
             _serialNumberHigh = 0;
             _serialNumberLow = 0;
@@ -486,27 +462,6 @@ namespace PERQemu.IO.HardDisk
             _dataBufferLow = 0;
             _dataBufferHigh = 0;
         }
-
-        // todo: move this to the disk itself!
-        private void IndexPulseStart(ulong skew, object context)
-        {
-            // Raise the index signal
-            _index = 1;
-
-            // Keep it held for 1.1uS
-            _indexEvent = _system.Scheduler.Schedule(_indexPulseDurationNsec, IndexPulseEnd);
-        }
-
-        // todo: move this to the disk itself
-        private void IndexPulseEnd(ulong skew, object context)
-        {
-            // Clear the index signal.
-            _index = 0;
-
-            // Wait for the disc to spin around again (20ms).
-            _indexEvent = _system.Scheduler.Schedule(_discRotationTimeNsec, IndexPulseStart);
-        }
-
 
         private enum SeekState
         {
@@ -530,33 +485,38 @@ namespace PERQemu.IO.HardDisk
             Reset = 0x7
         }
 
+        /// <summary>
+        /// Controller status.  Not terribly detailed.
+        /// </summary>
         private enum Status
         {
             Done = 0x0,
             Busy = 0x7
         }
 
-        // The physical disk data
-        private ShugartDisk _disk;
-
         /// <summary>
-        /// Status bits.  It is assumed (in the DiskStatus property)
-        /// that these contain no more than their designated bits.
-        /// Failure to ensure this will result in weirdness.
-        /// This is hacky.
+        /// Status bits from the drive mapped to the DiskStatus word.
         /// </summary>
-        private Status _controllerStatus;   // 3 bits
-        private int _trackZero;             // 1 bit
-        private int _driveFault;            // 1 bit
-        private int _seekComplete;          // 1 bit
-        private int _unitReady;             // 1 bit
-        private int _index;                 // 1 bit
+        private enum HardStatus
+        {
+            Index = 0x08,
+            TrackZero = 0x10,
+            DriveFault = 0x20,
+            SeekComplete = 0x40,
+            UnitReady = 0x80
+        }
+
+        // The physical disk data
+        private HardDisk _disk;
+
+        // Controller status (3 bits)
+        private Status _controllerStatus;
 
         // Head position information
-        private int _cylinder;
-        private int _physCylinder;
-        private int _head;
-        private int _sector;
+        private ushort _cylinder;
+        private ushort _physCylinder;
+        private byte _head;
+        private ushort _sector;
 
         private int _serialNumberLow;
         private int _serialNumberHigh;
@@ -568,20 +528,12 @@ namespace PERQemu.IO.HardDisk
 
         private SeekState _seekState;
         private int _seekData;
-
-        //
-        // Index timing:
-        // Your average SA4000 series drive spun at 2964 RPM or ~50 revs/sec, or
-        // one rev every 20ms. The index pulse duration is approximately 1.1uS.
-        //
-        private ulong _discRotationTimeNsec = 20 * Conversion.MsecToNsec;
-        private ulong _indexPulseDurationNsec = (ulong)(1.1 * Conversion.UsecToNsec);
+        private int _seekComplete;
 
         // Work timing for reads/writes.  Assume 1ms for now.
         private ulong _busyDurationNsec = 1 * Conversion.MsecToNsec;
-
-        private Event _indexEvent;
         private Event _busyEvent;
+
         private PERQSystem _system;
     }
 }

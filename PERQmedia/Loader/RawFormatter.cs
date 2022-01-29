@@ -98,12 +98,12 @@ namespace PERQmedia
                         dev.FileInfo.FSType = FilesystemHint.PNX;
                         break;
 
-                    case 0x80:
+                    case 0x82:
                         dev.FileInfo.FSType = FilesystemHint.POS;
                         dev.Info.IsBootable = true;
                         break;
 
-                    case 0x81:
+                    case 0x83:
                         dev.FileInfo.FSType = FilesystemHint.PNXBoot;
                         dev.Info.IsBootable = true;
                         break;
@@ -144,7 +144,7 @@ namespace PERQmedia
                 // Assuming a floppy image of SOME kind, assign reasonable defaults
                 dev.Specs = DevicePerformance.SA851;
 
-                dev.Info.Type = DeviceType.DFloppy;
+                dev.Info.Type = DeviceType.Floppy;
                 dev.Info.Name = "Floppy";
                 dev.Info.Description = "8\" floppy diskette";
                 dev.Info.IsRemovable = true;

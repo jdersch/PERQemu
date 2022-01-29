@@ -22,6 +22,8 @@ using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 
+using PERQmedia;
+
 namespace PERQemu.Config
 {
     /// <summary>
@@ -35,154 +37,69 @@ namespace PERQemu.Config
         public Configurator()
         {
             _default = new Configuration();
-            _prefabs = new Hashtable();
+            _current = _default;
 
-            Initialize();
+            _prefabs = new Hashtable();
+            _geometries = new Hashtable();
+            _driveSpecs = new Hashtable();
+            _knownDrives = new Hashtable();
         }
 
+        /// <summary>
+        /// Load the pre-defined storage devices and machine specifications
+        /// from the config files.  Only the basic PERQ-1 model is built-in
+        /// (as a fallback); other data is loaded at runtime.
+        /// </summary>
         public void Initialize()
         {
-            Configuration conf;
-            StorageDevice[] drives;
+            // Set up our built-in device data
+            AddGeometry("SSSD", DeviceGeometry.SSSD);
+            AddGeometry("DSSD", DeviceGeometry.DSSD);
+            AddGeometry("SSDD", DeviceGeometry.SSDD);
+            AddGeometry("DSDD", DeviceGeometry.DSDD);
+            AddGeometry("Shugart12", DeviceGeometry.Shugart12);
+            AddGeometry("Shugart24", DeviceGeometry.Shugart24);
 
-            // For now, we just build up a set of the standard PERQ models.
-            // This really ought to be read in from a file instead.  Ugly...
+            AddDriveSpecs("SA851", DevicePerformance.SA851);
+            AddDriveSpecs("SA4000", DevicePerformance.SA4000);
 
-            //
-            // PERQ-1 drive setup: one floppy, one Shugart.  Should be a 12MB drive;
-            // for now we'll default to the POS F.0 image (but should find a D.6!)
-            //
-            drives = new StorageDevice[2];
-            drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
-            drives[1] = new StorageDevice(DriveType.Disk14Inch, 1, Paths.BuildDiskPath("f0.phd"));
+            try
+            {
+                // Read in the database of known devices
+                PERQemu.CLI.ReadScript(Paths.BuildConfigPath("StorageDevices.precfg"));
+            }
+            catch (Exception e)
+            {
+                Log.Error(Category.MediaLoader, "** StorageDevices.precfg is missing or corrupted:");
+                Log.Error(Category.MediaLoader, "** " + e.Message);
+                Log.Error(Category.MediaLoader, "\nPlease restore this file from the PERQemu distribution.");
+                Log.Error(Category.MediaLoader, "Will attempt to continue with limited functionality.");
+            }
 
-            //
-            // The original machine: 4K, 256K MEM, Portrait
-            //
-            conf = new Configuration("PERQ1", "Original PERQ (small)",
-                                     ChassisType.PERQ1,
-                                     CPUType.PERQ1,
-                                     256 * 1024,
-                                     IOBoardType.IOB,
-                                     OptionBoardType.None,
-                                     IOOptionType.None,
-                                     DisplayType.Portrait,
-                                     TabletType.BitPad,
-                                     drives);
-            _prefabs[conf.Name] = conf;
+            // Add the default machine setup
+            AddPrefab(Default);
 
-            //
-            // The typical PERQ-1: 16K, 1MB, Portrait, Ethernet
-            // 
-            // Default drive will be a 24MB Shugart, POS F.1
-            //
-            drives[1].MediaPath = Paths.BuildDiskPath("f1.phd");
+            try
+            {
+                // Go load the StandardModels file
+                PERQemu.CLI.ReadScript(Paths.BuildConfigPath("StandardModels.precfg"));
+            }
+            catch (Exception e)
+            {
+                Log.Error(Category.MediaLoader, "** StandardModels.precfg is missing or corrupted:");
+                Log.Error(Category.MediaLoader, "** " + e.Message);
+                Log.Error(Category.MediaLoader, "\nPlease restore this file from the PERQemu distribution.");
+                Log.Error(Category.MediaLoader, "Will attempt to continue with limited functionality.");
+            }
 
-            conf = new Configuration("PERQ1A",
-                                     "PERQ-1 w/16K CPU, 1MB",
-                                     ChassisType.PERQ1,
-                                     CPUType.PERQ1A,
-                                     ONE_MEG,
-                                     IOBoardType.IOB,
-                                     OptionBoardType.OIO,
-                                     IOOptionType.Link | IOOptionType.Ether,
-                                     DisplayType.Portrait,
-                                     TabletType.BitPad,
-                                     drives);
-            _prefabs[conf.Name] = conf;
 
-            //
-            // Reconfigure drives for the PERQ-2 machines.  Not sure if the
-            // first, original PERQ-2 model could actually support two 8" drives
-            // so to slightly differentiate it, we'll just allow one.
-            //
-            drives = new StorageDevice[2];
-            drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
-            drives[1] = new StorageDevice(DriveType.Disk8Inch, 1, "");
-
-            conf = new Configuration("PERQ2",
-                                    "PERQ-2 w/16K CPU, 1MB",
-                                    ChassisType.PERQ2,
-                                    CPUType.PERQ1A,
-                                    ONE_MEG,
-                                    IOBoardType.EIO,
-                                    OptionBoardType.None,
-                                    IOOptionType.None,
-                                    DisplayType.Portrait,
-                                    TabletType.Kriz,
-                                    drives);
-            _prefabs[conf.Name] = conf;
-
-            //
-            // Let's say the T1 added support for the second 8" drive
-            //
-            drives = new StorageDevice[3];
-            drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
-            drives[1] = new StorageDevice(DriveType.Disk8Inch, 1, "");
-            drives[2] = new StorageDevice(DriveType.Disk8Inch, 2, "");
-
-            //
-            // The PERQ-2/T1 came with a 1MB Portrait by default
-            //
-            conf = new Configuration("PERQ2-T1",
-                                    "PERQ-2/T1 w/16K CPU, 1MB",
-                                    ChassisType.PERQ2,
-                                    CPUType.PERQ1A,
-                                    ONE_MEG,
-                                    IOBoardType.EIO,
-                                    OptionBoardType.None,
-                                    IOOptionType.None,
-                                    DisplayType.Portrait,
-                                    TabletType.Kriz,
-                                    drives);
-            _prefabs[conf.Name] = conf;
-
-            //
-            // PERQ-2 T2 and T4 used 5.25" drives
-            //
-            drives[1] = new StorageDevice(DriveType.Disk5Inch, 1, "");
-            drives[2] = new StorageDevice(DriveType.Disk5Inch, 1, "");
-
-            //
-            // Our PERQ-2/T2 comes with 2MB, Landscape by default
-            //
-            conf = new Configuration("PERQ2-T2",
-                                    "PERQ-2/T2 w/16K CPU, 2MB",
-                                    ChassisType.PERQ2T2,
-                                    CPUType.PERQ1A,
-                                    TWO_MEG,
-                                    IOBoardType.EIO,
-                                    OptionBoardType.None,
-                                    IOOptionType.None,
-                                    DisplayType.Landscape,
-                                    TabletType.Kriz,
-                                    drives);
-            _prefabs[conf.Name] = conf;
-
-            //
-            // The rare PERQ-2/T4 came with 4MB, Landscape
-            //
-            conf = new Configuration("PERQ2-T4",
-                                    "PERQ-2/T4 w/16K CPU, 4MB",
-                                    ChassisType.PERQ2T2,
-                                    CPUType.PERQ24,
-                                    FOUR_MEG,
-                                    IOBoardType.EIO,
-                                    OptionBoardType.None,
-                                    IOOptionType.None,
-                                    DisplayType.Landscape,
-                                    TabletType.Kriz,
-                                    drives);
-            _prefabs[conf.Name] = conf;
-
-            //
             // Set our current config to defaults.  The user can always
             // override this at start-up by specifying a script on the
             // command line (or reading one in through the menu/CLI).
             // This way PERQsystem is always a valid starting configuration
             // and the GUI form can initialize properly.
             //
-            _current = _default;
+            //_current = _default;
         }
 
         public Configuration Default
@@ -200,6 +117,62 @@ namespace PERQemu.Config
         {
             get { return _current.IsModified; }
             set { _current.IsModified = value; }
+        }
+
+        public void AddGeometry(string key, DeviceGeometry geom)
+        {
+            Log.Debug(Category.MediaLoader, "Adding drive geometry '{0}'", key);
+
+            _geometries.Add(key.ToLower(), geom);
+        }
+
+        public DeviceGeometry GetGeometry(string key)
+        {
+            return (DeviceGeometry)_geometries[key.ToLower()];
+        }
+
+        public void AddDriveSpecs(string key, DevicePerformance perf)
+        {
+            Log.Debug(Category.MediaLoader, "Adding drive specs '{0}'", key);
+
+            _driveSpecs.Add(key.ToLower(), perf);
+        }
+
+        public DevicePerformance GetDriveSpecs(string key)
+        {
+            return (DevicePerformance)_driveSpecs[key.ToLower()];
+        }
+
+        public void AddKnownDrive(StorageDevice dev)
+        {
+            Log.Debug(Category.MediaLoader, "Adding device definition '{0}', type {1}",
+                                            dev.Info.Name, dev.Info.Type);
+            
+            _knownDrives.Add(dev.Info.Name.ToLower(), dev);
+        }
+
+        public string[] GetKnownDrives()
+        {
+            var a = new string[_knownDrives.Keys.Count];
+            _knownDrives.Keys.CopyTo(a, 0);
+            return a;
+        }
+
+        /// <summary>
+        /// Add to the list of predefined configurations.
+        /// </summary>
+        public bool AddPrefab(Configuration conf)
+        {
+            if (_prefabs.ContainsKey(conf.Key))
+            {
+                Log.Warn(Category.MediaLoader, "* Prefabs list already contains '{0}'", conf.Key);
+                return false;
+            }
+
+            Log.Debug(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
+
+            _prefabs.Add(conf.Key, conf);
+            return true;
         }
 
         /// <summary>
@@ -271,7 +244,7 @@ namespace PERQemu.Config
                 // If called by the CLI, error messages should appear on the
                 // console; the GUI can choose to restore the previous config
                 // or set flags appropriately?
-                _current.Reason = string.Format("Could not load file '{0}': {1}", path, e.Message);
+                _current.Reason = $"Could not load file '{path}': {e.Message}";
                 return false;
             }
         }
@@ -301,6 +274,7 @@ namespace PERQemu.Config
                     //
                     sw.WriteLine("# PERQemu configuration file, written " + DateTime.Now);
                     sw.WriteLine("configure");
+                    sw.WriteLine("defaults");
                     sw.WriteLine("name " + _current.Name);
                     sw.WriteLine("description \"" + _current.Description + "\"");
                     sw.WriteLine("chassis " + _current.Chassis);
@@ -324,14 +298,15 @@ namespace PERQemu.Config
                     }
 
                     //
-                    // Write out the storage configuration.  We only need to save
-                    // any devices with an assigned media file.
+                    // Write out the storage configuration.  Only
+                    // save devices with an assigned media file. 
                     //
-                    foreach (var dev in _current.Drives)
+                    for (var unit = 0; unit < _current.Drives.Length; unit++)
                     {
+                        var dev = _current.Drives[unit];
                         if (!string.IsNullOrEmpty(dev.MediaPath))
                         {
-                            sw.WriteLine("storage load {0} {1} {2}", dev.Device, dev.MediaPath, dev.Unit);
+                            sw.WriteLine("drive {0} {1} {2}", unit, dev.Type, dev.MediaPath);
                         }
                     }
 
@@ -516,7 +491,7 @@ namespace PERQemu.Config
             if (((conf.IOBoard == IOBoardType.IOB || conf.IOBoard == IOBoardType.CIO) && conf.Chassis != ChassisType.PERQ1) ||
                 ((conf.IOBoard == IOBoardType.NIO || conf.IOBoard == IOBoardType.EIO) && conf.Chassis == ChassisType.PERQ1))
             {
-                conf.Reason = string.Format("IO Board type {0} not compatible with {1} chassis.", conf.IOBoard, conf.Chassis);
+                conf.Reason = $"IO Board type {conf.IOBoard} not compatible with {conf.Chassis} chassis.";
                 return false;
             }
 
@@ -563,14 +538,14 @@ namespace PERQemu.Config
                 case OptionBoardType.Ether3:
                     if (conf.IOOptions != IOOptionType.None)
                     {
-                        conf.Reason = string.Format("Bug? IO Option {0} but extra IO Options selected: {1}", conf.IOOptionBoard, conf.IOOptions);
+                        conf.Reason = $"Bug? IO Option {conf.IOOptionBoard} but extra IO Options selected: {conf.IOOptions}";
                         conf.IOOptions = IOOptionType.None;         // force it
                     }
 
                     if (conf.Chassis != ChassisType.PERQ1)
                     {
                         // Not sure about this, but lets go with it
-                        conf.Reason = string.Format("3Mbit Ethernet board not supported in {0}.", conf.Chassis);
+                        conf.Reason = $"3Mbit Ethernet board not supported in {conf.Chassis}.";
                         return false;
                     }
                     break;
@@ -592,7 +567,7 @@ namespace PERQemu.Config
                     // Disallow EIO + OIO Ethernet... but allow NIO?  Ugh.
                     if ((conf.IOBoard == IOBoardType.EIO) && conf.IOOptions.HasFlag(IOOptionType.Ether))
                     {
-                        conf.Reason = string.Format("OIO Board Ethernet option conflicts with {0} board.", conf.IOBoard);
+                        conf.Reason = $"OIO Board Ethernet option conflicts with {conf.IOBoard} board.";
                         return false;
                     }
                     break;
@@ -600,7 +575,7 @@ namespace PERQemu.Config
                 case OptionBoardType.MLO:
                     if (conf.Chassis == ChassisType.PERQ1)
                     {
-                        conf.Reason = string.Format("Multibus/Laser option not supported in {0}.", conf.Chassis);
+                        conf.Reason = $"Multibus/Laser option not supported in {conf.Chassis}.";
                         return false;
                     }
                     else
@@ -640,15 +615,17 @@ namespace PERQemu.Config
             bool gotMedia = false;
             int driveCount = 0;
 
-            foreach (var drive in conf.Drives)
+            for (var unit = 0; unit < conf.Drives.Length; unit++)
             {
-                switch (drive.Device)
+                var drive = conf.Drives[unit];
+            
+                switch (drive.Type)
                 {
-                    case DriveType.None:
+                    case DeviceType.Unused:
                         // Empty, skip it
                         break;
 
-                    case DriveType.Floppy:
+                    case DeviceType.Floppy:
                         if (!gotFloppy)
                         {
                             gotFloppy = true;
@@ -660,39 +637,39 @@ namespace PERQemu.Config
                         }
                         break;
 
-                    case DriveType.Disk14Inch:
-                    case DriveType.Disk8Inch:
-                    case DriveType.Disk5Inch:
+                    case DeviceType.Disk14Inch:
+                    case DeviceType.Disk8Inch:
+                    case DeviceType.Disk5Inch:
                         switch (conf.IOBoard)
                         {
                             case IOBoardType.IOB:
                             case IOBoardType.CIO:
-                                if (!((drive.Device == DriveType.Disk14Inch) ||
-                                      (drive.Device == DriveType.Disk8Inch && conf.IOBoard == IOBoardType.CIO)))
+                                if (!((drive.Type == DeviceType.Disk14Inch) ||
+                                      (drive.Type == DeviceType.Disk8Inch && conf.IOBoard == IOBoardType.CIO)))
                                 {
-                                    conf.Reason = string.Format("IO board type '{0}' does not support disks of type '{1}'.", conf.IOBoard, drive.Device);
+                                    conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
                                     return false;
                                 }
                                 driveCount++;
                                 if (driveCount > 1)
                                 {
-                                    conf.Reason = string.Format("IO board type '{0}' only supports one hard disk.", conf.IOBoard);
+                                    conf.Reason = $"IO board type '{conf.IOBoard}' only supports one hard disk.";
                                     return false;
                                 }
                                 break;
 
                             case IOBoardType.EIO:
                             case IOBoardType.NIO:
-                                if ((conf.Chassis == ChassisType.PERQ2 && drive.Device != DriveType.Disk8Inch) ||
-                                    (conf.Chassis == ChassisType.PERQ2T2 && drive.Device != DriveType.Disk5Inch))
+                                if ((conf.Chassis == ChassisType.PERQ2 && drive.Type != DeviceType.Disk8Inch) ||
+                                    (conf.Chassis == ChassisType.PERQ2T2 && drive.Type != DeviceType.Disk5Inch))
                                 {
-                                    conf.Reason = string.Format("IO board type '{0}' does not support disks of type '{1}'.", conf.IOBoard, drive.Device);
+                                    conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
                                     return false;
                                 }
                                 driveCount++;
                                 if (driveCount > 2)
                                 {
-                                    conf.Reason = string.Format("IO board type '{0}' supports a maximum of 2 hard disks.", conf.IOBoard);
+                                    conf.Reason = $"IO board type '{conf.IOBoard}' supports a maximum of 2 hard disks.";
                                     return false;
                                 }
                                 break;
@@ -702,10 +679,10 @@ namespace PERQemu.Config
                     //
                     // Not yet implemented
                     //
-                    case DriveType.DiskSMD:
-                    case DriveType.Tape9Track:
-                    case DriveType.TapeQIC:
-                        conf.Reason = string.Format("Sorry, {0} devices are not yet supported.", drive.Device);
+                    case DeviceType.DiskSMD:
+                    case DeviceType.Tape9Track:
+                    case DeviceType.TapeStreamer:
+                        conf.Reason = $"Sorry, {drive.Type} devices are not yet supported.";
                         return false;
                 }
 
@@ -739,27 +716,28 @@ namespace PERQemu.Config
         /// </summary>
         public void UpdateStorage(Configuration conf, IOBoardType newType)
         {
-            Console.WriteLine("* Updating storage from {0} to {1}", conf.IOBoard, newType);
+            Console.WriteLine($"* Updating storage from {conf.IOBoard} to {newType}");
 
-            foreach (var d in conf.Drives)
+            for (var unit = 0; unit < conf.Drives.Length; unit++)
             {
                 bool keepMedia = false;
+                var d = conf.Drives[unit];
 
-                switch (d.Device)
+                switch (d.Type)
                 {
-                    case DriveType.Floppy:
-                    case DriveType.None:
+                    case DeviceType.Floppy:
+                    case DeviceType.Unused:
                         // These are compatible with all IO board types
                         keepMedia = true;
                         break;
 
-                    case DriveType.DiskSMD:
-                    case DriveType.TapeQIC:
-                    case DriveType.Tape9Track:
+                    case DeviceType.DiskSMD:
+                    case DeviceType.TapeStreamer:
+                    case DeviceType.Tape9Track:
                         // Not implemented - ignore?  throw?
                         break;
 
-                    case DriveType.Disk14Inch:
+                    case DeviceType.Disk14Inch:
                         // Shugart 14" drives only valid on IOB or CIO (PERQ-1).
                         // Remapped to 8" or 5.25" on EIO/NIO depending on chassis.
                         switch (newType)
@@ -774,14 +752,14 @@ namespace PERQemu.Config
                             case IOBoardType.NIO:
                                 // Nope, change it
                                 if (conf.Chassis == ChassisType.PERQ2)
-                                    conf.Drives[d.Unit].Device = DriveType.Disk8Inch;
+                                    conf.Drives[unit].Type = DeviceType.Disk8Inch;
                                 else if (conf.Chassis == ChassisType.PERQ2T2)
-                                    conf.Drives[d.Unit].Device = DriveType.Disk5Inch;
+                                    conf.Drives[unit].Type = DeviceType.Disk5Inch;
                                 break;
                         }
                         break;
 
-                    case DriveType.Disk8Inch:
+                    case DeviceType.Disk8Inch:
                         // Micropolis 8" drives are valid in PERQ1 on CIO (rare
                         // but allowed) or PERQ2 on EIO/NIO.  Change to Shugart 14"
                         // if switching to IOB, or MFM 5.25" for EIO/NIO (PERQ2T2)
@@ -789,7 +767,7 @@ namespace PERQemu.Config
                         {
                             case IOBoardType.IOB:
                                 // Nope
-                                conf.Drives[d.Unit].Device = DriveType.Disk14Inch;
+                                conf.Drives[unit].Type = DeviceType.Disk14Inch;
                                 break;
 
                             case IOBoardType.CIO:
@@ -804,19 +782,19 @@ namespace PERQemu.Config
                                 if (conf.Chassis == ChassisType.PERQ2)
                                     keepMedia = true;
                                 else
-                                    conf.Drives[d.Unit].Device = DriveType.Disk5Inch;
+                                    conf.Drives[unit].Type = DeviceType.Disk5Inch;
                                 break;
                         }
                         break;
 
-                    case DriveType.Disk5Inch:
+                    case DeviceType.Disk5Inch:
                         // 5.25" MFM drives only valid on EIO/NIO in the PERQ2T2-type
                         // chassis; remapped to 8" in PERQ2 or 14" on PERQ1 IOB/CIO.
                         switch (newType)
                         {
                             case IOBoardType.IOB:
                             case IOBoardType.CIO:
-                                conf.Drives[d.Unit].Device = DriveType.Disk14Inch;
+                                conf.Drives[unit].Type = DeviceType.Disk14Inch;
                                 break;
 
                             case IOBoardType.EIO:
@@ -824,7 +802,7 @@ namespace PERQemu.Config
                                 if (conf.Chassis == ChassisType.PERQ2T2)
                                     keepMedia = true;
                                 else
-                                    conf.Drives[d.Unit].Device = DriveType.Disk8Inch;
+                                    conf.Drives[unit].Type = DeviceType.Disk8Inch;
                                 break;
                         }
                         break;
@@ -832,8 +810,8 @@ namespace PERQemu.Config
 
                 if (!keepMedia)
                 {
-                    Console.WriteLine("--> media for unit {0} unloaded", d.Unit);
-                    conf.Drives[d.Unit].MediaPath = string.Empty;
+                    Console.WriteLine($"--> media for unit {unit} unloaded");
+                    conf.Drives[unit].MediaPath = string.Empty;
                 }
             }
         }
@@ -846,6 +824,10 @@ namespace PERQemu.Config
         public const int FOUR_MEG = 1024 * 1024 * 4;
 
         private Hashtable _prefabs;
+        private Hashtable _geometries;
+        private Hashtable _driveSpecs;
+        private Hashtable _knownDrives;
+        
         private Configuration _default;
         private Configuration _current;
     }

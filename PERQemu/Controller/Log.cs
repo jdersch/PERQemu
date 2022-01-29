@@ -315,6 +315,7 @@ namespace PERQemu
             _colors.Add(Category.All, ConsoleColor.White);
             _colors.Add(Category.None, ConsoleColor.Black);     // HeartOfGold theme
             _colors.Add(Category.Emulator, ConsoleColor.White);
+            _colors.Add(Category.MediaLoader, ConsoleColor.DarkYellow);
             _colors.Add(Category.Controller, ConsoleColor.Yellow);
             _colors.Add(Category.Scheduler, ConsoleColor.Green);
             _colors.Add(Category.Timer, ConsoleColor.Green);

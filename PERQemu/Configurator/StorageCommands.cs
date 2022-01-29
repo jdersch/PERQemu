@@ -19,6 +19,7 @@
 
 using System;
 
+using PERQmedia;
 using PERQemu.Config;
 
 namespace PERQemu.UI
@@ -40,34 +41,12 @@ namespace PERQemu.UI
         //      unload harddisk             -- assumes 1
         //      unload harddisk <n>
         //      unload tape                 -- assume qic, only one drive
+        //
 
-        // NOW, for creating blank media... do we just define disk types and geometries
-        // outside of the emulator and embed that in the header!?  it would be very cool
-        // to have a Conf/DriveGeometries.cfg and load it at boot time, so that we don't
-        // have to update the code when new disk types are imaged (or synthesized with
-        // new installs)
+        //      storage define              -- create geometries, specs, devices
+        //      storage create <type> <file>  -- creates and formats a blank file on disk
         //
-        //      unless DEBUG, storage define IsDescreet!
-        //
-        //      storage list            -- show the list of known devices
-        //      storage define <class> <type> <cyls> <heads> <sectors> <bytes> <hdr> <flags> <rpm> <desc>
-        //      storage create media <type> <file>
-        // SO,
-        //      storage define Floppy "DSDD" 77 2 26 256 0 360
-        //      storage define Disk5Inch "XT2190" 918 15 16 512 16 0 3600 "Maxtor XT2190 159MB MFM"
-        //      storage define (subsystem)
-        //          type <class>       -- DriveType
-        //          name <string>       -- short name/key
-        //          cylinders, heads,
-        //          sectors, bytes,
-        //          header bytes, rpm   -- numeric, required
-        //          flags <enum>        -- optional, default 0x0
-        //          description <string> -- human readable
-        //          done                -- save and return
-        //          cancel              -- return
-        // then
-        //      storage create MaxtorXT2190 <file>  -- creates a blank file on disk
-        //      storage load harddisk <file>        -- assigns it to unit 1
+        //      storage load <file>         -- assigns it to unit 1
         //
 
         [Command("storage", "Enter the storage configuration subsystem")]
@@ -82,30 +61,38 @@ namespace PERQemu.UI
             PERQemu.CLI.ResetPrefix();
         }
 
-        [Command("storage load media", "Attach a media file to a storage unit")]
+        [Command("storage commands", "Show storage commands")]
+        public void ShowStorageCommands()
+        {
+            PERQemu.CLI.ShowCommands("storage");
+        }
+
+        [Command("storage assign", "Attach a media file to a storage unit")]
         public void LoadMedia(byte unit, string filename)
         {
             Console.WriteLine("Test: load unit={0}, file={1}", unit, filename);
         }
 
-        [Command("storage define", "Define a storage device and its geometry")]
-        public void DefineGeometry(string name, DriveType type, ushort cyl, byte heads, byte sec, uint bps = 512)
-        {
-            Console.WriteLine("Defining a new drive type!  Class={0}, type={1}", type, name);
-            Console.WriteLine("Geometry {0}/{1}/{2} with {3}-byte sectors ({4} KB capacity)",
-                              cyl, heads, sec, bps, (cyl * heads * sec * bps) / 1024);
-        }
-
         // todo: move the interface to the floppy/hard disk loading and saving
         // to PERQsystem?
-        // todo: allow specification of sssd, ssdd, dssd, dsdd
-        // all floppies created in imd format by default?
-        [Command("create floppy", "Creates and mounts a new, unformatted floppy disk image")]
-        private void CreateFloppyDisk()
+        [Command("storage create", "Creates a new floppy, disk or tape image")]
+        private void CreateMedia([KeywordMatch] string mediaType, string filename)
         {
-            PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(null);
-            Console.WriteLine("Created.");
+            Console.WriteLine("got media type {0}, file {1}", mediaType, filename);
+            //PERQemu.Sys.IOB.Z80System.LoadFloppyDisk(null);
+            //Console.WriteLine("Created.");
         }
+
+        // todo: allow for all supported types, not just shugart
+        // todo: all media requires a pathname, though the actual file doesn't get
+        //       written until it's saved.
+        // todo: make relative to Disks/ dir
+        //[Command("create harddisk", "Create and mounts a new, unformatted hard disk image")]
+        //private void CreateHardDisk()
+        //{
+        //    //PERQemu.Sys.IOB.DiskController.LoadImage(null); // fixme 
+        //    //Console.WriteLine("Created.");
+        //}
 
         [Command("load floppy", "Mounts a floppy disk image")]
         [Command("storage load floppy", "Mounts a floppy disk image")]
@@ -117,7 +104,7 @@ namespace PERQemu.UI
 
                 if (PERQemu.Sys.State != RunState.Off)
                 {
-                    PERQemu.Sys.LoadMedia(DriveType.Floppy, imagePath, 0);
+                    PERQemu.Sys.LoadMedia(DeviceType.Floppy, imagePath, 0);
                     Console.WriteLine("Loaded.");
                 }
             }
@@ -151,17 +138,6 @@ namespace PERQemu.UI
             }
         }
 
-        // todo: allow for all supported types, not just shugart
-        // todo: all media requires a pathname, though the actual file doesn't get
-        //       written until it's saved.
-        // todo: make relative to Disks/ dir
-        [Command("create harddisk", "Create and mounts a new, unformatted hard disk image")]
-        private void CreateHardDisk()
-        {
-            PERQemu.Sys.IOB.DiskController.LoadImage(null); // fixme 
-            Console.WriteLine("Created.");
-        }
-
         [Command("load harddisk", "Mount an existing hard disk image")]
         private void LoadHardDisk(string imagePath, int unit = 1)
         {
@@ -176,14 +152,14 @@ namespace PERQemu.UI
 
                 if (PERQemu.Controller.State != RunState.Off)
                 {
-                    PERQemu.Sys.LoadMedia(DriveType.Disk14Inch, imagePath, unit);
+                    PERQemu.Sys.LoadMedia(DeviceType.Disk14Inch, imagePath, unit);
                     Console.WriteLine("Loaded.");
                 }
                 else
                 {
                     Console.WriteLine("Assigned '{0}' to unit {1}.",
                                       Paths.Canonicalize(imagePath), unit);
-                    
+
                     // Force a reload at power on
                     PERQemu.Config.Changed = true;
                 }
@@ -214,10 +190,73 @@ namespace PERQemu.UI
         /// <summary>
         /// Get the next available defined unit number of a particular type. naw
         /// </summary>
-        public int GetUnitForDevice(DriveType drv)
+        public int GetUnitForDevice(DeviceType drv)
         {
-            var u = (drv == DriveType.Floppy ? 0 : 1);  // ugh
+            var u = (drv == DeviceType.Floppy ? 0 : 1);  // ugh
             return u;
         }
+
+        /// <summary>
+        /// Enter a private subsystem to define a new storage device type.
+        /// Must reference a (previously defined) geometry and performance
+        /// record.  Quietly sets the prefix, then restores it on "done".
+        /// </summary>
+        [Command("storage define", "Define a new drive type", IsDiscreet = true)]
+        private void StorageDefine(DeviceType type, string name)
+        {
+            _dev = new StorageDevice();
+            _dev.Info.Type = type;
+            _dev.Info.Name = name;
+            PERQemu.CLI.SetPrefix("storage define");
+        }
+
+        [Command("storage define description", "Set description of the new drive")]
+        private void DefineDesc(string desc)
+        {
+            _dev.Info.Description = desc;
+        }
+
+        [Command("storage define geometry", "Define the new drive's geometry")]
+        private void DefineNewGeometry(string tag, ushort cyl, byte heads, ushort sec, ushort secSize = 512, byte hdrSize = 0)
+        {
+            // Add a new geometry record to the hash
+            var geom = new DeviceGeometry(cyl, heads, sec, secSize, hdrSize);
+            PERQemu.Config.AddGeometry(tag, geom);
+            _dev.Geometry = geom;
+        }
+
+        [Command("storage define geometry")]
+        private void DefineGeometry(string tag)
+        {
+            _dev.Geometry = PERQemu.Config.GetGeometry(tag);
+        }
+        [Command("storage define performance", "Define the new drive's performance characteristics")]
+        private void DefineNewSpecs(string tag, int rpm, int pulse, int delay, int seekMin, int seekMax, int settle, int xfer)
+        {
+            var specs = new DevicePerformance(rpm, pulse, delay, seekMin, seekMax, settle, xfer);
+            PERQemu.Config.AddDriveSpecs(tag, specs);
+            _dev.Specs = specs;
+        }
+
+        [Command("storage define performance")]
+        private void DefineSpecs(string tag)
+        {
+            _dev.Specs = PERQemu.Config.GetDriveSpecs(tag);
+        }
+
+        [Command("storage define removable", "Define if the drive has removable media")]
+        private void DefineRemovable(bool canRemove)
+        {
+            _dev.Info.IsRemovable = canRemove;
+        }
+
+        [Command("storage define done", "Complete and save the new drive definition")]
+        private void DefineDone()
+        {
+            PERQemu.Config.AddKnownDrive(_dev);
+            SetStoragePrefix();
+        }
+
+        private static StorageDevice _dev;
     }
 }

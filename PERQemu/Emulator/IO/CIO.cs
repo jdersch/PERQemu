@@ -19,8 +19,8 @@
 
 using System;
 
-using PERQemu.IO.HardDisk;
 using PERQemu.IO.Z80;
+using PERQemu.IO.DiskDevices;
 
 namespace PERQemu.IO
 {

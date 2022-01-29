@@ -81,15 +81,15 @@ namespace PERQmedia
                     switch (heads)
                     {
                         case 4:
-                            dev.Info = new DeviceInfo(DeviceType.D14Inch, "Shugart12", "Shugart SA4004 (12MB)");
+                            dev.Info = new DeviceInfo(DeviceType.Disk14Inch, "Shugart12", "Shugart SA4004 (12MB)");
                             break;
 
                         case 8:
-                            dev.Info = new DeviceInfo(DeviceType.D14Inch, "Shugart24", "Shugart SA4008 (24MB)");
+                            dev.Info = new DeviceInfo(DeviceType.Disk14Inch, "Shugart24", "Shugart SA4008 (24MB)");
                             break;
 
                         case 16:
-                            dev.Info = new DeviceInfo(DeviceType.D14Inch, "Shugart48", "Shugart SA4104 (48MB)");
+                            dev.Info = new DeviceInfo(DeviceType.Disk14Inch, "Shugart48", "Shugart SA4104 (48MB)");
                             break;
 
                         default:

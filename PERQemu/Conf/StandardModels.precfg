@@ -1,0 +1,96 @@
+﻿#
+# 	StandardModels.precfg - List of standard PERQ configurations
+#
+#			** PLEASE DO NOT HAND-EDIT THIS FILE **
+#
+#	Users may define their own machine configurations using the
+#	command-line interface within PERQemu.  Errors in this file
+#	may cause the emulator to fail to initialize.  Caveat Perqor!
+#
+configure
+
+define PERQ1
+description "Original PERQ (small)"
+chassis PERQ1
+cpu PERQ1
+memory 256
+io board iob
+option board none
+display portrait
+tablet bitpad
+drive 0 floppy
+drive 1 disk14inch
+done
+
+define PERQ1A
+description "PERQ-1A Large configuration (2MB, CIO)"
+chassis PERQ1
+cpu PERQ1A
+memory 2048
+io board cio
+option board oio
+display portrait
+tablet bitpad
+drive 0 floppy
+drive 1 disk14inch
+done
+
+define PERQ2
+description "PERQ-2 w/16K CPU, 1MB"
+chassis PERQ2
+cpu PERQ1A
+memory 1024
+io board eio
+option board none
+display portrait
+tablet kriz
+drive 0 floppy
+drive 1 disk8inch
+done
+
+define PERQ2-T1
+description "PERQ-2/T1 w/16K CPU, 1MB"
+chassis PERQ2
+cpu PERQ1A
+memory 1024
+io board eio
+option board none
+display portrait
+tablet kriz
+drive 0 floppy
+drive 1 disk8inch
+drive 2 disk8inch
+done
+
+define PERQ2-T2
+description "PERQ-2/T2 w/16K CPU, 2MB"
+chassis PERQ2T2
+cpu PERQ1A
+memory 2048
+io board eio
+option board none
+display landscape
+tablet kriz
+drive 0 floppy
+drive 1 disk5inch
+drive 2 disk5inch
+done
+
+define PERQ2-T4
+description "PERQ-2/T4 w/24-bit 16K CPU, 4MB"
+chassis PERQ2T2
+cpu PERQ24
+memory 4096
+io board eio
+option board none
+display landscape
+tablet kriz
+drive 0 floppy
+drive 1 disk5inch
+drive 2 disk5inch
+done
+
+# return to top level
+done
+
+# end of standard configurations

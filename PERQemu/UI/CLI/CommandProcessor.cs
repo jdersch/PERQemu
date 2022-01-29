@@ -52,6 +52,7 @@ namespace PERQemu
             // Start up the line editor
             _editor = new CommandPrompt(_exec.CommandTreeRoot);
         }
+
         public CommandNode Prefix
         {
             get { return _exec.CurrentRoot; }
@@ -84,8 +85,14 @@ namespace PERQemu
             PERQemu.Controller.Break();
         }
 
+        /// <summary>
+        /// Read a script or configuration file, quiet-like.  Sets 
+        /// command root to the top level prior to invocation.
+        /// </summary>
         public void ReadScript(string script)
         {
+            ResetPrefix();
+
             // Ignore the result...
             _exec.ExecuteScript(script);
         }

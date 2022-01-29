@@ -51,4 +51,14 @@ namespace PERQemu
         private string _description;
         private bool _hidden;
     }
+
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public class KeywordMatchAttribute : Attribute
+    {
+        public KeywordMatchAttribute()
+        {
+            // If present, tells the CommandProcessor to match a string
+            // argument against the Helpers like an enumeration!
+        }
+    }
 }

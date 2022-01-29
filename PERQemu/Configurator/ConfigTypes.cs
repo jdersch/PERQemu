@@ -86,36 +86,4 @@ namespace PERQemu.Config
         Both = 0x3
     }
 
-    public enum DriveType
-    {
-        None = 0,
-        Floppy,
-        Disk14Inch,
-        Disk8Inch,
-        Disk5Inch,
-        DiskSMD,
-        TapeQIC,
-        Tape9Track
-    }
-
-    /// <summary>
-    /// Represents the basic definition of a single storage device from the
-    /// system's point of view: type (which controller to attach it to), unit
-    /// number (to differentiate multiple drives) and the path to the media
-    /// file on the host containing the floppy or hard disk image (and, someday
-    /// tape images as well).
-    /// </summary>
-    public struct StorageDevice
-    {
-        public StorageDevice(DriveType t, int unit, string path)
-        {
-            Device = t;
-            Unit = unit;
-            MediaPath = path;
-        }
-
-        public int Unit { get; set; }
-        public DriveType Device { get; set; }
-        public string MediaPath { get; set; }
-    }
 }

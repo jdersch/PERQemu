@@ -94,6 +94,11 @@ namespace PERQemu
             return Path.Combine(PROMDir, file);
         }
 
+        public static string BuildConfigPath(string file)
+        {
+            return Path.Combine(ConfigDir, file);
+        }
+
         public static string BuildDiskPath(string file)
         {
             return Path.Combine(DiskDir, file);

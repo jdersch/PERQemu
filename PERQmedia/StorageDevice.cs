@@ -174,6 +174,7 @@ namespace PERQmedia
             Filename = string.Empty;
         }
 
+        
         public string Filename;
         public bool IsLoaded;
         public bool IsModified;
@@ -184,6 +185,7 @@ namespace PERQmedia
         public DevicePerformance Specs;
         public DeviceGeometry Geometry;
 
+        // Should be protected from direct access...
         public Sector[,,] Sectors;
     }
 }

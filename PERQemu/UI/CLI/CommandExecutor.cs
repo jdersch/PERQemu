@@ -210,6 +210,10 @@ namespace PERQemu.UI
                     {
                         invokeParams[paramIndex] = bool.Parse(args[argIndex++]);
                     }
+                    else if (p.ParameterType == typeof(int))
+                    {
+                        invokeParams[paramIndex] = TryParseInt(args[argIndex++]);
+                    }
                     else if (p.ParameterType == typeof(uint))
                     {
                         invokeParams[paramIndex] = TryParseUint(args[argIndex++]);
@@ -445,6 +449,27 @@ namespace PERQemu.UI
             }
         }
 
+        private static int TryParseInt(string arg)
+        {
+            int result = 0;
+            Radix r = GetRadix(ref arg);
+
+            try
+            {
+                result = Convert.ToInt32(arg, (int)r);
+            }
+            catch (OverflowException)
+            {
+                throw new ArgumentException($"{arg} out of range for a 32-bit {r} value.");
+            }
+            catch (FormatException)
+            {
+                throw new ArgumentException($"{arg} is not a valid 32-bit {r} value.");
+            }
+
+            return result;
+        }
+
         private static uint TryParseUint(string arg)
         {
             uint result = 0;
@@ -456,11 +481,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException(string.Format("{0} out of range for a 32-bit {1} value.", arg, r));
+                throw new ArgumentException($"{arg} out of range for a 32-bit {r} value.");
             }
             catch (FormatException)
             {
-                throw new ArgumentException(string.Format("{0} is not a valid 32-bit {1} value.", arg, r));
+                throw new ArgumentException($"{arg} is not a valid 32-bit {r} value.");
             }
 
             return result;
@@ -477,11 +502,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException(string.Format("{0} out of range for a 16-bit {1} value.", arg, r));
+                throw new ArgumentException($"{arg} out of range for a 16-bit {r} value.");
             }
             catch (FormatException)
             {
-                throw new ArgumentException(string.Format("{0} is not a valid 16-bit {1} value.", arg, r));
+                throw new ArgumentException($"{arg} is not a valid 16-bit {r} value.");
             }
 
             return result;
@@ -498,11 +523,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException(string.Format("{0} out of range for an 8-bit {1} value.", arg, r));
+                throw new ArgumentException($"{arg} out of range for an 8-bit {r} value.");
             }
             catch (FormatException)
             {
-                throw new ArgumentException(string.Format("{0} is not a valid 8-bit {1} value.", arg, r));
+                throw new ArgumentException($"{arg} is not a valid 8-bit {r} value.");
             }
 
             return result;
@@ -570,7 +595,7 @@ namespace PERQemu.UI
                         {
                             // Create a new "arguments" node
                             var argNode = new ArgumentNode(args[0].Name, "", args[0],
-                                                           new MethodInvokeInfo(info, commandObject));
+                                            new MethodInvokeInfo(info, commandObject));
 
                             // Attach it to our command node
                             cmdNode.Arguments = argNode;
@@ -603,8 +628,18 @@ namespace PERQemu.UI
                                     argNode.Method = new MethodInvokeInfo(info, commandObject);
                                 }
 
-                                // Assign it
-                                tempRoot.Arguments = argNode;
+                                // Skip overloaded arguments!
+                                // "You are not expected to understand this"
+                                if ((tempRoot.Arguments != null) &&
+                                    (tempRoot.Arguments.Name == argNode.Name))
+                                {
+                                    argNode = tempRoot.Arguments;
+                                }
+                                else
+                                {
+                                    // Assign it
+                                    tempRoot.Arguments = argNode;
+                                }
 
                                 // Now cheat: arguments always hang off the previous node
                                 tempRoot = argNode;
@@ -642,7 +677,7 @@ namespace PERQemu.UI
                                   argNode.Param.Position,
                                   argNode.Param.HasDefaultValue ? "(HasDefault) " : "",
                                   argNode.Param.ParameterType.IsEnum ? "(IsEnum) " : "",
-                                  String.Join(" ", argNode.Helpers.ToArray()));
+                                  string.Join(" ", argNode.Helpers.ToArray()));
 
                 // Chase down the list
                 if (argNode.Arguments != null)

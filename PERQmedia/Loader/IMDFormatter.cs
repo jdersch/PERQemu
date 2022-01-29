@@ -60,7 +60,7 @@ namespace PERQmedia
                 // Fill in some gaps
                 dev.FileInfo.Format = Formatters.IMDFormat;
 
-                dev.Info.Type = DeviceType.DFloppy;
+                dev.Info.Type = DeviceType.Floppy;
                 dev.Info.Name = "Floppy";
                 dev.Info.Description = "8\" floppy diskette";
                 dev.Info.IsRemovable = true;

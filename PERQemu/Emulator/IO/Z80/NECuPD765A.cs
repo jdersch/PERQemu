@@ -20,7 +20,8 @@
 using System;
 using System.Collections.Generic;
 
-using PERQemu.PhysicalDisk;
+using PERQmedia;
+using PERQemu.IO.DiskDevices;
 
 namespace PERQemu.IO.Z80
 {

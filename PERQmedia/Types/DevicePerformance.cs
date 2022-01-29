@@ -68,52 +68,8 @@ namespace PERQmedia
         public static DevicePerformance SA4000 = new DevicePerformance(2964, 1100, 90000, 20, 140, 20, 888375);
 
         //
-        // Micropolis 1200 series 8" hard drives
+        // Specifications for the 8", 5.25" and other drive types are
+        // dynamically configured at runtime.
         //
-        public static DevicePerformance M1200 = new DevicePerformance(3600, 10000, 25000, 4, 96, 8, 992000);
-
-        //
-        // Micropolis 1300 series 5.25" MFM hard drives
-        //
-        public static DevicePerformance M1300 = new DevicePerformance(3600, 200000, 25000, 7, 66, 1, 625000);
-
-        //
-        // Toshiba MK-50FB series 5.25" MFM hard drives
-        // Toshiba MK-134FA 3.5" MFM hard drive
-        //
-        public static DevicePerformance MK50 = new DevicePerformance(3600, 10000, 25000, 6, 45, 1, 625000);
-        public static DevicePerformance MK134 = new DevicePerformance(3600, 10000, 25000, 7, 50, 1, 625000);
-
-        //
-        // Vertex (Priam) V100 series 5.25" MFM drives
-        //
-        public static DevicePerformance V100 = new DevicePerformance(3600, 200000, 25000, 5, 60, 3, 625000);
-
-        //
-        // Maxtor XT-1000 series 5.25" MFM hard drives
-        // Maxtor XT-2000 series 5.25" MFM hard drives
-        //
-        public static DevicePerformance XT1000 = new DevicePerformance(3600, 5340, 20000, 4, 420, 3, 625000);
-
-        //
-        // CDC 9760 series SMD hard drives (removable pack)
-        //
-        public static DevicePerformance CDC9760 = new DevicePerformance(3600, 2500, 30000, 6, 55, 1, 1209600);
-
-        //
-        // Fujitsu Eagle series SMD hard drives (wicked cool)
-        //
-        public static DevicePerformance M2351A = new DevicePerformance(3961, 1076, 30000, 5, 35, 1, 1859000);
-        public static DevicePerformance M2361A = new DevicePerformance(3600, 1627, 40000, 5, 35, 1, 2458000);
-
-        //
-        // Archive Sidewinder 3000 series QIC tape drives
-        //
-        // Notes: Assuming 3RCC only shipped the 30ips drive, not the 90ips?
-        // Only the max transfer rate figure is accurate; the other specs will
-        // have to be computed or defined in some useful way based on how the
-        // streaming controller is devised.
-        //
-        public static DevicePerformance A3020I = new DevicePerformance(30, 0, 10000, 0, 0, 0, 200000);
     }
 }

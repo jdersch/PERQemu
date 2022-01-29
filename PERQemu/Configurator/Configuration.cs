@@ -21,8 +21,22 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 
+using PERQmedia;
+
 namespace PERQemu.Config
 {
+    public struct Drive
+    {
+        public Drive(DeviceType dev, string path = "")
+        {
+            Type = dev;
+            MediaPath = path;
+        }
+
+        public DeviceType Type;
+        public string MediaPath;
+    }
+
     /// <summary>
     /// Describes the configuration of a PERQ system, including its storage
     /// devices.  The Configurator builds a list of standard configurations or
@@ -46,42 +60,15 @@ namespace PERQemu.Config
             _displayType = DisplayType.Portrait;
             _tabletType = TabletType.BitPad;
 
-            _drives = new StorageDevice[MAX_DRIVES];
-            _drives[0] = new StorageDevice(DriveType.Floppy, 0, "");
-            _drives[1] = new StorageDevice(DriveType.Disk14Inch, 1, "");
+            _drives = new Drive[MAX_DRIVES];
+            _drives[0] = new Drive(DeviceType.Floppy);
+            _drives[1] = new Drive(DeviceType.Disk14Inch);
+            _drives[2] = new Drive(DeviceType.Unused);
+            _drives[3] = new Drive(DeviceType.Unused);
 
             _validated = true;
             _modified = false;      // these don't belong here!?
             _saved = true;
-        }
-
-        // todo: zap this constructor; read in the defined set at startup...
-        public Configuration(string name, string desc, ChassisType machine,
-                             CPUType cpu, int mem, IOBoardType io,
-                             OptionBoardType optio, IOOptionType ioopts,
-                             DisplayType disp, TabletType tab,
-                             StorageDevice[] drives)
-        {
-            _name = name;
-            _key = _name.ToLower();
-            _description = desc;
-            _filename = "";
-            _chassis = machine;
-            _cpuBoard = cpu;
-            _memSize = mem;
-            _ioBoard = io;
-            _ioOptionBoard = optio;
-            _ioOptions = ioopts;
-            _displayType = disp;
-            _tabletType = tab;
-
-            _drives = new StorageDevice[MAX_DRIVES];
-
-            drives.CopyTo(_drives, 0);
-
-            _validated = false;
-            _modified = false;
-            _saved = false;
         }
 
         #region Getters and Setters
@@ -185,10 +172,10 @@ namespace PERQemu.Config
             set { _tabletType = value; }
         }
 
-        public StorageDevice[] Drives
+        public Drive[] Drives
         {
             get { return _drives; }
-            set { _drives = value; }        // ack!
+            set { _drives = value; }
         }
 
         #endregion
@@ -228,12 +215,14 @@ namespace PERQemu.Config
             sb.AppendLine("Storage configuration:");
             sb.AppendLine("----------------------");
 
-            foreach (var drive in Drives)
+            for (var unit = 0; unit < _drives.Length; unit++)
             {
-                if (drive.Device != DriveType.None)
+                var drive = _drives[unit];
+            
+                if (drive.Type != DeviceType.Unused)
                 {
                     var hack = sb.Length;
-                    sb.AppendFormat("Unit: {0}  Type: {1}", drive.Unit, drive.Device);
+                    sb.AppendFormat("Unit: {0}  Type: {1}", unit, drive.Type);
                     sb.AppendFormat("{0}File: {1}\n", " ".PadLeft(hack + 28 - sb.Length),
                                     (string.IsNullOrEmpty(drive.MediaPath) ? "<not assigned>" : Paths.Canonicalize(drive.MediaPath)));
                 }
@@ -275,7 +264,7 @@ namespace PERQemu.Config
         //}
 
         // For now...
-        public const int MAX_DRIVES = 4;
+        public const byte MAX_DRIVES = 4;
 
         private string _name;               // short name
         private string _key;                // unique key for matching
@@ -290,7 +279,7 @@ namespace PERQemu.Config
         private IOOptionType _ioOptions;
         private DisplayType _displayType;
         private TabletType _tabletType;
-        private StorageDevice[] _drives;
+        private Drive[] _drives;
 
         private string _reason;
         private bool _validated;
