@@ -217,7 +217,6 @@
     <Compile Include="Controller\Log.cs" />
     <Compile Include="Emulator\IO\HardDisk\ShugartController.cs" />
     <Compile Include="Emulator\IO\DiskDevices\HardDisk.cs" />
-    <Compile Include="Emulator\IO\FloppyDrive.cs" />
     <Compile Include="Emulator\IO\DiskDevices\FloppyDisk.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -26,6 +26,7 @@ using PERQemu.Debugger;
 using PERQemu.Processor;
 using PERQemu.Memory;
 using PERQemu.IO;
+using PERQemu.IO.DiskDevices;
 using PERQemu.UI;
 
 namespace PERQemu
@@ -126,6 +127,9 @@ namespace PERQemu
             _ioBus.AddDevice(_mem.Video);
             _ioBus.AddDevice(_iob);
             _ioBus.AddDevice(_oio);
+
+            // Allocate our storage devices
+            _drives = new StorageDevice[conf.Drives.Length];
 
             // Set our initial state; instantiated but not yet initialized...
             // shouldn't this just be... "On"?  Sigh.
@@ -370,10 +374,14 @@ namespace PERQemu
 
         /// <summary>
         /// Initial call to load all of the defined media files from the Config.
-        /// We call this after the PERQSystem is successfully instantiated so that
-        /// a bad filename doesn't cause the constructor to bail; with the system
-        /// in a Halted state the user can fix the bad pathname and continue.
         /// </summary>
+        /// <remarks>
+        /// We call this after the PERQSystem is successfully instantiated so
+        /// that a bad filename doesn't cause the constructor to bail; with the
+        /// system in a Halted state the user can fix the bad pathname and
+        /// reset.  All drives are loaded and then assigned to controllers by
+        /// device type!
+        /// </remarks>
         public void LoadAllMedia()
         {
             for (var unit = 0; unit < _conf.Drives.Length; unit++)
@@ -392,60 +400,87 @@ namespace PERQemu
         /// </summary>
         public void LoadMedia(DeviceType type, string path, int unit)
         {
-            switch (type)
+            try
             {
-                case DeviceType.Floppy:
-                    _iob.Z80System.LoadFloppyDisk(path);
-                    break;
+                // As PERQmedia to see if it's loadable
+                var dev = FileUtilities.GetDeviceTypeFromFile(path);
 
-                // case DriveType.Disk5Inch:
-                // case DriveType.Disk8Inch:
-                case DeviceType.Disk14Inch:
-                    _iob.LoadDisk(path); // unit...
-                    break;
+                // Is it what we're expecting?
+                if (dev != type)
+                {
+                    Console.WriteLine("File loaded is not the correct media type for this drive!");
+                    Console.WriteLine($"  Unit {unit}  Expected: {type}  Loaded: {dev}");
+                    return;
+                }
 
-                // case DriveType.DiskSMD:
-                // case DriveType.Tape*:
-                //      _oio.LoadImage();
+                // Hand it off to the appropriate controller
+                switch (dev)
+                {
+                    // case DriveType.Disk5Inch:
+                    // case DriveType.Disk8Inch:
+                    case DeviceType.Disk14Inch:
+                    case DeviceType.Floppy:
+                        _iob.LoadDisk(type, path, unit);
+                        break;
 
-                default:
-                    throw new UnimplementedHardwareException(
-                        string.Format("Support for drive type {0} is not implemented.", type));
+                    // case DriveType.DiskSMD:
+                    //  _oio.LoadDisk();
+
+                    // case DriveType.Tape*:
+                    //  _oio.LoadTape();
+
+                    default:
+                        throw new UnimplementedHardwareException($"Support for drive type {type} is not implemented.");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Failed to load '{0}' (unit {1}): {2}", path, unit, e.Message);
             }
         }
 
         /// <summary>
-        /// Optionally saves all modified storage devices, depending on user
-        /// preferences.  Not yet implemented.
+        /// Tells all the loaded storage devices to save themselves, depending
+        /// on user preferences.  Saves to original format and filename.
         /// </summary>
-        /// <remarks>
-        /// We should keep a list of the status of each mounted device here.  The
-        /// Config just tells us what slots are defined, but each call to Load()
-        /// (floppy, hard, tape) should update a list of mounted drives and their
-        /// actual status (mounted, readonly, modified) that can be checked against
-        /// the Settings.AutoSave* flags.  SaveAll() calls Save() which dispatches
-        /// based on drive/media type.
-        /// </remarks>
         public void SaveAllMedia()
         {
+            // Should we bother?
+            if (Settings.SaveDiskOnShutdown == Ask.No) return;
+
             Console.WriteLine("Checking for unsaved media...");
-            foreach (var drive in _conf.Drives)
+            for (var unit = 0; unit < Config.Drives.Length; unit++)
             {
+                var drive = _conf.Drives[unit];
                 if (!string.IsNullOrEmpty(drive.MediaPath))
-                    Console.WriteLine("--> " + drive.MediaPath);
+                {
+                    SaveMedia(drive.Type, drive.MediaPath, unit);
+                }
             }
         }
 
-        // todo: SaveMedia()
-        /*
-         * if (drive.IsMounted && drive.IsModified)
-         *      switch (Settings.AutoSave<type>)
-         *          no:     skip it
-         *          yes:    save it     -- must have a path defined!
-         *          maybe:  ask user, then skip/save accordingly
-         * 
-         *      drive.Save()
-         */
+        public void SaveMedia(DeviceType type, string path, int unit = 0)
+        {
+            switch (type)
+            {
+                // case DriveType.Disk5Inch:
+                // case DriveType.Disk8Inch:
+                case DeviceType.Disk14Inch:
+                case DeviceType.Floppy:
+                    _iob.SaveDisk(unit);
+                    break;
+
+                // case DriveType.DiskSMD:
+                //  _oio.LoadDisk();
+
+                // case DriveType.Tape*:
+                //  _oio.LoadTape();
+
+                default:
+                    throw new UnimplementedHardwareException($"Support for drive type {type} is not implemented.");
+            }
+        }
+
 
         /// <summary>
         /// If the user has specified an alternate boot character, kick off
@@ -494,6 +529,8 @@ namespace PERQemu
         private IOBus _ioBus;
         private IOBoard _iob;
         private OptionBoard _oio;
+
+        private StorageDevice[] _drives;
 
         // Controlly bits
         private ExecutionMode _mode;

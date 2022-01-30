@@ -30,7 +30,7 @@ namespace PERQmedia
     /// </summary>
     public struct Sector
     {
-        public Sector(ushort cylID, byte headID, ushort secID, ushort secSize, byte hdrSize, bool defect = false)
+        public Sector(ushort cylID, byte headID, ushort secID, ushort secSize, byte hdrSize = 0, bool defect = false)
         {
             _cylinderID = cylID;
             _headID = headID;

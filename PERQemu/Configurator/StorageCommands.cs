@@ -118,18 +118,16 @@ namespace PERQemu.UI
         [Command("storage unload floppy", "Unmounts a floppy disk image")]
         private void UnloadFloppy()
         {
-            PERQemu.Sys.IOB.Z80System.UnloadFloppyDisk();
+            var floppy = PERQemu.Config.Current.Drives[0];  // always unit 0
+            //PERQemu.Sys.UnloadMedia(floppy);
         }
 
-        // todo: floppy remembers the path we loaded from so we don't have to?
-        // todo: make relative to Disks/ dir
-
         [Command("save floppy", "Save the current in-memory floppy disk to an image file")]
-        private void SaveFloppy(string imagePath)
+        private void SaveFloppyAs(string imagePath)
         {
             try
             {
-                PERQemu.Sys.IOB.Z80System.SaveFloppyDisk(imagePath);
+                PERQemu.Sys.SaveMedia(DeviceType.Floppy, imagePath, 0); // hardcoded unit 0 ugh
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)
@@ -177,7 +175,7 @@ namespace PERQemu.UI
         {
             try
             {
-                PERQemu.Sys.IOB.DiskController.SaveImage(imagePath); // FIXME
+                PERQemu.Sys.SaveMedia(DeviceType.Disk14Inch, imagePath, 1); // FIXME  ACK
                 Console.WriteLine("Saved.");
             }
             catch (Exception e)

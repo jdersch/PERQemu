@@ -161,6 +161,8 @@ namespace PERQmedia
         /// </summary>
         public virtual void OnLoad()
         {
+            IsLoaded = true;
+            IsModified = false;
         }
 
         /// <summary>

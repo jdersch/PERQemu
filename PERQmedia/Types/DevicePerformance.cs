@@ -60,7 +60,7 @@ namespace PERQmedia
         //
         // Shugart SA851 8" floppy drive
         //
-        public static DevicePerformance SA851 = new DevicePerformance(360, 1800000, 90, 3, 231, 15, 62500);
+        public static DevicePerformance SA851 = new DevicePerformance(360, 400000, 90, 3, 231, 15, 62500);
 
         //
         // Shugart SA4000 series 14" hard drives

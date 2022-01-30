@@ -19,6 +19,7 @@
 
 using System;
 
+using PERQmedia;
 using PERQemu.IO.Z80;
 using PERQemu.IO.DiskDevices;
 
@@ -89,16 +90,6 @@ namespace PERQemu.IO
             Log.Debug(Category.IO, "{0} board reset.", _name);
         }
 
-        public virtual void RunAsync()
-        {
-            _z80System.RunAsync();
-        }
-
-        public virtual void Stop()
-        {
-            _z80System.Stop();
-        }
-
         /// <summary>
         /// Runs one Z80 instruction, synchronously.
         /// </summary>
@@ -107,50 +98,80 @@ namespace PERQemu.IO
             return _z80System.Run();
         }
 
+        /// <summary>
+        /// Runs the Z80 on its own thread, asynchronously.
+        /// </summary>
+        public virtual void RunAsync()
+        {
+            _z80System.RunAsync();
+        }
+
+        /// <summary>
+        /// Stops the Z80 thread.
+        /// </summary>
+        public virtual void Stop()
+        {
+            _z80System.Stop();
+        }
+
+        //
+        // IO Bus connection
+        //
+
         public abstract int IORead(byte port);
 
         public abstract void IOWrite(byte port, int value);
 
         //
-        // Hard disk
+        // Disk loading and unloading
         //
 
-        public virtual bool LoadDisk(string mediaPath, int unit = 0)
+        public virtual void LoadDisk(DeviceType dev, string mediaPath, int unit = 0)
         {
-            // FIXME:
-            // new interface should handle multiple units (at least two
-            // drives, and later more with SMD?)
-            // pathnames should be canonicalized, relative to Disks/ dir?
-            // don't make the controller catch errors, do that here
-            _hardDiskController.LoadImage(mediaPath /*, unit */);
-            return true;
+            if (dev == DeviceType.Floppy)
+            {
+                _drives[unit] = new FloppyDisk(_z80System.Scheduler, mediaPath);
+                _drives[unit].Load();
+                _z80System.FDC.AttachDrive((uint)unit, (FloppyDisk)_drives[unit]);
+            }
+            else if (dev == DeviceType.Disk14Inch)
+            {
+                _drives[unit] = new HardDisk(_sys.Scheduler, mediaPath);
+                _drives[unit].Load();
+                _hardDiskController.AttachDrive((HardDisk)_drives[unit]);
+            }
+
+            throw new InvalidOperationException("Wrong disk type for this IO Board");
         }
 
-        public virtual bool SaveDisk(int unit = 0)
+        public virtual void SaveDisk(int unit = 0)
         {
-            // FIXME:
-            // the name of the image is in the Config record; use when saving by default
-            // will also handle multiple units
-            // will handle error checking here and return a nice boolean
-
-            // _hardDiskController.SaveImage(/* unit */);
-            return true;    // FIXME ack.
+            if (_drives[unit].IsLoaded && _drives[unit].IsModified)
+            {
+                if (Settings.SaveDiskOnShutdown == Ask.Yes)
+                {
+                    Console.WriteLine("Saving unit " + unit);   // fixme
+                    _drives[unit].Save();
+                }
+                else
+                {
+                    Console.WriteLine("Wanna save unit " + unit + "?  ya cant yet");
+                }
+            }
         }
 
-        public virtual bool SaveDisk(string mediaPath, int unit = 0)
-        {
-            _hardDiskController.SaveImage(mediaPath /*, unit */);
-            return true;    // assume it worked, ugh.
-        }
+        //public virtual void SaveDisk(string mediaPath, int unit = 0)
+        //{
+        //    if (_drives[unit].IsLoaded)
+        //    {
+        //        Console.WriteLine("Doing a SaveAs for unit " + unit);
+        //        _drives[unit].SaveAs(mediaPath);
+        //    }
+        //}
 
         public virtual void UnloadDisk(int unit = 0)
         {
-            // FIXME the CDC 976x drives could be unloaded :-)
-            // we should also allow the user to add or remove a second
-            // Microp or 5.25" drive and actually release the storage
-            // (rather than just initialize a blank image).  once we
-            // start supporting 140mb Maxtors that's a LOT of wasted memory!
-            // _hardDiskController.Unload(unit);
+            _drives[unit].Unload();
         }
 
         /// <summary>
@@ -181,8 +202,11 @@ namespace PERQemu.IO
         // Devices required by all I/O boards
         protected Z80System _z80System;
 
-        // protected IStorageController _hardDisk;
+        //protected IStorageController _hardDisk;
         protected ShugartDiskController _hardDiskController;
+
+        // Drives attached to this board
+        protected StorageDevice[] _drives;
 
         // I/O port map for this board
         private static bool[] _portsHandled = new bool[256];

@@ -24,19 +24,18 @@ using PERQmedia;
 namespace PERQemu.IO.DiskDevices
 {
     /// <summary>
-    /// Represents a hard disk drive, which contains one or more Cylinders.
-    /// This is the primary interface for interaction with the disk image, and allows
-    /// reading sectors of data.
+    /// Emulates the mechanical operation of a hard disk drive, handling the
+    /// timing for seek operations, index pulses, and other basic operations.
+    /// Exposes the block API from StorageDevice through Get/SetSector for data
+    /// access, and provides status infomation useful to a disk controller.  
     /// </summary>
+    /// <remarks>
+    /// Status flags are true/false; the associated Controller presents these
+    /// to the PERQ in whichever active low/high state is appropriate.
+    /// </remarks>
     public class HardDisk : StorageDevice
     {
-        /// <summary>
-        /// Emulates the mechanical operation of a hard disk, handling the
-        /// timing for seek operations, index pulses, and other basic status
-        /// information useful to a disk controller.  Exposes the block API
-        /// from StorageDevice through Get/SetSector for data access.
-        /// </summary>
-        public HardDisk(Scheduler sched)
+        public HardDisk(Scheduler sched, string filename) : base(filename)
         {
             _scheduler = sched;
 
@@ -62,7 +61,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Does a hardware reset on the device.
         /// </summary>
-        public virtual void Reset()
+        public virtual void Reset(bool soft = false)
         {
             if (!IsLoaded)
             {
@@ -72,6 +71,15 @@ namespace PERQemu.IO.DiskDevices
                 return;
             }
 
+            // A "soft" reset from the controller just clears the fault status
+            // and should probably clear the seek state... todo/fixme check this
+            if (soft)
+            {
+                _fault = false;
+                return;
+            }
+
+            // A "hard" reset is from a power-on or reboot
             _ready = false;
             _fault = false;
             _index = false;
@@ -79,7 +87,7 @@ namespace PERQemu.IO.DiskDevices
             if (_startupEvent == null)
             {
                 // Cold start: schedule a ready event so our drive can
-                // come up to speed.  Todo: play the spin-up audio! :-)
+                // come up to speed.  todo: play the spin-up audio! :-)
                 MotorStart();
             }
 
@@ -88,7 +96,7 @@ namespace PERQemu.IO.DiskDevices
                 _scheduler.Cancel(_indexEvent);
             }
 
-			IndexPulseStart(0, null);
+            IndexPulseStart(0, null);
         }
 
         /// <summary>
@@ -124,8 +132,9 @@ namespace PERQemu.IO.DiskDevices
             if (sec.CylinderID != _cyl || sec.HeadID != _head)
             {
                 // "Address error" :-)
-                _fault = 1;
+                _fault = true;
             }
+
             Sectors[sec.CylinderID, sec.HeadID, sec.SectorID] = sec;
         }
 
@@ -164,10 +173,10 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         private void DriveReady(ulong skew, object context)
         {
-            Log.Debug(Category.HardDisk, "Drive {0} has come up to speed.", Info.Name);
-
             _ready = true;
             _startupEvent = null;
+
+            Log.Debug(Category.HardDisk, "Drive {0} has come up to speed.", Info.Name);
         }
 
         /// <summary>
@@ -188,6 +197,7 @@ namespace PERQemu.IO.DiskDevices
 
             _index = false;
             _indexEvent = _scheduler.Schedule(next, IndexPulseStart);
+
             Log.Debug(Category.HardDisk, "Next index pulse in {0:n}msec", next);
         }
 
@@ -198,14 +208,16 @@ namespace PERQemu.IO.DiskDevices
         {
             // Compute the index pulse duration and gap
             _discRotationTimeNsec = (ulong)(1 / (Specs.RPM / 60.0)) * Conversion.MsecToNsec;
-            _indexPulseDurationNsec = (ulong)Specs.IndexPulse;   // in nsec!
+            _indexPulseDurationNsec = (ulong)Specs.IndexPulse;
 
-            Console.WriteLine("{0} drive loaded!  Index is {1:n}us every {2:n}ms ",
-                              Info.Name, _indexPulseDurationNsec / 1000.0, _discRotationTimeNsec / 1000.0);
+            Log.Debug(Category.HardDisk,
+                      "{0} drive loaded!  Index is {1:n}us every {2:n}ms ",
+                      Info.Name, _indexPulseDurationNsec / 1000.0, _discRotationTimeNsec / 1000.0);
+            
             base.OnLoad();
         }
 
-        // For access to scheduler
+        // Access to a scheduler
         private Scheduler _scheduler;
 
         // Status that the drive keeps track of
@@ -214,6 +226,7 @@ namespace PERQemu.IO.DiskDevices
         private bool _index;
         private bool _seekComplete;
 
+        // Where my heads at
         private ushort _cyl;
         private byte _head;
 
@@ -222,27 +235,9 @@ namespace PERQemu.IO.DiskDevices
         private ulong _indexPulseDurationNsec;
         private Event _indexEvent;
 
+        // Oh yeah, seek stuff
+
+        // Startup delay
         private Event _startupEvent;
     }
 }
-
-/*
-public void LoadImage(string path)
-{
-	if (path != null)
-	{
-		// Load the disk image into it...
-		FileStream fs = new FileStream(path, FileMode.Open);
-_disk.Load(fs);
-		fs.Close();
-	}
-}
-
-public void SaveImage(string path)
-{
-    // Load the disk image into it...
-    FileStream fs = new FileStream(path, FileMode.OpenOrCreate);
-    _disk.Save(fs);
-    fs.Close();
-}
-*/

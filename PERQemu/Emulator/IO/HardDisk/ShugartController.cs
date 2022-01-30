@@ -38,11 +38,14 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Perform a "hardware reset".
+        /// Perform a "hardware reset" of the controller and drive.
         /// </summary>
         public void Reset()
         {
-            ResetFlags();
+            if (_disk != null)
+            {
+                _disk.Reset();
+            }
 
             _cylinder = 0;
             _physCylinder = 0;
@@ -62,38 +65,63 @@ namespace PERQemu.IO.DiskDevices
             Log.Debug(Category.HardDisk, "Shugart controller reset.");
         }
 
+        /// <summary>
+        /// Resets the flags ("soft" reset under microcode control).
+        /// </summary>
+        private void ResetFlags()
+        {
+            _controllerStatus = Status.Done;
+            _seekComplete = 1;  // ??? check the manual...
 
-        public void AttachDisk(HardDisk dev)
+            _serialNumberHigh = 0;
+            _serialNumberLow = 0;
+            _blockNumber = 0;
+            _headerAddressLow = 0;
+            _headerAddressHigh = 0;
+            _dataBufferLow = 0;
+            _dataBufferHigh = 0;
+        }
+
+        /// <summary>
+        /// Attach the physical drive.
+        /// </summary>
+        public void AttachDrive(HardDisk dev)
         {
             _disk = dev;
             Log.Debug(Category.HardDisk, "Attached disk '{0}'", _disk.Info.Name);
         }
 
-        //
+        /// <summary>
+        /// Reads the status register.
+        /// </summary>
+        /// <remarks>
+        /// Reading status DOES NOT clear pending interrupts.  (See behavior in disktest.mic)
+        /// </remarks>
         public int ReadStatus()
         {
-            // Reading status DOES NOT clear pending interrupts.
-            // (See behavior in disktest.mic)
-
             Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4}", DiskStatus);
             return DiskStatus;
         }
 
+        /// <summary>
+        /// Loads the Shugart command register.
+        /// </summary>
+        /// <remarks>
+        /// Note:  Most of the info gleaned about the Shugart controller register
+        /// behavior is from sysb.micro source.
+        ///     Command bits:
+        ///       0:2     drive command data      passed to state machine
+        ///         3     seek direction flag \
+        ///         4     pulses a single seek >  passed through to drive
+        ///         5     fault clear         /
+        ///       6:7     unit select!?      /    Z80 control bit (conflict!)
+        /// </remarks>
         public void LoadCommandRegister(int data)
         {
-            Log.Debug(Category.HardDisk, "Shugart command data: {0:x4}", data);
-
-            // Note:  Most of the info gleaned about the Shugart controller register
-            // behavior is from sysb.micro source.
-            // Command bits:
-            //  0:2     drive command data      passed to state machine
-            //    3     seek direction flag \
-            //    4     pulses a single seek >  passed through to drive
-            //    5     fault clear         /
-            //  6:7     unit select!?      /    Z80 control bit (conflict!)
             Command command = (Command)(data & 0x7);
 
-            Log.Debug(Category.HardDisk, "Shugart command is {0}", command);
+            Log.Debug(Category.HardDisk, "Shugart command data: {0:x4}", data);
+            Log.Debug(Category.HardDisk, "Shugart command is: {0}", command);
 
             switch (command)
             {
@@ -136,7 +164,7 @@ namespace PERQemu.IO.DiskDevices
 
                 default:
                     Log.Error(Category.HardDisk, "Unhandled Shugart command {0}", command);
-                    // throw or Log.Debug()?
+                    // fixme throw or Log.Debug() instead?  neither should happen when complete...
                     break;
             }
 
@@ -214,13 +242,12 @@ namespace PERQemu.IO.DiskDevices
         {
             get
             {
-                return (
-                    (int)_controllerStatus |
-                    (_disk.Index ? HardStatus.Index : 0) |
-                    (_disk.Trk00 ? HardStatus.TrackZero : 0) |
-                    (_disk.Fault ? HardStatus.DriveFault : 0) |
-                    (_disk.SeekComplete ? HardStatus.SeekComplete : 0) |
-                    (_disk.Ready ? HardStatus.UnitReady : 0));
+                return ((int)_controllerStatus |
+                        (int)((_disk.Index ? HardStatus.Index : 0) |
+                              (_disk.Trk00 ? HardStatus.TrackZero : 0) |
+                              (_disk.Fault ? HardStatus.DriveFault : 0) |
+                              (_disk.SeekComplete ? HardStatus.SeekComplete : 0) |
+                              (_disk.Ready ? HardStatus.UnitReady : 0)));
             }
         }
 
@@ -263,11 +290,11 @@ namespace PERQemu.IO.DiskDevices
         {
             if ((_seekData & 0x8) == 0)
             {
-                SeekTo(_physCylinder - 1);
+                SeekTo((ushort)(_physCylinder - 1));
             }
             else
             {
-                SeekTo(_physCylinder + 1);
+                SeekTo((ushort)(_physCylinder + 1));
             }
 
             Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
@@ -277,11 +304,11 @@ namespace PERQemu.IO.DiskDevices
         {
             if ((_seekData & 0x8) == 0)
             {
-                SeekTo(_physCylinder - cylCount);
+                SeekTo((ushort)(_physCylinder - cylCount));
             }
             else
             {
-                SeekTo(_physCylinder + cylCount);
+                SeekTo((ushort)(_physCylinder + cylCount));
             }
 
             Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
@@ -292,8 +319,8 @@ namespace PERQemu.IO.DiskDevices
             _physCylinder = cylinder;
 
             // Clip cylinder into range
-            _physCylinder = Math.Min((int)_disk.Geometry.Cylinders - 1, _physCylinder);
-            _physCylinder = Math.Max(0, _physCylinder);
+            _physCylinder = (ushort)Math.Min(_disk.Geometry.Cylinders - 1, _physCylinder);
+            _physCylinder = (ushort)Math.Max((ushort)0, _physCylinder);
 
         }
 
@@ -446,23 +473,6 @@ namespace PERQemu.IO.DiskDevices
             });
         }
 
-        /// <summary>
-        /// Resets the flags ("soft" reset under microcode control).
-        /// </summary>
-        private void ResetFlags()
-        {
-            _controllerStatus = Status.Done;
-            _seekComplete = 1;  // ??? check the manual...
-
-            _serialNumberHigh = 0;
-            _serialNumberLow = 0;
-            _blockNumber = 0;
-            _headerAddressLow = 0;
-            _headerAddressHigh = 0;
-            _dataBufferLow = 0;
-            _dataBufferHigh = 0;
-        }
-
         private enum SeekState
         {
             WaitForStepSet = 0,
@@ -497,6 +507,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Status bits from the drive mapped to the DiskStatus word.
         /// </summary>
+        [Flags]
         private enum HardStatus
         {
             Index = 0x08,

@@ -98,9 +98,6 @@ namespace PERQemu.IO.Z80
             KrizTablet tablet = new KrizTablet(_scheduler, system);
             _z80sio.AttachDevice(1, tablet);
 
-            _floppyDrive = new FloppyDrive();
-            _fdc.AttachDrive(0, _floppyDrive);
-
             _z80Debugger = new Z80Debugger();
 
             // Do 10 rate adjustments / second?  Balance overhead v. accuracy
@@ -365,20 +362,20 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        public void LoadFloppyDisk(string path)
-        {
-            _floppyDrive.LoadDisk(new PhysicalDisk.FloppyDisk(path));
-        }
+        //public void LoadFloppyDisk(string path)
+        //{
+        //    _floppyDrive.LoadDisk(new PhysicalDisk.FloppyDisk(path));
+        //}
 
-        public void SaveFloppyDisk(string path)
-        {
-            _floppyDrive.Disk.Save(path);
-        }
+        //public void SaveFloppyDisk(string path)
+        //{
+        //    _floppyDrive.Disk.Save(path);
+        //}
 
-        public void UnloadFloppyDisk()
-        {
-            _floppyDrive.UnloadDisk();
-        }
+        //public void UnloadFloppyDisk()
+        //{
+        //    _floppyDrive.UnloadDisk();
+        //}
 
         public void SetSerialPort(ISerialDevice dev) { }
 
@@ -439,7 +436,6 @@ namespace PERQemu.IO.Z80
         private TMS9914A _tms9914a;
 
         private Keyboard _keyboard;
-        private FloppyDrive _floppyDrive;
 
         private Z80Debugger _z80Debugger;
         private Scheduler _scheduler;
