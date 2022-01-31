@@ -255,28 +255,35 @@ namespace PERQemu
                     }
 
                     // Set the text color; in severe cases, override them to standout
+                    // Since the Mac Terminal blats the background color across the
+                    // entire output line, fudge the output to look a little better...
                     switch (s)
                     {
                         case Severity.Warning:
                             Console.BackgroundColor = ConsoleColor.Yellow;
                             Console.ForegroundColor = ConsoleColor.Black;
+
+                            Console.Write(output);
+                            Console.BackgroundColor = _defaultBackground;
+                            Console.WriteLine();
                             break;
 
                         case Severity.Error:
                         case Severity.Heresy:
                             Console.BackgroundColor = ConsoleColor.Red;
                             Console.ForegroundColor = ConsoleColor.White;
+
+                            Console.Write(output);
+                            Console.BackgroundColor = _defaultBackground;
+                            Console.WriteLine();
                             break;
 
                         default:
                             Console.ForegroundColor = _colors[c];
+                            Console.WriteLine(output);
                             break;
-                            
                     }
 
-                    Console.WriteLine(output);
-
-                    Console.BackgroundColor = _defaultBackground;
                     Console.ForegroundColor = _defaultForeground;
 
                     System.Threading.Thread.Sleep(0);   // Give it a rest why dontcha

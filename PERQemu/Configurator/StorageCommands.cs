@@ -100,12 +100,21 @@ namespace PERQemu.UI
         {
             try
             {
+                // Assign to our configuration
                 PERQemu.Config.Current.AssignMedia(imagePath, 0);
 
-                if (PERQemu.Sys.State != RunState.Off)
+                if (PERQemu.Controller.State != RunState.Off)
                 {
                     PERQemu.Sys.LoadMedia(DeviceType.Floppy, imagePath, 0);
                     Console.WriteLine("Loaded.");
+                }
+                else
+                {
+                    Console.WriteLine("Assigned '{0}' to unit {1}.",
+                                      Paths.Canonicalize(imagePath), 0);
+
+                    // Force a reload at power on
+                    PERQemu.Config.Changed = true;
                 }
             }
             catch (Exception e)
@@ -118,6 +127,12 @@ namespace PERQemu.UI
         [Command("storage unload floppy", "Unmounts a floppy disk image")]
         private void UnloadFloppy()
         {
+            // Ugh.  if the machine is running,
+            // then if the unit exists and is loaded,
+            // then see if the media has changed, is writable and the user settings
+            // require saving (or asking)
+            // THEN unload the disk and clear the media path.
+            // otherwise just clear the mediapath for unit 0
             var floppy = PERQemu.Config.Current.Drives[0];  // always unit 0
             //PERQemu.Sys.UnloadMedia(floppy);
         }
@@ -145,12 +160,11 @@ namespace PERQemu.UI
                 // drive will be loaded at power up.  If the machine is already
                 // configured, then dynamically load it -- a "hot swap" if you
                 // will, even though the fixed disk types didn't support that!
-                // (Someday a mountable SMD pack option would take advantage, tho)
                 PERQemu.Config.Current.AssignMedia(imagePath, unit);
 
                 if (PERQemu.Controller.State != RunState.Off)
                 {
-                    PERQemu.Sys.LoadMedia(DeviceType.Disk14Inch, imagePath, unit);
+                    PERQemu.Sys.LoadMedia(DeviceType.Disk14Inch, imagePath, unit);  // FIXME
                     Console.WriteLine("Loaded.");
                 }
                 else

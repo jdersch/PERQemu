@@ -127,8 +127,8 @@ namespace PERQmedia
             var sizeIndex = fs.ReadByte();
 
 #if DEBUG
-            Console.WriteLine("Reading fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
-                              format, cyl, head, count, _sectorSizes[sizeIndex], fs.Position);
+            //Console.WriteLine("Reading fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
+            //                  format, cyl, head, count, _sectorSizes[sizeIndex], fs.Position);
 #endif
 
             // Sanity check.  The 8" floppy format is fixed at 77 cylinders,
@@ -167,7 +167,7 @@ namespace PERQmedia
                 _sectorOrdering.Add((ushort)fs.ReadByte());
             }
 #if DEBUG
-            Console.WriteLine("Sector map: " + string.Join(" ", _sectorOrdering.ToArray()));
+            //Console.WriteLine("Sector map: " + string.Join(" ", _sectorOrdering.ToArray()));
 #endif
             //
             // At this time, cyl and head maps are not supported.  It's not
@@ -227,7 +227,7 @@ namespace PERQmedia
 
                 SectorRecordType type = (SectorRecordType)fs.ReadByte();
 #if DEBUG
-                Console.WriteLine($"Reading sector {i} (mapped {sec}), type {type} @ {fs.Position}");
+                //Console.WriteLine($"Reading sector {i} (mapped {sec}), type {type} @ {fs.Position}");
 #endif
                 switch (type)
                 {

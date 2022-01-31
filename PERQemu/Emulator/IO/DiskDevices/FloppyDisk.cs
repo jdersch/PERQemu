@@ -38,7 +38,7 @@ namespace PERQemu.IO.DiskDevices
         public FloppyDisk(Scheduler sched, string filename) : base(filename)
         {
             _scheduler = sched;
-            _tracks = new Track[2, 77];
+            _tracks = new Track[2, 77];     // temp HACK do this more elegantly
 
             _ready = false;
             _diskChange = false;
@@ -71,8 +71,9 @@ namespace PERQemu.IO.DiskDevices
 
         public ushort Cylinder => _cylinder;
 
-        public bool Ready => _ready;
-        public bool Track00 => (_cylinder == 0);
+        public bool Fault => false;     // For now ("Equipment Check")
+        public bool Ready => (IsLoaded && _ready);
+        public bool Track0 => (_cylinder == 0);
         public bool IsSingleSided => _isSingleSided;
         public bool IsDoubleDensity => _isDoubleDensity;
         public bool DiskChange => _diskChange;
@@ -92,6 +93,31 @@ namespace PERQemu.IO.DiskDevices
             }
         }
 
+        public byte HeadSelect
+        {
+            get { return _head; }
+            set
+            {
+                _head = value;
+                if (IsLoaded && IsSingleSided && _head > 0)
+                {
+                    // SA851 denies Ready if selecting head 1 on a single
+                    // sided diskette. We assume the FDC checks the RDY pin...
+                    Log.Debug(Category.FloppyDisk, "Bad head select, clearing RDY");
+                    _ready = false;
+                    _head = 0;
+                }
+                else
+                {
+                    // Reset the Ready bit if they reselect the proper head
+                    if (IsLoaded && _loadDelayEvent == null)
+                    {
+                        _ready = true;
+                    }
+                }
+            }
+        }
+
         public void SeekTo(ushort track, SchedulerEventCallback cb)
         {
             // Clip cylinder count into range and compute seek delay
@@ -99,11 +125,11 @@ namespace PERQemu.IO.DiskDevices
             var delay = Math.Min(Specs.MinimumSeek * (cyls + 1), Specs.MaximumSeek);
 
             // Schedule the callback (to fire on the FDC) to signal seek complete
-            _scheduler.Schedule((ulong)(delay) * Conversion.MsecToNsec, cb);
+            _seekDelayEvent = _scheduler.Schedule((ulong)delay * Conversion.MsecToNsec, cb);
 
             // Make sure we don't fly off the end
             _cylinder = Math.Min(track, Geometry.Cylinders);
-            Log.Debug(Category.FloppyDisk, "[Drive seek to cylinder {0}]", _cylinder);
+            Log.Debug(Category.FloppyDisk, "[Drive seek to cylinder {0} in {1}ms]", _cylinder, delay);
         }
 
         /// <summary>
@@ -143,11 +169,15 @@ namespace PERQemu.IO.DiskDevices
             _isDoubleDensity = (Geometry.SectorSize == 256);
 
             // SA851 manual says that Ready comes true after two index holes are sensed
-            var startup = (ulong)(2 * (1 / (Specs.RPM / 60.0))) * Conversion.MsecToNsec;
+            // (it's actually _three_ revolutions for a double density floppy!)
+            var startup = 2 * (1 / (Specs.RPM / 60.0)) * Conversion.MsecToNsec;
 
-            _loadDelayEvent = _scheduler.Schedule(startup, (skewNsec, context) =>
+            Log.Debug(Category.FloppyDisk, "Floppy will come ready in {0:n} seconds", startup / 10e6);
+
+            _loadDelayEvent = _scheduler.Schedule((ulong)startup, (skewNsec, context) =>
             {
-                Log.Debug(Category.FloppyDisk, "Floppy loaded: {0}", Geometry.ToString());
+                Log.Debug(Category.FloppyDisk, "Floppy online: {0}", Geometry.ToString());
+                _loadDelayEvent = null;
                 _ready = true;
             });
 
@@ -159,7 +189,6 @@ namespace PERQemu.IO.DiskDevices
         private bool _driveSelect;
         private bool _isSingleSided;
         private bool _isDoubleDensity;
-        private bool _isWriteProtected;
 
         private ushort _cylinder;
         private byte _head;

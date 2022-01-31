@@ -114,7 +114,7 @@ namespace PERQemu.IO.Z80
         public ulong Clocks => _cpu.TStatesElapsedSinceReset;
 
         public Z80Processor CPU => _cpu;
-        public Scheduler Scheduler => _scheduler;       // DEBUG only...
+        public Scheduler Scheduler => _scheduler;
         public Keyboard Keyboard => _keyboard;
 
         // DMA Capable devices
@@ -208,9 +208,6 @@ namespace PERQemu.IO.Z80
                 throw new InvalidOperationException("Z80 thread is already running; Stop first.");
             }
 
-            // Catch events from the controller
-            PERQemu.Controller.RunStateChanged += OnRunStateChange;
-
             // Fire off the Z80 thread
             _stopAsyncThread = false;
             _asyncThread = new Thread(AsyncThread) { Name = "Z80" };
@@ -222,9 +219,12 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void AsyncThread()
         {
+            // Catch events from the controller
+            PERQemu.Controller.RunStateChanged += OnRunStateChange;
+
             _heartbeat.Enable(true);
             Console.WriteLine("[Z80 thread starting]");
-            _scheduler.DumpEvents("Z80 at RunAsync");
+            //_scheduler.DumpEvents("Z80 at RunAsync");
 
             do
             {
@@ -232,12 +232,13 @@ namespace PERQemu.IO.Z80
                 {
                     Run(_adjustInterval);
 
-                    if (!_stopAsyncThread)
-                    {
-                        // I think we'll always rate limit the Z80?
-                        //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
-                        _heartbeat.WaitForHeartbeat();
-                    }
+                    if (_stopAsyncThread) break;
+
+                    // I think we'll always rate limit the Z80?
+                    //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                    //{
+                    _heartbeat.WaitForHeartbeat();
+                    //}
                 }
                 catch (Exception e)
                 {
@@ -248,6 +249,9 @@ namespace PERQemu.IO.Z80
 
             _heartbeat.Enable(false);
             Console.WriteLine("[Z80 thread stopped]");
+
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
         /// <summary>
@@ -260,26 +264,22 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Console.WriteLine("[Stopping Z80 thread]");
+            Console.WriteLine("[Stop() Z80 thread]");
             _stopAsyncThread = true;
 
             if (Thread.CurrentThread != _asyncThread)
             {
-                Console.WriteLine("[Z80 thread join...]");
-                _asyncThread?.Join();
-            }
-
-            _asyncThread = null;
-            Console.WriteLine("[Z80 thread exited]");
-
-            // Detach
-            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
+                Console.WriteLine("[Z80 thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
+                //_asyncThread.Join();
+                _asyncThread = null;
+                Console.WriteLine("[Z80 thread exited]");
+           }
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)
         {
-            if (s.State != RunState.Running && _asyncThread != null)
-                Stop();
+            Console.WriteLine("[Z80 state change event -> {0}]", s.State);
+            _stopAsyncThread = (s.State != RunState.Running);
         }
 
         /// <summary>
@@ -361,21 +361,6 @@ namespace PERQemu.IO.Z80
                 Reset(true);
             }
         }
-
-        //public void LoadFloppyDisk(string path)
-        //{
-        //    _floppyDrive.LoadDisk(new PhysicalDisk.FloppyDisk(path));
-        //}
-
-        //public void SaveFloppyDisk(string path)
-        //{
-        //    _floppyDrive.Disk.Save(path);
-        //}
-
-        //public void UnloadFloppyDisk()
-        //{
-        //    _floppyDrive.UnloadDisk();
-        //}
 
         public void SetSerialPort(ISerialDevice dev) { }
 

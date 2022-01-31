@@ -91,16 +91,16 @@ namespace PERQemu
             _schedule = new SchedulerQueue();
         }
 
-        public ulong CurrentTimeNsec
-        {
-            get { return _currentTimeNsec; }
-        }
+        public ulong CurrentTimeNsec => _currentTimeNsec;
 
         public void Reset()
         {
-            _currentTimeNsec = 0;
-            _schedule.Clear();
-            Log.Debug(Category.Scheduler, "Reset ({0}).", _timeStepNsec);
+            if (_currentTimeNsec > 0)
+            {
+                _currentTimeNsec = 0;
+                _schedule.Clear();
+                Log.Debug(Category.Scheduler, "Reset ({0}).", _timeStepNsec);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -112,7 +112,7 @@ namespace PERQemu
                 _currentTimeNsec += _timeStepNsec;
 
                 // See if we have any events waiting to fire at this timestep
-                while (_schedule.Top != null && _currentTimeNsec >= _schedule.Top.TimestampNsec)
+                while (_schedule.Top != null && _currentTimeNsec > _schedule.Top.TimestampNsec)
                 {
                     // Pop the top event and fire the callback
                     Event e = _schedule.Pop();

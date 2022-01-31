@@ -148,12 +148,18 @@ namespace PERQemu
                 // In with the new?
                 if (!Initialize(PERQemu.Config.Current))
                 {
-                    Console.WriteLine("Initialization failed.");
+                    Console.WriteLine("System initialization failed.");
+                    Halt();
                     return;
                 }
 
                 // Load the configured storage devices
-                _system.LoadAllMedia();
+                if (!_system.LoadAllMedia())
+                {
+                    Console.WriteLine("Storage initialization failed.");
+                    Halt();
+                    return;
+                }
             }
 
             // (Re-)Start the machine
@@ -283,6 +289,10 @@ namespace PERQemu
                             Thread.Sleep(10);
 
                         } while (step.WaitForIt);
+
+                        // Abandon the rest of our steps
+                        if (current == RunState.Halted)
+                            break;
                     }
                 }
                 else
@@ -308,8 +318,6 @@ namespace PERQemu
         {
             RunStateChangeEventHandler handler = RunStateChanged;
             handler?.Invoke(new RunStateChangeEventArgs(a));
-
-            // use Begin/EndInvoke in order to get back result code?
         }
 
         /// <summary>

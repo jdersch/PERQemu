@@ -45,6 +45,7 @@ namespace PERQemu.IO
         public IOBoard(PERQSystem system)
         {
             _sys = system;
+            _drives = new StorageDevice[_sys.Config.Drives.Length];
         }
 
         public static string Name => _name;
@@ -140,13 +141,15 @@ namespace PERQemu.IO
                 _drives[unit].Load();
                 _hardDiskController.AttachDrive((HardDisk)_drives[unit]);
             }
-
-            throw new InvalidOperationException("Wrong disk type for this IO Board");
+            else
+            {
+                throw new InvalidOperationException("Wrong disk type for this IO Board");
+            }
         }
 
         public virtual void SaveDisk(int unit = 0)
         {
-            if (_drives[unit].IsLoaded && _drives[unit].IsModified)
+            if (_drives[unit] != null && _drives[unit].IsLoaded && _drives[unit].IsModified)
             {
                 if (Settings.SaveDiskOnShutdown == Ask.Yes)
                 {
@@ -155,7 +158,7 @@ namespace PERQemu.IO
                 }
                 else
                 {
-                    Console.WriteLine("Wanna save unit " + unit + "?  ya cant yet");
+                    Console.WriteLine("Wanna save unit " + unit + "?  ya caint yet");
                 }
             }
         }
@@ -171,7 +174,7 @@ namespace PERQemu.IO
 
         public virtual void UnloadDisk(int unit = 0)
         {
-            _drives[unit].Unload();
+            _drives[unit]?.Unload();
         }
 
         /// <summary>

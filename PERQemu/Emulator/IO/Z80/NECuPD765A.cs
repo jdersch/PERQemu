@@ -56,7 +56,7 @@ namespace PERQemu.IO.Z80
                 new CommandData(Command.Recalibrate, 0xff, 2, SeekExecutor),
                 new CommandData(Command.SenseInterruptStatus, 0xff, 1, SenseInterruptStatusExecutor),
                 new CommandData(Command.Specify, 0xff, 3, SpecifyExecutor),
-                new CommandData(Command.SenseDriveStatus, 0xff, 2, StubExecutor),
+                new CommandData(Command.SenseDriveStatus, 0xff, 2, SenseDriveStatusExecutor),
                 new CommandData(Command.ScanHighOrEqual, 0x1f, 9, StubExecutor),
                 new CommandData(Command.Seek, 0xff, 3, SeekExecutor),
             };
@@ -119,22 +119,28 @@ namespace PERQemu.IO.Z80
         /// </summary>
         public void AttachDrive(uint unit, FloppyDisk drive)
         {
-            if (unit > 2)
+            if (unit > _drives.Length)
             {
                 throw new ArgumentOutOfRangeException(nameof(unit));
             }
 
             _drives[unit] = drive;
+
+            Log.Debug(Category.FloppyDisk, "Attached disk '{0}'", drive.Info.Name);
         }
 
         public void DetachDrive(uint unit)
         {
-            if (unit > 2)
+            if (unit > _drives.Length)
             {
                 throw new ArgumentOutOfRangeException(nameof(unit));
             }
 
-            _drives[unit] = null;
+            if (_drives[unit] != null)
+            {
+                Log.Debug(Category.FloppyDisk, "Detached disk '{0}'", _drives[unit].Info.Name);
+                _drives[unit] = null;
+            }
         }
 
         public byte Read(byte portAddress)
@@ -143,7 +149,7 @@ namespace PERQemu.IO.Z80
             {
                 case Register.Status:
                     Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x}).",
-                              _status, (byte)_status);
+                                                   _status, (byte)_status);
                     return (byte)_status;
 
                 case Register.Data:
@@ -349,7 +355,7 @@ namespace PERQemu.IO.Z80
         {
             var cmd = (Command)_commandData.Dequeue();
             SelectUnitHead(_commandData.Dequeue());
-            var cylinder = (cmd == Command.Seek) ? (byte)_commandData.Dequeue() : (byte)0;
+            var cylinder = (cmd == Command.Seek) ? _commandData.Dequeue() : (byte)0;
 
             if (SelectedDriveIsReady)
             {
@@ -363,8 +369,11 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                // TODO: uh, trying to seek an empty drive?
+                // Trying to seek on a drive that's not ready (or not connected?)
+                StatusRegister0 ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 Log.Error(Category.FloppyDisk, "{0} issued but drive {1} not ready", cmd, _unitSelect);
+
+                FinishCommand();
             }
         }
 
@@ -377,25 +386,57 @@ namespace PERQemu.IO.Z80
             _status &= ~((Status)(0x1 << _unitSelect));
             _interruptActive = true;
 
-            Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} completed ({2}ms)",
-                      _unitSelect, _pcn[_unitSelect], skewNsec * Conversion.NsecToMsec);
-            
-			// Return to Command state
-			FinishCommand();
+            Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} completed ({2}ns)",
+                                            _unitSelect, _pcn[_unitSelect], skewNsec);
+
+            // Return to Command state
+            FinishCommand();
         }
 
         private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
         {
+            _commandData.Dequeue();     // toss command byte
+
             // Return ST0 and PCN, and clear the interrupt active flag
             _interruptActive = false;
 
-            StatusRegister0 ST0 =
-                (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None) |
-                (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head) |
-                (StatusRegister0)_unitSelect;
+            StatusRegister0 ST0 = SetErrorStatus(StatusRegister0.None);
 
             _statusData.Enqueue((byte)ST0);             // ST0 (SEEK END)
             _statusData.Enqueue(_pcn[_unitSelect]);     // PCN
+
+            // "Neither the Seek or Recalibrate Command have a Result Phase. Therefore
+            // it is mandatory to use the Sense Interrupt Status Command after these
+            // commands to effectively terminate them and to provide verification of
+            // where the head is positioned (PCN).  Issuing the Sense Interrupt Command
+            // without interrupt pending is treated as an invalid command."
+
+            // Uh, so that means we should clear it _here_ then?
+            _seekEnd = false;
+
+            FinishCommand();
+        }
+
+        private void SenseDriveStatusExecutor(ulong skewNsec, object context)
+        {
+            _commandData.Dequeue();                     // toss command byte
+            SelectUnitHead(_commandData.Dequeue());     // get drive to query
+
+            var st3 = (StatusRegister3)_unitSelect;
+
+            if (SelectedUnit != null)
+            {
+                // Build up ST3 result bits from the selected drive
+                st3 |= (SelectedUnit.HeadSelect > 0 ? StatusRegister3.Head : StatusRegister3.None) |
+                       (SelectedUnit.IsSingleSided ? StatusRegister3.None : StatusRegister3.TwoSided) |
+                       (SelectedUnit.Track0 ? StatusRegister3.Track0 : StatusRegister3.None) |
+                       (SelectedUnit.Ready ? StatusRegister3.Ready : StatusRegister3.None) |
+                       (SelectedUnit.Info.IsWritable ? StatusRegister3.None : StatusRegister3.WriteProtected) |
+                       (SelectedUnit.Fault ? StatusRegister3.Fault : StatusRegister3.None);
+            }
+            // otherwise... what to return if no drive attached?
+
+            _statusData.Enqueue((byte)st3);
 
             FinishCommand();
         }
@@ -471,9 +512,7 @@ namespace PERQemu.IO.Z80
             {
                 // Post drive not ready (TODO: this isn't correct, apparently?
                 // FLOPPY hates this so much it hangs forever.)
-                _transferRequest.ST0 = StatusRegister0.IntrCode0 |
-                                       (StatusRegister0)_unitSelect |
-                                       (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head);
+                _transferRequest.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transferRequest.ST1 = StatusRegister1.None;
                 _transferRequest.ST2 = StatusRegister2.None;
 
@@ -490,7 +529,7 @@ namespace PERQemu.IO.Z80
             // If the last byte was not written, this is an overrun
             if (_writeDataReady)
             {
-                _transferRequest.ST0 |= StatusRegister0.IntrCode0;  // Abnormal termination
+                _transferRequest.ST0 |= StatusRegister0.AbnormalTermination;
                 _transferRequest.ST1 = StatusRegister1.OverRun;
                 FinishTransfer(_transferRequest);
                 return;
@@ -574,10 +613,10 @@ namespace PERQemu.IO.Z80
         private void SectorTransferCallback(ulong skewNsec, object context)
         {
             // Simulate the initial search for the sector, then kick off the sector transfer:
+            Log.Debug(Category.FloppyDisk, "In transfer callback");
 
             // Set preliminary status info
-            _transferRequest.ST0 = (StatusRegister0)_unitSelect |
-                (_headSelect == 0 ? StatusRegister0.None : StatusRegister0.Head);
+            _transferRequest.ST0 = SetErrorStatus(StatusRegister0.None);
 
             // If Request was aborted by the DMA controller, stop here
             if (_transferRequest.Aborted)
@@ -594,7 +633,7 @@ namespace PERQemu.IO.Z80
             if (_transferRequest.Cylinder > SelectedUnit.Geometry.Cylinders ||
                 _transferRequest.Cylinder != SelectedUnit.Cylinder)
             {
-                _transferRequest.ST0 = StatusRegister0.IntrCode0;   // Abnormal termination
+                _transferRequest.ST0 |= StatusRegister0.AbnormalTermination;
                 _transferRequest.ST2 = StatusRegister2.WrongCylinder;
                 FinishTransfer(_transferRequest);
                 return;
@@ -605,21 +644,23 @@ namespace PERQemu.IO.Z80
             // Validate the head vs. the number of sides on the disk:
             if (SelectedUnit.IsSingleSided && _transferRequest.Head != 0)
             {
-                _transferRequest.ST0 = StatusRegister0.IntrCode0;   // Abnormal termination
+                _transferRequest.ST0 |= StatusRegister0.AbnormalTermination;
                 _transferRequest.ST1 = StatusRegister1.NoData;      // TODO: is this correct?  What does this really report for a single-sided disk?
                 FinishTransfer(_transferRequest);
                 return;
             }
 
-            Track diskTrack = SelectedUnit.GetTrack(_transferRequest.Cylinder, _transferRequest.Head);
+            //Track diskTrack = SelectedUnit.GetTrack();
 
             // Grab the sector:
-            _transferRequest.SectorData = diskTrack.ReadSector(_transferRequest.Sector);
+            _transferRequest.SectorData = SelectedUnit.GetSector(_transferRequest.Cylinder,
+                                                                 _transferRequest.Head,
+                                                                 _transferRequest.Sector);
 
             if (_transferRequest.SectorData.Data.Length == 0)
             {
                 // No sector data available:
-                _transferRequest.ST0 = StatusRegister0.IntrCode0;   // Abnormal termination
+                _transferRequest.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transferRequest.ST1 = StatusRegister1.NoData;      // Sector not found
                 FinishTransfer(_transferRequest);
                 return;
@@ -629,7 +670,7 @@ namespace PERQemu.IO.Z80
             if ((_transferRequest.MFM && _transferRequest.SectorLength != 256) ||
                 (!_transferRequest.MFM && _transferRequest.SectorLength != 128))
             {
-                _transferRequest.ST0 = StatusRegister0.IntrCode0;   // Abnormal termination
+                _transferRequest.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transferRequest.ST1 = StatusRegister1.NoData;      // Sector not found (TODO: is this correct?)
                 FinishTransfer(_transferRequest);
                 return;
@@ -663,7 +704,7 @@ namespace PERQemu.IO.Z80
             // If the last byte was not read by now, this is an overrun
             if (_readDataReady)
             {
-                _transferRequest.ST0 |= StatusRegister0.IntrCode0;  // Abnormal termination
+                _transferRequest.ST0 |= StatusRegister0.AbnormalTermination;
                 _transferRequest.ST1 = StatusRegister1.OverRun;
                 FinishTransfer(_transferRequest);
                 return;
@@ -680,7 +721,7 @@ namespace PERQemu.IO.Z80
             // If the last byte was not written, this is an overrun
             if (_writeDataReady)
             {
-                _transferRequest.ST0 |= StatusRegister0.IntrCode0;  // Abnormal termination
+                _transferRequest.ST0 |= StatusRegister0.AbnormalTermination;
                 _transferRequest.ST1 = StatusRegister1.OverRun;
                 FinishTransfer(_transferRequest);
                 return;
@@ -705,7 +746,6 @@ namespace PERQemu.IO.Z80
 
         private void FinishSectorTransfer()
         {
-
             Log.Debug(Category.FloppyDisk, "Sector {0} transfer complete.", _transferRequest.Sector);
 
             // Always increment the sector counter
@@ -751,6 +791,34 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
+        /// Fill in the common fields of Status Register 0.  This is done
+        /// often enough to do it consistently.  If a non-existent drive is
+        /// selected, returns NotReady and error status ReadySignalChanged.
+        /// </summary>
+        private StatusRegister0 SetErrorStatus(StatusRegister0 error)
+        {
+            var st0 = error |
+                    (StatusRegister0)_unitSelect |
+                    (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None);
+
+            if (SelectedUnit == null)
+            {
+                // There ain't no drive there!  How will the PERQ react?
+                st0 |= StatusRegister0.NotReady | StatusRegister0.ReadySignalChanged;
+            }
+            else
+            {
+                // Give back actual drive status
+                st0 |= (SelectedUnit.HeadSelect == 0 ? StatusRegister0.None : StatusRegister0.Head) |
+                       (SelectedUnit.Fault ? StatusRegister0.EquipChk : StatusRegister0.None) |
+                       (SelectedUnit.Ready ? StatusRegister0.None : StatusRegister0.NotReady);
+            }
+
+            Log.Debug(Category.FloppyDisk, "ST0 = {0}", st0);
+            return st0;
+        }
+
+        /// <summary>
         /// Supplemental data structure: Transfer request.
         /// </summary>
         private struct TransferRequest
@@ -789,7 +857,7 @@ namespace PERQemu.IO.Z80
         private FloppyDisk[] _drives;
         private FloppyDisk SelectedUnit => _drives[_unitSelect];
 
-        private bool SelectedDriveIsReady => SelectedUnit != null && SelectedUnit.IsLoaded;
+        private bool SelectedDriveIsReady => SelectedUnit != null && SelectedUnit.Ready;
 
         private byte[] _pcn;
 
@@ -862,13 +930,14 @@ namespace PERQemu.IO.Z80
         {
             None = 0x0,
             Unit0 = 0x1,
-            Unit1 = 0x2,      // Sadly, this pin is NC on the PERQ
+            Unit1 = 0x2,    // Sadly, this pin is NC on the PERQ
             Head = 0x4,
             NotReady = 0x8,
             EquipChk = 0x10,
             SeekEnd = 0x20,
-            IntrCode0 = 0x40,
-            IntrCode1 = 0x80
+            AbnormalTermination = 0x40,     // Interrupt code bits are grouped:
+            InvalidCommandIssue = 0x80,     // 00=Normal,  01=Abnormal
+            ReadySignalChanged = 0xc0       // 10=Invalid, 11=RdyChanged
         }
 
         [Flags]

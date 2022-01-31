@@ -110,9 +110,6 @@ namespace PERQemu.Processor
                 throw new InvalidOperationException("CPU thread is already running; Stop first.");
             }
 
-            // Catch events from the controller
-            PERQemu.Controller.RunStateChanged += OnRunStateChange;
-
             // Fire off the CPU thread
             _stopAsyncThread = false;
             _asyncThread = new Thread(AsyncThread) { Name = "CPU" };
@@ -124,6 +121,9 @@ namespace PERQemu.Processor
         /// </summary>
         private void AsyncThread()
         {
+            // Catch events from the controller
+            PERQemu.Controller.RunStateChanged += OnRunStateChange;
+
             _heartbeat.Enable(true);
             Console.WriteLine("[CPU thread starting]");
             _scheduler.DumpEvents("CPU at RunAsync");
@@ -134,9 +134,10 @@ namespace PERQemu.Processor
                 {
                     Run(_adjustInterval);
 
+                    if (_stopAsyncThread) break;
+
                     // Do rate limiting if configured (and we haven't left run mode)
-                    if (!_stopAsyncThread &&
-                        Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                    if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
                     {
                         _heartbeat.WaitForHeartbeat();
                     }
@@ -150,6 +151,9 @@ namespace PERQemu.Processor
 
             _heartbeat.Enable(false);
             Console.WriteLine("[CPU thread stopped]");
+
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
         /// <summary>
@@ -163,27 +167,23 @@ namespace PERQemu.Processor
                 return;
             }
 
-            Console.WriteLine("[Stopping CPU thread]");
+            Console.WriteLine("[Stop() CPU thread]");
             _stopAsyncThread = true;
 
             if (Thread.CurrentThread != _asyncThread)
             {
-                Console.WriteLine("[CPU thread join...]");
+                Console.WriteLine("[CPU thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
                 // Waaaaait for it
-                _asyncThread?.Join();
+                //_asyncThread.Join();
+                _asyncThread = null;
+                Console.WriteLine("[CPU thread exited]");
             }
-
-            _asyncThread = null;
-            Console.WriteLine("[CPU thread exited]");
-
-            // Detach
-            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)
         {
-            if (s.State != RunState.Running && _asyncThread != null)
-                Stop();
+            Console.WriteLine("[CPU state change event -> {0}]", s.State);
+            _stopAsyncThread = (s.State != RunState.Running);
         }
 
         /// <summary>

@@ -44,9 +44,12 @@ namespace PERQemu.IO.DiskDevices
             _index = false;
             _seekComplete = false;
 
+            _seekEvent = null;
             _indexEvent = null;
             _startupEvent = null;
 
+            _cyl = 0;
+            _lastStep = 0;
             _discRotationTimeNsec = 0;
             _indexPulseDurationNsec = 0;
         }
@@ -55,7 +58,7 @@ namespace PERQemu.IO.DiskDevices
         public virtual bool Ready => _ready;
         public virtual bool Fault => _fault;
         public virtual bool Index => _index;
-        public virtual bool Trk00 => (_cyl == 0);
+        public virtual bool Track0 => (_cyl == 0);
         public virtual bool SeekComplete => _seekComplete;
 
         /// <summary>
@@ -139,6 +142,60 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
+        /// Initiates or continues a Seek by pulsing the Disk Step line.
+        /// Direction is >0 for positive steps, or 0 for a negative steps.
+        /// </summary>
+        public virtual void SeekStep(int direction)
+        {
+            // Take a step, but within limits
+            if (direction > 0)
+            {
+                _cyl = Math.Min(_cyl++, Geometry.Cylinders);
+            }
+            else
+            {
+                _cyl = Math.Min(_cyl--, _cyl);  // Heh.  Avoid wrap.
+            }
+            // Want to see if the buffered seeks are actually coming through
+            // or if I have to fix the CTC to actually dtrt; i think this has
+            // never actually worked right; we just deliver the data as requested
+            // and treat every seek as a single step (which, in reality, is really
+            // slow since there's 20ms head settling time on every seek op)
+            var interval = (_scheduler.CurrentTimeNsec - _lastStep) * Conversion.NsecToMsec;
+            Log.Debug(Category.HardDisk, "Step pulse! cyl={0}, interval={1:n}", _cyl, interval);
+            _lastStep = _scheduler.CurrentTimeNsec;
+
+            // schedule it:
+            //      if not seeking, we start (with the "settling" time if any)
+            //      if the timer is already running, we're buffering; extend
+            //      eventually the pulses stop and we allow the seek to complete
+            // easy peasy lemon squeezy
+
+            //Event foo = _scheduler.Schedule((ulong)interval, (skewNsec, context) => { } );
+            //foo.TimestampNsec += 9;
+
+            // For now:
+            _seekComplete = true;
+        }
+
+
+        /// <summary>
+        /// Requests that the drive clear its Fault status.
+        /// </summary>
+        public virtual void FaultClear()
+        {
+            if (_fault)
+            {
+                Log.Debug(Category.HardDisk, "Fault cleared.");
+                _fault = false;
+            }
+            else
+            {
+                Log.Debug(Category.HardDisk, "Fault clear requested.");
+            }
+        }
+
+        /// <summary>
         /// Spin up the virtual drive.  This schedules an event to raise the
         /// ready signal (which should cause an interrupt) after hardware reset.
         /// </summary>
@@ -159,7 +216,7 @@ namespace PERQemu.IO.DiskDevices
 
                 // Introduce a little variation, from 50-95% of max startup time
                 var rand = new Random();
-                delay = (ulong)(Specs.StartupDelay / 100 * rand.Next(50, 95));
+                delay = (ulong)(Specs.StartupDelay / 100 * rand.Next(50, 95) / 10); // DEBUG
             }
 
             _startupEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, DriveReady);
@@ -176,7 +233,7 @@ namespace PERQemu.IO.DiskDevices
             _ready = true;
             _startupEvent = null;
 
-            Log.Debug(Category.HardDisk, "Drive {0} has come up to speed.", Info.Name);
+            Log.Debug(Category.HardDisk, "Hard drive is online: {0}.", Geometry);
         }
 
         /// <summary>
@@ -193,12 +250,10 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         private void IndexPulseEnd(ulong skew, object context)
         {
-            var next = _discRotationTimeNsec - _indexPulseDurationNsec - skew;
+            var next = _discRotationTimeNsec - _indexPulseDurationNsec;
 
             _index = false;
             _indexEvent = _scheduler.Schedule(next, IndexPulseStart);
-
-            Log.Debug(Category.HardDisk, "Next index pulse in {0:n}msec", next);
         }
 
         /// <summary>
@@ -207,7 +262,7 @@ namespace PERQemu.IO.DiskDevices
         public override void OnLoad()
         {
             // Compute the index pulse duration and gap
-            _discRotationTimeNsec = (ulong)(1 / (Specs.RPM / 60.0)) * Conversion.MsecToNsec;
+            _discRotationTimeNsec = (ulong)(1 / (Specs.RPM / 60.0) * Conversion.MsecToNsec);
             _indexPulseDurationNsec = (ulong)Specs.IndexPulse;
 
             Log.Debug(Category.HardDisk,
@@ -236,6 +291,8 @@ namespace PERQemu.IO.DiskDevices
         private Event _indexEvent;
 
         // Oh yeah, seek stuff
+        private ulong _lastStep;
+        private Event _seekEvent;
 
         // Startup delay
         private Event _startupEvent;

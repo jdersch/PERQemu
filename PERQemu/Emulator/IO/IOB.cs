@@ -80,8 +80,8 @@ namespace PERQemu.IO
             switch (port)
             {
                 case 0xc1:  // Shugart command/control register & Z80 status register
-                    _hardDiskController.LoadCommandRegister(value & 0x3f);  // Low 6 bits
-                    _z80System.WriteStatus(value & 0xc0);                   // Hi 2 bits?
+                    _hardDiskController.LoadCommandRegister(value & 0x7f);
+                    _z80System.WriteStatus(value & 0x80);
                     break;
 
                 case 0xc2:  // Shugart Head register

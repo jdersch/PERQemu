@@ -243,36 +243,13 @@ namespace PERQemu.Processor
         public static int WCSSize => _wcsSize;
         public static int WCSMask => _wcsMask;
         public static ulong MicroCycleTime => _cycleTime;
-
-        public static bool Is4K
-        {
-            get { return (_wcsSize == 4096); }
-        }
-
-        public ulong Clocks
-        {
-            get { return _clocks; }
-        }
-
-        public RasterOp RasterOp
-        {
-            get { return _rasterOp; }
-        }
-
-        public bool OpFileEmpty
-        {
-            get { return (BPC & 0x8) != 0; }
-        }
-
-        public bool IncrementBPC
-        {
-            get { return _incrementBPC; }
-        }
-
-        public ulong[] Microcode
-        {
-        	get { return _ustore.Microcode; }
-        }
+        public static bool Is4K => (_wcsSize == 4096);
+      
+        public bool OpFileEmpty =>  (BPC & 0x8) != 0;
+        public bool IncrementBPC => _incrementBPC;
+        public ulong Clocks => _clocks;
+        public ulong[] Microcode => _ustore.Microcode;
+        public RasterOp RasterOp => _rasterOp;
 
         #endregion
 

@@ -128,9 +128,6 @@ namespace PERQemu
             _ioBus.AddDevice(_iob);
             _ioBus.AddDevice(_oio);
 
-            // Allocate our storage devices
-            _drives = new StorageDevice[conf.Drives.Length];
-
             // Set our initial state; instantiated but not yet initialized...
             // shouldn't this just be... "On"?  Sigh.
             _state = RunState.Off;
@@ -266,11 +263,6 @@ namespace PERQemu
 
                 // Run the event loop until State changes
                 _display.SDLMessageLoop(_mode);
-
-                // Stop the threads - they do this directly now
-                // this is a mess.  consider doing the whole effing TAP thing :-/
-                //_cpu.Stop();
-                //_iob.Stop();
             }
             else
             {
@@ -382,7 +374,7 @@ namespace PERQemu
         /// reset.  All drives are loaded and then assigned to controllers by
         /// device type!
         /// </remarks>
-        public void LoadAllMedia()
+        public bool LoadAllMedia()
         {
             for (var unit = 0; unit < _conf.Drives.Length; unit++)
             {
@@ -390,15 +382,18 @@ namespace PERQemu
 
                 if (!string.IsNullOrEmpty(drive.MediaPath))
                 {
-                    LoadMedia(drive.Type, drive.MediaPath, unit);
+                    if (!LoadMedia(drive.Type, drive.MediaPath, unit))
+                        return false;
                 }
             }
+
+            return true;
         }
 
         /// <summary>
         /// Load a media file (floppy, hard disk or tape).
         /// </summary>
-        public void LoadMedia(DeviceType type, string path, int unit)
+        public bool LoadMedia(DeviceType type, string path, int unit)
         {
             try
             {
@@ -410,7 +405,7 @@ namespace PERQemu
                 {
                     Console.WriteLine("File loaded is not the correct media type for this drive!");
                     Console.WriteLine($"  Unit {unit}  Expected: {type}  Loaded: {dev}");
-                    return;
+                    return false;
                 }
 
                 // Hand it off to the appropriate controller
@@ -432,10 +427,12 @@ namespace PERQemu
                     default:
                         throw new UnimplementedHardwareException($"Support for drive type {type} is not implemented.");
                 }
+                return true;
             }
             catch (Exception e)
             {
                 Console.WriteLine("Failed to load '{0}' (unit {1}): {2}", path, unit, e.Message);
+                return false;
             }
         }
 
@@ -529,8 +526,6 @@ namespace PERQemu
         private IOBus _ioBus;
         private IOBoard _iob;
         private OptionBoard _oio;
-
-        private StorageDevice[] _drives;
 
         // Controlly bits
         private ExecutionMode _mode;

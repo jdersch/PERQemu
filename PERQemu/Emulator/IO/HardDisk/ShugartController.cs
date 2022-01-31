@@ -118,8 +118,9 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public void LoadCommandRegister(int data)
         {
-            Command command = (Command)(data & 0x7);
-
+            var command = (Command)(data & 0x07);
+            _seekCommand = (SeekCommand)(data & 0x78);
+                
             Log.Debug(Category.HardDisk, "Shugart command data: {0:x4}", data);
             Log.Debug(Category.HardDisk, "Shugart command is: {0}", command);
 
@@ -128,6 +129,9 @@ namespace PERQemu.IO.DiskDevices
                 case Command.Idle:
                     // Clear any running busy event...
                     _system.Scheduler.Cancel(_busyEvent);
+                    _busyEvent = null;
+
+                    // Clear any active seek?
 
                     // Now clear any currently pending interrupts (avoids DDS 163)
                     _system.CPU.ClearInterrupt(InterruptSource.HardDisk);
@@ -168,7 +172,6 @@ namespace PERQemu.IO.DiskDevices
                     break;
             }
 
-            _seekData = data;
             ClockSeek();
         }
 
@@ -177,7 +180,7 @@ namespace PERQemu.IO.DiskDevices
             // Hardware latches 4 bits
             _head = (byte)(value & 0x0f);
 
-            Log.Debug(Category.HardDisk, "Shugart head set to {0x2}", _head);
+            Log.Debug(Category.HardDisk, "Shugart head latch set to {0}", _head);
         }
 
         public void LoadCylSecRegister(int value)
@@ -242,12 +245,12 @@ namespace PERQemu.IO.DiskDevices
         {
             get
             {
-                return ((int)_controllerStatus |
+                return ((int)_controllerStatus | (_disk == null ? 0 :
                         (int)((_disk.Index ? HardStatus.Index : 0) |
-                              (_disk.Trk00 ? HardStatus.TrackZero : 0) |
+                              (_disk.Track0 ? HardStatus.TrackZero : 0) |
                               (_disk.Fault ? HardStatus.DriveFault : 0) |
                               (_disk.SeekComplete ? HardStatus.SeekComplete : 0) |
-                              (_disk.Ready ? HardStatus.UnitReady : 0)));
+                              (_disk.Ready ? HardStatus.UnitReady : 0))));
             }
         }
 
@@ -256,7 +259,7 @@ namespace PERQemu.IO.DiskDevices
             switch (_seekState)
             {
                 case SeekState.WaitForStepSet:
-                    if ((_seekData & 0x10) != 0)
+                    if (_seekCommand.HasFlag(SeekCommand.Step))
                     {
                         _seekState = SeekState.WaitForStepRelease;
 
@@ -266,7 +269,7 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 case SeekState.WaitForStepRelease:
-                    if ((_seekData & 0x10) == 0)
+                    if (!_seekCommand.HasFlag(SeekCommand.Step))
                     {
                         _seekState = SeekState.SeekComplete;
 
@@ -288,13 +291,13 @@ namespace PERQemu.IO.DiskDevices
 
         public void DoSingleSeek()
         {
-            if ((_seekData & 0x8) == 0)
+            if (_seekCommand.HasFlag(SeekCommand.Direction))
             {
-                SeekTo((ushort)(_physCylinder - 1));
+                SeekTo((ushort)(_physCylinder + 1));
             }
             else
             {
-                SeekTo((ushort)(_physCylinder + 1));
+                SeekTo((ushort)(_physCylinder - 1));
             }
 
             Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
@@ -302,13 +305,13 @@ namespace PERQemu.IO.DiskDevices
 
         public void DoMultipleSeek(int cylCount)
         {
-            if ((_seekData & 0x8) == 0)
+            if (_seekCommand.HasFlag(SeekCommand.Direction))
             {
-                SeekTo((ushort)(_physCylinder - cylCount));
+                SeekTo((ushort)(_physCylinder + cylCount));
             }
             else
             {
-                SeekTo((ushort)(_physCylinder + cylCount));
+                SeekTo((ushort)(_physCylinder - cylCount));
             }
 
             Log.Debug(Category.HardDisk, "Shugart seek to cylinder {0}", _physCylinder);
@@ -322,31 +325,35 @@ namespace PERQemu.IO.DiskDevices
             _physCylinder = (ushort)Math.Min(_disk.Geometry.Cylinders - 1, _physCylinder);
             _physCylinder = (ushort)Math.Max((ushort)0, _physCylinder);
 
+            _disk.SeekStep(_seekCommand.HasFlag(SeekCommand.Direction) ? 1 : 0);
         }
 
         /// <summary>
-        /// Does a read from the cyl/head/sec specified by the controller registers.
-        /// TODO: This is a DMA operation...
+        /// Reads a block from cyl/head/sec into memory at the addresses
+        /// specified by the controller registers.
         /// </summary>
         private void ReadBlock()
         {
-            // Read the sector from the disk...
-            Sector sectorData = _disk.GetSector(_cylinder, _head, _sector);
+            // todo: This is actually a DMA operation, but that's not
+            // implemented yet.  So just do the whole block, lickety split
+
+            // Read the sector from the disk
+            Sector sec = _disk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
 
             // Copy the data to the data buffer address
-            // and the header to the header address
-            for (int i = 0; i < sectorData.Data.Length; i += 2)
+            for (int i = 0; i < sec.Data.Length; i += 2)
             {
-                int word = sectorData.Data[i] | (sectorData.Data[i + 1] << 8);
+                int word = sec.Data[i] | (sec.Data[i + 1] << 8);
                 _system.Memory.StoreWord(dataAddr + (i >> 1), (ushort)word);
             }
 
-            for (int i = 0; i < sectorData.Header.Length; i += 2)
+            // And the header to the header address
+            for (int i = 0; i < sec.Header.Length; i += 2)
             {
-                int word = sectorData.Header[i] | (sectorData.Header[i + 1] << 8);
+                int word = sec.Header[i] | (sec.Header[i + 1] << 8);
                 _system.Memory.StoreWord(headerAddr + (i >> 1), (ushort)word);
             }
 
@@ -360,42 +367,34 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Does a write to the cyl/head/sec specified by the controller registers.
         /// Does NOT commit to disk, only in memory copy is affected.
-        /// TODO: This is a DMA operation...
         /// </summary>
         private void WriteBlock(bool writeHeader)
         {
-            Sector sectorData = new Sector(_cylinder, _head, _sector,
-                                           _disk.Geometry.SectorSize,
-                                           _disk.Geometry.HeaderSize);
+            // todo: Should be a DMA op.  See above.
+            Sector sec = _disk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
 
-            for (int i = 0; i < sectorData.Data.Length; i += 2)
+            for (int i = 0; i < sec.Data.Length; i += 2)
             {
                 int word = _system.Memory.FetchWord(dataAddr + (i >> 1));
-                sectorData.Data[i] = (byte)(word & 0xff);
-                sectorData.Data[i + 1] = (byte)((word & 0xff00) >> 8);
+                sec.Data[i] = (byte)(word & 0xff);
+                sec.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
 
             if (writeHeader)
             {
-                for (int i = 0; i < sectorData.Header.Length; i += 2)
+                for (int i = 0; i < sec.Header.Length; i += 2)
                 {
                     int word = _system.Memory.FetchWord(headerAddr + (i >> 1));
-                    sectorData.Header[i] = (byte)(word & 0xff);
-                    sectorData.Header[i + 1] = (byte)((word & 0xff00) >> 8);
+                    sec.Header[i] = (byte)(word & 0xff);
+                    sec.Header[i + 1] = (byte)((word & 0xff00) >> 8);
                 }
-            }
-            else
-            {
-                // Keep the original header data.
-                Sector origSector = _disk.GetSector(_cylinder, _head, _sector);
-                origSector.Header.CopyTo(sectorData.Header, 0);
             }
 
             // Write the sector to the disk...
-            _disk.SetSector(sectorData, _cylinder, _head, _sector);
+            _disk.SetSector(sec);
 
             Log.Debug(Category.HardDisk,
                       "Shugart sector write complete to {0}/{1}/{2}, read from memory at {3:x6}",
@@ -405,35 +404,35 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Does a "format" of the cyl/head/sec specified by the controller registers.
-        /// Does NOT commit to disk, only in memory copy is affected.
+        /// Does a "format" of the cyl/head/sec specified by the controller
+        /// registers.  Does NOT commit to disk, only in memory copy is affected.
         /// </summary>
         private void FormatBlock()
         {
-            Sector sectorData = new Sector(_cylinder, _head, _sector,
-                                           _disk.Geometry.SectorSize,
-                                           _disk.Geometry.HeaderSize);
+            Sector sec = new Sector(_cylinder, _head, _sector,
+                                    _disk.Geometry.SectorSize,
+                                    _disk.Geometry.HeaderSize);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
 
-            for (int i = 0; i < sectorData.Data.Length; i += 2)
+            for (int i = 0; i < sec.Data.Length; i += 2)
             {
                 int word = _system.Memory.FetchWord(dataAddr + (i >> 1));
-                sectorData.Data[i] = (byte)(word & 0xff);
-                sectorData.Data[i + 1] = (byte)((word & 0xff00) >> 8);
+                sec.Data[i] = (byte)(word & 0xff);
+                sec.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
 
             // Write the new header data...
-            for (int i = 0; i < sectorData.Header.Length; i += 2)
+            for (int i = 0; i < sec.Header.Length; i += 2)
             {
                 int word = _system.Memory.FetchWord(headerAddr + (i >> 1));
-                sectorData.Header[i] = (byte)(word & 0xff);
-                sectorData.Header[i + 1] = (byte)((word & 0xff00) >> 8);
+                sec.Header[i] = (byte)(word & 0xff);
+                sec.Header[i + 1] = (byte)((word & 0xff00) >> 8);
             }
 
             // Write the sector to the disk...
-            _disk.SetSector(sectorData);
+            _disk.SetSector(sec);
 
             Log.Debug(Category.HardDisk,
                       "Shugart sector format of {0}/{1}/{2} complete, read from memory at {3:x6}",
@@ -443,10 +442,9 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Low words of Data & Header buffer addresses come in XNOR'd with 0x3ff for
-        /// unknown reasons (must be some weird quirk with the controller hardware).
-        ///
-        /// To get the real address, we do the XNOR operation again...
+        /// Low words of Data and Header buffer addresses come in XNOR'd with
+        /// 0x3ff for unknown reasons (must be some weird controller hardware
+        /// quirk).  To get the real address, we do the XNOR operation again...
         /// </summary>
         private int Unfrob(int value)
         {
@@ -496,6 +494,29 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
+        /// Seek command bits, active low.
+        /// </summary>
+        /// <remarks>
+        /// The Shugart controller on the IOB hardwires unit select 0 (pulled
+        /// to GND) and leaves unit select 1 and 2 unconnected. (The pin used
+        /// for unit 3 is jumpered to provide Seek Complete.)  The register
+        /// that latches the command bits could easily provide unit select 1
+        /// so we define that here (for future fun), but bit 7 of the IOD is
+        /// co-opted as the "Z80 enable" bit (so, no unit 2 select possible).
+        /// It grieves me that they didn't provide for a second (external)
+        /// drive or write the software to allow for it until POS G, when it
+        /// was all re-written for the EIO board.  Sigh.
+        /// </remarks>
+        [Flags]
+        private enum SeekCommand
+        {
+            Direction = 0x08,
+            Step = 0x10,
+            FaultClear = 0x20,
+            Unit1 = 0x40
+        }
+
+        /// <summary>
         /// Controller status.  Not terribly detailed.
         /// </summary>
         private enum Status
@@ -538,6 +559,7 @@ namespace PERQemu.IO.DiskDevices
         private int _dataBufferHigh;
 
         private SeekState _seekState;
+        private SeekCommand _seekCommand;
         private int _seekData;
         private int _seekComplete;
 
