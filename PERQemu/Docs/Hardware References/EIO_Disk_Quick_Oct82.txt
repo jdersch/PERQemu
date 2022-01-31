@@ -1,0 +1,538 @@
+
+
+
+                         Quick Guide to Disk Control
+                         
+                         
+                              John R. Rose
+                              
+                         Three Rivers Computer, Inc.
+                         
+                             22 October, 1982
+                             
+                             
+                             
+
+
+
+
+     Overview
+     
+     This is a quick guide to use of the new disk controller as 
+implemented on the EIO board. Covered in this document are the commands
+and data sent to the controller, the messages and status bits sent from 
+the controller, and a number of hints and warnings pertaining to some
+peculiarities of the hardware involved. This document covers only the
+Shugart SA-4000 and Micropolis 1200 drive types.
+
+     ISP notation will be used to describe all control and status bits.
+     
+
+     Registers
+     
+     All disk types supported by the EIO disk controller are accessed via
+two 8 bit write only registers and one 11 bit read only register. The bit
+assignments, as detailed in the following tables, vary in name and function
+according to the type of disk in the system.
+
+     The two write registers are called DiSKConTroL and State Machine
+ConTroL, or DSKCTL and SMCTL. The IOB addresses for these registers are
+323 and 322, respectively. In PERQ microcode they are defined:
+
+
+       Constant(DSKCTL, 323);     !disk mechanical control bits
+       Constant(SMCTL,  322);     !state machine control bits
+       
+     Each register contains 8 bits which are registered. Both registers
+are cleared by the boot button. DSKCTL can also be cleared by software via
+a bit in SMCTL.
+
+     The bit assignments for DSKCTL<7:0> are:
+     
+     BIT         
+     
+     DSKCTL<7>:  SA-4000 - Select Drive #2
+                 M1200   - DriveSelect<0>
+     DSKCTL<6>:  SA-4000 - Select Drive #3
+                 M1200   - DriveSelect<1>
+     DSKCTL<5>:  SA-4000 - Direction High = In, Low = Out
+                 M1200   - BA<0>
+     DSKCTL<4>:  SA-4000 - FaultClear Low-High-Low
+                 M1200   - BA<1>
+     DSKCTL<3>:  SA-4000 - Head<3>
+                 M1200   - B<3>
+     DSKCTL<2>:  SA-4000 - Head<2>
+                 M1200   - B<2>
+     DSKCTL<1>:  SA-4000 - Head<1>
+                 M1200   - B<1>
+     DSKCTL<0>:  SA-4000 - Head<0>
+                 M1200   - B<0>
+     
+          The bit assignments for SMCTL<7:0> are:
+     
+     BIT         
+     
+     SMCTL<7>:  T2 H - Makes CRC errors non-fatal(proposed).
+     SMCTL<6>:  SA-4000 - Step H - Low-High-Low causes a disk step
+                M1200   - BusEn H - used to latch data into drive control
+                          electronics via DSKCTL<5:0>.
+     SMCTL<5>:  T H - Enables "DB" interrupt.
+     SMCTL<4>:  Interrupts On H - Enable all interrupts to PERQ
+     SMCTL<3>:  Reset L - Reset disk controller when Low, must be set High
+                          before doing any disk operations.
+     SMCTL<2>:  F2
+     SMCTL<1>:  F1 - See Data Operation Table
+     SMCTL<0>:  F0
+     
+     
+     The read register is called StateMachineSTATus, or SMSTAT. The IOB 
+address of SMSTAT is 123. In PERQ microcode it would be defined:
+
+      Constant(SMSTAT, 123);      !disk controller status register
+      
+     SMSTAT contains 11 bits, SMSTAT<10,0>, assigned as follows:
+     
+     SMSTAT<10>          - DiskType<1>
+     SMSTAT<9>           - DiskType<0>
+     SMSTAT<8>           - Index/2
+     SMSTAT<7>           - Unit Ready L
+     SMSTAT<6>           - On Cylinder L
+     SMSTAT<5>           - Fault L
+     SMSTAT<4>    SA4000 - Track 00 L
+                   M1200 - Seek Error L
+     SMSTAT<3>           - State Machine Interrupt H
+     SMSTAT<2>           - Status<2>
+     SMSTAT<1>           - Status<1> See Status<2:0> section
+     SMSTAT<0>           - Status<0>
+                    
+     SMSTAT<3>, SMSTAT<4>, SMSTAT<6>, and SMSTAT<7> also cause an interrupt
+to PERQ when asserted. Unit Ready, SMSTAT<7> will also cause an interrupt
+if de-asserted. SMCTL<4> must be High to enable interrupts to PERQ.
+     
+
+     Mechanical Operation of SA4000
+     
+     The SA4000 drive depends almost entirely on the host computer for
+the intelligent control of disk mechanical operations. The only operation
+that the disk performs on its own is the movement of the heads in the
+direction and for the number of steps specified by the host computer. All
+control is open loop, with no detection of disk speed or heads settling.
+
+     Unit Selection
+     
+     The first operation to be performed is Unit Select. This is done
+by asserting the appropriate Drive Select bit in DSKCTL High. After this
+has been done, the programmer must look for Unit Ready to be Low.
+
+     In the SA4000, the Drive Select bits are not decoded but are used
+directly to enable drive operations. Drive addressing is done with jumpers
+in a patch panel to connect one of three Drive Select lines to the Disk
+Select net in the drive electronics. There are three possible drive
+addresses, 1-3, each with a Drive Select line of its own. Only one Drive
+select line should be asserted at a time.
+
+     The PERQ disk controller permanently selects Drive1 and can select
+Drive2 and Drive3 under program control. this is to maintain plug
+compatibility with old systems. Thus, under normal circumstances, the 
+system drive will be Drive1 and Drive Select2 and Drive Select3 should
+be kept Low.
+
+     If the need for a second system disk should arise, the drive address
+select jumper should be set to Drive2 or Drive3 as desired and the 
+appropriate provisions must be made in the system program.
+
+     If multiple drives are selected, there will be no specific fault
+condition detected. All selected drives will perform the same mechanical
+functions as far as possible. The status lines are open collector and
+will not have any electrical errors. All errors must be inferred from the
+unexpected behavior of the status lines. The data and clock lines will not
+work well since they are not open collector and will cause serious data
+errors.
+
+     Unit Ready
+     
+     Unit Ready will go Low when the drive is up to speed, the PLO clock
+has locked to the servo track, two minutes has elapsed from power-up, and
+the drive has been selected.
+
+     Any changes in Unit Ready will cause an interrupt to PERQ, which can
+only be cleared by reading SMSTAT. Selection of a new drive will glitch
+unit Ready and cause an interrupt.
+
+     Seeking
+     
+     The control bits for seeking are Direction and Step. Direction = High
+causes seeking toward the disk spindle, Direction = Low causes seeking
+toward the disk periphery. Toggling Step from Low to High to Low will
+cause the heads to take one step in the direction specified.
+
+     There are two stepping modes, buffered and non-buffered. The buffered
+mode is normally used.
+
+     Buffered stepping happens when the Step pulses occur less than 350
+microseconds apart. An internal counter counts up as each pulse comes in
+and counts down as each step is made. To stay in the buffered mode, the
+buffer counter must be kept from getting to zero before the last Step pulse
+is entered. Step pulses must be no closer together than 2 microsecond and
+must be at least 1 microsecond wide.
+
+     Non-buffered stepping happens when the buffer counter empties before
+a new Step pulse is received. When the counter reaches zero, a timer is
+activated to wait for head settling. No new Step pulses should be sent until
+On Cylinder is received. This process is very slow and should not be used.
+
+     After the last step has been executed, the disk will set On Cylinder
+to Low. This only means that the last step has been commanded. It does not
+mean that the heads have stopped moving! There is no way to tell if the
+heads have stopped moving. One must believe the SA4000 specification, which
+says it takes about 20 milliseconds. Waiting for two index marks is usually
+adequate.
+
+     Drive Select and Direction must be held for at least 100 nanoseconds
+after the last step pulse has been sent. The Seek will complete on its own.
+If the drive is deselected, its On Cylinder transmitter will also be
+deselected and will not report a valid On Cylinder until the drive is 
+again selected. If the drive is deselected before a seek is completed,
+the On Cylinder interrupt will not work correctly.
+
+     The disk drive cannot tell one track from another and has no sense of
+location. The host computer must keep track of the current physical location
+of the heads.
+     Not much can go wrong with a seek. In any case, the SA4000 can not
+report seek errors. Therefore, the programmer must assume that all is well
+if On Cylinder is asserted by the drive.
+
+
+     Head Selection
+     
+     Head selection on the SA4000 is very simple. The programmer must 
+simply present the number of the desired head on the Head<3:0> bits of
+DSKCTL. Switching of heads occurs very quickly, in about 1 microsecond.
+
+     A 12 MByte drive has heads 0-3, while a 24 MByte drive has heads
+0-7. No SA4000 drives used by PERQ use heads 10-17.
+
+     There are no status bits associated with correct head selection. If
+a non-existent head is selected, a Fault will occur during writing
+(WriteGate&NoWriteCurrent). If this occurs, select a real head, clear the
+fault, and repeat the operation.
+
+     
+     Fault Clearing
+     
+     In the event that a fault should occur, it will be necessary to
+eliminate the cause of the fault and then to clear the fault latch by
+toggling DSKCTL<4> from Low to High to Low. The drive being cleared must
+be selected.
+
+     Index
+     
+     The Index signal provided to PERQ, SMSTATUS<8>, is disk index pulse
+divided by two, which is a square wave. The Index mark is found by a
+program routine which looks for a transition in the Index bit.
+
+     An Index transition occurs once for every revolution of the disk,
+every 20.24 milliseconds.
+
+     Index is not used by the disk controller and is not absolutely
+necessary for disk operation. It is used for timing and during formatting
+to place all like numbered sectors on the same radiant.
+
+     Track00
+     
+     The Track00 signal will be Low when the heads are positioned on the
+most peripheral track, which is customarily called track 0. The SA4000,
+as mentioned previously, doesn't know and doesn't care about track numbers.
+
+     Track00 is used during recalibrate procedure to signal when the
+heads have reached a know location, track 0.
+
+     Track00 will cause an interrupt when asserted. This interrupt should
+be ignored.
+
+     Fault
+     
+     Fault, when asserted Low, will inhibit writing on the disk. Any
+write operation that causes a Fault should be repeated after the fault has
+been cleared by Fault Clear.
+
+     There are five causes of Fault:
+     
+        1. Write gate and no Write Current
+        2. Write Current and no Write Gate
+        3. Multiple heads selected
+        4. Write Gate when not Ready
+        5. Write Gate and Read Gate
+     
+     It is best to reset the controller, do a Restore, and start over after
+a Fault. The sector that caused the Fault should be rewritten.
+
+     On Cylinder
+     
+     On Cylinder will be asserted low after the last step command has been
+issued to the head positioner. It does not mean that the disk is ready for
+a data transfer. The heads will not be settled until about 20 milliseconds
+after On Cylinder has been asserted. Waiting for two Index marks to go by
+will allow sufficient head settling time.
+
+     When On Cylinder is asserted, it causes an interrupt to PERQ. The
+interrupt can be cleared by Reading SMSTATUS.
+
+     Restore
+     
+     The SA4000 does not have an internal restore function. Restore to
+Track00 is done by the host computer.
+
+     The Restore operation is done by stepping the heads outwards one
+track at a time while watching the Track00 bit. When Track00 goes Low,
+the heads are at track 0.
+
+   
+  
+     Micropolis 1200 Mechanical Functions
+     
+     
+     The M1200 series of 8 inch disk drives has a built-in intelligent 
+controller for handling disk mechanical operations. Seeks and head selects
+are done by telling the drive which cylinder and head is desired. Other
+operations, such as restore and fault clear, are also done by the internal
+controller.
+
+     M1200 to SA4000 Adapter
+     
+     The control bus structures of the SA4000 and the M1200 are sufficiently
+different that they cannot be directly substituted for one another. Yet,
+they are enough alike that a simple adapter circuit will allow, with the
+proper software support, the M1200 type of drive to be used on an SA4000
+controller. Such an adapter has been built.
+
+     The adapter converts the eight-bit control bus of the M1200 to a bus
+that is physically compatible with the SA4000 control bus. This is done by
+using the Step, Direction, FaultClear, and Head<3:0> lines of the SA4000
+bus to transmit data to the M1200, a nibble at a time.
+
+     The Adapter passes the Drive Select bits to all drives that are on 
+the system. Only the selected drive will respond to commands. Seeks, Head
+Selects, and Restores may be overlapped, but only the selected drive will
+be able to set status bits correctly.
+
+     Command Data Transfer Sequence
+     
+     The M1200 requires three control bytes, Cylinder, CylHead, and Control.
+The data in these bytes are transferred to registers in the M1200 controller.
+Data transfer occurs over the control bus from the PERQ disc controller to
+the interface adapter and then on to the M1200 controller.
+
+     To transfer a byte to the adapter, BA<0> and BA<1> must be set High.
+If this were done by ORing a constant into DSKCTL, the constant would be
+60. Thus, BA := 60.           
+
+     With BA = 60, the low for bits of the desired control byte are put up
+on the low four bits of DSKCTL. After a time, about 340 nanoseconds, the
+BusEn bit in SMCTL is set high, latching the low four bits of the control
+byte on the adapter board. Next, the high four bits of the control byte are
+put up on the low four bits of DSKCTL. After about 340 nanoseconds, BusEn is
+set low, thus latching the top four bits of the control byte.
+
+     After the control byte has been latched in the adapter, it must be
+sent to the disk drive. This is done by changing BA<1:0> to the appropriate
+value. The constants used for various control registers are as follows:
+
+      BA :=  0 - Cylinder<7:0>, the low cylinder bits
+      
+      BA := 40 - Head<2:0> and Cylinder<11:10> - the head select bits and the
+                 high bits of cylinder
+                 
+      BA := 20 - Disk Function<7> - Preamp Gain High
+                 Disk Function<6> - Restore
+                 Disk Function<5> - Not Used
+                 Disk Function<4> - Fault Clear
+                 Disk Function<3> - Offset Minus
+                 Disk Function<2> - Offset Plus
+                 Disk Function<1> - Not Used
+                 Disk Function<0> - Write Gate
+                       
+                       
+      Seek and Head Select
+      
+      The Cylinder and Head bits are mixed into two bytes, which must both
+be loaded into the M1223 before either head selection or seeking will
+occur. The Seek/Head Select is initiated by loading CylHead. If there was
+no change in the cylinder number, no seek will be done.
+
+      If a seek and head select, i.e a track select is desired, both CylHead
+and Cylinder must be loaded. On Cylinder will be de-asserted for a time.
+When the seek finishes, On Cylinder will be asserted and PERQ will get an
+interrupt. If an error occurs, Seek Error will be asserted and PERQ will get
+an interrupt.
+
+      If only a head select is desired, only CylHead need be loaded. The
+disk drive will then operate as if a seek were being done, except that 
+since no head movement is involved, the time to completion will be much 
+shorter.
+
+      Seek Error will be asserted if the operation times out (500 milli-
+seconds) or if an illegal track address is sent.
+
+      A Seek Error can be cleared with a Restore or by issuing a correct
+track address, unless there has been a mechanical failure.
+
+      Restore
+      
+      Restore is initialized by setting a bit in the Control Function
+byte. These bits are not registered, but are simply gated by BA = 20.
+To cause a Restore, set Control Function<6> High and present the data at
+BA = 20. The Restore will then commence. 
+
+      A Restore works much like a Seek, except that if it does not work,
+there is nothing that the programmer can do to recover.
+
+      Fault Clear
+      
+      Fault Clear, Control Function<4>, must be handled like Restore.
+The only thing it does is try to clear the Fault latch. If the cause of
+the fault is still present, it will have no effect. Fault Clearing should
+take place instantaneously.
+
+      Offset
+      
+      To aid in data recovery, the heads may be moved off the data track
+center, hopefully away from any error zone into an area with better data
+retention. This is done by setting Control function<2> OR Control
+Function<3> High. Offset works best when a media defect is the cause of
+an error.
+
+      Preamp Gain
+      
+      Setting Control Function<7> High will boost the gain on the Read
+Preamplifier, again to aid in error recovery.
+
+      Write Gate
+      
+      Write Gate is not directly under programmer control. However,
+BA must be set to 20 to enable the drive to write. Resetting BA during a
+write  operation has the effect of override the operation.
+
+      
+      Data Transfer Operations
+      
+      All data transfer operations are the same for all disk types, as
+there is no need to make any user-visible changes when going from one
+disk type to another.
+
+      The possible data transfers are as follows:
+      
+      SMCTL<2:0>       Name       Operations
+      
+              0        Idle         - -- -
+              1        Format       w  w w
+              2        Write        c  w w
+              3        CWrite       c  c w
+              4        Correct      -  - -   SMD only
+              5        Bread        c  r r
+              6        FixPH        w -- -   Proposed
+              7        Read         c cr r   
+              
+         - = nop, w = write, c = check, r = read
+         
+         
+       All data transfer operations begin at a sector boundary and should
+end before the next sector boundary.
+
+       Setup of the constant registers and the DMA channel should be
+done before issuing a data transfer command.
+
+                                                  
+       Data Transfer Basics
+       
+       Data transfers take place between PERQ memory and disk drives, via
+the PERQ disk controller, which is on the EIO board. Transfers may involve
+reading and/or writing of data.
+
+       Data can be divided into two general types, constant, which are
+associated with the Constant Registers and Data, which are associated
+with PERQ program memory.
+
+       Constants are loaded into the disk controller internal registers
+via the IO Bus and are used to generate Sync and Physical Headers, as well
+as to look for Sync marks and to check data during reads. Constants should
+be loaded before starting a data transfer operation.
+
+       Data that are stored on and retrieved from the disk are transferred
+to and from main memory via the DMA channel, which is under the control of
+the disk controller. Data are contained in the Logical Header and the Data
+Block section of the sector format.
+
+       The data handling circuits of the disk controller can combine the
+Constants and Data during writing and can separate them during reading.
+The disk controller can also compare a constant to the data being read from
+the disk to determine such things as where the interesting information
+begins, whether the correct sector has been found, and whether the file
+segment is the desired one.
+
+       The Sector Format
+       
+       The disk controller only knows about sectors. It treats all sectors
+the same and can tell them apart only by comparing their physical address
+to reference data contained in the constant registers. The arrangement
+of the data in each sector follows a rigidly defined scheme, know as the
+Format.
+
+       The sector format used by the PERQ disk controller consists of
+three sections of similar arrangement, but of unequal size and function.
+These sections are th Physical Header (PH), the Logical Header (LH), and 
+Data Block(DB).
+
+       All sections start with a "preamble" and a Sync mark. The "preamble"
+consists of all zeroes, while the Sync mark generally is four zeroes
+followed by four ones. The length of the preamble is determined by the
+specifications for the particular type of disk drive being used. It is
+of no consequence to the user. The Perq disk controller can read the
+Disk Type field of SMSTAT and can adjust the preamble accordingly. The Sync
+mark is determined by what is put into the Constant Registers by the
+programmer. It must be consistent, otherwise the disk will be unreadable
+by a controller that is not given the correct Sync pattern. At the end of
+each section is appended a Cyclic Redundancy Check (CRC) which is computed
+using all bits after the Sync mark. All write operations update the CRC and
+it is checked during all read operations.
+ 
+       The PH contains the track and sector information used to identify
+the sector being searched for. When being written during the Format
+operation, four byte are appended after the Sync mark. They are: Cylinder,
+CylHead, Sector, and Zero. When being read, the disk controller compares
+the Cylinder, CylHead, and Sector bytes that have been read from the disk
+to data contained in the similarly maned Constant Registers. If all three
+bytes match, then the sector has been found and the data transfer
+operation will continue. If Sector is incorrect, the operation will be
+suspended until the next sector boundary, where it will begin again. If
+Cylinder or CylHead are incorrect, an error has occurred (wrong track), the
+operation will be terminated, and an error message and interrupt to PERQ
+will be issued.
+
+       The LH is similar to the PH except that the variable data have
+have originated in PERQ memory. When writing, Data from the DMA channel are
+appended to data from the Constant Registers. When reading, the first 
+six bytes of LH Data may be compared to data stored in the Constant
+Registers. If this comparison is not perfect, the operation fails and an
+error message and interrupt are sent to PERQ. There are a total of four
+combinations of operations that can be performed on the LH Data. The LH
+Data may be: Written, Read, Checked, or Read and Checked.
+
+       The DB is much like the LH, except that the Data cannot be checked,
+only read and written.
+
+       After the data in each section is appended the CRC. As each section
+is written, a new CRC is computed and then appended after the last data bit.
+During each read operation, the CRC is checked. If a CRC error occurs, the
+operation will terminate and a message and interrupt will be sent to PERQ.
+
+       If a fatal error occurs, an error message will be sent to PERQ via
+SMSTAT. Also, an interrupt will be generated. DSKCTL<4> must be set High,
+otherwise the interrupts will be masked. Furthermore, in the case of a
+fatal error, the disk controller will perform no other operations until
+SMCTL<2:0> has been set to Idle (0).
+
+       It is possible to chain operations, e.g. consequitive sector read, by
+simply reseting Sector and the DMA channel.
+
+        

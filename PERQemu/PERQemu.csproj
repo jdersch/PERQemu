@@ -607,6 +607,19 @@
     <None Include="Conf\StandardModels.precfg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Docs\Hardware References\Am9517A.pdf" />
+    <None Include="Docs\Hardware References\Archive_Sidewinder_TheoryOpn.pdf" />
+    <None Include="Docs\Hardware References\Bit_Pad_One_Users_Manual_Aug81.pdf" />
+    <None Include="Docs\Hardware References\EIO_Disk_Quick_Oct82.txt" />
+    <None Include="Docs\Hardware References\LBP-CX_Series_Video_Interface_Service_Manual.pdf" />
+    <None Include="Docs\Hardware References\Micropolis_1220_Series_Oct79.pdf" />
+    <None Include="Docs\Hardware References\NEC_uPD765.pdf" />
+    <None Include="Docs\Hardware References\Shugart_SA850_OEM_Feb79.pdf" />
+    <None Include="Docs\Hardware References\Shugart_SA4000_OEM_Apr79.pdf" />
+    <None Include="Docs\Hardware References\TMS9914A_GPIB_Jun89.pdf" />
+    <None Include="Docs\Hardware References\Zilog_Z80_SIO_TechManual.pdf" />
+    <None Include="Docs\Hardware References\Zilog_Z8410_DMA.pdf" />
+    <None Include="Docs\Hardware References\Zilog_Z8430_CTC.pdf" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Docs\pz80.asm" />
@@ -644,6 +657,7 @@
     <Folder Include="Docs\Old\" />
     <Folder Include="Conf\" />
     <Folder Include="Emulator\IO\DiskDevices\" />
+    <Folder Include="Docs\Hardware References\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

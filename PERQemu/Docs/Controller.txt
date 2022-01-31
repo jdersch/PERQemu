@@ -14,11 +14,12 @@ PERQemu
         User selects a pre-defined configuration, loads a saved one, or
         creates one of their own design.  Media files are assigned to the
         storage devices.  GUI and CLI work with Configurator to manipulate
-        a Configuration object; when ready, this is passed to the execution
-        controller.
+        a Configuration object; they take care to validate the choices made
+        to ensure the PERQ that's configured can actually be set up and run.
+        When ready, this is passed to the ExecutionController.
 
     -> Controller
-        In the GUI, a graphical representation of a PERQ-2 control panel
+        In the GUI, a graphical representation of a PERQ2-style front panel
         provides a power on/off toggle, a reset button, and a rendering of
         the actual DDS to give simple visual feedback about the state of
         the machine.  Equivalent menu options are provided as well.  For
@@ -39,21 +40,21 @@ PERQemu
         object, the major components are organized much like the actual
         hardware, from a top-level view:
 
-        -> a "CPU board" encompasses the processor and Scheduler, and runs
+        ->  a "CPU board" encompasses the processor and Scheduler, and runs
             the whole microengine and most of the primary controllers that
             make up the system; in Async mode it runs on its own thread.
-        -> the "memory board" is clocked directly by the CPU.  It includes
+        ->  the "memory board" is clocked directly by the CPU.  It includes
             the VideoController, which manages the PERQ frame buffer.
-        -> an "IO board" contains hard disk (and optionally Ethernet)
+        ->  an "IO board" contains hard disk (and optionally Ethernet)
             controllers, as well as a Z80System object (see below).
-        -> if any optional IO devices are configured, an "Option board" is
+        ->  if any optional IO devices are configured, an "Option board" is
             created to contain them all.  Three of the options are high
             priority: Ethernet, Canon printer, and streamer would be very
             nice to have, since schematics and code exist to aid in writing
             the emulation; over time, other rare or less-well documented
             hardware can be added.
 
-        -> Z80System
+        ->  Z80System
             This object encompasses what is essentially an independent
             single-board computer, running at its own clock rate (and with
             its own Scheduler).  Like the PERQSystem, Z80System manages a
@@ -65,12 +66,17 @@ PERQemu
             bus timings and limitations so for now this isn't an issue!  Ha!
 
             The Z80 thread runs all of the virtual Z80 I/O devices:  floppy
-            controller, SIO and CTC chips, GPIB controller, keyboard and
+            controller, DMA, SIO and CTC chips, GPIB controller, keyboard,
             tablet, and audio output.  On the EIO, the RTC is also a Z80
             device, while on the PERQ-1 there's a tie-in to the Shugart hard
             disk controller for doing seeks.  We can sort of handwave over
             much of this for now.
-        
+
+        ->  Display
+            Receives video data from the VideoController but runs on the
+            main application/SDL thread.  All of the SDL2 interactions are
+            managed here (including, for now, the host keyboard and mouse
+            input).
 
 Run Modes
 ---------
@@ -92,6 +98,19 @@ mode?  But any machine -- or VM environment -- with only a single CPU core isn't
 likely going to meet the minimum requirements to even run .NET let alone PERQemu.
 
 
+There's no need to maintain a long-running background thread for each processor
+for all of the other RunStates -- single stepping, reset, and the intermediate
+startup/shutdown states can all be managed synchronously.  When transitioning
+to or from "Running" we start and stop the background threads, which in normal
+usage provides the highest performance benefit.  All of the other modes are most
+useful for debugging.
+
+    ... except that the mapping state changes to events in a persistent
+    thread running its own execution loop was simple and responsive, while
+    every other way of doing this has proven to be an astronomical pain in
+    the ass.
+
+
 Run States
 ----------
 
@@ -103,23 +122,18 @@ be created, the power on request will generally only fail if an unimplemented
 option is selected (so the situation should improve over time as emulation is
 expanded to encompass more of the hardware).
 
-The PowerOn method places the machine in a WarmingUp state:
-    - in Asynchronous execution mode, CPU and Z80 threads are started;
-    - the Display is created and the SDL2 event loop started.
+The PowerOn method places the machine in a WarmingUp state which is where the
+Display is created and the SDL2 machinery instantiated.  If SDL initialization
+fails for any reason, it falls back to Off and reports the error.  During this
+state media files are loaded and the virtual disks are spun up (for the real
+masochist, we can simulate the actual start up time for each device, but this
+can be turned off with Settings.Performance flags).
 
-WarmingUp will someday provide a little visual sugar, having the display surface
-fade in from "black" (the sort of grayish-green color of the CRT face) to an
-animation of the rolling retrace of the real hardware. :-)  To _really_ give the
-user a genuine PERQ experience, the virtual disk drives could take 30-120 seconds
-to spin up to speed, while an audio clip of the distinctive "screech and rattle"
-of the Shugart SA4000 drive spinning up played over the fan noise (which would
-fade as the host machine's CPU cooling kicks in :-).  While this level of detail
-would be amazing, it would also get old pretty quick.  Any goofy stuff like this
-will be goverened by user preferences or only enabled through startup options or
-something. :-)
-
-WarmingUp is a transitional state that automatically moves into RunState.Reset
-once the display is running.
+If the machine is started with the CLI "power on" command, it will remain in the
+WarmingUp state until another command is issued.  The Display thread should
+animate the screen coming to life with the "rolling retrace" lines while the
+disks spin up to speed in the background.  Audio of that distinctive Shugart
+shimmy, whine and rattle as it roars to life would be <kisses finterips> sweet.
 
 To help untangle the dynamic creation of different Configurations, all of the
 constituent parts of PERQSystem are (ideally) created without dependencies; the
@@ -131,8 +145,8 @@ is also a transition state.
 If the user setting PauseOnReset is true, the Reset state drops into Paused as
 the emulator waits for the user to explicitly issue the next command.  If
 PauseOnReset is false, Reset will immediately transition to Running.  Note that
-a user-initiated Reset may occur at any time, through a GUI button/menu selection
-or the CLI "reset" command.
+a user-initiated Reset may occur at any time, pressing the virtual boot button
+through a GUI representation/menu selection or the CLI "reset" command.
 
 The Running state has to be as efficient as possible: in asynch mode, PERQsystem
 sets both threads running, as the main application thread handles the SDL2
@@ -161,15 +175,17 @@ which closes the SDL2 window and shuts down the SDL2 event loop.  At this point
 the PERQSystem state is set to Off -- but, crucially, the object is NOT yet
 deallocated!
 
-Saving modified hard disk or floppy disk images is governed by the Settings
-AutosaveFloppy and AutosaveHardDisk.  If set to No, nothing is done (though a
-warning may be printed?).  If set to Yes, the media files are updated in place.
-If set to Maybe, the user is asked (through a dialog box, ideally) whether they
-want to save or not only if the image has been modified.  (In the case of hard
-disks this is silly since you can't really do much without having the OS touch
-the swap space or update a file's timestamp, but for floppies it's useful.  And
-we *should* implement "write protect tabs" on floppies by respecting the media
-file's mode bits!)
+Saving modified hard disk or floppy disk images is governed by the "autosave"
+Settings.  If set to No, nothing is done (though a warning may be printed?).
+If set to Yes, the media files are updated in place.  If set to Maybe, the user
+is asked (through a dialog box, ideally) whether they want to save or not only
+if the image has been modified.  (In the case of hard disks this is silly since
+you can't really do much without having the OS touch the swap space or update a
+file's timestamp, but for floppies it's useful.  PERQmedia will apply a virtual
+"write protect tab" on floppies by respecting the media file's mode bits.  For
+hard disks the IsWritable flag might mean we force the user to supply another
+filename so (for instance) images distributed with PERQemu don't get overwritten
+or corrupted?
 
 
 Events
@@ -201,34 +217,87 @@ stuff?  The basic idea is/was:
 Whether running in asynch or synch mode, the execution loop is pretty much the
 same: loop until an "off" message tells the thread to exit.
 
-Single stepping can also be achieved with a CountdownEvent, which is pretty
-straightforward: the Controller resets the stepper, then fires off the state
-change event; each thread then responds by dropping out of Running and signals
-the stepper, which then acts as a turnstile once both threads have checked in.
-This kinda/sorta helps with the issue of how to synchronize threads for "inst"
-executions, too?  More work/study required here.
+Since WinForms is dead, the whole unmitigated nightmare of dealing with any
+kind of cross-platform GUI is beyond rational discussion.  So long, useful
+WindowsFormsSynchronizationContext keeping all that crap nicely hidden under
+the covers.  Now we get to stand screaming into the abyss of libraries that
+require controls be created and accessed on the main execution thread while
+providing absolutely no means to make that easy or sane, and BEST of all there
+are exactly _zero_ useful toolkits, widget sets, screen painters or any other
+decent support for cross-platform GUIs even at the level of crappy ol' Winforms
+without having to basically write three separate F*!#*$)ING front ends.  This
+is sliding naked down the dull rusty razor of software development hell into a
+vat of rubbing alcohol.  My dark vision of what should happen to 99.9% of all
+software developers these days would make Genghis Khan blush.
 
+So for now PERQemu has a CLI and a painfully kluged event loop that is only
+run on the main thread when the processor is executing, and stopped when we
+break to the console for debugging.  I have not yet achieved the perfect fugue
+state of "dejected resignation" required to be okay with this.  Working on it.
 
 
 Notes
 -----
 
 The Konamiman Z80's default ClockSynchronizer doesn't seem to regulate itself
-well, if at all.  The maniac uses a 128-bit decimal type to specify the speed
-in Mhz - 21 times slower than a regular old floating point type.  Why.  WHY.
-And the SDL_Timer fires its callbacks from a random worker thread, which makes
-it next to useless when basically all of the things I want to call have to be
-run on the main/SDL thread.  Just shoot me now.
+well, if at all.  Using a 128-bit decimal type to specify the speed in Mhz is
+21 times slower than a regular old floating point type.  Why.  WHY.  Massive
+overkill.  Rather than mess with it we set the Z80's default ClockSynchronizer
+to null and the PERQsystem/Z80system does the rate limiting.
 
-So to regulate both the PERQ and Z80 processors, a SystemTimer object (which
-uses a HighResolutionTimer and a WaitHandle) provides a heartbeat function.
-The Z80's ClockSynchronizer is set to null and the PERQsystem/Z80system do
-their own rate limiting.  In short, SystemTimer registers a periodic timer to
-fire every 10ms (initially), and the number of instructions the processor should
-execute in that time is computed.  Each processor free runs until that number of
-clock cycles is executed, then calls WaitForHeartbeat().  If the processor is
-running fast, it blocks until the timer fires, which clears the wait and allows
-the thread to resume.  If the processor is running too slow it continues without
-delay.  This simple strategy seems to work well with the Z80; my machine isn't
-fast enough to run the PERQ CPU at 100% however.  Sigh.
+To accomplish this, a SystemTimer object registers a periodic timer (with our
+homegrown HighResolutionTimer) and a WaitHandle to provide a "heartbeat" every
+n-milliseconds (initially every 10-20ms).  The number of instruction cycles the
+processor should execute in that time is computed.  Each processor free runs
+until that number of clock cycles is executed, then calls WaitForHeartbeat().
+If the processor is running fast, it blocks until the timer fires, which clears
+the wait and allows the thread to resume.  If the processor is running too slow
+it continues without delay.  This simple strategy seems to work well with the
+2.4576Mhz IOB Z80, where it regulates within +-1ns of the target rate.
 
+I have no idea how we're supposed to program the Z80 devices to acknowledge
+interrupts.  It's not like that's a thing, right?  Whatever.
+
+
+State Machine
+-------------
+
+General rules:
+
+Halted is the error state; it may be entered at any time and always stops the
+processor(s) if running.  The only valid transition is to Off or Reset (which
+may fail if it's a serious error).  This means non-fatal errors (such as trying
+to load a floppy from a file that isn't readable, for example) should drop into
+Paused so the user may try again.
+
+The ShuttingDown state may be entered at any time.  It stops the machine and
+shuts down the display, then transitions to Off.  The check for unsaved media
+is made here; if a GUI is available, the "Save floppy <blah>" or "Save hard
+disk <unit, file>" dialog is presented (subject to user preferences, of course)
+or in the CLI a message is emitted for any modified and unsaved media.
+
+    --> After a shut down, a Reset is required to re-enable the PROMs and
+        restart the machine; this may be explicit or done implicitly as part
+        of a subsequent "go" or "power on" command.  IF the machine config
+        has not been modified, the loaded media should not be disturbed...
+
+WarmingUp is a transitional state that is only invoked by the PowerOn() routine.
+It always results in Halted (error on instantiation) or Reset.
+
+Reset is a transitional stage.  It may be transitioned to from the WarmingUp
+stage (machine successfully instantiated at power on) or it may be explicitly
+called by the user from any state besides ShuttingDown/Off.
+
+All other state transitions should be codified in the TransitionTo() routine.
+Which they have been.  Weirdly.  I've gotta fix my brain.
+
+
+Bottom line:
+
+    ALL of the ExecutionController interactions with PERQSystem (and the
+    Z80System) have to be substantially revisited and refined.  This is
+    all likely to change again until I've got it right, or die trying.
+
+
+--
+Last update: skeezics    Mon Jan 31 13:34:45 PST 2022
