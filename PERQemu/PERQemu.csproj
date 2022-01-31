@@ -250,7 +250,6 @@
     <None Include="Docs\Misc Microcode\csl4.mic" />
     <None Include="Docs\Misc Microcode\cursor.mic" />
     <None Include="Docs\Misc Microcode\disk5.mic" />
-    <None Include="Docs\Misc Microcode\dispat %282%29.mic" />
     <None Include="Docs\Misc Microcode\dispat.mic" />
     <None Include="Docs\Misc Microcode\dmab.mic" />
     <None Include="Docs\Misc Microcode\dmabte.mic" />
@@ -286,20 +285,16 @@
     <None Include="Docs\Misc Microcode\gosl2.mic" />
     <None Include="Docs\Misc Microcode\gosl3.mic" />
     <None Include="Docs\Misc Microcode\gosl4.mic" />
-    <None Include="Docs\Misc Microcode\high %282%29.mic" />
     <None Include="Docs\Misc Microcode\high.mic" />
     <None Include="Docs\Misc Microcode\high16.mic" />
     <None Include="Docs\Misc Microcode\incvme.mic" />
     <None Include="Docs\Misc Microcode\index.mic" />
     <None Include="Docs\Misc Microcode\ioa.mic" />
-    <None Include="Docs\Misc Microcode\jump %282%29.mic" />
     <None Include="Docs\Misc Microcode\jump.mic" />
     <None Include="Docs\Misc Microcode\jumpsh.mic" />
     <None Include="Docs\Misc Microcode\krnl.mic" />
     <None Include="Docs\Misc Microcode\link.mic" />
-    <None Include="Docs\Misc Microcode\loop %282%29.mic" />
     <None Include="Docs\Misc Microcode\loop.mic" />
-    <None Include="Docs\Misc Microcode\low %282%29.mic" />
     <None Include="Docs\Misc Microcode\low.mic" />
     <None Include="Docs\Misc Microcode\m1303.mic" />
     <None Include="Docs\Misc Microcode\mem.mic" />
@@ -316,9 +311,8 @@
     <None Include="Docs\Misc Microcode\pbt.mic" />
     <None Include="Docs\Misc Microcode\pdm.mic" />
     <None Include="Docs\Misc Microcode\pdmvfy.mic" />
-    <None Include="Docs\Misc Microcode\rat %282%29.mic" />
+    <None Include="Docs\Misc Microcode\rat2.mic" />
     <None Include="Docs\Misc Microcode\rat.mic" />
-    <None Include="Docs\Misc Microcode\regt %282%29.mic" />
     <None Include="Docs\Misc Microcode\regt.mic" />
     <None Include="Docs\Misc Microcode\relie.mic" />
     <None Include="Docs\Misc Microcode\relite.mic" />
@@ -326,14 +320,11 @@
     <None Include="Docs\Misc Microcode\ro.mic" />
     <None Include="Docs\Misc Microcode\sd.mic" />
     <None Include="Docs\Misc Microcode\se.mic" />
-    <None Include="Docs\Misc Microcode\shift %282%29.mic" />
     <None Include="Docs\Misc Microcode\shift.mic" />
     <None Include="Docs\Misc Microcode\srat.mic" />
-    <None Include="Docs\Misc Microcode\stack %282%29.mic" />
     <None Include="Docs\Misc Microcode\stack.mic" />
     <None Include="Docs\Misc Microcode\start.mic" />
     <None Include="Docs\Misc Microcode\test5b.mic" />
-    <None Include="Docs\Misc Microcode\tst %282%29.mic" />
     <None Include="Docs\Misc Microcode\tst.mic" />
     <None Include="Docs\Misc Microcode\tst1.mic" />
     <None Include="Docs\Misc Microcode\twinkl.mic" />
@@ -527,25 +518,25 @@
     <None Include="Docs\POS Pascal Source\virtua.pas" />
     <None Include="Docs\POS Pascal Source\volume.pas" />
     <None Include="Docs\POS Pascal Source\writer.pas" />
-    <None Include="Docs\z80 docs\newsio.z80" />
-    <None Include="Docs\z80 docs\perqz80.doc" />
-    <None Include="Docs\z80 docs\perqz80.prose" />
-    <None Include="Docs\z80 docs\spctst.z80" />
-    <None Include="Docs\z80 docs\spkin.z80" />
-    <None Include="Docs\z80 docs\v87.z80" />
-    <None Include="Docs\z80 docs\vspk.z80" />
-    <None Include="Docs\z80 docs\z80.007" />
-    <None Include="Docs\z80 docs\z80.010" />
-    <None Include="Docs\z80 docs\z80.012" />
-    <None Include="Docs\z80 docs\z80.014" />
-    <None Include="Docs\z80 docs\z80concept.doc" />
-    <None Include="Docs\z80 docs\z80concept.prose" />
-    <None Include="Docs\z80 docs\z80des.doc" />
-    <None Include="Docs\z80 docs\z80des.prose" />
-    <None Include="Docs\z80 docs\z80iof.pas" />
-    <None Include="Docs\z80 docs\z80link.pas" />
-    <None Include="Docs\z80 docs\z80script.pas" />
-    <None Include="Docs\z80 docs\z80talker.pas" />
+    <None Include="Docs\Z80 Docs\newsio.z80" />
+    <None Include="Docs\Z80 Docs\perqz80.doc" />
+    <None Include="Docs\Z80 Docs\perqz80.prose" />
+    <None Include="Docs\Z80 Docs\spctst.z80" />
+    <None Include="Docs\Z80 Docs\spkin.z80" />
+    <None Include="Docs\Z80 Docs\v87.z80" />
+    <None Include="Docs\Z80 Docs\vspk.z80" />
+    <None Include="Docs\Z80 Docs\z80.007" />
+    <None Include="Docs\Z80 Docs\z80.010" />
+    <None Include="Docs\Z80 Docs\z80.012" />
+    <None Include="Docs\Z80 Docs\z80.014" />
+    <None Include="Docs\Z80 Docs\z80concept.doc" />
+    <None Include="Docs\Z80 Docs\z80concept.prose" />
+    <None Include="Docs\Z80 Docs\z80des.doc" />
+    <None Include="Docs\Z80 Docs\z80des.prose" />
+    <None Include="Docs\Z80 Docs\z80iof.pas" />
+    <None Include="Docs\Z80 Docs\z80link.pas" />
+    <None Include="Docs\Z80 Docs\z80script.pas" />
+    <None Include="Docs\Z80 Docs\z80talker.pas" />
     <None Include="packages.config" />
     <None Include="PROM\boot.bin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -620,11 +611,11 @@
     <None Include="Docs\Hardware References\Zilog_Z80_SIO_TechManual.pdf" />
     <None Include="Docs\Hardware References\Zilog_Z8410_DMA.pdf" />
     <None Include="Docs\Hardware References\Zilog_Z8430_CTC.pdf" />
+    <None Include="Docs\Z80 Docs\pz80.asm" />
+    <None Include="Docs\Z80 Docs\z80ram_addr.txt" />
+    <None Include="Docs\Z80 Docs\z80rom_addr.txt" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Docs\pz80.asm" />
-    <Content Include="Docs\z80 docs\z80ram_addr.txt" />
-    <Content Include="Docs\z80 docs\z80rom_addr.txt" />
     <Content Include="PERQemu.ico" />
   </ItemGroup>
   <ItemGroup>
