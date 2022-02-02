@@ -52,11 +52,10 @@ namespace PERQemu.Processor
                     break;
 
                 case CPUType.PERQ24A:
-                    throw new UnimplementedHardwareException("Sorry, PERQ24A CPU is not implemented.");
+                    throw new UnimplementedHardwareException("Sorry, PERQ24A CPU is not implemented");
 
                 default:
-                    throw new InvalidConfigurationException(
-                        string.Format("No such CPU board type '{0}'", sys.Config.CPU));
+                    throw new InvalidConfigurationException($"No such CPU board type '{sys.Config.CPU}'");
             }
 
             // Create the system scheduler
@@ -67,7 +66,7 @@ namespace PERQemu.Processor
 
             // Compute how often (in CPU cycles) to sync the emulated processor
             _adjustInterval = (int)(_heartbeat.Interval / (CPU.MicroCycleTime * Conversion.NsecToMsec));
-            Log.Info(Category.Emulator, "CPU rate adjust every {0} cycles", _adjustInterval);
+            Log.Info(Category.Emulator, "[CPU rate adjust every {0} cycles]", _adjustInterval);
         }
 
         public CPU Processor => _processor;
@@ -81,8 +80,8 @@ namespace PERQemu.Processor
             _scheduler.Reset();
             _processor.Reset();
 
-            Log.Debug(Category.CPU, "Board reset.");
-            _scheduler.DumpEvents("CPU");
+            Log.Debug(Category.CPU, "Board reset");
+            //_scheduler.DumpEvents("CPU");
         }
 
         /// <summary>
@@ -126,7 +125,6 @@ namespace PERQemu.Processor
 
             _heartbeat.Enable(true);
             Console.WriteLine("[CPU thread starting]");
-            _scheduler.DumpEvents("CPU at RunAsync");
 
             do
             {

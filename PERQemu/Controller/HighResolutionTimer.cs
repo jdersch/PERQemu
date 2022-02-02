@@ -255,7 +255,7 @@ namespace PERQemu
                 _thread = new Thread(ExecuteTimer) { Name = "HighResTimer", IsBackground = true };
                 _thread.Start();
             }
-            Log.Debug(Category.Timer, "Thread started.");
+            Log.Debug(Category.Timer, "Thread started");
         }
 
         /// <summary>
@@ -267,7 +267,7 @@ namespace PERQemu
 
             _runTimers = false;
             _throttle.Reset();
-            Log.Debug(Category.Timer, "Thread paused.");
+            Log.Debug(Category.Timer, "Thread paused");
         }
 
         /// <summary>
@@ -283,7 +283,7 @@ namespace PERQemu
 
             _thread.Join();
             _thread = null;
-            Log.Debug(Category.Timer, "Thread shut down.");
+            Log.Debug(Category.Timer, "Thread shut down");
         }
 
         /// <summary>
@@ -439,7 +439,7 @@ namespace PERQemu
             else
             {
                 _runTimers = false;
-                Log.Debug(Category.Timer, "No active requesters, pausing HR timer.");
+                Log.Debug(Category.Timer, "No active requesters, pausing HR timer");
 
                 return now;
             }
@@ -455,7 +455,7 @@ namespace PERQemu
             {
                 _requesters[i].NextTrigger = _requesters[i].Interval;
             }
-            Log.Debug(Category.Timer, "Intervals reset.");
+            Log.Debug(Category.Timer, "Intervals reset");
         }
 
         [Conditional("DEBUG")]
@@ -464,7 +464,7 @@ namespace PERQemu
             Console.Write("HighResTimer thread is ");
             if (_thread == null)
             {
-                Console.WriteLine("not running.");
+                Console.WriteLine("not running");
             }
             else
             {

@@ -43,11 +43,9 @@ namespace PERQemu.IO.Z80
             if (_sendEvent != null)
             {
                 _scheduler.Cancel(_sendEvent);
-                Console.WriteLine("Old Kriz tablet event canceled!");
             }
 
             _sendEvent = _scheduler.Schedule(_dataInterval, SendData);
-            Console.WriteLine("New Kriz tablet SendData event scheduled!");
         }
 
         public void RegisterReceiveDelegate(ReceiveDelegate rxDelegate)

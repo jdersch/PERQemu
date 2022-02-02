@@ -21,7 +21,6 @@
 
 using System;
 using System.IO;
-using System.Collections.Generic;
 
 namespace PERQmedia
 {
@@ -38,7 +37,7 @@ namespace PERQmedia
 
         public static bool CanLoad(this StorageDevice dev, string pathname)
         {
-            if (File.Exists(pathname))
+            if (!string.IsNullOrEmpty(pathname) && File.Exists(pathname))
             {
                 var formatters = FileUtilities.GetFormattersForFile(pathname);
 
@@ -65,9 +64,15 @@ namespace PERQmedia
 
         public static void LoadFrom(this StorageDevice dev, string pathname)
         {
-            var formatters = FileUtilities.GetFormattersForFile(pathname);
-
             dev.IsLoaded = false;
+
+            // No file? Quietly ignore
+            if (string.IsNullOrEmpty(pathname))
+            {
+                return;
+            }
+                
+            var formatters = FileUtilities.GetFormattersForFile(pathname);
 
             using (var fs = new FileStream(pathname, FileMode.Open, FileAccess.Read))
             {

@@ -26,7 +26,6 @@ using PERQemu.Debugger;
 using PERQemu.Processor;
 using PERQemu.Memory;
 using PERQemu.IO;
-using PERQemu.IO.DiskDevices;
 using PERQemu.UI;
 
 namespace PERQemu
@@ -87,12 +86,10 @@ namespace PERQemu
                     //    _cpu.LoadBootROM("eioboot.bin");      // 16K, new Z80
                     //  }
                     //  break;
-                    throw new UnimplementedHardwareException(
-                        string.Format("IO board type {0} is not implemented.", _conf.IOBoard));
+                    throw new UnimplementedHardwareException($"IO board type {_conf.IOBoard} is not implemented.");
 
                 default:
-                    throw new InvalidConfigurationException(
-                        string.Format("No such IO board type '{0}'", _conf.IOBoard));
+                    throw new InvalidConfigurationException($"No such IO board type '{_conf.IOBoard}'");
             }
 
             // If any IO options are defined, instantiate the board
@@ -109,12 +106,10 @@ namespace PERQemu
 
                 case OptionBoardType.Ether3:
                 case OptionBoardType.MLO:
-                    throw new UnimplementedHardwareException(
-                        string.Format("IO Option board type {0} is not implemented.", _conf.IOOptionBoard));
+                    throw new UnimplementedHardwareException($"IO Option board type {_conf.IOOptionBoard} is not implemented.");
 
                 default:
-                    throw new InvalidConfigurationException(
-                        string.Format("No such IO Option board type '{0}'", _conf.IOOptionBoard));
+                    throw new InvalidConfigurationException($"No such IO Option board type '{_conf.IOOptionBoard}'");
             }
 
             // The Display will initialize itself (lazily)
@@ -174,7 +169,8 @@ namespace PERQemu
             if (_mode == ExecutionMode.Asynchronous && !(_iob.SupportsAsync && _cpu.SupportsAsync))
             {
                 _mode = ExecutionMode.Synchronous;
-                Log.Info(Category.Emulator, "Asynchronous execution not supported; falling back to Synchronous mode.");
+                Log.Info(Category.Emulator,
+                         "Asynchronous execution not supported; falling back to Synchronous mode.");
             }
         }
 
@@ -317,12 +313,13 @@ namespace PERQemu
         public void Halt(Exception e)
         {
             // The emulation has hit a serious error.  Enter the debugger...
-            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.\nSource={1}\nSystem state may be inconsistent.", e.Message, e.Source);
+            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.", e.Message);
+            Log.Error(Category.All, "System state may be inconsistent.");
 #if DEBUG
             Log.Write(Environment.StackTrace);
 #endif
             PERQemu.Controller.Halt();
-        }
+         }
 
         public void Shutdown()
         {
@@ -380,7 +377,7 @@ namespace PERQemu
             {
                 var drive = _conf.Drives[unit];
 
-                if (!string.IsNullOrEmpty(drive.MediaPath))
+                if (drive.Type == DeviceType.Floppy || !string.IsNullOrEmpty(drive.MediaPath))
                 {
                     if (!LoadMedia(drive.Type, drive.MediaPath, unit))
                         return false;
@@ -509,7 +506,7 @@ namespace PERQemu
         {
             if (CPU.DDS < 151)
             {
-                // Send the key:    fixme: iob and eio interfaces slightly different :-/
+                // Send the key:
                 _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
 
                 // And do it again.

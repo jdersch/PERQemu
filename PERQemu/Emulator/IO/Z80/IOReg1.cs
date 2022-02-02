@@ -48,7 +48,7 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
-            return (byte)(_z80PerqFifo.IsReady ? 0x0 : 0x20);
+            return (byte)(_z80PerqFifo.IsReady ? 0x0 : 0x40);
         }
 
         public void Write(byte portAddress, byte value)

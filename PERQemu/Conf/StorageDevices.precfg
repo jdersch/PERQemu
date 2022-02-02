@@ -139,7 +139,7 @@ done
 define Disk5Inch Maxtor71
 description "Maxtor XT-1085 71MB hard disk"
 geometry XT1085 1024 8 16 512 16
-performance XT1000 3600 5340 20000 4 420 3 625000
+performance XT1000 3600 5340 20000 4 43 3 625000
 done
 
 define Disk5Inch Maxtor85

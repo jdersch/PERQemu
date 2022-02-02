@@ -45,11 +45,11 @@ namespace PERQemu
         AccurateCPUSpeedEmulation = 0x1,        // strive for accuracy
         AccurateDiskSpeedEmulation = 0x2,       // feel the pain
         AccurateStartupDelays = 0x04,           // for the truly hardcore
-        Accurate = 0x0f,                        // shortcut (leave some room)
+        Accurate = 0x03,                        // shortcut (leave some room)
         AllowFrameSkipping = 0x10,              // sigh
     	SlowWhenMinimized = 0x20,               // save the salmon
     }
-
+                                            // put accurate back to 0xf FIXME
     public static class Settings
     {
         static Settings()

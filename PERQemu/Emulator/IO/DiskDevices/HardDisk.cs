@@ -44,6 +44,7 @@ namespace PERQemu.IO.DiskDevices
             _index = false;
             _seekComplete = false;
 
+            _seekCallback = null;
             _seekEvent = null;
             _indexEvent = null;
             _startupEvent = null;
@@ -61,6 +62,10 @@ namespace PERQemu.IO.DiskDevices
         public virtual bool Track0 => (_cyl == 0);
         public virtual bool SeekComplete => _seekComplete;
 
+        // Debugging/sanity check
+        public virtual ushort CurCylinder => _cyl;
+        public virtual byte CurHead => _head;
+
         /// <summary>
         /// Does a hardware reset on the device.
         /// </summary>
@@ -68,24 +73,25 @@ namespace PERQemu.IO.DiskDevices
         {
             if (!IsLoaded)
             {
-                // Should this just be a debug thing?
+                // Not really relevant until we support removable pack hard drives?
                 Log.Warn(Category.HardDisk, "Reset called but no disk loaded!");
                 _fault = true;
                 return;
             }
 
             // A "soft" reset from the controller just clears the fault status
-            // and should probably clear the seek state... todo/fixme check this
-            if (soft)
-            {
-                _fault = false;
-                return;
-            }
+            // and should probably clear the seek state... but what if a seek
+            // is in progress?  Abort or wait for motion to stop?  todo: check this?
+
+            FaultClear();
+            StopSeek();
+
+            if (soft) return;
 
             // A "hard" reset is from a power-on or reboot
             _ready = false;
-            _fault = false;
             _index = false;
+            _seekComplete = false;
 
             if (_startupEvent == null)
             {
@@ -128,56 +134,134 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Write a sector to the drive, with error checking.  Why?  Why do this?
+        /// Register a callback to fire when a seek operation completes.
         /// </summary>
-        public virtual void SetSector(Sector sec, ushort cylinder, byte head, ushort sector)
+        public virtual void SetSeekCompleteCallback(SchedulerEventCallback cb)
         {
-            if (sec.CylinderID != _cyl || sec.HeadID != _head)
-            {
-                // "Address error" :-)
-                _fault = true;
-            }
+            _seekCallback = cb;
+        }
 
-            Sectors[sec.CylinderID, sec.HeadID, sec.SectorID] = sec;
+        /// <summary>
+        /// Set the current head from the Head Select lines.
+        /// </summary>
+        public virtual void HeadSelect(byte head)
+        {
+            _head = head;
         }
 
         /// <summary>
         /// Initiates or continues a Seek by pulsing the Disk Step line.
-        /// Direction is >0 for positive steps, or 0 for a negative steps.
+        /// Direction is >0 for positive steps, or 0 or a negative steps.
         /// </summary>
         public virtual void SeekStep(int direction)
         {
-            // Take a step, but within limits
+            // Compute and check our new cylinder
             if (direction > 0)
             {
-                _cyl = Math.Min(_cyl++, Geometry.Cylinders);
+                _cyl = (ushort)Math.Min(_cyl + 1, (Geometry.Cylinders - 1));
             }
             else
             {
-                _cyl = Math.Min(_cyl--, _cyl);  // Heh.  Avoid wrap.
+                _cyl = Math.Min((ushort)(_cyl - 1), _cyl);      // Don't underflow yer ushorts!
             }
-            // Want to see if the buffered seeks are actually coming through
-            // or if I have to fix the CTC to actually dtrt; i think this has
-            // never actually worked right; we just deliver the data as requested
-            // and treat every seek as a single step (which, in reality, is really
-            // slow since there's 20ms head settling time on every seek op)
-            var interval = (_scheduler.CurrentTimeNsec - _lastStep) * Conversion.NsecToMsec;
-            Log.Debug(Category.HardDisk, "Step pulse! cyl={0}, interval={1:n}", _cyl, interval);
-            _lastStep = _scheduler.CurrentTimeNsec;
 
-            // schedule it:
-            //      if not seeking, we start (with the "settling" time if any)
-            //      if the timer is already running, we're buffering; extend
-            //      eventually the pulses stop and we allow the seek to complete
-            // easy peasy lemon squeezy
+            ulong start = _scheduler.CurrentTimeNsec;
+            ulong delay = (ulong)Specs.MinimumSeek;
 
-            //Event foo = _scheduler.Schedule((ulong)interval, (skewNsec, context) => { } );
-            //foo.TimestampNsec += 9;
+            // Schedule the time delay based on drive specifications
+            if (_seekEvent == null)
+            {
+                // Starting a new seek
+                _lastStep = start;
+                _stepCount = 1;
 
-            // For now:
-            _seekComplete = true;
+                Log.Debug(Category.HardDisk, "Initial step to cyl {0}, seek {1}ms", _cyl, delay);
+
+                _seekEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, start, SeekCompletion);
+            }
+            else
+            {
+                // Seek in progress, so buffer the step by extending the delay
+                _stepCount++;
+
+                // How long since the last step?  Technically there are tight specs
+                // for the duration of and time between pulses but we can only assume
+                // that the microcode/controller will adhere to them...
+                var interval = (_scheduler.CurrentTimeNsec - _lastStep) * Conversion.NsecToMsec;
+                _lastStep = _scheduler.CurrentTimeNsec;
+
+                // Get our start time from the event context...
+                start = (ulong)_seekEvent.Context;
+
+                // Extend our completion time based on the number of steps received
+                // minus the time elapsed so far.  This is quick and crude and should
+                // be a nice smooth ramp function but for now just clamped based on
+                // drive specs for full-stroke seek times (expressed in milliseconds
+                // or months-of-sundays, take your pick)
+                int tmp = Math.Min(_stepCount * Specs.MinimumSeek, Specs.MaximumSeek);
+                delay = ((ulong)tmp * Conversion.MsecToNsec) - (_lastStep - start);
+
+                Log.Debug(Category.HardDisk,
+                          "Buffered step to cyl {0}, total seek now {1}ms (step interval={2:n}ms)",
+                          _cyl, delay * Conversion.NsecToMsec, interval);
+
+                // We can't update the scheduled item in place; delete the event and
+                // reinsert it so the Scheduler doesn't get cranky.
+                _scheduler.Cancel(_seekEvent);
+                _seekEvent = _scheduler.Schedule(delay, start, SeekCompletion);
+            }
         }
 
+        /// <summary>
+        /// Finish a seek and inform any registered client.  Here's where we
+        /// apply the "head settling" time if the device requires it.
+        /// </summary>
+        public virtual void SeekCompletion(ulong skewNsec, object context)
+        {
+            _seekComplete = true;
+            _seekEvent = null;
+
+            // Schedule a callback to the registered client, if any
+            if (_seekCallback != null)
+            {
+                ulong settle = 1 * Conversion.UsecToNsec;
+
+                // If faithfully emulating the slow ass disk drives of the mid-
+                // 1980s, then add the head settling time to cap off our seek
+                // odyssey.  Otherwise a default 1us delay is reasonable.
+                if (Settings.Performance.HasFlag(RateLimit.AccurateDiskSpeedEmulation) && Specs.HeadSettling > 0)
+                {
+                    settle = (ulong)Specs.HeadSettling * Conversion.MsecToNsec;
+                }
+
+                Log.Debug(Category.HardDisk, "Seek complete [settling callback in {0:n}ms]",
+                                              settle * Conversion.NsecToMsec);
+
+                _scheduler.Schedule(settle, _seekCallback);
+            }
+            else
+            {
+                Log.Debug(Category.HardDisk, "Seek complete");
+            }
+        }
+
+        /// <summary>
+        /// Stops a seek in progress and resets.  It's not clear that the microcode
+        /// would ever do this or how the drive would react (presumably the hardware
+        /// completes the seek operation based on how many steps have been buffered;
+        /// check the manual...)
+        /// </summary>
+        public virtual void StopSeek()
+        {
+            if (_seekEvent != null)
+            {
+                _scheduler.Cancel(_seekEvent);
+                _seekEvent = null;
+            }
+
+            _seekComplete = false;
+            _stepCount = 0;
+        }
 
         /// <summary>
         /// Requests that the drive clear its Fault status.
@@ -186,12 +270,8 @@ namespace PERQemu.IO.DiskDevices
         {
             if (_fault)
             {
-                Log.Debug(Category.HardDisk, "Fault cleared.");
+                Log.Debug(Category.HardDisk, "Fault cleared!");
                 _fault = false;
-            }
-            else
-            {
-                Log.Debug(Category.HardDisk, "Fault clear requested.");
             }
         }
 
@@ -216,12 +296,12 @@ namespace PERQemu.IO.DiskDevices
 
                 // Introduce a little variation, from 50-95% of max startup time
                 var rand = new Random();
-                delay = (ulong)(Specs.StartupDelay / 100 * rand.Next(50, 95) / 10); // DEBUG
+                delay = (ulong)(Specs.StartupDelay / 100 * rand.Next(50, 95));
             }
 
             _startupEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, DriveReady);
 
-            Log.Debug(Category.HardDisk, "Drive {0} motor start ({1} sec delay).",
+            Log.Debug(Category.HardDisk, "Drive {0} motor start ({1} sec delay)",
                       Info.Name, delay * Conversion.MsecToSec);
         }
 
@@ -233,7 +313,7 @@ namespace PERQemu.IO.DiskDevices
             _ready = true;
             _startupEvent = null;
 
-            Log.Debug(Category.HardDisk, "Hard drive is online: {0}.", Geometry);
+            Log.Info(Category.HardDisk, "{0} is online: {1}", Info.Description, Geometry);
         }
 
         /// <summary>
@@ -266,9 +346,9 @@ namespace PERQemu.IO.DiskDevices
             _indexPulseDurationNsec = (ulong)Specs.IndexPulse;
 
             Log.Debug(Category.HardDisk,
-                      "{0} drive loaded!  Index is {1:n}us every {2:n}ms ",
+                      "{0} drive loaded!  Index is {1:n}us every {2:n}ms",
                       Info.Name, _indexPulseDurationNsec / 1000.0, _discRotationTimeNsec / 1000.0);
-            
+
             base.OnLoad();
         }
 
@@ -290,9 +370,12 @@ namespace PERQemu.IO.DiskDevices
         private ulong _indexPulseDurationNsec;
         private Event _indexEvent;
 
-        // Oh yeah, seek stuff
+        // Seek timing
+        private int _stepCount;
         private ulong _lastStep;
         private Event _seekEvent;
+
+        private SchedulerEventCallback _seekCallback;
 
         // Startup delay
         private Event _startupEvent;

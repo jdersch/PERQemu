@@ -97,7 +97,7 @@ namespace PERQemu
     }
 
     /// <summary>
-    /// Log messages to the console or a file, with filters for the level of
+    /// Log messages to the console and/or a file, with filters for the level of
     /// verbosity and other nice features (to aid in debugging, mostly).
     /// </summary>
     /// <design>
@@ -106,25 +106,30 @@ namespace PERQemu
     /// can specify (along with a file name pattern and limits on the amount
     /// of data to collect).
     /// </design>
+    /// <remarks>
+    /// While indispensible in debugging, logging is _painfully_ slow, so most
+    /// of the methods are compiled out completely in Release builds.
+    /// </remarks>
     public static class Log
     {
         static Log()
         {
             _level = Severity.Normal;           // This is normal
             _categories = Category.None;        // Nothing selected
+
             _logToConsole = true;               // On by default
             _logToFile = false;                 // Log only to the console
+
             _logSize = 1048576;                 // Default log size is 1MB?
-            _logLimit = 9;                      // Keep only 10 files (0..9)
-            _logFilePattern = "debug{0}.log";   // Default log file name
-            _logDirectory = Paths.OutputDir;    // Default log directory
+            _logLimit = 99;                     // Keep 100 files? (0..99)
+            _logFilePattern = "debug{0:d2}.log";
+            _logDirectory = Paths.OutputDir;
 
             _currentFile = string.Empty;
             _lastOutput = string.Empty;
             _repeatCount = 0;
 
             SetColors();
-
 #if DEBUG
             // for debugging
             _level = Severity.All;
@@ -186,6 +191,9 @@ namespace PERQemu
         /// <summary>
         /// Shortcut for displaying a serious error.
         /// </summary>
+        /// <remarks>
+        /// Gosh, it's a shame Console doesn't support <blink>attributes</blink>.
+        /// </remarks>
         public static void Error(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Error, c, fmt, args);
@@ -251,7 +259,7 @@ namespace PERQemu
                         if (_repeatCount == 1)
                             Console.WriteLine(_lastOutput);     // one repeat is ok :-)
                         else
-                            Console.WriteLine("[Last message repeated {0} times.]", _repeatCount);
+                            Console.WriteLine("[Last message repeated {0} times]", _repeatCount);
                     }
 
                     // Set the text color; in severe cases, override them to standout

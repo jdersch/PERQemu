@@ -95,7 +95,7 @@ namespace PERQemu.Memory
             _mdiQueue.Reset();
             _mdoQueue.Reset();
 
-            Log.Debug(Category.Memory, "Reset.");
+            Log.Debug(Category.Memory, "Reset");
         }
 
         public int MemSize => _memSize;

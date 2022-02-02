@@ -109,7 +109,7 @@ namespace PERQemu.UI
 
             if (SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "0") == SDL.SDL_bool.SDL_FALSE)
             {
-                throw new InvalidOperationException("SDL_SetHint failed to set scale quality.");
+                throw new InvalidOperationException("SDL_SetHint failed to set scale quality");
             }
 
             //
@@ -125,7 +125,7 @@ namespace PERQemu.UI
 
             if (_sdlWindow == IntPtr.Zero)
             {
-                throw new InvalidOperationException("SDL_CreateWindow failed.");
+                throw new InvalidOperationException("SDL_CreateWindow failed");
             }
 
             //
@@ -140,7 +140,7 @@ namespace PERQemu.UI
                 if (_sdlRenderer == IntPtr.Zero)
                 {
                     // Still no luck.
-                    throw new InvalidOperationException("SDL_CreateRenderer failed.");
+                    throw new InvalidOperationException("SDL_CreateRenderer failed");
                 }
             }
 
@@ -417,7 +417,7 @@ namespace PERQemu.UI
         /// </summary>
         public void ShutdownSDL()
         {
-            Log.Debug(Category.Display, "SDL Shutdown requested.");
+            Log.Debug(Category.Display, "SDL Shutdown requested");
 
             if (_sdlRunning)
             {
@@ -674,7 +674,7 @@ namespace PERQemu.UI
         //    return null;
         //}
 
-        // todo: remove (eventually); for debugging
+        // debugging
         public void Status()
         {
             Console.WriteLine("_sdlRunning={0}, _renderEventType={1}",

@@ -215,9 +215,9 @@
     <Compile Include="Configurator\Settings.cs" />
     <Compile Include="Configurator\SettingsCommands.cs" />
     <Compile Include="Controller\Log.cs" />
-    <Compile Include="Emulator\IO\HardDisk\ShugartController.cs" />
     <Compile Include="Emulator\IO\DiskDevices\HardDisk.cs" />
     <Compile Include="Emulator\IO\DiskDevices\FloppyDisk.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\ShugartController.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

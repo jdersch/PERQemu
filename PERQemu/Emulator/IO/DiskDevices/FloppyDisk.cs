@@ -38,16 +38,18 @@ namespace PERQemu.IO.DiskDevices
         public FloppyDisk(Scheduler sched, string filename) : base(filename)
         {
             _scheduler = sched;
-            _tracks = new Track[2, 77];     // temp HACK do this more elegantly
 
             _ready = false;
+            _fault = false;
             _diskChange = false;
             _driveSelect = false;
             _isSingleSided = false;
             _isDoubleDensity = false;
 
-            _cylinder = 1;      // Gently force a Step Out to find track 0 on startup
+            _cylinder = 1;      // Force a Step Out to find track 0 on startup
             _head = 0;
+
+            _tracks = new Track[2, 77];     // todo: eliminate, or do this more elegantly
 
             _loadDelayEvent = null;
             _seekDelayEvent = null;
@@ -66,12 +68,12 @@ namespace PERQemu.IO.DiskDevices
             }
 
             // Anything else?
-            Log.Debug(Category.FloppyDisk, "Drive reset.");
+            Log.Debug(Category.FloppyDisk, "Drive reset");
         }
 
         public ushort Cylinder => _cylinder;
 
-        public bool Fault => false;     // For now ("Equipment Check")
+        public bool Fault => _fault;
         public bool Ready => (IsLoaded && _ready);
         public bool Track0 => (_cylinder == 0);
         public bool IsSingleSided => _isSingleSided;
@@ -124,6 +126,14 @@ namespace PERQemu.IO.DiskDevices
             var cyls = Math.Abs(track - _cylinder);
             var delay = Math.Min(Specs.MinimumSeek * (cyls + 1), Specs.MaximumSeek);
 
+            if (!IsLoaded)
+            {
+                // Trying to execute a seek or recalibrate with no media loaded
+                // should result in an EquipCheck fault and an abnormal termination
+                _fault = true;
+                track = _cylinder;  // don't move the heads
+            }
+
             // Schedule the callback (to fire on the FDC) to signal seek complete
             _seekDelayEvent = _scheduler.Schedule((ulong)delay * Conversion.MsecToNsec, cb);
 
@@ -164,6 +174,7 @@ namespace PERQemu.IO.DiskDevices
         public override void OnLoad()
         {
             _ready = false;
+            _fault = false;
             _diskChange = true;
             _isSingleSided = (Geometry.Heads == 1);
             _isDoubleDensity = (Geometry.SectorSize == 256);
@@ -185,6 +196,7 @@ namespace PERQemu.IO.DiskDevices
         }
 
         private bool _ready;
+        private bool _fault;
         private bool _diskChange;
         private bool _driveSelect;
         private bool _isSingleSided;

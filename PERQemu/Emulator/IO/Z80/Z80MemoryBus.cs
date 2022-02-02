@@ -39,7 +39,7 @@ namespace PERQemu.IO.Z80
             _rom = new byte[ROM_SIZE];
             _ram = new byte[RAM_SIZE];
 
-            Log.Debug(Category.Z80, "Allocated {0:N1}KB ROM, {1:N1}KB RAM.",
+            Log.Debug(Category.Z80, "Allocated {0:N1}KB ROM, {1:N1}KB RAM",
                                     ROM_SIZE / 1024, RAM_SIZE / 1024);
         }
 
@@ -76,7 +76,7 @@ namespace PERQemu.IO.Z80
             {
                 // throw for now so I can see what's going on
                 throw new InvalidOperationException(
-                    string.Format("Unexpected memory read at address 0x{0:x}.", address));
+                    string.Format("Unexpected memory read at address 0x{0:x}", address));
             }
         }
 
@@ -90,7 +90,7 @@ namespace PERQemu.IO.Z80
             {
                 // throw for now so I can see what's going on
                 throw new InvalidOperationException(
-                    string.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}.", address, value));
+                    string.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}", address, value));
             }
         }
 
@@ -105,10 +105,10 @@ namespace PERQemu.IO.Z80
             {
                 if (fs.Read(_rom, 0, _rom.Length) != _rom.Length)
                 {
-                    throw new InvalidOperationException("Invalid Z80 ROM size.");
+                    throw new InvalidOperationException("Invalid Z80 ROM size");
                 }
 
-                Log.Info(Category.Emulator, "Loaded Z80 ROM from {0}.", Paths.Canonicalize(path));
+                Log.Info(Category.Emulator, "Loaded Z80 ROM from {0}", Paths.Canonicalize(path));
             }
         }
 

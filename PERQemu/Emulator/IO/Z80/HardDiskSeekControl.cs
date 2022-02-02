@@ -29,10 +29,18 @@ namespace PERQemu.IO.Z80
         public HardDiskSeekControl(PERQSystem system)
         {
             _system = system;
+            _stepClockEvent = null;
         }
 
         public void Reset()
         {
+            if (_stepClockEvent != null)
+            {
+                _system.Scheduler.Cancel(_stepClockEvent);
+                _stepClockEvent = null;
+
+                Log.Debug(Category.HardDisk, "SeekControl reset");
+            }
         }
 
         public string Name => "Shugart Seek Control";
@@ -50,17 +58,48 @@ namespace PERQemu.IO.Z80
 
         public void Write(byte portAddress, byte value)
         {
-            // The PERQ has set up the controller to do everything else,
-            // we just send a pulse to seek the drive in whatever direction
-            // it was set up to move in.
             if (value != 0)
             {
-                _system.IOB.DiskController.DoSingleSeek();
+                StepClockCallback(0, null);     // Go!
             }
         }
 
+        /// <summary>
+        /// Send a step pulse to the hard disk to move the heads.  The PERQ has
+        /// set up the controller to seek in the proper direction and programmed
+        /// the CTC with a cylinder count; we just clock the counter until it
+        /// expires, then deschedule.  The CTC fires the completion interrupt.
+        /// </summary>
+        private void StepClockCallback(ulong skewNsec, object context)
+        {
+            // Step dem heads
+            _system.IOB.DiskController.DoSingleSeek();
+
+            // Clock the CTC and get back the count
+            var leftToGo = _system.IOB.Z80System.CTC.Clock(Channel);
+
+            if (leftToGo > 0)
+            {
+                Log.Debug(Category.HardDisk, "SeekControl scheduling step {0} in {1:n}ms",
+                          leftToGo, StepTime * Conversion.NsecToMsec);
+                _stepClockEvent = _system.Scheduler.Schedule(StepTime, StepClockCallback);
+            }
+            else
+            {
+                _stepClockEvent = null;
+                Log.Debug(Category.HardDisk, "SeekControl count expired, descheduled");
+            }
+        }
+
+        // The hardware runs on a 500KHz fixed clock source
+        private readonly ulong StepTime = 500 * Conversion.UsecToNsec;
+
+        // DiskStep wired to CTC channel 2
+        private readonly int Channel = 2;
 
         private byte[] _ports = { 0xd8 };
+
+        private Event _stepClockEvent;
         private PERQSystem _system;
     }
 }

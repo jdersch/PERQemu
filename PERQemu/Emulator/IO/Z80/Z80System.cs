@@ -106,7 +106,7 @@ namespace PERQemu.IO.Z80
             // Compute how often (in CPU cycles) to sync the emulated processor
             // to real-time (used if Settings.RateLimit != Fast mode)
             _adjustInterval = (int)(_heartbeat.Interval / (IOBoard.Z80CycleTime * Conversion.NsecToMsec));
-            Log.Info(Category.Emulator, "Z80 rate adjust every {0} cycles", _adjustInterval);
+            Log.Info(Category.Emulator, "[Z80 rate adjust every {0} cycles]", _adjustInterval);
         }
 
         public bool SupportsAsync => true;
@@ -123,6 +123,9 @@ namespace PERQemu.IO.Z80
         public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
         public Z80SIO SIOA => _z80sio;
         public TMS9914A GPIB => _tms9914a;
+
+        // Allow for external CTC triggers
+        public Z80CTC CTC => _z80ctc;
 
         /// <summary>
         /// Resets the Z80 subsystem and starts it running.
@@ -157,17 +160,17 @@ namespace PERQemu.IO.Z80
                     _heartbeat.Enable(true);
                 }
 
-                Log.Debug(Category.Z80, "System (soft) reset.");
+                Log.Debug(Category.Z80, "System (soft) reset");
             }
             else
             {
                 // A power-on or "hard" reset does everything
                 _bus.Reset();
-                Log.Debug(Category.Z80, "System reset.");
+                Log.Debug(Category.Z80, "System reset");
             }
 
             _running = true;
-            _scheduler.DumpEvents("Z80");
+            //_scheduler.DumpEvents("Z80");
         }
 
         /// <summary>
@@ -224,7 +227,6 @@ namespace PERQemu.IO.Z80
 
             _heartbeat.Enable(true);
             Console.WriteLine("[Z80 thread starting]");
-            //_scheduler.DumpEvents("Z80 at RunAsync");
 
             do
             {
@@ -234,11 +236,11 @@ namespace PERQemu.IO.Z80
 
                     if (_stopAsyncThread) break;
 
-                    // I think we'll always rate limit the Z80?
-                    //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
-                    //{
-                    _heartbeat.WaitForHeartbeat();
-                    //}
+                    // Should probably always rate limit the Z80 for device timings to work
+                    if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                    {
+                        _heartbeat.WaitForHeartbeat();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -304,7 +306,7 @@ namespace PERQemu.IO.Z80
             //
             if ((data & 0x100) == 0)
             {
-                Log.Debug(Category.Z80IRQ, "DataInReady disabled, clearing interrupt.");
+                Log.Debug(Category.Z80IRQ, "DataInReady disabled, clearing interrupt");
 
                 // TODO: move this logic into PERQToZ80FIFO?
                 _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
@@ -312,7 +314,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                Log.Debug(Category.Z80IRQ, "DataInReady enabled.");
+                Log.Debug(Category.Z80IRQ, "DataInReady enabled");
 
                 _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
             }
@@ -352,12 +354,12 @@ namespace PERQemu.IO.Z80
         {
             if (status == 0x80 && _running)
             {
-                Log.Debug(Category.Z80, "Shut down by write to Status register.");
+                Log.Debug(Category.Z80, "Shut down by write to Status register");
                 _running = false;
             }
             else if (status == 0 && !_running)
             {
-                Log.Debug(Category.Z80, "Started by write to Status register.");
+                Log.Debug(Category.Z80, "Started by write to Status register");
                 Reset(true);
             }
         }

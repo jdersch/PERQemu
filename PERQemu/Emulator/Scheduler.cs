@@ -27,7 +27,7 @@ namespace PERQemu
     /// The SchedulerEventCallback describes a delegate that is invoked whenever a scheduled event has
     /// reached its due-date and is fired.
     /// </summary>    
-    /// <param name="skew">The delta between the requested exec time and the actual exec time (in nsec)</param>
+    /// <param name="skewNsec">The delta between the requested exec time and the actual exec time (in nsec)</param>
     /// <param name="context">An object containing context useful to the scheduler of the event</param>
     public delegate void SchedulerEventCallback(ulong skewNsec, object context);
 
@@ -99,7 +99,7 @@ namespace PERQemu
             {
                 _currentTimeNsec = 0;
                 _schedule.Clear();
-                Log.Debug(Category.Scheduler, "Reset ({0}).", _timeStepNsec);
+                Log.Debug(Category.Scheduler, "Reset ({0})", _timeStepNsec);
             }
         }
 

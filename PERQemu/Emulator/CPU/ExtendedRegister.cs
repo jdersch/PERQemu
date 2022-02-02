@@ -65,7 +65,7 @@ namespace PERQemu.Processor
         public override string ToString()
         {
 #if DEBUG
-            return string.Format("[ExtendedRegister: Value={0}, Lo={1}, Hi={2}]", Value, Lo, Hi);
+            return $"[ExtendedRegister: Value={Value}, Lo={Lo}, Hi={Hi}]";
 #else
             return Value.ToString();
 #endif

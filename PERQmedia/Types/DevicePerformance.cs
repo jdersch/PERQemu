@@ -65,7 +65,7 @@ namespace PERQmedia
         //
         // Shugart SA4000 series 14" hard drives
         //
-        public static DevicePerformance SA4000 = new DevicePerformance(2964, 1100, 90000, 20, 140, 20, 888375);
+        public static DevicePerformance SA4000 = new DevicePerformance(2964, 1100, 90000, 1, 140, 20, 888750);
 
         //
         // Specifications for the 8", 5.25" and other drive types are

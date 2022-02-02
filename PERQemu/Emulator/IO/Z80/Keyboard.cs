@@ -48,7 +48,7 @@ namespace PERQemu.IO.Z80
         public bool InterruptsEnabled
         {
             get { return _interruptsEnabled; }
-            set { _interruptsEnabled = value; Console.WriteLine("--> Kbd intr is {0} (at dds {1}, {2} cycles)", value, PERQemu.Sys.CPU.DDS, PERQemu.Sys.IOB.Z80System.Clocks); }
+            set { _interruptsEnabled = value; }
         }
 
         public event EventHandler NmiInterruptPulse;
@@ -61,6 +61,13 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
+            if (!_interruptsEnabled)
+            {
+                Log.Debug(Category.Keyboard,
+                          "Read while interrupts ignored (key {0} at dds {1}, {2} cycles)",
+                          _lastKeycode, PERQemu.Sys.CPU.DDS, PERQemu.Sys.IOB.Z80System.Clocks);
+            }
+
             _interruptActive = false;
             return _lastKeycode;
         }

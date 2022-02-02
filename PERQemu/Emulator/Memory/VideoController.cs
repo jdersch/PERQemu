@@ -105,7 +105,7 @@ namespace PERQemu.Memory
                 _currentEvent = null;
             }
 
-            Log.Debug(Category.Display, "Video controller reset.");
+            Log.Debug(Category.Display, "Video controller reset");
         }
 
         public int DisplayWidth => _displayWidth;
@@ -131,16 +131,15 @@ namespace PERQemu.Memory
                     return (int)_crtSignals;
 
                 case 0x66:   // Read Hi address parity (unimplemented)
-                    Log.Debug(Category.Display, "STUB: Read Hi address parity, returned 0.");
+                    Log.Debug(Category.Display, "STUB: Read Hi address parity, returned 0");
                     return 0x0;
 
                 case 0x67:   // Read Low address parity (unimplemented)
-                    Log.Debug(Category.Display, "STUB: Read Low address parity, returned 0.");
+                    Log.Debug(Category.Display, "STUB: Read Low address parity, returned 0");
                     return 0x0;
 
                 default:
-                    throw new UnhandledIORequestException(
-                        string.Format("Unhandled Memory IO Read from port {0:x2}", ioPort));
+                    throw new UnhandledIORequestException($"Unhandled Memory IO Read from port {ioPort:x2}");
             }
         }
 
@@ -260,13 +259,13 @@ namespace PERQemu.Memory
         private int UnFrobAddress(int value)
         {
             // Early PERQ-1 256K memory board
-            if (_system.Memory.MemSize < 0x80000)
+            if (_system.Memory.MemSize < 0x40000)
             {
                 return (value << 1);
             }
 
             // Half-meg through two meg boards
-            if (_system.Memory.MemSize < 0x400000)
+            if (_system.Memory.MemSize < 0x200000)
             {
                 return (value << 4);
             }
@@ -333,7 +332,8 @@ namespace PERQemu.Memory
                     break;
 
                 case VideoState.VBlankScanline:
-                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec + _hBlankTimeNsec, (skew, context) =>
+                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec + _hBlankTimeNsec,
+                                                               (skew, context) =>
                     {
                         if (_lineCounter > 0) _lineCounter--;
 
@@ -604,8 +604,8 @@ namespace PERQemu.Memory
         // strange behavior in OSes that rely on a 60Hz vertical retrace to
         // run their clocks, but that'd be a nice problem to have... :-|
         //
-        private readonly ulong _scanLineTimeNsec = 70 * CPU.MicroCycleTime;
-        private readonly ulong _hBlankTimeNsec = 22 * CPU.MicroCycleTime;
+        private readonly ulong _scanLineTimeNsec = 11900;   // 70 microcycles
+        private readonly ulong _hBlankTimeNsec = 3740;      // 22 microcycles
 
         // Width is configurable; both displays are the same height
         private int _displayWidth;

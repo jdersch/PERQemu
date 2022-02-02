@@ -57,7 +57,7 @@ namespace PERQemu.IO.Z80
             _interruptEnabled = false;
             _interruptVector = null;
 
-            Log.Debug(Category.CTC, "Reset.");
+            Log.Debug(Category.CTC, "Reset");
         }
 
         public string Name => "Z80 CTC";
@@ -76,7 +76,7 @@ namespace PERQemu.IO.Z80
         {
             int ch = (portAddress - _baseAddress);
 
-            if ((_channels[ch].Control & ControlFlags.TimeConstant) != 0)
+            if (_channels[ch].Control.HasFlag(ControlFlags.TimeConstant))
             {
                 Log.Debug(Category.CTC, "Channel {0} loading TC {1}", ch, value);
 
@@ -96,8 +96,9 @@ namespace PERQemu.IO.Z80
             else
             {
                 ControlFlags control = (ControlFlags)value;
+                Log.Debug(Category.CTC, "Control word: {0}", control);
 
-                if ((control & ControlFlags.ControlOrVector) != 0)
+                if (control.HasFlag(ControlFlags.ControlOrVector))
                 {
                     // Control word
                     _channels[ch].Control = control;
@@ -106,9 +107,6 @@ namespace PERQemu.IO.Z80
                     {
                         _channels[ch].Stop();
                     }
-
-                    // Check/reset the interrupt flag
-                    RaiseInterrupt();
                 }
                 else
                 {
@@ -124,12 +122,17 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// Clock the specified channel.
         /// </summary>
-        public void Clock(int channel)
+        public int Clock(int channel)
         {
-            if (_channels[channel].Clock() == 0)
+            var count = _channels[channel].Clock();
+
+            if (count == 0)
             {
                 RaiseInterrupt();
             }
+
+            Log.Debug(Category.CTC, "Clocked channel {0}, count now {1}", channel, count);
+            return count;
         }
 
         /// <summary>
@@ -141,7 +144,7 @@ namespace PERQemu.IO.Z80
             // Check all the channels
             for (var ch = 0; ch < _channels.Length; ch++)
             {
-                if (_channels[ch].InterruptRequested && (_channels[ch].Control & ControlFlags.Interrupt) != 0)
+                if (_channels[ch].InterruptRequested && _channels[ch].Control.HasFlag(ControlFlags.Interrupt))
                 {
                     _interruptEnabled = true;
                     _interruptVector = (byte)(_interruptVectorBase + ch * 2);
@@ -161,7 +164,7 @@ namespace PERQemu.IO.Z80
         /// Clear an interrupt, somehow.  It doesn't seem the Z80 doesn't have
         /// any easy or obvious way to actually signal the acknowledgement and
         /// handling of an interrupt without actually snooping the instruction
-        /// stream?  SERIOUSLY?  >:-(  This deal is getting worse all the time...
+        /// stream?  <lando>This deal is getting worse all the time...</lando>
         /// </summary>
         public void ClearInterrupt()
         {
@@ -188,7 +191,7 @@ namespace PERQemu.IO.Z80
             TimerTrigger = 0x08,
             EdgeSelection = 0x10,
             Prescaler = 0x20,
-            Mode = 0x40,
+            CounterMode = 0x40,
             Interrupt = 0x80,
         }
 
@@ -212,7 +215,7 @@ namespace PERQemu.IO.Z80
 
                 Trigger = null;
 
-                Log.Debug(Category.CTC, "Channel {0} initialized.", Number);
+                Log.Debug(Category.CTC, "Channel {0} initialized", Number);
             }
 
             public ControlFlags Control;
@@ -233,21 +236,20 @@ namespace PERQemu.IO.Z80
                 if (!Running)
                 {
                     // In Timer mode?
-                    if ((Control & ControlFlags.Mode) == 0)
+                    if (Control.HasFlag(ControlFlags.CounterMode))
+                    {
+                        Running = true;
+                    }
+                    else
                     {
                         // Start automatically on Time Constant reload, or when
                         // programmed for external start pulse is applied
-                        if ((pulse && (Control & ControlFlags.TimerTrigger) != 0) ||
-                                     ((Control & ControlFlags.TimerTrigger) == 0))
+                        if ((pulse && Control.HasFlag(ControlFlags.TimerTrigger)) ||
+                                     !Control.HasFlag(ControlFlags.TimerTrigger))
                         {
                             Running = true;
                             QueueTimerTick();
                         }
-                    }
-                    else
-                    {
-                        // Counter mode
-                        Running = true;
                     }
 
                     Log.Debug(Category.CTC, "Channel {0} started (running={1})", Number, Running);
@@ -259,20 +261,21 @@ namespace PERQemu.IO.Z80
             /// mode, decrement the counter.  In timer mode, start the timer
             /// (if programmed to start on external trigger).
             /// </summary>
-            /// <remarks>
-            /// This will almost certainly have to be converted to a scheduled
-            /// countdown, or the other peripherals will have to manually Clock
-            /// their own counters... ugh.
-            /// </remarks>
             public int Clock()
             {
-                if ((Control & ControlFlags.Mode) != 0)
+                if (Control.HasFlag(ControlFlags.CounterMode))
                 {
-                    if (Running) Counter--;     // Decrement counter
+                    if (Running)
+                    {
+                        if (Counter > 0) Counter--;
+
+                        // Expired; signal an interrupt (if configured)
+                        InterruptRequested = (Counter == 0);
+                    }
                 }
                 else
                 {
-                    if (!Running) Start(true);  // Start timer?
+                    if (!Running) Start(true);
                 }
 
                 return Counter;
@@ -286,8 +289,14 @@ namespace PERQemu.IO.Z80
             {
                 Running = false;
                 InterruptRequested = false;
+
                 _ctc._scheduler.Cancel(Trigger);
-                Log.Debug(Category.CTC, "Channel {0} stopped.", Number);
+                Trigger = null;
+
+                Log.Debug(Category.CTC, "Channel {0} stopped", Number);
+
+                // Counter-intuitively, call this to clear our interrupt
+                _ctc.RaiseInterrupt();
             }
 
             /// <summary>
@@ -299,9 +308,9 @@ namespace PERQemu.IO.Z80
                 Counter = TimeConstant;
 
                 // Apply the prescaler value if in Timer mode
-                if ((Control & ControlFlags.Mode) == 0)
+                if (!Control.HasFlag(ControlFlags.CounterMode))
                 {
-                    Counter *= (((Control & ControlFlags.Prescaler) != 0) ? 256 : 16);
+                    Counter *= (Control.HasFlag(ControlFlags.Prescaler) ? 256 : 16);
                 }
 
                 Log.Debug(Category.CTC, "Channel {0} counter reset ({1})", Number, Counter);
@@ -312,9 +321,9 @@ namespace PERQemu.IO.Z80
             /// </summary>
             private void QueueTimerTick()
             {
-                if ((Control & ControlFlags.Mode) != 0)
+                if (Control.HasFlag(ControlFlags.CounterMode))
                 {
-                    Console.WriteLine("No timer for counter " + Number);
+                    Log.Warn(Category.CTC, "Ignoring timer tick for counter {0}", Number);
                     return;
                 }
 
@@ -328,15 +337,12 @@ namespace PERQemu.IO.Z80
                 //              possibly unused?  (Old touch tablet interface)
                 // Thus, the min/max timer values at 2.4576Mhz are ~6.5uS to 26.6ms.
                 // At 9600 baud, the CTC runs at its maximum rate to produce the SIO/0
-                // clock (on channel 0).  TODO: don't actually run the serial and speech
-                // channels.  There's just no reason to generate BIT CLOCKS for simulated
-                // serial ports.  Sigh.  At least they don't interrupt the Z80.  Just
-                // focus on the hard disk seek/"IO REG 2" thing.
+                // clock (on channel 0).
                 //
                 var interval = _ctc._scheduler.TimeStepNsec * (ulong)Counter;
 
 #if DEBUG
-                // DEBUG - sanity check
+                // Sanity check
                 if (interval < 6512 || interval > 26673152)
                 {
                     Console.WriteLine("Bad CTC interval calculation: {0} (time const={1})",
@@ -348,7 +354,8 @@ namespace PERQemu.IO.Z80
 #endif
                 Trigger = _ctc._scheduler.Schedule(interval, Number, TimerTickCallback);
 
-                //Log.Debug(Category.CTC, "Channel {0} timer scheduled ({1})", Number, interval);
+                Log.Debug(Category.CTC, "Channel {0} timer scheduled ({1}) at {2}",
+                                        Number, interval, _ctc._scheduler.CurrentTimeNsec);
             }
 
             /// <summary>
@@ -357,9 +364,10 @@ namespace PERQemu.IO.Z80
             /// </summary>
             private void TimerTickCallback(ulong skewNsec, object context)
             {
-                //Log.Debug(Category.CTC, "Channel {0} timer callback fired", context);
+                Log.Debug(Category.CTC, "Channel {0} timer callback fired at {1}",
+                                        context, _ctc._scheduler.CurrentTimeNsec);
 
-                if (Running && ((Control & ControlFlags.Interrupt) != 0))
+                if (Running && Control.HasFlag(ControlFlags.Interrupt))
                 {
                     InterruptRequested = true;
 
@@ -377,7 +385,7 @@ namespace PERQemu.IO.Z80
                     // simulated devices aren't clocking actual bit streams fercryinoutloud.
                     Trigger = null;
                     InterruptRequested = false;
-                    Log.Debug(Category.CTC, "Channel {0} timer not renewed.", context);
+                    Log.Debug(Category.CTC, "[Channel {0} timer not renewed]", context);
                 }
             }
         }

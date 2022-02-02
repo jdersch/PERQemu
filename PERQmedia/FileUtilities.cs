@@ -36,11 +36,14 @@ namespace PERQmedia
         /// </summary>
         public static DeviceType GetDeviceTypeFromFile(string file)
         {
-            var dev = new StorageDevice();
-
-            if (dev.CanLoad(file))
+            if (!string.IsNullOrEmpty(file))
             {
-                return dev.Info.Type;
+                var dev = new StorageDevice();
+
+                if (dev.CanLoad(file))
+                {
+                    return dev.Info.Type;
+                }
             }
 
             return DeviceType.Unused;
@@ -55,36 +58,39 @@ namespace PERQmedia
         {
             var formatters = new List<IMediaFormatter>();
 
-            var ext = Path.GetExtension(path).ToLower();
-
-            switch (ext)
+            if (!string.IsNullOrEmpty(path))
             {
-                case ".prqm":
-                    formatters.Add(new PRQFormatter());
-                    break;
+                var ext = Path.GetExtension(path).ToLower();
 
-                case ".phd":
-                    formatters.Add(new PHDFormatter());
-                    break;
+                switch (ext)
+                {
+                    case ".prqm":
+                        formatters.Add(new PRQFormatter());
+                        break;
 
-                case ".imd":
-                    formatters.Add(new IMDFormatter());
-                    break;
+                    case ".phd":
+                        formatters.Add(new PHDFormatter());
+                        break;
 
-                case ".pfd":
-                case ".raw":
-                    formatters.Add(new RawFormatter());
-                    break;
+                    case ".imd":
+                        formatters.Add(new IMDFormatter());
+                        break;
 
-                //  tape - prqm, tap - none yet implemented
+                    case ".pfd":
+                    case ".raw":
+                        formatters.Add(new RawFormatter());
+                        break;
 
-                default:
-                    // Hell, try 'em all?
-                    formatters.Add(new PRQFormatter());
-                    formatters.Add(new PHDFormatter());
-                    formatters.Add(new IMDFormatter());
-                    formatters.Add(new RawFormatter());
-                    break;
+                    //  tape - prqm, tap - none yet implemented
+
+                    default:
+                        // Hell, try 'em all?
+                        formatters.Add(new PRQFormatter());
+                        formatters.Add(new PHDFormatter());
+                        formatters.Add(new IMDFormatter());
+                        formatters.Add(new RawFormatter());
+                        break;
+                }
             }
 
             return formatters;
