@@ -278,6 +278,11 @@ namespace PERQemu.IO.DiskDevices
                 _seekState = SeekState.WaitForSeekComplete;
                 Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
 
+                // Don't queue a standard busy delay?  Wait for "on cylinder"
+                // (i.e., SeekComplete) and then fire an interrupt.  But if the
+                // Z80 is stepping the heads... hmm.
+                _controllerStatus = Status.Busy;
+
                 // Send it
                 DoSingleSeek();
             }
@@ -299,6 +304,7 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public void DoSingleSeek()
         {
+
             _disk.SeekStep(_seekCommand.HasFlag(SeekCommand.Direction) ? 1 : 0);
         }
 
@@ -320,6 +326,8 @@ namespace PERQemu.IO.DiskDevices
         {
             _seekState = SeekState.WaitForStepSet;
             Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+
+            ClearBusyState();
         }
 
         /// <summary>

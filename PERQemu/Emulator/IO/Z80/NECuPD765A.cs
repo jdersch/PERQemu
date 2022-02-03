@@ -361,7 +361,7 @@ namespace PERQemu.IO.Z80
 
                 SelectedUnit.SeekTo(cylinder, SeekCompleteCallback);
 
-                Log.Debug(Category.FloppyDisk, "Unit {0} seek to {1} scheduled", _unitSelect, cylinder);
+                Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} scheduled", _unitSelect, cylinder);
             }
             else
             {
@@ -371,7 +371,6 @@ namespace PERQemu.IO.Z80
                 SetErrorStatus(StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk);
 
                 Log.Error(Category.FloppyDisk, "{0} issued but drive {1} not ready", cmd, _unitSelect);
-
                 FinishCommand();
             }
         }
@@ -385,8 +384,7 @@ namespace PERQemu.IO.Z80
             _status &= ~((Status)(0x1 << _unitSelect));
             _interruptActive = true;
 
-            Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} completed",
-                                            _unitSelect, _pcn[_unitSelect]);
+            Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} completed", _unitSelect, _pcn[_unitSelect]);
             FinishCommand();
         }
 
@@ -399,6 +397,8 @@ namespace PERQemu.IO.Z80
 
             _statusData.Enqueue((byte)_errorStatus);    // ST0 (SEEK END)
             _statusData.Enqueue(_pcn[_unitSelect]);     // PCN
+
+            Log.Debug(Category.FloppyDisk, "SenseInterruptStatus: {0}", _errorStatus);
 
             FinishCommand();
         }
@@ -423,6 +423,8 @@ namespace PERQemu.IO.Z80
             // otherwise... what to return if no drive attached?
 
             _statusData.Enqueue((byte)ST3);
+
+            Log.Debug(Category.FloppyDisk, "SenseDriveStatus: {0}", ST3);
 
             FinishCommand();
         }
@@ -828,7 +830,6 @@ namespace PERQemu.IO.Z80
                                 (SelectedUnit.Ready ? StatusRegister0.None : StatusRegister0.NotReady);
             }
 
-            Log.Debug(Category.FloppyDisk, "ST0 = {0}", _errorStatus);
             return _errorStatus;
         }
 

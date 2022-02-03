@@ -108,12 +108,18 @@ namespace PERQemu
         {
             while (steps > 0)
             {
-                // Move one system clock forward in time
+                // Move one clock step forward in time
                 _currentTimeNsec += _timeStepNsec;
 
                 // See if we have any events waiting to fire at this timestep
-                while (_schedule.Top != null && _currentTimeNsec > _schedule.Top.TimestampNsec)
+                while (_schedule.Top != null)
                 {
+                    if (_currentTimeNsec < _schedule.Top.TimestampNsec)
+                    {
+                        // No more ready events this trip
+                        break;
+                    }
+
                     // Pop the top event and fire the callback
                     Event e = _schedule.Pop();
                     e.EventCallback(_currentTimeNsec - e.TimestampNsec, e.Context);
@@ -191,19 +197,12 @@ namespace PERQemu
         public void Clear()
         {
             _queue.Clear();
+            _top = null;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Push(Event e)
         {
-            // Degenerate case:  list is empty or new entry is earlier than the head of the list.
-            if (_queue.Count == 0 || _top.TimestampNsec >= e.TimestampNsec)
-            {
-                _queue.AddFirst(e);
-                _top = e;
-                return;
-            }
-
             //
             // Do a linear search to find the place to put this in.  Since we
             // maintain a sorted list with every insertion we only need to find
@@ -213,11 +212,22 @@ namespace PERQemu
             //
             LinkedListNode<Event> current = _queue.First;
 
+            // Empty list?  Add the first event
+            if (current == null)
+            {
+                _queue.AddFirst(e);
+                _top = e;
+                return;
+            }
+
+            // Insert in chronological order
             while (current != null)
             {
-                if (current.Value.TimestampNsec >= e.TimestampNsec)
+                if (e.TimestampNsec < current.Value.TimestampNsec)
                 {
+                    // This might be our new first element, so reset Top
                     _queue.AddBefore(current, e);
+                    _top = _queue.First.Value;
                     return;
                 }
 

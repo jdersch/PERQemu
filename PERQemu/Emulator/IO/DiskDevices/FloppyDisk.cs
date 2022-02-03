@@ -85,7 +85,7 @@ namespace PERQemu.IO.DiskDevices
             get { return _driveSelect; }
             set
             {
-                _driveSelect = value;
+                _driveSelect = IsLoaded ? value : false;
 
                 // The Disk Change signal is reset when Drive Select goes low
                 if (!_driveSelect)

@@ -314,7 +314,7 @@ namespace PERQemu
         {
             // The emulation has hit a serious error.  Enter the debugger...
             Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.", e.Message);
-            Log.Error(Category.All, "System state may be inconsistent.");
+            Log.Error(Category.All, "System state may be inconsistent.\n");
 #if DEBUG
             Log.Write(Environment.StackTrace);
 #endif
@@ -397,8 +397,13 @@ namespace PERQemu
                 // As PERQmedia to see if it's loadable
                 var dev = FileUtilities.GetDeviceTypeFromFile(path);
 
-                // Is it what we're expecting?
-                if (dev != type)
+                // For now, always load a floppy drive even if there's
+                // no media file; the Z80 just isn't happy without one
+                if (type == DeviceType.Floppy && string.IsNullOrEmpty(path))
+                {
+                    Log.Debug(Category.FloppyDisk, "Drive {0} (no media loaded)", unit);
+                }
+                else if (dev != type)
                 {
                     Console.WriteLine("File loaded is not the correct media type for this drive!");
                     Console.WriteLine($"  Unit {unit}  Expected: {type}  Loaded: {dev}");
@@ -406,7 +411,7 @@ namespace PERQemu
                 }
 
                 // Hand it off to the appropriate controller
-                switch (dev)
+                switch (type)
                 {
                     // case DriveType.Disk5Inch:
                     // case DriveType.Disk8Inch:
