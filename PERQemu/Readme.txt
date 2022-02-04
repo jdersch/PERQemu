@@ -14,17 +14,18 @@
     master.  The skeezicsb/master should track the original jdersch/master
     but will occaisionally incorporate a few tweaks to make it work on the
     Mac and Mono.  During the summer of 2021, Josh began the work to add a
-    "real Z80" to the I/O board  to allow for PERQ-2 emulation, and made
-    big changes to switch from WinForms to SDL2 for the display.  AWESOME!
+    "real Z80" to the I/O board to allow for PERQ-2 emulation, and made big
+    changes to switch from WinForms to SDL2 for the display.  AWESOME!
 
-    Status as of October, 2021:
 
-    What's new here is that the new SDL2 Display.cs has been hacked to allow
-    it to run on Mono under macOS.  The Windows version may be able to spawn
-    a separate thread for SDL's event loop, but on the Mac this is apparently
-    impossible; thus, I've temporarily forced it back onto the main thread.
+    Summary of changes on this branch since October, 2021:
+
+    1. New SDL2 Display.cs has been hacked to allow it to run on Mono under
+    macOS.  The Windows version may be able to spawn a separate thread for
+    SDL's event loop, but on Mac (and Linux?) this is apparently impossible;
+    thus, I've clumsily forced it back onto the main thread.
    
-    Verified that this version runs on MacOS X 10.11 (El Capitan) AND on
+    2. Verified that this version runs on MacOS X 10.11 (El Capitan) AND on
     10.13 (High Sierra).  These are the newest versions I have available
     for testing.  They run in both 32- and 64-bit mode!  The horrible Mac
     keyboard hack is no longer required, which is good since we can't
@@ -33,52 +34,44 @@
     in quite some time... will get to that when we get closer to wrapping up
     an actual release!
 
-    On my "ancient" 8-core MacPro 3,1 I'm getting 30fps; with the display
-    tweaks incorporated here, 33fps is typical on my 3.0Ghz Core Duo iMac.
-    This is with the CPU running on the main thread with the SDL event loop.
+    3. The CPU class has been refactored to include support for the 24-bit
+    processor!  Configurator allows up to 8MB (4MW) of memory, and the
+    VideoController should properly decode addresses for the >2MB configs.
+    Landscape display is supported but can't (yet) be tested until a newer
+    OS can boot (requires CIO/EIO for "new" Z80).
 
-    The CPU class has been refactored to include support for the 24-bit
-    processor!  It'll take about 5 minutes to tweak Memory and VideoController
-    to accept the 4MB memory option, and Landscape display support should be
-    similarly painless to add -- once we have a "configurator" in place.
+    4. Enhancements to the CLI that make it more TOPS-20/Cisco IOS-like,
+    with tab-expansion providing matching for enumerated options and more
+    in-line help.  There are still some enhancements that Josh folded into
+    the old Debugger yet to be incorporated (the ":variable" syntax is
+    missing/busted at the moment).
 
-    The beginnings of a major restructuring are starting to be folded in!
-    An enhanced CLI is sneaking in once some updates that Josh added to the
-    Debugger are incorporated.  This will allow some nice enhancements that
-    support the mostly-written configurator that'll be moved over too.  If
-    I could back-port the 64-bit Cocoa WinForms driver (<bashes head on
-    desk>) to run on 10.11-10.13, a pretty slick graphical configuration
-    tool is already written, but abandoned due to 32-bit app support being
-    dropped by Apple.  Sigh.
+    5. If I could back-port a 64-bit Cocoa WinForms driver (<bashes head
+    on desk>) to run on 10.11-10.13, a pretty slick graphical configuration
+    tool and front end is already written, but abandoned due to 32-bit app
+    support being dropped by Apple.  Sigh.
 
-    As the "new Z80" is expanded and debugged, reorganizing the IO code to
-    similarly allow dynamic configuration based on machine type will follow.
-    Various PERQ configurations can then be created, saved, and loaded from
-    the CLI, including all of the PERQ-2 models.  This will dramatically
-    expand the library of available software, including later versions of
-    PNX, POS G, Accent S5 and S6, Spice Lisp, and even 24-bit Accent!
 
-    So, after a long hiatus, stuff is happenin' again.  Watch this space!
+    Updates in November, 2021:
 
-    Back at it:  Status as of November, 2021:
-
-    Have removed the old Z80 and moved Z80_new into its place.  Started to
+    1. Removed the old Z80 and moved Z80_new into its place.  Started to
     refactor the IO so that different board types can be selected -- the
     EIO for the PERQ-2 is rather different than the old IOB.  Have quite a
     bit of work to do before we can start building virtual PERQ-2 machines
     but there's a pinprick of light at the end of that long dark tunnel. :-)
 
-    Amazingly, with all of my ham-fisted shenanigans over the last month,
+    2. Amazingly, with all of my ham-fisted shenanigans over the last month,
     it still builds and runs!  Getting ~ 32fps pretty consistently on my
     old Mac now, and really hope that moving the bulk of the CPU onto its
     own thread will finally get me closer to 170ns/60fps emulation (on my
     "old" hardware).  Then I can drop in the rate-limiting stuff for those
     of you with hardware built in the last decade, where it should really fly.
 
-    December update:
 
-    The PERQ now runs on its own thread, and some "improvements" to speed up
-    video have been removed, because apparently writing worse code somehow
+    December, 2021 update:
+
+    1. The PERQ now runs on its own thread, and some "improvements" to speed
+    up video have been removed, because apparently writing worse code somehow
     makes it go faster.  Sure.  Removing the 1bpp to 32bpp translation loop
     adds 10-12fps (shaves 80-90ns off the average microcycle time) so there
     has to be a way to speed that up and/or move it off the CPU thread that
@@ -88,6 +81,62 @@
     coding that up.  Maybe throw in some GOTOs and really make it fly.
 
     All of the documentation clearly needs to be rewritten.  More to come.
+
+
+    Holy crap it's January, 2022:
+
+    1. PERQmedia is a new unified storage object complete with a new common
+    file format for storing PERQ hard disk, floppy and even tape images.  It
+    works with all the old formats, but removes ALL of the file reading and
+    writing grunge from the Emulator proper.  Included as a shared subproject
+    here, it is also used by PERQdisk (a POS filesystem interrogator and file
+    extractor) and will soon/eventually be integrated into PERQfloppy (RT-11
+    floppy utility) and Stut (which reads PERQ "STUT" QIC tapes).  Bunch o'
+    docs included in the PERQmedia project folder.
+
+    2. The first two storage devices have been converted to work with the new
+    PERQmedia StorageDevice class.  Now Shugart SA4000-series hard drives and
+    the SA851 floppy drive are split in half:  the "mechanical" operation and
+    block-level access to the data are in HardDisk and FloppyDisk classes,
+    while the ShugartDiskController and NECuPD765 (floppy disk controller)
+    provide the register-level interface to the PERQ and Z80 respectively.
+
+    3. Disk access is actually frighteningly realistic now.  The Z80 CTC,
+    HardDiskSeekControl and Scheduler classes were all updated to allow the
+    actual Z80 ROM code to drive the emulated disk drive using "buffered"
+    seeks.  To be truly perverse, PERQemu will even mimic the startup delay
+    of each drive type -- but after the first time you wait 90 actual seconds
+    for a simulated disk to "spin up" you'll want to turn off that option too.
+    :-)  One mildly infuriating bug is that the PERQ seems to absolutely lose
+    its mind if a floppy isn't mounted in the "optional" floppy drive; I have
+    not yet discovered the magick combination of status register bits to
+    convince it to boot if it can't read a sector.  Hmm.
+
+    4. An extensible database of supported media types is loaded at runtime
+    so the groundwork is there to allow all of the PERQ-2 disk types to be
+    created, formatted and mounted.  Soon...
+
+    5. There is a ton of work to do to make the new threading approach more
+    robust, and completely rethink the way the main application loop works.
+    While I flirted with 40-42fps performance in AoT/optimized Release mode
+    builds, having to introduce locking in the Scheduler was a hit; still,
+    my old Mac is consistently running at 37fps, up from ~30fps in the old
+    WinForms version.  Yes, it has to go much, much faster.  Or you can try
+    it on a machine that's less than a decade old.
+
+
+    February, 2022:
+
+    Lots of stuff in progress.  The goal is to get the restructured Emulator
+    at least back to the level of stability as the current master branch
+    before attempting to sync "experiments" back up.  Lots of plumbing to do.
+    GPIB/Tablet support is a big hurdle since older OSes require the BitPad;
+    working out all the kinks in the ExecutionController so that virtual
+    machines can be reliably and accurately managed is top priority.  Adding
+    the CIO option (executing the new Z80 code from an actual ROM dump) gives
+    us the ability to finally let PERQ-1s run all the newer OSes and software!
+
+    PERQ-2 support will then follow, gracefully and effortlessly.  bwaaaahahahahahahaha no stop it hahahaha sigh.
 
 
 Original README.Source follows.
