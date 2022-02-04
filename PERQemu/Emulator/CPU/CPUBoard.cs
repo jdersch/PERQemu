@@ -128,8 +128,8 @@ namespace PERQemu.Processor
 
             do
             {
-                try
-                {
+                //try
+                //{
                     Run(_adjustInterval);
 
                     if (_stopAsyncThread) break;
@@ -139,11 +139,11 @@ namespace PERQemu.Processor
                     {
                         _heartbeat.WaitForHeartbeat();
                     }
-                }
-                catch (Exception e)
-                {
-                    _system.Halt(e);
-                }
+                //}
+                //catch (Exception e)
+                //{
+                //    _system.Halt(e);
+                //}
             }
             while (!_stopAsyncThread);
 

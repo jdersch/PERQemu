@@ -622,7 +622,7 @@ namespace PERQemu.Memory
         private byte[] _cursorData;
 
         private VideoState _state;
-        private Event _currentEvent;
+        private SchedulerEvent _currentEvent;
         private int _scanLine;
         private int _lineCounterInit;
         private bool _lineCountOverflow;

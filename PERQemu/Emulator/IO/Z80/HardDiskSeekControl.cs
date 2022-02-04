@@ -1,4 +1,4 @@
-﻿//
+//
 // HardDiskSeekControl.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -99,7 +99,7 @@ namespace PERQemu.IO.Z80
 
         private byte[] _ports = { 0xd8 };
 
-        private Event _stepClockEvent;
+        private SchedulerEvent _stepClockEvent;
         private PERQSystem _system;
     }
 }

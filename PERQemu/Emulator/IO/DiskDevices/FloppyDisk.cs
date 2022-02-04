@@ -1,4 +1,4 @@
-﻿//
+//
 // FloppyDisk.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -147,6 +147,8 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         public Sector GetSector(ushort cylinder, byte head, ushort sector)
         {
+            // Fudge the sector #1..26 -> 0..25
+            sector--;
             return Sectors[cylinder, head, sector];
         }
 
@@ -207,8 +209,8 @@ namespace PERQemu.IO.DiskDevices
 
         private Track[,] _tracks;
 
-        private Event _seekDelayEvent;
-        private Event _loadDelayEvent;
+        private SchedulerEvent _seekDelayEvent;
+        private SchedulerEvent _loadDelayEvent;
         private Scheduler _scheduler;
     }
 

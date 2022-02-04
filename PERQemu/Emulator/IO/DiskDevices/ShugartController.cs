@@ -325,7 +325,7 @@ namespace PERQemu.IO.DiskDevices
         public void SeekCompletionCallback(ulong skewNsec, object context)
         {
             _seekState = SeekState.WaitForStepSet;
-            Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+            Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState); 
 
             ClearBusyState();
         }
@@ -592,7 +592,7 @@ namespace PERQemu.IO.DiskDevices
         // Work timing for reads/writes.  Assume .1ms for now?  (The
         // actual mechanical delays are baked into the drive itself now)
         private ulong _busyDurationNsec = 100 * Conversion.UsecToNsec;
-        private Event _busyEvent;
+        private SchedulerEvent _busyEvent;
 
         private PERQSystem _system;
     }

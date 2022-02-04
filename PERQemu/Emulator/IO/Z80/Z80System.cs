@@ -25,7 +25,6 @@ using Konamiman.Z80dotNet;
 
 using PERQemu.Processor;
 using PERQemu.Debugger;
-using PERQemu.IO;
 using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO.Z80
@@ -101,7 +100,7 @@ namespace PERQemu.IO.Z80
             _z80Debugger = new Z80Debugger();
 
             // Do 10 rate adjustments / second?  Balance overhead v. accuracy
-            _heartbeat = new SystemTimer(20f);
+            _heartbeat = new SystemTimer(5f);
 
             // Compute how often (in CPU cycles) to sync the emulated processor
             // to real-time (used if Settings.RateLimit != Fast mode)
@@ -230,8 +229,8 @@ namespace PERQemu.IO.Z80
 
             do
             {
-                try
-                {
+                //try
+                //{
                     Run(_adjustInterval);
 
                     if (_stopAsyncThread) break;
@@ -241,11 +240,11 @@ namespace PERQemu.IO.Z80
                     {
                         _heartbeat.WaitForHeartbeat();
                     }
-                }
-                catch (Exception e)
-                {
-                    _system.Halt(e);
-                }
+                //}
+                //catch (Exception e)
+                //{
+                //    _system.Halt(e);
+                //}
             }
             while (!_stopAsyncThread);
 

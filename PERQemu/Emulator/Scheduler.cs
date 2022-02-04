@@ -24,19 +24,20 @@ using System.Runtime.CompilerServices;
 namespace PERQemu
 {
     /// <summary>
-    /// The SchedulerEventCallback describes a delegate that is invoked whenever a scheduled event has
-    /// reached its due-date and is fired.
+    /// The SchedulerEventCallback describes a delegate that is invoked whenever
+    /// a scheduled event has reached its due-date and is fired.
     /// </summary>    
     /// <param name="skewNsec">The delta between the requested exec time and the actual exec time (in nsec)</param>
     /// <param name="context">An object containing context useful to the scheduler of the event</param>
     public delegate void SchedulerEventCallback(ulong skewNsec, object context);
 
     /// <summary>
-    /// An Event encapsulates a callback and associated context that is scheduled for a future timestamp.
+    /// A SchedulerEvent encapsulates a callback and associated context that is
+    /// scheduled for a future timestamp.
     /// </summary>
-    public class Event
+    public class SchedulerEvent
     {
-        public Event(ulong timestampNsec, object context, SchedulerEventCallback callback)
+        public SchedulerEvent(ulong timestampNsec, object context, SchedulerEventCallback callback)
         {
             _timestampNsec = timestampNsec;
             _context = context;
@@ -76,13 +77,17 @@ namespace PERQemu
     }
 
     /// <summary>
-    /// The Scheduler class provides infrastructure for scheduling time-based hardware events.
-    /// 
-    /// Note that the Scheduler is not thread-safe and must only be used from the emulation thread,
-    /// or else things will break.  This is not optimal -- having a thread-safe scheduler would make
-    /// it easier/cleaner to deal with asynchronous things like ethernet packets and scripting events
-    /// but doing so incurs about a 10% performance penalty so it's been avoided.
+    /// The Scheduler class provides infrastructure for scheduling hardware
+    /// events inside the virtual machine, clocked at the CPU's execution rate.
     /// </summary>
+    /// <remarks>
+    /// Each Scheduler can run on its own timebase inside its own thread, and
+    /// fires its callbacks on the thread that advances the Clock.  There are
+    /// some circumstances where cross-thread calls are difficult to avoid;
+    /// for example, the Z80's hard disk seek control has to interact with the
+    /// hard disk on the main CPU thread.  We provide as low-cost a method as
+    /// we can to synchronize around the non-thread-safe LinkedList...
+    /// </remarks>
     public class Scheduler
     {
         public Scheduler(ulong timeStepNsec)
@@ -103,6 +108,9 @@ namespace PERQemu
             }
         }
 
+        /// <summary>
+        /// Advance the system clock and fire off events that are ready.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock(int steps = 1)
         {
@@ -121,7 +129,7 @@ namespace PERQemu
                     }
 
                     // Pop the top event and fire the callback
-                    Event e = _schedule.Pop();
+                    SchedulerEvent e = _schedule.Pop();
                     e.EventCallback(_currentTimeNsec - e.TimestampNsec, e.Context);
                 }
 
@@ -132,23 +140,41 @@ namespace PERQemu
         /// <summary>
         /// Add a new event to the schedule.
         /// </summary>
-        public Event Schedule(ulong timestampNsec, object context, SchedulerEventCallback callback)
+        public SchedulerEvent Schedule(ulong timestampNsec, object context, SchedulerEventCallback callback)
         {
-            Event e = new Event(timestampNsec + _currentTimeNsec, context, callback);
+            SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, context, callback);
             _schedule.Push(e);
 
             return e;
         }
 
-        public Event Schedule(ulong timestampNsec, SchedulerEventCallback callback)
+        public SchedulerEvent Schedule(ulong timestampNsec, SchedulerEventCallback callback)
         {
-            Event e = new Event(timestampNsec + _currentTimeNsec, null, callback);
+            SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, null, callback);
             _schedule.Push(e);
 
             return e;
         }
 
-        public void Cancel(Event e)
+        /// <summary>
+        /// Update an event with a new timestamp.
+        /// </summary>
+        /// <remarks>
+        /// There's a nasty race condition here, where Clock() might fire the
+        /// old event before we remove it, resulting in calling it twice...
+        /// at least if we insert the new before removing the old we can avoid
+        /// having _top momentarily be null?
+        /// </remarks>
+        public SchedulerEvent ReSchedule(SchedulerEvent old, ulong timestampNsec)
+        {
+            SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, old.Context, old.EventCallback);
+            _schedule.Push(e);
+            _schedule.Remove(old);
+
+            return e;
+        }
+
+        public void Cancel(SchedulerEvent e)
         {
             if (e != null)
             {
@@ -179,13 +205,14 @@ namespace PERQemu
     {
         public SchedulerQueue()
         {
-            _queue = new LinkedList<Event>();
+            _queue = new LinkedList<SchedulerEvent>();
+            _queueLock = new object();
         }
 
         /// <summary>
         /// The Top of the queue (null if queue is empty).
         /// </summary>
-        public Event Top
+        public SchedulerEvent Top
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
@@ -194,67 +221,86 @@ namespace PERQemu
             }
         }
 
+        /// <summary>
+        /// Clear this queue and reset Top.  Best not called while threads are
+        /// running, y'know?
+        /// </summary>
         public void Clear()
         {
-            _queue.Clear();
             _top = null;
+            _queue.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Push(Event e)
+        public void Push(SchedulerEvent e)
         {
-            //
-            // Do a linear search to find the place to put this in.  Since we
-            // maintain a sorted list with every insertion we only need to find
-            // the first entr that the new entry is earlier (or equal) to. This
-            // will likely be adequate as the queue should never get incredibly
-            // deep; a binary search may be more performant if this isn't the case.
-            //
-            LinkedListNode<Event> current = _queue.First;
-
-            // Empty list?  Add the first event
-            if (current == null)
+            lock (_queueLock)
             {
-                _queue.AddFirst(e);
-                _top = e;
-                return;
-            }
+                //
+                // Do a linear search to find the place to put this in.  Since we
+                // maintain a sorted list with every insertion we only need to find
+                // the first entr that the new entry is earlier (or equal) to. This
+                // will likely be adequate as the queue should never get incredibly
+                // deep; a binary search may be more performant if this isn't the case.
+                //
+                LinkedListNode<SchedulerEvent> current = _queue.First;
 
-            // Insert in chronological order
-            while (current != null)
-            {
-                if (e.TimestampNsec < current.Value.TimestampNsec)
+                // Empty list?  Add the first event
+                if (current == null)
                 {
-                    // This might be our new first element, so reset Top
-                    _queue.AddBefore(current, e);
+                    _queue.AddFirst(e);
                     _top = _queue.First.Value;
                     return;
                 }
 
-                current = current.Next;
-            }
+                // Insert in chronological order
+                while (current != null)
+                {
+                    if (e.TimestampNsec < current.Value.TimestampNsec)
+                    {
+                        // This might be our new first element, so reset Top
+                        _queue.AddBefore(current, e);
+                        _top = _queue.First.Value;
+                        return;
+                    }
 
-            // Add at end
-            _queue.AddLast(e);
+                    current = current.Next;
+                }
+
+                // Add at end
+                _queue.AddLast(e);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Event Pop()
+        public SchedulerEvent Pop()
         {
-            Event e = _top;
+            SchedulerEvent e = _top;
 
-            _queue.RemoveFirst();
-            _top = _queue.First != null ? _queue.First.Value : null;
-
+            lock (_queueLock)
+            {
+                _queue.RemoveFirst();
+                _top = _queue.First != null ? _queue.First.Value : null;
+            }
             return e;
         }
 
-        public void Remove(Event e)
+        public void Remove(SchedulerEvent e)
         {
-            if (_queue.Contains(e))
+            lock (_queueLock)
             {
-                _queue.Remove(e);
-                _top = _queue.First != null ? _queue.First.Value : null;
+                if (_queue.Contains(e))
+                {
+                    if (_top == e)
+                    {
+                        _queue.RemoveFirst();
+                        _top = _queue.First != null ? _queue.First.Value : null;
+                    }
+                    else
+                    {
+                        _queue.Remove(e);
+                    }
+                }
             }
         }
 
@@ -276,7 +322,8 @@ namespace PERQemu
             }
         }
 
-        private LinkedList<Event> _queue;
-        private Event _top;
+        private object _queueLock;
+        private LinkedList<SchedulerEvent> _queue;
+        private SchedulerEvent _top;
     }
 }

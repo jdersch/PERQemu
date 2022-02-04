@@ -119,7 +119,7 @@ namespace PERQemu.IO.Z80
 
         private ReceiveDelegate _rxDelegate;
         private Scheduler _scheduler;
-        private Event _sendEvent;
+        private SchedulerEvent _sendEvent;
         private PERQSystem _system;
     }
 }

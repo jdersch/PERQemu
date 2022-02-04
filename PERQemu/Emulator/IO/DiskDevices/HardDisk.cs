@@ -205,10 +205,8 @@ namespace PERQemu.IO.DiskDevices
                           "Buffered step to cyl {0}, total seek now {1}ms (step interval={2:n}ms)",
                           _cyl, delay * Conversion.NsecToMsec, interval);
 
-                // We can't update the scheduled item in place; delete the event and
-                // reinsert it so the Scheduler doesn't get cranky.
-                _scheduler.Cancel(_seekEvent);
-                _seekEvent = _scheduler.Schedule(delay, start, SeekCompletion);
+                // Update the seek event with the new delay time.
+                _seekEvent = _scheduler.ReSchedule(_seekEvent, delay);
             }
         }
 
@@ -368,16 +366,16 @@ namespace PERQemu.IO.DiskDevices
         // Index timing
         private ulong _discRotationTimeNsec;
         private ulong _indexPulseDurationNsec;
-        private Event _indexEvent;
+        private SchedulerEvent _indexEvent;
 
         // Seek timing
         private int _stepCount;
         private ulong _lastStep;
-        private Event _seekEvent;
+        private SchedulerEvent _seekEvent;
 
         private SchedulerEventCallback _seekCallback;
 
         // Startup delay
-        private Event _startupEvent;
+        private SchedulerEvent _startupEvent;
     }
 }

@@ -77,12 +77,12 @@ namespace PERQemu.IO.Z80
 
             if (_fifo.TryDequeue(out value))
             {
-                Log.Debug(Category.FIFO, "Z80->PERQ read {0:x2}, {1} items left in queue",
+                Log.Debug(Category.FIFO, "PERQ read byte {0:x2}, {1} items left in queue",
                                             value, _fifo.Count);
             }
             else
             {
-                Log.Debug(Category.FIFO, "Z80->PERQ read from empty FIFO, returning 0");
+                Log.Debug(Category.FIFO, "PERQ read from empty FIFO, returning 0");
             }
 
             if (_fifo.Count == 0)
@@ -104,7 +104,7 @@ namespace PERQemu.IO.Z80
         {
             _fifo.Enqueue(value);
 
-            Log.Debug(Category.FIFO, "Z80->PERQ enqueued byte {0:x2}, {1} items in queue",
+            Log.Debug(Category.FIFO, "Z80 wrote byte {0:x2}, {1} items in queue",
                                         value, _fifo.Count);
 
             // Since there's data available, let the PERQ know
@@ -167,7 +167,7 @@ namespace PERQemu.IO.Z80
             // Interrupt the Z80 to let it know we have data to be read
             _interruptActive = true;
 
-            Log.Debug(Category.FIFO, "PERQ->Z80 enqueued byte {0:x2}, {1} items in queue",
+            Log.Debug(Category.FIFO, "PERQ wrote byte {0:x2}, {1} items in queue",
                                         value, _fifo.Count);
         }
 
@@ -177,12 +177,12 @@ namespace PERQemu.IO.Z80
 
             if (!_fifo.TryDequeue(out value))
             {
-                Log.Debug(Category.FIFO, "PERQ->Z80 read from empty fifo (int active {0}), returning 0",
+                Log.Debug(Category.FIFO, "Z80 read from empty fifo (int active {0}), returning 0",
                                             _interruptActive);
             }
             else
             {
-                Log.Debug(Category.FIFO, "PERQ->Z80 dequeued byte {0:x2}, {1} items left in queue",
+                Log.Debug(Category.FIFO, "Z80 read byte {0:x2}, {1} items left in queue",
                                             value, _fifo.Count);
             }
 

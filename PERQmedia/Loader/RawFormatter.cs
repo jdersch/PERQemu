@@ -52,7 +52,7 @@ namespace PERQmedia
 
                 // Parse out the geometry hint
                 b = (byte)fs.ReadByte();
-                Console.WriteLine("PFD geometry hint: {0:x2}", b);
+                //Console.WriteLine("PFD geometry hint: {0:x2}", b);
 
                 // There are only four valid codes... but some super early
                 // ones might still exist with even older hints.  Sigh.
@@ -81,7 +81,7 @@ namespace PERQmedia
 
                 // Make some sense of the filesystem hint byte
                 b = (byte)fs.ReadByte();
-                Console.WriteLine("PFD filesystem hint: {0:x2}", b);
+                //Console.WriteLine("PFD filesystem hint: {0:x2}", b);
 
                 // Only 5 values were defined...
                 switch (b)

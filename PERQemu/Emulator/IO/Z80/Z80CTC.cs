@@ -1,4 +1,4 @@
-﻿//
+//
 // Z80CTC.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -54,7 +54,6 @@ namespace PERQemu.IO.Z80
         {
             _channels.Initialize();
 
-            _interruptEnabled = false;
             _interruptVector = null;
 
             Log.Debug(Category.CTC, "Reset");
@@ -62,8 +61,9 @@ namespace PERQemu.IO.Z80
 
         public string Name => "Z80 CTC";
         public byte[] Ports => _ports;
-        public byte? ValueOnDataBus => _interruptVector;
-        public bool IntLineIsActive => _interruptEnabled;
+
+        public bool IntLineIsActive => AssertInterrupt();
+        public byte? ValueOnDataBus => AcknowledgeInterrupt();
 
         public event EventHandler NmiInterruptPulse;
 
@@ -120,63 +120,81 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Clock the specified channel.
+        /// Clock the specified channel.  Assert the interrupt if the counter
+        /// has reached zero.
         /// </summary>
         public int Clock(int channel)
         {
             var count = _channels[channel].Clock();
 
-            if (count == 0)
-            {
-                RaiseInterrupt();
-            }
-
             Log.Debug(Category.CTC, "Clocked channel {0}, count now {1}", channel, count);
+
             return count;
         }
 
         /// <summary>
         /// Raises the CTC interrupt flag and sets the vector if one or more
-        /// channels are enabled and requesting service.
+        /// channels are enabled and requesting service; otherwise, clears it.
         /// </summary>
-        public void RaiseInterrupt()
+        public bool AssertInterrupt()
         {
             // Check all the channels
             for (var ch = 0; ch < _channels.Length; ch++)
             {
                 if (_channels[ch].InterruptRequested && _channels[ch].Control.HasFlag(ControlFlags.Interrupt))
                 {
-                    _interruptEnabled = true;
                     _interruptVector = (byte)(_interruptVectorBase + ch * 2);
                     Log.Debug(Category.CTC, "Interrupt raised (chan={0})", ch);
-                    return;
+                    return true;
                 }
             }
 
-            if (_interruptEnabled) Log.Debug(Category.CTC, "Interrupt cleared");
-
             // Nobody's home
-            _interruptEnabled = false;
             _interruptVector = null;
+
+            return false;
         }
 
         /// <summary>
-        /// Clear an interrupt, somehow.  It doesn't seem the Z80 doesn't have
-        /// any easy or obvious way to actually signal the acknowledgement and
-        /// handling of an interrupt without actually snooping the instruction
-        /// stream?  <lando>This deal is getting worse all the time...</lando>
+        /// Acknowledge and clear our interrupt flag, if appropriate.
         /// </summary>
-        public void ClearInterrupt()
+        /// <remarks>
+        /// If the Z80 is asking for our interrupt vector, it's the only way we
+        /// can (easily) acknowledge that our interrupt is going to be serviced.
+        /// </remarks>
+        public byte? AcknowledgeInterrupt()
         {
-            // Someday we'll figure out how to do this.
+            // Save the vector address that we're going to return for the
+            // interrupt that's being serviced
+            var vector = _interruptVector;
+
+            // Now clear the interrupt request flag for the channel
+            // (the Z80 has already fetched it)
+            var ch = (vector != null) ? ((int)vector - _interruptVectorBase) / 2 : 0;
+
+#if DEBUG
+            // Sanity checks
+            if (_interruptVector == null)
+                Console.WriteLine("Z80 asked for vector and we haven't set one!?");
+
+            if (ch < 0 || ch > 3)
+                Console.WriteLine("Vector {0} out of range on acknowledge", ch);
+
+            if (!_channels[ch].InterruptRequested)
+                Console.WriteLine("Vector {0} for channel not requesting an interrupt", ch);
+#endif
+
+            _channels[ch].InterruptRequested = false;
+            Log.Debug(Category.CTC, "Interrupt acknowledged (chan={0})", ch);
+
+            return vector;
         }
 
         protected Scheduler _scheduler;
         private Channel[] _channels;
 
-        private bool _interruptEnabled = false;
         private byte _interruptVectorBase;
-        private byte? _interruptVector = null;
+        private byte? _interruptVector;
 
         private byte _baseAddress;
         private byte[] _ports;
@@ -198,8 +216,6 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// One independent channel in the CTC chip.
         /// </summary>
-        // TODO: see if the Intel chip used in the EIO can use this class too?
-        // if they're similar enough, move it into its own file, add an iface, etc.
         internal class Channel
         {
             public Channel(int num, Z80CTC parent)
@@ -225,7 +241,7 @@ namespace PERQemu.IO.Z80
             public bool Running;
             public bool InterruptRequested;
 
-            private Event Trigger;
+            private SchedulerEvent Trigger;
             private Z80CTC _ctc;
 
             /// <summary>
@@ -235,15 +251,15 @@ namespace PERQemu.IO.Z80
             {
                 if (!Running)
                 {
-                    // In Timer mode?
+                    // In Counter mode?
                     if (Control.HasFlag(ControlFlags.CounterMode))
                     {
                         Running = true;
                     }
                     else
                     {
-                        // Start automatically on Time Constant reload, or when
-                        // programmed for external start pulse is applied
+                        // Depending on the trigger mode, start automatically on
+                        // Time Constant reload, or when external start pulse is applied
                         if ((pulse && Control.HasFlag(ControlFlags.TimerTrigger)) ||
                                      !Control.HasFlag(ControlFlags.TimerTrigger))
                         {
@@ -269,7 +285,7 @@ namespace PERQemu.IO.Z80
                     {
                         if (Counter > 0) Counter--;
 
-                        // Expired; signal an interrupt (if configured)
+                        // Reached TC?  Request an interrupt (if configured)
                         InterruptRequested = (Counter == 0);
                     }
                 }
@@ -287,16 +303,16 @@ namespace PERQemu.IO.Z80
             /// </summary>
             public void Stop()
             {
-                Running = false;
-                InterruptRequested = false;
+                if (Running)
+                {
+                    Running = false;
+                    InterruptRequested = false;
 
-                _ctc._scheduler.Cancel(Trigger);
-                Trigger = null;
+                    _ctc._scheduler.Cancel(Trigger);
+                    Trigger = null;
 
-                Log.Debug(Category.CTC, "Channel {0} stopped", Number);
-
-                // Counter-intuitively, call this to clear our interrupt
-                _ctc.RaiseInterrupt();
+                    Log.Debug(Category.CTC, "Channel {0} stopped", Number);
+                }
             }
 
             /// <summary>
@@ -312,6 +328,9 @@ namespace PERQemu.IO.Z80
                 {
                     Counter *= (Control.HasFlag(ControlFlags.Prescaler) ? 256 : 16);
                 }
+
+                // If we had previously asserted an interrupt, clear it?
+                InterruptRequested = false;
 
                 Log.Debug(Category.CTC, "Channel {0} counter reset ({1})", Number, Counter);
             }
@@ -341,17 +360,6 @@ namespace PERQemu.IO.Z80
                 //
                 var interval = _ctc._scheduler.TimeStepNsec * (ulong)Counter;
 
-#if DEBUG
-                // Sanity check
-                if (interval < 6512 || interval > 26673152)
-                {
-                    Console.WriteLine("Bad CTC interval calculation: {0} (time const={1})",
-                                      interval, Counter);
-
-                    interval = Math.Max(interval, _ctc._scheduler.TimeStepNsec * 16);
-                    interval = Math.Min(interval, _ctc._scheduler.TimeStepNsec * 256 * 256);
-                }
-#endif
                 Trigger = _ctc._scheduler.Schedule(interval, Number, TimerTickCallback);
 
                 Log.Debug(Category.CTC, "Channel {0} timer scheduled ({1}) at {2}",
@@ -369,10 +377,8 @@ namespace PERQemu.IO.Z80
 
                 if (Running && Control.HasFlag(ControlFlags.Interrupt))
                 {
+                    // Poke the Z80
                     InterruptRequested = true;
-
-                    // Tell mom
-                    _ctc.RaiseInterrupt();
 
                     // Schedule next tick
                     QueueTimerTick();
