@@ -189,7 +189,7 @@ namespace PERQemu.IO.DiskDevices
 
             _loadDelayEvent = _scheduler.Schedule((ulong)startup, (skewNsec, context) =>
             {
-                Log.Debug(Category.FloppyDisk, "Floppy online: {0}", Geometry.ToString());
+                Log.Info(Category.FloppyDisk, "{0} online: {1}", Info.Description, Geometry);
                 _loadDelayEvent = null;
                 _ready = true;
             });

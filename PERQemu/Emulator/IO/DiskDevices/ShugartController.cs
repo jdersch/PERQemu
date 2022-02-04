@@ -586,8 +586,6 @@ namespace PERQemu.IO.DiskDevices
 
         private SeekState _seekState;
         private SeekCommand _seekCommand;
-        private int _seekData;
-        private int _seekComplete;
 
         // Work timing for reads/writes.  Assume .1ms for now?  (The
         // actual mechanical delays are baked into the drive itself now)

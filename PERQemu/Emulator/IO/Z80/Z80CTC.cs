@@ -360,7 +360,7 @@ namespace PERQemu.IO.Z80
                 //
                 var interval = _ctc._scheduler.TimeStepNsec * (ulong)Counter;
 
-                Trigger = _ctc._scheduler.Schedule(interval, Number, TimerTickCallback);
+                Trigger = _ctc._scheduler.Schedule(interval, TimerTickCallback, Number);
 
                 Log.Debug(Category.CTC, "Channel {0} timer scheduled ({1}) at {2}",
                                         Number, interval, _ctc._scheduler.CurrentTimeNsec);

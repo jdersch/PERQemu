@@ -81,7 +81,6 @@ namespace PERQemu.Processor
             _processor.Reset();
 
             Log.Debug(Category.CPU, "Board reset");
-            //_scheduler.DumpEvents("CPU");
         }
 
         /// <summary>

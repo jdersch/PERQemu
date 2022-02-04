@@ -237,8 +237,7 @@ namespace PERQemu.Memory
                     break;
 
                 default:
-                    throw new UnhandledIORequestException(
-                        string.Format("Unhandled IO Write to port {0:x2}, data {1:x4}", ioPort, value));
+                    throw new UnhandledIORequestException($"Unhandled IO Write to port {ioPort:x2}, data {value:x4}");
             }
         }
 
@@ -332,8 +331,7 @@ namespace PERQemu.Memory
                     break;
 
                 case VideoState.VBlankScanline:
-                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec + _hBlankTimeNsec,
-                                                               (skew, context) =>
+                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec + _hBlankTimeNsec, (skew, context) =>
                     {
                         if (_lineCounter > 0) _lineCounter--;
 

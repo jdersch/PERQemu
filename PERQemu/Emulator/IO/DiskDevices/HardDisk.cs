@@ -177,7 +177,7 @@ namespace PERQemu.IO.DiskDevices
 
                 Log.Debug(Category.HardDisk, "Initial step to cyl {0}, seek {1}ms", _cyl, delay);
 
-                _seekEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, start, SeekCompletion);
+                _seekEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, SeekCompletion, start);
             }
             else
             {

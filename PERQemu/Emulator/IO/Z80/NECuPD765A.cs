@@ -754,7 +754,8 @@ namespace PERQemu.IO.Z80
 
             // Do it again, do it again
             _writeDataReady = true;
-            _scheduler.Schedule(_transfer.TransferIndex == 0 ? _sectorTimeNsec : _byteTimeNsec, SectorFormatCallback);
+            _scheduler.Schedule(_transfer.TransferIndex == 0 ? _sectorTimeNsec : _byteTimeNsec,
+                                SectorFormatCallback);
         }
 
 
