@@ -22,6 +22,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
@@ -56,8 +57,7 @@ namespace PERQmedia
             //
             // So, we can read and parse the first line in one swell foop:
             //
-            var cookie = fs.ReadString((byte)'\n');
-            cookie.TrimEnd('\r');    // annoying
+            var cookie = fs.ReadString((byte)'\n').TrimEnd();   // trim trailing CRLF
 
             // Perl will never die
             var pattern = @"^IMD (\d)\.(\d{1,2}): (.*)";
@@ -85,7 +85,7 @@ namespace PERQmedia
                 }
 
                 // Save our archive date for posterity
-                dev.FileInfo.ArchiveDate = DateTime.Parse(match.Groups[3].Value);
+                dev.FileInfo.ArchiveDate = DateTime.ParseExact(match.Groups[3].Value, "dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
 
                 // That was the easy part...
                 return true;

@@ -12,7 +12,7 @@
 
     This "experiments" branch is a pretty major divergence from the PERQemu
     master.  The skeezicsb/master should track the original jdersch/master
-    but will occaisionally incorporate a few tweaks to make it work on the
+    but will occasionally incorporate a few tweaks to make it work on the
     Mac and Mono.  During the summer of 2021, Josh began the work to add a
     "real Z80" to the I/O board to allow for PERQ-2 emulation, and made big
     changes to switch from WinForms to SDL2 for the display.  AWESOME!
@@ -107,10 +107,7 @@
     seeks.  To be truly perverse, PERQemu will even mimic the startup delay
     of each drive type -- but after the first time you wait 90 actual seconds
     for a simulated disk to "spin up" you'll want to turn off that option too.
-    :-)  One mildly infuriating bug is that the PERQ seems to absolutely lose
-    its mind if a floppy isn't mounted in the "optional" floppy drive; I have
-    not yet discovered the magick combination of status register bits to
-    convince it to boot if it can't read a sector.  Hmm.
+    :-)
 
     4. An extensible database of supported media types is loaded at runtime
     so the groundwork is there to allow all of the PERQ-2 disk types to be

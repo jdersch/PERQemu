@@ -94,7 +94,7 @@ namespace PERQemu
             ResetPrefix();
 
             // Ignore the result...
-            _exec.ExecuteScript(script);
+            _exec.ExecuteScript(Paths.Canonicalize(script));
         }
 
         /// <summary>

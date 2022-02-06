@@ -124,9 +124,8 @@ namespace PERQemu.IO.Z80
                 throw new ArgumentOutOfRangeException(nameof(unit));
             }
 
-            _drives[unit] = drive;
-
             Log.Debug(Category.FloppyDisk, "Attached disk '{0}'", drive.Info.Name);
+            _drives[unit] = drive;
         }
 
         /// <summary>
@@ -152,7 +151,7 @@ namespace PERQemu.IO.Z80
         }
 
         private FloppyDisk SelectedUnit => _drives[_unitSelect];
-        private bool SelectedDriveIsReady => SelectedUnit != null && SelectedUnit.Ready;
+        private bool SelectedUnitIsReady => SelectedUnit != null && SelectedUnit.Ready;
 
         private void SelectUnitHead(byte select)
         {
@@ -333,9 +332,12 @@ namespace PERQemu.IO.Z80
             // Read the data specified.
             // We currently ignore SRT (Step Rate Time), HUT (Head Unload Time)
             // and HLT (Head Load Time) because I'm not anal retentive.
+            // TODO: However... the old Z80 actually sets these, and Accent
+            // actually programs the values too.  So we _could_ actually set up
+            // the proper delays that the I/O code expects...
             //
-            _commandData.Dequeue(); // command byte
-            _commandData.Dequeue(); // SRT/HUT
+            _commandData.Dequeue();     // command byte
+            _commandData.Dequeue();     // SRT/HUT
             _nonDMAMode = (_commandData.Dequeue() & 0x1) != 0;
 
             // TODO: controller goes into polling mode and will interrupt if any
@@ -353,25 +355,23 @@ namespace PERQemu.IO.Z80
             SelectUnitHead(_commandData.Dequeue());
             var cylinder = (cmd == Command.Seek) ? _commandData.Dequeue() : (byte)0;
 
-            if (SelectedDriveIsReady)
+            // Set "Busy" bit for this drive:
+            _status |= (Status)(0x1 << _unitSelect);
+
+            if (SelectedUnitIsReady)
             {
-                // Set "Busy" bit for this drive:
-                _status |= (Status)(0x1 << _unitSelect);
-                _pcn[_unitSelect] = cylinder;
-
-                SelectedUnit.SeekTo(cylinder, SeekCompleteCallback);
-
                 Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} scheduled", _unitSelect, cylinder);
+
+                _pcn[_unitSelect] = cylinder;
+                SelectedUnit.SeekTo(cylinder, SeekCompleteCallback);
             }
             else
             {
                 // Can't seek on a drive that's not ready (or not connected)
-                _seekEnd = true;
+                Log.Warn(Category.FloppyDisk, "{0} issued but drive {1} not ready", cmd, _unitSelect);
 
-                SetErrorStatus(StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk);
-
-                Log.Error(Category.FloppyDisk, "{0} issued but drive {1} not ready", cmd, _unitSelect);
-                FinishCommand();
+                // Fire the callback to complete command
+                SeekCompleteCallback(0, null);
             }
         }
 
@@ -380,7 +380,9 @@ namespace PERQemu.IO.Z80
             // Stimpy!  We made it!
             _seekEnd = true;
 
-            // Clear drive "Busy" bit:
+            SetErrorStatus(SelectedUnitIsReady ? StatusRegister0.None : StatusRegister0.AbnormalTermination);
+
+            // Clear drive "Busy" bit and interrupt
             _status &= ~((Status)(0x1 << _unitSelect));
             _interruptActive = true;
 
@@ -399,10 +401,13 @@ namespace PERQemu.IO.Z80
             _statusData.Enqueue(_pcn[_unitSelect]);     // PCN
 
             Log.Debug(Category.FloppyDisk, "SenseInterruptStatus: {0}", _errorStatus);
-
             FinishCommand();
         }
 
+        /// <summary>
+        /// Executes the floppy SENSE DRIVE STATUS command.  Not used by the
+        /// old IOB Z80, but used by the new EIO Z80!
+        /// </summary>
         private void SenseDriveStatusExecutor(ulong skewNsec, object context)
         {
             _commandData.Dequeue();                     // toss command byte
@@ -420,12 +425,15 @@ namespace PERQemu.IO.Z80
                        (SelectedUnit.Info.IsWritable ? StatusRegister3.None : StatusRegister3.WriteProtected) |
                        (SelectedUnit.Fault ? StatusRegister3.Fault : StatusRegister3.None);
             }
-            // otherwise... what to return if no drive attached?
+            else
+            {
+                // This is a guess...
+                ST3 |= StatusRegister3.Fault;
+            }
 
             _statusData.Enqueue((byte)ST3);
 
             Log.Debug(Category.FloppyDisk, "SenseDriveStatus: {0}", ST3);
-
             FinishCommand();
         }
 
@@ -498,12 +506,11 @@ namespace PERQemu.IO.Z80
                     _transfer.EndOfTrack,
                     _transfer.SectorLength);
 
-            if (!SelectedDriveIsReady)
+            if (!SelectedUnitIsReady)
             {
                 // Post drive not ready (TODO: this isn't correct, apparently?
                 // FLOPPY hates this so much it hangs forever.)
-                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination |
-                                                      StatusRegister0.EquipChk);
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination); // StatusRegister0.EquipChk);
                 _transfer.ST1 = StatusRegister1.None;
                 _transfer.ST2 = StatusRegister2.None;
 
@@ -561,7 +568,7 @@ namespace PERQemu.IO.Z80
             if (_transfer.SectorData.Data.Length == 0)
             {
                 // No sector data available:
-                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
+                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
                 _transfer.ST1 = StatusRegister1.NoData;      // Sector not found
                 FinishTransfer(_transfer);
                 return;
@@ -571,7 +578,7 @@ namespace PERQemu.IO.Z80
             if ((_transfer.MFM && _transfer.SectorLength != 256) ||
                 (!_transfer.MFM && _transfer.SectorLength != 128))
             {
-                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
+                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
                 _transfer.ST1 = StatusRegister1.NoData;      // Sector not found (TODO: is this correct?)
                 FinishTransfer(_transfer);
                 return;
@@ -804,9 +811,9 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Fill in the common fields of Status Register 0.  This is done
-        /// often enough to do it consistently.  If a non-existent drive is
-        /// selected, returns NotReady and error status ReadySignalChanged.
+        /// Fill in the common fields of Status Register 0.  This is done often
+        /// enough to do it consistently.  If a non-existent drive is selected,
+        /// returns AbnormalTermination with NotReady and EquipChk set.
         /// </summary>
         private StatusRegister0 SetErrorStatus(StatusRegister0 error)
         {
@@ -814,23 +821,22 @@ namespace PERQemu.IO.Z80
                            (StatusRegister0)_unitSelect |
                            (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None);
 
-            if (SelectedUnit == null)
+            if (SelectedUnitIsReady)
+            {
+                // Give back actual drive status
+                _errorStatus |= (SelectedUnit.HeadSelect > 0 ? StatusRegister0.Head : StatusRegister0.None) |
+                                (SelectedUnit.Fault ? StatusRegister0.EquipChk : StatusRegister0.None) |
+                                (SelectedUnit.Ready ? StatusRegister0.None : StatusRegister0.NotReady);
+            }
+            else
             {
                 // There ain't no drive there!  How will the PERQ react?
                 //      Seek End = 0, Intr Code = Ready line state changed
                 //      Seek End = 1, Intr Code = Abnormal termination (Seek/Recal)
-                _errorStatus |= StatusRegister0.EquipChk | StatusRegister0.NotReady;
-                _errorStatus |= _seekEnd ? StatusRegister0.AbnormalTermination :
-                                           StatusRegister0.ReadySignalChanged;
+                _errorStatus |= _seekEnd ? (StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk) :
+                                           (StatusRegister0.ReadySignalChanged | StatusRegister0.NotReady);
             }
-            else
-            {
-                // Give back actual drive status
-                _errorStatus |= (SelectedUnit.HeadSelect == 0 ? StatusRegister0.None : StatusRegister0.Head) |
-                                (SelectedUnit.Fault ? StatusRegister0.EquipChk : StatusRegister0.None) |
-                                (SelectedUnit.Ready ? StatusRegister0.None : StatusRegister0.NotReady);
-            }
-
+            
             return _errorStatus;
         }
 
