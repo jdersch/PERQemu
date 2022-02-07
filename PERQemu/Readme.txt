@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-10/30/2021 - skeezicsb - v0.4.6 (experimental)
+2/7/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -134,6 +134,19 @@
     us the ability to finally let PERQ-1s run all the newer OSes and software!
 
     PERQ-2 support will then follow, gracefully and effortlessly.  bwaaaahahahahahahaha no stop it hahahaha sigh.
+
+    1. Worked the Debugger and :var syntax back in, and integrated it with the
+    new CLI.  Still some work to do to make it more friendly - like adding tab
+    completion on the variable list?  Additional items on the to-do list for
+    the CLI are to add global commands, pathname expansion, and a more dynamic
+    way to expand the parse tree so that certain string variables can be used
+    like enumerated types but updated at runtime).
+
+    2. Hard and floppy disk support is stable again, and feeling more solid.
+    May have to implement the Shugart seek ramp timing to match the Z80's
+    crazy built-in timing scheme to avoid the occasional disk timeout (but
+    they are mostly evident on my slow machine, are not fatal, and just add
+    the authenticity of the PERQ experience!).
 
 
 Original README.Source follows.

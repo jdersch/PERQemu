@@ -31,13 +31,12 @@ using PERQemu.UI;
 
 namespace PERQemu
 {
-
     /// <summary>
-    /// PERQSystem encapsulates basic operation of a complete virtual machine.
-    /// It builds the configuration as described by the user in a Configuration
-    /// object and manages the creation of a thread to run the PERQ.  It starts
-    /// up the SDL Display when the system is "powered on" and accepts commands
-    /// from the Execution Controller to run, stop, single step, or shutdown.
+    /// PERQSystem encapsulates a complete virtual machine as described by a
+    /// Configuration object.  It creates all of the necessary components,
+    /// attaches a Display and a Debugger, loads the media files, and listens
+    /// for commands from the ExecutionController to run, stop, single step, or
+    /// shutdown.
     /// </summary>
     public sealed class PERQSystem
     {
@@ -319,14 +318,14 @@ namespace PERQemu
         /// </summary>
         public void Halt(Exception e)
         {
-            // The emulation has hit a serious error.  Enter the debugger...
+            // The emulation has hit a serious error.  Return to the CLI.
             Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.", e.Message);
             Log.Error(Category.All, "System state may be inconsistent.\n");
 #if DEBUG
             Log.Write(Environment.StackTrace);
 #endif
             PERQemu.Controller.Halt();
-         }
+        }
 
         public void Shutdown()
         {
@@ -401,11 +400,10 @@ namespace PERQemu
         {
             try
             {
-                // As PERQmedia to see if it's loadable
+                // Check to see if it's loadable
                 var dev = FileUtilities.GetDeviceTypeFromFile(path);
 
-                // For now, always load a floppy drive even if there's
-                // no media file; the Z80 just isn't happy without one
+                // Add the floppy drive even if there's no media file presently
                 if (type == DeviceType.Floppy && string.IsNullOrEmpty(path))
                 {
                     Log.Debug(Category.FloppyDisk, "Drive {0} (no media loaded)", unit);
@@ -551,12 +549,12 @@ namespace PERQemu
         private IOBoard _iob;
         private OptionBoard _oio;
 
+        // Debugger
+        private PERQDebugger _debugger;
+
         // Controlly bits
         private ExecutionMode _mode;
         private volatile RunState _state;
-
-        // Debugger
-        private PERQDebugger _debugger;
 
         // This is a hack, and should move elsewhere...?
         private uint _uiEventInterval;

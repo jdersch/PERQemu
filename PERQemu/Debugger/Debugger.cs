@@ -51,6 +51,8 @@ namespace PERQemu.Debugger
         public PERQDebugger(List<object> debugObjects)
         {
             BuildVariableList(debugObjects);
+            // todo: breakpoints!
+            // todo: additional array types (byte, ushort, others?)
         }
 
         /// <summary>
