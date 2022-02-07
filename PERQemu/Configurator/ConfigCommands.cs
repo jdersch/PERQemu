@@ -40,7 +40,7 @@ namespace PERQemu.UI
         /// </summary>
         private bool OKtoReconfig()
         {
-            if (PERQemu.Controller.State == RunState.Off)
+            if (PERQemu.Controller.State <= RunState.Off)
             {
                 return true;
             }
@@ -78,8 +78,7 @@ namespace PERQemu.UI
                 Console.WriteLine("This configuration is invalid!  Please correct the following error:");
                 Console.WriteLine(PERQemu.Config.Current.Reason);
             }
-            else if (PERQemu.Config.Current.IsModified &&
-                     !PERQemu.Config.Current.IsSaved)
+            else if (PERQemu.Config.Current.IsModified && !PERQemu.Config.Current.IsSaved)
             {
                 Console.WriteLine("Note: the configuration has been modified but not yet saved.");
                 Console.WriteLine("Use the 'configure save' command to save your changes.");
@@ -117,28 +116,6 @@ namespace PERQemu.UI
                               PERQemu.Config.Current.Name.PadLeft(10),
                               PERQemu.Config.Current.Description);
         }
-
-        //[Command("configure select", "Select a pre-defined machine configuration")]
-        //public void SelectPrefab(string name)
-        //{
-        //    if (OKtoReconfig())
-        //    {
-        //        Configuration newConf = PERQemu.Config.GetConfigByName(name);
-
-        //        // Did we git a goodun, pa?
-        //        if (newConf == null)
-        //        {
-        //            Console.WriteLine($"No configuration matching '{name}'.");
-        //            Console.WriteLine("Use the configuration 'list' command to see available configurations.");
-        //        }
-        //        else if (newConf != PERQemu.Config.Current)
-        //        {
-        //            Console.WriteLine($"Configuration '{newConf}' selected.");
-        //            PERQemu.Config.Current = newConf;
-        //            PERQemu.Config.Changed = true;
-        //        }
-        //    }
-        //}
 
         [Command("configure show", "Show current configuration details")]
         public void ShowConfiguration()
@@ -220,13 +197,6 @@ namespace PERQemu.UI
             SaveConfig();
         }
 
-        [Command("configure name")]
-        public void SetName()
-        {
-            Console.WriteLine("(Optional) Give the configuration a short name.  In the Configurator GUI,");
-            Console.WriteLine("this name appears in the drop-down menu of machine types.");
-        }
-
         [Command("configure name", "Name the current configuration")]
         public void SetName(string name)
         {
@@ -238,13 +208,6 @@ namespace PERQemu.UI
             {
                 PERQemu.Config.Current.Name = name;
             }
-        }
-
-        [Command("configure description")]
-        public void SetDescription()
-        {
-            Console.WriteLine("(Optional) Provide a short description for this configuration.  Supply a");
-            Console.WriteLine("quoted string if you wish to include spaces in the description.");
         }
 
         [Command("configure description", "Add a short description of the current configuration")]
@@ -259,15 +222,6 @@ namespace PERQemu.UI
                 PERQemu.Config.Current.Description = desc;
             }
         }
-
-        //[Command("configure chassis", "Set the machine type")]
-        //public void SetChassis()
-        //{
-        //    Console.WriteLine("Configure the basic machine type.  Valid chassis types:");
-        //    PERQemu.CLI.Columnify(Enum.GetNames(typeof(ChassisType)));
-        //    Console.WriteLine();
-        //    Console.WriteLine("The chassis selected affects what CPU, IO and Disk options are available.");
-        //}
 
         [Command("configure chassis", "Set the machine type")]
         public void SetChassis(ChassisType perq)
@@ -288,15 +242,6 @@ namespace PERQemu.UI
                 }
             }
         }
-
-        //[Command("configure cpu", "Set the CPU type")]
-        //public void SetCPU()
-        //{
-        //    Console.WriteLine("Configure the CPU board.  Valid CPU board types: ");
-        //    PERQemu.CLI.Columnify(Enum.GetNames(typeof(CPUType)));
-        //    Console.WriteLine();
-        //    Console.WriteLine("Selected CPU type may depend on chassis and other options.");
-        //}
 
         [Command("configure cpu", "Set the CPU type")]
         public void SetCPU(CPUType cpu)
@@ -335,18 +280,15 @@ namespace PERQemu.UI
             return n;
         }
 
-        // TODO summarize all the extended help messages in a "configure help" method
-        // or help configure from the top level
-
-        //[Command("configure memory", "Set the memory size")]
-        //public void SetMemory()
-        //{
-        //    Console.WriteLine("Configure the memory board, from 256KB to 8MB.  The amount of memory");
-        //    Console.WriteLine("supported depends on the CPU type, and must be a power of two.");
-        //    Console.WriteLine("\t20-bit CPU: 256, 512, 1024 or 2048 (KB)");
-        //    Console.WriteLine("\t24-bit CPU: 2048, 4096 or 8192 (KB)");
-        //    Console.WriteLine("Or enter 1, 2, 4 or 8 for MB.  PERQemu will round up to the nearest legal value.");
-        //}
+        [Command("configure memory", "Set the memory size")]
+        public void SetMemory()
+        {
+            Console.WriteLine("Configure the memory capacity, from 256KB to 8MB.  The CPU type determines\n" +
+                              "the maximum memory capacity, which must be a power of two:\n" +
+                              "\t20-bit CPU: 256, 512, 1024 or 2048 (KB)\tor 1, 2 (MB)\n" +
+                              "\t24-bit CPU: 2048, 4096 or 8192 (KB)    \tor 2, 4, 8 (MB)\n" +
+                              "PERQemu will round up to the nearest legal value.");
+        }
 
         [Command("configure memory", "Set the memory size")]
         public void SetMemory(uint size)
@@ -426,14 +368,6 @@ namespace PERQemu.UI
             }
         }
 
-        //[Command("configure option board")]
-        //public void SetOptionIO()
-        //{
-        //    Console.WriteLine("Configure the IO Option board.  Valid IO Option types are:");
-        //    PERQemu.CLI.Columnify(Enum.GetNames(typeof(OptionBoardType)));
-        //    Console.WriteLine();
-        //}
-
         [Command("configure option board", "Configure the IO Option board type")]
         public void SetOptionIO(OptionBoardType oio)
         {
@@ -472,14 +406,6 @@ namespace PERQemu.UI
                 }
             }
         }
-
-        //[Command("configure option")]
-        //public void SetIOOption()
-        //{
-        //    Console.WriteLine("Configure an IO Option.  Valid IO Option types are:");
-        //    PERQemu.CLI.Columnify(Enum.GetNames(typeof(IOOptionType)));
-        //    Console.WriteLine();
-        //}
 
         [Command("configure option", "Configure extra features of the IO Option board")]
         public void SetIOOption(IOOptionType opt)
@@ -567,14 +493,6 @@ namespace PERQemu.UI
             }
         }
 
-        //[Command("configure display")]
-        //public void SetDisplay()
-        //{
-        //    Console.WriteLine("Configures the display device(s) attached to the PERQ.  Valid types are:");
-        //    PERQemu.CLI.Columnify(Enum.GetNames(typeof(DisplayType)));
-        //    Console.WriteLine();
-        //}
-
         [Command("configure display", "Configure the display device")]
         public void SetDisplay(DisplayType disp)
         {
@@ -599,14 +517,6 @@ namespace PERQemu.UI
                 }
             }
         }
-
-        //[Command("configure tablet")]
-        //public void SetTablet()
-        //{
-        //    Console.WriteLine("Configures the pointing device(s) attached to the PERQ.  Valid types are:");
-        //    PERQemu.CLI.Columnify(Enum.GetNames(typeof(TabletType)));
-        //    Console.WriteLine();
-        //}
 
         [Command("configure tablet", "Configure the pointing device(s)")]
         public void SetTablet(TabletType tab)
@@ -647,7 +557,7 @@ namespace PERQemu.UI
         /// files and have "config list" just dump Conf/*.cfg and not preload
         /// anything at all...  hmm.)
         /// </remarks>
-        [Command("configure define", IsDiscreet = true)]
+        [Command("configure define", Discreet = true)]
         private void StartDefinition(string name)
         {
             _preloading = true;
@@ -658,7 +568,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Init the device type for a particular unit #.
         /// </summary>
-        [Command("configure drive", IsDiscreet = true)]
+        [Command("configure drive", Discreet = true)]
         private void ConfigDrive(byte unit, DeviceType dev)
         {
             _conf.Drives[unit].Type = dev;

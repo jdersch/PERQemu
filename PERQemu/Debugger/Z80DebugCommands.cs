@@ -45,7 +45,7 @@ namespace PERQemu
         [Command("debug z80 inst", "Run one Z80 opcode")]
         public void DebugZ80Inst()
         {
-            if (PERQemu.Controller.State == RunState.Off)
+            if (PERQemu.Controller.State <= RunState.Off)
             {
                 Console.WriteLine("The PERQ is currently turned off.");
             }
@@ -60,6 +60,13 @@ namespace PERQemu
         private void ShowZ80State()
         {
             PERQemu.Sys.IOB.Z80System.ShowZ80State();
+        }
+
+        //[Conditional("DEBUG")]
+        [Command("debug z80 dump scheduler queue")]
+        private void DumpZ80Scheduler()
+        {
+            PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 
         // todo: interrogate memory, fifos, peripheral controllers & registers, etc.

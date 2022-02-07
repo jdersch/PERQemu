@@ -924,7 +924,7 @@ namespace PERQemu.IO.Z80
         private enum StatusRegister1
         {
             None = 0x0,
-            MissAddr = 0x1,
+            MissingAddrMark = 0x1,
             NotWritable = 0x2,
             NoData = 0x4,
             Unused1 = 0x8,
@@ -938,14 +938,13 @@ namespace PERQemu.IO.Z80
         private enum StatusRegister2
         {
             None = 0x0,
-            DataMissAddr = 0x1,
+            MissingAddrMarkInDataField = 0x1,
             BadCylinder = 0x2,
             ScanNotSatisfied = 0x4,
             ScanEqualHit = 0x8,
             WrongCylinder = 0x10,
-            DataDataError = 0x20,
-            DataErrorInDataField = 0x40,
-            ControlMark = 0x80
+            DataErrorInDataField = 0x20,
+            ControlMark = 0x40
         }
 
         [Flags]

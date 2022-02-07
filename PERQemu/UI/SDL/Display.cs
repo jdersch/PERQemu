@@ -428,7 +428,7 @@ namespace PERQemu.UI
                     _fpsTimerId = -1;
                 }
 
-                // Make sure the PERQ has shut down and isn't firing events
+                // Make sure the PERQ has shut down and isn't firing events  FIXME
                 while (PERQemu.Controller.State != RunState.ShuttingDown &&
                        PERQemu.Controller.State != RunState.Off)
                 {

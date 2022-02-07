@@ -458,7 +458,7 @@ namespace PERQemu
             Log.Debug(Category.Timer, "Intervals reset");
         }
 
-        [Conditional("DEBUG")]
+        // [Conditional("DEBUG")]
         public static void DumpTimers()
         {
             Console.Write("HighResTimer thread is ");

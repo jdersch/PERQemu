@@ -1,4 +1,4 @@
-﻿//
+//
 // StorageCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -103,7 +103,7 @@ namespace PERQemu.UI
                 // Assign to our configuration
                 PERQemu.Config.Current.AssignMedia(imagePath, 0);
 
-                if (PERQemu.Controller.State != RunState.Off)
+                if (PERQemu.Controller.State > RunState.Off)
                 {
                     PERQemu.Sys.LoadMedia(DeviceType.Floppy, imagePath, 0);
                     Console.WriteLine("Loaded.");
@@ -162,7 +162,7 @@ namespace PERQemu.UI
                 // will, even though the fixed disk types didn't support that!
                 PERQemu.Config.Current.AssignMedia(imagePath, unit);
 
-                if (PERQemu.Controller.State != RunState.Off)
+                if (PERQemu.Controller.State > RunState.Off)
                 {
                     PERQemu.Sys.LoadMedia(DeviceType.Disk14Inch, imagePath, unit);  // FIXME
                     Console.WriteLine("Loaded.");
@@ -213,7 +213,7 @@ namespace PERQemu.UI
         /// Must reference a (previously defined) geometry and performance
         /// record.  Quietly sets the prefix, then restores it on "done".
         /// </summary>
-        [Command("storage define", "Define a new drive type", IsDiscreet = true)]
+        [Command("storage define", "Define a new drive type", Discreet = true)]
         private void StorageDefine(DeviceType type, string name)
         {
             _dev = new StorageDevice();

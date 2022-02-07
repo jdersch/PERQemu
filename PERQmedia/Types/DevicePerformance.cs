@@ -65,7 +65,13 @@ namespace PERQmedia
         //
         // Shugart SA4000 series 14" hard drives
         //
-        public static DevicePerformance SA4000 = new DevicePerformance(2964, 1100, 90000, 1, 140, 20, 888750);
+        // NOTE: Head settling times are _computed_ by the Z80, and the full 20ms
+        // wait specified by the hardware spec seems to not agree with the actual
+        // delay that our emulated hardware produces.  Why didn't they just watch
+        // the index pulse as Shugart suggests?  Alas.  Fudge this to help limit
+        // timeouts on seeks (should actually implement Shugarts ramp timing).
+        //
+        public static DevicePerformance SA4000 = new DevicePerformance(2964, 1100, 90000, 1, 140, 1, 888750);
 
         //
         // Specifications for the 8", 5.25" and other drive types are

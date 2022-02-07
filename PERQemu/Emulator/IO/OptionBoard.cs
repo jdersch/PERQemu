@@ -62,6 +62,32 @@ namespace PERQemu.IO
 
         public abstract void IOWrite(byte port, int value);
 
+        public virtual void LoadDisk()
+        {
+        }
+
+        public virtual void LoadTape()
+        {
+        }
+
+        public virtual void SaveDisk()
+        {
+        }
+
+        public virtual void SaveTape()
+        {
+        }
+
+        public virtual void CheckDisks()
+        {
+            System.Console.WriteLine("Option board: No disks loaded.");
+        }
+
+        public virtual void CheckTapes()
+        {
+            System.Console.WriteLine("Option board: No tapes loaded.");
+        }
+
         /// <summary>
         /// Populate the port lookup table.
         /// </summary>

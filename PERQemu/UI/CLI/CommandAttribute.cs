@@ -21,6 +21,27 @@ using System;
 
 namespace PERQemu
 {
+    /// <summary>
+    /// Command attribute marks a method to include in the command tree.
+    /// A method may be "aliased" by attaching more than one attribute.
+    /// </summary>
+    /// <remarks>
+    /// Name is required; it's the string that places the command in the tree.
+    /// Name is broken on whitespace into words and lower-cased for parsing.
+    /// 
+    /// Description is optional help text displayed by ShowCommands().
+    /// 
+    /// Discreet may optionally be set to "hide" the command from the
+    /// completion engine.  Discreet commands must be typed in full.
+    /// 
+    /// Repeatable may optionally be set to tell the parser that the command
+    /// can be repeated (a shortcut for things like "step", "inst" by just
+    /// pressing return rather than retyping or using up arrow.
+    /// 
+    /// Global optionally flags a command as accessible from any level in the
+    /// command tree (i.e., regardless of prefix).  These are only checked if
+    /// the typed command does not match the current tree.
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public class CommandAttribute : Attribute
     {
@@ -29,6 +50,7 @@ namespace PERQemu
             _commandName = cmdName;
             _description = cmdDesc;
             _hidden = false;
+            _repeats = false;
         }
 
         public virtual string Name
@@ -41,15 +63,29 @@ namespace PERQemu
             get { return _description; }
         }
 
-        public virtual bool IsDiscreet
+        public virtual bool Discreet
         {
             get { return _hidden; }
             set { _hidden = value; }
         }
 
+        public virtual bool Repeatable
+        {
+            get { return _repeats; }
+            set { _repeats = value; }
+        }
+
+        public virtual bool Global
+        {
+            get { return _global; }
+            set { _global = value; }
+        }
+
         private string _commandName;
         private string _description;
         private bool _hidden;
+        private bool _repeats;
+        private bool _global;
     }
 
     [AttributeUsage(AttributeTargets.Parameter)]
@@ -61,4 +97,16 @@ namespace PERQemu
             // argument against the Helpers like an enumeration!
         }
     }
+
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public class PathExpandAttribute : Attribute
+    {
+        public PathExpandAttribute()
+        {
+            // If present, tells the CommandProcessor that this string argument
+            // is a file/path name and to do expansions against the filesystem 
+            // which would/will be extremely cool
+        }
+    }
+
 }

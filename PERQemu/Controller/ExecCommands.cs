@@ -32,16 +32,16 @@ namespace PERQemu
         [Command("debug status", "Show current status of the PERQ")]
         public void Status()
         {
-            if (PERQemu.Sys == null)
+            if (PERQemu.Controller.State == RunState.Unavailable)
             {
-                Console.WriteLine("No PERQ!");
+                Console.WriteLine("The PERQ is not powered on; no status available.");
                 return;
             }
 
             Console.WriteLine("Current configuration is " + PERQemu.Sys.Config.Name);
             Console.WriteLine("Current run state is " + PERQemu.Sys.State);
 
-            // todo: check and show floppy and disk drive IsModified
+            PERQemu.Sys.CheckMedia();
 
             // DEBUG
             PERQemu.Sys.Display.Status();
@@ -51,19 +51,19 @@ namespace PERQemu
         [Command("power on", "Turn on the configured PERQ!")]
         public void PowerOn()
         {
-            if (PERQemu.Controller.State != RunState.Off)
+            if (PERQemu.Controller.State > RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered on.");
                 return;
             }
 
-            PERQemu.Controller.TransitionTo(RunState.Paused);
+            PERQemu.Controller.PowerOn();
         }
 
         [Command("power off", "Turn off the PERQ")]
         public void PowerOff()
         {
-            if (PERQemu.Controller.State == RunState.Off)
+            if (PERQemu.Controller.State <= RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered off.");
                 return;
@@ -79,13 +79,23 @@ namespace PERQemu
             PERQemu.Controller.Reset();
         }
 
-        [Command("go")]
-        [Command("debug go")]
-        [Command("start", "Start or restart the PERQ")]
-        [Command("debug start", "Start or restart the PERQ")]
-        public void Start()
+        [Command("go", "Power on and start the PERQ")]
+        [Command("debug go", "Power on and start the PERQ")]
+        public void Go()
         {
             // Implicitly power on (shortcut) if not already done
+            if (PERQemu.Controller.State == RunState.Unavailable)
+            {
+                PERQemu.Controller.PowerOn();
+            }
+
+            Start();
+        }
+
+        [Command("start", "Run the PERQ")]
+        [Command("debug start", "Run the PERQ")]
+        public void Start()
+        {
             PERQemu.Controller.TransitionTo(RunState.Running);
             PERQemu.Sys.PrintStatus();
         }
@@ -95,7 +105,7 @@ namespace PERQemu
         public void Stop()
         {
             // A quiet no-op if the machine isn't on...
-            if (PERQemu.Controller.State != RunState.Off)
+            if (PERQemu.Controller.State > RunState.Off)
             {
                 PERQemu.Controller.TransitionTo(RunState.Paused);
             }

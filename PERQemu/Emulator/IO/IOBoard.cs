@@ -177,6 +177,37 @@ namespace PERQemu.IO
             _drives[unit]?.Unload();
         }
 
+        public virtual void CheckDisks()
+        {
+            for (var unit = 0; unit < _drives.Length; unit++)
+            {
+                if (_drives[unit] == null || (_drives[unit] != null && _drives[unit].Info.Type == DeviceType.Unused))
+                {
+                    Console.WriteLine("Drive {0} is unassigned.", unit);
+                }
+                else
+                {
+                    Console.WriteLine("Drive {0}:  Type: {1} - {2}", unit,
+                                      _drives[unit].Info.Type,
+                                      _drives[unit].Info.Description);
+
+                    if (_drives[unit].IsLoaded)
+                    {
+                        Console.WriteLine("Loaded: {0}", Paths.Canonicalize(_drives[unit].Filename));
+                        Console.WriteLine("Flags:  {0}", string.Join(", ",
+                                          _drives[unit].Info.IsRemovable ? "Removable" : "",
+                                          _drives[unit].Info.IsBootable ? "Bootable" : "",
+                                          _drives[unit].Info.IsWritable ? "Writable" : "Read only",
+                                          _drives[unit].IsModified ? "Modified" : ""));
+                    }
+                    else
+                    {
+                        Console.WriteLine("Is not loaded.");
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Populate the port lookup table.
         /// </summary>

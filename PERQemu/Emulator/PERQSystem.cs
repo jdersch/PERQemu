@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Collections.Generic;
 
 using PERQmedia;
 
@@ -123,6 +124,9 @@ namespace PERQemu
             _ioBus.AddDevice(_iob);
             _ioBus.AddDevice(_oio);
 
+            // Attach a debugger!
+            _debugger = new PERQDebugger(new List<object>() { _cpu.Processor });
+
             // Set our initial state; instantiated but not yet initialized...
             // shouldn't this just be... "On"?  Sigh.
             _state = RunState.Off;
@@ -155,6 +159,9 @@ namespace PERQemu
 
         public ExecutionMode Mode => _mode;
         public RunState State => _state;
+
+        public PERQDebugger Debugger => _debugger;
+
 
         /// <summary>
         /// Set the user's preferred run mode.  We assume async mode if the
@@ -439,6 +446,21 @@ namespace PERQemu
         }
 
         /// <summary>
+        /// Report the status of loaded storage devices.
+        /// </summary>
+        public void CheckMedia()
+        {
+            // Just ping the IO and Option boards to report their own damn status
+            _iob.CheckDisks();
+
+            if (_oio != null)
+            {
+                _oio.CheckDisks();
+                _oio.CheckTapes();
+            }
+        }
+
+        /// <summary>
         /// Tells all the loaded storage devices to save themselves, depending
         /// on user preferences.  Saves to original format and filename.
         /// </summary>
@@ -532,6 +554,9 @@ namespace PERQemu
         // Controlly bits
         private ExecutionMode _mode;
         private volatile RunState _state;
+
+        // Debugger
+        private PERQDebugger _debugger;
 
         // This is a hack, and should move elsewhere...?
         private uint _uiEventInterval;

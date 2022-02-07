@@ -81,13 +81,13 @@ namespace PERQemu
 
         public ExecutionMode Mode
         {
-        	get { return _mode; }
-        	set { _mode = value; }
+            get { return _mode; }
+            set { _mode = value; }
         }
 
         public RunState State
         {
-            get { return (_system == null ? RunState.Off : _system.State); }
+            get { return (_system == null ? RunState.Unavailable : _system.State); }
         }
 
         public byte BootChar
@@ -149,7 +149,8 @@ namespace PERQemu
                 if (!Initialize(PERQemu.Config.Current))
                 {
                     Console.WriteLine("System initialization failed.");
-                    Halt();
+                    // No worky Perqy
+                    _system = null;
                     return;
                 }
 
@@ -157,6 +158,7 @@ namespace PERQemu
                 if (!_system.LoadAllMedia())
                 {
                     Console.WriteLine("Storage initialization failed.");
+                    // Give an opportunity to try again
                     Halt();
                     return;
                 }
@@ -179,7 +181,7 @@ namespace PERQemu
             Console.WriteLine("ExecutionController Reset called.");
 
             // If no system, quietly no-op.
-            if (State != RunState.Off)
+            if (State > RunState.Off)
             {
                 TransitionTo(RunState.Reset);
 
@@ -195,16 +197,17 @@ namespace PERQemu
         /// </summary>
         public void Break()
         {
-            if (State != RunState.Off && State != RunState.Halted)
+            if (State > RunState.Off && State != RunState.Halted)
             {
                 // Break out of the Running state
                 SetState(RunState.Paused);
             }
-           
-            // DEBUGGING
+
+#if DEBUG
             HighResolutionTimer.DumpTimers();
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
             PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
+#endif
         }
 
         // sigh.
@@ -220,7 +223,7 @@ namespace PERQemu
         /// </summary>
         public void PowerOff(bool save = true)
         {
-            if (State == RunState.Off) return;
+            if (State <= RunState.Off) return;
 
             Console.WriteLine("Power OFF requested.");
 
@@ -247,6 +250,12 @@ namespace PERQemu
         public void TransitionTo(RunState nextState)
         {
             var current = State;
+
+            if (current == RunState.Unavailable)
+            {
+                Console.WriteLine("No PERQ defined; must 'power on' first.");
+                return;
+            }
 
             // Bail if already in the requested state
             if (current == nextState) return;

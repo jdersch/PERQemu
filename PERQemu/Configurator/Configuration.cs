@@ -56,7 +56,7 @@ namespace PERQemu.Config
             _ioBoard = IOBoardType.IOB;
             _ioOptionBoard = OptionBoardType.OIO;
             _ioOptions = IOOptionType.Link | IOOptionType.Ether;
-            _memSize = 1024 * 1024;
+            _memSize = Configurator.ONE_MEG;
             _displayType = DisplayType.Portrait;
             _tabletType = TabletType.BitPad;
 
@@ -242,10 +242,8 @@ namespace PERQemu.Config
             {
                 return string.Format("{0}KB", _memSize / 1024);
             }
-            else
-            {
-                return string.Format("{0}MB", _memSize / Configurator.ONE_MEG);
-            }
+
+            return string.Format("{0}MB", _memSize / Configurator.ONE_MEG);
         }
 
         public void AssignMedia(string file, int unit = 0)
@@ -253,15 +251,10 @@ namespace PERQemu.Config
             _drives[unit].MediaPath = file;
         }
 
-        //public int GetDriveByUnit(int unit)
-        //{
-        //    return _drives.FindIndex(d => (d.Unit == unit));
-        //}
-
-        //public List<StorageDevice> GetDriveByType(DriveType t)
-        //{
-        //    return _drives.FindAll(d => (d.Device == t));
-        //}
+        public void AssignType(DeviceType dev, int unit)
+        {
+            _drives[unit].Type = dev;
+        }
 
         // For now...
         public const byte MAX_DRIVES = 4;

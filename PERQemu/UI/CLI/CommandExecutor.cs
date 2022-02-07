@@ -1,4 +1,4 @@
-﻿//
+//
 // CommandExecutor.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -23,8 +23,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 using System.IO;
-
-using PERQemu;
 
 namespace PERQemu.UI
 {
@@ -56,12 +54,15 @@ namespace PERQemu.UI
 
         public void ExecuteScript(string scriptFile, bool verbose = false)
         {
+            var curPrefix = CurrentRoot;
+
             using (StreamReader sr = new StreamReader(scriptFile))
             {
                 Console.WriteLine("Reading from '{0}'...", scriptFile);
 
-                // todo: scripts should always execute from the top level
-                // of the command hierarchy; set/restore the prefix
+                // Scripts always execute from top level
+                CurrentRoot = CommandTreeRoot;
+
                 while (!sr.EndOfStream)
                 {
                     string line = sr.ReadLine();
@@ -69,18 +70,50 @@ namespace PERQemu.UI
                     if (!string.IsNullOrWhiteSpace(line))
                     {
                         if (verbose) Console.WriteLine(line);
-                        ExecuteLine(line);
+
+                        if (line.StartsWith("@", StringComparison.CurrentCulture))
+                        {
+                            Console.WriteLine("** Nested script files not supported - {0} ignored", line);
+                        }
+                        else
+                        {
+                            ExecuteLine(line);
+                        }
                     }
                 }
 
                 sr.Close();
             }
+
+            // Restore
+            CurrentRoot = curPrefix;
         }
 
 
         public void ExecuteLine(string line)
         {
-            if (line.StartsWith("#", StringComparison.CurrentCulture))
+            // todo: add "." for repeat command processing?
+            //      keep a register that contains the last repeatable command
+            //      things like 'step' or 'inst' repeat with just <CR>, but
+            //      most things shouldn't
+            //      '.' by itself clears the register
+            //      '.cmd' executes cmd and sets the register
+            //      commands that don't repeat just clear it quietly
+            //      just make "repeatable" an attribute! off by default
+
+            // Expressions start with ":"
+            if (line.StartsWith(":", StringComparison.CurrentCulture))
+            {
+                if (PERQemu.Sys != null)
+                {
+                    PERQemu.Sys.Debugger.EvaluateExpression(line.Substring(1));
+                }
+                else
+                {
+                    Console.WriteLine("No PERQ defined; can't evaluate variable expression.");
+                }
+            }
+            else if (line.StartsWith("#", StringComparison.CurrentCulture))
             {
                 // Comments start with "#", just ignore them
             }
@@ -106,7 +139,6 @@ namespace PERQemu.UI
                 }
             }
         }
-
 
         /// <summary>
         /// Shows a top-level command summary.
@@ -138,6 +170,7 @@ namespace PERQemu.UI
                 }
             }
         }
+
 
         /// <summary>
         /// Invokes the method for a command.
@@ -193,8 +226,7 @@ namespace PERQemu.UI
                     if (invokeParams[paramIndex] == null)
                     {
                         // Should/will have been sanity checked by the parser...
-                        throw new ArgumentException(
-                            string.Format("Unknown value for parameter {0}.", argIndex));
+                        throw new ArgumentException($"Unknown value for parameter {argIndex}");
                     }
 
                     argIndex++;
@@ -232,7 +264,7 @@ namespace PERQemu.UI
                     }
                     else if (p.ParameterType == typeof(char))
                     {
-                        invokeParams[paramIndex] = (char)args[argIndex++][0];
+                        invokeParams[paramIndex] = args[argIndex++][0];
                     }
                     else if (p.ParameterType == typeof(float))
                     {
@@ -255,12 +287,6 @@ namespace PERQemu.UI
             command.Method.Method.Invoke(command.Method.Instance, invokeParams);
         }
 
-        enum ParseState
-        {
-            NonWhiteSpace = 0,
-            WhiteSpace = 1,
-            QuotedString = 2,
-        }
 
         /// <summary>
         /// Splits a command into a list of words, taking care to handle quoted
@@ -449,7 +475,7 @@ namespace PERQemu.UI
             }
         }
 
-        private static int TryParseInt(string arg)
+        public static int TryParseInt(string arg)
         {
             int result = 0;
             Radix r = GetRadix(ref arg);
@@ -470,7 +496,7 @@ namespace PERQemu.UI
             return result;
         }
 
-        private static uint TryParseUint(string arg)
+        public static uint TryParseUint(string arg)
         {
             uint result = 0;
             Radix r = GetRadix(ref arg);
@@ -491,7 +517,7 @@ namespace PERQemu.UI
             return result;
         }
 
-        private static ushort TryParseUshort(string arg)
+        public static ushort TryParseUshort(string arg)
         {
             ushort result = 0;
             Radix r = GetRadix(ref arg);
@@ -512,7 +538,7 @@ namespace PERQemu.UI
             return result;
         }
 
-        private static byte TryParseByte(string arg)
+        public static byte TryParseByte(string arg)
         {
             byte result = 0;
             Radix r = GetRadix(ref arg);
@@ -578,7 +604,7 @@ namespace PERQemu.UI
                                                       function.Description);
 
                         // The better part of valor?
-                        cmdNode.Hidden = function.IsDiscreet;
+                        cmdNode.Hidden = function.Discreet;
 
                         // Do we have any parameters?
                         var args = info.GetParameters();
@@ -699,7 +725,16 @@ namespace PERQemu.UI
             }
         }
 
+        enum ParseState
+        {
+            NonWhiteSpace = 0,
+            WhiteSpace = 1,
+            QuotedString = 2,
+        }
+
+        private CommandNode _globalRoot;
         private CommandNode _commandRoot;
         private CommandNode _currentRoot;
+
     }
 }

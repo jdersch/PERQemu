@@ -38,18 +38,17 @@ namespace PERQemu.IO
 
             _z80CycleTime = 250;    // 4Mhz!
 
-            // Hmm.  The EIO schematic very clearly shows an 8Kx8 ROM (2764)
+            //
+            // The EIO schematic very clearly shows an 8Kx8 ROM (2764) chip
             // and 8 x 16Kx1 SRAMs (2167s) but the ROM that's built seems to
-            // limit the Z80 assembler's view to 4K ROM and the upper 6K of RAM
-            // (including pre-allocated buffers and working space). This may be
-            // to reserve 10K for uploading ZBoot files?
-            // TODO: figure out if these mappings are accurate.  As long as we
-            // have enough space allocated at the right starting addresses,
-            // provisioning extra space isn't a big deal, but the ROM loader
-            // wants to match the RomSize to the length of the actual file...
+            // limit the Z80 assembler's view to 4K ROM and several other docs
+            // show that only 4K is used.  Since we're (eventually/ultimately)
+            // going to load from a actual ROM dumps, the ROM loader wants to
+            // match the RomSize to the length of the actual file...
+            //
             _z80RamSize = 0x4000;   // 16K of RAM
             _z80RamAddr = 0x4000;
-            _z80RomSize = 0x2000;   // 8K of ROM
+            _z80RomSize = 0x1000;   // 4K of ROM
             _z80RomAddr = 0x0;
 
             // TODO: load the correct Z80 ROM (eio vs. eio24?)
@@ -64,6 +63,8 @@ namespace PERQemu.IO
         public EIO(PERQSystem system) : base(system)
         {
             _hardDiskController = new ShugartDiskController(system);
+
+            // _ethernetController = new EthernetController(system);
 
             _z80System = new Z80System(system);
             _z80System.LoadZ80ROM("eioz80.bin");      // "new" Z80 ROM

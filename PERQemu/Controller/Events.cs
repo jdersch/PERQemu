@@ -26,16 +26,17 @@ namespace PERQemu
     /// </summary>
     public enum RunState
     {
-        Off = 0,        // Power is off or no PERQ configured
-        WarmingUp,      // Power is on and the GUI is warming up :-)
-        Reset,          // Transitional reset state
-        Paused,         // User- or program-requested Pause
-        Running,        // Run, run like the wind
-        SingleStep,     // Debugger is single stepping execution
-        RunInst,        // Debugger is running one opcode
-        RunZ80Inst,     // Debugger is running one Z80 opcode
-        Halted,         // Exception or grievous error stopped execution
-        ShuttingDown    // Program is shutting down, PERQ deconfigu
+        Unavailable = -1,   // No PERQ is configured
+        Off = 0,            // Machine defined; power is off
+        WarmingUp = 1,      // Power is on and the GUI is warming up :-)
+        Reset,              // Transitional reset state
+        Paused,             // User- or program-requested Pause
+        Running,            // Run, run like the wind
+        SingleStep,         // Debugger is single stepping execution
+        RunInst,            // Debugger is running one opcode
+        RunZ80Inst,         // Debugger is running one Z80 opcode
+        Halted,             // Exception or grievous error stopped execution
+        ShuttingDown        // The PERQ is shutting down, will power off
     }
 
     public class RunStateChangeEventArgs : EventArgs

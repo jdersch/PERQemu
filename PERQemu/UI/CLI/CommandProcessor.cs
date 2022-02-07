@@ -86,13 +86,10 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Read a script or configuration file, quiet-like.  Sets 
-        /// command root to the top level prior to invocation.
+        /// Read a script or configuration file, quiet-like.
         /// </summary>
         public void ReadScript(string script)
         {
-            ResetPrefix();
-
             // Ignore the result...
             _exec.ExecuteScript(Paths.Canonicalize(script));
         }
@@ -185,44 +182,90 @@ namespace PERQemu
             PERQemu.PrintBanner();
         }
 
+        // todo:  a nice help system that can optionally bring up the
+        // emulator help pages on a web site (or even the Github repo)
+        // but for now, dump out some basic help (in 80 columns).  don't
+        // assume most people will download the source tree so provide
+        // available help text in the binary package
+
         [Command("help", "Show PERQemu help")]
         private void Help()
         {
-            Console.WriteLine("This is PERQemu, an emulator for the Three Rivers PERQ workstation.");
-            Console.WriteLine("Type 'commands' at the prompt to see which commands are available.");
-            Console.WriteLine();
-            Console.WriteLine("The command line editor provides tab completion and prompts to assist");
-            Console.WriteLine("you.  Use the arrow keys to retrieve and edit previous command lines.");
-            Console.WriteLine("Type 'help editor' for more information.");
-            Console.WriteLine();
-            Console.WriteLine("Many more commands are available to configure and customize the emulated");
-            Console.WriteLine("PERQ, debug software running on it (or the emulator itself), and to set");
-            Console.WriteLine("preferences that tailor PERQemu to your environment.  Type 'help ' and");
-            Console.WriteLine("press the TAB key for more on-line assistance, or consult the User's Guide");
-            Console.WriteLine("included with the distribution.");
+            Console.WriteLine("This is PERQemu, an emulator for the Three Rivers PERQ workstation.\n" +
+                              "Type 'commands' at the prompt to see which commands are available.\n");
+
+            Console.WriteLine("The command line editor provides tab completion and prompts to assist you.\n" +
+                              "Use the arrow keys to retrieve and edit previous command lines, or press\n" +
+                              "the ESC key to erase the command.  Type 'help editor' for more information.\n");
+
+            Console.WriteLine("Many more commands are available to configure and customize the emulated\n" +
+                              "PERQ, debug software running on it (or the emulator itself), and to set\n" +
+                              "preferences that tailor PERQemu to your environment.  Type 'help ' and\n" +
+                              "press the TAB key for more on-line assistance, or consult the User's Guide\n" +
+                              "included with the distribution.");
         }
 
         [Command("help editor", "Show PERQemu command line editor help")]
         private void HelpCLI()
         {
-            Console.WriteLine("Some commands may accept optional arguments or may require them; press");
-            Console.WriteLine("the TAB key at any point to see a list of possible completions for the");
-            Console.WriteLine("current input word, or preview the next expected argument.  Pressing");
-            Console.WriteLine("the SPACE BAR or TAB key will expand the current input up to the longest");
-            Console.WriteLine("unambiguous match.");
-            Console.WriteLine();
-            Console.WriteLine("String arguments may be a single word, or must be surrounded by quotes");
-            Console.WriteLine("if they contain spaces.");
-            Console.WriteLine();
-            Console.WriteLine("Numeric arguments may be specified in decimal (default), or in another");
-            Console.WriteLine("common base depending on preference or context:");
-            Console.WriteLine("\tBase    \t Prefix    \tExample");
-            Console.WriteLine("\tBinary: \t    b      \tb10001100");
-            Console.WriteLine("\tOctal:  \t  o or %   \to377 or %177600");
-            Console.WriteLine("\tDecimal:\td (or none)\td12345 or 54321");
-            Console.WriteLine("\tHex:    \t0x, x or $ \t0xff, x3eff, $80000");
-            Console.WriteLine();
-            Console.WriteLine("The default output radix may be set with 'settings radix <base>'.");
+            Console.WriteLine("Some commands accept optional arguments, while some require them; press the\n" +
+                              "TAB key at any point to see a list of possible completions for the current\n" +
+                              "input word, or preview the next expected argument.  Pressing the SPACE BAR\n" +
+                              "or TAB key will expand the current input up to the longest unambiguous match.\n");
+
+            Console.WriteLine("String arguments must be surrounded by quotes if they contain spaces.\n");
+
+            Console.WriteLine("Numeric arguments may be specified in decimal (default), or in another common\n" +
+                              "base depending on preference or context:\n" +
+                              "\tBase    \t Prefix    \tExample\n" +
+                              "\tBinary: \t    b      \tb10001100\n" +
+                              "\tOctal:  \t  o or %   \to377 or %177600\n" +
+                              "\tDecimal:\td (or none)\td12345 or 54321\n" +
+                              "\tHex:    \t0x, x or $ \t0xff, x3eff, $80000\n");
+
+            Console.WriteLine("The default output radix may be set with 'settings radix <base>'.\n" +
+                              "[Setting output radix not yet implemented]");
+        }
+
+        [Command("help configure", "Show PERQemu Configurator help")]
+        private void HelpConfig()
+        {
+            Console.WriteLine("The Configurator lets you load, modify and save PERQ configurations.  Several\n" +
+                              "pre-defined system types are provided.  The default configuration is a typical\n" +
+                              "early PERQ-1A similar to the machine emulated by earlier versions of PERQemu;\n" +
+                              "type 'configure show' to see the current selection.\n");
+
+            Console.WriteLine("If you assign pathnames for the storage devices attached to a configuration,\n" +
+                              "they will be saved and automatically loaded when the machine is started.\n" +
+                              "The 'load', 'unload' and 'save' commands for working with floppy and hard\n" +
+                              "disk images are provided as aliases to the equivalent Configurator commands.\n");
+
+            Console.WriteLine("Type 'configure' by itself to enter the interactive configuration subsystem.\n" +
+                              "Tab completion will guide the configuration process by prompting you for any\n" +
+                              "expected parameters.  The Configurator will limit or warn you of invalid\n" +
+                              "selections that aren't supported by the emulator.  Type 'configure commands'\n" +
+                              "for a list of available options.  The prompt will change to 'configure*>' if\n" +
+                              "you have made changes that haven't been saved.  Type 'done' when finished.");
+        }
+
+        [Command("help debugger", "Show PERQemu Debugger help")]
+        private void HelpDebug()
+        {
+            Console.WriteLine("PERQemu provides extensive for debugging the emulator itself or code running\n" +
+                              "on the virtual machine.  In 'release builds' a limited set of commands to\n" +
+                              "read debugging information is available; in 'debug builds' a more extensive\n" +
+                              "command set allows manipulation of internal state and deeper interrogation\n" +
+                              "of the emulation environment.  [This is still under active development and\n" +
+                              "will be fully documented at a future date.]");
+        }
+
+        [Command("help logging", "Show PERQemu logging help")]
+        private void HelpLogging()
+        {
+            Console.WriteLine("PERQemu provides voluminous debugging output and a set of commands to choose\n" +
+                              "what type and how much information to display.  Logging incurs a substantial\n" +
+                              "performance penalty, so 'release builds' offer only a limited subset of the\n" +
+                              "available output.  Logging commands are available in the 'debug' subsystem.");
         }
 
         [Command("commands", "Show console commands and their descriptions")]
@@ -273,7 +316,7 @@ namespace PERQemu
             //}
         }
 
-        [Command("done", IsDiscreet = true)]
+        [Command("done", Discreet = true)]
         private void Done()
         {
             Console.WriteLine("Already at top-level.");

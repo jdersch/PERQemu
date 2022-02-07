@@ -20,7 +20,6 @@
 using System;
 using System.Text;
 using System.Diagnostics;
-using System.Collections.Generic;
 
 using PERQemu.Debugger;
 using PERQemu.Processor;
@@ -93,11 +92,24 @@ namespace PERQemu
             // radix, step mode, whatever
         }
 
+        [Command("debug show variables", "Show debugger variables and their descriptions")]
+        private void ShowVars()
+        {
+            if (PERQemu.Sys == null)
+            {
+                Console.WriteLine("No PERQ defined.");
+            }
+            else
+            {
+                PERQemu.Sys.Debugger.ShowVariables();
+            }
+        }
+
         [Command("step")]
         [Command("debug step", "Run one microinstruction")]
         public void DebugStep()
         {
-            if (PERQemu.Controller.State == RunState.Off)
+            if (PERQemu.Controller.State <= RunState.Off)
             {
                 Console.WriteLine("The PERQ is currently turned off.");
             }
@@ -112,7 +124,7 @@ namespace PERQemu
         [Command("debug inst", "Run one opcode")]
         public void DebugInst()
         {
-            if (PERQemu.Controller.State == RunState.Off)
+            if (PERQemu.Controller.State <= RunState.Off)
             {
                 Console.WriteLine("The PERQ is currently turned off.");
             }
@@ -274,35 +286,36 @@ namespace PERQemu
         //
 
         [Command("debug show memory", "Dump the PERQ's memory")]
-        private void ShowMemory(uint startAddr, uint length = 64)
+        private void ShowMemory(uint startAddr, uint words = 64)
         {
-            uint endAddr = startAddr + length;
-
-            if (startAddr >= PERQemu.Sys.Memory.MemSize ||
-                endAddr - 8 >= PERQemu.Sys.Memory.MemSize)
+            if (startAddr > PERQemu.Sys.Memory.MemSize - 1)
             {
                 Console.WriteLine("Argument out of range -- must be between 0 and {0}",
                                   PERQemu.Sys.Memory.MemSize - 1);
                 return;
             }
 
-            // Oof.  I could mask the address to the nearest quad word
-            // and just fetch quads rather than copy the whole bloody array...
-            ushort[] mem = PERQemu.Sys.Memory.Memory;
+            // Round down to nearest octoword by masking off low address bits
+            var start = (int)(startAddr & 0xfffffff8);
+            var end = (int)Math.Min(PERQemu.Sys.Memory.MemSize, start + words);
 
             // Format and display 8 words per line
-            for (uint i = startAddr; i < endAddr; i += 8)
+            for (var i = start; i < end; i += 8)
             {
-                StringBuilder line = new StringBuilder();
+                var line = new StringBuilder();
+                line.AppendFormat("{0:x6}: ", i);
 
-                line.AppendFormat("{0:x6}: {1:x4} {2:x4} {3:x4} {4:x4} {5:x4} {6:x4} {7:x4} {8:x4} ",
-                    i, mem[i], mem[i + 1], mem[i + 2], mem[i + 3], mem[i + 4], mem[i + 5], mem[i + 6], mem[i + 7]);
-
-                for (uint j = i; j < i + 8; j++)
+                // Words in hex (todo: add output radix support)
+                for (var j = i; j < i + 8; j++)
                 {
-                    // Build ascii representation...
-                    char high = (char)((mem[j] & 0xff00) >> 8);
-                    char low = (char)((mem[j] & 0xff));
+                    line.AppendFormat("{0:x4} ", PERQemu.Sys.Memory.FetchWord(j));
+                }
+
+                // ASCII representation
+                for (var j = i; j < i + 8; j++)
+                {
+                    char high = (char)((PERQemu.Sys.Memory.FetchWord(j) & 0xff00) >> 8);
+                    char low = (char)(PERQemu.Sys.Memory.FetchWord(j) & 0xff);
 
                     if (!PERQemu.CLI.IsPrintable(high))
                     {
@@ -517,12 +530,10 @@ namespace PERQemu
         //
 
         //[Conditional("DEBUG")]
-        [Command("debug dump scheduler queues")]
+        [Command("debug dump scheduler queue")]
         private void DumpScheduler()
         {
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
-            Console.WriteLine("---");
-            PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 
         //[Conditional("DEBUG")]

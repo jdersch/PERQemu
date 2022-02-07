@@ -43,8 +43,8 @@ namespace PERQemu.IO
         {
             _link = new PERQLink();
             // _canon = new CanonPrinter();
-            // _ether = new 10MbEthernet();
-            // _streamer = new QICTape();
+            // _ether = new Ethernet10MbController();
+            // _streamer = new QICTapeController();
             
             RegisterPorts(_handledPorts);
         }

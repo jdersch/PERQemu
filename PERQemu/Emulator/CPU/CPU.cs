@@ -257,7 +257,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Returns the current DDS value.  (Not really a register, but useful! :-)
         /// </summary>
-        [DebugProperty("dds")]
+        [Debuggable("dds", "Current diagnostic display value")]
         public int DDS
         {
             get { return _dds; }
@@ -266,6 +266,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Returns the OpFile contents.
         /// </summary>
+        [Debuggable("op", "The Op cache")]
         public byte[] OpFile
         {
             get { return _opFile; }
@@ -274,7 +275,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// Ensures 4 bits of _bpc, for convenience.
         /// </summary>
-        [DebugProperty("bpc")]
+        [Debuggable("bpc", "The Byte Program Counter")]
         public int BPC
         {
             get { return _bpc & 0xf; }
@@ -283,7 +284,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The 2910's S Register.
         /// </summary>
-        [DebugProperty("s")]
+        [Debuggable("s", "The microsequencer's S register")]
         public ushort S
         {
             get { return _usequencer.S; }
@@ -292,7 +293,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The Victim Latch.
         /// </summary>
-        [DebugProperty("victim")]
+        [Debuggable("victim", "The microcode Victim register")]
         public ushort Victim
         {
             get { return _usequencer.Victim; }
@@ -301,7 +302,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The microstate register (20-bit).
         /// </summary>
-        [DebugProperty("ustate")]
+        [Debuggable("ustate", "The microstate register")]
         public int Microstate
         {
             get { return ReadMicrostateRegister(0); }
@@ -311,7 +312,7 @@ namespace PERQemu.Processor
         /// On 24-bit CPUs, reads the Upper register (Microstate with H=1).
         /// Results on 20-bit CPUs are undefined.  This isn't ideal.
         /// </summary>
-        [DebugProperty("upper")]
+        [Debuggable("upper", "Upper bits of XY register (valid only in 24-bit CPU)")]
         public int Upper
         {
             get { return ReadMicrostateRegister(1); }
@@ -347,7 +348,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The Microcode PC, either 12 or 14 bits depending on the CPU.
         /// </summary>
-        [DebugProperty("pc")]
+        [Debuggable("pc", "Microcode program counter")]
         public ushort PC
         {
             get { return (ushort)_usequencer.PC; }
@@ -357,7 +358,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The current interrupt status.
         /// </summary>
-        [DebugProperty("int")]
+        [Debuggable("int", "Current active interrupts")]
         public InterruptFlag InterruptFlag
         {
             get { return _interrupt.Flag; }
@@ -390,7 +391,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The ALU's last result register "R".
         /// </summary>
-        [DebugProperty("r")]
+        [Debuggable("r", "Last ALU result")]
         public int R
         {
             get { return _alu.R.Value; }
@@ -399,7 +400,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The base register for indexing the XY registers.
         /// </summary>
-        [DebugProperty("rbase")]
+        [Debuggable("rbase", "Current XY register base")]
         public byte RegisterBase
         {
             get { return _xy.RegisterBase; }
@@ -408,7 +409,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The Multiply/Divide MQ register.
         /// </summary>
-        [DebugProperty("mq")]
+        [Debuggable("mq", "The multiply/divide unit MQ register")]
         public int MQ
         {
             get { return _mq; }
@@ -417,7 +418,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The most recent word on the IO data bus.
         /// </summary>
-        [DebugProperty("iod")]
+        [Debuggable("iod", "Most recent word on the IO data bus")]
         public int IOD
         {
             get { return _iod; }
