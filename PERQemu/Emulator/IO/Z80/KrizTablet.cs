@@ -97,10 +97,10 @@ namespace PERQemu.IO.Z80
             // TODO: there really should be thread synchronization here for retrieving this data.
             // Calc Y and X positions, coordinate translation based on tweaking so the host screen
             // coordinates line up with the PERQ's...
-            int tabX = _system.Display.MouseX + 64;
-            int tabY = _system.VideoController.DisplayHeight - _system.Display.MouseY + 64;
-            int buttons = _system.Display.MouseButton;
-            bool offTablet = _system.Display.MouseOffTablet;
+            int tabX = _system.Mouse.MouseX + 64;
+            int tabY = _system.VideoController.DisplayHeight - _system.Mouse.MouseY + 64;
+            int buttons = _system.Mouse.MouseButton;
+            bool offTablet = _system.Mouse.MouseOffTablet;
 
             // Send the data off to the SIO
             _rxDelegate(0x81);                  // sync

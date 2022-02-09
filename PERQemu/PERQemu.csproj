@@ -219,6 +219,8 @@
     <Compile Include="Emulator\IO\DiskDevices\ShugartController.cs" />
     <Compile Include="Debugger\DebugAttribute.cs" />
     <Compile Include="Debugger\Debugger.cs" />
+    <Compile Include="UI\SDL\EventLoop.cs" />
+    <Compile Include="UI\SDL\InputDevices.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

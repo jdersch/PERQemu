@@ -100,7 +100,7 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         public void Poll(ref Queue<byte> fifo)
         {
-            if (!_talking || _system.Display.MouseOffTablet)
+            if (!_talking || _system.Mouse.MouseOffTablet)
             {
                 // Unlike the Kriz, the BitPad does not send updates if off the tablet.
                 // So bail here to allow relative mode to work... kind of...
@@ -198,10 +198,10 @@ namespace PERQemu.IO.GPIB
             // Calculate Y and X positions.  The offsets tacked onto the end are based on
             // playing around with the interface, not on solid data and could be incorrect.
             //
-            y = (_system.VideoController.DisplayHeight - _system.Display.MouseY) * 2 + 80;
-            x = (_system.Display.MouseX) * 2 + 76;
+            y = (_system.VideoController.DisplayHeight - _system.Mouse.MouseY) * 2 + 80;
+            x = (_system.Mouse.MouseX) * 2 + 76;
 
-            button = (byte)_system.Display.MouseButton;
+            button = (byte)_system.Mouse.MouseButton;
         }
 
         private int _lastUpdate;

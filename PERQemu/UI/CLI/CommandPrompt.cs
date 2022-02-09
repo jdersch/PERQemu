@@ -93,7 +93,8 @@ namespace PERQemu.UI
                 UpdateDisplay();
 
                 // Read one keystroke from the console...
-                ConsoleKeyInfo key = Console.ReadKey(true);
+                //ConsoleKeyInfo key = Console.ReadKey(true);
+                ConsoleKeyInfo key = PERQemu.CLI.GetKeyEventually();
 
                 // TODO: allow the classic emacs-like control chars too!
 

@@ -99,12 +99,22 @@ namespace PERQemu
         /// </summary>
         public void Run()
         {
+            // This one's cheesy.  Use a null callback to tell the HRTimer to
+            // return so we can check the Console for a keystroke.  Studies show
+            // that the fastest typists in the world can't go much faster than
+            // 50-60ms between keystrokes.  Yep.  I checked. :-)
+            var consoleTimerHandle = HighResolutionTimer.Register(50d, null);
+            HighResolutionTimer.Enable(consoleTimerHandle, true);
+
+            // Here we go!
             _running = true;
 
             while (_running)
             {
                 try
                 {
+                    // GetLine actually runs the Timer loop (while between
+                    // keystrokes) which is brilliant and a little embarrassing
                     string cmd = _editor.GetLine().Trim();
 
                     if (cmd != string.Empty)
@@ -117,8 +127,30 @@ namespace PERQemu
                     Console.WriteLine(e.Message);
                 }
             }
+
+            HighResolutionTimer.Unregister(consoleTimerHandle);
         }
 
+        /// <summary>
+        /// Periodically checks the Console to see if a key is available.  If
+        /// so, returns it to the editor, otherwise it runs the high-ish res
+        /// timer loop.
+        /// </summary>
+        public ConsoleKeyInfo GetKeyEventually()
+        {
+            // We actually schedule events to run the SDL loop and check the
+            // keyboard, so all we do here is what the previously-dedicated
+            // HRT thread did.  Heh.
+            while (true)
+            {
+                HighResolutionTimer.Run();
+
+                if (Console.KeyAvailable)
+                    break;
+            }
+
+            return Console.ReadKey(true);
+        }
 
         #region CLI Utility Routines
 
@@ -296,24 +328,8 @@ namespace PERQemu
         private void LaunchGUI()
         {
             // I'm looking at YOU, 64-bit Cocoa WinForms port that was promised
-            // three YEARS ago.  Sigh.
+            // over three YEARS ago.  Sigh.
             Console.WriteLine("Nope.  No cross-platform GUI available yet.");
-
-            // TODO: build a flippin' Windows machine and try out the PERQolator
-            // GUI there.  At least maybe we'd have a way to continue development...
-
-            //Console.WriteLine("[Console now read-only; close the GUI to return.]");
-
-            //// When started manually, return to the console if the user closes
-            //// the front panel -- but exit if they explicitly choose File->Exit.
-            //if (PERQemu.GUI.Run("FrontPanel"))
-            //{
-            //    _running = false;
-            //}
-            //else
-            //{
-            //    Console.WriteLine("[Return to CLI mode.]");
-            //}
         }
 
         [Command("done", Discreet = true)]

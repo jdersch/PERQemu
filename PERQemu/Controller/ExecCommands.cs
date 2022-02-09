@@ -45,6 +45,7 @@ namespace PERQemu
 
             // DEBUG
             PERQemu.Sys.Display.Status();
+            PERQemu.Sys.Mouse.Status();
             PERQemu.Sys.VideoController.Status();
         }
 

@@ -20,7 +20,7 @@
 using System;
 using System.Reflection;
 
-//using PERQemu.UI.Forms;
+using PERQemu.UI;
 using PERQemu.Config;
 
 namespace PERQemu
@@ -89,6 +89,8 @@ namespace PERQemu
             _cli = new CommandProcessor();
 
             //_gui = new FormsManager();
+            _gui = new EventLoop();
+            _gui.InitializeSDL();
 
             // Create main objects
             _config = new Configurator();
@@ -99,9 +101,6 @@ namespace PERQemu
             // Read user settings file, or set defaults if it doesn't yet exist
             Settings.Load();
             Log.Info(Category.All, Settings.Reason);
-
-            // Initialize the ExecutionController and default PERQ
-            //_controller.Initialize(_config.Current);
 
             // Start 'er up!
             Run();
@@ -127,12 +126,12 @@ namespace PERQemu
                 // _gui.Run("FrontPanel");          // Sigh.
                 Console.WriteLine("No GUI for you!");
             }
-            //else
-            //{
-                // Run the CLI
-                _cli.Run();
-            //}
 
+            // Run the CLI
+            _cli.Run();
+
+            // Close up shop
+            _gui.ShutdownSDL();
             HighResolutionTimer.Shutdown();
         }
 
@@ -179,10 +178,10 @@ namespace PERQemu
             get { return _hostIsUnix; }
         }
 
-        //public static FormsManager GUI
-        //{
-        //    get { return _gui; }
-        //}
+        public static EventLoop GUI
+        {
+            get { return _gui; }
+        }
 
         public static CommandProcessor CLI
         {
@@ -257,7 +256,7 @@ namespace PERQemu
         private static bool _hostIsUnix;
 
         private static CmdLineArgs _switches;
-        //private static FormsManager _gui;
+        private static EventLoop _gui;
         private static CommandProcessor _cli;
 
         private static Configurator _config;

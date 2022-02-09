@@ -75,16 +75,21 @@ namespace PERQemu
     }
 
     /// <summary>
-    /// Shared high precision timer that supports multiple subscribers with
-    /// separate intervals.  Runs a single Stopwatch on a background thread
-    /// and doesn't rely on platform-specific code.
-    /// 
-    /// Based initially on an anonymous code snippet found on-line...
+    /// Shared high-ish precision timer that supports multiple subscribers with
+    /// separate intervals.  Runs a single Stopwatch on the current thread and
+    /// doesn't rely on platform-specific code.
     /// </summary>
     /// <remarks>
+    /// Based initially on a mash-up of anonymous code snippets found on-line,
+    /// but hacked to run a dedicated thread.  It was way too intensive for our
+    /// needs and all that silliness has been undone; it now forms the basis of
+    /// the CLI's "multiplexed" Run loop (SDL, timers and Console input!).  Now
+    /// that it runs on the main thread, Timer callbacks aren't coming from a
+    /// random background thread so SDL events can be scheduled directly.
+    /// 
     /// To register or unregister a timer client, the timer should probably
     /// be stopped since I'm not locking it or using enumerators (too slow).
-    /// For now this is more a proof-of-concept than a final implementation...
+    /// This is still more a proof-of-concept than a final implementation...
     /// </remarks>
     public static class HighResolutionTimer
     {
@@ -95,8 +100,7 @@ namespace PERQemu
         {
             _stopwatch = new Stopwatch();
             _requesters = new List<TimerThing>();
-            _thread = null;
-            _runThread = false;
+
             _runTimers = false;
             _throttle = new AutoResetEvent(true);
         }
@@ -239,80 +243,68 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Starts the timer and begins firing off events.  Launches the
-        /// background thread if it isn't already running.
+        /// Enables the firing of events.
         /// </summary>
         public static void Start()
         {
             if (_runTimers) return;
 
-            _runTimers = true;
-            _throttle.Set();        // In case we're hanging in WaitOne()
+            ResetIntervals();
+            _stopwatch.Restart();
 
-            if (_thread == null)
-            {
-                _runThread = true;
-                _thread = new Thread(ExecuteTimer) { Name = "HighResTimer", IsBackground = true };
-                _thread.Start();
-            }
-            Log.Debug(Category.Timer, "Thread started");
+            _runTimers = true;
+            //_throttle.Set();        // In case we're hanging in WaitOne()
         }
 
         /// <summary>
-        /// Stops the timer, leaves the thread running so it can be resumed.
+        /// Stops the timer loop and disable the firing of events.
         /// </summary>
         public static void Stop()
         {
             if (!_runTimers) return;
 
             _runTimers = false;
-            _throttle.Reset();
-            Log.Debug(Category.Timer, "Thread paused");
+            _stopwatch.Stop();
         }
 
         /// <summary>
-        /// Shutdown the timer and exit the background thread.
+        /// Shutdown the timer and clear the list of requesters.
         /// </summary>
         public static void Shutdown()
         {
-            if (_thread == null) return;
-
             Stop();
-            _runThread = false;     // Flag that we're ready to exit
             _throttle.Set();        // If we're in Wait(), release the hold
 
-            _thread.Join();
-            _thread = null;
-            Log.Debug(Category.Timer, "Thread shut down");
+            // Dispose of all timerthings?
+            _requesters.Clear();
+#if DEBUG
+            // For posterity
+            Log.Debug(Category.Timer, "Stopwatch stopped, HRT thread exiting");
+            Log.Debug(Category.Timer, "--> SpinWaits short={0} long={1}", shortSpin, longSpin);
+            Log.Debug(Category.Timer, "--> Sleeps    short={0} long={1}", shortSleep, longSleep);
+#endif
         }
 
         /// <summary>
-        /// Executes the timer.
+        /// Executes the timer loop.
         /// </summary>
-        private static void ExecuteTimer()
+        /// <remarks>
+        /// Exits if _runTimers is false or a null delegate is fired.  This
+        /// provides a cheesy way for the CLI to periodically check the console
+        /// for input before jumping back into the timer loop.
+        /// </remarks>
+        public static void Run()
         {
             double now, next, diff, skew;
-            now = next = 0d;
+            now = next = ElapsedHiRes();
 
 #if DEBUG
             // Gather some efficiency stats for tuning, curiosity
-            long shortSpin, longSpin, shortSleep, longSleep;
             shortSpin = longSpin = shortSleep = longSleep = 0;
 #endif
+            var looping = true;
 
-            // Set our processor affinity so the timer thread doesn't bounce
-            // around from cpu to cpu.  Should help accuracy and performance?
-            // Of course, the OS is free to ignore this.
-            Thread.BeginThreadAffinity();
-
-            Log.Debug(Category.Timer,
-                      "Stopwatch initialized, HRT thread {0} running {1} timers",
-                      Thread.CurrentThread.ManagedThreadId, _requesters.Count);
-
-            ResetIntervals();
-            _stopwatch.Restart();
-
-            while (_runThread)
+            while (looping)
             {
                 // Set our next target
                 next = NextInterval(now);
@@ -366,53 +358,30 @@ namespace PERQemu
                         if (_requesters[i].Enabled && (_requesters[i].NextTrigger <= (now + Tolerance)))
                         {
                             skew = ElapsedHiRes() - next;
-                            _requesters[i].Callback.Invoke(new HRTimerElapsedEventArgs(skew));
                             _requesters[i].NextTrigger += _requesters[i].Interval;
+
+                            // Bit of a hack: if the delegate is null, return.
+                            if (_requesters[i].Callback == null)
+                                looping = false;
+                            else
+                                _requesters[i].Callback.Invoke(new HRTimerElapsedEventArgs(skew));
                         }
                     }
                 }
-                else
-                {
-                    // Stop time
-                    _stopwatch.Stop();
-
-                    // While we're paused, do nothing until told to restart
-                    // or shutdown the thread
-                    _throttle.WaitOne();
-
-                    // Reset and restart time
-                    now = next = 0d;
-                    ResetIntervals();
-                    _stopwatch.Restart();
-                }
             }
-
-            // Thread is exiting, stop the ticker
-            _stopwatch.Stop();
-
-            // This is probably irrelevant
-            Thread.EndThreadAffinity();
-
-#if DEBUG
-            // For posterity
-            Log.Debug(Category.Timer, "Stopwatch stopped, HRT thread exiting");
-            Log.Debug(Category.Timer, "--> SpinWaits short={0} long={1}", shortSpin, longSpin);
-            Log.Debug(Category.Timer, "--> Sleeps    short={0} long={1}", shortSleep, longSleep);
-#endif
         }
 
         /// <summary>
         /// Run through the list of active timers and select the next one to
         /// fire.  If there are no defined or active timers, return "now" and
-        /// set the flag to pause the running thread.
+        /// tell the loop to exit?
         /// </summary>
         /// <remarks>
-        /// This is terribly inefficient, but the list of timers is very short;
-        /// we also don't lock anything here, which is dangerous, but again we
-        /// get away with it because the usage is fairly static (a couple of UI
-        /// timers and a couple of CPU rate timers, all of which are set up once
-        /// and not modified while the VM is running).  Multi-threading sucks.
-        /// Why, WHY is it still such a complete disaster?  Seriously.  Ugh.
+        /// This is terribly inefficient, but the list of timers is short.  We
+        /// also don't lock anything here, which is dangerous, but again we get
+        /// away with it because usage is fairly static (a couple of UI timers
+        /// and a couple of CPU rate timers, all of which are set up once and
+        /// not modified while the VM is running).
         /// </remarks>
         private static double NextInterval(double now)
         {
@@ -433,16 +402,14 @@ namespace PERQemu
 
             if (found)
             {
-                // Hmm.  Is there a risk that next < now?  Hmm.
                 return next;
             }
-            else
-            {
-                _runTimers = false;
-                Log.Debug(Category.Timer, "No active requesters, pausing HR timer");
 
-                return now;
-            }
+            // hack so we don't just loop crazily
+            Thread.Yield();
+
+            _runTimers = false;
+            return now;
         }
 
         /// <summary>
@@ -461,17 +428,8 @@ namespace PERQemu
         // [Conditional("DEBUG")]
         public static void DumpTimers()
         {
-            Console.Write("HighResTimer thread is ");
-            if (_thread == null)
-            {
-                Console.WriteLine("not running");
-            }
-            else
-            {
-                Console.WriteLine(_thread.ThreadState);
-                Console.WriteLine("Event loop is " + (_runTimers ? "running" : "not running"));
-                Console.WriteLine("Stopwatch is " + (_stopwatch.IsRunning ? "running" : "not running"));
-            }
+            Console.WriteLine("Event loop is " + (_runTimers ? "running" : "not running"));
+            Console.WriteLine("Stopwatch is " + (_stopwatch.IsRunning ? "running" : "not running"));
 
             Console.WriteLine("Registered timer clients:");
             for (int i = 0; i < _requesters.Count; i++)
@@ -480,22 +438,20 @@ namespace PERQemu
             }
         }
 
+#if DEBUG
+        private static long shortSpin, longSpin, shortSleep, longSleep;
+#endif
+
         /// <summary>
         /// The timer is running and firing events
         /// </summary>
         private static volatile bool _runTimers;
 
         /// <summary>
-        /// If false, signals the thread to exit
-        /// </summary>
-        private static volatile bool _runThread;
-
-        /// <summary>
         /// A wait handle to act as a throttle
         /// </summary>
         private static AutoResetEvent _throttle;
 
-        private static Thread _thread;
         private static Stopwatch _stopwatch;
         private static List<TimerThing> _requesters;
     }

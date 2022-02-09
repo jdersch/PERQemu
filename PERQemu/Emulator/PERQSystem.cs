@@ -115,6 +115,9 @@ namespace PERQemu
             // The Display will initialize itself (lazily)
             _display = new Display(this);
 
+            // Interface to the host keyboard & mouse
+            _inputs = new InputDevices(this);
+
             // Set up the IO Bus and check in the boards
             _ioBus = new IOBus();
 
@@ -132,11 +135,6 @@ namespace PERQemu
 
             SetMode();
 
-            // Compute how many cycles between runs of the GUI's event loop (in
-            // this case, the SDL2 message loop).  In Synchronous mode we explicitly
-            // call on the Display to run the loop; in Asynch mode it just sits in a
-            // wait rather than poll.  FIXME.  This is gross.
-            _uiEventInterval = (uint)((16.6667 * Conversion.MsecToNsec) / CPU.MicroCycleTime);
 
             // Okay!  We have a PERQ!  Now listen for state change events
             // from the Controller (or Debugger)
@@ -151,6 +149,7 @@ namespace PERQemu
         public MemoryBoard Memory => _mem;
         public VideoController VideoController => _mem.Video;
         public Display Display => _display;
+        public InputDevices Mouse => _inputs;
 
         public IOBus IOBus => _ioBus;
         public IOBoard IOB => _iob;
@@ -189,7 +188,8 @@ namespace PERQemu
             switch (_state)
             {
                 case RunState.WarmingUp:
-                    _display.InitializeSDL();
+                    _display.Initialize();
+                    _inputs.Initialize();
                     break;
 
                 case RunState.Running:
@@ -228,7 +228,8 @@ namespace PERQemu
                     break;
 
                 case RunState.ShuttingDown:
-                    _display.ShutdownSDL();
+                    _inputs.Shutdown();
+                    _display.Shutdown();
                     _state = RunState.Off;
                     break;
 
@@ -248,9 +249,7 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Run the machine until the state changes.  For now, calls the SDL message
-        /// loop directly, which is horrible awful no good very bad and I am deeply
-        /// ashamed by this.
+        /// Run the machine until the state changes.
         /// </summary>
         public void Run()
         {
@@ -262,9 +261,6 @@ namespace PERQemu
                 // Start up the background threads
                 _iob.RunAsync();
                 _cpu.RunAsync();
-
-                // Run the event loop until State changes
-                _display.SDLMessageLoop(_mode);
             }
             else
             {
@@ -285,13 +281,6 @@ namespace PERQemu
 
                             // Run the main CPU.  Rate limiting?  Hmm.
                             _cpu.Run((int)clocks);
-
-                            // Run the SDL loop.  There has to be a better way.
-                            if (count > _uiEventInterval)
-                            {
-                                _display.SDLMessageLoop(_mode);
-                                count = 0;
-                            }
                         }
                     });
             }
@@ -544,10 +533,13 @@ namespace PERQemu
         private Configuration _conf;
         private CPUBoard _cpu;
         private MemoryBoard _mem;
-        private Display _display;
         private IOBus _ioBus;
         private IOBoard _iob;
         private OptionBoard _oio;
+
+        // User interface hooks (SDL)
+        private Display _display;
+        private InputDevices _inputs;
 
         // Debugger
         private PERQDebugger _debugger;
@@ -555,9 +547,6 @@ namespace PERQemu
         // Controlly bits
         private ExecutionMode _mode;
         private volatile RunState _state;
-
-        // This is a hack, and should move elsewhere...?
-        private uint _uiEventInterval;
 
         private delegate void RunDelegate();
     }
