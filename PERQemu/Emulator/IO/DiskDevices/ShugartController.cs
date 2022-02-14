@@ -132,14 +132,12 @@ namespace PERQemu.IO.DiskDevices
             switch (command)
             {
                 case Command.Idle:
+                    // Clear the busy status and the interrupt
                     ClearBusyState();
-
-                    // Now clear any currently pending interrupts (avoids DDS 163)
-                    _system.CPU.ClearInterrupt(InterruptSource.HardDisk);
                     break;
 
                 case Command.Reset:
-                    // Reset clears the state machine. It will interrupt when done.
+                    // Reset clears the state machine, interrupts when done
                     ResetFlags();
 
                     Log.Debug(Category.HardDisk, "Shugart state machine reset");
@@ -281,7 +279,7 @@ namespace PERQemu.IO.DiskDevices
                 // Don't queue a standard busy delay?  Wait for "on cylinder"
                 // (i.e., SeekComplete) and then fire an interrupt.  But if the
                 // Z80 is stepping the heads... hmm.
-                _controllerStatus = Status.Busy;
+                SetBusyState();
 
                 // Send it
                 DoSingleSeek();
@@ -304,7 +302,6 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public void DoSingleSeek()
         {
-
             _disk.SeekStep(_seekCommand.HasFlag(SeekCommand.Direction) ? 1 : 0);
         }
 
@@ -327,6 +324,9 @@ namespace PERQemu.IO.DiskDevices
             _seekState = SeekState.WaitForStepSet;
             Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState); 
 
+            // Clear busy status
+            // Technically if Track0 is true we should raise the interrupt
+            // but otherwise the "on cylinder" (seek complete) doesn't?  Ugh.
             ClearBusyState();
         }
 
@@ -464,8 +464,8 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Sets the controller Busy status, allows processing delay, then
-        /// raises the HardDisk interrupt.
+        /// Set the controller Busy status, allow for processing delay, then
+        /// raise the HardDisk interrupt.
         /// </summary>
         private void SetBusyState()
         {
@@ -474,27 +474,36 @@ namespace PERQemu.IO.DiskDevices
 
             // Set busy flag (code 7), and queue a workitem for resetting it and
             // firing an interrupt.  Time would normally vary based on platter
-            // rotation, seek and head settling time, etc.
+            // rotation, seek and head settling time, etc.  But we don't really
+            // know that in advance, so for seeks don't queue anything; for other
+            // commands (reads, writes, etc) just fake up a short/fixed delay.
             _controllerStatus = Status.Busy;
 
-            _busyEvent = _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
+            if (_seekState != SeekState.WaitForSeekComplete)
             {
-                _controllerStatus = Status.Done;
-                _system.CPU.RaiseInterrupt(InterruptSource.HardDisk);
-            });
+                _busyEvent = _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
+                {
+                    ClearBusyState(true);
+                });
+            }
         }
 
         /// <summary>
-        /// Clears the Busy state and cancels any wait in progress.
+        /// Unconditionally clear the Busy state.  Raise or clear the disk
+        /// interrupt, depending on the caller's situation.
         /// </summary>
-        private void ClearBusyState()
+        private void ClearBusyState(bool raiseInterrupt = false)
         {
-            if (_controllerStatus == Status.Done) return;
-
             _controllerStatus = Status.Done;
 
-            _system.Scheduler.Cancel(_busyEvent);
-            _busyEvent = null;
+            if (raiseInterrupt)
+            {
+                _system.CPU.RaiseInterrupt(InterruptSource.HardDisk);
+            }
+            else
+            {
+                _system.CPU.ClearInterrupt(InterruptSource.HardDisk);
+            }
         }
 
         private enum SeekState

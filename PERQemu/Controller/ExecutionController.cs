@@ -169,7 +169,7 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Resets the virtual PERQ.
+        /// Resets the PERQ.
         /// </summary>
         /// <remarks>
         /// If PauseOnReset is set, leaves the machine in Paused and waits for the
@@ -178,9 +178,7 @@ namespace PERQemu
         /// </remarks>
         public void Reset()
         {
-            Console.WriteLine("ExecutionController Reset called.");
-
-            // If no system, quietly no-op.
+            // If no system, quietly no-op
             if (State > RunState.Off)
             {
                 TransitionTo(RunState.Reset);
@@ -193,7 +191,7 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Pauses the virtual PERQ, if it's running.
+        /// Pauses the PERQ, if it's running.
         /// </summary>
         public void Break()
         {
@@ -225,7 +223,7 @@ namespace PERQemu
         {
             if (State <= RunState.Off) return;
 
-            Console.WriteLine("Power OFF requested.");
+            Console.WriteLine("Power OFF requested on {0}.", Thread.CurrentThread.ManagedThreadId);
 
             // Force the machine to pause if in any other state
             Break();
@@ -238,6 +236,9 @@ namespace PERQemu
 
             // Now clobber the Display and close down
             SetState(RunState.ShuttingDown);
+
+            // Farewell, sweet PERQ
+            _system = null;
         }
 
         /// <summary>
@@ -285,7 +286,8 @@ namespace PERQemu
                             // If we got the expected RunState (or an error, in
                             // which case we halt) then continue to the next step
                             if ((current == step.ExpectedResult) ||
-                                (current == RunState.Halted))
+                                (current == RunState.Halted) ||
+                                (current == RunState.Unavailable))
                             {
                                 break;
                             }
@@ -300,8 +302,10 @@ namespace PERQemu
                         } while (step.WaitForIt);
 
                         // Abandon the rest of our steps
-                        if (current == RunState.Halted)
+                        if (current == RunState.Unavailable || current == RunState.Halted)
+                        {
                             break;
+                        }
                     }
                 }
                 else
@@ -325,6 +329,7 @@ namespace PERQemu
         /// </summary>
         private void SetState(RunState a)
         {
+            Console.WriteLine("SetState on {0} to call {1}", Thread.CurrentThread.ManagedThreadId, a);
             RunStateChangeEventHandler handler = RunStateChanged;
             handler?.Invoke(new RunStateChangeEventArgs(a));
         }

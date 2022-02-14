@@ -1,4 +1,4 @@
-﻿//
+//
 // Keyboard.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -31,7 +31,6 @@ namespace PERQemu.IO.Z80
         public Keyboard()
         {
             _lastKeycode = 0;
-            Reset();
         }
 
         public void Reset()

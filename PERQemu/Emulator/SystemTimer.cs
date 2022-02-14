@@ -27,15 +27,18 @@ namespace PERQemu
     /// </summary>
     public class SystemTimer
     {
-        public SystemTimer(double ival)
+        public SystemTimer(double ival, ulong cycleTime)
         {
             _interval = ival;
+            _period = (uint)(ival / (cycleTime * Conversion.NsecToMsec));
             _callback = new HRTimerElapsedCallback(OnElapsed);
             _handle = HighResolutionTimer.Register(_interval, _callback);
             _sync = new ManualResetEventSlim(false);
             _isEnabled = false;
 
-            Log.Debug(Category.Timer, "SystemTimer constructed, HRT handle is {0}", _handle);
+            Log.Debug(Category.Timer,
+                      "SystemTimer {0} created, interval {1}ms, period {2} cycles",
+                      _handle, _interval, _period);
         }
 
         ~SystemTimer()
@@ -51,17 +54,24 @@ namespace PERQemu
             }
         }
 
-        public double Interval
-        {
-            get { return _interval; }
-            set { _interval = value; }
-        }
+        /// <summary>
+        /// Period between heartbeats, in clock cycles.
+        /// </summary>
+        public uint Period => _period;
 
-        public bool IsEnabled
-        {
-            get { return _isEnabled; }
-        }
+        /// <summary>
+        /// Timer interval, in ticks.
+        /// </summary>
+        public double Interval => _interval;
 
+        /// <summary>
+        /// Is we is, or is we isn't?
+        /// </summary>
+        public bool IsEnabled => _isEnabled;
+
+        /// <summary>
+        /// Resets (disables) this heartbeat timer.
+        /// </summary>
         public void Reset()
         {
             Enable(false);
@@ -84,8 +94,10 @@ namespace PERQemu
         {
             // If we're running fast, block; if too slow, blow through
             if (!_sync.IsSet)
+            {
                 _sync.Wait();
-            
+            }
+
             _sync.Reset();
         }
 
@@ -96,6 +108,7 @@ namespace PERQemu
 
         private int _handle;
         private bool _isEnabled;
+        private uint _period;
         private double _interval;
         private HRTimerElapsedCallback _callback;
         private ManualResetEventSlim _sync;

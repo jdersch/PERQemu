@@ -23,8 +23,10 @@ using System.Runtime.CompilerServices;
 
 using Konamiman.Z80dotNet;
 
+using PERQemu.Config;
 using PERQemu.Processor;
 using PERQemu.Debugger;
+using PERQemu.IO.GPIB;
 using PERQemu.IO.SerialDevices;
 
 namespace PERQemu.IO.Z80
@@ -64,10 +66,9 @@ namespace PERQemu.IO.Z80
             _z80sio = new Z80SIO(0xb0, _scheduler);
             _z80dma = new Z80DMA(0x98, _memory, _bus);
             _dmaRouter = new DMARouter(this);
-            _tms9914a = new TMS9914A();
+            _tms9914a = new TMS9914A(0xb8);
             _keyboard = new Keyboard();
             _seekControl = new HardDiskSeekControl(system);
-            _ioReg1 = new IOReg1(_z80ToPerqFifo);
             _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc, _dmaRouter);
 
             _z80dma.AttachDeviceA(_dmaRouter);
@@ -83,29 +84,30 @@ namespace PERQemu.IO.Z80
             _bus.RegisterDevice(_keyboard);
             _bus.RegisterDevice(_z80sio);
             _bus.RegisterDevice(_tms9914a);
-            _bus.RegisterDevice(_ioReg1);
             _bus.RegisterDevice(_ioReg3);
 
-            // Attach peripherals
-
-            // todo: consult the configuration record to decide which
-            // tablet (or both) to attach
-            // todo: finish the gpib and attach the bitpad if selected
+            // If this is an EIO we need:
             // todo: serial port "b"
             // todo: rtc chip
 
-            KrizTablet tablet = new KrizTablet(_scheduler, system);
-            _z80sio.AttachDevice(1, tablet);
+            // Attach the configured tablet(s)
+            if (system.Config.Tablet.HasFlag(TabletType.BitPad))
+            {
+                BitPadOne tablet = new BitPadOne(_scheduler, system);
+                _tms9914a.Bus.AddDevice(tablet);
+            }
 
+            if (system.Config.Tablet.HasFlag(TabletType.Kriz))
+            {
+                KrizTablet tablet = new KrizTablet(_scheduler, system);
+                _z80sio.AttachDevice(1, tablet);
+            }
+
+            // Attach our debugger
             _z80Debugger = new Z80Debugger();
 
-            // Do 10 rate adjustments / second?  Balance overhead v. accuracy
-            _heartbeat = new SystemTimer(5f);
-
-            // Compute how often (in CPU cycles) to sync the emulated processor
-            // to real-time (used if Settings.RateLimit != Fast mode)
-            _adjustInterval = (int)(_heartbeat.Interval / (IOBoard.Z80CycleTime * Conversion.NsecToMsec));
-            Log.Info(Category.Emulator, "[Z80 rate adjust every {0} cycles]", _adjustInterval);
+            // Rate limit
+            _heartbeat = new SystemTimer(10f, IOBoard.Z80CycleTime);
         }
 
         public bool SupportsAsync => true;
@@ -169,7 +171,6 @@ namespace PERQemu.IO.Z80
             }
 
             _running = true;
-            //_scheduler.DumpEvents("Z80");
         }
 
         /// <summary>
@@ -179,7 +180,7 @@ namespace PERQemu.IO.Z80
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint Run(int clocks = 1)
         {
-            var ticks = 0;  // How many actual clock ticks elapsed
+            var ticks = 0;
 
             do
             {
@@ -192,6 +193,11 @@ namespace PERQemu.IO.Z80
                 }
                 else
                 {
+                    // Clock the scheduler, since devices like the Shugart
+                    // hard disk might need service during boot when the Z80
+                    // is turned off.  This isn't great, but it lets us move
+                    // that extra bit of processing off the CPU thread. :-|
+                    //_scheduler.Clock();
                     ticks += 1;
                     clocks -= 1;
                 }
@@ -225,31 +231,31 @@ namespace PERQemu.IO.Z80
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
 
             _heartbeat.Enable(true);
-            Console.WriteLine("[Z80 thread starting]");
+            Log.Debug(Category.Controller, "[Z80 running on thread {0}]", Thread.CurrentThread.ManagedThreadId);
 
             do
             {
-                //try
-                //{
-                    Run(_adjustInterval);
+                try
+                {
+                    Run((int)_heartbeat.Period);
 
                     if (_stopAsyncThread) break;
 
                     // Should probably always rate limit the Z80 for device timings to work
-                    if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                    //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
                     {
                         _heartbeat.WaitForHeartbeat();
                     }
-                //}
-                //catch (Exception e)
-                //{
-                //    _system.Halt(e);
-                //}
+                }
+                catch (Exception e)
+                {
+                    _system.Halt(e);
+                }
             }
             while (!_stopAsyncThread);
 
+            Log.Debug(Category.Controller, "[Z80 thread stopped]");
             _heartbeat.Enable(false);
-            Console.WriteLine("[Z80 thread stopped]");
 
             // Detach
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
@@ -265,21 +271,26 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Console.WriteLine("[Stop() Z80 thread]");
+            Log.Debug(Category.Controller, "[Stop() Z80 thread called on {0}]", Thread.CurrentThread.ManagedThreadId);
             _stopAsyncThread = true;
+            _heartbeat.Enable(false);
 
             if (Thread.CurrentThread != _asyncThread)
             {
-                Console.WriteLine("[Z80 thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
-                //_asyncThread.Join();
+                Log.Debug(Category.Controller, "[Z80 thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
+                while (!_asyncThread.Join(10))
+                {
+                    Log.Debug(Category.Controller, "[Waiting for Z80 thread to finish...]");
+                    _heartbeat.Reset();
+                }
                 _asyncThread = null;
-                Console.WriteLine("[Z80 thread exited]");
+                Log.Debug(Category.Controller, "[Z80 thread exited]");
            }
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)
         {
-            Console.WriteLine("[Z80 state change event -> {0}]", s.State);
+            Log.Debug(Category.Controller, "[Z80 state change event -> {0}]", s.State);
             _stopAsyncThread = (s.State != RunState.Running);
         }
 
@@ -409,7 +420,6 @@ namespace PERQemu.IO.Z80
         private Z80Processor _cpu;
         private Z80MemoryBus _memory;
         private Z80IOBus _bus;
-        private IOReg1 _ioReg1;
         private IOReg3 _ioReg3;
         private Z80SIO _z80sio;
         private Z80CTC _z80ctc;
@@ -429,7 +439,6 @@ namespace PERQemu.IO.Z80
 
         private Thread _asyncThread;
         private SystemTimer _heartbeat;
-        private int _adjustInterval;
 
         private volatile bool _running;
         private volatile bool _stopAsyncThread;

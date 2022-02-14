@@ -1,4 +1,4 @@
-﻿//
+//
 // PERQFifo.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -94,10 +94,10 @@ namespace PERQemu.IO.Z80
             return value;
         }
 
+        // "I/O REG 1"
         public byte Read(byte portAddress)
         {
-            // Should never happen, this FIFO is write-only from the Z80 side
-            throw new NotImplementedException();
+            return (byte)(IsReady ? 0x0 : 0x40);
         }
 
         public void Write(byte portAddress, byte value)
@@ -111,7 +111,7 @@ namespace PERQemu.IO.Z80
             _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
         }
 
-        private byte[] _ports = { 0xd0 };       // PERQW
+        private byte[] _ports = { 0x88, 0xd0 };     // IOReg1, PERQW
 
         private ConcurrentQueue<byte> _fifo;
         private PERQSystem _system;

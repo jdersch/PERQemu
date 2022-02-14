@@ -93,10 +93,10 @@ namespace PERQemu
             _gui.InitializeSDL();
 
             // Create main objects
+            _controller = new ExecutionController();
+
             _config = new Configurator();
             _config.Initialize();
-
-            _controller = new ExecutionController();
 
             // Read user settings file, or set defaults if it doesn't yet exist
             Settings.Load();

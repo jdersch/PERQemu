@@ -40,18 +40,21 @@ states from startup to shutdown:
                     the Reset button on the GUI front panel is pressed.  The
                     ExecutionController will first Pause a running machine if
                     necessary before performing the Reset.  The user may set
-                    the PauseOnReset preference to have the emulator Pause at
-                    this stage for a user command.  Otherwise the machine
-                    transitions to Running automatically, which pressing the
-                    boot button on the hardware does.
+                    the PauseOnReset preference to have the emulator remain
+                    Paused at this stage for a user command.  Otherwise the
+                    machine transitions to Running automatically, like pressing
+                    the boot button on the hardware does.
 
     Paused          If the user types "stop" or presses the pause button in a
                     Debugger GUI (TBD), the system stops execution and enters
-                    this state.  The machine may be interrogated by Debuggers,
-                    removable disks may be loaded or unloaded, etc.  If the
-                    PauseWhenMinimized setting is true, PERQemu will pause
-                    execution when the Display window is minimized and resume
-                    its previous state when restored. [Not yet implemented]
+                    this state.  Alternatives are pressing ^C in the console or
+                    hitting the F8 (Mac) or Break (PC) keys while the Display
+                    window has focus.  When Paused the machine's state may be
+                    interrogated by Debuggers, removable disks may be loaded or
+                    unloaded, etc.  If the PauseWhenMinimized setting is true,
+                    PERQemu will pause execution when the Display window is
+                    minimized and resume its previous state when restored.
+                    [PauseWhenMinimized not yet implemented]
 
     Running         The Running state is entered automatically after a Reset
                     unless the "PauseOnReset" preference is set.  The "go" or
@@ -70,13 +73,15 @@ states from startup to shutdown:
                     In Synchronous mode, the CPU and Z80 are run on one thread.
                     While this may have some benefits when debugging, it's
                     generally much slower as the single thread has to run the
-                    entire emulation (two CPUs and all the peripherals).
+                    entire emulation (two CPUs and all the peripherals).  [It's
+                    not clear that this will be easy, useful or possible under
+                    the new CLI event loop.  "Mode" may just be removed, TBD]
 
     SingleStep      This mode runs the CPU for one microinstruction.  It also
                     runs the Z80 for one instruction step, which isn't very
-                    accurate (given the ~2.5:1 difference in clock rates and
-                    that the Z80 doesn't execute individual clock cycles like
-                    the PERQ CPU).  This is useful for microcode debugging.
+                    accurate (given the disparity in clock rates and that the
+                    Z80 doesn't execute individual clock cycles like the PERQ
+                    emulation does).  This is useful for microcode debugging.
                     The SingleStep mode always returns to the Paused state.
 
     RunInst,        These modes run the CPU or Z80 for one opcode/instruction.
@@ -185,7 +190,7 @@ teeth but with luck it'll gitcha there.
 Notes
 -----
 
-The Konamiman Z80's default ClockSynchronizer doesn't seem to regulate itself
+The default ClockSynchronizer in Z80dotNet doesn't seem to regulate itself
 well, if at all.  Using a 128-bit decimal type to specify the speed in Mhz is
 21 times slower than a regular old floating point type.  Why.  WHY.  Massive
 overkill.  Rather than mess with it we set the Z80's default ClockSynchronizer
@@ -208,7 +213,7 @@ to read and clear them.  The workaround is to simply snoop the ValueOnDataBus
 getter, which lets our IZ80Device know that the CPU is about to service it, so
 we can (if necessary) drop our interrupt request.  The CTC timer, for example,
 uses this trick so that the hard disk seek timing can count timer interrupts
-that otherwise are never cleared.
+that otherwise are raised and never cleared.
 
 
 State Machine

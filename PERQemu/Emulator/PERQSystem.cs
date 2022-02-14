@@ -240,6 +240,11 @@ namespace PERQemu
 
                 case RunState.Paused:
                 case RunState.Halted:
+                    if (Mode == ExecutionMode.Asynchronous)
+                    {
+                        _cpu.Stop();
+                        _iob.Stop();
+                    }
                     break;
 
                 case RunState.Off:
@@ -267,20 +272,17 @@ namespace PERQemu
                 // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
                 RunGuarded(() =>
                     {
-                        uint count = 0;
-
                         while (_state == RunState.Running)
                         {
                             // Run the IOB for one Z80 instruction, then run the PERQ CPU for
                             // the number of microinstructions equivalent to that wall-clock time.
-                            var clocks = _iob.Clock();
+                            var count = _iob.Clock();
 
-                            // Calculate the fudge factor
-                            clocks = (uint)(clocks * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
-                            count += clocks;
+                            // Calculate the fudge factor, accumulating fractions
+                            var clocks = Math.Ceiling((double)count * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
 
                             // Run the main CPU.  Rate limiting?  Hmm.
-                            _cpu.Run((int)clocks);
+                            _cpu.Run((uint)clocks);
                         }
                     });
             }
@@ -295,7 +297,7 @@ namespace PERQemu
         /// </remarks>
         private void Reset()
         {
-            Console.WriteLine("ExecutionController Reset called.");
+            Log.Info(Category.Emulator, "PERQSystem Reset called.");
 
             _cpu.Reset();
             _mem.Reset();

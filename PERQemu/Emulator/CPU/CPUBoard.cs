@@ -62,11 +62,7 @@ namespace PERQemu.Processor
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Rate limiter
-            _heartbeat = new SystemTimer(20f);
-
-            // Compute how often (in CPU cycles) to sync the emulated processor
-            _adjustInterval = (int)(_heartbeat.Interval / (CPU.MicroCycleTime * Conversion.NsecToMsec));
-            Log.Info(Category.Emulator, "[CPU rate adjust every {0} cycles]", _adjustInterval);
+            _heartbeat = new SystemTimer(10f, CPU.MicroCycleTime);
         }
 
         public CPU Processor => _processor;
@@ -87,7 +83,7 @@ namespace PERQemu.Processor
         /// Run the CPU and Scheduler (synchronous mode).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Run(int clocks = 1)
+        public void Run(uint clocks = 1)
         {
             do
             {
@@ -123,13 +119,13 @@ namespace PERQemu.Processor
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
 
             _heartbeat.Enable(true);
-            Console.WriteLine("[CPU thread starting]");
+            Log.Debug(Category.Controller, "[CPU running on thread {0}]", Thread.CurrentThread.ManagedThreadId);
 
             do
             {
-                //try
-                //{
-                    Run(_adjustInterval);
+                try
+                {
+                    Run(_heartbeat.Period);
 
                     if (_stopAsyncThread) break;
 
@@ -138,16 +134,16 @@ namespace PERQemu.Processor
                     {
                         _heartbeat.WaitForHeartbeat();
                     }
-                //}
-                //catch (Exception e)
-                //{
-                //    _system.Halt(e);
-                //}
+                }
+                catch (Exception e)
+                {
+                    _system.Halt(e);
+                }
             }
             while (!_stopAsyncThread);
 
+            Log.Debug(Category.Controller, "[CPU thread stopped]");
             _heartbeat.Enable(false);
-            Console.WriteLine("[CPU thread stopped]");
 
             // Detach
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
@@ -160,26 +156,30 @@ namespace PERQemu.Processor
         {
             if (_asyncThread == null)
             {
-                Console.WriteLine("[CPU Stop called on null thread]");
                 return;
             }
 
-            Console.WriteLine("[Stop() CPU thread]");
+            Log.Debug(Category.Controller, "[Stop() CPU thread called on {0}]", Thread.CurrentThread.ManagedThreadId);
             _stopAsyncThread = true;
+            _heartbeat.Enable(false);
 
             if (Thread.CurrentThread != _asyncThread)
             {
-                Console.WriteLine("[CPU thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
+                Log.Debug(Category.Controller, "[CPU thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
                 // Waaaaait for it
-                //_asyncThread.Join();
+                while (!_asyncThread.Join(10))
+                {
+                    Log.Debug(Category.Controller, "[Waiting for CPU thread to finish...]");
+                    _heartbeat.Reset();
+                }
                 _asyncThread = null;
-                Console.WriteLine("[CPU thread exited]");
+                Log.Debug(Category.Controller, "[CPU thread exited]");
             }
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)
         {
-            Console.WriteLine("[CPU state change event -> {0}]", s.State);
+            Log.Debug(Category.Controller, "[CPU state change event -> {0}]", s.State);
             _stopAsyncThread = (s.State != RunState.Running);
         }
 
@@ -204,7 +204,6 @@ namespace PERQemu.Processor
         private PERQSystem _system;
 
         private SystemTimer _heartbeat;
-        private int _adjustInterval;
 
         private Thread _asyncThread;
         private volatile bool _stopAsyncThread;

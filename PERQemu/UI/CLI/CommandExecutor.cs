@@ -54,8 +54,6 @@ namespace PERQemu.UI
 
         public void ExecuteScript(string scriptFile, bool verbose = false)
         {
-            var curPrefix = CurrentRoot;
-
             using (StreamReader sr = new StreamReader(scriptFile))
             {
                 Console.WriteLine("Reading from '{0}'...", scriptFile);
@@ -84,9 +82,6 @@ namespace PERQemu.UI
 
                 sr.Close();
             }
-
-            // Restore
-            CurrentRoot = curPrefix;
         }
 
 

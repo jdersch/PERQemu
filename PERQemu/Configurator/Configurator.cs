@@ -39,6 +39,8 @@ namespace PERQemu.Config
             _default = new Configuration();
             _current = _default;
 
+            _quietly = false;
+
             _prefabs = new Hashtable();
             _geometries = new Hashtable();
             _driveSpecs = new Hashtable();
@@ -66,11 +68,11 @@ namespace PERQemu.Config
             try
             {
                 // Read in the database of known devices
-                PERQemu.CLI.ReadScript(Paths.BuildConfigPath("StorageDevices.precfg"));
+                PERQemu.CLI.ReadScript(Paths.BuildConfigPath("StorageDevices.db"));
             }
             catch (Exception e)
             {
-                Log.Error(Category.MediaLoader, "** StorageDevices.precfg is missing or corrupted:");
+                Log.Error(Category.MediaLoader, "** StorageDevices.db is missing or corrupted:");
                 Log.Error(Category.MediaLoader, "** " + e.Message);
                 Log.Error(Category.MediaLoader, "\nPlease restore this file from the PERQemu distribution.");
                 Log.Error(Category.MediaLoader, "Will attempt to continue with limited functionality.");
@@ -79,27 +81,8 @@ namespace PERQemu.Config
             // Add the default machine setup
             AddPrefab(Default);
 
-            try
-            {
-                // Go load the StandardModels file
-                PERQemu.CLI.ReadScript(Paths.BuildConfigPath("StandardModels.precfg"));
-            }
-            catch (Exception e)
-            {
-                Log.Error(Category.MediaLoader, "** StandardModels.precfg is missing or corrupted:");
-                Log.Error(Category.MediaLoader, "** " + e.Message);
-                Log.Error(Category.MediaLoader, "\nPlease restore this file from the PERQemu distribution.");
-                Log.Error(Category.MediaLoader, "Will attempt to continue with limited functionality.");
-            }
-
-
-            // Set our current config to defaults.  The user can always
-            // override this at start-up by specifying a script on the
-            // command line (or reading one in through the menu/CLI).
-            // This way PERQsystem is always a valid starting configuration
-            // and the GUI form can initialize properly.
-            //
-            //_current = _default;
+            // Go look for more
+            LoadPrefabs();
         }
 
         public Configuration Default
@@ -118,6 +101,8 @@ namespace PERQemu.Config
             get { return _current.IsModified; }
             set { _current.IsModified = value; }
         }
+
+        public bool Quietly => _quietly;
 
         public void AddGeometry(string key, DeviceGeometry geom)
         {
@@ -186,31 +171,26 @@ namespace PERQemu.Config
         }
 
         /// <summary>
-        /// Look up a pre-defined Configuration by name.  Tries the name as
-        /// given, and in upper case.  Also recognizes the name "current".
-        /// Maybe the _prefabs[] could contain "default", "current", "working"
-        /// or other keys so they're just all kept in one place; that might
-        /// make it simpler for the GUI to save/retrieve custom or modified
-        /// configurations?  I dunno man, I'm just making this up as I go.
+        /// Look up a pre-defined Configuration by name.  The name "current"
+        /// is reserved and returns the Current configuration.  This ought to
+        /// be clarified or documented somewhere.  I dunno man, I'm just making
+        /// this up as I go.
         /// </summary>
         public Configuration GetConfigByName(string name)
         {
-            if (name.ToLower() == "current")
+            name = name.ToLower();
+
+            if (name == "current")
             {
                 return _current;
             }
-            else if (_prefabs.ContainsKey(name))
+
+           if (_prefabs.ContainsKey(name))
             {
                 return (Configuration)_prefabs[name];
             }
-            else if (_prefabs.ContainsKey(name.ToUpper()))
-            {
-                return (Configuration)_prefabs[name.ToUpper()];
-            }
-            else
-            {
-                return null;
-            }
+
+            return null;
         }
 
         /// <summary>
@@ -250,6 +230,42 @@ namespace PERQemu.Config
         }
 
         /// <summary>
+        /// Scan the Conf dir for saved system configs and preload them into
+        /// the Prefabs list.  Sure.  Why not.
+        /// </summary>
+        private void LoadPrefabs()
+        {
+            // Let's be discreet, shall we?
+            _quietly = true;
+
+            Log.Info(Category.MediaLoader, "Loading configurations from '{0}'",
+                     Paths.Canonicalize(Paths.ConfigDir));
+
+            foreach (var f in Directory.EnumerateFiles(Paths.ConfigDir, "*.cfg"))
+            {
+                var file = Paths.Canonicalize(f);
+
+                Console.WriteLine("Found file {0}", file);
+
+                _current = new Configuration();
+
+                if (Load(file))
+                {
+                    AddPrefab(_current);
+                    Log.Debug(Category.MediaLoader, "Added configuration '{0}'", _current.Name);
+                }
+                else
+                {
+                    Log.Info(Category.MediaLoader, _current.Reason);
+                }
+            }
+
+            // Reset for normal CLI interactions
+            _quietly = false;
+            _current = Default;
+        }
+
+        /// <summary>
         /// Saves the configuration to disk as a simple script file that can
         /// be read at startup (command-line argument), with the "@file" syntax
         /// from the CLI, or using the "Load" button in the Configurator GUI.
@@ -274,7 +290,7 @@ namespace PERQemu.Config
                     //
                     sw.WriteLine("# PERQemu configuration file, written " + DateTime.Now);
                     sw.WriteLine("configure");
-                    sw.WriteLine("defaults");
+                    sw.WriteLine("default");
                     sw.WriteLine("name " + _current.Name);
                     sw.WriteLine("description \"" + _current.Description + "\"");
                     sw.WriteLine("chassis " + _current.Chassis);
@@ -306,7 +322,7 @@ namespace PERQemu.Config
                         var dev = _current.Drives[unit];
                         if (!string.IsNullOrEmpty(dev.MediaPath))
                         {
-                            sw.WriteLine("drive {0} {1} {2}", unit, dev.Type, dev.MediaPath);
+                            sw.WriteLine("drive {0} {1}", unit, dev.MediaPath);
                         }
                     }
 
@@ -822,6 +838,9 @@ namespace PERQemu.Config
         public const int ONE_MEG = 1024 * 1024;
         public const int TWO_MEG = 1024 * 1024 * 2;
         public const int FOUR_MEG = 1024 * 1024 * 4;
+
+        // For preloading, discreetly
+        private static bool _quietly;
 
         private Hashtable _prefabs;
         private Hashtable _geometries;

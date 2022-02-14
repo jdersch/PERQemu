@@ -21,6 +21,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu
 {
@@ -133,6 +134,7 @@ namespace PERQemu
         /// <summary>
         /// Return how many milliseconds have elapsed on the stopwatch.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double ElapsedHiRes()
         {
             return _stopwatch.ElapsedTicks * TickLength;
@@ -143,10 +145,10 @@ namespace PERQemu
         /// interval and event handler.  Similar to SDL_Timer, returns an
         /// ID so the specific timer can be referred to later.
         /// </summary>
-        public static int Register(double period, HRTimerElapsedCallback cb)
+        public static int Register(double interval, HRTimerElapsedCallback cb)
         {
             int tag = 0;
-            double next = period;
+            double next = interval;
 
             Log.Debug(Category.Timer, "Register called, requesters length = " + _requesters.Count);
 
@@ -155,7 +157,7 @@ namespace PERQemu
             // in effect coalescing the two and slightly improving efficiency :-)
             for (int i = 0; i < _requesters.Count; i++)
             {
-                if (!_requesters[i].Free && Math.Abs(_requesters[i].Interval - period) < Tolerance)
+                if (!_requesters[i].Free && Math.Abs(_requesters[i].Interval - interval) < Tolerance)
                 {
                     next = _requesters[i].NextTrigger;
                     Log.Debug(Category.Timer, "Coalesced new timer at " + next);
@@ -169,25 +171,25 @@ namespace PERQemu
                 if (_requesters[tag].Free)
                 {
                     _requesters[tag].Enabled = false;
-                    _requesters[tag].Interval = period;
+                    _requesters[tag].Interval = interval;
                     _requesters[tag].NextTrigger = next;
                     _requesters[tag].Callback = cb;
                     _requesters[tag].Free = false;
 
                     Log.Debug(Category.Timer,
                               "Registered timer {0}, interval {1:N3}, next trigger {2:N3}",
-                              tag, period, next);
+                              tag, interval, next);
 
                     return tag;
                 }
             }
 
             // None free?  Extend...
-            _requesters.Add(new TimerThing(period, cb));
+            _requesters.Add(new TimerThing(interval, cb));
 
             Log.Debug(Category.Timer,
                       "Added new timer {0}, interval {1:N3}, next trigger {2:N3}",
-                      tag, period, next);
+                      tag, interval, next);
 
             return tag;
         }
@@ -237,7 +239,7 @@ namespace PERQemu
             }
             catch
             {
-                Log.Error(Category.Timer, "Bad call to unregister a timer!");
+                Log.Error(Category.Timer, "Bad call to unregister timer {0}!", tag);
                 // do proper exception handling here...
             }
         }
@@ -293,6 +295,7 @@ namespace PERQemu
         /// provides a cheesy way for the CLI to periodically check the console
         /// for input before jumping back into the timer loop.
         /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Run()
         {
             double now, next, diff, skew;
@@ -383,6 +386,7 @@ namespace PERQemu
         /// and a couple of CPU rate timers, all of which are set up once and
         /// not modified while the VM is running).
         /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static double NextInterval(double now)
         {
             double next = 0d;
@@ -447,12 +451,8 @@ namespace PERQemu
         /// </summary>
         private static volatile bool _runTimers;
 
-        /// <summary>
-        /// A wait handle to act as a throttle
-        /// </summary>
-        private static AutoResetEvent _throttle;
-
         private static Stopwatch _stopwatch;
+        private static AutoResetEvent _throttle;
         private static List<TimerThing> _requesters;
     }
 }

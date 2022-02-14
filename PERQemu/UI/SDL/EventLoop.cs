@@ -27,9 +27,7 @@ using System.Runtime.CompilerServices;
 namespace PERQemu.UI
 {
     /// <summary>
-    /// Manages the setup, execution and shutdown of the SDL2 library.  The
-    /// Display class still manages the keyboard and mouse events, for now.
-    /// [Work in progress.]
+    /// Manages the setup, execution and shutdown of the SDL2 library.
     /// </summary>
     public sealed class EventLoop
     {
@@ -37,8 +35,10 @@ namespace PERQemu.UI
         {
             _sdlRunning = false;
             _timerHandle = -1;
-            _dispatch = new Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate>();
+            _uiEventDispatch = new Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate>();
         }
+
+        public delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
 
         /// <summary>
         /// Set up our SDL window and start the display machinery in motion.
@@ -49,7 +49,7 @@ namespace PERQemu.UI
 
             if (_sdlRunning)
             {
-                Log.Error(Category.Emulator, "** InitializeSDL called while already running!?");
+                Log.Error(Category.Emulator, "InitializeSDL called while already running!?");
                 return;
             }
 
@@ -76,7 +76,7 @@ namespace PERQemu.UI
             _timerHandle = HighResolutionTimer.Register(15d, PERQemu.GUI.SDLMessageLoop);
             HighResolutionTimer.Enable(_timerHandle, true);
 
-            Console.WriteLine("[Initialized SDL on {0}]", Thread.CurrentThread.ManagedThreadId);
+            Log.Debug(Category.UI, "[Initialized SDL on {0}]", Thread.CurrentThread.ManagedThreadId);
         }
 
 
@@ -89,25 +89,27 @@ namespace PERQemu.UI
             if (d == null)
                 throw new InvalidOperationException("Can't register null delegate");
 
-            if (_dispatch.ContainsKey(e))
+            if (_uiEventDispatch.ContainsKey(e))
                 throw new InvalidOperationException($"Delegate already registered for event type {e}");
 
-            Console.WriteLine("Attached delegate for SDL event type " + e);
+            Log.Debug(Category.UI, "Attached delegate for SDL event type {0}", e);
 #endif
-            _dispatch[e] = d;
+            _uiEventDispatch[e] = d;
         }
+
 
         /// <summary>
         /// Release a delegate for an SDL event.
         /// </summary>
         public void ReleaseDelegate(SDL.SDL_EventType e)
         {
-            if (_dispatch.ContainsKey(e))
+            if (_uiEventDispatch.ContainsKey(e))
             {
-                _dispatch[e] = null;
-                Console.WriteLine("Released delegate for SDL event type " + e);
+                _uiEventDispatch[e] = null;
+                Log.Debug(Category.UI, "Released delegate for SDL event type {0}", e);
             }
         }
+
 
         /// <summary>
         /// Process any pending SDL events.  This must be run on the main thread
@@ -135,30 +137,43 @@ namespace PERQemu.UI
         private void SDLMessageHandler(SDL.SDL_Event e)
         {
             // If a delegate is registered, pass it the event
-            if (_dispatch.ContainsKey(e.type))
+            if (_uiEventDispatch.ContainsKey(e.type))
             {
-                _dispatch[e.type].Invoke(e);
+                _uiEventDispatch[e.type].Invoke(e);
                 return;
             }
+
+            // Dispatch on Window events if a delegate is registered
+            //if (e.type == SDL.SDL_EventType.SDL_WINDOWEVENT && _displayWindow != IntPtr.Zero)
+            //{
+            //    // switch on the types we care about for doin' fancy stuff
+            //    return;
+            //}
 
             // Deal with the ones that fall through
             if (e.type == SDL.SDL_EventType.SDL_QUIT)
             {
-                // Stop the virtual machine, which will call ShutdownSDL()
+                // Stop the virtual machine
                 PERQemu.Controller.PowerOff();
+
+                // todo: so if we have more than one window, does SDL fire a
+                // quit message when any of them closes?
             }
+#if DEBUG
             else
             {
-                Console.WriteLine("Unhandled event type {0}, user.type {1}", e.type, e.user.type);
+                Log.Debug(Category.UI, "Unhandled event type {0}, user.type {1}", e.type, e.user.type);
             }
+#endif
         }
 
         /// <summary>
-        /// Close down the display and free SDL resources.
+        /// Close down the timer and free SDL resources.
         /// </summary>
         public void ShutdownSDL()
         {
-            Log.Debug(Category.Display, "SDL Shutdown requested");
+            //Log.Debug(Category.UI, "SDL Shutdown requested");
+            Console.WriteLine("SDL Shutdown requested on {0}", Thread.CurrentThread.ManagedThreadId);
 
             if (_sdlRunning)
             {
@@ -179,12 +194,67 @@ namespace PERQemu.UI
         }
 
 
-        public delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
-
         private bool _sdlRunning;
         private int _timerHandle;
 
-        private Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate> _dispatch;
-        //private PERQSystem _system;
+        // add cursor stuff here
+        private IntPtr _displayWindow;
+
+        private Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate> _uiEventDispatch;
     }
 }
+/*
+            // Register callbacks for some window events
+            PERQemu.GUI.RegisterDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_HIDDEN, HideOrMinimize);
+            PERQemu.GUI.RegisterDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESTORED, UnhideOrRestore);
+            PERQemu.GUI.RegisterDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_LOST, ReleaseCursor);
+            PERQemu.GUI.RegisterDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_GAINED, FocusCursor);
+            // Unhook the window events
+            PERQemu.GUI.ReleaseDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_HIDDEN);
+            PERQemu.GUI.ReleaseDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESTORED);
+            PERQemu.GUI.ReleaseDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_LOST);
+            PERQemu.GUI.ReleaseDelegate(SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_GAINED);
+
+
+/// <summary>
+/// Called when the Display window is minimized or hidden; if the
+/// PauseWhenMinimized setting is true, pause the emulator.
+/// </summary>
+private void HideOrMinimize(SDL.SDL_Event e)
+{
+	if (Settings.PauseWhenMinimized)
+	{
+		Console.WriteLine("[Hey, I'm tiny!  I should pause to think about this.]");
+	}
+}
+
+/// <summary>
+/// If we're embiggened, unpause if paused.
+/// </summary>
+private void UnhideOrRestore(SDL.SDL_Event e)
+{
+	if (Settings.PauseWhenMinimized)
+	{
+		Console.WriteLine("[I'm BIG again!  Rawr!]");
+	}
+}
+
+/// <summary>
+/// Set our preferred cursor on window focus.
+/// </summary>
+private void FocusCursor(SDL.SDL_Event e)
+{
+	Console.WriteLine("[Set my cursor to {0}]", Settings.CursorPreference);
+}
+
+/// <summary>
+/// Restore the system cursor when leaving the window.
+/// </summary>
+private void ReleaseCursor(SDL.SDL_Event e)
+{
+	Console.WriteLine("[Restore the system cursor]");
+}
+
+
+
+*/

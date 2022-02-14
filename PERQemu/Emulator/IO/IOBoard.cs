@@ -194,11 +194,11 @@ namespace PERQemu.IO
                     if (_drives[unit].IsLoaded)
                     {
                         Console.WriteLine("Loaded: {0}", Paths.Canonicalize(_drives[unit].Filename));
-                        Console.WriteLine("Flags:  {0}", string.Join(", ",
-                                          _drives[unit].Info.IsRemovable ? "Removable" : "",
-                                          _drives[unit].Info.IsBootable ? "Bootable" : "",
+                        Console.WriteLine("Flags:  {0}", string.Join(" ",
+                                          _drives[unit].Info.IsRemovable ? "Removable" : string.Empty,
+                                          _drives[unit].Info.IsBootable ? "Bootable" : string.Empty,
                                           _drives[unit].Info.IsWritable ? "Writable" : "Read only",
-                                          _drives[unit].IsModified ? "Modified" : ""));
+                                          _drives[unit].IsModified ? "Modified" : string.Empty));
                     }
                     else
                     {

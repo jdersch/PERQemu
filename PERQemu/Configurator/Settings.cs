@@ -38,6 +38,13 @@ namespace PERQemu
         Hexadecimal = 16
     }
 
+    public enum Cursor
+    {
+        DefaultArrow = 0,
+        Crosshairs,
+        Hide
+    }
+
     [Flags]
     public enum RateLimit
     {
@@ -47,9 +54,8 @@ namespace PERQemu
         AccurateStartupDelays = 0x04,           // for the truly hardcore
         Accurate = 0x03,                        // shortcut (leave some room)
         AllowFrameSkipping = 0x10,              // sigh
-    	SlowWhenMinimized = 0x20,               // save the salmon
     }
-                                            // put accurate back to 0xf FIXME
+
     public static class Settings
     {
         static Settings()
@@ -63,6 +69,8 @@ namespace PERQemu
             SaveFloppyOnEject = Ask.Maybe;
             SaveDiskOnShutdown = Ask.Maybe;
             PauseOnReset = true;
+            PauseWhenMinimized = true;
+            CursorPreference = Cursor.DefaultArrow;
 
             Performance = RateLimit.Accurate;
             RunMode = ExecutionMode.Asynchronous;
@@ -84,6 +92,9 @@ namespace PERQemu
         public static Ask SaveDiskOnShutdown { get; set; }
         public static Ask SaveFloppyOnEject { get; set; }
         public static bool PauseOnReset { get; set; }
+
+        public static bool PauseWhenMinimized { get; set; }
+        public static Cursor CursorPreference { get; set; }
 
         // Performance
         public static RateLimit Performance { get; set; }
@@ -160,6 +171,9 @@ namespace PERQemu
                     sw.WriteLine("autosave harddisk " + SaveDiskOnShutdown);
                     sw.WriteLine("autosave floppy " + SaveFloppyOnEject);
                     sw.WriteLine("pause on reset " + PauseOnReset);
+                    sw.WriteLine("pause when minimized " + PauseWhenMinimized);
+                    sw.WriteLine("system cursor " + CursorPreference);
+                    sw.WriteLine("performance " + Performance);
                     sw.WriteLine("debug radix " + DebugRadix);
                     sw.WriteLine("z80 debug radix " + Z80Radix);
                     sw.WriteLine("screenshot format " + ScreenshotFormat);
@@ -178,7 +192,7 @@ namespace PERQemu
                         PERQemu.Config.Current.Name != "default")
                     {
                         sw.WriteLine("#\n# Most recent loaded configuration:");
-                        sw.WriteLine("configure select " + PERQemu.Config.Current.Name);
+                        sw.WriteLine("configure load " + PERQemu.Config.Current.Name);
                     }
 
                     sw.Close();
@@ -190,7 +204,7 @@ namespace PERQemu
             }
             catch (Exception e)
             {
-                Changed = true;     // have you tried turning it off and on again?
+                Changed = true;     // Have you tried turning it off and on again?
                 Reason = "Could not save settings: " + e.Message;
                 return false;
             }

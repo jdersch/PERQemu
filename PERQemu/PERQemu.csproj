@@ -188,7 +188,6 @@
     <Compile Include="Emulator\IO\Z80\HardDiskSeekControl.cs" />
     <Compile Include="Emulator\IO\Z80\IDMADevice.cs" />
     <Compile Include="Emulator\IO\Z80\Z80IOBus.cs" />
-    <Compile Include="Emulator\IO\Z80\IOReg1.cs" />
     <Compile Include="Emulator\IO\Z80\IOReg3.cs" />
     <Compile Include="Emulator\IO\Z80\ISIODevice.cs" />
     <Compile Include="Emulator\IO\Z80\IZ80Device.cs" />
@@ -592,10 +591,7 @@
     <None Include="Docs\IOBoards.txt" />
     <None Include="Docs\Configuration.txt" />
     <None Include="Docs\Controller.txt" />
-    <None Include="Conf\StorageDevices.precfg">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Conf\StandardModels.precfg">
+    <None Include="Conf\StorageDevices.db">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Docs\Hardware References\Am9517A.pdf" />
@@ -614,6 +610,24 @@
     <None Include="Docs\Z80 Docs\pz80.asm" />
     <None Include="Docs\Z80 Docs\z80ram_addr.txt" />
     <None Include="Docs\Z80 Docs\z80rom_addr.txt" />
+    <None Include="Conf\perq1.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\perq1a.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\perq2-t1.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\perq2-t2.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\perq2-t4.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\perq2.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Content Include="PERQemu.ico" />

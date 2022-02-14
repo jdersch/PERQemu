@@ -217,7 +217,7 @@ namespace PERQemu
                 Console.WriteLine($"thread {me} doesn't actually have the lock?!?");
 
             if (spins > 1)
-            Console.WriteLine($"acquiring thread {me} took {spins} spins");
+                Console.WriteLine($"acquiring thread {me} took {spins} spins");
 #endif
         }
 
@@ -226,7 +226,7 @@ namespace PERQemu
         {
 #if DEBUG
             var me = Thread.CurrentThread.ManagedThreadId;
-            if (_queueLock != me)
+            if (_queueLock > 0 && _queueLock != me)
                 Console.WriteLine($"thread {me} releasing a lock held by {_queueLock}");
 #endif
             Interlocked.Exchange(ref _queueLock, 0);

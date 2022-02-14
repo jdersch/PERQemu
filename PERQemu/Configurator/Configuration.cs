@@ -60,9 +60,11 @@ namespace PERQemu.Config
             _displayType = DisplayType.Portrait;
             _tabletType = TabletType.BitPad;
 
+            // Pre-assign a standard disk image supplied with PERQemu
+            // That way there's something to actually run, by default
             _drives = new Drive[MAX_DRIVES];
             _drives[0] = new Drive(DeviceType.Floppy);
-            _drives[1] = new Drive(DeviceType.Disk14Inch);
+            _drives[1] = new Drive(DeviceType.Disk14Inch, "f1.phd");
             _drives[2] = new Drive(DeviceType.Unused);
             _drives[3] = new Drive(DeviceType.Unused);
 
@@ -246,12 +248,12 @@ namespace PERQemu.Config
             return string.Format("{0}MB", _memSize / Configurator.ONE_MEG);
         }
 
-        public void AssignMedia(string file, int unit = 0)
+        public void AssignMedia(int unit, string file)
         {
             _drives[unit].MediaPath = file;
         }
 
-        public void AssignType(DeviceType dev, int unit)
+        public void AssignType(int unit, DeviceType dev)
         {
             _drives[unit].Type = dev;
         }

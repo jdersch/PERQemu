@@ -93,6 +93,7 @@ namespace PERQemu
         Multibus    = 0x20000000000,
         SMD         = 0x40000000000,
         MediaLoader = 0x100000000000000,
+        UI          = 0x1000000000000000,
         All         = 0xffffffffffffffff
     }
 
@@ -335,6 +336,7 @@ namespace PERQemu
             _colors.Add(Category.Scheduler, ConsoleColor.Green);
             _colors.Add(Category.Timer, ConsoleColor.Green);
             _colors.Add(Category.DDS, ConsoleColor.Yellow);
+            _colors.Add(Category.UI, ConsoleColor.Gray);
 
             // CPU components
             _colors.Add(Category.CPU, ConsoleColor.Cyan);

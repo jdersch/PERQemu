@@ -1,5 +1,5 @@
 ﻿#
-# 	StorageDevices.precfg - List of standard PERQ storage devices
+# 	StorageDevices.db - List of standard PERQ storage devices
 #
 #			** PLEASE DO NOT HAND-EDIT THIS FILE **
 #
@@ -113,7 +113,7 @@ done
 # A rare 3.5" MFM drive for fun
 
 define Disk5Inch Toshiba53
-description "Toshiba MK-134 53MB (3.25in) hard disk"
+description "Toshiba MK-134 53MB (3.5in) hard disk"
 geometry MK134 733 7 16 512 16
 performance MK134 3600 10000 25000 7 50 1 625000
 done
@@ -176,7 +176,7 @@ performance CDC976X
 removable true
 done
 
-# additional SMD types that are beyond ridiculous
+# additional SMD types that are wicked cool
 
 define DiskSMD Eagle
 description "Fujitsu M2351A 'Eagle' 474MB hard disk"

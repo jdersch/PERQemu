@@ -41,8 +41,6 @@ namespace PERQemu
             Console.WriteLine("Current configuration is " + PERQemu.Sys.Config.Name);
             Console.WriteLine("Current run state is " + PERQemu.Sys.State);
 
-            PERQemu.Sys.CheckMedia();
-
             // DEBUG
             PERQemu.Sys.Display.Status();
             PERQemu.Sys.Mouse.Status();
@@ -98,7 +96,6 @@ namespace PERQemu
         public void Start()
         {
             PERQemu.Controller.TransitionTo(RunState.Running);
-            PERQemu.Sys.PrintStatus();
         }
 
         [Command("stop", "Stop or pause the PERQ")]
@@ -109,6 +106,7 @@ namespace PERQemu
             if (PERQemu.Controller.State > RunState.Off)
             {
                 PERQemu.Controller.TransitionTo(RunState.Paused);
+                PERQemu.Sys.PrintStatus();
             }
         }
 

@@ -20,6 +20,7 @@
 using System;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using PERQemu.UI;
 
@@ -53,10 +54,10 @@ namespace PERQemu
             _editor = new CommandPrompt(_exec.CommandTreeRoot);
         }
 
-        public CommandNode Prefix
-        {
-            get { return _exec.CurrentRoot; }
-        }
+        //public CommandNode Prefix
+        //{
+        //    get { return _exec.CurrentRoot; }
+        //}
 
         /// <summary>
         /// Enter a subsystem.
@@ -86,12 +87,16 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Read a script or configuration file, quiet-like.
+        /// Read a script or configuration file, quiet-like.  Always begins
+        /// execution at the command tree root, restores prefix when done.
         /// </summary>
         public void ReadScript(string script)
         {
-            // Ignore the result...
-            _exec.ExecuteScript(Paths.Canonicalize(script));
+            var curPrefix = _exec.CurrentRoot;
+
+            _exec.ExecuteScript(Paths.Canonicalize(script), true);
+
+            _exec.CurrentRoot = curPrefix;
         }
 
         /// <summary>
@@ -125,6 +130,7 @@ namespace PERQemu
                 catch (Exception e)
                 {
                     Console.WriteLine(e.Message);
+                    Console.WriteLine(e.InnerException?.Message);
                 }
             }
 
@@ -136,6 +142,7 @@ namespace PERQemu
         /// so, returns it to the editor, otherwise it runs the high-ish res
         /// timer loop.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ConsoleKeyInfo GetKeyEventually()
         {
             // We actually schedule events to run the SDL loop and check the

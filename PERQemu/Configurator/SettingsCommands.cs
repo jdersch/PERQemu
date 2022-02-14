@@ -57,6 +57,11 @@ namespace PERQemu.UI
             Console.WriteLine("Autosave harddisks on shutdown: " + Settings.SaveDiskOnShutdown);
             Console.WriteLine("Autosave floppies on eject:     " + Settings.SaveFloppyOnEject);
             Console.WriteLine("Pause execution after reset:    " + Settings.PauseOnReset);
+            Console.WriteLine("Pause when window minimized:    " + Settings.PauseWhenMinimized);
+            Console.WriteLine("Cursor in PERQ display window:  " + Settings.CursorPreference);
+            Console.WriteLine();
+            Console.WriteLine("Performance options: " + Settings.Performance);
+            Console.WriteLine();
             Console.WriteLine("Default radix for CPU debugger: " + Settings.DebugRadix);
             Console.WriteLine("Default radix for Z80 debugger: " + Settings.Z80Radix);
             Console.WriteLine();
@@ -102,7 +107,7 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("settings autosave floppy", "Save floppy disks on eject")]
+        [Command("settings autosave floppy", "Save modified floppy disks on eject")]
         public void SetAutosaveFloppy(Ask doit)
         {
             if (doit != Settings.SaveFloppyOnEject)
@@ -124,12 +129,50 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("settings pause when minimized", "Pause the emulator when the display window is minimized")]
+        public void SetPauseWhenMinimized(bool doit)
+        {
+            if (doit != Settings.PauseWhenMinimized)
+            {
+                Settings.PauseWhenMinimized = doit;
+                Settings.Changed = true;
+                Console.WriteLine("Pause when minimized is now {0}.", doit);
+            }
+        }
+
+        [Command("settings cursor in display", "Change the system cursor when in the display window")]
+        public void SetCursorPref(Cursor curs)
+        {
+            if (curs != Settings.CursorPreference)
+            {
+                Settings.CursorPreference = curs;
+                Settings.Changed = true;
+                Console.WriteLine("Cursor preference changed to {0}.", curs);
+            }
+        }
+
+        [Command("settings performance option", "Set performance option flags")]
+        public void SetPerformance(RateLimit opt)
+        {
+            // Ha this doesn't work as expected.  Duh.  Rethink this.
+            if (Settings.Performance.HasFlag(opt))
+            {
+                Settings.Performance &= ~opt;
+            }
+            else
+            {
+                Settings.Performance |= opt;
+            }
+            Settings.Changed = true;
+            Console.WriteLine("Performance options set to {0}", Settings.Performance);
+        }
+
         [Command("settings output directory", "Set directory for saving printer output and screenshots")]
         public void SetOutputDir(string dir)
         {
             if (dir == string.Empty)
             {
-                dir = Paths.OutputDir;  // reset to default
+                dir = Paths.OutputDir;      // Reset to default?  Hmm.
             }
 
             dir = Paths.Canonicalize(dir);
@@ -144,6 +187,8 @@ namespace PERQemu.UI
 
         /*
             TODO:
+            settings::cursorpreference          -- hook into window focus events?
+            settings::pausewhenminimized        -- hook into sdl window events
             settings::screenshot format [jpg, png, tiff, ?]
             settings::screenshot template [str] -- really?  cmon...
             settings::canon format [jpg, png, tiff, bmp, PDF!?]

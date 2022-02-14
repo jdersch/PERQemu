@@ -27,10 +27,10 @@ using System.Runtime.InteropServices;
 namespace PERQemu.UI
 {
     /// <summary>
-    /// This implements only the bits necessary to blit a chunk of memory to a
-    /// window and do keyboard/mouse input. The actual interrupt/IO/Rendering
-    /// logic is handled by the VideoController class, which is responsible for
-    /// invoking Refresh() when a display frame is ready.
+    /// This implements only the bits necessary to blit a chunk of memory to an
+    /// SDL window.  The actual interrupt/IO/rendering logic is handled by the
+    /// VideoController class, which is responsible for invoking Refresh() when
+    /// a display frame is ready.
     /// </summary>
     public sealed class Display
     {
@@ -42,8 +42,6 @@ namespace PERQemu.UI
         public Display(PERQSystem system)
         {
             _system = system;
-
-            // attach our mouse and keyboard here... simpler?
 
             _customEventType = 0;
             _fpsTimerId = -1;
@@ -64,18 +62,18 @@ namespace PERQemu.UI
             _8bppDisplayBuffer = new long[(_displayWidth / 8 * _displayHeight)];
         }
 
-
         /// <summary>
-        /// Set up our SDL window and start the display machinery in motion.
+        /// Set up our SDL window and the rendering machinery.
         /// </summary>
         public void Initialize()
         {
             if (_sdlWindow != IntPtr.Zero)
             {
-                Log.Error(Category.Emulator, "** DisplayInitialize called while already running!?");
+                Log.Error(Category.Display, "** Initialize called while already running!?");
                 return;
             }
-            Console.WriteLine("[Initializing SDL Display on {0}]", Thread.CurrentThread.ManagedThreadId);
+
+            Log.Debug(Category.Display, "[Initializing on {0}]", Thread.CurrentThread.ManagedThreadId);
 
             //
             // Create the display window
@@ -160,14 +158,13 @@ namespace PERQemu.UI
             if (_fpsTimerId < 0)
             {
                 _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
-                _fpsTimerId = HighResolutionTimer.Register(3000d, _fpsTimerCallback);
+                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
                 HighResolutionTimer.Enable(_fpsTimerId, true);
             }
 
             // Force one update so the Mac will render the bloody window frame
             SDL.SDL_PumpEvents();
         }
-
 
         /// <summary>
         /// Expand the 1-bit pixels from the PERQ into a local intermediate
@@ -241,7 +238,7 @@ namespace PERQemu.UI
             // Render the display texture to the renderer
             SDL.SDL_RenderCopy(_sdlRenderer, _displayTexture, IntPtr.Zero, IntPtr.Zero);
 
-            //// And show it to us
+            // And show it to us
             SDL.SDL_RenderPresent(_sdlRenderer);
 
             // Update FPS count
@@ -259,24 +256,31 @@ namespace PERQemu.UI
         /// </remarks>
         private void UpdateFPS(SDL.SDL_Event e)
         {
+            // Snapshot our data points
             var now = HighResolutionTimer.ElapsedHiRes();
             var elapsed = now - _last;
 
-            var inst = _system.CPU.Clocks - _prevClock;
-            var z80inst = _system.IOB.Z80System.Clocks - _prevZ80Clock;
+            var state = _system.State;
+
+            var inst = _system.CPU.Clocks;
+            var z80inst = _system.IOB.Z80System.Clocks;
+
+            // Compute our instruction timing and frame rate
+            double ns = (elapsed * Conversion.MsecToNsec) / (inst - _prevClock);
+            double zns = (elapsed * Conversion.MsecToNsec) / (z80inst - _prevZ80Clock);
             double fps = _frames / (elapsed * Conversion.MsecToSec);
-            double ns = (elapsed * Conversion.MsecToNsec) / inst;
-            double zns = (elapsed * Conversion.MsecToNsec) / z80inst;
-            _prevClock = _system.CPU.Clocks;
-            _prevZ80Clock = _system.IOB.Z80System.Clocks;
+
+            // Save for next time
+            _prevClock = inst;
+            _prevZ80Clock = z80inst;
             _last = now;
             _frames = 0;    // not safe.  don't even care anymore.
 
-            var state = PERQemu.Sys.State;
+            // Update the title bar
             if (state == RunState.Running)
             {
                 SDL.SDL_SetWindowTitle(_sdlWindow,
-                        string.Format("PERQ - {0:N2} fps, CPU {1:N2}ns, Z80 {2:N2}ns", fps, ns, zns));
+                    string.Format("PERQ - {0:N2} fps, CPU {1:N2}ns, Z80 {2:N2}ns", fps, ns, zns));
             }
             else
             {
@@ -287,6 +291,7 @@ namespace PERQemu.UI
                                                   "single stepping" : state.ToString()));
             }
         }
+
 
         /// <summary>
         /// Close down the display and free SDL resources.
@@ -324,7 +329,6 @@ namespace PERQemu.UI
             }
         }
 
-
         //
         //  Screenshots
         //
@@ -355,11 +359,11 @@ namespace PERQemu.UI
         //    return null;
         //}
 
-        // debugging
+        // debugging, no longer very useful, to be removed
         public void Status()
         {
-            Console.WriteLine("renderEvent={0}, fpsUpdateEvent={1}",
-                              _renderEvent.type, _fpsUpdateEvent.type);
+            Console.WriteLine("renderEvent={0}, fpsUpdateEvent={1}, frames={2}",
+                              _renderEvent.type, _fpsUpdateEvent.type, _frames);
         }
 
         /// <summary>
@@ -393,10 +397,9 @@ namespace PERQemu.UI
         private int _displayWidth;
         private int _displayHeight;
 
-        // Buffers for rendering pixels.  The two-step shuffle blows a ton of
-        // memory for a reasonable boost in speed, even though it makes that
-        // vein in my temple throb.  What's a few dozen wasted megabytes
-        // between friends?
+        // Buffers for rendering pixels.  The two-step shuffle blows a ton of RAM
+        // for a reasonable boost in speed, even though it makes that vein in my
+        // temple throb.  What's a few dozen wasted megabytes between friends?
         private int[] _32bppDisplayBuffer;
         private long[] _8bppDisplayBuffer;
 
@@ -433,4 +436,3 @@ namespace PERQemu.UI
         private PERQSystem _system;
     }
 }
-

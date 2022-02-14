@@ -101,7 +101,7 @@ namespace PERQemu.UI
             try
             {
                 // Assign to our configuration
-                PERQemu.Config.Current.AssignMedia(imagePath, 0);
+                PERQemu.Config.Current.AssignMedia(0, imagePath);
 
                 if (PERQemu.Controller.State > RunState.Off)
                 {
@@ -160,7 +160,7 @@ namespace PERQemu.UI
                 // drive will be loaded at power up.  If the machine is already
                 // configured, then dynamically load it -- a "hot swap" if you
                 // will, even though the fixed disk types didn't support that!
-                PERQemu.Config.Current.AssignMedia(imagePath, unit);
+                PERQemu.Config.Current.AssignMedia(unit, imagePath);
 
                 if (PERQemu.Controller.State > RunState.Off)
                 {

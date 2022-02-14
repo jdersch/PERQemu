@@ -26,9 +26,17 @@ using PERQemu.Config;
 namespace PERQemu.UI
 {
     /// <summary>
-    /// Command-line interface to the Configurator.  Operates directly on the
-    /// Current configuration, so changes are immediate.
+    /// Command-line interface to the Configurator.  There's no local state
+    /// here, so CLI commands operate directly on the Current configuration.
     /// </summary>
+    /// <remarks>
+    /// If loading from a file the Configurator sets the "Quietly" flag to skip
+    /// console output and validation checks so it can preload configurations
+    /// at startup without potentially spewing spurious errors that might be
+    /// confusing.  This is something of a hack, but it means we don't bother
+    /// with a fancy file parser or separate format for config files (though it
+    /// does mean our CLI grammar must be stable).
+    /// </remarks>
     public class ConfigCommands
     {
         /// <summary>
@@ -64,15 +72,15 @@ namespace PERQemu.UI
         [Command("configure done", "Exit configuration mode, return to top-level")]
         public void ConfigDone()
         {
-            // Overload: if done with a definition, save it and remain
-            if (_preloading)
+            PERQemu.CLI.ResetPrefix();
+
+            // Overload: if loading from a file, caller will validate
+            if (PERQemu.Config.Quietly)
             {
-                PERQemu.Config.AddPrefab(_conf);
-                _preloading = false;
                 return;
             }
 
-            // Otherwise check it and return to top-level
+            // Otherwise (CLI) check it and return to top-level
             if (!PERQemu.Config.Validate())
             {
                 Console.WriteLine("This configuration is invalid!  Please correct the following error:");
@@ -83,13 +91,17 @@ namespace PERQemu.UI
                 Console.WriteLine("Note: the configuration has been modified but not yet saved.");
                 Console.WriteLine("Use the 'configure save' command to save your changes.");
             }
-
-            PERQemu.CLI.ResetPrefix();
         }
 
         [Command("configure default", "Reset the machine to the default configuration")]
         public void SetDefault()
         {
+            if (PERQemu.Config.Quietly)
+            {
+                PERQemu.Config.Current = PERQemu.Config.Default;
+                return;
+            }
+
             if (OKtoReconfig())
             {
                 Console.WriteLine("Setting the machine to defaults.");
@@ -200,9 +212,9 @@ namespace PERQemu.UI
         [Command("configure name", "Name the current configuration")]
         public void SetName(string name)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.Name = name;
+                PERQemu.Config.Current.Name = name;
             }
             else
             {
@@ -213,9 +225,9 @@ namespace PERQemu.UI
         [Command("configure description", "Add a short description of the current configuration")]
         public void SetDescription(string desc)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.Description = desc;
+                PERQemu.Config.Current.Description = desc;
             }
             else
             {
@@ -226,9 +238,9 @@ namespace PERQemu.UI
         [Command("configure chassis", "Set the machine type")]
         public void SetChassis(ChassisType perq)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.Chassis = perq;
+                PERQemu.Config.Current.Chassis = perq;
                 return;
             }
 
@@ -246,9 +258,9 @@ namespace PERQemu.UI
         [Command("configure cpu", "Set the CPU type")]
         public void SetCPU(CPUType cpu)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.CPU = cpu;
+                PERQemu.Config.Current.CPU = cpu;
                 return;
             }
 
@@ -293,9 +305,9 @@ namespace PERQemu.UI
         [Command("configure memory", "Set the memory size")]
         public void SetMemory(uint size)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.MemorySizeInBytes = (int)(size * 1024);
+                PERQemu.Config.Current.MemorySizeInBytes = (int)(size * 1024);
                 return;
             }
 
@@ -340,9 +352,9 @@ namespace PERQemu.UI
         [Command("configure io board", "Configure the IO board type")]
         public void SetIO(IOBoardType io)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.IOBoard = io;
+                PERQemu.Config.Current.IOBoard = io;
                 return;
             }
 
@@ -371,9 +383,9 @@ namespace PERQemu.UI
         [Command("configure option board", "Configure the IO Option board type")]
         public void SetOptionIO(OptionBoardType oio)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.IOOptionBoard = oio;
+                PERQemu.Config.Current.IOOptionBoard = oio;
                 return;
             }
 
@@ -410,9 +422,9 @@ namespace PERQemu.UI
         [Command("configure option", "Configure extra features of the IO Option board")]
         public void SetIOOption(IOOptionType opt)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.IOOptions = opt;
+                PERQemu.Config.Current.IOOptions = opt;
                 return;
             }
 
@@ -496,9 +508,9 @@ namespace PERQemu.UI
         [Command("configure display", "Configure the display device")]
         public void SetDisplay(DisplayType disp)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.Display = disp;
+                PERQemu.Config.Current.Display = disp;
                 return;
             }
 
@@ -509,7 +521,7 @@ namespace PERQemu.UI
                     PERQemu.Config.Current.Display = disp;
                     PERQemu.Config.Changed = true;
                     Console.WriteLine($"{disp} display option selected.");
-               }
+                }
 
                 if (!PERQemu.Config.CheckMemory())
                 {
@@ -521,9 +533,9 @@ namespace PERQemu.UI
         [Command("configure tablet", "Configure the pointing device(s)")]
         public void SetTablet(TabletType tab)
         {
-            if (_preloading)
+            if (PERQemu.Config.Quietly)
             {
-                _conf.Tablet = tab;
+                PERQemu.Config.Current.Tablet = tab;
                 return;
             }
 
@@ -538,43 +550,17 @@ namespace PERQemu.UI
             }
         }
 
+        /// <summary>
+        /// Assign the device type and filename for a particular unit #.
+        /// </summary>
+        [Command("configure drive", "Assign a type, file name to a storage device")]
+        public void ConfigDrive(byte unit, DeviceType dev, string file = "")
+        {
+            PERQemu.Config.Current.AssignType(unit, dev);
+            PERQemu.Config.Current.AssignMedia(unit, file);
+        }
+
         // TODO ethernet!
 
-        /// <summary>
-        /// Start the definition of a new machine type.  A "discreet" command
-        /// (not normally exposed to users) used when preloading configurations
-        /// at startup.
-        /// </summary>
-        /// <remarks>
-        /// This is kind of cheesy.  Setting the "preloading" flag circumvents
-        /// all of the sanity checks and skips all the output so that the file
-        /// can be read in quickly and quietly.  If there are errors in the
-        /// StandardModels definitions and the user selects one, the normal
-        /// validation checks will prevent starting up the machine.  This lets
-        /// us basically just leverage the normal command syntax and not have
-        /// to define a file format and parser to load these.  (Simpler still,
-        /// I could just write out a standard collection of individual config
-        /// files and have "config list" just dump Conf/*.cfg and not preload
-        /// anything at all...  hmm.)
-        /// </remarks>
-        [Command("configure define", Discreet = true)]
-        private void StartDefinition(string name)
-        {
-            _preloading = true;
-            _conf = new Configuration();
-            _conf.Name = name;
-        }
-
-        /// <summary>
-        /// Init the device type for a particular unit #.
-        /// </summary>
-        [Command("configure drive", Discreet = true)]
-        private void ConfigDrive(byte unit, DeviceType dev)
-        {
-            _conf.Drives[unit].Type = dev;
-        }
-
-        private static bool _preloading;
-        private static Configuration _conf;
     }
 }
