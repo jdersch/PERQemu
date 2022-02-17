@@ -101,6 +101,9 @@ namespace PERQemu.IO.Z80
             set { _interruptsEnabled = value; }
         }
 
+        private FloppyDisk SelectedUnit => _drives[_unitSelect];
+        private bool SelectedUnitIsReady => SelectedUnit != null && SelectedUnit.Ready;
+
         //
         // IDMADevice Implementation
         //
@@ -129,34 +132,23 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Disconnect a drive from the controller.
+        /// Selects a drive and head for the next operation.  Sets both the
+        /// local flags AND pokes the drive -- this picks up the disk change
+        /// signal or possibly flags head select errors.
         /// </summary>
-        /// <remarks>
-        /// Not needed?  _drive.Unload() and .Load() can simply eject and read
-        /// new floppy images in place, and the OnLoad() trigger can update the
-        /// controller with a RDY change.  Hmm.
-        /// </remarks>
-        public void DetachDrive(uint unit)
-        {
-            if (unit >= _drives.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(unit));
-            }
-
-            if (_drives[unit] != null)
-            {
-                Log.Debug(Category.FloppyDisk, "Detached disk '{0}'", _drives[unit].Info.Name);
-                _drives[unit] = null;
-            }
-        }
-
-        private FloppyDisk SelectedUnit => _drives[_unitSelect];
-        private bool SelectedUnitIsReady => SelectedUnit != null && SelectedUnit.Ready;
-
         private void SelectUnitHead(byte select)
         {
             _unitSelect = select & 0x3;
+            if (SelectedUnit != null)
+            {
+                SelectedUnit.DriveSelect = true;
+            }
+
             _headSelect = (select & 0x4) >> 2;
+            if (SelectedUnitIsReady)
+            {
+                SelectedUnit.HeadSelect = (byte)_headSelect;
+            }
         }
 
         //
@@ -380,7 +372,11 @@ namespace PERQemu.IO.Z80
             // Stimpy!  We made it!
             _seekEnd = true;
 
-            SetErrorStatus(SelectedUnitIsReady ? StatusRegister0.None : StatusRegister0.AbnormalTermination);
+            // Can't ya read?  Exact change ONLY!
+            _seekEnd &= !SelectedUnit.DiskChange;
+
+            // Simply implode!
+            SetErrorStatus(StatusRegister0.None);
 
             // Clear drive "Busy" bit and interrupt
             _status &= ~((Status)(0x1 << _unitSelect));
@@ -508,9 +504,8 @@ namespace PERQemu.IO.Z80
 
             if (!SelectedUnitIsReady)
             {
-                // Post drive not ready (TODO: this isn't correct, apparently?
-                // FLOPPY hates this so much it hangs forever.)
-                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination); // StatusRegister0.EquipChk);
+                // Post drive not ready (EquipChk doesn't cause Floppy to seize)
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST1 = StatusRegister1.None;
                 _transfer.ST2 = StatusRegister2.None;
 
@@ -836,7 +831,7 @@ namespace PERQemu.IO.Z80
                 _errorStatus |= _seekEnd ? (StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk) :
                                            (StatusRegister0.ReadySignalChanged | StatusRegister0.NotReady);
             }
-            
+
             return _errorStatus;
         }
 

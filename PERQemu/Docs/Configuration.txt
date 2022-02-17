@@ -367,15 +367,74 @@ The PERQmedia documentation has all the info about the formats it supports.
 
 PERQemu wraps the StorageDevice in classes that deal with the specific behavior
 and interactions of each device type and the Controller classes that emulate
-them:
-        Floppy      - Shugart SA851 8" floppy drive
-        Disk14Inch  - Shugart SA4000-series drives, 12-24MB
-        Disk8Inch   - Micropolis 1200-series drives, from 21-70MB
-        Disk5Inch   - A bunch of ST-506/MFM drives from different
-                      manufacturers in varying capacities.
-        DiskSMD,
-        TapeStreamer,
-        Tape9Track  - Future options
+them.  These live in Emulator/IO/DiskDevices:
+
+    FloppyDisk.cs   - The "generic" floppy disk class
+        - can load DeviceType.Floppy images
+        - only has to mimic the Shugart SA851 8" floppy drive
+        - interfaced to the PERQ through IO/Z80/NECuPD765.cs
+
+    HardDisk.cs     - The generic hard disk class
+        - can load any DeviceType.Disk* image, in theory
+        - handles seeks using a generic stepping algorithm that could
+          be subclassed if smoother accelleration ramps desired
+        - provides the "mechanical" hard disk emulation, handling seeks,
+          head settling, index pulses, etc.
+        - interfaced to an IOBoard through an IDiskController (eventually)
+
+The IDiskController interface will define the common hooks for the PERQ to
+control the HardDisks using the appropriate protocols.  These are:
+
+    ShugartController.cs    - Controller for Shugart SA4000-series drives
+        - loads DeviceType.Disk14Inch images
+        - provides the state machine that makes the generic HardDisk
+          look like a Shugart to the PERQ
+        - has to play nicely with the Z80-controlled HardDiskSeekControl
+          device that uses the Z80 CTC to generate step pulses
+
+    MicropolisController.cs - Controller for Micropolis 8" hard drivies
+        - loads DeviceType.Disk8Inch images
+        - provides an interface specific to the Micropolis 1200-series
+          drives (21-70MB) used in early PERQ 2 models
+        - in theory, a "CIO" PERQ-1 could talk to this controller?  But
+          I expect normally it will attach to an NIO/EIO in a PERQ-2?
+        - [not yet implemented]
+
+    MFMController.cs    - Controller for all generic ST-506/MFM drives
+        - loads DeviceType.Disk5Inch images
+        - supports a bunch of drives from different manufacturers in
+          varying capacities, used exclusively on the EIO/NIO in PERQ-2
+        - [not yet implemented]
+
+    SMDController.cs    - Controller for future SMD (Multibus) drives
+        - will support DeviceType.DiskSMD images
+        - is a long way off, but this is definitely something fun to
+          pursue since numerous documents and source code allude to
+          there being actual PERQs in the world with SMD-attached disks
+          at one point
+
+The possibility of doing real or imagined GPIB or SCSI disk controllers for
+future emulated (or actual :-) hardware is left as an exercise for the reader.
+
+
+As the StorageDevice class is intended to be general enough to encompass the
+basic requirements of tape drives too, a possible ITapeController interface
+could/will produce:
+
+    QICTapeController.cs    - Controller for QIC-02 streaming tape drives
+        - will support DeviceType.TapeQIC images
+        - will likely only mimic the Archive Sidewinder 3020I (30ips)
+          or similar drives (QIC-02? QIC-11? QIC-24 36 42 hike!?)
+        - attached through the Option IO board
+        - definitely on the to-do list since the streamer is well supported
+
+    MBusTapeController.cs   - Controller for generic Multibus tape drives
+        - would support DeviceType.Tape9Track images
+        - software support exists but there's weirdly no specifics
+          about what 9-track drives or controllers were used
+        - cool as it is to consider emulating a reel-to-reel tape drive
+          this one is wildly implausible, even for a fanatic like me
+
 
 For configuration purposes, the user can assign files to drive units and the
 UI can verify that the appropriate type of disk image will be loaded.  Other
@@ -412,20 +471,20 @@ that JWST can't see the end of it.  Sigh.
 Ethernet is the #1 desired extra "peripheral" to support -- allowing the
 emulated PERQ to talk to the outside world.  Accent is a network OS, and it
 would be very, very cool to be able to run emulated PERQs on a network with
-real hardware -- providing virtually unlimited file service, tape backup,
-print/time/FTP servers, etc.
+each other and with real PERQ hardware -- providing virtually unlimited file
+service, tape backup, print/time/FTP servers, etc.  "Nerrrrd." :-P
 
-The QIC Streamer shouldn't be too hard; it's mostly a matter of writing the
-controller, since PERQmedia can handle the storage format.  This allows for
-much faster software installation (one or two tapes instead of 8-10+ floppies)
-and we have an amazing library of backups to load and explore.
+The QIC Streamer is desirable as it allows much faster software installation
+(one or two tape changes instead of 8-10+ floppies), and we have an amazing
+library of backups to load and explore.
 
 The Canon laser printer interface is high on the list, since it should be a
-fairly simple thing to emulate.  The PERQ uses the Canon "video interface"
+relatively simple thing to emulate.  The PERQ uses the Canon "video interface"
 to send a bitstream to the marking engine at 240dpi (LBP-10) or 300dpi (CX).
-The plan for PERQemu is to just stream the bits into a bitmap and save them
-as TIFF, JPG or PNG images.  (Simple enough to post-process the pages into a
-multi-page PDF if desired, but let's not get carried away.)
+(This should be familiar to any NeXT heads.)  The plan for PERQemu is to just
+stream the bits into a bitmap and save them as TIFF, JPG or PNG images.  (It's
+simple enough to post-process the pages into a multi-page PDF if desired, but
+let's not get carried away.)
 
 
 Wow.  If you read all that, give yourself a cookie!

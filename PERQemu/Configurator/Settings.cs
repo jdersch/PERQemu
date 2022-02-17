@@ -42,7 +42,7 @@ namespace PERQemu
     {
         DefaultArrow = 0,
         Crosshairs,
-        Hide
+        Hidden
     }
 
     [Flags]
@@ -111,16 +111,19 @@ namespace PERQemu
         public static ImageFormat CanonFormat { get; set; }
         public static string CanonTemplate { get; private set; }
 
-        // Logging
-        //  LogDir, LogTemplate, LogSize, LogLimit = see Log.cs
+        // Logging - see Log.cs
+        //public static string LogDir;
+        //public static string LogTemplate;
+        //public static int LogSize;
+        //public static int LogLimit;
 
         // Host Devices
-        //public string HostRSADevice _devRSA;
-        //public string HostRSBDevice _devRSB;
-        //public string HostAudioDevice _devAudio;
-        //public string HostEtherDevice _devEther;
-        //public EtherEncapsulationType _netEncap;
-        //public bool _netUse3rccMAC;
+        //public static string RSADevice;
+        //public static string RSBDevice;
+        //public static string AudioDevice;
+        //public static string EtherDevice;
+        //public static EtherEncapsulationType EtherEncapsulation;
+        //public static bool Use3RCCEtherMACPrefix;
 
         // Housekeeping
         public static string Reason { get; set; }
@@ -146,11 +149,14 @@ namespace PERQemu
             }
         }
 
+        /// <summary>
+        /// Write out a new user preferences file with the current settings.
+        /// </summary>
         public static bool Save()
         {
             if (!Changed)
             {
-                // Lie.  Nothing changed, so nothing to save.
+                // Lie.  Nothing changed, so nothing to save...
                 Reason = "Settings unchanged.";
                 return true;
             }
@@ -165,19 +171,21 @@ namespace PERQemu
                     //
                     sw.WriteLine("# PERQemu settings file, written " + DateTime.Now);
                     sw.WriteLine("# " + PERQemu.Version);
-                    sw.WriteLine("#\n# * Please do not hand-edit this file. *\n#");
+                    sw.WriteLine("#\n# * Please take care if hand-editing this file! *");
+                    sw.WriteLine("# *  Errors may cause PERQemu to fail to load.  *\n#");
                     sw.WriteLine("settings");
-                    sw.WriteLine("default");        // it's the only way to be sure
+                    sw.WriteLine("default");
                     sw.WriteLine("autosave harddisk " + SaveDiskOnShutdown);
                     sw.WriteLine("autosave floppy " + SaveFloppyOnEject);
                     sw.WriteLine("pause on reset " + PauseOnReset);
                     sw.WriteLine("pause when minimized " + PauseWhenMinimized);
-                    sw.WriteLine("system cursor " + CursorPreference);
-                    sw.WriteLine("performance " + Performance);
-                    sw.WriteLine("debug radix " + DebugRadix);
-                    sw.WriteLine("z80 debug radix " + Z80Radix);
-                    sw.WriteLine("screenshot format " + ScreenshotFormat);
-                    sw.WriteLine("canon format " + CanonFormat);
+                    sw.WriteLine("display cursor " + CursorPreference);
+                    sw.WriteLine("## These options are not yet implemented:");
+                    sw.WriteLine("# performance " + Performance);
+                    sw.WriteLine("# debug radix " + DebugRadix);
+                    sw.WriteLine("# z80 debug radix " + Z80Radix);
+                    sw.WriteLine("# screenshot format " + ScreenshotFormat);
+                    sw.WriteLine("# canon format " + CanonFormat);
 
                     if (!string.IsNullOrEmpty(OutputDirectory))
                     {
@@ -204,7 +212,7 @@ namespace PERQemu
             }
             catch (Exception e)
             {
-                Changed = true;     // Have you tried turning it off and on again?
+                Changed = true;
                 Reason = "Could not save settings: " + e.Message;
                 return false;
             }

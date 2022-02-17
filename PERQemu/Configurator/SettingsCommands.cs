@@ -140,7 +140,7 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("settings cursor in display", "Change the system cursor when in the display window")]
+        [Command("settings display cursor", "Change the system cursor when in the display window")]
         public void SetCursorPref(Cursor curs)
         {
             if (curs != Settings.CursorPreference)

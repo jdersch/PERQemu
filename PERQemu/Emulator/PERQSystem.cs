@@ -86,7 +86,7 @@ namespace PERQemu
                     //    _cpu.LoadBootROM("eioboot.bin");      // 16K, new Z80
                     //  }
                     //  break;
-                    throw new UnimplementedHardwareException($"IO board type {_conf.IOBoard} is not implemented.");
+                    throw new UnimplementedHardwareException($"IO board type {_conf.IOBoard}");
 
                 default:
                     throw new InvalidConfigurationException($"No such IO board type '{_conf.IOBoard}'");
@@ -106,7 +106,7 @@ namespace PERQemu
 
                 case OptionBoardType.Ether3:
                 case OptionBoardType.MLO:
-                    throw new UnimplementedHardwareException($"IO Option board type {_conf.IOOptionBoard} is not implemented.");
+                    throw new UnimplementedHardwareException($"IO Option board type {_conf.IOOptionBoard}");
 
                 default:
                     throw new InvalidConfigurationException($"No such IO Option board type '{_conf.IOOptionBoard}'");
@@ -126,6 +126,9 @@ namespace PERQemu
             _ioBus.AddDevice(_iob);
             _ioBus.AddDevice(_oio);
 
+            // Allocate handles for storage devices to be mounted
+            _volumes = new StorageDevice[_conf.Drives.Length];
+
             // Attach a debugger!
             _debugger = new PERQDebugger(new List<object>() { _cpu.Processor });
 
@@ -133,8 +136,8 @@ namespace PERQemu
             // shouldn't this just be... "On"?  Sigh.
             _state = RunState.Off;
 
+            // Not sure that RunModes make sense anymore
             SetMode();
-
 
             // Okay!  We have a PERQ!  Now listen for state change events
             // from the Controller (or Debugger)
@@ -142,6 +145,8 @@ namespace PERQemu
         }
 
         public Configuration Config => _conf;
+
+        public StorageDevice[] Volumes => _volumes;
 
         public CPU CPU => _cpu.Processor;
         public Scheduler Scheduler => _cpu.Scheduler;
@@ -205,7 +210,7 @@ namespace PERQemu
                     // be more correct.
                     RunGuarded(() =>
                         {
-                            _iob.Clock();
+                            _iob.Run();
                             _cpu.Run();
                             _state = RunState.Paused;
                         });
@@ -218,7 +223,7 @@ namespace PERQemu
                         {
                             do
                             {
-                                _iob.Clock();
+                                _iob.Run();
                                 _cpu.Run();
                             }
                             while (!CPU.IncrementBPC);
@@ -276,7 +281,7 @@ namespace PERQemu
                         {
                             // Run the IOB for one Z80 instruction, then run the PERQ CPU for
                             // the number of microinstructions equivalent to that wall-clock time.
-                            var count = _iob.Clock();
+                            var count = _iob.Run();
 
                             // Calculate the fudge factor, accumulating fractions
                             var clocks = Math.Ceiling((double)count * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
@@ -297,7 +302,7 @@ namespace PERQemu
         /// </remarks>
         private void Reset()
         {
-            Log.Info(Category.Emulator, "PERQSystem Reset called.");
+            Log.Info(Category.Emulator, "PERQSystem Reset called");
 
             _cpu.Reset();
             _mem.Reset();
@@ -352,10 +357,10 @@ namespace PERQemu
             _cpu.Processor.ShowPC();
 
             Console.WriteLine("ucode {0}",
-                        Disassembler.Disassemble(CPU.PC, CPU.GetInstruction(CPU.PC)));
+                    Disassembler.Disassemble(CPU.PC, CPU.GetInstruction(CPU.PC)));
 
             Console.WriteLine("inst  {0:x2}-{1} (@BPC {2})", CPU.OpFile[CPU.BPC],
-                        QCodeHelper.GetQCodeFromOpCode(CPU.OpFile[CPU.BPC]).Mnemonic, CPU.BPC);
+                    QCodeHelper.GetQCodeFromOpCode(CPU.OpFile[CPU.BPC]).Mnemonic, CPU.BPC);
         }
 
         /// <summary>
@@ -374,123 +379,182 @@ namespace PERQemu
             {
                 var drive = _conf.Drives[unit];
 
-                if (drive.Type == DeviceType.Floppy || !string.IsNullOrEmpty(drive.MediaPath))
+                if (!string.IsNullOrEmpty(drive.MediaPath) || drive.Type == DeviceType.Floppy)
                 {
-                    if (!LoadMedia(drive.Type, drive.MediaPath, unit))
+                    if (!LoadMedia(drive))
+                    {
                         return false;
+                    }
                 }
             }
 
             return true;
         }
 
-        /// <summary>
-        /// Load a media file (floppy, hard disk or tape).
-        /// </summary>
-        public bool LoadMedia(DeviceType type, string path, int unit)
-        {
-            try
-            {
-                // Check to see if it's loadable
-                var dev = FileUtilities.GetDeviceTypeFromFile(path);
-
-                // Add the floppy drive even if there's no media file presently
-                if (type == DeviceType.Floppy && string.IsNullOrEmpty(path))
-                {
-                    Log.Debug(Category.FloppyDisk, "Drive {0} (no media loaded)", unit);
-                }
-                else if (dev != type)
-                {
-                    Console.WriteLine("File loaded is not the correct media type for this drive!");
-                    Console.WriteLine($"  Unit {unit}  Expected: {type}  Loaded: {dev}");
-                    return false;
-                }
-
-                // Hand it off to the appropriate controller
-                switch (type)
-                {
-                    // case DriveType.Disk5Inch:
-                    // case DriveType.Disk8Inch:
-                    case DeviceType.Disk14Inch:
-                    case DeviceType.Floppy:
-                        _iob.LoadDisk(type, path, unit);
-                        break;
-
-                    // case DriveType.DiskSMD:
-                    //  _oio.LoadDisk();
-
-                    // case DriveType.Tape*:
-                    //  _oio.LoadTape();
-
-                    default:
-                        throw new UnimplementedHardwareException($"Support for drive type {type} is not implemented.");
-                }
-                return true;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Failed to load '{0}' (unit {1}): {2}", path, unit, e.Message);
-                return false;
-            }
-        }
 
         /// <summary>
-        /// Report the status of loaded storage devices.
+        /// Load (or reload) a media file (floppy, hard disk or tape).  Returns
+        /// true and updates the _volumes[] with a reference to the actual loaded
+        /// device upon successful load of a supported storage device.
         /// </summary>
-        public void CheckMedia()
+        /// <remarks>
+        /// Since we moved the error checking and media type/path verification
+        /// into the UI, assume that the given Drive entry is valid and don't
+        /// waste time duplicating those checks here.
+        /// 
+        /// If a drive is already loaded and is not marked as Removable, don't
+        /// allow a reload -- the PERQ doesn't expect normal fixed hard disks to
+        /// just appear or disappear unexpectedly.
+        /// </remarks>
+        public bool LoadMedia(Drive drive)
         {
-            // Just ping the IO and Option boards to report their own damn status
-            _iob.CheckDisks();
-
-            if (_oio != null)
-            {
-                _oio.CheckDisks();
-                _oio.CheckTapes();
-            }
-        }
-
-        /// <summary>
-        /// Tells all the loaded storage devices to save themselves, depending
-        /// on user preferences.  Saves to original format and filename.
-        /// </summary>
-        public void SaveAllMedia()
-        {
-            // Should we bother?
-            if (Settings.SaveDiskOnShutdown == Ask.No) return;
-
-            Console.WriteLine("Checking for unsaved media...");
-            for (var unit = 0; unit < Config.Drives.Length; unit++)
-            {
-                var drive = _conf.Drives[unit];
-                if (!string.IsNullOrEmpty(drive.MediaPath))
-                {
-                    SaveMedia(drive.Type, drive.MediaPath, unit);
-                }
-            }
-        }
-
-        public void SaveMedia(DeviceType type, string path, int unit = 0)
-        {
-            switch (type)
+            // Hand it off to the IO or Option IO board
+            switch (drive.Type)
             {
                 // case DriveType.Disk5Inch:
                 // case DriveType.Disk8Inch:
                 case DeviceType.Disk14Inch:
+                    // The UI shouldn't actually allow this but check anyway
+                    if (_volumes[drive.Unit] != null)
+                        throw new InvalidOperationException($"Drive {drive.Unit} is already loaded");
+
+                    // Spin 'er up
+                    _volumes[drive.Unit] = _iob.LoadDisk(drive);
+                    break;
+
                 case DeviceType.Floppy:
-                    _iob.SaveDisk(unit);
+                    if (_volumes[drive.Unit] == null)
+                    {
+                        // Add the drive (with or without media)
+                        _volumes[drive.Unit] = _iob.LoadDisk(drive);
+                    }
+                    else
+                    {
+                        // Place a new diskette in the drive!  Since we're
+                        // reloading, assume the pathname changed
+                     
+                        // NB: we'll assume the UI makes sure that any existing
+                        // floppy is Unloaded first (with the "save on eject"
+                        // settings applied) before clobbering with a reload
+                        _volumes[drive.Unit].LoadFrom(drive.MediaPath);
+                    }
                     break;
 
                 // case DriveType.DiskSMD:
+                //  check Removable
                 //  _oio.LoadDisk();
 
                 // case DriveType.Tape*:
                 //  _oio.LoadTape();
 
                 default:
-                    throw new UnimplementedHardwareException($"Support for drive type {type} is not implemented.");
+                    throw new UnimplementedHardwareException($"Drive type {drive.Type}");
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Report the status of loaded storage devices.  Basic info for now.
+        /// </summary>
+        public void CheckMedia()
+        {
+            for (var unit = 0; unit < _volumes.Length; unit++)
+            {
+                var dev = _volumes[unit];
+
+                if (dev != null)
+                {
+                    Console.Write("Drive {0} ({1}) is online", unit, dev.Info.Type);
+                    if (dev.IsLoaded) Console.Write(", is loaded");
+                    if (dev.IsModified) Console.Write(", is modified");
+                    if (dev.Info.IsWritable) Console.Write(", is writable");
+                    Console.WriteLine();
+                }
             }
         }
 
+        /// <summary>
+        /// Tells all the loaded storage devices to save themselves, depending
+        /// on user preferences.  Called at shutdown, saves each device to its
+        /// original format and filename.
+        /// </summary>
+        public void SaveAllMedia()
+        {
+            for (var unit = 0; unit < _volumes.Length; unit++)
+            {
+                if (_volumes[unit] != null)
+                {
+                    SaveMedia(unit);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Save a modified media file to disk.
+        /// </summary>
+        public bool SaveMedia(int unit)
+        {
+            // Sanity checks
+            if (_volumes[unit] == null)
+            {
+                throw new InvalidOperationException($"Drive {unit} is not loaded");
+            }
+
+            if (!_volumes[unit].IsLoaded)
+            {
+                Log.Debug(Category.MediaLoader, "Drive {0} is not loaded, cannot save", unit);
+                return false;
+            }
+
+            // Do we actually need saving?
+            if (!_volumes[unit].IsModified || !SaveRequested(_volumes[unit].Info.Type))
+            {
+                Log.Debug(Category.MediaLoader, "Drive {0} media does not require saving", unit);
+                return false;
+            }
+
+            // Yep! Uh, just do it I guess
+            _volumes[unit].Save();
+            return true;
+        }
+
+        private bool SaveRequested(DeviceType dev)
+        {
+            switch (dev)
+            {
+                case DeviceType.Floppy:
+                    if (Settings.SaveFloppyOnEject == Ask.Maybe)
+                    {
+                        Console.WriteLine("BE LESS WISHY WASHY.  SAVE YER FLOPPIES OR DON'T.");
+                        // someday we'll actually be able to do this interactively
+                        // pause if running
+                        //      gui: dialog box (with save as options)
+                        //      cli: "modal" command prompt
+                        // resume if was running
+                    }
+                    return (Settings.SaveFloppyOnEject == Ask.Yes);
+
+                case DeviceType.Disk14Inch:
+                case DeviceType.Disk8Inch:
+                case DeviceType.Disk5Inch:
+                case DeviceType.DiskSMD:
+                    if (Settings.SaveDiskOnShutdown == Ask.Maybe)
+                    {
+                        // same deal
+                        Console.WriteLine("Save, or save not: there is no try.");
+                    }
+                    return (Settings.SaveDiskOnShutdown == Ask.Yes);
+
+                case DeviceType.TapeStreamer:
+                case DeviceType.Tape9Track:
+                    // Not supported yet
+                    return false;
+
+                default:
+                    throw new InvalidConfigurationException($"Device type {dev} is not supported, cannot save");
+            }
+        }
 
         /// <summary>
         /// If the user has specified an alternate boot character, kick off
@@ -525,7 +589,7 @@ namespace PERQemu
                 // Send the key:
                 _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
 
-                // And do it again.
+                // And do it again
                 Scheduler.Schedule(100 * Conversion.MsecToNsec, BootCharCallback);
             }
         }
@@ -538,6 +602,9 @@ namespace PERQemu
         private IOBus _ioBus;
         private IOBoard _iob;
         private OptionBoard _oio;
+
+        // Drives attached to this PERQ
+        private StorageDevice[] _volumes;
 
         // User interface hooks (SDL)
         private Display _display;

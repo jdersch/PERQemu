@@ -164,7 +164,7 @@ namespace PERQemu.Processor
 #if DEBUG
             _ropDebug = false;
 #endif
-            Log.Debug(Category.RasterOp, "Reset.");
+            Log.Debug(Category.RasterOp, "Reset");
         }
 
         public bool Enabled
@@ -750,8 +750,7 @@ namespace PERQemu.Processor
                     break;
 
                 default:
-                    throw new InvalidOperationException(
-                        string.Format("Unexpected state {0} in phase {1} NextState", _state, _phase));
+                    throw new InvalidOperationException($"Unexpected state {_state} in phase {_phase} NextState");
             }
             return next;
         }
@@ -780,7 +779,7 @@ namespace PERQemu.Processor
                 Log.Error(Category.RasterOp, "FetchNextWord in {0} while MDI was invalid!", _state);
                 w.Clear();
 #else
-                throw new InvalidOperationException("RasterOp: FetchNextWord while MDI was invalid!");
+                throw new InvalidOperationException("FetchNextWord while MDI was invalid!");
 #endif
             }
             return w;
@@ -993,7 +992,7 @@ namespace PERQemu.Processor
             }
             fs.Close();
 
-            Log.Info(Category.Emulator, "Initialized RDS ROM lookup table.");
+            Log.Info(Category.Emulator, "Initialized RDS ROM lookup table");
 
             // RSC is a lookup table with an 7-bit index, returning an EdgeStrategy
             fs = new FileStream(Paths.BuildPROMPath("rsc03emu.rom"), FileMode.Open);
@@ -1004,7 +1003,7 @@ namespace PERQemu.Processor
             }
             fs.Close();
 
-            Log.Info(Category.Emulator, "Initialized RSC ROM lookup table.");
+            Log.Info(Category.Emulator, "Initialized RSC ROM lookup table");
         }
 
 

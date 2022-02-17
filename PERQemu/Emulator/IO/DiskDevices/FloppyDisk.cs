@@ -85,13 +85,14 @@ namespace PERQemu.IO.DiskDevices
             get { return _driveSelect; }
             set
             {
-                _driveSelect = IsLoaded ? value : false;
+                _driveSelect = value;
 
                 // The Disk Change signal is reset when Drive Select goes low
                 if (!_driveSelect)
                 {
                     _diskChange = false;
                 }
+                Console.WriteLine("Select={0} Change={1}", _driveSelect, _diskChange);
             }
         }
 
@@ -117,6 +118,7 @@ namespace PERQemu.IO.DiskDevices
                         _ready = true;
                     }
                 }
+                Console.WriteLine("HeadSel={0} Ready={1}", _head, _ready);
             }
         }
 
@@ -185,7 +187,7 @@ namespace PERQemu.IO.DiskDevices
             // (it's actually _three_ revolutions for a double density floppy!)
             var startup = 2 * (1 / (Specs.RPM / 60.0)) * Conversion.MsecToNsec;
 
-            Log.Debug(Category.FloppyDisk, "Floppy will come ready in {0:n} seconds", startup / 10e6);
+            Log.Info(Category.FloppyDisk, "Floppy will come ready in {0:n} seconds", startup / 10e6);
 
             _loadDelayEvent = _scheduler.Schedule((ulong)startup, (skewNsec, context) =>
             {
@@ -195,6 +197,19 @@ namespace PERQemu.IO.DiskDevices
             });
 
             base.OnLoad();
+        }
+
+        public override void Unload()
+        {
+            Log.Info(Category.FloppyDisk, "Floppy is about to eject...");
+
+            // Try to signal the FDC in a way that doesn't make the Z80 hang.
+            // This is due to poorly written code in the v87.z80 assembly; have
+            // to see if the newer version has the same issues.  :-/
+            _ready = false;
+            _diskChange = true;
+
+            base.Unload();
         }
 
         private bool _ready;
@@ -242,7 +257,7 @@ namespace PERQemu.IO.DiskDevices
         {
             if (_sectorOrdering.Count == _sectorCount)
             {
-                throw new InvalidOperationException("Track full.");
+                throw new InvalidOperationException("Track full");
             }
 
             _sectorOrdering.Add(sector);

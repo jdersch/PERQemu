@@ -45,7 +45,7 @@ namespace PERQemu.IO.Z80
             _channels[0].Reset();
             _channels[1].Reset();
 
-            Log.Debug(Category.SIO, "Reset.");
+            Log.Debug(Category.SIO, "Reset");
         }
 
         public string Name => "Z80 SIO";
@@ -99,7 +99,7 @@ namespace PERQemu.IO.Z80
                     return _channels[1].ReadRegister();
 
                 default:
-                    throw new InvalidOperationException("Invalid SIO port address.");
+                    throw new InvalidOperationException("Invalid SIO port address");
             }
         }
 
@@ -124,7 +124,7 @@ namespace PERQemu.IO.Z80
                     break;
 
                 default:
-                    throw new InvalidOperationException("Invalid SIO port address.");
+                    throw new InvalidOperationException("Invalid SIO port address");
             }
         }
 
@@ -161,7 +161,7 @@ namespace PERQemu.IO.Z80
 
                 UpdateFlags();
 
-                Log.Debug(Category.SIO, "Channel {0} reset.", _channelNumber);
+                Log.Debug(Category.SIO, "Channel {0} reset", _channelNumber);
             }
 
             public bool InterruptLatched => _rxInterruptLatched || _txInterruptLatched;
@@ -247,7 +247,7 @@ namespace PERQemu.IO.Z80
                             break;
 
                         default:
-                            throw new NotImplementedException(string.Format("Unimplemented SIO command {0}.", cmd));
+                            throw new NotImplementedException($"SIO command {cmd}");
                     }
 
                     // Select register pointer
@@ -270,7 +270,7 @@ namespace PERQemu.IO.Z80
                             
                             break;
                     }
-                    // Write to other register, next access is to reg 0.
+                    // Write to other register, next access is to reg 0
                     _selectedRegister = 0;
                 }
 
@@ -288,12 +288,12 @@ namespace PERQemu.IO.Z80
                 {
                     if (SyncMode)
                     {
-                        if (_huntMode)  // Looking for sync byte(s)
+                        if (_huntMode)          // Looking for sync byte(s)
                         {
                             if (data == _writeRegs[7])  // 8-bit sync value
                             {
                                  Log.Debug(Category.SIO, "Channel {0} sync word matched", _channelNumber);
-                                _huntMode = false;  // exit hunt mode
+                                _huntMode = false;      // Exit hunt mode
                             }
                         }
                         else if (!_huntMode)    // Collecting data
@@ -306,14 +306,14 @@ namespace PERQemu.IO.Z80
                     }
                     else // Async mode
                     {
-                        throw new NotImplementedException();
+                        throw new NotImplementedException("Async mode");
                     }
                 }
             }
 
             private void UpdateFlags()
             {
-                // Set RX-related flags and raise interrupts as necessary.
+                // Set RX-related flags and raise interrupts as necessary
                 _readRegs[0] = (byte)(
                     (_huntMode ? 0x0 : 0x10) |          // SYNC/HUNT
                     0x04 |                              // tx buffer empty
@@ -356,10 +356,12 @@ namespace PERQemu.IO.Z80
 
             /// <summary>
             /// TODO:
-            /// These two FIFOs on the real hardware are just 3 bytes deep.  Here they're unbounded in size and are (ab)used as the
-            /// communications stream between the SIO channel and the device it's connected to.
-            /// What we should really have here is a proper 3-level FIFO and a real stream-ish abstraction somewhere else that connects
-            /// from the SIO to the device, but this will work for now.
+            /// These two FIFOs on the real hardware are just 3 bytes deep.  Here
+            /// they're unbounded in size and are (ab)used as the communications
+            /// stream between the SIO channel and the device it's connected to.
+            /// What we should really have here is a proper 3-level FIFO and a
+            /// real stream-ish abstraction somewhere else that connects from the
+            /// SIO to the device, but this will work for now.
             /// </summary>
             private Queue<byte> _rxFifo;
             private Queue<byte> _txFifo;

@@ -45,7 +45,7 @@ namespace PERQemu.Processor
 
                 _registerBase = 0;
 
-                Log.Debug(Category.Registers, "Reset.");
+                Log.Debug(Category.Registers, "Reset");
             }
 
             public byte RegisterBase

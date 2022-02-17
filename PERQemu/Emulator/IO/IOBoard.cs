@@ -20,6 +20,7 @@
 using System;
 
 using PERQmedia;
+using PERQemu.Config;
 using PERQemu.IO.Z80;
 using PERQemu.IO.DiskDevices;
 
@@ -45,7 +46,6 @@ namespace PERQemu.IO
         public IOBoard(PERQSystem system)
         {
             _sys = system;
-            _drives = new StorageDevice[_sys.Config.Drives.Length];
         }
 
         public static string Name => _name;
@@ -57,27 +57,16 @@ namespace PERQemu.IO
         public static int Z80_ROM_SIZE => _z80RomSize;
         public static int Z80_ROM_ADDRESS => _z80RomAddr;
 
-        public Z80System Z80System
-        {
-            get { return _z80System; }
-        }
+        public Z80System Z80System => _z80System;
+        public bool SupportsAsync => _z80System.SupportsAsync;
 
         // public IStorageController DiskController
-        public ShugartDiskController DiskController
-        {
-            get { return _hardDiskController; }
-        }
+        public ShugartDiskController DiskController => _hardDiskController;
 
         public bool HandlesPort(byte port)
         {
             return _portsHandled[port];
         }
-
-        public bool SupportsAsync
-        {
-            get { return _z80System.SupportsAsync; }
-        }
-
 
         //
         // Basic operations
@@ -94,7 +83,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Runs one Z80 instruction, synchronously.
         /// </summary>
-        public virtual uint Clock()
+        public virtual uint Run()
         {
             return _z80System.Run();
         }
@@ -123,89 +112,39 @@ namespace PERQemu.IO
 
         public abstract void IOWrite(byte port, int value);
 
-        //
-        // Disk loading and unloading
-        //
 
-        public virtual void LoadDisk(DeviceType dev, string mediaPath, int unit = 0)
+        /// <summary>
+        /// Creates disk devices appropriate for this board, loads them, and
+        /// attaches them to their controllers.  Returns the new StorageDevice.
+        /// </summary>
+        public virtual StorageDevice LoadDisk(Drive dev)
         {
-            if (dev == DeviceType.Floppy)
+            if (dev.Type == DeviceType.Floppy)
             {
-                _drives[unit] = new FloppyDisk(_z80System.Scheduler, mediaPath);
-                _drives[unit].Load();
-                _z80System.FDC.AttachDrive((uint)unit, (FloppyDisk)_drives[unit]);
-            }
-            else if (dev == DeviceType.Disk14Inch)
-            {
-                _drives[unit] = new HardDisk(_sys.Scheduler, mediaPath);
-                _drives[unit].Load();
-                _hardDiskController.AttachDrive((HardDisk)_drives[unit]);
-            }
-            else
-            {
-                throw new InvalidOperationException("Wrong disk type for this IO Board");
-            }
-        }
+                var floppy = new FloppyDisk(_z80System.Scheduler, dev.MediaPath);
 
-        public virtual void SaveDisk(int unit = 0)
-        {
-            if (_drives[unit] != null && _drives[unit].IsLoaded && _drives[unit].IsModified)
-            {
-                if (Settings.SaveDiskOnShutdown == Ask.Yes)
+                if (!string.IsNullOrEmpty(dev.MediaPath))
                 {
-                    Console.WriteLine("Saving unit " + unit);   // fixme
-                    _drives[unit].Save();
+                    floppy.Load();
                 }
-                else
-                {
-                    Console.WriteLine("Wanna save unit " + unit + "?  ya caint yet");
-                }
+
+                _z80System.FDC.AttachDrive((uint)dev.Unit, floppy);
+                return floppy;
             }
-        }
 
-        //public virtual void SaveDisk(string mediaPath, int unit = 0)
-        //{
-        //    if (_drives[unit].IsLoaded)
-        //    {
-        //        Console.WriteLine("Doing a SaveAs for unit " + unit);
-        //        _drives[unit].SaveAs(mediaPath);
-        //    }
-        //}
-
-        public virtual void UnloadDisk(int unit = 0)
-        {
-            _drives[unit]?.Unload();
-        }
-
-        public virtual void CheckDisks()
-        {
-            for (var unit = 0; unit < _drives.Length; unit++)
+            if (dev.Type == DeviceType.Disk14Inch)
             {
-                if (_drives[unit] == null || (_drives[unit] != null && _drives[unit].Info.Type == DeviceType.Unused))
-                {
-                    Console.WriteLine("Drive {0} is unassigned.", unit);
-                }
-                else
-                {
-                    Console.WriteLine("Drive {0}:  Type: {1} - {2}", unit,
-                                      _drives[unit].Info.Type,
-                                      _drives[unit].Info.Description);
+                var hard = new HardDisk(_sys.Scheduler, dev.MediaPath);
 
-                    if (_drives[unit].IsLoaded)
-                    {
-                        Console.WriteLine("Loaded: {0}", Paths.Canonicalize(_drives[unit].Filename));
-                        Console.WriteLine("Flags:  {0}", string.Join(" ",
-                                          _drives[unit].Info.IsRemovable ? "Removable" : string.Empty,
-                                          _drives[unit].Info.IsBootable ? "Bootable" : string.Empty,
-                                          _drives[unit].Info.IsWritable ? "Writable" : "Read only",
-                                          _drives[unit].IsModified ? "Modified" : string.Empty));
-                    }
-                    else
-                    {
-                        Console.WriteLine("Is not loaded.");
-                    }
-                }
+                hard.Load();
+
+                // Unit # is irrelevant (for now); we only support one drive
+                // FIXME when we switch to IStorageController for EIO...
+                _hardDiskController.AttachDrive(hard);
+                return hard;
             }
+
+            throw new InvalidOperationException("Wrong disk type for this IO Board");
         }
 
         /// <summary>
@@ -238,9 +177,6 @@ namespace PERQemu.IO
 
         //protected IStorageController _hardDisk;
         protected ShugartDiskController _hardDiskController;
-
-        // Drives attached to this board
-        protected StorageDevice[] _drives;
 
         // I/O port map for this board
         private static bool[] _portsHandled = new bool[256];

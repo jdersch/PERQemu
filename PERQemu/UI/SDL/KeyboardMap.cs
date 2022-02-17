@@ -172,7 +172,7 @@ namespace PERQemu.UI
             SetKeyMapping(SDL.SDL_Keycode.SDLK_CLEAR, 0x15, 0x15);      // OOPS (^u)    (Mac)
             SetKeyMapping(SDL.SDL_Keycode.SDLK_F3, 0x0a, 0x0a);         // LINEFEED (^j)
 
-            Log.Debug(Category.Keyboard, "PERQ-1 map initialized.");
+            Log.Debug(Category.Keyboard, "PERQ-1 map initialized");
         }
 
         /// <summary>
@@ -285,7 +285,7 @@ namespace PERQemu.UI
             SetKeyMapping(SDL.SDL_Keycode.SDLK_KP_8, 0x60, 0x60);       // NumPad 8
             SetKeyMapping(SDL.SDL_Keycode.SDLK_KP_9, 0x5f, 0x5f);       // NumPad 9
 
-            Log.Debug(Category.Keyboard, "PERQ-2 (VT100) map initialized.");
+            Log.Debug(Category.Keyboard, "PERQ-2 (VT100) map initialized");
         }
 
         // Maps for normal and shifted keys

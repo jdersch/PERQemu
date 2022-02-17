@@ -69,7 +69,7 @@ namespace PERQemu.UI
                     {
                         if (verbose) Console.WriteLine(line);
 
-                        if (line.StartsWith("@", StringComparison.CurrentCulture))
+                        if (line.StartsWith("@", StringComparison.InvariantCulture))
                         {
                             Console.WriteLine("** Nested script files not supported - {0} ignored", line);
                         }
@@ -174,7 +174,7 @@ namespace PERQemu.UI
         {
             if (command.Method == null)
             {
-                throw new ArgumentException("Invalid (null) command.");
+                throw new ArgumentException("Invalid (null) command");
             }
 
             ParameterInfo[] parameterInfo = command.Method.Method.GetParameters();
@@ -267,9 +267,7 @@ namespace PERQemu.UI
                     }
                     else
                     {
-                        throw new ArgumentException(
-                            string.Format("Unhandled type for parameter {0}, type {1}",
-                                          paramIndex, p.ParameterType));
+                        throw new ArgumentException($"Unhandled type for parameter {paramIndex}, type {p.ParameterType}");
                     }
                 }
             }
@@ -481,11 +479,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException($"{arg} out of range for a 32-bit {r} value.");
+                throw new ArgumentException($"{arg} out of range for a 32-bit {r} value");
             }
             catch (FormatException)
             {
-                throw new ArgumentException($"{arg} is not a valid 32-bit {r} value.");
+                throw new ArgumentException($"{arg} is not a valid 32-bit {r} value");
             }
 
             return result;
@@ -502,11 +500,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException($"{arg} out of range for a 32-bit {r} value.");
+                throw new ArgumentException($"{arg} out of range for a 32-bit {r} value");
             }
             catch (FormatException)
             {
-                throw new ArgumentException($"{arg} is not a valid 32-bit {r} value.");
+                throw new ArgumentException($"{arg} is not a valid 32-bit {r} value");
             }
 
             return result;
@@ -523,11 +521,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException($"{arg} out of range for a 16-bit {r} value.");
+                throw new ArgumentException($"{arg} out of range for a 16-bit {r} value");
             }
             catch (FormatException)
             {
-                throw new ArgumentException($"{arg} is not a valid 16-bit {r} value.");
+                throw new ArgumentException($"{arg} is not a valid 16-bit {r} value");
             }
 
             return result;
@@ -544,11 +542,11 @@ namespace PERQemu.UI
             }
             catch (OverflowException)
             {
-                throw new ArgumentException($"{arg} out of range for an 8-bit {r} value.");
+                throw new ArgumentException($"{arg} out of range for an 8-bit {r} value");
             }
             catch (FormatException)
             {
-                throw new ArgumentException($"{arg} is not a valid 8-bit {r} value.");
+                throw new ArgumentException($"{arg} is not a valid 8-bit {r} value");
             }
 
             return result;
@@ -591,7 +589,7 @@ namespace PERQemu.UI
 
                         if (tokens.Count == 0)
                         {
-                            throw new InvalidOperationException("Command attribute with zero words!? " + function.Name);
+                            throw new InvalidOperationException($"Command attribute {function.Name} has zero words!?");
                         }
 
                         // Create the new node to insert

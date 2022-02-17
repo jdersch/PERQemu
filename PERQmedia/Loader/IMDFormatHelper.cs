@@ -263,8 +263,7 @@ namespace PERQmedia
                         break;
 
                     default:
-                        throw new InvalidOperationException(
-                            string.Format("Unexpected IMD sector data type {0}", type));
+                        throw new InvalidOperationException($"Unexpected IMD sector data type {type}");
                 }
 
                 // Just push it onto the list of read sectors; we'll write

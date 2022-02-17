@@ -58,7 +58,7 @@ namespace PERQemu.IO.Z80
             _interruptActive = false;
             _enableDMA = false;
 
-            Log.Debug(Category.Z80DMA, "Reset.");
+            Log.Debug(Category.Z80DMA, "Reset");
         }
 
         public string Name => "Z80 DMA";
@@ -145,7 +145,7 @@ namespace PERQemu.IO.Z80
                     _byteCounter--;
 
                     Log.Debug(Category.Z80DMA,
-                              "Transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left.",
+                              "Transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left",
                               data, source, sourceAddress, dest, destAddress, _byteCounter);
 
 
@@ -178,7 +178,7 @@ namespace PERQemu.IO.Z80
                 // interrupt, restart, etc.
                 if (_byteCounter == 0)
                 {
-                    Log.Debug(Category.Z80DMA, "Transfer complete.");
+                    Log.Debug(Category.Z80DMA, "Transfer complete");
 
                     if ((_interruptControl & 0x2) != 0)
                     {
@@ -193,7 +193,7 @@ namespace PERQemu.IO.Z80
                         _portAddressA = _portAddressAInit;
                         _portAddressB = _portAddressBInit;
 
-                        Log.Debug(Category.Z80DMA, "Transfer auto-restarting.");
+                        Log.Debug(Category.Z80DMA, "Transfer auto-restarting");
                     }
                     else
                     {
@@ -371,7 +371,7 @@ namespace PERQemu.IO.Z80
                     break;
 
                 default:        // Shouldn't happen
-                    throw new InvalidOperationException("Unexpected subregister write.");
+                    throw new InvalidOperationException("Unexpected subregister write");
             }
         }
 
@@ -379,8 +379,8 @@ namespace PERQemu.IO.Z80
         {
             switch (command)
             {
-                case 0xc3: // Reset
-                case 0xa3: // TODO: this is a slightly different reset
+                case 0xc3:  // Reset
+                case 0xa3:  // TODO: this is a slightly different reset
                     Reset();
                     break;
 
@@ -416,14 +416,12 @@ namespace PERQemu.IO.Z80
                     _enableDMA = false;
                     break;
 
-                case 0xbb:
-                //_readMask = 
-
+                // Unimplemented
+                case 0xbb:  //_readMask
                 case 0xb3:
                 case 0x88:
                 case 0xb7:
-                    // Unimplemented.
-                    throw new NotImplementedException();
+                    throw new NotImplementedException($"DMA command {command}");
             }
         }
 

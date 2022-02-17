@@ -61,7 +61,7 @@ namespace PERQemu.IO
 
             if (_devices.Contains(device))
             {
-                throw new InvalidOperationException("This component has already been added to the bus.");
+                throw new InvalidOperationException("This component has already been added to the bus");
             }
 
             _devices.Add(device);
@@ -129,10 +129,8 @@ namespace PERQemu.IO
                             string.Format("IO Port conflict at {0:x2} between {1} and {2}",
                                            i, device, _deviceDispatch[i]));
                     }
-                    else
-                    {
-                        _deviceDispatch[i] = device;
-                    }
+
+                    _deviceDispatch[i] = device;
                 }
             }
         }

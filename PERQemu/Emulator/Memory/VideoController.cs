@@ -499,7 +499,7 @@ namespace PERQemu.Memory
             }
 
             // Can't actually happen
-            throw new Exception("Bad _cursorFunc in TransformDisplayQuad");
+            throw new ArgumentException("Bad _cursorFunc in TransformDisplayQuad");
         }
 
         /// <summary>
@@ -531,7 +531,7 @@ namespace PERQemu.Memory
                     return (byte)(~cursByte ^ ~dispByte);
             }
 
-            throw new Exception("Bad _cursorFunc in TransformCursorByte");
+            throw new ArgumentException("Bad _cursorFunc in TransformCursorByte");
         }
 
         [Flags]

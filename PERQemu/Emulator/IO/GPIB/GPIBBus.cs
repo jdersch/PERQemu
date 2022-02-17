@@ -75,7 +75,7 @@ namespace PERQemu.IO.GPIB
         {
             if (_devices.Contains(device))
             {
-                throw new InvalidOperationException("This component has already been added to the GPIB bus.");
+                throw new InvalidOperationException("This component has already been added to the GPIB bus");
             }
 
             _devices.Add(device);

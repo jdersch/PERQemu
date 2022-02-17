@@ -93,7 +93,7 @@ namespace PERQemu.IO.SerialDevices
         public string Port
         {
             get { return "RSX:"; }
-            set { throw new InvalidOperationException("Cannot specify the port on an RSX file port."); }
+            set { throw new InvalidOperationException("Cannot specify the port on RSX:"); }
         }
 
         public int BaudRate

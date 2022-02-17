@@ -220,7 +220,7 @@ namespace PERQemu.IO.Z80
                         }
                     }
 
-                    Log.Debug(Category.GPIB, "DataIn reg read --> 0x{0:x2} ({1} bytes remaining)", retval, _busFifo.Count);
+                    Log.Debug(Category.GPIB, "DataIn read 0x{0:x2} ({1} bytes remaining)", retval, _busFifo.Count);
                     AssertInterrupt();
                     return retval;
 

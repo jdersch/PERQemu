@@ -88,7 +88,7 @@ namespace PERQemu.Processor
             _mq = 0;
             _mqEnabled = false;
 
-            Log.Debug(Category.CPU, "{0} reset.", _name);
+            Log.Debug(Category.CPU, "{0} processor reset", _name);
         }
 
 
@@ -158,7 +158,7 @@ namespace PERQemu.Processor
                 uOp.CND == Condition.True &&
                 uOp.JMP == JumpOperation.Goto)
             {
-                throw new UnimplementedInstructionException(string.Format("CPU has halted in a loop at {0:x4}", PC));
+                throw new UnimplementedInstructionException($"CPU has halted in a loop at {PC:x4}");
             }
 #endif
 
@@ -487,8 +487,7 @@ namespace PERQemu.Processor
                     break;
 
                 default:
-                    throw new UnimplementedInstructionException(
-                        string.Format("Unimplemented AMUX {0}", uOp.A));
+                    throw new UnimplementedInstructionException($"Unimplemented AMUX {uOp.A}");
             }
 
             return amux;
@@ -593,7 +592,7 @@ namespace PERQemu.Processor
                                 {
                                     case MulDivCommand.Off:
                                         if (_mqEnabled)
-                                            Log.Debug(Category.MulDiv, "Unit disabled.");
+                                            Log.Debug(Category.MulDiv, "Unit disabled");
                                         _mqEnabled = false;
                                         break;
 
@@ -623,7 +622,7 @@ namespace PERQemu.Processor
 
                             if (_refillOp)
                             {
-                                Log.Debug(Category.OpFile, "Load init.");
+                                Log.Debug(Category.OpFile, "Load init");
                             }
 #if DEBUG
                             else
@@ -671,8 +670,7 @@ namespace PERQemu.Processor
                             break;
 
                         default:
-                            throw new UnimplementedInstructionException(
-                                string.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                            throw new UnimplementedInstructionException($"Unimplemented Special Function {uOp.SF:x1}");
                     }
                     break;
 
@@ -824,8 +822,7 @@ namespace PERQemu.Processor
                     else
                     {
                         // Not possible...
-                        throw new UnimplementedInstructionException(
-                            string.Format("Unimplemented Special Function {0:x1}", uOp.SF));
+                        throw new UnimplementedInstructionException($"Unimplemented Special Function {uOp.SF}");
                     }
                     break;
 
@@ -834,8 +831,7 @@ namespace PERQemu.Processor
                     break;
 
                 default:
-                    throw new UnimplementedInstructionException(
-                        string.Format("Unimplemented Function {0:x1}", uOp.F));
+                    throw new UnimplementedInstructionException($"Unimplemented Function {uOp.F}");
             }
         }
 

@@ -205,7 +205,7 @@ namespace PERQemu
             var me = Thread.CurrentThread.ManagedThreadId;
 
             // This is supposed to be many times faster than lock{}
-            // Impact is around +1fps, if that?  Woo.
+            // Impact is ~1fps, which is... tolerable.
             while (Interlocked.CompareExchange(ref _queueLock, me, 0) != me)
             {
                 spins++;
@@ -260,7 +260,7 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// The Top of the queue (null if queue is empty).
+        /// The Top of the queue (points to sentinel node if no other events).
         /// </summary>
         public SchedulerEvent Top
         {
@@ -289,7 +289,7 @@ namespace PERQemu
             //
             // Do a linear search to find the place to put this in.  Since we
             // maintain a sorted list with every insertion we only need to find
-            // the first entr that the new entry is earlier (or equal) to. This
+            // the first entry that the new entry is earlier (or equal) to. This
             // will likely be adequate as the queue should never get incredibly
             // deep; a binary search may be more performant if this isn't the case.
             //

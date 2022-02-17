@@ -340,7 +340,8 @@ namespace PERQemu.IO.DiskDevices
             // implemented yet.  So just do the whole block, lickety split
 
             if (_disk.CurCylinder != _cylinder || _disk.CurHead != _head)
-                Log.Warn(Category.HardDisk, "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
+                Log.Warn(Category.HardDisk,
+                         "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
                          _disk.CurCylinder, _cylinder, _disk.CurHead, _head);
 
             // Read the sector from the disk

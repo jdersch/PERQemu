@@ -1,16 +1,17 @@
-// disassembler.cs - Copyright 2006-2018 Josh Dersch (derschjo@gmail.com)
+//
+// Disassembler.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
-// PERQemu is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// PERQemu is free software: you can redistribute it and/or modify it
+// under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -33,8 +34,6 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Returns a human-readable disassembly of a given microcode instruction.
         /// </summary>
-        /// <param name="op"></param>
-        /// <returns></returns>
         public static string Disassemble(ushort address, CPU.Instruction op)
         {
             _pc = address;
@@ -66,24 +65,20 @@ namespace PERQemu.Debugger
                 }
             }
 
-            // Append function, if any.
+            // Append function, if any
             string func = DisassembleFunction(op);
             if (func.Length > 0)
             {
                 sb.AppendFormat("{0}. ", DisassembleFunction(op));
             }
 
-            // Append jump.
+            // Append jump
             sb.AppendFormat("{0}.", DisassembleJump(op));
 
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Show Amux field.
-        /// </summary>
-        /// <param name="uOp"></param>
-        /// <returns></returns>
+
         private static string DisassembleAmuxInput(CPU.Instruction uOp)
         {
             string amux = "<invalid>";
@@ -117,11 +112,11 @@ namespace PERQemu.Debugger
                 case AField.XYRegister: // XY register at location specified by X field
                     if (uOp.X < 0x40)
                     {
-                        amux = String.Format("R{0:x2}%", uOp.X);
+                        amux = string.Format("R{0:x2}%", uOp.X);
                     }
                     else
                     {
-                        amux = String.Format("R{0:x2}", uOp.X);
+                        amux = string.Format("R{0:x2}", uOp.X);
                     }
                     break;
 
@@ -133,11 +128,7 @@ namespace PERQemu.Debugger
             return amux;
         }
 
-        /// <summary>
-        /// Decode Bmux field.
-        /// </summary>
-        /// <param name="uOp"></param>
-        /// <returns></returns>
+
         private static string DisassembleBmuxInput(CPU.Instruction uOp)
         {
             string bmux = "<invalid>";
@@ -147,11 +138,11 @@ namespace PERQemu.Debugger
             {
                 if (uOp.Y < 0x40)
                 {
-                    bmux = String.Format("R{0:x2}%", uOp.Y);
+                    bmux = string.Format("R{0:x2}%", uOp.Y);
                 }
                 else
                 {
-                    bmux = String.Format("R{0:x2}", uOp.Y);
+                    bmux = string.Format("R{0:x2}", uOp.Y);
                 }
             }
             else
@@ -160,21 +151,23 @@ namespace PERQemu.Debugger
                 // 8 bits from Z, and 8 bits from Y.  Otherwise just 8 bits from Y.
                 if (IsSpecialFunction(uOp) && uOp.SF == 0)
                 {
-                    bmux = String.Format("{0:x4}", (uOp.Z << 8) | (uOp.Y));
+                    bmux = string.Format("{0:x4}", (uOp.Z << 8) | (uOp.Y));
                 }
                 else
                 {
-                    bmux = String.Format("{0:x2}", uOp.Y);
+                    bmux = string.Format("{0:x2}", uOp.Y);
                 }
             }
 
             return bmux;
         }
 
+
         private static bool IsSpecialFunction(CPU.Instruction uOp)
         {
             return (uOp.F == 0 || uOp.F == 2);
         }
+
 
         private static string DisassembleALUOp(string amux, string bmux, CPU.Instruction op)
         {
@@ -191,59 +184,59 @@ namespace PERQemu.Debugger
                     break;
 
                 case ALUOperation.NotA:
-                    alu = String.Format("NOT {0}", amux);
+                    alu = string.Format("NOT {0}", amux);
                     break;
 
                 case ALUOperation.NotB:
-                    alu = String.Format("NOT {0}", bmux);
+                    alu = string.Format("NOT {0}", bmux);
                     break;
 
                 case ALUOperation.AandB:
-                    alu = String.Format("{0} AND {1}", amux, bmux);
+                    alu = string.Format("{0} AND {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AandNotB:
-                    alu = String.Format("{0} AND NOT {1}", amux, bmux);
+                    alu = string.Format("{0} AND NOT {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AnandB:
-                    alu = String.Format("{0} NAND {1}", amux, bmux);
+                    alu = string.Format("{0} NAND {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AorB:         // a or b
-                    alu = String.Format("{0} OR {1}", amux, bmux);
+                    alu = string.Format("{0} OR {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AorNotB:      // a or not b
-                    alu = String.Format("{0} OR NOT {1}", amux, bmux);
+                    alu = string.Format("{0} OR NOT {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AnorB:        // a nor b
-                    alu = String.Format("{0} NOR {1}", amux, bmux);
+                    alu = string.Format("{0} NOR {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AxorB:        // a xor b
-                    alu = String.Format("{0} XOR {1}", amux, bmux);
+                    alu = string.Format("{0} XOR {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AxnorB:       // a xnor b
-                    alu = String.Format("{0} XNOR {1}", amux, bmux);
+                    alu = string.Format("{0} XNOR {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AplusB:       // a+b
-                    alu = String.Format("{0} + {1}", amux, bmux);
+                    alu = string.Format("{0} + {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AplusBplusCarry:  // a+b+oldcarry
-                    alu = String.Format("{0} + {1} + Cry", amux, bmux);
+                    alu = string.Format("{0} + {1} + Cry", amux, bmux);
                     break;
 
                 case ALUOperation.AminusB:      // a-b
-                    alu = String.Format("{0} - {1}", amux, bmux);
+                    alu = string.Format("{0} - {1}", amux, bmux);
                     break;
 
                 case ALUOperation.AminusBminusCarry: // a-b-carry
-                    alu = String.Format("{0} - {1} - Cry", amux, bmux);
+                    alu = string.Format("{0} - {1} - Cry", amux, bmux);
                     break;
             }
 
@@ -253,7 +246,6 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Decode Function and Special Function fields.
         /// </summary>
-        /// <param name="uOp"></param>
         private static string DisassembleFunction(CPU.Instruction uOp)
         {
             string function = "";
@@ -335,7 +327,7 @@ namespace PERQemu.Debugger
                             break;
 
                         case 0xf:       // IOB function
-                            function += String.Format("IOB({0:x2})", uOp.IOPort);
+                            function += string.Format("IOB({0:x2})", uOp.IOPort);
                             break;
                     }
                     break;
@@ -364,7 +356,7 @@ namespace PERQemu.Debugger
                             break;
 
                         case 0x5:   // Push long constant
-                            function += String.Format("Push {0:x4}", uOp.Y | (uOp.Z << 8));
+                            function += string.Format("Push {0:x4}", uOp.Y | (uOp.Z << 8));
                             break;
 
                         case 0x6:   // address input := Shift
@@ -414,13 +406,12 @@ namespace PERQemu.Debugger
                     break;
 
                 case 0x3:       // Long jump
-                    // Handled in DoJump.
+                    // Handled in DoJump
                     break;
 
                 default:
                     function += "<invalid>";
                     break;
-
             }
 
             return function;
@@ -437,21 +428,21 @@ namespace PERQemu.Debugger
             // See if this is a left or right shift, or a rotate
             if (low == 0xf)
             {
-                shifter = String.Format("Left Shift {0}", high);
+                shifter = string.Format("Left Shift {0}", high);
             }
             else if ((0xf - low) == high)
             {
-                shifter = String.Format("Right Shift {0}", high);
+                shifter = string.Format("Right Shift {0}", high);
             }
             else if (
                 (low == 0xd || low == 0xe) &&
                 (high >= 0x8 && high <= 0xf))
             {
-                shifter = String.Format("Rotate {0}", (high & 0x7) | (low == 0xd ? 0x0 : 0x8));
+                shifter = string.Format("Rotate {0}", (high & 0x7) | (low == 0xd ? 0x0 : 0x8));
             }
             else
             {
-                shifter = String.Format("BitField, offset {0} mask {1:x4}", high, (0x1ffff >> (0x10 - low)));
+                shifter = string.Format("BitField, offset {0} mask {1:x4}", high, (0x1ffff >> (0x10 - low)));
             }
 
             return shifter;
@@ -525,13 +516,10 @@ namespace PERQemu.Debugger
                     break;
             }
 
-            return String.Format(jump, DisassembleJumpType(uOp));
+            return string.Format(jump, DisassembleJumpType(uOp));
         }
 
-        /// <summary>
-        /// Decodes the jump field.
-        /// </summary>
-        /// <param name="uOp"></param>
+
         private static string DisassembleJumpType(CPU.Instruction uOp)
         {
             string type = "<invalid>";
@@ -544,19 +532,19 @@ namespace PERQemu.Debugger
                     break;
 
                 case JumpOperation.Call:
-                    type = String.Format("Call {0:x4}", CalcAddress(uOp));
+                    type = string.Format("Call {0:x4}", CalcAddress(uOp));
                     break;
 
                 case JumpOperation.CallS:
-                    type = String.Format("Call S");
+                    type = "Call S";
                     break;
 
                 case JumpOperation.Goto:
-                    type = String.Format("Goto {0:x4}", CalcAddress(uOp));
+                    type = string.Format("Goto {0:x4}", CalcAddress(uOp));
                     break;
 
                 case JumpOperation.PushLoad:
-                    type = String.Format("PushLoad {0:x4}", CalcAddress(uOp));
+                    type = string.Format("PushLoad {0:x4}", CalcAddress(uOp));
                     break;
 
                 case JumpOperation.VectorDispatch:
@@ -565,68 +553,68 @@ namespace PERQemu.Debugger
                         // Vector
                         int next = ZOpFill(~uOp.Z);
                         next = next | ((~uOp.Z & 0x3c) << 4);
-                        type = String.Format("Vector {0:x4}", next);
+                        type = $"Vector {next:x4}";
                     }
                     else
                     {
                         // Dispatch
                         int next = ZOpFill(~uOp.Z);
                         next = next | ((~uOp.Z & 0x3c) << 4);
-                        type = String.Format("Dispatch {0:x4}", next);
+                        type = $"Dispatch {next:x4}";
                     }
                     break;
 
                 case JumpOperation.GotoS:
-                    type = String.Format("GotoS {0:x4}", CalcAddress(uOp));
+                    type = string.Format("GotoS {0:x4}", CalcAddress(uOp));
                     break;
 
                 case JumpOperation.Return:
-                    type = String.Format("Return");
+                    type = "Return";
                     break;
 
                 case JumpOperation.JumpPop:
                     if (uOp.H == 0)
                     {
-                        type = String.Format("JumpPop {0:x4}", CalcAddress(uOp));
+                        type = string.Format("JumpPop {0:x4}", CalcAddress(uOp));
                     }
                     else
                     {
-                        type = String.Format("LeapPop {0:x4}", CalcAddress(uOp));
+                        type = string.Format("LeapPop {0:x4}", CalcAddress(uOp));
                     }
                     break;
 
                 case JumpOperation.Repeat:
-                    type = String.Format("Repeat {0:x4}", CalcAddress(uOp));
+                    type = string.Format("Repeat {0:x4}", CalcAddress(uOp));
                     break;
 
                 case JumpOperation.RepeatLoop:
-                    type = String.Format("RepeatLoop");
+                    type = "RepeatLoop";
                     break;
 
                 case JumpOperation.Loop:
-                    type = String.Format("Loop");
+                    type = "Loop";
                     break;
 
                 case JumpOperation.LoadS:
-                    type = String.Format("LoadS {0:x4}", CalcAddress(uOp));
+                    type = string.Format("LoadS {0:x4}", CalcAddress(uOp));
                     break;
 
                 case JumpOperation.Next:
-                    type = String.Format("Continue");
+                    type = "Continue";
                     break;
 
                 case JumpOperation.ThreeWayBranch:
-                    type = String.Format("ThreeWayBranch");
+                    type = "ThreeWayBranch";
                     break;
 
                 case JumpOperation.NextInstReviveVictim:
                     if (uOp.H == 0)
                     {
-                        type = String.Format("NextInst {0:x4}", DisassembleNextInst(uOp));
+                        type = string.Format("NextInst {0:x4}", DisassembleNextInst(uOp));
                     }
                     else
                     {
-                        type = String.Format("Revive Victim");
+                        type = "Revive Victim";
                     }
                     break;
             }
@@ -637,8 +625,6 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Calculate the next microinstruction address.
         /// </summary>
-        /// <param name="uOp"></param>
-        /// <returns></returns>
         private static string CalcAddress(CPU.Instruction uOp)
         {
             ushort addr = 0;
@@ -664,11 +650,10 @@ namespace PERQemu.Debugger
                     break;
 
                 default:
-                    throw new UnimplementedInstructionException(
-                            String.Format("Error: F value does not specify a jump."));
+                    throw new UnimplementedInstructionException("Error: F value does not specify a jump");
             }
 
-            return String.Format("{0:x4}", addr);
+            return $"{addr:x4}";
         }
 
 

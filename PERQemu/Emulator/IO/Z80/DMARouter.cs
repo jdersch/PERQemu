@@ -60,8 +60,7 @@ namespace PERQemu.IO.Z80
                     break;
 
                 default:
-                    throw new NotImplementedException(
-                        string.Format("DMA not implemented for device {0}.", device));
+                    throw new NotImplementedException($"DMA not implemented for device {device}");
             }
 
             if (device != SelectedDMADevice.None)

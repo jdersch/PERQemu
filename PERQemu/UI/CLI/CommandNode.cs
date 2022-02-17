@@ -231,7 +231,10 @@ namespace PERQemu.UI
         {
             if (SubNodes.Count > 1)
             {
-                return $"{Name} ({SubNodes.Count})... ";
+                // Note: this isn't quite accurate given the way parameters
+                // are handled now, and I think it's too "busy" visually...
+                //return $"{Name} ({SubNodes.Count})... ";
+                return $"{Name}... ";
             }
 
             return Name;

@@ -75,8 +75,7 @@ namespace PERQemu.IO.Z80
             else
             {
                 // throw for now so I can see what's going on
-                throw new InvalidOperationException(
-                    string.Format("Unexpected memory read at address 0x{0:x}", address));
+                throw new InvalidOperationException($"Unexpected memory read at address 0x{address:x}");
             }
         }
 
@@ -89,8 +88,7 @@ namespace PERQemu.IO.Z80
             else
             {
                 // throw for now so I can see what's going on
-                throw new InvalidOperationException(
-                    string.Format("Unexpected memory write at address 0x{0:x} of 0x{1:x}", address, value));
+                throw new InvalidOperationException($"Unexpected memory write at address 0x{address:x} of 0x{value:x}");
             }
         }
 

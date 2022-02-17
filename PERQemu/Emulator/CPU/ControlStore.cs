@@ -67,7 +67,7 @@ namespace PERQemu.Processor
                 _wcsHold = false;
                 _romEnabled = true;
 
-                Log.Debug(Category.Microstore, "WCS reset, ROM enabled.");
+                Log.Debug(Category.Microstore, "WCS reset, ROM enabled");
             }
 
             public bool Hold
@@ -255,7 +255,7 @@ namespace PERQemu.Processor
                 }
                 fs.Close();
 
-                Log.Info(Category.Emulator, "Loaded boot ROM from {0}.", Paths.Canonicalize(path));
+                Log.Info(Category.Emulator, "Loaded boot ROM from {0}", Paths.Canonicalize(path));
             }
 
             /// <summary>
@@ -290,7 +290,7 @@ namespace PERQemu.Processor
 
                 _romEnabled = false;
 
-                Log.Debug(Category.Microstore, "Loaded microcode from {0}.", Paths.Canonicalize(path));
+                Log.Debug(Category.Microstore, "Loaded microcode from {0}", Paths.Canonicalize(path));
             }
 
             /// <summary>

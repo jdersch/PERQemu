@@ -92,7 +92,7 @@ namespace PERQemu.Processor
                 _flags.Clear();
                 _oldFlags.Clear();
 
-                Log.Debug(Category.ALU, "Reset.");
+                Log.Debug(Category.ALU, "Reset");
             }
 
             public ExtendedRegister R => _r;
@@ -207,7 +207,7 @@ namespace PERQemu.Processor
                         break;
 
                     default:
-                        throw new UnimplementedInstructionException(string.Format("Unhandled ALU operation {0:x1}", op));
+                        throw new UnimplementedInstructionException($"Unhandled ALU operation {op:x1}");
                 }
 
                 // Inputs to the condition code PAL, used to build an index into

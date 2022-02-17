@@ -54,10 +54,6 @@ namespace PERQemu
             _editor = new CommandPrompt(_exec.CommandTreeRoot);
         }
 
-        //public CommandNode Prefix
-        //{
-        //    get { return _exec.CurrentRoot; }
-        //}
 
         /// <summary>
         /// Enter a subsystem.
@@ -92,11 +88,22 @@ namespace PERQemu
         /// </summary>
         public void ReadScript(string script)
         {
-            var curPrefix = _exec.CurrentRoot;
-
-            _exec.ExecuteScript(Paths.Canonicalize(script), true);
-
-            _exec.CurrentRoot = curPrefix;
+            var curPrefix = _editor.CurrentPrefix;
+            
+            try
+            {
+                ResetPrefix();
+                _exec.ExecuteScript(Paths.Canonicalize(script));
+            }
+            catch
+            {
+                throw;
+            }
+            finally
+            {
+                // Restore our prefix
+                SetPrefix(curPrefix);
+            }
         }
 
         /// <summary>

@@ -87,7 +87,7 @@ namespace PERQemu.IO
                 //  read loopback/diagnostic?
 
                 default:
-                    Log.Warn(Category.IO, "Unhandled OIO Read from port {0:x2}.", port);
+                    Log.Warn(Category.IO, "Unhandled OIO Read from port {0:x2}", port);
                     break;
             }
 

@@ -178,13 +178,31 @@ namespace PERQemu.UI
         {
             if (OKtoReconfig())
             {
-                if (!PERQemu.Config.Load(file))
+                var found = Paths.FindFileInPath(file, Paths.ConfigDir, ".cfg");
+
+                if (found == string.Empty)
+                {
+                    // Special case: if typed "configure load default" and
+                    // there's no file named "default"... do the implied thing?
+                    if (file == "default")
+                    {
+                        SetDefault();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Could not find file '{0}'.", file);
+                    }
+                    return;
+                }
+
+                if (!PERQemu.Config.Load(found))
                 {
                     Console.WriteLine(PERQemu.Config.Current.Reason);
                 }
                 else
                 {
-                    Console.WriteLine("Configuration loaded.");
+                    Console.WriteLine("Configuration '{0}' loaded from {1}.",
+                                     PERQemu.Config.Current.Name, found);
                 }
             }
         }
@@ -192,6 +210,8 @@ namespace PERQemu.UI
         [Command("configure save", "Save the configuration to the current file")]
         public void SaveConfig()
         {
+            // todo: set the dir prefix and add .cfg if necessary
+
             if (!PERQemu.Config.Save())
             {
                 Console.WriteLine(PERQemu.Config.Current.Reason);
@@ -202,6 +222,8 @@ namespace PERQemu.UI
             }
         }
 
+        // todo: now this is confusing... if the name doesn't match it throws
+        // our whole prefab/caching scheme out the window.  hmm.  think, meat...
         [Command("configure save", "Save the configuration to a named file")]
         public void SaveConfig(string file)
         {
@@ -551,16 +573,41 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Assign the device type and filename for a particular unit #.
+        /// Get the device type from a media file and assign it to the first
+        /// available matching drive slot.
         /// </summary>
-        [Command("configure drive", "Assign a type, file name to a storage device")]
-        public void ConfigDrive(byte unit, DeviceType dev, string file = "")
+        [Command("configure assign", "Assign a media file to a storage device")]
+        public void ConfigAssign(string file)
         {
-            PERQemu.Config.Current.AssignType(unit, dev);
-            PERQemu.Config.Current.AssignMedia(unit, file);
+            // Configurator does the heavy lifting
+            PERQemu.Config.AssignMedia(file);
+            Console.WriteLine(PERQemu.Config.Current.Reason);
         }
 
-        // TODO ethernet!
+        /// <summary>
+        /// Assign a media file to a particular unit #.
+        /// </summary>
+        [Command("configure assign", "Assign a media file to a particular storage device")]
+        public void ConfigAssign(string file, byte unit)
+        {
+            PERQemu.Config.AssignMediaTo(unit, file);
+            Console.WriteLine(PERQemu.Config.Current.Reason);
+        }
 
+        /// <summary>
+        /// "Discreet" command used at loading to allocate a drive slot and give
+        /// it a type and (optional) filename.  This way we don't have to rely on
+        /// the chassis and IO board selections happening in a particular order.
+        /// This one could allow users to mess with their configurations in fun
+        /// and unexpected ways, so I guess it forces me to put in the work to
+        /// eliminate assumptions (like "floppy always in slot 0").  Sigh.
+        /// </summary>
+        [Command("configure drive", Discreet = true)]
+        public void ConfigDrive(byte unit, DeviceType dev, string file = "")
+        {
+            // NO error checking, no output, assumes "quiet"
+            PERQemu.Config.Current.SetDeviceType(unit, dev);
+            PERQemu.Config.Current.SetMediaPath(unit, file);
+        }
     }
 }

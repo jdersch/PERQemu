@@ -69,7 +69,7 @@ namespace PERQemu.UI
         {
             if (_sdlWindow != IntPtr.Zero)
             {
-                Log.Error(Category.Display, "** Initialize called while already running!?");
+                Log.Error(Category.Display, "Initialize called while already running!?");
                 return;
             }
 
@@ -110,9 +110,10 @@ namespace PERQemu.UI
             // todo: setting the renderer's "logical size" may help with the scaling
             // issue on displays too short to hold the entire screen?
             // SDL.SDL_RenderSetLogicalSize(_sdlRenderer, w, h);
+
             // todo: initialize in our slightly greenish/grayish background color :-)
             // during "warmup" we'll fade in to full brightness.  because why not.
-            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x04, 0xf4, 0x04, 0xff);
+            SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x0f, 0xf4, 0x0f, 0xff);
 
             //
             // Create the display texture
@@ -154,11 +155,14 @@ namespace PERQemu.UI
             PERQemu.GUI.RegisterDelegate(_renderEvent.type, RenderDisplay);
             PERQemu.GUI.RegisterDelegate(_fpsUpdateEvent.type, UpdateFPS);
 
+            // Tell the SDL EventLoop we're here
+            PERQemu.GUI.AttachDisplay(_sdlWindow);
+
             // Register a timer and callback to update the FPS display
             if (_fpsTimerId < 0)
             {
                 _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
-                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
+                _fpsTimerId = HighResolutionTimer.Register(3000d, _fpsTimerCallback);
                 HighResolutionTimer.Enable(_fpsTimerId, true);
             }
 
@@ -206,7 +210,8 @@ namespace PERQemu.UI
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RenderDisplay(SDL.SDL_Event e)
         {
-            const uint WHITE = 0xfff0f0ff;
+            // Adjust WHITE for slightly bluish tint of Clinton P-104 :-)
+            const uint WHITE = 0xfff1f1ff;
             const uint BLACK = 0xff000000;
 
             IntPtr textureBits = IntPtr.Zero;
@@ -314,6 +319,7 @@ namespace PERQemu.UI
             PERQemu.GUI.ReleaseDelegate(_renderEvent.type);
             PERQemu.GUI.ReleaseDelegate(_fpsUpdateEvent.type);
 
+
             // Clear the renderer
             if (_sdlRenderer != IntPtr.Zero)
             {
@@ -324,6 +330,9 @@ namespace PERQemu.UI
             // And finally close down the window
             if (_sdlWindow != IntPtr.Zero)
             {
+                // Tell the EventLoop we're going away
+                PERQemu.GUI.DetachDisplay();
+
                 SDL.SDL_DestroyWindow(_sdlWindow);
                 _sdlWindow = IntPtr.Zero;
             }

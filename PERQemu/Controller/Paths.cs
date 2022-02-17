@@ -114,6 +114,59 @@ namespace PERQemu
         }
 
         /// <summary>
+        /// Try to qualify a file name by applying a few simple search rules:
+        ///     1. Try 'file' as given
+        ///     2. Try 'file' in 'dir'
+        ///     3. Try 'file' with each of the 'extensions' in current, 'dir'
+        /// Returns the canonicalized pathname upon the first successful match,
+        /// otherwise an empty string.
+        /// </summary>
+        public static string FindFileInPath(string file, string dir, params string[] extensions)
+        {
+            if (File.Exists(file))
+            {
+                Console.WriteLine("file {0} found in current dir, as is", file);
+                return Canonicalize(file);
+            }
+
+            if (File.Exists(Path.Combine(dir, file)))
+            {
+                Console.WriteLine("file {0} found in dir {1}", file, dir);
+                return Canonicalize(Path.Combine(dir, file));
+            }
+
+            // Try the alternate extensions?
+            if (extensions.Length > 0)
+            {
+                // Remove the current one
+                if (Path.HasExtension(file))
+                {
+                    file = Path.GetFileNameWithoutExtension(file);
+                }
+
+                foreach (var ext in extensions)
+                {
+                    var found = Path.ChangeExtension(file, ext);
+                    if (File.Exists(found))
+                    {
+                        Console.WriteLine("file {0} found with extension {1}", file, ext);
+                        return Canonicalize(found);
+                    }
+
+                    found = Path.Combine(dir, found);
+                    if (File.Exists(found))
+                    {
+                        Console.WriteLine("file {0} found in dir {1} with extension {2}", file, dir, ext);
+                        return Canonicalize(found);
+                    }
+                }
+            }
+
+            Console.WriteLine("file {0} not found", file);
+            return string.Empty;
+        }
+
+        /// <summary>
         /// Try to make long crazy strings less long and crazy.
         /// </summary>
         public static string Canonicalize(string path)
@@ -130,7 +183,7 @@ namespace PERQemu
                     {
                         path = SettingsDir;
                     }
-                    else if (path.StartsWith("~/"))
+                    else if (path.StartsWith("~/", StringComparison.InvariantCulture))
                     {
                         path = Path.Combine(SettingsDir, path.Substring(2));
                     }

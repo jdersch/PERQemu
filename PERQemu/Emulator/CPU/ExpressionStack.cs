@@ -45,7 +45,7 @@ namespace PERQemu.Processor
                 }
 
                 _stackPointer = 0;
-                Log.Debug(Category.EStack, "Reset.");
+                Log.Debug(Category.EStack, "Reset");
             }
 
             /// <summary>
@@ -54,7 +54,7 @@ namespace PERQemu.Processor
             public void StackReset()
             {
                 _stackPointer = 0;
-                Log.Debug(Category.EStack, "StackReset.");
+                Log.Debug(Category.EStack, "StackReset");
             }
 
             /// <summary>
@@ -66,7 +66,7 @@ namespace PERQemu.Processor
                 set
                 {
                     _stack[_stackPointer] = value & CPUMask;
-                    Log.Debug(Category.EStack, "TOS set to {0:x6}.", value);
+                    Log.Debug(Category.EStack, "TOS set to {0:x6}", value);
                 }
             }
 
@@ -99,7 +99,7 @@ namespace PERQemu.Processor
 
                 _stack[_stackPointer] = value & CPUMask;    // TOS = value;
 
-                Log.Debug(Category.EStack, "Pushed {0:x6}, pointer now {1}.",
+                Log.Debug(Category.EStack, "Pushed {0:x6}, pointer now {1}",
                                           _stack[_stackPointer], _stackPointer);
             }
 
@@ -117,7 +117,7 @@ namespace PERQemu.Processor
                     _stackPointer = 15;
                 }
 
-                Log.Debug(Category.EStack, "Popped, pointer now {0}.", _stackPointer);
+                Log.Debug(Category.EStack, "Popped, pointer now {0}", _stackPointer);
             }
 
             /// <summary>

@@ -119,7 +119,7 @@ namespace PERQemu.Debugger
 
                     if (string.IsNullOrWhiteSpace(line))
                     {
-                        throw new InvalidOperationException("Unexpected empty line in Z80 source listing.");
+                        throw new InvalidOperationException("Unexpected empty line in Z80 source listing");
                     }
 
                     ushort address = ushort.Parse(line.Substring(4, 4), System.Globalization.NumberStyles.HexNumber);

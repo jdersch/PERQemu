@@ -209,34 +209,6 @@ PERQ-2 features to be completed for the next major release:
   anymore.  Well, besides me, anyway.
 
 
-2.3 Operating System Support
-----------------------------
-
-As of v0.4.2, the following PERQ operating systems are known to boot:
-
- - POS versions D.6, F.0 and F.1 (official 3RCC releases);
- - POS version F.15 (released by Boondoggle Heavy Industries, Ltd);
- - MPOS version E.29 (unreleased by 3RCC);
- - Accent S4 (an early version from CMU, unreleased);
- - PNX 1.0 (first public release by ICL).
-
-NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
-2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
-trouble with a full megaword of memory.
-
-PERQ FLEX is untested, though hopefully media recovery efforts are ongoing or
-may soon succeed.  This may provide the first 8" Micropolis hard disk image to
-test once the PERQ-2 emulation features are complete.
-
-Accent S4 now tracks the mouse, though it takes a little getting used to since
-it runs in relative mode.  To simulate mouse "swipes" you have to use the Alt
-key (Command key on Mac) to tell PERQemu the mouse is "off tablet", reposition,
-then release the key to start tracking again.  It's a little clumsy at first.
-
-
-If anyone has any other software that ran on the PERQ-1 and does not run
-successfully under PERQemu, send us a copy and we'll find out why!
-
 
 3.0 The Basic Idea
 ==================

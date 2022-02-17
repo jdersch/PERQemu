@@ -95,5 +95,7 @@ namespace PERQmedia
 
             return formatters;
         }
+
+        public static readonly string[] KnownExtensions = { ".prqm", ".phd", ".imd", ".pfd", ".raw" };
     }
 }

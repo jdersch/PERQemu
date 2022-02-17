@@ -213,7 +213,7 @@ namespace PERQemu.IO.Z80
         {
             if (_asyncThread != null)
             {
-                throw new InvalidOperationException("Z80 thread is already running; Stop first.");
+                throw new InvalidOperationException("Z80 thread is already running; Stop first");
             }
 
             // Fire off the Z80 thread

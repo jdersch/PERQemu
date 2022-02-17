@@ -20,7 +20,6 @@
 using System;
 using System.IO;
 using System.Collections;
-using System.Collections.Generic;
 
 using PERQmedia;
 
@@ -132,7 +131,7 @@ namespace PERQemu.Config
         {
             Log.Debug(Category.MediaLoader, "Adding device definition '{0}', type {1}",
                                             dev.Info.Name, dev.Info.Type);
-            
+
             _knownDrives.Add(dev.Info.Name.ToLower(), dev);
         }
 
@@ -150,7 +149,7 @@ namespace PERQemu.Config
         {
             if (_prefabs.ContainsKey(conf.Key))
             {
-                Log.Warn(Category.MediaLoader, "* Prefabs list already contains '{0}'", conf.Key);
+                Log.Warn(Category.MediaLoader, "Prefabs list already contains '{0}'", conf.Key);
                 return false;
             }
 
@@ -185,7 +184,7 @@ namespace PERQemu.Config
                 return _current;
             }
 
-           if (_prefabs.ContainsKey(name))
+            if (_prefabs.ContainsKey(name))
             {
                 return (Configuration)_prefabs[name];
             }
@@ -366,7 +365,7 @@ namespace PERQemu.Config
                 CheckMemory(conf) &&
                 CheckIO(conf) &&
                 CheckOptions(conf) &&
-                CheckDisks(conf))
+                CheckStorage(conf))
             {
                 conf.IsValid = true;
             }
@@ -487,7 +486,7 @@ namespace PERQemu.Config
                 conf.Display == DisplayType.Landscape &&
                 conf.MemorySizeInBytes != ONE_MEG)
             {
-                conf.Reason = "The exceedingly rare PERQ-1 with Landscape display only had 1MB of memory.";
+                conf.Reason = "The rare PERQ-1 with Landscape display only had 1MB of memory.";
                 // But I'll allow it. :-)
             }
             return true;
@@ -620,12 +619,12 @@ namespace PERQemu.Config
         /// If any genuine 8" Micropolis images can be found that came from a
         /// PERQ-1, we'll allow that configuration (with a CIO board) as well.
         /// </remarks>
-        public bool CheckDisks()
+        public bool CheckStorage()
         {
-            return CheckDisks(_current);
+            return CheckStorage(_current);
         }
 
-        public bool CheckDisks(Configuration conf)
+        public bool CheckStorage(Configuration conf)
         {
             bool gotFloppy = false;
             bool gotMedia = false;
@@ -634,7 +633,7 @@ namespace PERQemu.Config
             for (var unit = 0; unit < conf.Drives.Length; unit++)
             {
                 var drive = conf.Drives[unit];
-            
+
                 switch (drive.Type)
                 {
                     case DeviceType.Unused:
@@ -732,6 +731,7 @@ namespace PERQemu.Config
         /// </summary>
         public void UpdateStorage(Configuration conf, IOBoardType newType)
         {
+            // fixme debugging
             Console.WriteLine($"* Updating storage from {conf.IOBoard} to {newType}");
 
             for (var unit = 0; unit < conf.Drives.Length; unit++)
@@ -826,12 +826,107 @@ namespace PERQemu.Config
 
                 if (!keepMedia)
                 {
+                    // fixme debugging
                     Console.WriteLine($"--> media for unit {unit} unloaded");
                     conf.Drives[unit].MediaPath = string.Empty;
                 }
             }
         }
 
+        /// <summary>
+        /// Validate a media file and assign it to the appropriate device.
+        /// </summary>
+        public bool AssignMedia(string file)
+        {
+            return AssignMedia(_current, file);
+        }
+
+        public bool AssignMedia(Configuration conf, string file)
+        {
+            conf.Reason = string.Empty;
+
+            var found = Paths.FindFileInPath(file, Paths.DiskDir, FileUtilities.KnownExtensions);
+
+            if (string.IsNullOrEmpty(found))
+            {
+                conf.Reason = $"Could not find file '{file}'.";
+                return false;
+            }
+
+            var type = FileUtilities.GetDeviceTypeFromFile(found);
+
+            // Did it contain an actual recognizable image?
+            if (type == DeviceType.Unused)
+            {
+                conf.Reason = $"File '{found}' did not contain loadable media type.";
+                return false;
+            }
+
+            // Find the slot(s), if any, that match the device type
+            var units = conf.GetDrivesOfType(type);
+
+            if (units.Length == 0)
+            {
+                conf.Reason = $"Could not assign file '{found}':\n" +
+                              $"No drives of type {type} in this configuration.";
+                return false;
+            }
+
+            // Assign it to the first/only slot!
+            conf.SetMediaPath(units[0].Unit, found);
+            conf.Reason = $"Assigned file '{found}' to drive {units[0].Unit}.";
+            conf.IsModified = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Validate a media file and assign it to the appropriate device.
+        /// </summary>
+        public bool AssignMediaTo(int unit, string file)
+        {
+            return AssignMediaTo(_current, unit, file);
+        }
+
+        public bool AssignMediaTo(Configuration conf, int unit, string file)
+        {
+            conf.Reason = string.Empty;
+
+            if (unit < 0 || unit > conf.MaxUnitNum)
+            {
+                conf.Reason = $"Drive number out of range 0..{conf.MaxUnitNum}.";
+                return false;
+            }
+
+            var found = Paths.FindFileInPath(file, Paths.DiskDir, FileUtilities.KnownExtensions);
+
+            if (string.IsNullOrEmpty(found))
+            {
+                conf.Reason = $"Could not find file '{file}'.";
+                return false;
+            }
+
+            var type = FileUtilities.GetDeviceTypeFromFile(found);
+
+            // Did it contain an actual recognizable image?
+            if (type == DeviceType.Unused)
+            {
+                conf.Reason = $"File '{found}' did not contain loadable media type.";
+                return false;
+            }
+
+            // Annnnd did it match the requested unit?
+            if (type != PERQemu.Config.Current.Drives[unit].Type)
+            {
+                conf.Reason = $"Could not assign file '{found}' to drive {unit}:\n" +
+                              $"Media type {type} not compatible with drive type {conf.Drives[unit]}.";
+                return false;
+            }
+
+            // Phew!  Assign it!
+            conf.SetMediaPath(unit, found);
+            conf.Reason = $"Assigned file '{found}' to drive {unit}.";
+            return true;
+        }
 
         // Common memory sizes in bytes
         public const int HALF_MEG = 512 * 1024;
@@ -846,7 +941,7 @@ namespace PERQemu.Config
         private Hashtable _geometries;
         private Hashtable _driveSpecs;
         private Hashtable _knownDrives;
-        
+
         private Configuration _default;
         private Configuration _current;
     }

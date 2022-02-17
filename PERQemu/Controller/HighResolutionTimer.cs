@@ -214,7 +214,32 @@ namespace PERQemu
             }
             catch
             {
-                Log.Error(Category.Timer, "Failed to set enable for tag " + tag);
+                Log.Error(Category.Timer, "Failed to set enable for tag {0}", tag);
+            }
+        }
+
+        /// <summary>
+        /// Adjust the interval for a timer.
+        /// </summary>
+        /// <remarks>
+        /// Should disable, adjust then reenable to be "safe"?  But might get
+        /// away with adjustments on the fly even if there's a little bump.
+        /// This is still deemed less risky than freeing up a timer then re-
+        /// registering.  It's mostly a hack so the CLI doesn't spin at a high
+        /// rate if the Display isn't active; unless/until we have a GUI that
+        /// needs attention, there aren't any SDL events to process until the
+        /// emulator starts up.
+        /// </remarks>
+        public static void Adjust(int tag, double interval)
+        {
+            try
+            {
+                _requesters[tag].Interval = interval;
+                Log.Debug(Category.Timer, "Interval for timer {0} now {1}", tag, interval);
+            }
+            catch
+            {
+                Log.Error(Category.Timer, "Failed to adjust interval for tag {0}", tag);
             }
         }
 
@@ -277,8 +302,6 @@ namespace PERQemu
             Stop();
             _throttle.Set();        // If we're in Wait(), release the hold
 
-            // Dispose of all timerthings?
-            _requesters.Clear();
 #if DEBUG
             // For posterity
             Log.Debug(Category.Timer, "Stopwatch stopped, HRT thread exiting");

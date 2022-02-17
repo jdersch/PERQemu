@@ -135,7 +135,7 @@ namespace PERQemu.Memory
             _current.Clear();
             _pending.Clear();
 
-            Log.Debug(Category.Memory, "{0} queue reset.", _name);
+            Log.Debug(Category.Memory, "{0} queue reset", _name);
         }
 
         public bool Wait => _wait;
@@ -379,7 +379,7 @@ namespace PERQemu.Memory
                     // abort and just hope for the best?
                     if (!flags.Abort)
                     {
-                        Console.WriteLine("-->\tForced abort in T{0} due to new request in wrong cycle.", _mem.TState);
+                        Console.WriteLine("-->\tForced abort in T{0} due to new request in wrong cycle", _mem.TState);
                         Console.WriteLine("\tFlags: {0}", flags);
                         DumpQueue();
                         flags.Abort = true;
@@ -435,7 +435,7 @@ namespace PERQemu.Memory
             }
             fs.Close();
 
-            Log.Info(Category.Emulator, "Initialized BKM ROM lookup table.");
+            Log.Info(Category.Emulator, "Initialized BKM ROM lookup table");
         }
 
 #if DEBUG

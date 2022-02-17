@@ -53,7 +53,7 @@ namespace PERQemu.IO
 
         public virtual void Reset()
         {
-            Log.Info(Category.IO, "{0} board reset.", _name);
+            Log.Info(Category.IO, "{0} board reset", _name);
         }
 
         public abstract uint Clock();
@@ -76,16 +76,6 @@ namespace PERQemu.IO
 
         public virtual void SaveTape()
         {
-        }
-
-        public virtual void CheckDisks()
-        {
-            System.Console.WriteLine("Option board: No disks loaded.");
-        }
-
-        public virtual void CheckTapes()
-        {
-            System.Console.WriteLine("Option board: No tapes loaded.");
         }
 
         /// <summary>

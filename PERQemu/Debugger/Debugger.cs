@@ -97,7 +97,7 @@ namespace PERQemu.Debugger
                 // If the property is not assignable we can't do anything here
                 if (!v.Property.CanWrite && !v.Property.PropertyType.IsArray)
                 {
-                    throw new ArgumentException("Variable is read-only.");
+                    throw new ArgumentException("Variable is read-only");
                 }
 
                 if (v.Property.PropertyType.IsArray)
@@ -105,7 +105,7 @@ namespace PERQemu.Debugger
                     if (!isArray)
                     {
                         // Cannot do assignment to an entire array
-                        throw new ArgumentException("Cannot assign to array, must specify element to assign to.");
+                        throw new ArgumentException("Cannot assign to array, must specify element to assign to");
                     }
                     else
                     {

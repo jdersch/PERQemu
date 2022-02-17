@@ -73,7 +73,7 @@ namespace PERQemu.Debugger
 
                 if (_qCodesOrdered[index] != null)
                 {
-                    throw new InvalidOperationException(String.Format("Duplicate QCode entry {0}", index));
+                    throw new InvalidOperationException($"Duplicate QCode entry {index}");
                 }
 
                 _qCodesOrdered[index] = unordered[i];

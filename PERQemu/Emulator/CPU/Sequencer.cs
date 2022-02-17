@@ -54,7 +54,7 @@ namespace PERQemu.Processor
                 _victim.Value = 0xffff;           // all 1s means unset
                 _callStack.Reset();
 
-                Log.Debug(Category.Sequencer, "Reset.");
+                Log.Debug(Category.Sequencer, "Reset");
             }
 
             /// <summary>
@@ -188,8 +188,7 @@ namespace PERQemu.Processor
                         break;
 
                     default:
-                        throw new UnimplementedInstructionException(
-                            string.Format("Unimplemented Condition {0}", uOp.CND));
+                        throw new UnimplementedInstructionException($"Unimplemented Condition {uOp.CND}");
                 }
 
                 // Dispatch jump action
@@ -313,7 +312,7 @@ namespace PERQemu.Processor
                         }
                         else
                         {
-                            Log.Debug(Category.Sequencer, "Repeat done.");
+                            Log.Debug(Category.Sequencer, "Repeat done");
                             _pc.Lo++;
                         }
                         break;
@@ -402,8 +401,7 @@ namespace PERQemu.Processor
                         break;
 
                     default:
-                        throw new UnimplementedInstructionException(
-                            string.Format("Unhandled Jump type {0}", uOp.JMP));
+                        throw new UnimplementedInstructionException($"Unhandled Jump type {uOp.JMP}");
                 }
             }
 

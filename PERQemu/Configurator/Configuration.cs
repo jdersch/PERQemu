@@ -27,12 +27,14 @@ namespace PERQemu.Config
 {
     public struct Drive
     {
-        public Drive(DeviceType dev, string path = "")
+        public Drive(int unit, DeviceType dev, string path = "")
         {
+            Unit = unit;
             Type = dev;
             MediaPath = path;
         }
 
+        public int Unit;
         public DeviceType Type;
         public string MediaPath;
     }
@@ -63,10 +65,10 @@ namespace PERQemu.Config
             // Pre-assign a standard disk image supplied with PERQemu
             // That way there's something to actually run, by default
             _drives = new Drive[MAX_DRIVES];
-            _drives[0] = new Drive(DeviceType.Floppy);
-            _drives[1] = new Drive(DeviceType.Disk14Inch, "f1.phd");
-            _drives[2] = new Drive(DeviceType.Unused);
-            _drives[3] = new Drive(DeviceType.Unused);
+            _drives[0] = new Drive(0, DeviceType.Floppy);
+            _drives[1] = new Drive(1, DeviceType.Disk14Inch, "f1.phd");
+            _drives[2] = new Drive(2, DeviceType.Unused);
+            _drives[3] = new Drive(3, DeviceType.Unused);
 
             _validated = true;
             _modified = false;      // these don't belong here!?
@@ -238,6 +240,9 @@ namespace PERQemu.Config
             return Name;
         }
 
+        public int MaxDrives => MAX_DRIVES;
+        public int MaxUnitNum => _drives.Length - 1;
+
         public string MemSizeToString()
         {
             if (_memSize < Configurator.ONE_MEG)
@@ -248,14 +253,32 @@ namespace PERQemu.Config
             return string.Format("{0}MB", _memSize / Configurator.ONE_MEG);
         }
 
-        public void AssignMedia(int unit, string file)
+        public void SetMediaPath(int unit, string file)
         {
             _drives[unit].MediaPath = file;
         }
 
-        public void AssignType(int unit, DeviceType dev)
+        public void SetDeviceType(int unit, DeviceType dev)
         {
             _drives[unit].Type = dev;
+        }
+
+        public Drive[] GetDrivesOfType(DeviceType type)
+        {
+            // This may seem silly now, but I dream of future PERQ configurations
+            // with two floppies, four internal disks, a string of external SMD
+            // drives, a streamer, GPIB and SCSI drives... PERQ 2.0 will rise!
+
+            // For now it's basically 0=floppy, 1,2=harddisk, 3=streamer.  Meh.
+            var match = new List<Drive>();
+
+            for (var d = 0; d < _drives.Length; d++)
+            {
+                if (_drives[d].Type == type)
+                    match.Add(_drives[d]);
+            }
+
+            return match.ToArray();
         }
 
         // For now...

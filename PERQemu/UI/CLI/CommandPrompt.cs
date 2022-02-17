@@ -77,6 +77,8 @@ namespace PERQemu.UI
             return _commandTree;
         }
 
+        public string CurrentPrefix => _prompt;
+
         /// <summary>
         /// Runs a nifty interactive debugger prompt.
         /// </summary>

@@ -93,7 +93,7 @@ namespace PERQemu.IO.GPIB
                 _sampleEvent = _scheduler.Schedule(_sampleInterval, SendData);
             }
 
-            Log.Debug(Category.GPIB, "BitPadOne {0} talking.", (_talking ? "is" : "is NOT"));
+            Log.Debug(Category.GPIB, "BitPadOne {0} talking", (_talking ? "is" : "is NOT"));
         }
 
         /// <summary>
@@ -105,7 +105,7 @@ namespace PERQemu.IO.GPIB
         {
             _listening = (address == DeviceID);
 
-            Log.Debug(Category.GPIB, "BitPadOne {0} listening.", (_listening ? "is" : "is NOT"));
+            Log.Debug(Category.GPIB, "BitPadOne {0} listening", (_listening ? "is" : "is NOT"));
         }
 
 

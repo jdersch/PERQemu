@@ -54,7 +54,7 @@ namespace PERQemu.Processor
                 _loStackPtr = 0;
                 _hiStackPtr = 0;
 
-                Log.Debug(Category.Sequencer, "Call stack reset.");
+                Log.Debug(Category.Sequencer, "Call stack reset");
             }
 
             /// <summary>
@@ -75,7 +75,7 @@ namespace PERQemu.Processor
 
                 _loStack[_loStackPtr] = (ushort)(address & 0xfff);
 
-                Log.Debug(Category.Sequencer, "Pushed {0:x4} onto call stack (lo).", address & 0xfff);
+                Log.Debug(Category.Sequencer, "Pushed {0:x4} onto call stack (lo)", address & 0xfff);
             }
 
             /// <summary>
@@ -87,7 +87,7 @@ namespace PERQemu.Processor
 
                 if (_loStackPtr > 0) { _loStackPtr--; }
 
-                Log.Debug(Category.Sequencer, "Popped {0:x4} from call stack (lo).", address);
+                Log.Debug(Category.Sequencer, "Popped {0:x4} from call stack (lo)", address);
                 return address;
             }
 
@@ -96,7 +96,7 @@ namespace PERQemu.Processor
             /// </summary>
             public ushort TopLo()
             {
-                Log.Debug(Category.Sequencer, "Returned {0:x4} from top of call stack.", _loStack[_loStackPtr]);
+                Log.Debug(Category.Sequencer, "Returned {0:x4} from top of call stack", _loStack[_loStackPtr]);
                 return _loStack[_loStackPtr];
             }
 
@@ -111,7 +111,7 @@ namespace PERQemu.Processor
                 _loStack[_loStackPtr] = (ushort)(address & 0xfff);
                 _hiStack[_hiStackPtr] = (ushort)(address & _wcsHiMask);
 
-                Log.Debug(Category.Sequencer, "Pushed {0:x4} onto call stack.", address & _wcsMask);
+                Log.Debug(Category.Sequencer, "Pushed {0:x4} onto call stack", address & _wcsMask);
             }
 
             /// <summary>
@@ -124,7 +124,7 @@ namespace PERQemu.Processor
                 if (_loStackPtr > 0) { _loStackPtr--; }
                 if (_hiStackPtr > 0) { _hiStackPtr--; }
 
-                Log.Debug(Category.Sequencer, "Popped {0:x4} from call stack.", address);
+                Log.Debug(Category.Sequencer, "Popped {0:x4} from call stack", address);
                 return address;
             }
 
@@ -135,7 +135,7 @@ namespace PERQemu.Processor
             {
                 ushort address = (ushort)(_loStack[_loStackPtr] | _hiStack[_hiStackPtr]);
 
-                Log.Debug(Category.Sequencer, "Returned {0:x4} from top of call stack.", address);
+                Log.Debug(Category.Sequencer, "Returned {0:x4} from top of call stack", address);
                 return address;
             }
 

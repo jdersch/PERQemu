@@ -101,7 +101,7 @@ namespace PERQemu.Processor
         {
             if (_asyncThread != null)
             {
-                throw new InvalidOperationException("CPU thread is already running; Stop first.");
+                throw new InvalidOperationException("CPU thread is already running; Stop first");
             }
 
             // Fire off the CPU thread
