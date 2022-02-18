@@ -1,5 +1,7 @@
 ﻿PERQemu User Guide (rough notes)
 
+2/17/2022 - skeezicsb - v0.5.0 (experimental)
+
 ----
 
 All of this culled from the Readme.  Fashion it into something coherent and
@@ -54,8 +56,6 @@ and the OS takes over the display.  Because we don't emulate the 2-3 minute
 will complete in just a few seconds.  If your PERQ really is stuck, consult
 the "Fault Dictionary" in the Bitsavers on-line documentation repository (see
 below) or in the PERQemu source Docs directory on GitHub.
-
-
 
 
 2.2 POS
@@ -201,16 +201,10 @@ process, and at that point there's no going back; switch to the PERQemu
 debugger window and hit Ctrl-c to stop execution, save or reset as desired.
 
 
-
 2.4 PNX
 -------
 
-Unfortunately, we do not yet have a complete PNX 1.0 hard disk image.  It is
-possible to boot from floppy, prepare the hard disk, and lay down the boot-
-strap (essentially a "miniroot" in Unix parlance) which is bootable.  But the
-other floppies in the Bitsavers collection are missing track 0, and the rest
-of the PNX loading process cannot be completed at this time.  I hope to remedy
-this very soon.
+A complete PNX 1.3 hard disk image and a full floppy set is available!
 
 PNX, another unfortunately named PERQ operating system, was a very early Unix
 V7/System III mashup that included an in-kernel window manager - possibly one
@@ -223,8 +217,9 @@ PERQ Q-codes.  However, PERQemu's debugger cannot accurately disassemble PNX
 C-codes, since we don't currently have access to any PNX source code or
 documentation.
 
-Watch this space.
-
+There is currently no extra software for this version of PNX besides the very
+basic install image.  With upcoming enhancements to the emulator, there are
+several newer versions of PNX to try out; watch this space!
 
 
 3.0 Command Line Operations
@@ -251,17 +246,14 @@ unfinished.  The more useful (and implemented) ones are:
 
     SET BOOTCHAR <char> - helper to make it easier to boot from an alternate
         boot.  The D.6 image has two available boots: 'a' and 'z'.  'a' is the
-        default (POS), 'z' is Accent S4.                   
+        default (POS), 'z' is Accent S4.  [UGH this is broken at the moment]
 
-    LOAD FLOPPY/HARDDISK <image> - loads a given hard disk or floppy image into
-        memory.
-                     
-    SAVE FLOPPY/HARDDISK <image> - saves the current in-memory hard disk or
-        floppy to the specified image file.
-                     
-    CREATE FLOPPY/HARDDISK - creates a blank disk image in memory.
+
+    [Disk commands below in "Working with storage devices"]
+
 
     SAVE SCREENSHOT <name> - saves a JPEG image of the current PERQ display.
+        [Has to be rewritten for SDL]
 
     SET RS232 <port name> - selects the serial port on the host machine to use
         for the emulated PERQ.  "RSX:" is a special port which allows transfer
@@ -269,7 +261,8 @@ unfinished.  The more useful (and implemented) ones are:
         from POS one can "COPY RSX:c:\path\to\hostfile.pas sys:foo>bar>baz.pas"
         and the file will be copied from the host OS to the emulated PERQ; this
         works for text (7-bit ASCII) only.  (It's also quite slow, since it has
-        to run at serial speeds).
+        to run at serial speeds).  [Untested!]
+
 
 In the Debug build, there are a huge number of additional commands to inspect
 the state of the emulator and assist with debugging PERQ microcode.  These
@@ -289,41 +282,372 @@ are not yet documented.
   is active for your current session by typing "DETAILS /ALL".
     
 
+Working With Storage Devices
+============================
+
+3.0 Supported Devices
+---------------------
+
+The PERQ supports a range of storage devices, including floppy disk, hard disk
+and tape drives.  Configuration of a specific model was limited by several
+factors.  The maximum number of supported devices:
+
+                            PERQ-1      PERQ-2      PERQemu[*]
+    Floppy drives             1           1            2
+
+    Internal hard disk:
+        14" Shugart           1           -            2
+        8" Micropolis         -           2            2
+        5.25" MFM             -           2            4
+
+    External hard drives:
+        SMD                   -           ?            4
+
+    Tape drives:
+        QIC streamer          1           1            1
 
 
-3.1 Disk Operations
+    [*] PERQemu currently supports only the maximum number of drives that
+    the actual hardware supported, but in future releases (as software and
+    microcode support is enhanced) we may expand the limits.
+
+Each model could support one type of internal hard disk based on the chassis
+type and I/O board selected, so the PERQ-2 could have two 8" or two 5.25" disk
+drives, but not both.  The Configurator takes these factors into account when
+setting up a PERQ.  All of the commands to load devices check that only the
+correct type of image is attached to the disk controller in the virtual PERQ.
+
+Note that while the 8" floppy drive was always listed as an "option," I've
+never actually come across a PERQ that didn't have one attached.  Because it
+is essentially "free" to emulate, all standard configurations in PERQemu have
+a floppy drive attached as unit #0.  You may certainly configure a machine
+without a floppy drive, but that option has not been exhaustively tested, and
+you might encounter strange hangs or other unexpected behavior.
+
+
+3.0.1 Unit Numbers
+------------------
+
+Each device in PERQemu is assigned a "unit #" to uniquely identify it when
+more than one of a given type is configured.  In this release it's a very
+straightforward mapping, as the options are quite limited:
+
+    Unit 0:     Floppy drive    (all configurations)
+    Unit 1:     Hard drive      (for PERQ-1, the only hard drive)
+    Unit 2:     2nd hard drive  (only in PERQ-2 models)
+    Unit 3:     Streamer tape   (optional; not yet implemented)
+
+For compatibility with all versions of PERQemu prior to v0.5.0, the usual
+"load floppy" and "load harddisk" commands are shortcuts for loading units 0
+or 1, while new command syntax allows for specifying the unit number and many
+commands can automatically determine which unit to assign.
+
+
+3.0.2 The Disks Directory
+-------------------------
+
+In the discussion that follows, PERQemu assumes that all media files are stored
+in the Disks/ directory provided in the distribution.  This is located in the
+base directory (where PERQemu.exe resides) as discussed in the Organization
+section above.
+
+A simple algorithm is used to find files to load:
+
+    1. look for the filename as given;
+    2. look in Disks/ for the filename;
+    3. if the file does not have an extension, try the list of known
+       extensions in both the base and Disks/ directory.
+
+While the distribution is currently just a handful of files, a curated archive
+of many hundreds of floppy, tape and hard disk images is being assembled, so
+it is recommended that you choose simple names and allow PERQemu to apply the
+correct directory and file extensions when loading or saving media.  Future
+releases may rename Disks/ or add Floppies/ and Tapes/ to the "search path" to
+keep things manageable.
+
+For now, any disk or floppy images you create or download should be dropped
+into Disks/ so PERQemu can find them without a lot of typing. :-)
+
+
+3.1 Supported Formats
+---------------------
+
+As of PERQemu v0.5.0, a new common media format has been devised to store all
+of the supported storage devices.  Going forward, this PERQmedia file format
+will be used by default, and as the library of curated disk images is expanded
+you'll have a growing selection of floppy, hard disk and tape media to load
+and explore with PERQemu.
+
+All of the previous formats may still be used as well, and utilities are/will
+be available to transpose between the formats (and take advantage of some the
+new features in the PERQmedia format).  PERQemu recognizes these file types:
+
+    PRQM format:  the new unified format; files end with ".prqm".  Can be
+    used to store ANY supported PERQ storage device.
+
+    PHD format:  files ending in ".phd" contain Shugart 12MB or 24MB hard
+    disk images, suitable for use with older versions of PERQemu.  These
+    drives are only supported on PERQ-1 models.
+
+    IMD format:  floppy images in IMD format typically have the ".imd" file
+    extension.  PERQemu can read and write these, and will preserve the
+    media label information when transferred to/from PRQM format.
+
+    PFD/raw format:  older floppy images might have a ".raw" or a ".pfd"
+    extension.  These were likely converted from DMK or IMD images into a
+    "raw" format with no metadata.  The "PFD" format was a brief and ill-
+    advised flirtation with adding a small "cookie" to the first sector
+    of a raw floppy image (undetectable by PERQemu or the emulated PERQ)
+    that could provide some hints as to format and contents.
+
+        Note:  While this version of PERQemu can read both formats,
+        if asked to write a "raw" floppy it will always include the
+        PFD cookie and will append/replace the extension with ".pfd"
+        to more uniquely identify the image.
+
+The most compelling argument in favor of translating images into the new PRQM
+format is that it provides both data compression and a CRC for verifying the
+integrity of the archive.  Plus, both textual and graphical labels may be 
+stored in the archive, so the PERQemu interface may/will be extended to show
+the labels to aid in selecting files to load.
+
+
+3.2 Basic Operation
 -------------------
 
-The basic thing to bear in mind when dealing with PERQemu and disk images is
-that PERQemu only makes changes to in-memory copies of the images.  That is:
-if you make changes to the disk, you must MANUALLY dump the image back to an
-image file when you are done or your changes WILL BE LOST when you exit the 
-emulator or load another image.
+    Important:  PERQemu always operates on an in-memory copy of the loaded
+    storage devices.  While this means you are free to explore with impunity
+    and wreak all sorts of havoc without risk -- simply don't save the disk
+    or tape image when shutting down -- it also means that changes you DO
+    want to keep must be manually saved.
 
-Floppy disk images must be in RAW format (I am working on implementing DMK
-support).
+3.2.1 Configuration
+-------------------
 
-Hard disk images are in my extremely primitive dump format (which I intend
-to improve and document).  Currently only images of the 24mb Shugart drive are
-supported (mostly because I have so few images of other disks to work with...)
+The Configurator has one basic command to assign media files to the storage
+devices defined for given machine configuration:
 
-To load a disk image, use the LOAD FLOPPY/LOAD HARDDISK command from the 
-debugger.
+    > configure assign <file>
+or
+    > configure assign <unit> <file>
 
-To save a disk image, use the SAVE FLOPPY/SAVE HARDDISK command (go figure).
-You (currently) have to specify the pathname each time you save.
+These two forms associate the media file with the appropriate device.  In the
+first case, <file> is read and PERQemu identifies the type of image it contains
+and attempts to assign it to the proper device.  This means that a file
+containing a floppy image will automatically be assigned to unit 0, the floppy
+drive.  Hard disks will be assigned first to unit 1, which is always the "boot
+drive" on all PERQs.  When the PERQ-2 models are suported, assigning a second
+hard disk will automatically assign it to unit 2.  PERQemu will, as expected,
+assign tape images to unit 3, once the QIC streamer is implemented.
 
-To create a blank disk, use the CREATE FLOPPY/CREATE HARDDISK command.  This
-creates a blank, in-memory image of a disk.  You MUST save this image if you
-want to use it again.
+In the second case, PERQemu examines <file> to make sure it can be loaded into
+the device specified by the given unit #, i.e., the second drive in a two-drive
+PERQ-2.  This will be more important in future releases when emulation expands
+to incorporate more device types and larger configurations.
 
-Note that in the current builds, disks are way, way faster than the actual
-hardware, so it's less of a chore to format a floppy or partition a Shugart
-hard disk than IRL.  Maybe in future releases we'll offer the 100% authentic
-83ms access times and the kerchunk-kerchunk-kachunk audio clips of the SA851
-floppy drive banging away on floppy boots... :-)
+All assignments made are loaded when the "power on" command is issued to start
+the emulator.  Also, assigned devices are saved with the configuration record,
+so you can associate a specific storage configuration with a machine:
+
+    > configure name myperq
+    > configure assign f15dev.phd
+    > configure save
+
+Then to come back to that configuration in the future:
+
+    > configure load myperq
+    > go
+
+Note that the "assign" command only operates on the configuration record and
+does not alter the running machine.  The next section explains how runtime
+commands may be used to dynamically load removable media while the emulator
+is running.
+
+
+3.2.2 Runtime Operation
+-----------------------
+
+PERQemu now provides a new "storage" subsystem that offers a set of more
+general commands for loading, unloading and saving disk images, along with
+new commands for creating new blank media and even defining new types of
+storage devices.  These are discussed in section 3.2.3, "Storage Commands".
+The previous PERQemu syntax is still available, though, providing useful
+shortcuts for the most common operations.
+
+For compatibility with earlier PERQemu syntax, the following commands are
+recognized:
+
+    > load floppy <file>
+    > unload floppy
+    > save floppy
+
+    > load harddisk <file>
+    > unload harddisk
+    > save harddisk
+
+Each of these commands will do the "expected" thing in configuration mode,
+essentially updating the current media assignments in the same way the new
+"assign" command does:
+
+    > configure assign <file>
+
+is equivalent to
+
+    > load floppy <file>
+or
+    > load harddisk <file>
+
+depending on the contents of <file>.  The unload and save commands (discussed
+in more detail below) also behave in largely the same way as before.  However,
+when the "power on" command has been issued and the PERQ emulation is started,
+these commands behave a little differently:
+
+    > load floppy <file>
+    > save floppy
+    > unload floppy
+
+Because the floppy drive contains removable media, PERQemu allows these at any
+time.  As the internal hard drives in the PERQ are not "removable", a load or
+unload of a hard disk image is not allowed when the emulator is running, so it
+must be stopped first.  Here are conditions:
+
+    Loading a floppy can happen at any time; both the configuration and
+    running emulator "see" the change and the PERQ does not have to be
+    halted to change diskettes.  Attempting to "load" a new floppy while
+    the drive is already loaded produces a gentle reminder to "unload"
+    (and save, if desired) first.
+
+    Saving a loaded floppy may happen at any time.  You may optionally
+    save a copy (without overwriting the original) by providing a new
+    name, and specify a different file format as well:
+
+        > save floppy <newfile> [<newfmt>]
+
+    will create a copy in <newfile>, optionally using the format given
+    as <newfmt>.  The configuration record is updated to reflect the
+    new name.
+
+    Unloading a floppy may happen at any time.  If the floppy has been
+    modified and you have set the "autosave floppy on eject" preference
+    to "yes" it will be saved automatically to the same name (and in the
+    same format) as it was loaded from.  If set to "no" the floppy will
+    be ejected and unsaved changes lost.  [Note that "ask" mode is not
+    yet implemented.]
+
+These same rules will apply to other removable media, as they are implemented:
+the QIC tape drive and (in a far distant future) removable pack SMD drives will
+work in the same manner.
+
+Fixed hard drives, however, may NOT be loaded or unloaded when the emulator is
+running.  Attempts to do so will provide a reminder to shut down the PERQ first
+before reconfiguring.  Thus:
+
+    Loading a hard drive may happen while the machine is not yet started,
+    or when it is in the "halted" state.  This can happen if PERQemu
+    encounted a problem trying to load the drives from the configuration,
+    as might happen if a file referenced by a saved configuration was
+    corrupted, renamed or removed.  Successfully loading a new disk image,
+    followed by a "reset" command will allow the emulator to start.
+
+    Saving a hard drive has the same options as shown above for floppies:
+
+        > save harddisk <newfile> [<newfmt>]
+
+    will create a new copy of the disk.  Note that PERQemu does not auto-
+    matically pause for this operation; you might consider issuing the
+    "stop" command prior to saving.  [This may be a future enhancement?]
+
+    Unloading a hard drive is generally disallowed unless the machine is
+    shut down (or in the "halted" state).
+
+As dual-drive configurations are not yet supported, there is no command syntax
+to allow specifying he second drive for loading, unloading or saving.
+
+
+3.2.3 Storage Commands
+----------------------
+
+A new, general interface for working with storage devices is provided by the
+"storage" subsystem.  All of the "compatibility" commands available at the top-
+level of the command tree map to the more general forms described below.
+
+Creating a new media file requires simply a type and a file name:
+
+    > storage create <type> <file> [<fmt>]
+
+This will create a new, unformatted disk, floppy or tape image and save it to
+disk.  The parameters:
+
+    <type>  a predefined type that already has its drive class,
+            geometry, and performance specifications defined; type
+
+                > storage list
+
+            to see what device types are available.
+
+    <file>  may be a simple name or a full path specification; it
+            is recommended that you let PERQemu organize your media
+            files by adding the Disks/ directory prefix and filename
+            extension appropriate for the chosen file format
+
+    <fmt>   optionally specifies a particular file format, which must
+            be capable of storing the type of image you wish to create;
+            if not specified, PERQemu will choose the approriate file
+            format [now: PHD for hard disks, IMD for floppies; soon
+            PRQM for all devices!]
+
+While this command may be run at any time, it may take some time to run and
+could slow down the emulator significantly if a large image is being created.
+
+The general form of the "load" commands given above is:
+
+    > storage load <file>
+    > storage load <unit> <file>
+
+Because PERQmedia can simply probe <file> to determine what it contains, the
+aliases "floppy", "harddisk" and "tape" simply refer to the default unit number
+based on the (currently limited) available configurations.
+
+Similarly, the compatibility "unload" commands shown above map to:
+
+    > storage unload <unit>
+
+The "save" command, however, has a number of new variants.  The most general
+form is:
+
+    > storage save <unit> <file> <fmt>
+
+where the unit and file parameters are obvious.  Selecting a formatter, though,
+is new in v0.5.0.  If specified, PERQemu will attempt to save the device in the
+format given, assuming that it's compatible with the media type.  Going forward
+the most obvious choice is to migrate ALL PERQ media files to PRQM format, as
+it's the most complete and accommodating.  [A new Setting may be provided to
+make this a settable preference -- "SaveAllMediaAsPRQM" or something like that]
+
+
+3.2.4 Advanced Storage Commands
+-------------------------------
+
+The database of "known devices" that PERQemu can (theoretically/eventually)
+work with is kept in Disks/StorageDevices.db.  At time of release, this list
+contains all/most of the drive types that Three Rivers Computer/PERQ Systems
+shipped back in the 1980s.  Quite a few additional types are thrown in for
+fun, even though PERQemu does not yet support them.
+
+At startup, the "storage define" commands are used to discreetly load this
+file into the "known devices" list that you access with the "storage create"
+or "storage list" commands.  In time, additional disk devices may be tested,
+defined and incorporated into the distribution.  The syntax and detailed
+implementation notes regarding the definition of storage devices will someday
+be documented, but right now my hands hurt from all this typing and you've got
+lots of existing drive types to play with. :-)
+
+For now, the source code repository and the database itself are the documen-
+tation.  Send me an email if you have a burning desire to attach some funky
+new drive type and need assistance.  Moreover, note that the PRQM file format
+is entirely self contained -- meaning you can create and distribute a custom
+storage device created in PERQemu even if that type isn't in the database!
 
 
 --
-
-2/15/2022 - skeezicsb - v0.5.0 (experimental)
+Last update:  skeezicsb     Thu Feb 17 19:32:09 PST 2022

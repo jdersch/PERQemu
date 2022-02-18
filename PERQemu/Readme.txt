@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-2/15/2022 - skeezicsb - v0.4.6 (experimental)
+2/16/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -171,7 +171,11 @@
     6. Believe it or not, this Readme has been trimmed substantially to create
     a new UserGuide.  This wad of verbiage will be eventually pruned, rolled
     into a history/change log...
-    
+
+    7. You can now set a preference to turn the system default arrow cursor to
+    turn off the system cursor or change it to a smaller crosshairs cursor when
+    in the Display window.  Not every change has to be Earth shattering, y'know?
+
 
 Original Readme.txt follows.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -309,12 +313,16 @@ There are several subdirectories:
        Additional "stock" hard drive or floppy images may be included as
        well.  Any custom disk images you create or import are loaded from
        and saved in the Disks/ directory by default.  Please consult the
-       UserGuide for information about working the PERQemu media files.
+       UserGuide for information about working with PERQemu media files.
 
     PROM/
         Contains dumps of PERQ ROMs necessary for operation.
 
-        
+    Output/
+        When screenshots, printing or logging debug output to disk is
+        implemented, those files will go here by default.
+
+
 To start the emulator, just run PERQemu.exe:
 
     Windows: double-click the icon.  PERQemu is a "console application,"
