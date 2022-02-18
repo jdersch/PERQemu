@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-2/16/2022 - skeezicsb - v0.4.6 (experimental)
+2/17/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -172,9 +172,9 @@
     a new UserGuide.  This wad of verbiage will be eventually pruned, rolled
     into a history/change log...
 
-    7. You can now set a preference to turn the system default arrow cursor to
-    turn off the system cursor or change it to a smaller crosshairs cursor when
-    in the Display window.  Not every change has to be Earth shattering, y'know?
+    7. You can now set a preference to turn off the system default arrow cursor
+    or change it to a smaller crosshairs cursor when in the Display window.
+    Not every change has to be Earth shattering, y'know?
 
 
 Original Readme.txt follows.
