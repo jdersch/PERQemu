@@ -130,7 +130,7 @@ namespace PERQemu.IO.Z80
 
             _interruptActive = ((int0 || int1) && _interruptsEnabled);
 
-            Log.Debug(Category.GPIB, "Interrupt {0}", _interruptActive ? "raised" : "cleared");
+            Log.Debug(Category.GPIB, "Interrupt {0}", _interruptActive ? "asserted" : "cleared");
         }
 
         public byte Read(byte portAddress)
@@ -380,12 +380,12 @@ namespace PERQemu.IO.Z80
                 case AuxiliaryCommand.sic:
                     if (cs)
                     {
-                        Log.Debug(Category.GPIB, "Setting IFC");
+                        Log.Detail(Category.GPIB, "Setting IFC");
                         _rdRegisters[(int)ReadRegister.BusStatus] |= (byte)BusStatus.IFC;
                     }
                     else
                     {
-                        Log.Debug(Category.GPIB, "IFC reset");
+                        Log.Detail(Category.GPIB, "IFC reset");
                         _rdRegisters[(int)ReadRegister.BusStatus] &= (byte)~BusStatus.IFC;
                     }
                     break;
@@ -394,12 +394,12 @@ namespace PERQemu.IO.Z80
                 case AuxiliaryCommand.tca:
                     if (cs)
                     {
-                        Log.Debug(Category.GPIB, "Setting ATN");
+                        Log.Detail(Category.GPIB, "Setting ATN");
                         _rdRegisters[(int)ReadRegister.BusStatus] |= (byte)BusStatus.ATN;
                     }
                     else
                     {
-                        Log.Debug(Category.GPIB, "ATN reset");
+                        Log.Detail(Category.GPIB, "ATN reset");
                         _rdRegisters[(int)ReadRegister.BusStatus] &= (byte)~BusStatus.ATN;
                     }
                     break;
@@ -407,12 +407,12 @@ namespace PERQemu.IO.Z80
                 case AuxiliaryCommand.sre:
                     if (cs)
                     {
-                        Log.Debug(Category.GPIB, "Setting REN");
+                        Log.Detail(Category.GPIB, "Setting REN");
                         _rdRegisters[(int)ReadRegister.BusStatus] |= (byte)BusStatus.REN;
                     }
                     else
                     {
-                        Log.Debug(Category.GPIB, "REN reset");
+                        Log.Detail(Category.GPIB, "REN reset");
                         _rdRegisters[(int)ReadRegister.BusStatus] &= (byte)~BusStatus.REN;
                     }
                     break;
@@ -590,22 +590,6 @@ namespace PERQemu.IO.Z80
             MA = 0x04,
             SRQ = 0x02,
             IFC = 0x01
-        }
-
-        /// <summary>
-        /// Address status register bits.
-        /// </summary>
-        [Flags]
-        private enum AddressStatus : byte
-        {
-            REM = 0x80,
-            LLO = 0x40,
-            ATN = 0x20,
-            LPAS = 0x10,
-            TPAS = 0x08,
-            LADS = 0x04,
-            TADS = 0x02,
-            ulpa = 0x01
         }
 
         /// <summary>

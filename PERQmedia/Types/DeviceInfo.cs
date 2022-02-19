@@ -50,7 +50,7 @@ namespace PERQmedia
         Reserved7 = 8,
         Reserved6 = 9,
         Reserved5 = 10,
-        TapeStreamer = 11,      // QIC Streamer - OIO board
+        TapeQIC = 11,           // QIC Streamer - OIO board
         Tape9Track = 12,        // 9-Track - MLO board (someday!?)
         Reserved2 = 13,
         Reserved1 = 14,

@@ -329,7 +329,7 @@ namespace PERQemu.Processor
                 return;
             }
 
-            Log.Debug(Category.RasterOp,
+            Log.Detail(Category.RasterOp,
                       "Clock: phase={0} state={1} Tstate={2} need1st={3} LeftOver={4}",
                       _phase, _state, _memory.TState, _srcNeedsAligned, _leftOver);
 
@@ -404,7 +404,7 @@ namespace PERQemu.Processor
                 throw new InvalidOperationException("Destination FIFO empty and result needed");
             }
 
-            Log.Debug(Category.RasterOp, "Returning result word: {0:x4}", dest.Data);
+            Log.Detail(Category.RasterOp, "Returning result word: {0:x4}", dest.Data);
 
             return dest.Data;
         }
@@ -421,7 +421,7 @@ namespace PERQemu.Processor
             EdgeStrategy e = EdgeStrategy.NoPopNoPeek;
             ushort aligned, combined;
 
-            Log.Debug(Category.RasterOp, "Result dest word: {0}", dest);
+            Log.Detail(Category.RasterOp, "Result dest word: {0}", dest);
 
             #region Align Words
 
@@ -461,7 +461,7 @@ namespace PERQemu.Processor
 #if DEBUG
                         src.Mask = SrcWordMask(src.Index);  // for debugging, not necessary otherwise
 #endif
-                        Log.Debug(Category.RasterOp, "Dropped src word: {0}", src);
+                        Log.Detail(Category.RasterOp, "Dropped src word: {0}", src);
                     }
                     return dest;
 
@@ -554,7 +554,7 @@ namespace PERQemu.Processor
                 src.Mask = SrcWordMask(src.Index);
             }
 
-            Log.Debug(Category.RasterOp, "Next source word: {0}", src);
+            Log.Detail(Category.RasterOp, "Next source word: {0}", src);
 
             #endregion
 
@@ -569,12 +569,12 @@ namespace PERQemu.Processor
             {
                 if (_direction == Direction.LeftToRight)
                 {
-                    Log.Debug(Category.RasterOp, "Result xtra (hi): {0:x4}", _halfPipe);
+                    Log.Detail(Category.RasterOp, "Result xtra (hi): {0:x4}", _halfPipe);
                     _ropShifter.Shift(src.Data, _halfPipe.Data);
                 }
                 else
                 {
-                    Log.Debug(Category.RasterOp, "Result xtra (lo): {0:x4}", _halfPipe);
+                    Log.Detail(Category.RasterOp, "Result xtra (lo): {0:x4}", _halfPipe);
                     _ropShifter.Shift(_halfPipe.Data, src.Data);
                 }
 
@@ -590,7 +590,7 @@ namespace PERQemu.Processor
                 aligned = src.Data;
             }
 
-            Log.Debug(Category.RasterOp, "Result aligned:  {0:x4}", aligned);
+            Log.Detail(Category.RasterOp, "Result aligned:  {0:x4}", aligned);
             #endregion
 
             #region Combine 'em
@@ -619,7 +619,7 @@ namespace PERQemu.Processor
                     break;
             }
 
-            Log.Debug(Category.RasterOp, "Result combined: {0:x4} (func={1})", combined, _function);
+            Log.Detail(Category.RasterOp, "Result combined: {0:x4} (func={1})", combined, _function);
 
             #endregion
 
@@ -801,7 +801,7 @@ namespace PERQemu.Processor
             // Annnnd return the result!
             CombinerFlags result = _rdsTable[lookup];
 
-            Log.Debug(Category.RasterOp, "DestWordMask lookup {0:x} --> {1}", lookup, result);
+            Log.Detail(Category.RasterOp, "DestWordMask lookup {0:x} --> {1}", lookup, result);
             return result;
         }
 
@@ -821,7 +821,7 @@ namespace PERQemu.Processor
             // Same table as the dest word for source word mask!
             CombinerFlags result = _rdsTable[lookup];
 
-            Log.Debug(Category.RasterOp, "SrcWordMask lookup {0:x} --> {1}", lookup, result);
+            Log.Detail(Category.RasterOp, "SrcWordMask lookup {0:x} --> {1}", lookup, result);
             return result;
         }
 
@@ -840,7 +840,7 @@ namespace PERQemu.Processor
 
             EdgeStrategy result = _rscTable[lookup];
 
-            Log.Debug(Category.RasterOp, "EdgeStrategy lookup {0:x3} --> {1}", lookup, result);
+            Log.Detail(Category.RasterOp, "EdgeStrategy lookup {0:x3} --> {1}", lookup, result);
 #if DEBUG
             // Draw attention for debugging; should throw an exception in release version...
             if (result == EdgeStrategy.Unknown)
@@ -874,7 +874,7 @@ namespace PERQemu.Processor
 
                 if (_srcNeedsAligned)
                 {
-                    Log.Debug(Category.RasterOp, "--> Dropping leading word ({0})", w.Mask);
+                    Log.Detail(Category.RasterOp, "--> Dropping leading word ({0})", w.Mask);
                     _srcFifo.Dequeue();
                 }
             }
@@ -898,7 +898,7 @@ namespace PERQemu.Processor
                     _leftOver = false;
                     _srcNeedsAligned = true;
 
-                    Log.Debug(Category.RasterOp, "<-- Reset for first edge");
+                    Log.Detail(Category.RasterOp, "<-- Reset for first edge");
                 }
                 else
                 {
@@ -913,13 +913,13 @@ namespace PERQemu.Processor
                         _leftOver = false;
                         _srcNeedsAligned = true;
 
-                        Log.Debug(Category.RasterOp, "<-- End of scan line, reset for first edge ({0})", w.Mask);
+                        Log.Detail(Category.RasterOp, "<-- End of scan line, reset for first edge ({0})", w.Mask);
                         _srcFifo.Dequeue();
                     }
 
                     if (_leftOver)
                     {
-                        Log.Debug(Category.RasterOp, "--> Clearing extra word ({0})", w.Mask);
+                        Log.Detail(Category.RasterOp, "--> Clearing extra word ({0})", w.Mask);
                         _srcFifo.Dequeue();
                     }
                 }

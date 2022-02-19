@@ -32,8 +32,8 @@ namespace PERQemu
     public enum Severity
     {
         All = 0,
-        Debug = 1,
-        Verbose = 2,
+        Verbose = 1,
+        Debug = 2,
         Info = 3,
         Normal = 4,
         Warning = 5,
@@ -132,9 +132,9 @@ namespace PERQemu
 
             SetColors();
 #if DEBUG
-            // for debugging
-            _level = Severity.All;
-            _categories = Category.All;
+            // Set a _reasonable_ default for debugging
+            _level = Severity.Debug;
+            _categories = Category.Emulator | Category.Controller | Category.UI;
 #endif
 
 #if TRACING_ENABLED
@@ -209,6 +209,18 @@ namespace PERQemu
         public static void Debug(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Debug, c, fmt, args);
+        }
+
+        /// <summary>
+        /// A shortcut for logging extra detailed debugging output.  Like, stuff
+        /// that's reeeally verbose.  Like Debug, adds a ton of overhead but is
+        /// compiled out entirely in Release builds.
+        /// </summary>
+        [Conditional("DEBUG")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Detail(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Verbose, c, fmt, args);
         }
 
         /// <summary>

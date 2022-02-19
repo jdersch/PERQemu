@@ -127,7 +127,7 @@ namespace PERQmedia
             else
             {
                 // No joy.  Fell off the end, so all we can do is bail
-                Console.WriteLine("File {0} could not be read (unknown/bad format)", pathname);
+                Console.WriteLine($"File {pathname} could not be read (unknown/bad format)");
             }
         }
     }

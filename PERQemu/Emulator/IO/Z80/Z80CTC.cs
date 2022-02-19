@@ -78,7 +78,7 @@ namespace PERQemu.IO.Z80
 
             if (_channels[ch].Control.HasFlag(ControlFlags.TimeConstant))
             {
-                Log.Debug(Category.CTC, "Channel {0} loading TC {1}", ch, value);
+                Log.Detail(Category.CTC, "Channel {0} loading TC {1}", ch, value);
 
                 // TimeConstant bit was set in the last control byte,
                 // so this byte sets the time constant for this channel.
@@ -96,7 +96,7 @@ namespace PERQemu.IO.Z80
             else
             {
                 ControlFlags control = (ControlFlags)value;
-                Log.Debug(Category.CTC, "Control word: {0}", control);
+                Log.Detail(Category.CTC, "Control word: {0}", control);
 
                 if (control.HasFlag(ControlFlags.ControlOrVector))
                 {
@@ -127,7 +127,7 @@ namespace PERQemu.IO.Z80
         {
             var count = _channels[channel].Clock();
 
-            Log.Debug(Category.CTC, "Clocked channel {0}, count now {1}", channel, count);
+            Log.Detail(Category.CTC, "Clocked channel {0}, count now {1}", channel, count);
 
             return count;
         }

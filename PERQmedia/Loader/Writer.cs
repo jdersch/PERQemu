@@ -91,7 +91,7 @@ namespace PERQmedia
 
                 dev.IsModified = false;
 
-                Console.WriteLine("Saved {0}.", pathname);
+                Console.WriteLine($"Saved {pathname}.");
             }
         }
     }

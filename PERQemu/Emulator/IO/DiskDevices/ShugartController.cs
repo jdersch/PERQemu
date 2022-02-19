@@ -119,7 +119,7 @@ namespace PERQemu.IO.DiskDevices
             var command = (Command)(data & 0x07);
             _seekCommand = (SeekCommand)(data & 0x78);
 
-            Log.Debug(Category.HardDisk, "Shugart command data: {0:x4}", data);
+            Log.Detail(Category.HardDisk, "Shugart command data: {0:x4}", data);
             Log.Debug(Category.HardDisk, "Shugart command is: {0}", command);
 
             // If the FaultClear bit is set, send that to the drive now
@@ -268,13 +268,13 @@ namespace PERQemu.IO.DiskDevices
             {
                 // Low to high
                 _seekState = SeekState.WaitForStepRelease;
-                Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                Log.Detail(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
             }
             else if (_seekState == SeekState.WaitForStepRelease && !_seekCommand.HasFlag(SeekCommand.Step))
             {
                 // High to low
                 _seekState = SeekState.WaitForSeekComplete;
-                Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                Log.Detail(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
 
                 // Don't queue a standard busy delay?  Wait for "on cylinder"
                 // (i.e., SeekComplete) and then fire an interrupt.  But if the
@@ -322,7 +322,7 @@ namespace PERQemu.IO.DiskDevices
         public void SeekCompletionCallback(ulong skewNsec, object context)
         {
             _seekState = SeekState.WaitForStepSet;
-            Log.Debug(Category.HardDisk, "Shugart seek state transition to {0}", _seekState); 
+            Log.Detail(Category.HardDisk, "Shugart seek state transition to {0}", _seekState); 
 
             // Clear busy status
             // Technically if Track0 is true we should raise the interrupt

@@ -32,18 +32,24 @@ namespace PERQmedia
     /// <summary>
     /// Encapsulates a Stream to calculate a checksum as data passes through.
     /// </summary>
+    /// <remarks>
+    /// To accommodate the split ReadHeader/ReadData structure of the formatter
+    /// we make the current CRC values static and let the caller choose when to
+    /// reset them.  Or I could make the caller actually save the partial value
+    /// and pass it back in, but either way is kinda gross.  Should probably do
+    /// it that way though.  This kinda made me throw up in my mouth a little.
+    /// </remarks>
     public class CRC32Stream : Stream
     {
         static CRC32Stream()
         {
             GenerateTable();
+            ResetChecksum();
         }
 
         public CRC32Stream(Stream stream)
         {
             _stream = stream;
-
-            ResetChecksum();
         }
 
         public Stream OuterStream
@@ -95,7 +101,7 @@ namespace PERQmedia
         /// <summary>
         /// Get the checksum of the data read by the stream thus far.
         /// </summary>
-        public uint ReadCRC
+        public static uint ReadCRC
         {
             get { return unchecked(_readCRC ^ 0xffffffff); }
         }
@@ -103,7 +109,7 @@ namespace PERQmedia
         /// <summary>
         /// Get the checksum of the data written to the stream thus far.
         /// </summary>
-        public uint WriteCRC
+        public static uint WriteCRC
         {
             get { return unchecked(_writeCRC ^ 0xffffffff); }
         }
@@ -111,7 +117,7 @@ namespace PERQmedia
         /// <summary>
         /// Reset the read and write checksums.
         /// </summary>
-        public void ResetChecksum()
+        public static void ResetChecksum()
         {
             _readCRC = unchecked(0xffffffff);
             _writeCRC = unchecked(0xffffffff);
@@ -181,8 +187,8 @@ namespace PERQmedia
         Stream _stream;
 
         // Running checksum values
-        uint _readCRC;
-        uint _writeCRC;
+        private static uint _readCRC;
+        private static uint _writeCRC;
 
         // Standard polynomial
         public static uint Polynomial = 0xedb88320;

@@ -51,7 +51,6 @@ namespace PERQemu.UI
     /// </summary>
     public class ArgumentNode : CommandNode
     {
-
         public ArgumentNode(string name, string desc, ParameterInfo p) : base(name, desc)
         {
             Param = p;
@@ -64,7 +63,6 @@ namespace PERQemu.UI
         {
             Method = methodInvoke;
         }
-
 
         public ParameterInfo Param;
         public List<string> Helpers;
@@ -128,7 +126,7 @@ namespace PERQemu.UI
                 }
                 else
                 {
-                    Console.WriteLine("** Unhandled parameter type for param " + Param.Name);
+                    Console.WriteLine($"** Unhandled parameter type for param {Param.Name}");
                     return false;
                 }
             }
@@ -190,6 +188,8 @@ namespace PERQemu.UI
             }
         }
 
+        // todo: for parameters with the [KeywordMatch] attribute this will be
+        // hook for adding to the helper strings used in matching/completion
         private void SetHelperStrings(string[] words)
         {
             foreach (var w in words)
@@ -268,7 +268,7 @@ namespace PERQemu.UI
                 }
 
                 subNode = new CommandNode(words[0], "");
-                SubNodes.Add(subNode);      // Add a glue node, continue
+                SubNodes.Add(subNode);          // Add a glue node, continue
             }
             else
             {
@@ -276,7 +276,6 @@ namespace PERQemu.UI
                 if (words.Count == 1)
                 {
                     // Yes... so update in place.  Oof.
-                    //if (subNode.Arguments == null && cmd.Arguments != null)
                     if (cmd.Arguments != null)
                     {
                         if (subNode.Arguments == null)
@@ -299,7 +298,7 @@ namespace PERQemu.UI
                     }
                     else
                     {
-                        if (subNode.Arguments != null) // && cmd.Arguments == null)
+                        if (subNode.Arguments != null)
                         {
                             cmd.Arguments = subNode.Arguments;  // XXX
                         }
@@ -330,6 +329,5 @@ namespace PERQemu.UI
             }
             return null;
         }
-
     }
 }

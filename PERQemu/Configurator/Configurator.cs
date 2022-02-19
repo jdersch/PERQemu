@@ -105,7 +105,7 @@ namespace PERQemu.Config
 
         public void AddGeometry(string key, DeviceGeometry geom)
         {
-            Log.Debug(Category.MediaLoader, "Adding drive geometry '{0}'", key);
+            Log.Detail(Category.MediaLoader, "Adding drive geometry '{0}'", key);
 
             _geometries.Add(key.ToLower(), geom);
         }
@@ -117,7 +117,7 @@ namespace PERQemu.Config
 
         public void AddDriveSpecs(string key, DevicePerformance perf)
         {
-            Log.Debug(Category.MediaLoader, "Adding drive specs '{0}'", key);
+            Log.Detail(Category.MediaLoader, "Adding drive specs '{0}'", key);
 
             _driveSpecs.Add(key.ToLower(), perf);
         }
@@ -129,13 +129,18 @@ namespace PERQemu.Config
 
         public void AddKnownDrive(StorageDevice dev)
         {
-            Log.Debug(Category.MediaLoader, "Adding device definition '{0}', type {1}",
+            Log.Detail(Category.MediaLoader, "Adding device definition '{0}', type {1}",
                                             dev.Info.Name, dev.Info.Type);
 
             _knownDrives.Add(dev.Info.Name.ToLower(), dev);
         }
 
-        public string[] GetKnownDrives()
+        public StorageDevice GetKnownDeviceByName(string key)
+        {
+            return (StorageDevice)_knownDrives[key];
+        }
+
+        public string[] GetKnownDevices()
         {
             var a = new string[_knownDrives.Keys.Count];
             _knownDrives.Keys.CopyTo(a, 0);
@@ -153,7 +158,7 @@ namespace PERQemu.Config
                 return false;
             }
 
-            Log.Debug(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
+            Log.Detail(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
 
             _prefabs.Add(conf.Key, conf);
             return true;
@@ -237,21 +242,17 @@ namespace PERQemu.Config
             // Let's be discreet, shall we?
             _quietly = true;
 
-            Log.Info(Category.MediaLoader, "Loading configurations from '{0}'",
-                     Paths.Canonicalize(Paths.ConfigDir));
+            Log.Debug(Category.MediaLoader, "Loading configurations from '{0}'",
+                      Paths.Canonicalize(Paths.ConfigDir));
 
-            foreach (var f in Directory.EnumerateFiles(Paths.ConfigDir, "*.cfg"))
+            foreach (var file in Directory.EnumerateFiles(Paths.ConfigDir, "*.cfg"))
             {
-                var file = Paths.Canonicalize(f);
-
-                Console.WriteLine("Found file {0}", file);
-
                 _current = new Configuration();
 
-                if (Load(file))
+                if (Load(Paths.Canonicalize(file)))
                 {
                     AddPrefab(_current);
-                    Log.Debug(Category.MediaLoader, "Added configuration '{0}'", _current.Name);
+                    Log.Detail(Category.MediaLoader, "Added configuration '{0}'", _current.Name);
                 }
                 else
                 {
@@ -288,6 +289,7 @@ namespace PERQemu.Config
                     // write the basic things first.
                     //
                     sw.WriteLine("# PERQemu configuration file, written " + DateTime.Now);
+                    sw.WriteLine("# " + PERQemu.Version);
                     sw.WriteLine("configure");
                     sw.WriteLine("default");
                     sw.WriteLine("name " + _current.Name);
@@ -696,7 +698,7 @@ namespace PERQemu.Config
                     //
                     case DeviceType.DiskSMD:
                     case DeviceType.Tape9Track:
-                    case DeviceType.TapeStreamer:
+                    case DeviceType.TapeQIC:
                         conf.Reason = $"Sorry, {drive.Type} devices are not yet supported.";
                         return false;
                 }
@@ -748,7 +750,7 @@ namespace PERQemu.Config
                         break;
 
                     case DeviceType.DiskSMD:
-                    case DeviceType.TapeStreamer:
+                    case DeviceType.TapeQIC:
                     case DeviceType.Tape9Track:
                         // Not implemented - ignore?  throw?
                         break;
@@ -918,7 +920,7 @@ namespace PERQemu.Config
             if (type != PERQemu.Config.Current.Drives[unit].Type)
             {
                 conf.Reason = $"Could not assign file '{found}' to drive {unit}:\n" +
-                              $"Media type {type} not compatible with drive type {conf.Drives[unit]}.";
+                              $"Media type {type} not compatible with drive type {conf.Drives[unit].Type}.";
                 return false;
             }
 

@@ -127,7 +127,7 @@ namespace PERQemu.IO.Z80
                 throw new ArgumentOutOfRangeException(nameof(unit));
             }
 
-            Log.Debug(Category.FloppyDisk, "Attached disk '{0}'", drive.Info.Name);
+            Log.Debug(Category.FloppyDisk, "Attached floppy unit {0}", unit);
             _drives[unit] = drive;
         }
 
@@ -259,7 +259,7 @@ namespace PERQemu.IO.Z80
                         }
                     }
 
-                    // Invalid command, handle this properly
+                    // TODO: Invalid command, handle this properly
                 }
 
                 // Store the command data away, reset bits 6 and 7 of the status
@@ -318,6 +318,12 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException("FDC command not implemented");
         }
 
+        /// <summary>
+        /// The Specify command sets chip parameters for delays and drive timings
+        /// that we might not really care about.  It also starts the periodic
+        /// poll of connected drives for status changes (drive door open/close
+        /// events).
+        /// </summary>
         private void SpecifyExecutor(ulong skewNsec, object context)
         {
             //
@@ -332,8 +338,11 @@ namespace PERQemu.IO.Z80
             _commandData.Dequeue();     // SRT/HUT
             _nonDMAMode = (_commandData.Dequeue() & 0x1) != 0;
 
-            // TODO: controller goes into polling mode and will interrupt if any
-            // drive gets a disk inserted/removed
+            // If we aren't polling, start the loop
+            if (_pollEvent == null)
+            {
+                PollTimer(0, null);
+            }
 
             FinishCommand();
         }
@@ -514,13 +523,27 @@ namespace PERQemu.IO.Z80
                 return false;
             }
 
+            if (!SelectedUnit.Info.IsWritable &&
+                (_transfer.Type == Command.FormatTrack ||
+                 _transfer.Type == Command.WriteData ||
+                 _transfer.Type == Command.WriteDeletedData))
+            {
+                // Oh noes we forgot to put the sticker on
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
+                _transfer.ST1 = StatusRegister1.NotWritable;
+                _transfer.ST2 = StatusRegister2.None;
+
+                FinishTransfer(_transfer);
+                return false;
+            }
+
             return true;
         }
 
         private void SectorTransferCallback(ulong skewNsec, object context)
         {
             // Simulate the initial search for the sector, then kick off the sector transfer:
-            Log.Debug(Category.FloppyDisk, "In transfer callback");
+            Log.Detail(Category.FloppyDisk, "In transfer callback");
 
             // Set preliminary status info
             _transfer.ST0 = SetErrorStatus(StatusRegister0.None);
@@ -557,8 +580,8 @@ namespace PERQemu.IO.Z80
 
             // Grab the sector:
             _transfer.SectorData = SelectedUnit.GetSector(_transfer.Cylinder,
-                                                                 _transfer.Head,
-                                                                 _transfer.Sector);
+                                                          _transfer.Head,
+                                                          _transfer.Sector);
 
             if (_transfer.SectorData.Data.Length == 0)
             {
@@ -597,10 +620,11 @@ namespace PERQemu.IO.Z80
 
         private void SectorByteReadCallback(ulong skewNsec, object context)
         {
-            if (_transfer.TransferIndex == _transfer.SectorLength)
+            // Did we reach (or run over!) the end of the buffer?
+            // (Catch cases where the floppy was ejected mid-transfer)
+            if (_transfer.TransferIndex >= _transfer.SectorLength)
             {
-                // Done
-                FinishSectorTransfer();
+                FinishSectorTransfer();     // Done
                 return;
             }
 
@@ -613,7 +637,7 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            _readByte = _transfer.SectorData.Data[_transfer.TransferIndex++];
+            _readByte = _transfer.SectorData.ReadByte((uint)_transfer.TransferIndex++);
             _readDataReady = true;
 
             _scheduler.Schedule(_byteTimeNsec, SectorByteReadCallback);
@@ -630,11 +654,11 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Log.Debug(Category.FloppyDisk, "Wrote byte 0x{0} to index {1}",
+            Log.Detail(Category.FloppyDisk, "Wrote byte 0x{0} to index {1}",
                                           _writeByte, _transfer.TransferIndex);
 
             // Write the next byte:
-            _transfer.SectorData.Data[_transfer.TransferIndex++] = _writeByte;
+            _transfer.SectorData.WriteByte((uint)_transfer.TransferIndex++, _writeByte);
 
             if (_transfer.TransferIndex == _transfer.SectorLength)
             {
@@ -666,8 +690,7 @@ namespace PERQemu.IO.Z80
             else
             {
                 _scheduler.Schedule(_sectorTimeNsec, SectorTransferCallback);
-
-                Log.Debug(Category.FloppyDisk, "Next sector transfer queued");
+                Log.Detail(Category.FloppyDisk, "Next sector transfer queued");
             }
         }
 
@@ -724,7 +747,7 @@ namespace PERQemu.IO.Z80
                     }
                     else
                     {
-                        // Track should already have been created.
+                        // Track should already have been created
                         diskTrack = SelectedUnit.GetTrack(SelectedUnit.Cylinder, (byte)_headSelect);
                     }
 
@@ -766,6 +789,8 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void FinishTransfer(TransferRequest request)
         {
+            Log.Detail(Category.FloppyDisk, "Transfer completed");
+
             // Post result data to the status register queue:
             _statusData.Enqueue((byte)request.ST0);
             _statusData.Enqueue((byte)request.ST1);
@@ -777,8 +802,6 @@ namespace PERQemu.IO.Z80
 
             _interruptActive = true;
             FinishCommand();
-
-            Log.Debug(Category.FloppyDisk, "Transfer completed");
         }
 
         /// <summary>
@@ -803,6 +826,9 @@ namespace PERQemu.IO.Z80
             }
 
             _commandData.Clear();
+
+            // Good time to check if the drives need a pollin'
+            if (_pollPending) PollDrives();
         }
 
         /// <summary>
@@ -829,10 +855,72 @@ namespace PERQemu.IO.Z80
                 //      Seek End = 0, Intr Code = Ready line state changed
                 //      Seek End = 1, Intr Code = Abnormal termination (Seek/Recal)
                 _errorStatus |= _seekEnd ? (StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk) :
-                                           (StatusRegister0.ReadySignalChanged | StatusRegister0.NotReady);
+                                           (StatusRegister0.ReadySignalChanged /* | StatusRegister0.NotReady*/ );
             }
 
             return _errorStatus;
+        }
+
+        /// <summary>
+        /// Polls the drives for ready line changes.
+        /// </summary>
+        /// <remarks>
+        /// If a change in the ready status is detected (in our case, a floppy
+        /// Load or Unload has set the DiskChange signal) then an interrupt is
+        /// generated and a subsequent Sense Interrupt Status will return
+        /// ReadySignalChanged in ST0.  It's unclear if the PERQ actually
+        /// notices this, but it's built-in to the chip and it provides a way
+        /// to clear DiskChange so we should do it.  Only checked once per
+        /// second so it's very low overhead.
+        /// </remarks>
+        private void PollDrives()
+        {
+            // In Command mode and no busy flags?
+            if (_state == State.Command && ((byte)_status & 0x1f) == 0)
+            {
+                Log.Detail(Category.FloppyDisk, "Starting drive poll");
+
+                // Ok to poll
+                var changed = false;
+
+                for (var d = 0; d < _drives.Length; d++)
+                {
+                    if (_drives[d] != null && _drives[d].DiskChange)
+                    {
+                        changed = true;
+                        _drives[d].DriveSelect = false; // Clears DiskChange
+                        SelectUnitHead((byte)d);        // Reselect unit, head 0
+                    }
+                }
+
+                // Set ST0 and Interrupt...
+                if (changed)
+                {
+                    Log.Debug(Category.FloppyDisk, "Signalling status change!");
+                    _seekEnd = false;
+                    SetErrorStatus(StatusRegister0.ReadySignalChanged);
+                    _interruptActive = true;
+                }
+            }
+
+            Log.Detail(Category.FloppyDisk, "Drive poll completed");
+
+            // Reset for next time
+            _pollPending = false;
+        }
+
+        /// <summary>
+        /// Signal that the drives should be polled for status changes, then
+        /// reschedule again, forever.  (The actual call to poll the drives
+        /// can then be done when the controller isn't busy, avoiding weird
+        /// state interactions having this run asynchronously.)
+        /// </summary>
+        private void PollTimer(ulong skewNsec, object context)
+        {
+            Log.Detail(Category.FloppyDisk, "Drive status poll requested");
+
+            _pollPending = true;
+            _pollEvent = _scheduler.Schedule(_pollTimeNsec, PollTimer);
         }
 
         /// <summary>
@@ -1028,6 +1116,11 @@ namespace PERQemu.IO.Z80
 
         // FM time, halve this for MFM time
         private ulong _byteTimeNsec = (ulong)(27.0 * Conversion.UsecToNsec);
+
+        // Status polling interval
+        private ulong _pollTimeNsec = (ulong)(1024 * Conversion.MsecToNsec);
+        private volatile bool _pollPending;
+        private SchedulerEvent _pollEvent;
 
         // System interface
         private readonly byte[] _ports = { (byte)Register.Status, (byte)Register.Data };

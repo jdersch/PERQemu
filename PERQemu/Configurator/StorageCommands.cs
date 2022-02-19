@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.IO;
 
 using PERQmedia;
 using PERQemu.Config;
@@ -30,31 +31,17 @@ namespace PERQemu.UI
     /// </summary>
     public class StorageCommands
     {
-
-        // top-level run time shortcuts (for compat w/previous perqemu cli):
-        //      load floppy <file>          -- only one drive, assumes unit 0
-        //      load harddisk <file>        -- assumes unit 1
-        //      load harddisk <file> <n>    -- specifies unit in two-drive systems
-        //                                  -- OR the mlo's smd slots if/when implemented
-        //      load tape <file>            -- assume qic, only one drive
-        //      load tape <file> <n>        -- if/when we have other drive types
-        //      unload floppy               -- assumes 0
-        //      unload harddisk             -- assumes 1
-        //      unload harddisk <n>
-        //      unload tape                 -- assume qic, only one drive
-
-        // storage subsystem provides the raw tools for manipulating devices:
+        // The storage subsystem provides the raw tools for manipulating devices:
         //
-        //      storage define              -- create geometries, specs, devices
-        //      storage create <type> <file>  -- creates and formats a blank file on disk
-        //      storage load <file>         -- assigns it to first appropriate unit
-        //      storage load <n> <file>     -- load unit <n> from <file>
-        //      storage unload <n>          -- unload unit <n> (if removable)
-        //      storage save <n>            -- save unit <n> (if loaded)
-        //      storage save <n> <file>     -- save unit <n> as <file> (if loaded)
-        //      storage save <n> <file> <fmt> -- saveaswithformat()
-        //
-        //  storage load/unload/save actually does the heavy lifting at runtime.
+        //  storage define              -- create geometries, specs, devices
+        //  storage list                -- show what types are available
+        //  storage create <type> <file> -- creates and formats a blank file on disk
+        //  storage load <file>         -- assigns it to next appropriate unit
+        //  storage load <n> <file>     -- load unit <n> from <file>
+        //  storage unload <n>          -- unload unit <n> (if removable)
+        //  storage save <n>            -- save unit <n> (if loaded)
+        //  storage save <n> <file>     -- save unit <n> as <file> (if loaded)
+        //  storage save <n> <file> <fmt> -- saveaswithformat()
 
         [Command("storage", "Enter the storage configuration subsystem")]
         public void SetStoragePrefix()
@@ -74,149 +61,54 @@ namespace PERQemu.UI
             PERQemu.CLI.ShowCommands("storage");
         }
 
+        [Command("storage status", "Show status of loaded storage devices")]
+        private void StorageStatus()
+        {
+            if (PERQemu.Controller.State != RunState.Unavailable)
+                PERQemu.Sys.CheckMedia();
+        }
+
         //
         // Floppy Commands
         //
 
         [Command("load floppy", "Load a floppy disk image")]
-        [Command("storage load floppy", "Load a floppy disk image")]
-        private void LoadFloppy(string imagePath)
+        private void LoadFloppy(string filename)
         {
             try
             {
-                // Make _sure_ we have a floppy drive, which should be unit 0
-                // For now we'll assume there's always exactly one but still check
-                var vol = PERQemu.Config.Current.GetDrivesOfType(DeviceType.Floppy);
-
-                if (vol.Length == 0)
-                {
-                    throw new InvalidConfigurationException("No floppy drive");
-                }
-
-                // todo: check for existing media! (do implicit unload/save, then reload)
-
-                // Assign to our configuration
-                if (PERQemu.Config.AssignMediaTo(vol[0].Unit, imagePath))
-                {
-                    // Success!  Is the PERQ running?
-                    if (PERQemu.Controller.State == RunState.Unavailable)
-                    {
-                        // Nope, just report the assignment
-                        Console.WriteLine(PERQemu.Config.Current.Reason);
-                    }
-                    else
-                    {
-                        PERQemu.Sys.LoadMedia(vol[0]);
-                        Console.WriteLine("Loaded.");
-                    }
-                }
-                else
-                {
-                    // Report why the Configurator failed to assign it
-                    Console.WriteLine(PERQemu.Config.Current.Reason);
-                }
+                LoadInternal(0, filename);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to load floppy image {0}: {1}", imagePath, e.Message);
+                Console.WriteLine($"Unable to load {filename}: {e.Message}");
             }
         }
 
-        [Command("unload floppy", "Unload a floppy disk image")]
-        [Command("storage unload floppy", "Unload a floppy disk image")]
+        [Command("unload floppy", "Unload the loaded floppy disk")]
         private void UnloadFloppy()
         {
             try
             {
-                var vol = PERQemu.Config.Current.GetDrivesOfType(DeviceType.Floppy);
-
-                if (vol.Length == 0)
-                {
-                    throw new InvalidConfigurationException("No floppy drive");
-                }
-
-                var unit = vol[0].Unit;
-
-                // If the machine is running, check the drive and unload it
-                if (PERQemu.Controller.State != RunState.Unavailable)
-                {
-                    var floppy = PERQemu.Sys.Volumes[unit];
-
-                    if (floppy.IsLoaded)
-                    {
-                        if (floppy.IsModified)
-                        {
-                            // Do the save if requested
-                            if (PERQemu.Sys.SaveMedia(unit))
-                            {
-                                Console.WriteLine("Floppy in drive {0} saved to '{1}'.",
-                                                 unit, floppy.Filename);
-                            }
-                        }
-
-                        // Tell the drive to unload itself; it will update the FDC
-                        floppy.Unload();
-                        Console.WriteLine("Floppy ejected.");
-                    }
-                }
-
-                // Now zap the media path in the Configuration
-                PERQemu.Config.Current.SetMediaPath(unit, string.Empty);
-                Console.WriteLine("Drive {0} now unassigned.", unit);
+                UnloadInternal(0);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to unload floppy: {0}", e.Message);
+                Console.WriteLine($"Unable to unload floppy: {e.Message}");
             }
         }
 
 
-        [Command("save floppy", "Save the loaded floppy disk (optionally with a new name)")]
-        [Command("storage save floppy", "Save the loaded floppy disk (optionally with a new name)")]
-        private void SaveFloppy(string imagePath = "")
+        [Command("save floppy", "Save the loaded floppy disk")]
+        private void SaveFloppy(string filename = "")
         {
-            // No PERQ, no save
-            if (PERQemu.Controller.State == RunState.Unavailable)
-            {
-                Console.WriteLine("No PERQ!  Can't save a non-existent floppy.");
-                return;
-            }
-
-            // Make sure we have a floppy drive configured, yadda yadda yadda
-            var vol = PERQemu.Config.Current.GetDrivesOfType(DeviceType.Floppy);
-
-            if (vol.Length == 0)
-            {
-                Console.WriteLine("No floppy drive!");
-                return;
-            }
-
-            var unit = vol[0].Unit;
-
             try
             {
-                // todo: need to create a canonical path based on what's given
-                // (a reverse of the search method; see if there's a dir and if
-                // not, prepend Disks/, see if there's an extension and if not
-                // add the appropriate one
-
-                // Save the canonicalized path to the Configuration and the live device
-                if (!string.IsNullOrEmpty(imagePath))
-                {
-                    imagePath = Paths.Canonicalize(imagePath);  // fixme
-                    PERQemu.Config.Current.SetMediaPath(unit, imagePath);
-                    PERQemu.Sys.Volumes[unit].Filename = imagePath;
-                }
-
-                // Go save it
-                if (PERQemu.Sys.SaveMedia(unit))
-                {
-                    Console.WriteLine("Floppy saved.");
-                }
+                SaveInternal(0, filename);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to save disk image {0}: {1}", imagePath, e.Message);
+                Console.WriteLine($"Unable to save floppy: {e.Message}");
             }
         }
 
@@ -226,10 +118,8 @@ namespace PERQemu.UI
 
         private bool OKtoLoad()
         {
-            // Hard drives in the PERQ are generally fixed and non-removable, so
-            // we don't support having users add or delete them when the machine
-            // is running.  If/when Multibus/SMD is implemented, we'll allow the
-            // removable pack drives (CDC 976x) to be loaded and unloaded. :-)
+            // Hard drives in the PERQ are generally fixed and non-removable;
+            // Don't allow them to be updated while the machine is running
             if (PERQemu.Controller.State > RunState.Off &&
                 PERQemu.Controller.State < RunState.Halted)
             {
@@ -241,127 +131,336 @@ namespace PERQemu.UI
             return true;
         }
 
-        [Command("load harddisk", "Load an existing hard disk image")]
-        [Command("storage load harddisk", "Load an existing hard disk image")]
-        private void LoadHardDisk(string imagePath, int unit = 1)
+        [Command("load harddisk", "Load a hard disk image")]
+        private void LoadHardDisk(string filename)
         {
             if (!OKtoLoad()) return;
 
             try
             {
-                // todo: check for existing media! (do implicit unload/save, then reload)
+                LoadInternal(1, filename);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to load {filename}: {e.Message}");
+            }
+        }
 
-                // Assign to our configuration if appropriate.  This should fail
-                // if the unit number is not appropriate (2nd drive on a PERQ-1,
-                // wrong type, etc.)
-                if (PERQemu.Config.AssignMediaTo(unit, imagePath))
-                {
-                    // Success!  Report the assignment
-                    Console.WriteLine(PERQemu.Config.Current.Reason);
+        [Command("unload harddisk", "Unload a hard disk")]
+        private void UnloadHardDisk(int unit = 1)
+        {
+            if (!OKtoLoad()) return;
 
-                    // If the machine exists (off/halted), go ahead and load
-                    if (PERQemu.Controller.State > RunState.Unavailable)
+            try
+            {
+                UnloadInternal(unit);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to unload hard disk {unit}: {e.Message}");
+            }
+        }
+
+        [Command("save harddisk", "Save the hard disk")]
+        private void SaveHardDisk(string filename = "")
+        {
+            try
+            {
+                SaveInternal(1, filename);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to save hard disk: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// For a modified device, consults the user's preferences to determine
+        /// if it should be saved or not.  Currently only Yes or No; the Ask mode
+        /// requires changes the CLI and GUI to interactively prompt for and
+        /// gather a response.
+        /// </summary>
+        /// <remarks>
+        /// It is worth investigating the SDL built-in Dialog function to see if
+        /// even a simple Yes/No box can be popped up without writing a ton of
+        /// gritty low-level code.
+        /// 
+        /// Also, a possibly clever hack for the CLI might be to have a special
+        /// command tree with just Yes/No nodes so that the editor could be used
+        /// without modification -- literally just SetPrefix(yesOrNode) :-) and
+        /// then let the editor do its thing.  Of course, getting the callback
+        /// with the result could be, uh, fun...  oh yeah.  There's that.  Hmm.
+        /// </remarks>
+        private bool SaveRequested(DeviceType dev)
+        {
+            switch (dev)
+            {
+                case DeviceType.Floppy:
+                    if (Settings.SaveFloppyOnEject == Ask.Maybe)
                     {
-                        PERQemu.Sys.LoadMedia(PERQemu.Config.Current.Drives[unit]);
-                        Console.WriteLine("Loaded.");
+                        Console.WriteLine("If you have to ask, you can't afford it.");
+                        // someday we'll actually be able to do this interactively
+                        // pause if running
+                        //      gui: dialog box (with save as options)
+                        //      cli: "modal" command prompt
+                        // resume if was running
+                    }
+                    return (Settings.SaveFloppyOnEject == Ask.Yes);
+
+                case DeviceType.Disk14Inch:
+                case DeviceType.Disk8Inch:
+                case DeviceType.Disk5Inch:
+                case DeviceType.DiskSMD:
+                    if (Settings.SaveDiskOnShutdown == Ask.Maybe)
+                    {
+                        // same deal
+                        Console.WriteLine("Save, or save not: there is no try.");
+                    }
+                    return (Settings.SaveDiskOnShutdown == Ask.Yes);
+
+                case DeviceType.TapeQIC:
+                case DeviceType.Tape9Track:
+                    // Not supported yet
+                    return false;
+
+                default:
+                    throw new InvalidConfigurationException($"Device type {dev} is not supported, cannot save");
+            }
+        }
+
+        //
+        // Common Routines
+        //
+
+        /// <summary>
+        /// The common routine to load a device.
+        /// </summary>
+        /// <remarks>
+        /// Rules for Loading:
+        ///     if the machine is not defined:
+        ///         update the Configuration record only; return
+        ///     if the machine IS defined:
+        ///         if the drive IS already loaded:
+        ///             if the media is NOT Modified, implicit unload, continue
+        ///             if the media IS Modified, tell user to save/unload manually, exit
+        ///         if the drive is NOT loaded, load it.
+        ///
+        /// The caller must check the machine's running state and inform the user
+        /// if the media type can't be loaded (non-removable types, generally).
+        /// </remarks>
+        private bool LoadInternal(int unit, string filename)
+        {
+            // The Configurator performs a bunch of sanity checks, and if the
+            // file is kosher sets the new canonicalized path in the Config
+            // record.  On success or failure we get back a Reason string with
+            // the result to inform the user.
+            var ok = PERQemu.Config.AssignMediaTo(unit, filename);
+
+            // Report success or failure
+            Console.WriteLine(PERQemu.Config.Current.Reason);
+
+            // If we successfully updated the Configuration, see if the
+            // machine is in a state where we should update it too.
+            if (ok && (PERQemu.Controller.State > RunState.Unavailable))
+            {
+                // LoadMedia will load or reload the drive as appropriate
+                ok = PERQemu.Sys.LoadMedia(PERQemu.Config.Current.Drives[unit]);
+            }
+
+            return ok;
+        }
+
+        /// <summary>
+        /// The common routine to unload a device.
+        /// </summary>
+        /// <remarks>
+        /// Rules for Unloading:
+        ///     if the machine IS defined:
+        ///         if the drive is NOT a Removable type and the machine is NOT running, proceed
+        ///             otherwise return (can't unload)
+        ///         if the drive IS Removable:
+        ///             if the drive is NOT Modified, unload.
+        ///             if the drive IS Modified, do the save routine.
+        ///     issue the Unload to the actual device (Volumes[unit])
+        ///     clear the Volumes entry 
+        ///     update the Configuration record; return.
+        /// 
+        /// The caller checks the run state against the device type; if not a
+        /// removable drive, it rejects the request.  Thus we assume that it's
+        /// okay to unload the device, but we do the check to see if it needs
+        /// saving first.
+        /// </remarks>
+        private void UnloadInternal(int unit)
+        {
+            // If the machine is defined, check the drive and unload it
+            if (PERQemu.Controller.State != RunState.Unavailable)
+            {
+                var drive = PERQemu.Sys.Volumes[unit];
+
+                if (drive.IsModified && SaveRequested(drive.Info.Type))
+                {
+                    // Tell the PERQ to save the device
+                    if (PERQemu.Sys.SaveMedia(unit))
+                    {
+                        Console.WriteLine($"Drive {unit} saved to '{drive.Filename}'.");
                     }
                 }
-                else
-                {
-                    // Report why the Configurator failed to assign it
-                    Console.WriteLine(PERQemu.Config.Current.Reason);
-                }
+
+                // Tell the PERQ to unload it
+                PERQemu.Sys.UnloadMedia(unit);
             }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to load disk image {0}: {1}", imagePath, e.Message);
-            }
+
+            // Now zap the media path in the Configuration
+            PERQemu.Config.Current.SetMediaPath(unit, string.Empty);
+            Console.WriteLine("Drive {0} unassigned.", unit);
         }
 
-        [Command("unload harddisk", "Unload an existing hard disk image")]
-        [Command("storage unload harddisk", "Unload an existing hard disk image")]
-        private void UnLoadHardDisk(int unit = 1)
-        {
-            if (!OKtoLoad()) return;
-
-            try
-            {
-                // check the unit number to make sure it's a hard disk?
-                // if the machine is defined but off/halted:
-                //      if drive is loaded and modified, check for autosave?
-                //      unload it (hard drives will detach from their controllers
-                //      and deallocate themselves?)
-                // zap the filename in the config record
-                Console.WriteLine("Unload harddisk not yet implemented...");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to unload disk unit {0}: {1}", unit, e.Message);
-            }
-        }
-
-        [Command("save harddisk", "Save the current hard disk (optionally with a new name)")]
-        [Command("storage save harddisk", "Save the current hard disk (optionally with a new name)")]
-        private void SaveHardDisk(string imagePath = "", int unit = 1)
+        /// <summary>
+        /// Common routine to save devices upon request.
+        /// </summary>
+        /// <remarks>
+        /// Rules for Saving:
+        ///     If they give us a new filename, then we "save as" (and update
+        ///     the config to show the new pathname)
+        /// 
+        ///     If they give us a new format, we change the extension and do a
+        ///     SaveAsWithFormat, updating the info properties to reflect the change
+        /// 
+        ///     Any device can be saved in any machine state when defined;
+        ///     should we automatically pause emulation to take a stable snapshot?
+        /// 
+        ///     if the PERQ is undefined, no save;
+        ///     if bad unit, drive not loaded, is readonly - no save
+        ///     if the format IS changed, the filename is changed;
+        ///     if the filename IS changed:
+        ///         qualify new name/new ext and check if the new path is
+        ///             valid? proceed, otherwise - no save
+        ///             exists, and overwrite set? proceed, otherwise - no save
+        ///         changes to filename sets IS modified
+        ///     if the device is NOT modified - no save
+        ///     if the device IS modified:
+        ///         if the filename is NOT changed:  .Save()
+        ///         if the file IS changed: .SaveAs()
+        ///         if the format IS changed: .SaveAsWithFormat()
+        ///
+        ///     SaveMedia might need extra hooks to accommodate the format switch
+        /// </remarks>
+        public bool SaveInternal(int unit, string filename /* todo: format */)
         {
             // Save should be okay any time the machine is defined
             if (PERQemu.Controller.State == RunState.Unavailable)
             {
-                Console.WriteLine("No PERQ!  Can't save non-existent hard disks.");
-                return;
+                Console.WriteLine($"No PERQ!  Can't save drive {unit}.");
+                return false;
             }
 
-            try
-            {
-                // as with the floppy, should we briefly pause the emulation if running?
-                // also need to patch up new filename if provided
-                // should test new name before zapping the old one?
-                // have to consider AGAIN how to do the save as, save as with fmt
-                // commands in a sane and consistent way
-                // try to find commonality with floppy/hard disk/tape and do common
-                // load/unload/save/saveas/saveasfmt routines with stubs that pass in
-                // the correct args/validated unit id/etc
+            // What's our current (loaded) filename?
+            var pathname = PERQemu.Sys.Volumes[unit].Filename;
 
-                PERQemu.Sys.SaveMedia(unit);
-                Console.WriteLine("Saved.");
-            }
-            catch (Exception e)
+            // If given a new name, clean it up and nudge it into the
+            // the Disks/ directory, with a proper extension if needed
+            if (!string.IsNullOrEmpty(filename))
             {
-                Console.WriteLine("Unable to save hard disk {0}: {1}", unit, e.Message);
+                var fmt = PERQemu.Sys.Volumes[unit].FileInfo.Format;
+                var ext = FileUtilities.GetExtensionForFormat(fmt);
+
+                pathname = Paths.QualifyPathname(filename, Paths.DiskDir, ext, true);
+                Console.WriteLine($"Qual gave back {pathname}");
+
+                // Is it actually different?
+                if (pathname != PERQemu.Sys.Volumes[unit].Filename)
+                {
+                    Console.WriteLine($"Updating from {PERQemu.Sys.Volumes[unit].Filename}");
+
+                    // Save the canonicalized path to the Configuration
+                    PERQemu.Config.Current.SetMediaPath(unit, pathname);
+                }
             }
+
+            // Inform the PERQ.  It will pick up the changed filename and
+            // update itself accordingly, calling the drive's .Save()
+            var ok = PERQemu.Sys.SaveMedia(unit);
+
+            if (ok)
+            {
+                Console.WriteLine($"Drive {unit} saved to '{pathname}'.");
+            }
+
+            // If Debugging isn't enabled we won't see messages if the drive
+            // isn't loaded, isn't modified, or the user preferences say not
+            // to autosave -- or, soon, if they reject the save when asked.
+            // If an actual error occurs it'll be caught below.  For now I'm
+            // okay with the silent treatment.
+            return ok;
         }
 
-        // a debugging thing... flesh it out or remove it eventually
-        [Command("storage status", "Show status of current storage devices")]
-        private void StorageStatus()
-        {
-            if (PERQemu.Controller.State != RunState.Unavailable)
-                PERQemu.Sys.CheckMedia();
-        }
 
         //
-        // Creating new media files
+        // Create new media files
         //
 
         /// <summary>
         /// Creates a new blank devices, names it, saves it in the Disks/ dir.
+        /// For now, all new drives are created in PRQM format by default. :-)
         /// </summary>
         [Command("storage create", "Creates a new blank, formatted floppy, disk or tape image")]
-        private void CreateMedia([KeywordMatch] string mediaType,
+        private void CreateMedia([KeywordMatch] string driveType,
                                  [PathExpand] string filename,
                                  bool overwrite = false)
         {
-            // look up the mediaType string in the known drives list
-            // if a valid type, check filename
-            //      expand and validate (add Disks/, appropriate extension)
-            //      allow overwriting but not by default
-            //      if filename is valid:
-            //          create the new StorageDevice
-            //          .Format()
-            //          .Save()
-            // suhweeet.
+            // Is it a known/valid type?
+            var d = PERQemu.Config.GetKnownDeviceByName(driveType);
 
-            Console.WriteLine("got media type {0}, file {1}", mediaType, filename);
+            if (d == null)
+            {
+                Console.WriteLine($"Sorry, don't know what a '{driveType}' is.");
+                return;
+            }
+
+            // Fix up the pathname, see if it exists
+            var pathname = Paths.QualifyPathname(filename, Paths.DiskDir, ".prqm", true);
+
+            if (File.Exists(pathname) && !overwrite)
+            {
+                Console.WriteLine($"File '{pathname}' already exists.  Please choose another name,");
+                Console.WriteLine("or to replace the file repeat the command with overwrite 'true'.");
+                return;
+            }
+
+            // Create a new copy
+            var newDrive = new StorageDevice(d.Info, d.Geometry, d.Specs);
+            newDrive.Filename = pathname;
+
+            Console.Write("Formatting new drive... ");
+            newDrive.Format();
+            Console.WriteLine("done!");
+
+            Console.Write("Saving the image... ");
+            newDrive.Save();
+
+            // The formatter will announce success.  All done!
+        }
+
+        /// <summary>
+        /// Lists the known device types, all purdy like.
+        /// </summary>
+        [Command("storage list", "List known storage devices")]
+        private void ListKnownTypes()
+        {
+            string[] drives = PERQemu.Config.GetKnownDevices();
+            Array.Sort(drives);
+
+            Console.WriteLine("Drive Class    Drive Type    Description");
+            Console.WriteLine("-----------    ----------    -----------------------------------------------");
+
+            foreach (var d in drives)
+            {
+                var drive = PERQemu.Config.GetKnownDeviceByName(d);
+                Console.WriteLine("{0}{1}{2}",
+                                  drive.Info.Type.ToString().PadRight(15),
+                                  drive.Info.Name.PadRight(14),
+                                  drive.Info.Description);
+            }
         }
 
         //
@@ -408,6 +507,7 @@ namespace PERQemu.UI
         {
             _dev.Geometry = PERQemu.Config.GetGeometry(tag);
         }
+
         [Command("storage define performance", "Define the new drive's performance characteristics")]
         private void DefineNewSpecs(string tag, int rpm, int pulse, int delay, int seekMin, int seekMax, int settle, int xfer)
         {

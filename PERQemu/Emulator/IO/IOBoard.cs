@@ -77,7 +77,7 @@ namespace PERQemu.IO
             _z80System.Reset();
             _hardDiskController.Reset();
 
-            Log.Debug(Category.IO, "{0} board reset", _name);
+            Log.Info(Category.IO, "{0} board reset", _name);
         }
 
         /// <summary>

@@ -135,7 +135,7 @@ namespace PERQemu.UI
             if (_uiEventDispatch.ContainsKey(e))
                 throw new InvalidOperationException($"Delegate already registered for event type {e}");
 
-            Log.Debug(Category.UI, "Attached delegate for SDL event type {0}", e);
+            Log.Detail(Category.UI, "Attached delegate for SDL event type {0}", e);
             _uiEventDispatch[e] = d;
         }
 
@@ -148,7 +148,7 @@ namespace PERQemu.UI
             if (_uiEventDispatch.ContainsKey(e))
             {
                 _uiEventDispatch[e] = null;
-                Log.Debug(Category.UI, "Released delegate for SDL event type {0}", e);
+                Log.Detail(Category.UI, "Released delegate for SDL event type {0}", e);
             }
         }
 
@@ -216,7 +216,7 @@ namespace PERQemu.UI
                     // also: max/minimize for someday laying out a fulllscreen mode?
 
                     default:
-                        Log.Debug(Category.UI, "Unhandled window event {0}", winEvent);
+                        Log.Detail(Category.UI, "Unhandled window event {0}", winEvent);
                         break;
                 }
             }
@@ -233,7 +233,7 @@ namespace PERQemu.UI
 #if DEBUG
             else
             {
-                Log.Debug(Category.UI, "Unhandled event type {0}, user.type {1}", e.type, e.user.type);
+                Log.Detail(Category.UI, "Unhandled event type {0}, user.type {1}", e.type, e.user.type);
             }
 #endif
         }
@@ -293,8 +293,7 @@ namespace PERQemu.UI
         /// </summary>
         public void ShutdownSDL()
         {
-            //Log.Debug(Category.UI, "SDL Shutdown requested");
-            Console.WriteLine("SDL Shutdown requested on {0}", Thread.CurrentThread.ManagedThreadId);
+            Log.Info(Category.UI, "SDL Shutdown requested on {0}", Thread.CurrentThread.ManagedThreadId);
 
             if (_sdlRunning)
             {

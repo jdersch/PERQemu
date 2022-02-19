@@ -66,8 +66,11 @@ namespace PERQmedia
         /// </summary>
         public static void WriteShort(this Stream fs, ushort val)
         {
-            fs.WriteByte((byte)(val >> 8));
-            fs.WriteByte((byte)(val));
+            unchecked
+            {
+                fs.WriteByte((byte)(val >> 8));
+                fs.WriteByte((byte)val);
+            }
         }
 
         /// <summary>
@@ -91,10 +94,13 @@ namespace PERQmedia
         /// </summary>
         public static void WriteInt(this Stream fs, int val)
         {
-            fs.WriteByte((byte)(val >> 24));
-            fs.WriteByte((byte)(val >> 16));
-            fs.WriteByte((byte)(val >> 8));
-            fs.WriteByte((byte)(val));
+            unchecked
+            {
+                fs.WriteByte((byte)(val >> 24));
+                fs.WriteByte((byte)(val >> 16));
+                fs.WriteByte((byte)(val >> 8));
+                fs.WriteByte((byte)val);
+            }
         }
 
         /// <summary>
@@ -118,22 +124,59 @@ namespace PERQmedia
         }
 
         /// <summary>
+        /// Writes a 32-bit unsigned value, MSB first.
+        /// </summary>
+        public static void WriteUInt(this Stream fs, uint val)
+        {
+            unchecked
+            {
+                fs.WriteByte((byte)(val >> 24));
+                fs.WriteByte((byte)(val >> 16));
+                fs.WriteByte((byte)(val >> 8));
+                fs.WriteByte((byte)val);
+            }
+        }
+
+        /// <summary>
+        /// Reads a 32-bit unsigned value.
+        /// </summary>
+        public static uint ReadUInt(this Stream fs)
+        {
+            fs.CheckRead(4);
+
+            uint val = 0;
+
+            val = (byte)fs.ReadByte();
+            val <<= 8;
+            val |= (byte)fs.ReadByte();
+            val <<= 8;
+            val |= (byte)fs.ReadByte();
+            val <<= 8;
+            val |= (byte)fs.ReadByte();
+
+            return val;
+        }
+
+        /// <summary>
         /// Writes a 64-bit value to the stream, MSB first.
         /// </summary>
         public static void WriteLong(this Stream fs, long val)
         {
-            fs.WriteByte((byte)(val >> 56));
-            fs.WriteByte((byte)(val >> 48));
-            fs.WriteByte((byte)(val >> 40));
-            fs.WriteByte((byte)(val >> 32));
-            fs.WriteByte((byte)(val >> 24));
-            fs.WriteByte((byte)(val >> 16));
-            fs.WriteByte((byte)(val >> 8));
-            fs.WriteByte((byte)(val));
+            unchecked
+            {
+                fs.WriteByte((byte)(val >> 56));
+                fs.WriteByte((byte)(val >> 48));
+                fs.WriteByte((byte)(val >> 40));
+                fs.WriteByte((byte)(val >> 32));
+                fs.WriteByte((byte)(val >> 24));
+                fs.WriteByte((byte)(val >> 16));
+                fs.WriteByte((byte)(val >> 8));
+                fs.WriteByte((byte)val);
+            }
         }
 
         /// <summary>
-        /// Reads a 16-bit value.
+        /// Reads a 64-bit value.
         /// </summary>
         public static long ReadLong(this Stream fs)
         {

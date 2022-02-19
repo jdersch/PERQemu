@@ -125,13 +125,11 @@ namespace PERQemu
         {
             if (File.Exists(file))
             {
-                Console.WriteLine("file {0} found in current dir, as is", file);
                 return Canonicalize(file);
             }
 
             if (File.Exists(Path.Combine(dir, file)))
             {
-                Console.WriteLine("file {0} found in dir {1}", file, dir);
                 return Canonicalize(Path.Combine(dir, file));
             }
 
@@ -149,21 +147,55 @@ namespace PERQemu
                     var found = Path.ChangeExtension(file, ext);
                     if (File.Exists(found))
                     {
-                        Console.WriteLine("file {0} found with extension {1}", file, ext);
                         return Canonicalize(found);
                     }
 
                     found = Path.Combine(dir, found);
                     if (File.Exists(found))
                     {
-                        Console.WriteLine("file {0} found in dir {1} with extension {2}", file, dir, ext);
                         return Canonicalize(found);
                     }
                 }
             }
 
-            Console.WriteLine("file {0} not found", file);
             return string.Empty;
+        }
+
+        /// <summary>
+        /// Return a (presumed) simple filename with a directory and extension.
+        /// </summary>
+        /// <remarks>
+        /// Attempts to transform 'file' into the form 'dir/file.extension'.  If
+        /// file already has a directory specification it is not changed; if the
+        /// file does not have any extension the one given is appended, otherwise
+        /// an existing extension is only replaced if replaceExt is true.  The
+        /// return string is "canonicalized".
+        /// </remarks>
+        public static string QualifyPathname(string file, string dir, string extension, bool replaceExt)
+        {
+            var path = Path.GetDirectoryName(file);
+            Console.WriteLine($"qualify: dir for {file} is '{path}'");
+
+            if (path == string.Empty)
+            {
+                path = Path.Combine(dir, file);
+                Console.WriteLine($"qualified path with dir prepended is {path}");
+            }
+            else
+            {
+                path = file;    // Gotta go with what they gave us
+            }
+
+            Console.WriteLine($"extension desired is {extension} replace={replaceExt}");
+
+            if ((Path.HasExtension(path) && replaceExt) || !Path.HasExtension(path))
+            {
+                path = Path.ChangeExtension(path, extension);
+                Console.WriteLine($"qualified path with changed ext is {path}");
+            }
+
+            Console.WriteLine($"result is {Canonicalize(path)}"); 
+            return Canonicalize(path);
         }
 
         /// <summary>
@@ -227,15 +259,14 @@ namespace PERQemu
                 {
                     return "";    // Base relative to base is, uh, right here
                 }
-                else if (full.StartsWith(PERQemu.BaseDir, PERQemu.HostIsUnix ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
+
+                if (full.StartsWith(PERQemu.BaseDir, PERQemu.HostIsUnix ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
                 {
                     return full.Substring(PERQemu.BaseDir.Length + 1);
                 }
-                else
-                {
-                    // Outside our working dir? for now, return the path unmodified
-                    return path;
-                }
+
+                // Outside our working dir? for now, return the path unmodified
+                return path;
             }
             catch (Exception e)
             {

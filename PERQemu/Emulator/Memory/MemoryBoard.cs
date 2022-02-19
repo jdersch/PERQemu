@@ -95,7 +95,7 @@ namespace PERQemu.Memory
             _mdiQueue.Reset();
             _mdoQueue.Reset();
 
-            Log.Debug(Category.Memory, "Reset");
+            Log.Info(Category.Memory, "Reset");
         }
 
         public int MemSize => _memSize;
@@ -126,7 +126,7 @@ namespace PERQemu.Memory
             // Bump cycle counter
             _Tstate = (_Tstate + 1) & 0x3;
 
-            Log.Debug(Category.MemCycle, "Tick! T{0} cycle={1}", _Tstate, cycleType);
+            Log.Detail(Category.MemCycle, "Tick! T{0} cycle={1}", _Tstate, cycleType);
 
             // Segregate Fetches and Stores into separate queues
             if (IsFetch(cycleType))
@@ -167,8 +167,8 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Tock(ushort input)
         {
-            Log.Debug(Category.MemCycle, "Tock! T{0} mdoNeeded={1} data={2:x4}",
-                                         _Tstate, MDONeeded, input);
+            Log.Detail(Category.MemCycle, "Tock! T{0} mdoNeeded={1} data={2:x4}",
+                                          _Tstate, MDONeeded, input);
 
             // Execute the store
             if (_mdoQueue.Valid)
@@ -202,7 +202,7 @@ namespace PERQemu.Memory
         public void RequestMemoryCycle(int address, MemoryCycle cycleType)
         {
             Log.Debug(Category.MemCycle, "Requested {0} in T{1} addr={2:x6}",
-                                         cycleType, _Tstate, address);
+                                          cycleType, _Tstate, address);
 
             //
             // Queue up the request.  We're in no-man's land at the bottom of the CPU cycle,
@@ -244,8 +244,8 @@ namespace PERQemu.Memory
             // Clip address to memsize range and read
             ushort data = _memory.Words[address & _memSizeMask];
 
-            Log.Debug(Category.Memory, "Fetch addr {0:x6} --> {1:x4}",
-                                        address & _memSizeMask, data);
+            Log.Detail(Category.Memory, "Fetch addr {0:x6} --> {1:x4}",
+                                         address & _memSizeMask, data);
 
             return data;
         }
@@ -256,8 +256,8 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void StoreWord(int address, ushort data)
         {
-            Log.Debug(Category.Memory, "Store addr {0:x6} <-- {1:x4}",
-                                        address & _memSizeMask, data);
+            Log.Detail(Category.Memory, "Store addr {0:x6} <-- {1:x4}",
+                                         address & _memSizeMask, data);
 
             // Clip address to memsize range and write
             _memory.Words[address & _memSizeMask] = data;

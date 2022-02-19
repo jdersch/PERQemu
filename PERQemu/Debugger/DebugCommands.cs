@@ -472,11 +472,11 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.Sys.CPU.LoadMicrocode(ucodeFile);
+                PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(ucodeFile));
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to load microcode from {0}, error: {1}", ucodeFile, e.Message);
+                Console.WriteLine("Unable to load microcode from '{0}': {1}", ucodeFile, e.Message);
             }
         }
 

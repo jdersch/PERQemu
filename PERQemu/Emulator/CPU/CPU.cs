@@ -88,7 +88,7 @@ namespace PERQemu.Processor
             _mq = 0;
             _mqEnabled = false;
 
-            Log.Debug(Category.CPU, "{0} processor reset", _name);
+            Log.Info(Category.CPU, "{0} processor reset", _name);
         }
 
 
@@ -718,7 +718,7 @@ namespace PERQemu.Processor
                                     break;
 
                                 case 0x1:   // Multiply / DivideStep
-                                    Log.Debug(Category.MulDiv, "Step: MQ in ={0:x4} R={1:x6} R<15>={2}",
+                                    Log.Detail(Category.MulDiv, "Step: MQ in ={0:x4} R={1:x6} R<15>={2}",
                                                                _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
                                     //
                                     // For the hardware assisted Multiply/Divide steps, we've already done
@@ -752,7 +752,7 @@ namespace PERQemu.Processor
 #if DEBUG
                                             else
                                             {
-                                                Log.Debug(Category.MulDiv, "Step: Q0 bit skipped");
+                                                Log.Detail(Category.MulDiv, "Step: Q0 bit skipped");
                                             }
 #endif
                                             break;
@@ -768,7 +768,7 @@ namespace PERQemu.Processor
                                             _mq = _mqShifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
                                             break;
                                     }
-                                    Log.Debug(Category.MulDiv, "Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
+                                    Log.Detail(Category.MulDiv, "Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
                                     break;
 
                                 case 0x2:   // Load multiplier / dividend

@@ -329,7 +329,7 @@ namespace PERQemu
         /// </summary>
         private void SetState(RunState a)
         {
-            Console.WriteLine("SetState on {0} to call {1}", Thread.CurrentThread.ManagedThreadId, a);
+            Log.Debug(Category.Controller, "SetState on {0} to call {1}", Thread.CurrentThread.ManagedThreadId, a);
             RunStateChangeEventHandler handler = RunStateChanged;
             handler?.Invoke(new RunStateChangeEventArgs(a));
         }

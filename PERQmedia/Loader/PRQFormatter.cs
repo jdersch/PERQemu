@@ -70,6 +70,9 @@ namespace PERQmedia
         {
             try
             {
+                // Reset the CRC
+                CRC32Stream.ResetChecksum();
+
                 // Reset the helper
                 _helper = new PRQFormatHelper();
 
@@ -183,10 +186,10 @@ namespace PERQmedia
             }
 
             // Grab the CRC through the end of data
-            var crcFromStream = fs.ReadCRC;
+            var crcFromStream = CRC32Stream.ReadCRC;
 
             // Read in the saved CRC and compare it to the computed result
-            var crcFromFile = (uint)fs.OuterStream.ReadInt();
+            var crcFromFile = fs.OuterStream.ReadUInt();
 
             Console.WriteLine("Stored CRC is {0:x8}, computed {1:x8}",
                               crcFromFile, crcFromStream);
@@ -265,6 +268,9 @@ namespace PERQmedia
         /// </summary>
         private bool WriteWithCRC(CRC32Stream fs, StorageDevice dev)
         {
+            // Reset the CRC
+            CRC32Stream.ResetChecksum();
+
             // Create a new helper object
             _helper = new PRQFormatHelper();
 
@@ -341,12 +347,12 @@ namespace PERQmedia
             fs.Write(_helper.Data, 0, _helper.DataSize);
 
             // Get the computed CRC
-            uint crc = fs.WriteCRC;
+            uint crc = CRC32Stream.WriteCRC;
 #if DEBUG 
             Console.WriteLine("Saving computed CRC: {0:x8}", crc);
 #endif 
             // Write it to the file
-            fs.OuterStream.WriteInt((int)crc);
+            fs.OuterStream.WriteUInt(crc);
 
             return true;
         }

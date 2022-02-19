@@ -216,8 +216,8 @@ namespace PERQemu
             if (_queueLock != me)
                 Console.WriteLine($"thread {me} doesn't actually have the lock?!?");
 
-            if (spins > 1)
-                Console.WriteLine($"acquiring thread {me} took {spins} spins");
+            //if (spins > 1)
+            //    Console.WriteLine($"acquiring thread {me} took {spins} spins");
 #endif
         }
 

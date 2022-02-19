@@ -77,8 +77,8 @@ namespace PERQemu.IO.Z80
 
             if (_fifo.TryDequeue(out value))
             {
-                Log.Debug(Category.FIFO, "PERQ read byte {0:x2}, {1} items left in queue",
-                                            value, _fifo.Count);
+                Log.Detail(Category.FIFO, "PERQ read byte {0:x2}, {1} items left in queue",
+                                          value, _fifo.Count);
             }
             else
             {
@@ -104,8 +104,8 @@ namespace PERQemu.IO.Z80
         {
             _fifo.Enqueue(value);
 
-            Log.Debug(Category.FIFO, "Z80 wrote byte {0:x2}, {1} items in queue",
-                                        value, _fifo.Count);
+            Log.Detail(Category.FIFO, "Z80 wrote byte {0:x2}, {1} items in queue",
+                                      value, _fifo.Count);
 
             // Since there's data available, let the PERQ know
             _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
@@ -167,23 +167,23 @@ namespace PERQemu.IO.Z80
             // Interrupt the Z80 to let it know we have data to be read
             _interruptActive = true;
 
-            Log.Debug(Category.FIFO, "PERQ wrote byte {0:x2}, {1} items in queue",
-                                        value, _fifo.Count);
+            Log.Detail(Category.FIFO, "PERQ wrote byte {0:x2}, {1} items in queue",
+                                      value, _fifo.Count);
         }
 
         public byte Read(byte portAddress)
         {
             byte value = 0;
 
-            if (!_fifo.TryDequeue(out value))
+            if (_fifo.TryDequeue(out value))
             {
-                Log.Debug(Category.FIFO, "Z80 read from empty fifo (int active {0}), returning 0",
-                                            _interruptActive);
+                Log.Detail(Category.FIFO, "Z80 read byte {0:x2}, {1} items left in queue",
+                                          value, _fifo.Count);
             }
             else
             {
-                Log.Debug(Category.FIFO, "Z80 read byte {0:x2}, {1} items left in queue",
-                                            value, _fifo.Count);
+                Log.Debug(Category.FIFO, "Z80 read from empty fifo (irq active {0})",
+                                         _interruptActive);
             }
 
             // If the input FIFO is empty, we will interrupt if the PERQ has

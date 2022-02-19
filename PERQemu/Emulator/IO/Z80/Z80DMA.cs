@@ -144,7 +144,7 @@ namespace PERQemu.IO.Z80
                     // Update addresses & counters
                     _byteCounter--;
 
-                    Log.Debug(Category.Z80DMA,
+                    Log.Detail(Category.Z80DMA,
                               "Transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left",
                               data, source, sourceAddress, dest, destAddress, _byteCounter);
 

@@ -391,7 +391,6 @@ namespace PERQemu
             return true;
         }
 
-
         /// <summary>
         /// Load (or reload) a media file (floppy, hard disk or tape).  Returns
         /// true and updates the _volumes[] with a reference to the actual loaded
@@ -404,7 +403,7 @@ namespace PERQemu
         /// 
         /// If a drive is already loaded and is not marked as Removable, don't
         /// allow a reload -- the PERQ doesn't expect normal fixed hard disks to
-        /// just appear or disappear unexpectedly.
+        /// just appear or disappear while the machine is running.
         /// </remarks>
         public bool LoadMedia(Drive drive)
         {
@@ -432,16 +431,11 @@ namespace PERQemu
                     {
                         // Place a new diskette in the drive!  Since we're
                         // reloading, assume the pathname changed
-                     
-                        // NB: we'll assume the UI makes sure that any existing
-                        // floppy is Unloaded first (with the "save on eject"
-                        // settings applied) before clobbering with a reload
                         _volumes[drive.Unit].LoadFrom(drive.MediaPath);
                     }
                     break;
 
                 // case DriveType.DiskSMD:
-                //  check Removable
                 //  _oio.LoadDisk();
 
                 // case DriveType.Tape*:
@@ -451,8 +445,28 @@ namespace PERQemu
                     throw new UnimplementedHardwareException($"Drive type {drive.Type}");
             }
 
-            return true;
+            return _volumes[drive.Unit].IsLoaded;
         }
+
+
+        /// <summary>
+        /// Unload a device and remove it from the Volumes list.
+        /// </summary>
+        public void UnloadMedia(int unit)
+        {
+            if (_volumes[unit] == null)
+                throw new InvalidOperationException($"Drive {unit} is not loaded");
+
+            // Tell the device to unload
+            _volumes[unit].Unload();
+
+            if (!_volumes[unit].Info.IsRemovable)
+            {
+                // Non-removable drives get released.  Buh bye, now
+                _volumes[unit] = null;
+            }
+        }
+
 
         /// <summary>
         /// Report the status of loaded storage devices.  Basic info for now.
@@ -465,8 +479,8 @@ namespace PERQemu
 
                 if (dev != null)
                 {
-                    Console.Write("Drive {0} ({1}) is online", unit, dev.Info.Type);
-                    if (dev.IsLoaded) Console.Write(", is loaded");
+                    Console.Write($"Drive {unit} ({dev.Info.Type}) is online");
+                    if (dev.IsLoaded) Console.Write($", is loaded ({dev.Filename})");
                     if (dev.IsModified) Console.Write(", is modified");
                     if (dev.Info.IsWritable) Console.Write(", is writable");
                     Console.WriteLine();
@@ -503,57 +517,33 @@ namespace PERQemu
 
             if (!_volumes[unit].IsLoaded)
             {
-                Log.Debug(Category.MediaLoader, "Drive {0} is not loaded, cannot save", unit);
+                Log.Debug(Category.Emulator, "Drive {0} is not loaded, cannot save", unit);
                 return false;
             }
 
-            // Do we actually need saving?
-            if (!_volumes[unit].IsModified || !SaveRequested(_volumes[unit].Info.Type))
+            // Did the user update the Configuration record?
+            if (_conf.Drives[unit].MediaPath != _volumes[unit].Filename)
             {
-                Log.Debug(Category.MediaLoader, "Drive {0} media does not require saving", unit);
+                // Name changed!  Save it and set the Modified flag
+                _volumes[unit].Filename = _conf.Drives[unit].MediaPath;
+                _volumes[unit].IsModified = true;
+            }
+
+            if (!_volumes[unit].IsModified)
+            {
+                Log.Debug(Category.Emulator, "Drive {0} media does not require saving", unit);
                 return false;
             }
 
-            // Yep! Uh, just do it I guess
+            // todo: here's where we should decide to pause the emulator if
+            // running, do the save, then continue.  probably not necessary
+            // for floppies, but for a large hard disk we don't want to take
+            // a snapshot that might be modified as we're writing it out!
+
             _volumes[unit].Save();
-            return true;
-        }
 
-        private bool SaveRequested(DeviceType dev)
-        {
-            switch (dev)
-            {
-                case DeviceType.Floppy:
-                    if (Settings.SaveFloppyOnEject == Ask.Maybe)
-                    {
-                        Console.WriteLine("BE LESS WISHY WASHY.  SAVE YER FLOPPIES OR DON'T.");
-                        // someday we'll actually be able to do this interactively
-                        // pause if running
-                        //      gui: dialog box (with save as options)
-                        //      cli: "modal" command prompt
-                        // resume if was running
-                    }
-                    return (Settings.SaveFloppyOnEject == Ask.Yes);
-
-                case DeviceType.Disk14Inch:
-                case DeviceType.Disk8Inch:
-                case DeviceType.Disk5Inch:
-                case DeviceType.DiskSMD:
-                    if (Settings.SaveDiskOnShutdown == Ask.Maybe)
-                    {
-                        // same deal
-                        Console.WriteLine("Save, or save not: there is no try.");
-                    }
-                    return (Settings.SaveDiskOnShutdown == Ask.Yes);
-
-                case DeviceType.TapeStreamer:
-                case DeviceType.Tape9Track:
-                    // Not supported yet
-                    return false;
-
-                default:
-                    throw new InvalidConfigurationException($"Device type {dev} is not supported, cannot save");
-            }
+            // A successful save clears the Modified flag
+            return !_volumes[unit].IsModified;
         }
 
         /// <summary>

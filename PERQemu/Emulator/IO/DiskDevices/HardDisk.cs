@@ -175,7 +175,7 @@ namespace PERQemu.IO.DiskDevices
                 _lastStep = start;
                 _stepCount = 1;
 
-                Log.Debug(Category.HardDisk, "Initial step to cyl {0}, seek {1}ms", _cyl, delay);
+                Log.Detail(Category.HardDisk, "Initial step to cyl {0}, seek {1}ms", _cyl, delay);
 
                 _seekEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, SeekCompletion, start);
             }
@@ -201,7 +201,7 @@ namespace PERQemu.IO.DiskDevices
                 int tmp = Math.Min(_stepCount * Specs.MinimumSeek, Specs.MaximumSeek);
                 delay = ((ulong)tmp * Conversion.MsecToNsec) - (_lastStep - start);
 
-                Log.Debug(Category.HardDisk,
+                Log.Detail(Category.HardDisk,
                           "Buffered step to cyl {0}, total seek now {1}ms (step interval={2:n}ms)",
                           _cyl, delay * Conversion.NsecToMsec, interval);
 
@@ -343,9 +343,8 @@ namespace PERQemu.IO.DiskDevices
             _discRotationTimeNsec = (ulong)(1 / (Specs.RPM / 60.0) * Conversion.MsecToNsec);
             _indexPulseDurationNsec = (ulong)Specs.IndexPulse;
 
-            Log.Debug(Category.HardDisk,
-                      "{0} drive loaded!  Index is {1:n}us every {2:n}ms",
-                      Info.Name, _indexPulseDurationNsec / 1000.0, _discRotationTimeNsec / 1000.0);
+            Log.Info(Category.HardDisk, "{0} drive loaded!  Index is {1:n}us every {2:n}ms",
+                     Info.Name, _indexPulseDurationNsec / 1000.0, _discRotationTimeNsec / 1000.0);
 
             base.OnLoad();
         }

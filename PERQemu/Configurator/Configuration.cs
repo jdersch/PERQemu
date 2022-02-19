@@ -66,7 +66,7 @@ namespace PERQemu.Config
             // That way there's something to actually run, by default
             _drives = new Drive[MAX_DRIVES];
             _drives[0] = new Drive(0, DeviceType.Floppy);
-            _drives[1] = new Drive(1, DeviceType.Disk14Inch, "f1.phd");
+            _drives[1] = new Drive(1, DeviceType.Disk14Inch, "Disks/f1.phd");
             _drives[2] = new Drive(2, DeviceType.Unused);
             _drives[3] = new Drive(3, DeviceType.Unused);
 
@@ -275,7 +275,9 @@ namespace PERQemu.Config
             for (var d = 0; d < _drives.Length; d++)
             {
                 if (_drives[d].Type == type)
+                {
                     match.Add(_drives[d]);
+                }
             }
 
             return match.ToArray();

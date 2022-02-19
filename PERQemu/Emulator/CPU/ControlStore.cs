@@ -160,7 +160,7 @@ namespace PERQemu.Processor
                 // Set the hold bit to inject a wait state
                 _wcsHold = true;
 
-                Log.Debug(Category.Microstore,
+                Log.Detail(Category.Microstore,
                           "Wrote {0:x4} at WCS {1:x4} ({2}) -- now contains {3:x12}",
                           data, addr, word, _microcode[addr]);
             }
@@ -290,7 +290,7 @@ namespace PERQemu.Processor
 
                 _romEnabled = false;
 
-                Log.Debug(Category.Microstore, "Loaded microcode from {0}", Paths.Canonicalize(path));
+                Log.Info(Category.Microstore, "Loaded microcode from {0}", Paths.Canonicalize(path));
             }
 
             /// <summary>

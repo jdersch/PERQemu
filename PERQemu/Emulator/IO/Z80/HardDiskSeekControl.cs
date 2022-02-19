@@ -80,8 +80,8 @@ namespace PERQemu.IO.Z80
 
             if (leftToGo > 0)
             {
-                Log.Debug(Category.HardDisk, "SeekControl scheduling step {0} in {1:n}ms",
-                          leftToGo, StepTime * Conversion.NsecToMsec);
+                Log.Detail(Category.HardDisk, "SeekControl scheduling step {0} in {1:n}ms",
+                           leftToGo, StepTime * Conversion.NsecToMsec);
                 _stepClockEvent = _system.Scheduler.Schedule(StepTime, StepClockCallback);
             }
             else

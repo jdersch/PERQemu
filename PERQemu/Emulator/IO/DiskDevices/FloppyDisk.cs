@@ -43,13 +43,13 @@ namespace PERQemu.IO.DiskDevices
             _fault = false;
             _diskChange = false;
             _driveSelect = false;
-            _isSingleSided = false;
+            _isSingleSided = true;
             _isDoubleDensity = false;
 
             _cylinder = 1;      // Force a Step Out to find track 0 on startup
             _head = 0;
 
-            _tracks = new Track[2, 77];     // todo: eliminate, or do this more elegantly
+            _tracks = new Track[2, 77];     // todo: eliminate this?
 
             _loadDelayEvent = null;
             _seekDelayEvent = null;
@@ -88,11 +88,7 @@ namespace PERQemu.IO.DiskDevices
                 _driveSelect = value;
 
                 // The Disk Change signal is reset when Drive Select goes low
-                if (!_driveSelect)
-                {
-                    _diskChange = false;
-                }
-                Console.WriteLine("Select={0} Change={1}", _driveSelect, _diskChange);
+                _diskChange &= _driveSelect;
             }
         }
 
@@ -102,6 +98,7 @@ namespace PERQemu.IO.DiskDevices
             set
             {
                 _head = value;
+
                 if (IsLoaded && IsSingleSided && _head > 0)
                 {
                     // SA851 denies Ready if selecting head 1 on a single
@@ -113,12 +110,8 @@ namespace PERQemu.IO.DiskDevices
                 else
                 {
                     // Reset the Ready bit if they reselect the proper head
-                    if (IsLoaded && _loadDelayEvent == null)
-                    {
-                        _ready = true;
-                    }
+                    _ready |= (IsLoaded && _loadDelayEvent == null);
                 }
-                Console.WriteLine("HeadSel={0} Ready={1}", _head, _ready);
             }
         }
 
@@ -141,7 +134,7 @@ namespace PERQemu.IO.DiskDevices
 
             // Make sure we don't fly off the end
             _cylinder = Math.Min(track, Geometry.Cylinders);
-            Log.Debug(Category.FloppyDisk, "[Drive seek to cylinder {0} in {1}ms]", _cylinder, delay);
+            Log.Debug(Category.FloppyDisk, "Drive seek to cyl {0} in {1}ms", _cylinder, delay);
         }
 
         /// <summary>
@@ -187,7 +180,7 @@ namespace PERQemu.IO.DiskDevices
             // (it's actually _three_ revolutions for a double density floppy!)
             var startup = 2 * (1 / (Specs.RPM / 60.0)) * Conversion.MsecToNsec;
 
-            Log.Info(Category.FloppyDisk, "Floppy will come ready in {0:n} seconds", startup / 10e6);
+            Log.Info(Category.FloppyDisk, "Drive will come ready in {0:n} seconds", startup / 10e6);
 
             _loadDelayEvent = _scheduler.Schedule((ulong)startup, (skewNsec, context) =>
             {
@@ -203,11 +196,15 @@ namespace PERQemu.IO.DiskDevices
         {
             Log.Info(Category.FloppyDisk, "Floppy is about to eject...");
 
-            // Try to signal the FDC in a way that doesn't make the Z80 hang.
-            // This is due to poorly written code in the v87.z80 assembly; have
-            // to see if the newer version has the same issues.  :-/
+            // DiskChange will signal the FDC at the next Poll that the floppy
+            // was ejected.  On the cable interface most of the drive signals
+            // are pulled up, so we set some relevant ones here accordingly.
             _ready = false;
             _diskChange = true;
+            _isSingleSided = true;
+            _isDoubleDensity = false;
+            _cylinder = 1;
+            _head = 0;
 
             base.Unload();
         }
@@ -234,6 +231,13 @@ namespace PERQemu.IO.DiskDevices
     /// Represents a single track's worth of sectors.  Overlays the underlying
     /// StorageDevice which provides the actual data storage.
     /// </summary>
+    /// <remarks>
+    /// This is basically a bitmap that keeps track of how many sectors have
+    /// been written during format operations.  The emulator doesn't care about
+    /// interleave, so we let the PERQ and the FDC fuss over that but we quietly
+    /// just map the sectors directly to the StorageDevice instead of creating
+    /// another layer of abstraction.
+    /// </remarks>
     public class Track
     {
         /// <summary>

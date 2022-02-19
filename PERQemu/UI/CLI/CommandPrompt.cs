@@ -240,15 +240,30 @@ namespace PERQemu.UI
                 row = ((_textPosition + _originColumn) / Console.BufferWidth) + _originRow;
             }
 
-            // Move cursor to origin to draw string
-            Console.CursorLeft = _originColumn;
-            Console.CursorTop = _originRow;
-            Console.Write(_input + clear);
+            // ARGH. For all its nice features, MacOS X Terminal can screw up
+            // the Mono Console in unexpected ways.  Splitting the pane or even
+            // using the Find feature seems to blow up by changing the buffer
+            // height unexpectedly.  Catch, correct rather than infinitely loop.
+            try
+            {
+                // Move cursor to origin to draw string
+                Console.CursorLeft = _originColumn;
+                Console.CursorTop = _originRow;
+                Console.Write(_input + clear);
 
-            // Move cursor to text position to draw cursor
-            Console.CursorLeft = column;
-            Console.CursorTop = row;
-            Console.CursorVisible = true;
+                // Move cursor to text position to draw cursor
+                Console.CursorLeft = column;
+                Console.CursorTop = row;
+                Console.CursorVisible = true;
+            }
+            catch
+            {
+                Console.WriteLine($"Cursor @{_originRow},{_originColumn} out of bounds ({row},{column})");
+                _originRow = Math.Max(0, _originRow);
+                _originRow = Math.Min(Console.BufferHeight, _originRow);
+                row = _originRow;
+                Console.CursorTop = _originRow;
+            }
 
             _lastInputLength = _input.Length;
         }

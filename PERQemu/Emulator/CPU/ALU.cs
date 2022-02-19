@@ -107,7 +107,7 @@ namespace PERQemu.Processor
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Execute(ALUOperation op, int amux, int bmux)
             {
-                Log.Debug(Category.ALU, "In: Amux={0:x6} Bmux={1:x6}", amux, bmux);
+                Log.Detail(Category.ALU, "In: Amux={0:x6} Bmux={1:x6}", amux, bmux);
 
                 // Reset carry flag (arithmetic ops will set it as necessary)
                 // but save the original value for use in addition/subtraction w/carry
@@ -245,7 +245,7 @@ namespace PERQemu.Processor
             {
                 ALUOperation modOp = curOp;
 
-                Log.Debug(Category.MulDiv, "IN  op={0} amux={1:x6} mq={2:x4}", curOp, amux, mq);
+                Log.Detail(Category.MulDiv, "IN  op={0} amux={1:x6} mq={2:x4}", curOp, amux, mq);
 
                 if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
                 {
@@ -288,7 +288,7 @@ namespace PERQemu.Processor
                     }
                 }
 
-                Log.Debug(Category.MulDiv, "OUT op={0} amux={1:x6}", modOp, amux);
+                Log.Detail(Category.MulDiv, "OUT op={0} amux={1:x6}", modOp, amux);
 
                 Execute(modOp, amux, bmux);
             }

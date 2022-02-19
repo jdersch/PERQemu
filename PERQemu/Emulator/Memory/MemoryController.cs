@@ -154,9 +154,9 @@ namespace PERQemu.Memory
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock(MemoryCycle nextCycle)
         {
-            Log.Debug(Category.MemCycle,
-                      "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-                     _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+            Log.Detail(Category.MemCycle,
+                       "{0} queue  IN: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+                       _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
 
             // Update the current op
             Recognize();
@@ -167,9 +167,9 @@ namespace PERQemu.Memory
             // Update bookmarks for the next cycle
             UpdateBookmarks(nextCycle);
 
-            Log.Debug(Category.MemCycle,
-                      "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
-                     _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
+            Log.Detail(Category.MemCycle,
+                       "{0} queue OUT: Clock T{1} cycle={2} bkm={3} next={4} state={5} next={6}",
+                       _name, _mem.TState, _current.CycleType, _bookmark, nextCycle, _state, _nextState);
         }
 
         /// <summary>
@@ -416,7 +416,7 @@ namespace PERQemu.Memory
             //
             int lookup = (((int)book & 0x0f) << 4) | ((int)state << 2) | _mem.TState;
 
-            Log.Debug(Category.MemCycle, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
+            Log.Detail(Category.MemCycle, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
             return _bkmTable[lookup];
         }
 

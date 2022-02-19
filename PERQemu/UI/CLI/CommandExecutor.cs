@@ -56,7 +56,7 @@ namespace PERQemu.UI
         {
             using (StreamReader sr = new StreamReader(scriptFile))
             {
-                Console.WriteLine("Reading from '{0}'...", scriptFile);
+                if (verbose) Console.WriteLine($"Reading from '{scriptFile}'...");
 
                 // Scripts always execute from top level
                 CurrentRoot = CommandTreeRoot;
@@ -71,7 +71,7 @@ namespace PERQemu.UI
 
                         if (line.StartsWith("@", StringComparison.InvariantCulture))
                         {
-                            Console.WriteLine("** Nested script files not supported - {0} ignored", line);
+                            Console.WriteLine($"** Nested script files not supported: '{line}' ignored");
                         }
                         else
                         {
@@ -140,6 +140,14 @@ namespace PERQemu.UI
         /// </summary>
         public void ShowCommands(CommandNode root)
         {
+            // todo/fixme: given changes in the node structure and argument
+            // lists, we're missing many methods and not displaying all the
+            // available commands.  instead of chasing that down every time
+            // the command is run, populate the complete command lists when
+            // the tree is first created when all the information needed is
+            // already at hand.  this routine then just quickly prints the
+            // sorted and nicely formatted list from the given root.  nice!
+
             // Start at the given root
             foreach (var cmd in root.SubNodes)
             {
@@ -199,8 +207,9 @@ namespace PERQemu.UI
                     // Run out of supplied arguments, try the default value
                     invokeParams[paramIndex] = p.DefaultValue;
 
-                    // At this point, we bail out?
-                    break;
+                    // At this point this is the last argument (or by definition,
+                    // any remaining arguments will also have default values!)
+                    continue;
                 }
 
                 if (p.ParameterType.IsEnum)
@@ -409,12 +418,11 @@ namespace PERQemu.UI
                     {
                         return null;
                     }
-                    else
-                    {
-                        // Save and advance; ok to trim quotes around strings now!
-                        argWords.Add(cmdWords[0].Trim('"'));
-                        current = argNode;
-                    }
+
+                    // Save and advance; ok to trim quotes around strings now!
+                    argWords.Add(cmdWords[0].Trim('"'));
+                    current = argNode;
+
                 }
                 cmdWords.RemoveAt(0);
             }
@@ -632,7 +640,14 @@ namespace PERQemu.UI
                             // Add the generic/glue node to the root
                             _commandRoot.AddSubNode(tokens, cmdNode);
 
+                            // Handle the case where all of the args are optional!
+                            if (args[0].IsOptional)
+                            {
+                                cmdNode.Method = new MethodInvokeInfo(info, commandObject);
+                            }
+
                             var tempRoot = cmdNode;
+                            var nextToLastArg = args.Length - 1;
 
                             // Now loop over the arguments and link 'em in
                             for (var i = 0; i < args.Length; i++)
@@ -641,8 +656,7 @@ namespace PERQemu.UI
                                 var argNode = new ArgumentNode(args[i].Name, "", args[i]);
 
                                 // Attach the method here?
-                                if ((args[i].Position == args.Length - 1) ||
-                                    (i < args.Length - 1 && args[i + 1].IsOptional))
+                                if ((i == nextToLastArg) || (i < nextToLastArg && args[i + 1].IsOptional))
                                 {
                                     argNode.Method = new MethodInvokeInfo(info, commandObject);
                                 }

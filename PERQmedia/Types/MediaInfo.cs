@@ -73,7 +73,11 @@ namespace PERQmedia
             Version = 0;
             Format = Formatters.Unknown;
             FSType = FilesystemHint.Unknown;
+#if DEBUG
+            ArchiveDate = DateTime.Today;   // don't change every damn run when testing
+#else
             ArchiveDate = DateTime.UtcNow;
+#endif
             ArchivedBy = Environment.UserName;
             _textLabel = null;
             _imageLabel = null;

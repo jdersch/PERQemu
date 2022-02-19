@@ -96,6 +96,33 @@ namespace PERQmedia
             return formatters;
         }
 
+        /// <summary>
+        /// Gets the canonical file extension for a given format.
+        /// </summary>
+        public static string GetExtensionForFormat(Formatters fmt)
+        {
+            switch (fmt)
+            {
+                case Formatters.PRQFormat:
+                    return ".prqm";
+
+                case Formatters.PHDFormat:
+                    return ".phd";
+
+                case Formatters.IMDFormat:
+                    return ".imd";
+
+                case Formatters.RawFormat:
+                    return ".pfd";
+
+                case Formatters.TAPFormat:
+                    return ".tap";
+
+                default:
+                    return string.Empty;
+            }
+        }
+
         public static readonly string[] KnownExtensions = { ".prqm", ".phd", ".imd", ".pfd", ".raw" };
     }
 }

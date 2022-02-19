@@ -83,11 +83,15 @@ namespace PERQemu
         /// </summary>
         public void Enable(bool enabled)
         {
-            _isEnabled = enabled;
-            HighResolutionTimer.Enable(_handle, enabled);
-            _sync.Set();
+            if (enabled != _isEnabled)
+            {
+                _isEnabled = enabled;
+                HighResolutionTimer.Enable(_handle, enabled);
+                Log.Debug(Category.Timer, "Heartbeat {0} {1}", _handle, (enabled ? "started" : "stopped"));
+            }
 
-            Log.Debug(Category.Timer, "Heartbeat {0} {1}", _handle, (enabled ? "started" : "stopped"));
+            // Always clear regardless of transition
+            _sync.Set();
         }
 
         public void WaitForHeartbeat()

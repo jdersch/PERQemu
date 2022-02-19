@@ -1,11 +1,11 @@
 ﻿#
-# 	StorageDevices.db - List of standard PERQ storage devices
+#   StorageDevices.db - List of standard PERQ storage devices
 #
-#			** PLEASE DO NOT HAND-EDIT THIS FILE **
+#            ** PLEASE DO NOT HAND-EDIT THIS FILE **
 #
-#	Users may define their own storage types using the command-line
-#	interface within PERQemu.  Errors in this file may prevent the
-#	emulator from initializing properly or with limited functionality.
+#   Users may define their own storage types using the command-line
+#   interface within PERQemu.  Errors in this file will prevent the
+#   emulator from initializing properly or may limit functionality.
 #
 storage
 
@@ -176,7 +176,7 @@ performance CDC976X
 removable true
 done
 
-# additional SMD types that are wicked cool
+# Additional SMD types that are wicked cool
 
 define DiskSMD Eagle
 description "Fujitsu M2351A 'Eagle' 474MB hard disk"
@@ -192,11 +192,11 @@ done
             
 # Standard streamer tape (not yet supported)
  
-define TapeStreamer Archive20
+define TapeQIC Archive20
 description "Archive Sidewinder 3020I (20MB) QIC tape"
 geometry QIC20 1 4 10207 512 17
 performance Arch30IPS 30 0 10000 0 0 0 200000
 removable true
 done
 
-# end of standard definitions
+# End of PERQemu 0.4.6 standard definitions
