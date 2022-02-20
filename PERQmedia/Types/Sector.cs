@@ -20,6 +20,7 @@
 //
 
 using System;
+using System.Runtime.CompilerServices;
 
 namespace PERQmedia
 {
@@ -59,6 +60,7 @@ namespace PERQmedia
                                  CylinderID, HeadID, SectorID, Data.Length, Header.Length, IsBad);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public byte ReadByte(uint offset)
         {
             try
@@ -71,6 +73,7 @@ namespace PERQmedia
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByte(uint offset, byte value)
         {
             try
@@ -83,6 +86,7 @@ namespace PERQmedia
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public byte ReadHeaderByte(uint offset)
         {
             try
@@ -95,6 +99,7 @@ namespace PERQmedia
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteHeaderByte(uint offset, byte value)
         {
             try

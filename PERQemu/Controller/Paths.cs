@@ -174,27 +174,21 @@ namespace PERQemu
         public static string QualifyPathname(string file, string dir, string extension, bool replaceExt)
         {
             var path = Path.GetDirectoryName(file);
-            Console.WriteLine($"qualify: dir for {file} is '{path}'");
 
             if (path == string.Empty)
             {
                 path = Path.Combine(dir, file);
-                Console.WriteLine($"qualified path with dir prepended is {path}");
             }
             else
             {
                 path = file;    // Gotta go with what they gave us
             }
 
-            Console.WriteLine($"extension desired is {extension} replace={replaceExt}");
-
             if ((Path.HasExtension(path) && replaceExt) || !Path.HasExtension(path))
             {
                 path = Path.ChangeExtension(path, extension);
-                Console.WriteLine($"qualified path with changed ext is {path}");
             }
 
-            Console.WriteLine($"result is {Canonicalize(path)}"); 
             return Canonicalize(path);
         }
 

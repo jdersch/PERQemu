@@ -48,7 +48,7 @@
     <DocumentationFile>
     </DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
-    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>
@@ -541,12 +541,6 @@
     <None Include="Docs\Z80 Docs\z80script.pas" />
     <None Include="Docs\Z80 Docs\z80talker.pas" />
     <None Include="packages.config" />
-    <None Include="PROM\boot.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <Content Include="PROM\pz80.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <None Include="PROM\rds00.rom" />
     <None Include="PROM\rsc03emu.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -571,9 +565,6 @@
     <None Include="PROM\memstate_table.txt" />
     <None Include="Docs\NewIOPorts.txt" />
     <None Include="Readme-source.txt" />
-    <Content Include="PROM\pz80.lst">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="Readme.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -630,12 +621,21 @@
     <Content Include="UserGuide.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Disks\d6.phd">
+    <None Include="PROM\boot.bin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Disks\f1.phd">
+    </None>
+    <None Include="PROM\pz80.bin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    </None>
+    <None Include="PROM\pz80.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Disks\d6.phd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Disks\f1.phd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Content Include="PERQemu.ico" />

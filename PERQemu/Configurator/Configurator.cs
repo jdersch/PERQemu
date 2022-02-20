@@ -210,14 +210,15 @@ namespace PERQemu.Config
                 // Feed the script to the CLI
                 PERQemu.CLI.ReadScript(path);
 
-                // Save the file name for saving later.  If it was a valid
-                // config file (written by SaveConfiguration() below) all the
-                // fields will have been set except Filename.
+                // We loaded successfully; set the IsSaved flag to indicate
+                // that this config is backed by a disk file, and save the
+                // actual filename we loaded it from so we can re-save it in
+                // place later if the user makes changes.
                 _current.Filename = path;
+                _current.IsSaved = true;
 
-                // Flag so the ExecutionController will reinitialize the
-                // PERQSystem object at power on.
-                _current.IsModified = true;
+                // Reset the modified flag since we're loading afresh
+                _current.IsModified = false;
 
                 // Run the validator just to be sure; we might be loading a
                 // hand-written file that might not be 100% kosher.
@@ -331,7 +332,9 @@ namespace PERQemu.Config
                     sw.Close();
                 }
 
+                // Set flags and a nice result message
                 _current.IsSaved = true;
+                _current.IsModified = false;
                 _current.Reason = string.Format("Configuration '{0}' saved to {1}.",
                                                 _current.Name, Paths.Canonicalize(_current.Filename));
                 return true;
@@ -363,18 +366,12 @@ namespace PERQemu.Config
             // reason will be set but IsValid will still be true.
             conf.Reason = "";
 
-            if (CheckCPU(conf) &&
-                CheckMemory(conf) &&
-                CheckIO(conf) &&
-                CheckOptions(conf) &&
-                CheckStorage(conf))
-            {
-                conf.IsValid = true;
-            }
-            else
-            {
-                conf.IsValid = false;
-            }
+            conf.IsValid = (CheckCPU(conf) &&
+                            CheckMemory(conf) &&
+                            CheckIO(conf) &&
+                            CheckOptions(conf) &&
+                            CheckStorage(conf));
+            
             return conf.IsValid;
         }
 
@@ -515,7 +512,7 @@ namespace PERQemu.Config
             // A few little sanity checks
             if (conf.Chassis == ChassisType.PERQ1 && conf.Tablet.HasFlag(TabletType.Kriz))
             {
-                conf.Reason = "PERQ-1 with Kriz tablet is unusual, though supported...";
+                conf.Reason = "PERQ-1 with Kriz tablet is unusual, though supported.";
             }
 
             // We'll allow it?  But you'll regret it
@@ -711,7 +708,7 @@ namespace PERQemu.Config
 
             if (!gotMedia)
             {
-                conf.Reason = "Note: the PERQ won't boot without a hard or floppy disk present.";
+                conf.Reason = "The PERQ won't boot without a hard or floppy disk present.";
             }
 
             // Must be good then...

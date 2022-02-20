@@ -211,7 +211,6 @@ namespace PERQemu.Processor
                         current = ((current & 0x0000ffffffff) | (ulong)(data) << 32);
                         break;
                 }
-
                 return current;
             }
 
@@ -302,7 +301,7 @@ namespace PERQemu.Processor
 
                 // Read the address, low bits first
                 addr = (ushort)(fs.ReadByte());
-                addr = (ushort)((addr | ((ushort)fs.ReadByte() << 8)));
+                addr |= (ushort)(fs.ReadByte() << 8);
 
                 // Read the instruction one byte at a time, low bits first
                 word = (ulong)(fs.ReadByte());

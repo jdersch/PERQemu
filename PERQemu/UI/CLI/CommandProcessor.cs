@@ -89,7 +89,7 @@ namespace PERQemu
         public void ReadScript(string script)
         {
             var curPrefix = _editor.CurrentPrefix;
-            
+
             try
             {
                 ResetPrefix();
@@ -228,11 +228,11 @@ namespace PERQemu
             PERQemu.PrintBanner();
         }
 
-        // todo:  a nice help system that can optionally bring up the
-        // emulator help pages on a web site (or even the Github repo)
-        // but for now, dump out some basic help (in 80 columns).  don't
-        // assume most people will download the source tree so provide
-        // available help text in the binary package
+        // todo:  a nice help system, either built-in (for offline operation) or
+        // web-based.  for now, dump out some basic help (in 80 columns).  don't
+        // assume most people will download the source tree, so include at least
+        // the UserGuide.txt file in the binary package.  if this starts to get
+        // large, split off into a HelpCommands class and add to the list above.
 
         [Command("help", "Show PERQemu help")]
         private void Help()
@@ -242,7 +242,7 @@ namespace PERQemu
 
             Console.WriteLine("The command line editor provides tab completion and prompts to assist you.\n" +
                               "Use the arrow keys to retrieve and edit previous command lines, or press\n" +
-                              "the ESC key to erase the command.  Type 'help editor' for more information.\n");
+                              "ESC to erase the current line.  Type 'help editor' for more information.\n");
 
             Console.WriteLine("Many more commands are available to configure and customize the emulated\n" +
                               "PERQ, debug software running on it (or the emulator itself), and to set\n" +
@@ -269,8 +269,8 @@ namespace PERQemu
                               "\tDecimal:\td (or none)\td12345 or 54321\n" +
                               "\tHex:    \t0x, x or $ \t0xff, x3eff, $80000\n");
 
-            Console.WriteLine("The default output radix may be set with 'settings radix <base>'.\n" +
-                              "[Setting output radix not yet implemented]");
+            //Console.WriteLine("The default output radix may be set with 'settings radix <base>'.\n" +
+            //                  "[Setting output radix not yet implemented]");
         }
 
         [Command("help configure", "Show PERQemu Configurator help")]
@@ -281,10 +281,12 @@ namespace PERQemu
                               "early PERQ-1A similar to the machine emulated by earlier versions of PERQemu;\n" +
                               "type 'configure show' to see the current selection.\n");
 
-            Console.WriteLine("If you assign pathnames for the storage devices attached to a configuration,\n" +
-                              "they will be saved and automatically loaded when the machine is started.\n" +
-                              "The 'load', 'unload' and 'save' commands for working with floppy and hard\n" +
-                              "disk images are provided as aliases to the equivalent Configurator commands.\n");
+            Console.WriteLine($"Configurations are saved in the {Paths.ConfigDir} directory.  Use the 'configure list'\n" +
+                              "command to see the available selection.  When you use the 'configure' commands\n" +
+                              "to create or modify your own custom configuration, PERQemu will generate the\n" +
+                              "filename automatically based on the name you assign; use 'configure name' to set\n" +
+                              "a short, unique name which PERQemu will use with the 'configure load' and 'save'\n" +
+                              "commands for easy recall.  See the User Guide for more information.");
 
             Console.WriteLine("Type 'configure' by itself to enter the interactive configuration subsystem.\n" +
                               "Tab completion will guide the configuration process by prompting you for any\n" +

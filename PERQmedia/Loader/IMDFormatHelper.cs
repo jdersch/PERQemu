@@ -99,7 +99,7 @@ namespace PERQmedia
         /// </summary>
         public byte[] EncodeHeader(StorageDevice dev)
         {
-            var header = string.Format("IMD {0}.{1}: {2:MM/dd/yyyy H:mm:ss}\r\n",
+            var header = string.Format("IMD {0}.{1}: {2:dd/MM/yyyy HH:mm:ss}\r\n",
                                        dev.FileInfo.Version / 100,
                                        dev.FileInfo.Version % 100,
                                        dev.FileInfo.ArchiveDate);

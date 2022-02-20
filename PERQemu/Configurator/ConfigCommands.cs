@@ -106,11 +106,10 @@ namespace PERQemu.UI
             {
                 Console.WriteLine("Setting the machine to defaults.");
                 PERQemu.Config.Current = PERQemu.Config.Default;
-                PERQemu.Config.Changed = true;
             }
         }
 
-        [Command("configure list", "List pre-defined machine configurations")]
+        [Command("configure list", "List available machine configurations")]
         public void ListPrefabs()
         {
             string[] prefabs = PERQemu.Config.GetPrefabs();
@@ -173,44 +172,61 @@ namespace PERQemu.UI
             }
         }
 
+        /// <summary>
+        /// Load a new configuration.  Tries the prefabs list first, then falls
+        /// back to search the directory.
+        /// </summary>
         [Command("configure load", "Load a saved configuration")]
-        public void LoadConfig(string file)
+        public void LoadConfig(string name)
         {
             if (OKtoReconfig())
             {
-                var found = Paths.FindFileInPath(file, Paths.ConfigDir, ".cfg");
+                var key = name.Trim().ToLower();
 
-                if (found == string.Empty)
+                // Special case: if typed "configure load default" and
+                // there's no file named "default"... do the implied thing?
+                if (key == "default")
                 {
-                    // Special case: if typed "configure load default" and
-                    // there's no file named "default"... do the implied thing?
-                    if (file == "default")
-                    {
-                        SetDefault();
-                    }
-                    else
-                    {
-                        Console.WriteLine("Could not find file '{0}'.", file);
-                    }
+                    SetDefault();
                     return;
                 }
 
-                if (!PERQemu.Config.Load(found))
+                // Try the prefabs first
+                var prefab = PERQemu.Config.GetConfigByName(key);
+
+                if (prefab != null)
                 {
-                    Console.WriteLine(PERQemu.Config.Current.Reason);
+                    PERQemu.Config.Current = prefab;
+                    PERQemu.Config.Changed = false;
+                    Console.WriteLine($"Configuration '{PERQemu.Config.Current.Name}' selected.");
+                    return;
+                }
+
+                // Fall back to the filesystem
+                var path = Paths.QualifyPathname(key, Paths.ConfigDir, ".cfg", true);
+
+                if (PERQemu.Config.Load(path))
+                {
+                    Console.WriteLine($"Configuration '{PERQemu.Config.Current.Name}' loaded.");
                 }
                 else
                 {
-                    Console.WriteLine("Configuration '{0}' loaded from {1}.",
-                                     PERQemu.Config.Current.Name, found);
+                    Console.WriteLine($"Couldn't find a configuration named '{name}'.");
                 }
             }
         }
 
-        [Command("configure save", "Save the configuration to the current file")]
+        [Command("configure save", "Save the current configuration")]
         public void SaveConfig()
         {
-            // todo: set the dir prefix and add .cfg if necessary
+            // This is a subtle manipulation to discourage using "default" as
+            // a filename - the default config leaves Filename blank to make
+            // the user set a new name when making changes.
+            if (string.IsNullOrEmpty(PERQemu.Config.Current.Filename))
+            {
+                Console.WriteLine("No filename set!  Use 'configure name <file>' to set a name for the");
+                Console.WriteLine("configuration, then try again.");
+            }
 
             if (!PERQemu.Config.Save())
             {
@@ -218,43 +234,34 @@ namespace PERQemu.UI
             }
             else
             {
-                Console.WriteLine("Configuration saved.");
+                // Save it to our prefabs too, so 'list' will included it
+                PERQemu.Config.AddPrefab(PERQemu.Config.Current);
+                PERQemu.Config.Changed = false;
+                Console.WriteLine("Configuration saved to '{0}'.", PERQemu.Config.Current.Filename);
             }
-        }
-
-        // todo: now this is confusing... if the name doesn't match it throws
-        // our whole prefab/caching scheme out the window.  hmm.  think, meat...
-        [Command("configure save", "Save the configuration to a named file")]
-        public void SaveConfig(string file)
-        {
-            PERQemu.Config.Current.Filename = file;
-            SaveConfig();
         }
 
         [Command("configure name", "Name the current configuration")]
         public void SetName(string name)
         {
-            if (PERQemu.Config.Quietly)
+           var key = name.Trim().ToLower();
+
+            if (PERQemu.Config.GetConfigByName(key) != null)
             {
-                PERQemu.Config.Current.Name = name;
+                Console.WriteLine("There's already a configuration by that name; please choose another.");
+                return;
             }
-            else
-            {
-                PERQemu.Config.Current.Name = name;
-            }
+
+            // Qualify the file name: lower case, trimmed, Conf/, add .cfg!
+            PERQemu.Config.Current.Filename = Paths.QualifyPathname(name, Paths.ConfigDir, ".cfg", true);
+            PERQemu.Config.Current.Name = name;
         }
 
-        [Command("configure description", "Add a short description of the current configuration")]
+        [Command("configure description", "Add a brief description of the current configuration")]
         public void SetDescription(string desc)
         {
-            if (PERQemu.Config.Quietly)
-            {
-                PERQemu.Config.Current.Description = desc;
-            }
-            else
-            {
-                PERQemu.Config.Current.Description = desc;
-            }
+            PERQemu.Config.Current.Description = desc;
+            PERQemu.Config.Changed = true;
         }
 
         [Command("configure chassis", "Set the machine type")]
