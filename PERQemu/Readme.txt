@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-2/19/2022 - skeezicsb - v0.4.6 (experimental)
+2/26/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -179,7 +179,10 @@
     8. Floppy updates: Write protected floppies are now write protected; status
     change polling implemented; fixed a stooopid bug in the PRQM formatter that
     broke CRCs; testing and refactoring of floppy formatting and debugging why
-    writes are failing.
+    writes are failing.  Update: writes were working but the PERQ<->Z80 FIFOs
+    and Z80 DMA were/are randomly injecting nulls and corrupting the floppy data.
+    It's going to get worse before it gets better.  Or it'll just get worse, full
+    stop.  Entropy wins again.
 
 
 Original Readme.txt follows.

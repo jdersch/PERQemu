@@ -188,8 +188,9 @@ namespace PERQemu.IO.Z80
         {
             if (portAddress == StatusPort)
             {
-                Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
+               Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
                                                _status, (byte)_status);
+                _interruptActive = false;
                 return (byte)_status;
             }
 

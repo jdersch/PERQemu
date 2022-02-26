@@ -20,9 +20,10 @@
 using Konamiman.Z80dotNet;
 
 using System;
+using System.Collections.Generic;
 
 namespace PERQemu.IO.Z80
-{   
+{
     /// <summary>
     /// Z80IOBus implements the Konamiman Z80dotNet IMemory interface for the
     /// purposes of providing access to the IO board's Z80 Port I/O space.
@@ -31,20 +32,37 @@ namespace PERQemu.IO.Z80
     {
         public Z80IOBus(Z80System system)
         {
-            _devices = new IZ80Device[Size];
+            _devices = new List<IZ80Device>();
+            _devicePorts = new IZ80Device[Size];
             _z80System = system;
         }
 
         public void Reset()
         {
-            foreach(IZ80Device device in _devices)
+            foreach (IZ80Device device in _devices)
             {
                 if (device != null)
                 {
+                    Console.WriteLine($"resetting {device.Name}");
                     device.Reset();
                 }
             }
         }
+
+        /// <summary>
+        /// SLOW ASS DEBUGGING AID TO FIGURE OUT WHAT THE ACTUAL FUCK IS GOING ON WITH THE FUCKING Z80
+        /// </summary>
+        public void ActiveInterrupts()
+        {
+            foreach (var d in _devices)
+            {
+                if (d.IntLineIsActive)
+                {
+                    Console.WriteLine($"cycle {_z80System.Clocks}: device {d.Name} is active, vector is {d.ValueOnDataBus}");
+                }
+            }
+        }
+
 
         //
         // IMemory Implementation
@@ -65,23 +83,31 @@ namespace PERQemu.IO.Z80
         //
         public void RegisterDevice(IZ80Device device)
         {
+            // Add to (the local copy of) the device list
+            if (_devices.Contains(device))
+            {
+                throw new InvalidOperationException($"Z80 I/O device {device.Name} already registered");
+            }
+            _devices.Add(device);
+
+            // Register the ports, checking for overlaps
             foreach (ushort portAddress in device.Ports)
             {
-                if (_devices[portAddress] != null)
+                if (_devicePorts[portAddress] != null)
                 {
-                    throw new InvalidOperationException(
-                        string.Format("Z80 I/O Port conflict: Device {0} already registered at port 0x{1}",
-                                      _devices[portAddress], portAddress));
+                    throw new InvalidOperationException($"Z80 I/O Port conflict: Device {_devicePorts[portAddress]} already registered at port 0x{portAddress:x2}");
                 }
 
-                _devices[portAddress] = device;
-                _z80System.CPU.RegisterInterruptSource(device);
+                _devicePorts[portAddress] = device;
             }
+
+            // Tell the Z80 about it
+            _z80System.CPU.RegisterInterruptSource(device);
         }
 
         private byte ReadPort(int port)
         {
-            IZ80Device device = _devices[port];
+            IZ80Device device = _devicePorts[port];
             byte value = 0x0;
 
             if (device != null)
@@ -100,7 +126,7 @@ namespace PERQemu.IO.Z80
 
         private void WritePort(int port, byte value)
         {
-            IZ80Device device = _devices[port];
+            IZ80Device device = _devicePorts[port];
 
             if (device != null)
             {
@@ -114,7 +140,8 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private IZ80Device[] _devices;
+        private List<IZ80Device> _devices;
+        private IZ80Device[] _devicePorts;
         private Z80System _z80System;
     }
 }
