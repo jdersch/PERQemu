@@ -227,21 +227,21 @@ namespace PERQemu
         /// Shortcut for debug warnings that should stand out (but are non-fatal
         /// and can be ignored in Release builds).
         /// </summary>
-        [Conditional("DEBUG")]
+        //[Conditional("DEBUG")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Warn(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Warning, c, fmt, args);
         }
 
-        [Conditional("TRACING_ENABLED")]
+        //[Conditional("TRACING_ENABLED")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Normal, c, fmt, args);
         }
 
-        [Conditional("TRACING_ENABLED")]
+        //[Conditional("TRACING_ENABLED")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(Severity s, Category c, string fmt, params object[] args)
         {

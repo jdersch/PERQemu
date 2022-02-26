@@ -517,7 +517,7 @@ namespace PERQemu
 
             if (!_volumes[unit].IsLoaded)
             {
-                Log.Debug(Category.Emulator, "Drive {0} is not loaded, cannot save", unit);
+                Log.Info(Category.Emulator, "Drive {0} is not loaded, cannot save", unit);
                 return false;
             }
 
@@ -531,7 +531,7 @@ namespace PERQemu
 
             if (!_volumes[unit].IsModified)
             {
-                Log.Debug(Category.Emulator, "Drive {0} media does not require saving", unit);
+                Log.Info(Category.Emulator, "Drive {0} media does not require saving", unit);
                 return false;
             }
 

@@ -125,9 +125,7 @@ namespace PERQemu.IO
                 {
                     if (_deviceDispatch[i] != null)
                     {
-                        throw new InvalidOperationException(
-                            string.Format("IO Port conflict at {0:x2} between {1} and {2}",
-                                           i, device, _deviceDispatch[i]));
+                        throw new InvalidOperationException($"IO Port conflict at {i:x2} between {device} and {_deviceDispatch[i]}");
                     }
 
                     _deviceDispatch[i] = device;

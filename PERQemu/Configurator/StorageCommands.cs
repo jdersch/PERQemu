@@ -98,9 +98,14 @@ namespace PERQemu.UI
             }
         }
 
-
         [Command("save floppy", "Save the loaded floppy disk")]
-        private void SaveFloppy(string filename = "")
+        private void SaveFloppy()
+        {
+            SaveFloppyAs("");       // Lazy...
+        }
+
+        [Command("save floppy as", "Save the loaded floppy disk with a new name")]
+        private void SaveFloppyAs(string filename)
         {
             try
             {
@@ -161,8 +166,14 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("save harddisk", "Save the hard disk")]
-        private void SaveHardDisk(string filename = "")
+        [Command("save harddisk", "Save the hard disk with a new name")]
+        private void SaveHardDisk()
+        {
+            SaveHardDiskAs("");     // Yeah, silly.
+        }
+
+        [Command("save harddisk as", "Save the hard disk with a new name")]
+        private void SaveHardDiskAs(string filename)
         {
             try
             {
@@ -354,18 +365,33 @@ namespace PERQemu.UI
                 return false;
             }
 
+            if (PERQemu.Sys.Volumes[unit] == null)
+            {
+                throw new InvalidOperationException($"Drive {unit} is not loaded");
+            }
+
             // What's our current (loaded) filename?
             var pathname = PERQemu.Sys.Volumes[unit].Filename;
 
-            // If given a new name, clean it up and nudge it into the
-            // the Disks/ directory, with a proper extension if needed
+            // Is it read-only?  Then saving in place is verboten
+            if (string.IsNullOrEmpty(filename) && !PERQemu.Sys.Volumes[unit].Info.IsWritable)
+            {
+                var cmd = PERQemu.Sys.Volumes[unit].Info.Type == DeviceType.Floppy ? "floppy" : "harddisk";
+
+                Console.WriteLine($"The image '{pathname}' is read-only; cannot overwrite.");
+                Console.WriteLine($"Please use 'save {cmd} as' to save a copy with a different name.");
+                return false;
+            }
+
+            // If given a new name, clean it up and nudge it into the Disks/
+            // directory, with a proper extension if needed.  No check here is
+            // done to see if the new name will overwrite an existing one...
             if (!string.IsNullOrEmpty(filename))
             {
                 var fmt = PERQemu.Sys.Volumes[unit].FileInfo.Format;
                 var ext = FileUtilities.GetExtensionForFormat(fmt);
 
                 pathname = Paths.QualifyPathname(filename, Paths.DiskDir, ext, true);
-                Console.WriteLine($"Qual gave back {pathname}");
 
                 // Is it actually different?
                 if (pathname != PERQemu.Sys.Volumes[unit].Filename)
@@ -377,8 +403,8 @@ namespace PERQemu.UI
                 }
             }
 
-            // Inform the PERQ.  It will pick up the changed filename and
-            // update itself accordingly, calling the drive's .Save()
+            // Inform the PERQ.  It will pick up a changed filename and update
+            // itself accordingly, calling the drive's .Save()
             var ok = PERQemu.Sys.SaveMedia(unit);
 
             if (ok)
@@ -389,8 +415,8 @@ namespace PERQemu.UI
             // If Debugging isn't enabled we won't see messages if the drive
             // isn't loaded, isn't modified, or the user preferences say not
             // to autosave -- or, soon, if they reject the save when asked.
-            // If an actual error occurs it'll be caught below.  For now I'm
-            // okay with the silent treatment.
+            // At that point we have already updated the Config with a new name
+            // (whoops?) so this might still need some messin' with.
             return ok;
         }
 

@@ -18,6 +18,7 @@
 //
 
 using Konamiman.Z80dotNet;
+
 using System;
 using System.IO;
 
@@ -68,15 +69,14 @@ namespace PERQemu.IO.Z80
             {
                 return _rom[address];
             }
-            else if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
+
+            if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
             {
                 return _ram[address - RAM_ADDRESS];
             }
-            else
-            {
-                // throw for now so I can see what's going on
-                throw new InvalidOperationException($"Unexpected memory read at address 0x{address:x}");
-            }
+
+            // throw for now so I can see what's going on
+            throw new InvalidOperationException($"Unexpected memory read at address 0x{address:x}");
         }
 
         private void WriteByte(int address, byte value)
@@ -94,7 +94,6 @@ namespace PERQemu.IO.Z80
 
         public void DMATerminate()
         {
-
         }
 
         public void LoadROM(string path)

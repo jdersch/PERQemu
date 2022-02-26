@@ -18,6 +18,7 @@
 //
 
 using Konamiman.Z80dotNet;
+
 using System;
 
 namespace PERQemu.IO.Z80
@@ -51,7 +52,7 @@ namespace PERQemu.IO.Z80
         public int Size => 0x100;        // 256 IO addresses
 
         public byte this[int address]
-        { 
+        {
             get { return ReadPort(address); }
             set { WritePort(address, value); }
         }
@@ -72,11 +73,9 @@ namespace PERQemu.IO.Z80
                         string.Format("Z80 I/O Port conflict: Device {0} already registered at port 0x{1}",
                                       _devices[portAddress], portAddress));
                 }
-                else
-                {
-                    _devices[portAddress] = device;
-                    _z80System.CPU.RegisterInterruptSource(device);
-                }
+
+                _devices[portAddress] = device;
+                _z80System.CPU.RegisterInterruptSource(device);
             }
         }
 

@@ -31,16 +31,28 @@ namespace PERQemu.IO.Z80
     /// functional at this time.  Not all interrupt modes are implemented, in
     /// particular transfers are DMA-only.
     /// </summary>
+    /// <remarks>
+    /// There are only two addressible registers; base address is the CSR:
+    /// 
+    ///     From v87.z80:           From param.eio:
+    ///     FLPSTA  EQU  250Q       IOAFSTAT  EQU  040Q     FLOPPY STATUS
+    ///     FLPDAT  EQU  251Q       IOAFDATA  EQU  041Q     FLOPPY DATA
+    /// 
+    /// This chip is common to all PERQ I/O Board types.
+    /// </remarks>
     public class NECuPD765A : IZ80Device, IDMADevice
     {
-        // TODO: Ctor should take base I/O address
-        public NECuPD765A(Scheduler scheduler)
+        public NECuPD765A(byte baseAddress, Scheduler scheduler)
         {
             _scheduler = scheduler;
+            _baseAddress = baseAddress;
+            _ports = new byte[] { _baseAddress, (byte)(_baseAddress + 1) };
+
             _commandData = new Queue<byte>();
             _statusData = new Queue<byte>();
             _drives = new FloppyDisk[2];
             _pcn = new byte[2];
+            _pollEvent = null;
 
             _commands = new CommandData[]
             {
@@ -74,6 +86,12 @@ namespace PERQemu.IO.Z80
             _commandData.Clear();
             _statusData.Clear();
 
+            if (_pollEvent != null)
+            {
+                _scheduler.Cancel(_pollEvent);
+                _pollEvent = null;
+            }
+
             _interruptsEnabled = false;
             _interruptActive = false;
             _nonDMAMode = false;
@@ -86,9 +104,11 @@ namespace PERQemu.IO.Z80
             _unitSelect = 0;
             _headSelect = 0;
             _seekEnd = false;
+            _byteTimeNsec = FMByteTimeNsec;
 
             Log.Debug(Category.FloppyDisk, "Controller reset");
         }
+
 
         public string Name => "uPD765A FDC";
         public byte[] Ports => _ports;
@@ -101,8 +121,13 @@ namespace PERQemu.IO.Z80
             set { _interruptsEnabled = value; }
         }
 
+        private byte StatusPort => _baseAddress;
+        private byte DataPort => (byte)(_baseAddress + 1);
+
         private FloppyDisk SelectedUnit => _drives[_unitSelect];
         private bool SelectedUnitIsReady => SelectedUnit != null && SelectedUnit.Ready;
+
+        private ulong ByteTimeNsec => _byteTimeNsec;
 
         //
         // IDMADevice Implementation
@@ -113,6 +138,7 @@ namespace PERQemu.IO.Z80
         void IDMADevice.DMATerminate()
         {
             _transfer.Aborted = true;
+            Log.Detail(Category.FloppyDisk, "DMA transfer terminated");
         }
 
         /// <summary>
@@ -142,6 +168,7 @@ namespace PERQemu.IO.Z80
             if (SelectedUnit != null)
             {
                 SelectedUnit.DriveSelect = true;
+                _byteTimeNsec = SelectedUnit.IsDoubleDensity ? MFMByteTimeNsec : FMByteTimeNsec;
             }
 
             _headSelect = (select & 0x4) >> 2;
@@ -155,93 +182,91 @@ namespace PERQemu.IO.Z80
         // IZ80Device implementation (Read & Write)
         //
 
+        #region Z80 IO Read/Write
+
         public byte Read(byte portAddress)
         {
-            switch ((Register)portAddress)
+            if (portAddress == StatusPort)
             {
-                case Register.Status:
-                    Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
-                                                   _status, (byte)_status);
-                    return (byte)_status;
+                Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
+                                               _status, (byte)_status);
+                return (byte)_status;
+            }
 
-                case Register.Data:
-                    _interruptActive = false;
-                    byte data = 0;
+            if (portAddress == DataPort)
+            {
+                _interruptActive = false;
+                byte data = 0;
 
-                    if (_state == State.Result)
+                if (_state == State.Result)
+                {
+                    // Read result data
+                    if (_statusData.Count > 0)
                     {
-                        // Read result data
-                        if (_statusData.Count > 0)
+                        byte value = _statusData.Dequeue();
+
+                        // Clear RQM for the next 12 uSec
+                        _status &= (~Status.RQM);
+
+                        _scheduler.Schedule(12 * Conversion.UsecToNsec, (skew, context) =>
                         {
-                            byte value = _statusData.Dequeue();
-
-                            // Clear RQM for the next 12 uSec
-                            _status &= (~Status.RQM);
-
-                            _scheduler.Schedule(12 * Conversion.UsecToNsec, (skew, context) =>
+                            // Set DIO and RQM appropriately to signify readiness for next data
+                            if (_statusData.Count > 0)
                             {
-                                // Set DIO and RQM appropriately to signify readiness for next data
-                                if (_statusData.Count > 0)
-                                {
-                                    // More data to be read
-                                    _status |= (Status.DIO | Status.RQM);
-                                }
-                                else
-                                {
-                                    // No more data, clear DIO (waiting for transfer
-                                    // from processor) and set RQM (ready to receive)
-                                    _status &= (~Status.DIO);
-                                    _status |= Status.RQM;
-                                    _state = State.Command;
-                                }
-                            });
+                                // More data to be read
+                                _status |= (Status.DIO | Status.RQM);
+                            }
+                            else
+                            {
+                                // No more data, clear DIO (waiting for transfer
+                                // from processor) and set RQM (ready to receive)
+                                _status &= (~Status.DIO);
+                                _status |= Status.RQM;
+                                _state = State.Command;
 
-                            data = value;
-                        }
-                        else
-                        {
-                            // Unexpected right now
-                            throw new InvalidOperationException("FDC Status Read with no data available");
-                        }
-                    }
-                    else if (_state == State.Execution)
-                    {
-                        if (!_readDataReady)
-                        {
-                            throw new InvalidOperationException("DMA read with no data ready");
-                        }
+                                // Returning to command mode is probably a good
+                                // time to check if the drives need a pollin'
+                                if (_pollPending) PollDrives();
+                            }
+                        });
 
-                        _readDataReady = false;
-                        data = _readByte;
+                        data = value;
                     }
                     else
                     {
-                        // Unsure exactly what should happen here
-                        throw new InvalidOperationException("FDC Status Read in Command phase");
+                        // Unexpected right now
+                        throw new InvalidOperationException("FDC Status Read with no data available");
+                    }
+                }
+                else if (_state == State.Execution)
+                {
+                    if (!_readDataReady)
+                    {
+                        throw new InvalidOperationException("DMA read with no data ready");
                     }
 
-                    return data;
+                    _readDataReady = false;
+                    data = _readByte;
+                }
+                else
+                {
+                    // Unsure exactly what should happen here
+                    throw new InvalidOperationException("FDC Status Read in Command phase");
+                }
 
-                default:
-                    throw new NotImplementedException();
+                return data;
             }
+
+            throw new NotImplementedException($"Unexpected FDC register read from 0x{portAddress:x}");
         }
 
         public void Write(byte portAddress, byte value)
         {
-            switch ((Register)portAddress)
+            if (portAddress != DataPort)
             {
-                case Register.Data:
-                    WriteData(value);
-                    break;
-
-                default:
-                    throw new NotImplementedException($"Unexpected FDC register write to 0x{portAddress:x}");
+                throw new NotImplementedException($"Unexpected FDC register write to 0x{portAddress:x}");
             }
-        }
 
-        private void WriteData(byte value)
-        {
             _interruptActive = false;
 
             if (_state == State.Command)
@@ -309,6 +334,8 @@ namespace PERQemu.IO.Z80
             }
         }
 
+        #endregion
+
         //
         // Command Executors
         //
@@ -317,6 +344,8 @@ namespace PERQemu.IO.Z80
         {
             throw new NotImplementedException("FDC command not implemented");
         }
+
+        #region Seek, Specify, Sense
 
         /// <summary>
         /// The Specify command sets chip parameters for delays and drive timings
@@ -332,7 +361,7 @@ namespace PERQemu.IO.Z80
             // and HLT (Head Load Time) because I'm not anal retentive.
             // TODO: However... the old Z80 actually sets these, and Accent
             // actually programs the values too.  So we _could_ actually set up
-            // the proper delays that the I/O code expects...
+            // the proper delays that the I/O code expects... :-)
             //
             _commandData.Dequeue();     // command byte
             _commandData.Dequeue();     // SRT/HUT
@@ -395,6 +424,7 @@ namespace PERQemu.IO.Z80
             FinishCommand();
         }
 
+
         private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
         {
             _commandData.Dequeue();     // toss command byte
@@ -442,11 +472,15 @@ namespace PERQemu.IO.Z80
             FinishCommand();
         }
 
+        #endregion
+
+        #region Reads, Writes
+
         private void ReadDataExecutor(ulong skewNsec, object context)
         {
             if (BeginSectorTransfer())
             {
-                _scheduler.Schedule(_sectorTimeNsec, SectorTransferCallback);
+                _scheduler.Schedule(SectorTimeNsec, SectorTransferCallback);
             }
         }
 
@@ -454,29 +488,21 @@ namespace PERQemu.IO.Z80
         {
             if (BeginSectorTransfer())
             {
-                _scheduler.Schedule(_sectorTimeNsec, SectorTransferCallback);
+                _scheduler.Schedule(SectorTimeNsec, SectorTransferCallback);
             }
         }
 
-        private void FormatExecutor(ulong skewNsec, object context)
+        private bool IsReadType(Command c)
         {
-            _transfer = new TransferRequest();
-            _transfer.Type = Command.FormatTrack;
-            _transfer.MFM = (_commandData.Dequeue() & 0x40) != 0;
-            SelectUnitHead(_commandData.Dequeue());
-            _transfer.Number = _commandData.Dequeue();
-            _transfer.SectorCount = _commandData.Dequeue();
-            _commandData.Dequeue(); // GPL, discarded for now (we don't emulate gaps)
-            _commandData.Dequeue(); // D, discarded (don't care about filler data)
+            return (c == Command.ReadId ||
+                    c == Command.ReadData ||
+                    c == Command.ReadTrack ||
+                    c == Command.ReadDeletedData);
+        }
 
-            _transfer.SectorLength = (ushort)(128 << _transfer.Number);
-
-            // Format works by doing 4 DMA transfers (for format parameters) per
-            // sector on the track.  Indicate that we're ready for a DMA transfer,
-            // then kick off the sector format
-            _writeDataReady = true;
-
-            _scheduler.Schedule(_sectorTimeNsec, SectorFormatCallback);
+        private bool IsWriteType(Command c)
+        {
+            return (c == Command.WriteData || c == Command.WriteDeletedData);
         }
 
         private bool BeginSectorTransfer()
@@ -501,15 +527,20 @@ namespace PERQemu.IO.Z80
             _transfer.SectorLength = (_transfer.Number == 0) ? dtl : (ushort)(128 << _transfer.Number);
             _transfer.Aborted = false;
 
+#if DEBUG
+            if (_transfer.MultiTrack)
+                throw new InvalidOperationException("Floppy multi-track not supported");
+#endif
+
             Log.Debug(Category.FloppyDisk,
-                    "{0} from unit {1}, C/H/S {2}/{3}/{4} to sector {5}, length {6}.",
-                    _transfer.Type == Command.ReadData ? "Read" : "Write",
-                    _unitSelect,
-                    _transfer.Cylinder,
-                    _transfer.Head,
-                    _transfer.Sector,
-                    _transfer.EndOfTrack,
-                    _transfer.SectorLength);
+                      "{0} unit {1}, C/H/S {2}/{3}/{4} (eot={5}, length={6})",
+                      _transfer.Type == Command.ReadData ? "Read" : "Write",
+                      _unitSelect,
+                      _transfer.Cylinder,
+                      _transfer.Head,
+                      _transfer.Sector,
+                      _transfer.EndOfTrack,
+                      _transfer.SectorLength);
 
             if (!SelectedUnitIsReady)
             {
@@ -523,10 +554,7 @@ namespace PERQemu.IO.Z80
                 return false;
             }
 
-            if (!SelectedUnit.Info.IsWritable &&
-                (_transfer.Type == Command.FormatTrack ||
-                 _transfer.Type == Command.WriteData ||
-                 _transfer.Type == Command.WriteDeletedData))
+            if (!SelectedUnit.Info.IsWritable && IsWriteType(_transfer.Type))
             {
                 // Oh noes we forgot to put the sticker on
                 _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
@@ -540,6 +568,7 @@ namespace PERQemu.IO.Z80
             return true;
         }
 
+
         private void SectorTransferCallback(ulong skewNsec, object context)
         {
             // Simulate the initial search for the sector, then kick off the sector transfer:
@@ -547,16 +576,6 @@ namespace PERQemu.IO.Z80
 
             // Set preliminary status info
             _transfer.ST0 = SetErrorStatus(StatusRegister0.None);
-
-            // If Request was aborted by the DMA controller, stop here
-            if (_transfer.Aborted)
-            {
-                // This is considered a success
-                _transfer.ST1 = StatusRegister1.None;
-                _transfer.ST2 = StatusRegister2.None;
-                FinishTransfer(_transfer);
-                return;
-            }
 
             // Validate the operation:  if the cylinder is out of range or the
             // sector does not exist on disk, flag the appropriate error and exit
@@ -570,18 +589,33 @@ namespace PERQemu.IO.Z80
             }
 
             // Validate the head vs. the number of sides on the disk:
-            if (SelectedUnit.IsSingleSided && _transfer.Head != 0)
+            //if (SelectedUnit.IsSingleSided && _transfer.Head != 0)
+            if (!SelectedUnitIsReady)
             {
+                // The SA851 drive drops the Ready line if head 1 is selected
+                // with a single sided diskette inserted; probably doesn't hurt
+                // to set the NoData flag, but NotReady should cover it?  This
+                // should also catch if an eject was done unexpectedly...
                 _transfer.ST0 |= StatusRegister0.AbnormalTermination;
-                _transfer.ST1 = StatusRegister1.NoData;      // TODO: is this correct?  What does this really report for a single-sided disk?
+                _transfer.ST1 = StatusRegister1.NoData;
                 FinishTransfer(_transfer);
                 return;
             }
 
-            // Grab the sector:
-            _transfer.SectorData = SelectedUnit.GetSector(_transfer.Cylinder,
-                                                          _transfer.Head,
-                                                          _transfer.Sector);
+            // Readin' or writin'?
+            if (IsWriteType(_transfer.Type))
+            {
+                _transfer.SectorData = new Sector(_transfer.Cylinder,
+                                                  _transfer.Head,
+                                                  _transfer.Sector,
+                                                  _transfer.SectorLength);
+            }
+            else
+            {
+                _transfer.SectorData = SelectedUnit.Read(_transfer.Cylinder,
+                                                         _transfer.Head,
+                                                         _transfer.Sector);
+            }
 
             if (_transfer.SectorData.Data.Length == 0)
             {
@@ -594,7 +628,7 @@ namespace PERQemu.IO.Z80
 
             // Check sector format; expect either FM500 or MFM500, matching the MFM flag
             if ((_transfer.MFM && _transfer.SectorLength != 256) ||
-                (!_transfer.MFM && _transfer.SectorLength != 128))
+               (!_transfer.MFM && _transfer.SectorLength != 128))
             {
                 _transfer.ST0 |= StatusRegister0.AbnormalTermination;
                 _transfer.ST1 = StatusRegister1.NoData;      // Sector not found (TODO: is this correct?)
@@ -602,15 +636,22 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            // OK, we actually have sector data now!  Queue up the first callback:
-            if (_transfer.Type == Command.ReadData)
+            // Reset our byte counter, and away we go!
+            _transfer.TransferIndex = 0;
+
+            if (IsReadType(_transfer.Type))
             {
-                _scheduler.Schedule(_byteTimeNsec, SectorByteReadCallback);
+                // When reading, jump into the callback with the ready flag off;
+                // gives us a few usec to fetch the first byte before going nuts
+                _readDataReady = false;
+                _scheduler.Schedule(ByteTimeNsec, SectorByteReadCallback);
             }
-            else if (_transfer.Type == Command.WriteData)
+            else if (IsWriteType(_transfer.Type))
             {
+                // If writing, request the first byte now, then queue the callback
+                // to give DMA time to ship it to over
                 _writeDataReady = true;
-                _scheduler.Schedule(_byteTimeNsec, SectorByteWriteCallback);
+                _scheduler.Schedule(ByteTimeNsec, SectorByteWriteCallback);
             }
             else
             {
@@ -618,13 +659,13 @@ namespace PERQemu.IO.Z80
             }
         }
 
+
         private void SectorByteReadCallback(ulong skewNsec, object context)
         {
-            // Did we reach (or run over!) the end of the buffer?
-            // (Catch cases where the floppy was ejected mid-transfer)
-            if (_transfer.TransferIndex >= _transfer.SectorLength)
+            // If the last trip was the end of the transfer, we're done
+            if (_transfer.Aborted || _transfer.TransferIndex == _transfer.SectorLength)
             {
-                FinishSectorTransfer();     // Done
+                FinishSectorTransfer();
                 return;
             }
 
@@ -637,11 +678,17 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
+            // Get the next byte to send
             _readByte = _transfer.SectorData.ReadByte((uint)_transfer.TransferIndex++);
-            _readDataReady = true;
 
-            _scheduler.Schedule(_byteTimeNsec, SectorByteReadCallback);
+            Log.Detail(Category.FloppyDisk, "Read byte {0} from index {1}",
+                                            _readByte, _transfer.TransferIndex - 1);
+
+            // Tell the DMA we're ready and schedule the next one
+            _readDataReady = true;
+            _scheduler.Schedule(ByteTimeNsec, SectorByteReadCallback);
         }
+
 
         private void SectorByteWriteCallback(ulong skewNsec, object context)
         {
@@ -654,45 +701,92 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Log.Detail(Category.FloppyDisk, "Wrote byte 0x{0} to index {1}",
-                                          _writeByte, _transfer.TransferIndex);
+            Log.Detail(Category.FloppyDisk, "Write byte 0x{0:x2} to index {1}",
+                                            _writeByte, _transfer.TransferIndex);
 
-            // Write the next byte:
+            // Write the received byte:
             _transfer.SectorData.WriteByte((uint)_transfer.TransferIndex++, _writeByte);
 
-            if (_transfer.TransferIndex == _transfer.SectorLength)
+            // Sector complete?
+            if (_transfer.Aborted || _transfer.TransferIndex == _transfer.SectorLength)
             {
-                FinishSectorTransfer();     // Done
+                FinishSectorTransfer();
+                return;
             }
-            else
-            {
-                _writeDataReady = true;
-                _scheduler.Schedule(_byteTimeNsec, SectorByteWriteCallback);
-            }
+
+            // Gimme gimme gimme, I need some more
+            _writeDataReady = true;
+            _scheduler.Schedule(ByteTimeNsec, SectorByteWriteCallback);
         }
+
 
         private void FinishSectorTransfer()
         {
             Log.Debug(Category.FloppyDisk, "Sector {0} transfer complete", _transfer.Sector);
 
-            // Always increment the sector counter
-            _transfer.Sector++;
-
-            // Are there any sectors left to transfer?
-            if (_transfer.Sector > _transfer.EndOfTrack)
+            // Should only get here when a complete sector transfer has completed
+            // so commit the new data if writing.  Prevents partial writes...
+            if (IsWriteType(_transfer.Type))
             {
-                // Nope, done, report success:
-                _transfer.ST0 = SetErrorStatus(StatusRegister0.None);
+                SelectedUnit.Write(_transfer.SectorData);
+            }
+
+            // Did we reach the last sector in the track?  
+            // Was the request aborted by the DMA controller?
+            if (_transfer.Aborted || _transfer.Sector == _transfer.EndOfTrack)
+            {
+                // We're done, so report success
                 _transfer.ST1 = StatusRegister1.None;
                 _transfer.ST2 = StatusRegister2.None;
                 FinishTransfer(_transfer);
+                return;
             }
-            else
-            {
-                _scheduler.Schedule(_sectorTimeNsec, SectorTransferCallback);
-                Log.Detail(Category.FloppyDisk, "Next sector transfer queued");
-            }
+
+            // Nope!  Increment the sector counter and go 'round again
+            _transfer.Sector++;
+
+            _scheduler.Schedule(SectorTimeNsec, SectorTransferCallback);
+
+            Log.Detail(Category.FloppyDisk, "Next sector transfer queued");
         }
+
+        #endregion
+
+        #region Format
+
+        private void FormatExecutor(ulong skewNsec, object context)
+        {
+            _transfer = new TransferRequest();
+            _transfer.Type = Command.FormatTrack;
+            _transfer.MFM = (_commandData.Dequeue() & 0x40) != 0;
+            SelectUnitHead(_commandData.Dequeue());
+            _transfer.Number = _commandData.Dequeue();
+            _transfer.SectorCount = _commandData.Dequeue();
+            _commandData.Dequeue(); // GPL, discarded for now (we don't emulate gaps)
+            _transfer.Pattern = _commandData.Dequeue();
+
+            _transfer.SectorLength = (ushort)(128 << _transfer.Number);
+            _transfer.SectorIndex = 0;
+
+            // Should we do this?
+            if (!SelectedUnit.Info.IsWritable)
+            {
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
+                _transfer.ST1 = StatusRegister1.NotWritable;
+                _transfer.ST2 = StatusRegister2.None;
+
+                FinishTransfer(_transfer);
+                return;
+            }
+
+            // Format works by doing 4 DMA transfers (for format parameters) per
+            // sector on the track.  Indicate that we're ready for a DMA transfer,
+            // then kick off the sector format
+            _writeDataReady = true;
+
+            _scheduler.Schedule(SectorTimeNsec, SectorFormatCallback);
+        }
+
 
         private void SectorFormatCallback(ulong skewNsec, object context)
         {
@@ -727,44 +821,51 @@ namespace PERQemu.IO.Z80
                 case 3:
                     _transfer.Number = _writeByte;
 
-                    // Format the sector now:
-                    Track diskTrack;
+                    // Create a new sector
+                    _transfer.SectorData = new Sector(_transfer.Cylinder,
+                                                      _transfer.Head,
+                                                      _transfer.Sector,
+                                                      _transfer.SectorLength);
 
-                    if (_transfer.SectorIndex == 0)
+                    // Fill it with the format pattern byte (if given)
+                    if (_transfer.Pattern != 0)
                     {
-                        // First sector in the track to be formatted: Create a new, empty track,
-                        // which will be filled during the rest of this operation.  (Note: we use
-                        // the passed-in cylinder/head information for the track itself; it gets
-                        // inserted into the disk image on the cylinder/head the drive is currently
-                        // pointing to).  It is technically possible for the processor to change
-                        // cyl/head designations in the middle of the format; IMD does not support
-                        // this possibility and I don't expect the PERQ to try it.
-                        diskTrack = new Track(_transfer.Cylinder,
-                                              _transfer.Head,
-                                              _transfer.SectorCount,
-                                              _transfer.SectorLength);
-                        SelectedUnit.SetTrack(_transfer.Cylinder, (byte)_headSelect, diskTrack);
-                    }
-                    else
-                    {
-                        // Track should already have been created
-                        diskTrack = SelectedUnit.GetTrack(SelectedUnit.Cylinder, (byte)_headSelect);
+                        for (uint i = 0; i < _transfer.SectorLength; i++)
+                            _transfer.SectorData.WriteByte(i, _transfer.Pattern);
                     }
 
-                    // Create a new sector and write it to the track:
-                    Sector diskSector = new Sector(_transfer.Cylinder,
-                                                   _transfer.Head,
-                                                   _transfer.Sector,
-                                                   _transfer.SectorLength);
-                    diskTrack.AddSector(_transfer.Sector, diskSector);
+                    // Sanity check: writable disk? Good sector address?  Neither
+                    // of these are likely (format checks for write protect before
+                    // we even begin, and the Z80 should never try to format with
+                    // the wrong geometry).  The check below won't actually allow
+                    // us to write past the end of track, but that's the only
+                    // status code that makes sense to return here.  (Can probably
+                    // just remove this after verifying with other Z80/OS combos.)
+                    if (!SelectedUnit.WriteCheck(_transfer.SectorData))
+                    {
+                        _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
+                        _transfer.ST1 = SelectedUnit.Info.IsWritable ? StatusRegister1.EndCylinder
+                                                                     : StatusRegister1.NotWritable;
+                        _transfer.ST2 = StatusRegister2.None;
+                        FinishTransfer(_transfer);
+                        return;
+                    }
 
-                    // Move to the next sector
+                    // Write the sector
+                    SelectedUnit.Write(_transfer.SectorData);
+
+                    Log.Detail(Category.FloppyDisk,
+                               "Formatted sector {0}, {1} bytes (pattern 0x{2:x2})",
+                               _transfer.Sector, _transfer.SectorLength, _transfer.Pattern);
+
+                    // Move to the next
                     _transfer.SectorIndex++;
                     _transfer.TransferIndex = 0;
 
+                    // Done?
                     if (_transfer.SectorIndex == _transfer.SectorCount)
                     {
-                        // Done, report success:
+                        // Report success!
                         _transfer.ST0 = SetErrorStatus(StatusRegister0.None);
                         _transfer.ST1 = StatusRegister1.None;
                         _transfer.ST2 = StatusRegister2.None;
@@ -779,17 +880,43 @@ namespace PERQemu.IO.Z80
 
             // Do it again, do it again
             _writeDataReady = true;
-            _scheduler.Schedule(_transfer.TransferIndex == 0 ? _sectorTimeNsec : _byteTimeNsec,
+            _scheduler.Schedule(_transfer.TransferIndex == 0 ? SectorTimeNsec : ByteTimeNsec,
                                 SectorFormatCallback);
         }
 
+        #endregion
+
+        #region Finish Commands, SetStatus
 
         /// <summary>
         /// Finish a data transfer: queue up the results bytes and interrupt.
         /// </summary>
         private void FinishTransfer(TransferRequest request)
         {
-            Log.Detail(Category.FloppyDisk, "Transfer completed");
+            // Shut off DMA if early/abnormal termination?
+            if (_readDataReady || _writeDataReady)
+            {
+                _readDataReady = false;
+                _writeDataReady = false;
+            }
+            
+            // Apply the "ID Information at Result Phase" rules
+            // todo: if anything uses MT, that subtly changes things at eot
+            if (request.Sector < request.EndOfTrack)
+            {
+                request.Sector++;
+            }
+            else
+            {
+                request.Cylinder++;
+                request.Sector = 1;
+            }
+
+            Log.Detail(Category.FloppyDisk, "Transfer completed:");
+            Log.Detail(Category.FloppyDisk, "C{0}/H{1}/S{2} N{3}", request.Cylinder, request.Head, request.Sector, request.Number);
+            Log.Detail(Category.FloppyDisk, "ST0 = {0}", request.ST0);
+            Log.Detail(Category.FloppyDisk, "ST1 = {0}", request.ST1);
+            Log.Detail(Category.FloppyDisk, "ST2 = {0}", request.ST2);
 
             // Post result data to the status register queue:
             _statusData.Enqueue((byte)request.ST0);
@@ -810,7 +937,8 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void FinishCommand()
         {
-            // Reset EXM, set RQM and DIO to let the processor know results are ready to read
+            // Reset EXM, set RQM and DIO to let the processor know results are
+            // ready to read.  todo: CB?
             _status &= ~Status.EXM;
 
             if (_statusData.Count > 0)
@@ -826,9 +954,6 @@ namespace PERQemu.IO.Z80
             }
 
             _commandData.Clear();
-
-            // Good time to check if the drives need a pollin'
-            if (_pollPending) PollDrives();
         }
 
         /// <summary>
@@ -860,6 +985,10 @@ namespace PERQemu.IO.Z80
 
             return _errorStatus;
         }
+
+        #endregion
+
+        #region Drive Status Polling
 
         /// <summary>
         /// Polls the drives for ready line changes.
@@ -911,7 +1040,7 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Signal that the drives should be polled for status changes, then
-        /// reschedule again, forever.  (The actual call to poll the drives
+        /// reschedule again, until reset.  (The actual call to poll the drives
         /// can then be done when the controller isn't busy, avoiding weird
         /// state interactions having this run asynchronously.)
         /// </summary>
@@ -920,8 +1049,10 @@ namespace PERQemu.IO.Z80
             Log.Detail(Category.FloppyDisk, "Drive status poll requested");
 
             _pollPending = true;
-            _pollEvent = _scheduler.Schedule(_pollTimeNsec, PollTimer);
+            _pollEvent = _scheduler.Schedule(PollTimeNsec, PollTimer);
         }
+
+        #endregion
 
         /// <summary>
         /// Supplemental data structure: Transfer request.
@@ -949,6 +1080,7 @@ namespace PERQemu.IO.Z80
             // Sector count and index (used while formatting)
             public ushort SectorCount;
             public int SectorIndex;
+            public byte Pattern;
 
             // Cancellation
             public bool Aborted;
@@ -959,14 +1091,6 @@ namespace PERQemu.IO.Z80
             public StatusRegister2 ST2;
         }
 
-        // From v87.z80:
-        // FLPSTA  EQU     250Q         ;FLOPPY STATUS  OLD ADDRESS WAS 320Q
-        // FLPDAT  EQU     251Q         ;FLOPPY DATA    OLD ADDRESS WAS 321Q
-        private enum Register
-        {
-            Status = 0xa8,
-            Data = 0xa9,
-        }
 
         private enum State
         {
@@ -1097,6 +1221,8 @@ namespace PERQemu.IO.Z80
         // The current transfer in progress
         private TransferRequest _transfer;
 
+        private ulong _byteTimeNsec;
+
         private byte _readByte;
         private bool _readDataReady;
 
@@ -1112,21 +1238,49 @@ namespace PERQemu.IO.Z80
 
         // Timing constants
         // Sector time: 360 RPM, 26 sectors per rotation.  This is just for approximate timing.
-        private ulong _sectorTimeNsec = (ulong)((166.667 / 26.0) * Conversion.MsecToNsec);
+        private readonly ulong SectorTimeNsec = (ulong)((166.667 / 26.0) * Conversion.MsecToNsec);
 
-        // FM time, halve this for MFM time
-        private ulong _byteTimeNsec = (ulong)(27.0 * Conversion.UsecToNsec);
+        // Timing for FM and MFM mode
+        private readonly ulong FMByteTimeNsec = 27 * Conversion.UsecToNsec;
+        private readonly ulong MFMByteTimeNsec = 13 * Conversion.UsecToNsec;
 
         // Status polling interval
-        private ulong _pollTimeNsec = (ulong)(1024 * Conversion.MsecToNsec);
+        private readonly ulong PollTimeNsec = 1024 * Conversion.MsecToNsec;
+
         private volatile bool _pollPending;
         private SchedulerEvent _pollEvent;
 
         // System interface
-        private readonly byte[] _ports = { (byte)Register.Status, (byte)Register.Data };
+        private byte _baseAddress;
+        private byte[] _ports;
         private Scheduler _scheduler;
 
         // I hate this, Konamiman.  I hate this So much.
         public event EventHandler NmiInterruptPulse;
     }
 }
+
+/*
+ 
+ Notes:
+
+    Why is CB not used?  It isn't clear that CB is only set in non-DMA mode or
+    if the PERQ actually polls it.  We could just or together the individual
+    drive busy bits, though I was wondering if CB is also used when polling or
+    during non-transfer command execution (seek/recal, status, etc)?  Hmm.
+    
+    We could implement the read/write "deleted data" functions by just setting
+    a flag in the read/write executors to use the IsBad flag in the Sector.  I
+    don't think an PERQ software ever bothered with that, though they do allow
+    for those commands to be sent and the SK bit checked?
+    
+    Accent may have used the Read Track command; will probably implement that
+    at some point.
+
+    The head loading/settling/unloading times given in the Specify command are
+    actually set by the firmware and by Accent's floppy drive, though there's
+    little-to-no benefit to using them; the default 3ms head settling value is
+    set in the DevicePerformance record and the FloppyDisk could reference it
+    just to make floppy operations that much more agonizingly accurate. :-)
+ 
+ */

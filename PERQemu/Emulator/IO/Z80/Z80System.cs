@@ -24,7 +24,6 @@ using System.Runtime.CompilerServices;
 using Konamiman.Z80dotNet;
 
 using PERQemu.Config;
-using PERQemu.Processor;
 using PERQemu.Debugger;
 using PERQemu.IO.GPIB;
 using PERQemu.IO.SerialDevices;
@@ -56,12 +55,12 @@ namespace PERQemu.IO.Z80
             _cpu.PortsSpace = _bus;
             _cpu.ClockSynchronizer = null;      // We'll do our own rate limiting
 
-            // todo: assign ports/base addresses of each peripheral chip
+            // todo: assign ports/base addresses of each peripheral chip or latch
             // based on the configured IO Board type.
 
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
-            _fdc = new NECuPD765A(_scheduler);
+            _fdc = new NECuPD765A(0xa8, _scheduler);
             _z80ctc = new Z80CTC(0x90, _scheduler);
             _z80sio = new Z80SIO(0xb0, _scheduler);
             _z80dma = new Z80DMA(0x98, _memory, _bus);
@@ -107,7 +106,7 @@ namespace PERQemu.IO.Z80
             _z80Debugger = new Z80Debugger();
 
             // Rate limit
-            _heartbeat = new SystemTimer(10f, IOBoard.Z80CycleTime);
+            _heartbeat = new SystemTimer(1f, IOBoard.Z80CycleTime);
         }
 
         public bool SupportsAsync => true;
@@ -187,17 +186,12 @@ namespace PERQemu.IO.Z80
                 if (_running)
                 {
                     ticks = _cpu.ExecuteNextInstruction();
-                    _z80dma.Execute();
+                    _z80dma.Clock();
                     _scheduler.Clock(ticks);
                     clocks -= ticks;
                 }
                 else
                 {
-                    // Clock the scheduler, since devices like the Shugart
-                    // hard disk might need service during boot when the Z80
-                    // is turned off.  This isn't great, but it lets us move
-                    // that extra bit of processing off the CPU thread. :-|
-                    //_scheduler.Clock();
                     ticks += 1;
                     clocks -= 1;
                 }
@@ -295,53 +289,30 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Sends data to the Z80.
-        /// Corresponds to IOB port 0xc7 (octal 307).   TODO: ports have to be configurable
-        ///
-        ///  The IOB schematic (p. 49 of the PDF, "IOA DECODE") sheds some light on the Z80 "input"
-        ///  interrupt.  This is actually labeled as "Z80 READY INT L" (meaning it's active Low)
-        ///  and seems to be enabled by the PERQ sending data with bit 8 high, and can be dismissed by
-        ///  the PERQ sending data with bit 8 low.
-        ///
-        ///  IOD 8 is latched on a WRITE from the Z80 and gated with the PERQ->Z80 REQ L signal at a
-        ///  NAND gate.  So -- if the PERQ sets IOD 8 high with a write, and there is no pending PERQ->
-        ///  Z80 request, Z80 READY INT L will be low (triggered).
+        /// Sends data to the Z80.  Corresponds to IOB port 0xc7 (octal 307).
+        /// Note that this is a 9-bit value, with the high bit passed to the
+        /// FIFO to indicate whether or not the READY INT L interrupt should be
+        /// raised when the FIFO is clear -- see PERQtoZ80Fifo for details.
         /// </summary>
         public void WriteData(int data)
         {
-            //
-            // The 8th bit of the incoming data to this port is latched.
-            // When set, the PERQ is requesting that the Z80 send a DataInReady interrupt when it is ready.
-            // When cleared, the Z80 will clear any pending DataInReady interrupt.
-            //
-            if ((data & 0x100) == 0)
-            {
-                Log.Debug(Category.Z80IRQ, "DataInReady disabled, clearing interrupt");
-
-                // TODO: move this logic into PERQToZ80FIFO?
-                _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
-                _perqToZ80Fifo.SetDataReadyInterruptRequested(false);
-            }
-            else
-            {
-                Log.Debug(Category.Z80IRQ, "DataInReady enabled");
-
-                _perqToZ80Fifo.SetDataReadyInterruptRequested(true);
-            }
-
-            // Queue up the byte 
-            _perqToZ80Fifo.Enqueue((byte)data);
+            _perqToZ80Fifo.Enqueue(data & 0x01ff);      // Include IOD<8>
         }
 
+        /// <summary>
+        /// Reads data from the Z80.  Coresponds to IOB port 0x46 (octal 106).
+        /// </summary>
         public int ReadData()
         {
+            // Some reads are issued specifically to make sure the buffer is
+            // flushed, so the occasional "read from empty fifo" warning is okay
             return _z80ToPerqFifo.Dequeue();
         }
 
         /// <summary>
         /// Corresponds to IOB port 0xc1 (octal 301).
-        /// The PERQ1 microcode uses port c1 to control both the hard drive and the Z80.
-        /// The lower 5 bits are hard disk control flags.
+        /// The PERQ1 microcode uses port c1 to control both the hard drive and
+        /// the Z80.  The lower 7 bits are hard disk control flags.
         ///
         /// From sysb.mic:
         /// !

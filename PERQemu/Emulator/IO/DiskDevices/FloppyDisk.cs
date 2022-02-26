@@ -19,12 +19,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
 
 using PERQmedia;
-using PERQemu;
-using PERQemu.IO;
 
 namespace PERQemu.IO.DiskDevices
 {
@@ -48,8 +44,6 @@ namespace PERQemu.IO.DiskDevices
 
             _cylinder = 1;      // Force a Step Out to find track 0 on startup
             _head = 0;
-
-            _tracks = new Track[2, 77];     // todo: eliminate this?
 
             _loadDelayEvent = null;
             _seekDelayEvent = null;
@@ -138,31 +132,39 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Returns sector data for the given address.
+        /// Returns sector data for the given address, but map the (annoying)
+        /// floppy sector numbering (1..26) to the underlying device (0..25).
         /// </summary>
-        public Sector GetSector(ushort cylinder, byte head, ushort sector)
+        public override Sector Read(ushort cyl, byte head, ushort sec)
         {
-            // Fudge the sector #1..26 -> 0..25
-            sector--;
-            return Sectors[cylinder, head, sector];
-        }
+            // Read from 1..26 -> 0..25
+            Sector fudge = base.Read(cyl, head, (ushort)(sec - 1));
 
-        public Track GetTrack(ushort cylinder, byte head)
-        {
-            return _tracks[head, cylinder];
-        }
+            // But fudge the returned id from 0..25 -> 1..26
+            fudge.SectorID++;
 
-        public void SetTrack(ushort cylinder, byte head, Track track)
-        {
-            _tracks[head, cylinder] = track;
+            Log.Detail(Category.FloppyDisk, "Read {0} (actual {1})", sec - 1, fudge.SectorID);
+            return fudge;
         }
 
         /// <summary>
-        /// Formats the given track with the specified sector count, size, and format.
+        /// Writes a sector to the given address, accounting for offset.
         /// </summary>
-        public void FormatTrack(ushort cylinder, byte head, ushort sectorCount, ushort sectorSize)
+        public override void Write(Sector sec)
         {
-            _tracks[head, cylinder] = new Track(cylinder, head, sectorCount, sectorSize);
+            // Map from 1..26 -> 0..25
+            sec.SectorID--;
+
+            Log.Detail(Category.FloppyDisk, "Write {0} (actual {1})", sec.SectorID, sec.SectorID + 1);
+            base.Write(sec);
+        }
+
+        /// <summary>
+        /// Validate a write, accounting for sector offset and IsWritable.
+        /// </summary>
+        public override bool WriteCheck(Sector sec)
+        {
+            return Info.IsWritable && Validate(sec.CylinderID, sec.HeadID, (ushort)(sec.SectorID - 1));
         }
 
         /// <summary>
@@ -176,13 +178,13 @@ namespace PERQemu.IO.DiskDevices
             _isSingleSided = (Geometry.Heads == 1);
             _isDoubleDensity = (Geometry.SectorSize == 256);
 
-            // SA851 manual says that Ready comes true after two index holes are sensed
-            // (it's actually _three_ revolutions for a double density floppy!)
-            var startup = 2 * (1 / (Specs.RPM / 60.0)) * Conversion.MsecToNsec;
+            // SA851 manual says that Ready comes true after two index holes are
+            // sensed, or _three_ revolutions for a double density floppy!
+            var startup = (_isDoubleDensity ? 3 : 2) * (1 / (Specs.RPM / 60.0));
 
-            Log.Info(Category.FloppyDisk, "Drive will come ready in {0:n} seconds", startup / 10e6);
+            Log.Info(Category.FloppyDisk, "Drive will come ready in {0:n} seconds", startup);
 
-            _loadDelayEvent = _scheduler.Schedule((ulong)startup, (skewNsec, context) =>
+            _loadDelayEvent = _scheduler.Schedule((ulong)startup * Conversion.MsecToNsec, (skewNsec, context) =>
             {
                 Log.Info(Category.FloppyDisk, "{0} online: {1}", Info.Description, Geometry);
                 _loadDelayEvent = null;
@@ -219,68 +221,8 @@ namespace PERQemu.IO.DiskDevices
         private ushort _cylinder;
         private byte _head;
 
-        private Track[,] _tracks;
-
         private SchedulerEvent _seekDelayEvent;
         private SchedulerEvent _loadDelayEvent;
         private Scheduler _scheduler;
-    }
-
-
-    /// <summary>
-    /// Represents a single track's worth of sectors.  Overlays the underlying
-    /// StorageDevice which provides the actual data storage.
-    /// </summary>
-    /// <remarks>
-    /// This is basically a bitmap that keeps track of how many sectors have
-    /// been written during format operations.  The emulator doesn't care about
-    /// interleave, so we let the PERQ and the FDC fuss over that but we quietly
-    /// just map the sectors directly to the StorageDevice instead of creating
-    /// another layer of abstraction.
-    /// </remarks>
-    public class Track
-    {
-        /// <summary>
-        /// Create a new, unformatted track with the specified format, sector
-        /// size and sector count.  Used when formatting a track.
-        /// </summary>
-        public Track(ushort cylinder, byte head, ushort sectorCount, ushort sectorSize)
-        {
-            _cylinder = cylinder;
-            _head = head;
-            _sectorCount = sectorCount;
-            _sectorSize = sectorSize;
-
-            // Create new sector dictionary and sector ordering map, but do not
-            // populate; this will be done as sectors are added via AddSector.
-            _sectors = new Dictionary<int, Sector>();
-            _sectorOrdering = new List<int>(_sectorCount);
-        }
-
-        public void AddSector(ushort sector, Sector newSector)
-        {
-            if (_sectorOrdering.Count == _sectorCount)
-            {
-                throw new InvalidOperationException("Track full");
-            }
-
-            _sectorOrdering.Add(sector);
-            _sectors[sector] = newSector;
-        }
-
-        public Sector ReadSector(ushort sector)
-        {
-            Sector s;
-            _sectors.TryGetValue(sector, out s);
-            return s;
-        }
-
-        private ushort _cylinder;
-        private byte _head;
-        private ushort _sectorCount;
-        private ushort _sectorSize;
-
-        private List<int> _sectorOrdering;
-        private Dictionary<int, Sector> _sectors;
     }
 }

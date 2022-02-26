@@ -88,6 +88,10 @@ to track down any information about the specific Multibus cards that this
 software talkes to.  The idea of hanging a string of CDC 9766 300MB drives
 off a PERQ is enticing.  Anyone have a clue?  Anyone?  Bueller?
 
+    [Update: Multibus tape support appears to be for the Ciprico
+    Tapemaster, a common board used in early Suns as well.  Part
+    of the mystery solved?  Still no idea about the disk board.]
+
 By far the most common IO option is Three Rivers' "OIO" board.  The basic
 "Option IO" Board comes in many flavors: it may contain the "link" option,
 a 10Mbit Ethernet controller, a QIC streamer controller, and the same Canon
@@ -172,6 +176,37 @@ The Ethernet driver will likely be split in half:  the PERQ emulation of its
 fully-custom TTL implementation and homegrown microcode interface will run
 on the CPU thread, while the actual host-side packet handling will run on a
 background thread as it does in Contralto/Darkstar?
+
+
+edit:
+[duplicated/too verbose/brought over from IOBoards.txt]
+
+Optional Boards Not Likely To Be Added
+--------------------------------------
+
+An early 3Mbit Ethernet board exists, and there is software support if it were
+added to the emulator.  It would likely be a PERQ-1 only option; wire-wrapped
+motherboard mods were required to make it work.  It's entirely likely that CMU
+was the only place outside of 3RCC that had 3Mbit Ethernet boards?  It would be
+fun to have an emulated PERQ talk to an emulated Xerox Alto over an emulated
+3-megabit Ethernet someday.
+
+The Audre board was a wicked cool CCD camera interface.  The software still
+exists.  If anyone, anywhere in the world still has working boards or any
+kind of schematics or hardware documentation... not holding my breath.
+
+Metheus color display controllers could theoretically be emulated and attached
+through the Link board.  Software drivers for the PERQ exist.  Not planned.
+
+
+Due to microcode and hardware conflicts, it does not appear possible to run a
+PERQ-2 EIO with an OIO Ethernet option board.  While the T2 cabinet has both
+OSLAN A & B ports (ICL's branding of Ethernet?) there's no standard software
+support for it.  When Ethernet is implemented, PERQemu will only support one
+interface [and for simplicity, it may be "attached" to the IO Option board
+slot but will use the appropriate IO registers to appear as an EIO or OIO
+depending on the Chassis selection].
+
 
 
 This is a whole lot of typing that nobody else will read or care about...

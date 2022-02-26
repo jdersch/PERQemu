@@ -150,14 +150,7 @@ IO board selection is intimately tied to Chassis type as well.  For the PERQ-1
 the classic "IOB" provides Shugart disk support and runs the "old" Z80 ROMs,
 which limits the selection of OSes that can run.  The "CIO" option upgrades
 the PERQ-1 to the "new" Z80 protocols and (theoretically) adds Micropolis 8"
-disk drive support in lieu of the 14" Shugart.  The naming and versioning of
-PERQ-1 era IO boards is madness.
-
-    For PERQemu purposes, we distinguish IOB and CIO as different board
-    types even though some software _maddeningly_ calls them "CIO" and
-    "OIO" (meaning "current" IO and "old" IO, referring to the Z80 ROM
-    and protocol versions used).  But "OIO" was also the nomenclature for
-    various "Option IO" boards (below).
+disk drive support in lieu of the 14" Shugart.
 
 All PERQ-2 configurations used the "Ethernet IO" or EIO board.  This board
 incorporates an Ethernet controller in addition to the standard peripherals
@@ -171,7 +164,8 @@ really not clear how many, if any of these, were ever actually shipped.  If
 you configure a PERQ-2 without an Ethernet PERQemu will just quietly change
 the board type to NIO, or back to EIO if you add the Ethernet back in.
 
-    [Ethernet is not yet implemented, but is on the priority list.]
+    [For too much information about IO Boards, see the supplemental
+     documentation in Docs/IOBoards.txt.]
     
 
 Optional Boards
@@ -192,45 +186,13 @@ Canon laser printer, and Streamer (in any combination).  In addition, a Link
 option could be incorporated as well.  For a PERQ-1, the only way to add
 Ethernet was through the OIO board.
 
-Due to microcode and hardware conflicts, it does not appear possible to run a
-PERQ-2 EIO with an OIO Ethernet option board.  While the T2 cabinet has both
-OSLAN A & B ports (ICL's branding of Ethernet?) there's no standard software
-support for it.  When Ethernet is implemented, PERQemu will only support one
-interface [and for simplicity, it may be "attached" to the IO Option board
-slot but will use the appropriate IO registers to appear as an EIO or OIO
-depending on the Chassis selection].
-
-
 Although the "Multibus/Laser Option" board (MLO) was developed on the PERQ-1
 way earlier than previously thought, the only surviving software seems to rely
-on the PERQ-2's (EIO) DMA hardware.  The MLO supported a Storage Module Disk
-(SMD) or 9-track tape option; software exists, but there is _absolutely no
-mention_ of what specific controllers were used!  Argh.
+on the PERQ-2's (EIO) DMA hardware.  If/when the MLO is emulated, it will be
+limited to PERQ-2 systems.  It will also sport a Canon laser interface.
 
-    [While MLO hardware was until recently thought to be unobtainable,
-    several boards have surfaced and a possible netlist is available!
-    With real reference hardware available it may be enough to eventually
-    add this to the emulator, someday...]
-
-If/when the MLO is emulated, it will also sport a Canon laser interface.
-
-
-Optional Boards Not Likely To Be Added
---------------------------------------
-
-An early 3Mbit Ethernet board exists, and there is software support if it were
-added to the emulator.  It would likely be a PERQ-1 only option; wire-wrapped
-motherboard mods were required to make it work.  It's entirely likely that CMU
-was the only place outside of 3RCC that had 3Mbit Ethernet boards?  It would be
-fun to have an emulated PERQ talk to an emulated Xerox Alto over an emulated
-3-megabit Ethernet someday.
-
-The Audre board was a wicked cool CCD camera interface.  The software still
-exists.  If anyone, anywhere in the world still has working boards or any
-kind of schematics or hardware documentation... not holding my breath.
-
-Metheus color display controllers could theoretically be emulated and attached
-through the Link board.  Software drivers for the PERQ exist.  Not planned.
+    [For even more information about IO Option Boards, see the
+     supplemental documentation in Docs/IOBoards.txt.]
 
 
 Storage Options

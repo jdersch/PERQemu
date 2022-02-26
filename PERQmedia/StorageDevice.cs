@@ -70,9 +70,9 @@ namespace PERQmedia
 
 
         /// <summary>
-        /// Read the specified cyl, head and sec without validation.  Will
-        /// throw an InvalidOperation if out of range.  Override or Validate
-        /// if you want error checking, ya big chicken.
+        /// Read the specified cyl, head and sec without validation.  Will throw
+        /// an exception if out of range.  Override or Validate() if you want
+        /// error checking, ya big chicken.
         /// </summary>
         public virtual Sector Read(ushort cyl, byte head, ushort sec)
         {
@@ -82,13 +82,19 @@ namespace PERQmedia
             }
             catch
             {
-                throw new InvalidOperationException("Parameter out of range");
+                throw;
             }
         }
 
         /// <summary>
-        /// Unchecked fast write of a sector.  See Read, above.
+        /// Unchecked fast write of a sector.  Sets IsModified for the device.
         /// </summary>
+        /// <remarks>
+        /// We do NOT check the IsWritable flag here to prevent writes; that's
+        /// up to the controller to prevent changes to read-only devices and
+        /// report the status to the PERQ/Z80 appropriately?  Will throw an
+        /// exception if given illegal C/H/S.  See above.
+        /// </remarks>
         public virtual void Write(Sector sec)
         {
             try
@@ -98,8 +104,17 @@ namespace PERQmedia
             }
             catch
             {
-                throw new InvalidOperationException("Parameter out of range");
+                throw;
             }
+        }
+
+        /// <summary>
+        /// Validate that a sector write is within bounds AND the device is writable.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public virtual bool WriteCheck(Sector sec)
+        {
+            return Info.IsWritable && Validate(sec.CylinderID, sec.HeadID, sec.SectorID);
         }
 
         /// <summary>

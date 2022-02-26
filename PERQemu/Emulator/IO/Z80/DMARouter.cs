@@ -33,8 +33,9 @@ namespace PERQemu.IO.Z80
     }
 
     /// <summary>
-    /// Routes DMA requests to PERQ IOB's Z80 DMA-capable devices as controlled by IOReg3.  These are:
-    /// Floppy, PERQ Read and Write FIFOs, SIO channel A and B, and GPIB.
+    /// Routes DMA requests to PERQ IOB's Z80 DMA-capable devices as controlled
+    /// by IOReg3.  These are:
+    ///     Floppy, PERQ Read and Write FIFOs, SIO channel A and B, and GPIB.
     /// </summary>
     public class DMARouter : IDMADevice
     {

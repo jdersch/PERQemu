@@ -372,7 +372,9 @@ namespace PERQemu.Processor
             // Log it if it wasn't already set
             if (_interrupt.Raise(i) == 0)
             {
-                Log.Debug(Category.Interrupt, "{0} raised, active now {1}", i, _interrupt.Flag);
+                // Cut down on the spewage for debugging
+                if (i != InterruptSource.LineCounter)
+                    Log.Debug(Category.Interrupt, "{0} raised, active now {1}", i, _interrupt.Flag);
             }
         }
 
@@ -384,7 +386,9 @@ namespace PERQemu.Processor
             // Log it if it wasn't already clear
             if (_interrupt.Clear(i) != 0)
             {
-                Log.Debug(Category.Interrupt, "{0} cleared, active now {1}", i, _interrupt.Flag);
+                // Cut down on the spewage for debugging
+                if (i != InterruptSource.LineCounter)
+                    Log.Debug(Category.Interrupt, "{0} cleared, active now {1}", i, _interrupt.Flag);
             }
         }
 

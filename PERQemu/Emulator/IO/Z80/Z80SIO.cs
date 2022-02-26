@@ -154,10 +154,11 @@ namespace PERQemu.IO.Z80
                 _rxInterruptLatched = false;
                 _rxIntOnNextCharacter = false;
 
-                if (_device != null)
-                {
-                    _device.Reset();
-                }
+                // Redundant: Attached devices will be reset by the Bus
+                //if (_device != null)
+                //{
+                //    _device.Reset();
+                //}
 
                 UpdateFlags();
 

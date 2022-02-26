@@ -43,16 +43,21 @@ namespace PERQmedia
 
         public ushort CylinderID => _cylinderID;
         public byte HeadID => _headID;
-        public ushort SectorID => _sectorID;
 
-        public byte[] Data => _sectorData;
-        public byte[] Header => _rawHeader;
+        public ushort SectorID
+        {
+            get { return _sectorID; }
+            set { _sectorID = value; }
+        }
 
         public bool IsBad
         {
             get { return _sectorBad; }
             set { _sectorBad = value; }
         }
+
+        public byte[] Data => _sectorData;
+        public byte[] Header => _rawHeader;
 
         public override string ToString()
         {

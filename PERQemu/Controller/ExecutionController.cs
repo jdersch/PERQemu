@@ -139,11 +139,13 @@ namespace PERQemu
                 return;
             }
 
-            if (_system == null || PERQemu.Config.Changed)
+            // Just always blow it away now.  Bloody hell I have to straighten out this mess
+            if (_system != null || PERQemu.Config.Changed)
             {
                 // Out with the old
                 _system?.Shutdown();
                 _system = null;
+            }
 
                 // In with the new?
                 if (!Initialize(PERQemu.Config.Current))
@@ -162,7 +164,7 @@ namespace PERQemu
                     Halt();
                     return;
                 }
-            }
+
 
             // (Re-)Start the machine
             SetState(RunState.WarmingUp);
