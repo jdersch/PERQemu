@@ -528,6 +528,9 @@ namespace PERQemu.IO.Z80
             _transfer.SectorLength = (_transfer.Number == 0) ? dtl : (ushort)(128 << _transfer.Number);
             _transfer.Aborted = false;
 
+            // Transfers set the busy bit
+            _status |= Status.CB;
+
 #if DEBUG
             if (_transfer.MultiTrack)
                 throw new InvalidOperationException("Floppy multi-track not supported");
@@ -928,6 +931,8 @@ namespace PERQemu.IO.Z80
             _statusData.Enqueue((byte)request.Sector);
             _statusData.Enqueue((byte)request.Number);
 
+            // Shut off the busy bit and raise the interrupt
+            _status &= (~Status.CB);
             _interruptActive = true;
             FinishCommand();
         }
@@ -939,8 +944,8 @@ namespace PERQemu.IO.Z80
         private void FinishCommand()
         {
             // Reset EXM, set RQM and DIO to let the processor know results are
-            // ready to read.  todo: CB?
-            _status &= ~Status.EXM;
+            // ready to read.
+            _status &= (~Status.EXM);
 
             if (_statusData.Count > 0)
             {
@@ -1031,9 +1036,9 @@ namespace PERQemu.IO.Z80
                     SetErrorStatus(StatusRegister0.ReadySignalChanged);
                     _interruptActive = true;
                 }
-            }
 
-            Log.Detail(Category.FloppyDisk, "Drive poll completed");
+                Log.Detail(Category.FloppyDisk, "Drive poll completed @ {0}", _scheduler.CurrentTimeNsec);
+            }
 
             // Reset for next time
             _pollPending = false;
@@ -1047,7 +1052,7 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void PollTimer(ulong skewNsec, object context)
         {
-            Log.Detail(Category.FloppyDisk, "Drive status poll requested");
+            Log.Detail(Category.FloppyDisk, "Drive status poll requested @ {0}", _scheduler.CurrentTimeNsec);
 
             _pollPending = true;
             _pollEvent = _scheduler.Schedule(PollTimeNsec, PollTimer);
@@ -1265,11 +1270,6 @@ namespace PERQemu.IO.Z80
  
  Notes:
 
-    Why is CB not used?  It isn't clear that CB is only set in non-DMA mode or
-    if the PERQ actually polls it.  We could just or together the individual
-    drive busy bits, though I was wondering if CB is also used when polling or
-    during non-transfer command execution (seek/recal, status, etc)?  Hmm.
-    
     We could implement the read/write "deleted data" functions by just setting
     a flag in the read/write executors to use the IsBad flag in the Sector.  I
     don't think an PERQ software ever bothered with that, though they do allow

@@ -58,31 +58,31 @@ namespace PERQemu.IO.Z80
             // todo: assign ports/base addresses of each peripheral chip or latch
             // based on the configured IO Board type.
 
+            _seekControl = new HardDiskSeekControl(system);
             _perqToZ80Fifo = new PERQToZ80FIFO(system);
             _z80ToPerqFifo = new Z80ToPERQFIFO(system);
-            _fdc = new NECuPD765A(0xa8, _scheduler);
             _z80ctc = new Z80CTC(0x90, _scheduler);
             _z80sio = new Z80SIO(0xb0, _scheduler);
             _z80dma = new Z80DMA(0x98, _memory, _bus);
             _dmaRouter = new DMARouter(this);
+            _fdc = new NECuPD765A(0xa8, _scheduler);
             _tms9914a = new TMS9914A(0xb8);
             _keyboard = new Keyboard();
-            _seekControl = new HardDiskSeekControl(system);
             _ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc, _dmaRouter);
 
             _z80dma.AttachDeviceA(_dmaRouter);
             _z80dma.AttachDeviceB(_memory);
 
             // Put devices on the bus
-            _bus.RegisterDevice(_fdc);
+            _bus.RegisterDevice(_seekControl);
             _bus.RegisterDevice(_perqToZ80Fifo);
             _bus.RegisterDevice(_z80ToPerqFifo);
             _bus.RegisterDevice(_z80ctc);
-            _bus.RegisterDevice(_z80dma);
-            _bus.RegisterDevice(_seekControl);
-            _bus.RegisterDevice(_keyboard);
             _bus.RegisterDevice(_z80sio);
+            _bus.RegisterDevice(_z80dma);
+            _bus.RegisterDevice(_fdc);
             _bus.RegisterDevice(_tms9914a);
+            _bus.RegisterDevice(_keyboard);
             _bus.RegisterDevice(_ioReg3);
 
             // If this is an EIO we need:
@@ -117,10 +117,12 @@ namespace PERQemu.IO.Z80
         public Scheduler Scheduler => _scheduler;
         public Keyboard Keyboard => _keyboard;
 
+        // Not accessed externally...
+        //public PERQToZ80FIFO PERQReadFIFO => _perqToZ80Fifo;
+        //public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
+
         // DMA Capable devices
         public NECuPD765A FDC => _fdc;
-        public PERQToZ80FIFO PERQReadFIFO => _perqToZ80Fifo;
-        public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
         public Z80SIO SIOA => _z80sio;
         public TMS9914A GPIB => _tms9914a;
 
@@ -185,6 +187,8 @@ namespace PERQemu.IO.Z80
             {
                 if (_running)
                 {
+                    _bus.ActiveInterrupts();
+
                     ticks = _cpu.ExecuteNextInstruction();
                     _z80dma.Clock();
                     _scheduler.Clock(ticks);
@@ -279,7 +283,7 @@ namespace PERQemu.IO.Z80
                 }
                 _asyncThread = null;
                 Log.Debug(Category.Controller, "[Z80 thread exited]");
-           }
+            }
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)
@@ -346,7 +350,6 @@ namespace PERQemu.IO.Z80
         }
 
         public void SetSerialPort(ISerialDevice dev) { }
-
         public string GetSerialPort() { return string.Empty; }
 
         // todo:  move this into Z80DebugCommands?
@@ -391,10 +394,10 @@ namespace PERQemu.IO.Z80
         private Z80Processor _cpu;
         private Z80MemoryBus _memory;
         private Z80IOBus _bus;
-        private IOReg3 _ioReg3;
         private Z80SIO _z80sio;
         private Z80CTC _z80ctc;
         private Z80DMA _z80dma;
+        private IOReg3 _ioReg3;
         private DMARouter _dmaRouter;
         private PERQToZ80FIFO _perqToZ80Fifo;
         private Z80ToPERQFIFO _z80ToPerqFifo;

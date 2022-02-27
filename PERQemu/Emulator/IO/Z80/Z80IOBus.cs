@@ -43,22 +43,19 @@ namespace PERQemu.IO.Z80
             {
                 if (device != null)
                 {
-                    Console.WriteLine($"resetting {device.Name}");
                     device.Reset();
                 }
             }
         }
 
-        /// <summary>
-        /// SLOW ASS DEBUGGING AID TO FIGURE OUT WHAT THE ACTUAL FUCK IS GOING ON WITH THE FUCKING Z80
-        /// </summary>
+
         public void ActiveInterrupts()
         {
             foreach (var d in _devices)
             {
                 if (d.IntLineIsActive)
                 {
-                    Console.WriteLine($"cycle {_z80System.Clocks}: device {d.Name} is active, vector is {d.ValueOnDataBus}");
+                    Log.Write(Category.Z80IRQ, "cycle {0}: device {1} is active, vector is {2:x2}", _z80System.Clocks, d.Name, d.ValueOnDataBus);
                 }
             }
         }

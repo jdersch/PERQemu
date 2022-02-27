@@ -80,11 +80,11 @@ namespace PERQemu.IO.Z80
                     value = _fifo;
                     _valid = false;
 
-                    Log.Detail(Category.FIFO, "PERQ read byte 0x{0:x2} from latch", value);
+                    Log.Detail(Category.FIFO, "cycle {0}: PERQ read byte 0x{1:x2} from latch", _system.IOB.Z80System.Clocks, value);
                 }
                 else
                 {
-                    Log.Warn(Category.FIFO, "PERQ read from empty latch, returning 0");
+                    Log.Warn(Category.FIFO, "cycle {0}: PERQ read from empty latch, returning 0", _system.IOB.Z80System.Clocks);
                 }
             }
             return value;
@@ -107,18 +107,18 @@ namespace PERQemu.IO.Z80
             {
                 if (_valid)
                 {
-                    Log.Warn(Category.FIFO, "Z80 overran latch, byte 0x{0:x2} will be lost", _fifo);
+                    Log.Warn(Category.FIFO, "cycle {0}: Z80 overran latch, byte 0x{1:x2} will be lost", _system.IOB.Z80System.Clocks, _fifo);
                 }
 
                 _fifo = value;
                 _valid = true;
+
+                // Let the PERQ know there's data available
+                _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
             }
 
-            // Let the PERQ know there's data available
-            _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
-
             // Slow log moved outside the lock
-            Log.Detail(Category.FIFO, "Z80 wrote byte 0x{0:x2} to latch", value);
+            Log.Detail(Category.FIFO, "cycle {0}: Z80 wrote byte 0x{1:x2} to latch", _system.IOB.Z80System.Clocks, value);
         }
 
 

@@ -89,14 +89,14 @@ namespace PERQemu.IO.Z80
         /// </remarks>
         public void Enqueue(int value)
         {
+            // Clear the DataInReady CPU interrupt
+            _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
+
             lock (_lock)
             {
-                // Clear the DataInReady CPU interrupt
-                _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
-
                 if (_valid)
                 {
-                    Log.Warn(Category.FIFO, "PERQ overran latch, byte 0x{0:x2} will be lost", _fifo);
+                    Log.Warn(Category.FIFO, "cycle {0}: PERQ overran latch, byte 0x{1:x2} will be lost", _system.IOB.Z80System.Clocks, _fifo);
                 }
 
                 // Latch the 8th bit of the incoming word
@@ -111,7 +111,7 @@ namespace PERQemu.IO.Z80
             }
 
             // Logs are s l o w
-            Log.Detail(Category.FIFO, "PERQ wrote byte 0x{0:x2} to latch", value);
+            Log.Detail(Category.FIFO, "cycle {0}: PERQ wrote byte 0x{1:x2} to latch", _system.IOB.Z80System.Clocks, value);
         }
 
         /// <summary>
@@ -133,11 +133,11 @@ namespace PERQemu.IO.Z80
                     value = _fifo;
                     _valid = false;
 
-                    Log.Detail(Category.FIFO, "Z80 read byte 0x{0:x2} from latch", value);
+                    Log.Detail(Category.FIFO, "cycle {0}: Z80 read byte 0x{1:x2} from latch", _system.IOB.Z80System.Clocks, value);
                 }
                 else
                 {
-                    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0");
+                    Log.Warn(Category.FIFO, "cycle {0}: Z80 read from empty latch, returning 0", _system.IOB.Z80System.Clocks);
                 }
 
                 // FIFO is empty; interrupt if the PERQ has asked us to

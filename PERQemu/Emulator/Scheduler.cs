@@ -18,7 +18,6 @@
 //
 
 using System;
-using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -77,6 +76,7 @@ namespace PERQemu
         private SchedulerEventCallback _callback;
     }
 
+
     /// <summary>
     /// The Scheduler class provides infrastructure for scheduling hardware
     /// events inside the virtual machine, clocked at the CPU's execution rate.
@@ -95,16 +95,21 @@ namespace PERQemu
         {
             _timeStepNsec = timeStepNsec;
             _schedule = new SchedulerQueue();
-            _queueLock = 0;
         }
 
         public ulong CurrentTimeNsec => _currentTimeNsec;
 
+        /// <summary>
+        /// Reset this scheduler.
+        /// </summary>
+        /// <remarks>
+        /// NB: This is a no-op if time has not advanced.  We don't want to blow
+        /// away the initial events registered prior to starting the machine.
+        /// This is something of a hack, but given that the Z80 can be "turned
+        /// off" and restarted it's necessary to prevent greater ugliness. :-|
+        /// </remarks>
         public void Reset()
         {
-            // Hit it, with the rock!
-            QuickRelease();
-
             if (_currentTimeNsec > 0)
             {
                 _currentTimeNsec = 0;
@@ -134,9 +139,7 @@ namespace PERQemu
                         break;
                     }
 
-                    QuickLock();
                     SchedulerEvent e = _schedule.Pop();
-                    QuickRelease();
 
                     // Fire the callback
                     e.EventCallback(_currentTimeNsec - e.TimestampNsec, e.Context);
@@ -151,10 +154,12 @@ namespace PERQemu
         /// </summary>
         public SchedulerEvent Schedule(ulong timestampNsec, SchedulerEventCallback callback, object context = null)
         {
+#if DEBUG
+            if (callback == null)
+                throw new InvalidOperationException("Null callback in Scheduler");
+#endif
             SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, context, callback);
-            QuickLock();
             _schedule.Push(e);
-            QuickRelease();
 
             return e;
         }
@@ -165,10 +170,8 @@ namespace PERQemu
         public SchedulerEvent ReSchedule(SchedulerEvent old, ulong timestampNsec)
         {
             SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, old.Context, old.EventCallback);
-            QuickLock();
             _schedule.Push(e);
             _schedule.Remove(old);
-            QuickRelease();
 
             return e;
         }
@@ -180,9 +183,7 @@ namespace PERQemu
         {
             if (e != null)
             {
-                QuickLock();
                 _schedule.Remove(e);
-                QuickRelease();
             }
         }
 
@@ -193,44 +194,6 @@ namespace PERQemu
             _schedule.Dump();
         }
 
-        /// <summary>
-        /// Crude fast lock around the queue.  I can't imagine this is faster
-        /// than lock() (Monitor.Enter) but let's suck it and see
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void QuickLock()
-        {
-            long spins = 0;
-            SpinWait spin = new SpinWait();
-            var me = Thread.CurrentThread.ManagedThreadId;
-
-            // This is supposed to be many times faster than lock{}
-            // Impact is ~1fps, which is... tolerable.
-            while (Interlocked.CompareExchange(ref _queueLock, me, 0) != me)
-            {
-                spins++;
-                spin.SpinOnce();
-            };
-
-#if DEBUG
-            if (_queueLock != me)
-                Console.WriteLine($"thread {me} doesn't actually have the lock?!?");
-
-            //if (spins > 1)
-            //    Console.WriteLine($"acquiring thread {me} took {spins} spins");
-#endif
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void QuickRelease()
-        {
-#if DEBUG
-            var me = Thread.CurrentThread.ManagedThreadId;
-            if (_queueLock > 0 && _queueLock != me)
-                Console.WriteLine($"thread {me} releasing a lock held by {_queueLock}");
-#endif
-            Interlocked.Exchange(ref _queueLock, 0);
-        }
 
         public ulong TimeStepNsec => _timeStepNsec;
 
@@ -238,9 +201,9 @@ namespace PERQemu
         private ulong _timeStepNsec;
         private ulong _currentTimeNsec;
 
-        private volatile int _queueLock;
         private SchedulerQueue _schedule;
     }
+
 
     /// <summary>
     /// Provides an "ordered" queue based on timestamp -- the top of the queue
@@ -256,12 +219,19 @@ namespace PERQemu
         public SchedulerQueue()
         {
             _queue = new LinkedList<SchedulerEvent>();
+            _queueLock = new object();
+
             Clear();
         }
 
         /// <summary>
         /// The Top of the queue (points to sentinel node if no other events).
         /// </summary>
+        /// <remarks>
+        /// It _should_ be okay to read Top without locking, since the worst
+        /// case is that Clock() misses a cycle due to outdated information.
+        /// All writes to _top are protected.  I'm sure this will be fine...
+        /// </remarks>
         public SchedulerEvent Top
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -277,48 +247,53 @@ namespace PERQemu
         public void Clear()
         {
             _top = null;
+            _last = null;
             _queue.Clear();
 
             // If this fires in 584 years I'll be very impressed
-            Push(new SchedulerEvent(ulong.MaxValue, null, null));
+            _last = new SchedulerEvent(ulong.MaxValue, null, null);
+            Push(_last);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Push(SchedulerEvent e)
         {
-            //
-            // Do a linear search to find the place to put this in.  Since we
-            // maintain a sorted list with every insertion we only need to find
-            // the first entry that the new entry is earlier (or equal) to. This
-            // will likely be adequate as the queue should never get incredibly
-            // deep; a binary search may be more performant if this isn't the case.
-            //
-            LinkedListNode<SchedulerEvent> current = _queue.First;
-
-            // Empty list?  Add the first event
-            if (current == null)
+            lock (_queueLock)
             {
-                _queue.AddFirst(e);
-                _top = _queue.First.Value;
-                return;
-            }
+                //
+                // Do a linear search to find the place to put this in.  Since we
+                // maintain a sorted list with every insertion we only need to find
+                // the first entry that the new entry is earlier (or equal) to. This
+                // will likely be adequate as the queue should never get incredibly
+                // deep; a binary search may be more performant if this isn't the case.
+                //
+                LinkedListNode<SchedulerEvent> current = _queue.First;
 
-            // Insert in chronological order
-            while (current != null)
-            {
-                if (e.TimestampNsec < current.Value.TimestampNsec)
+                // Empty list?  Add the first event
+                if (current == null)
                 {
-                    // This might be our new first element, so reset Top
-                    _queue.AddBefore(current, e);
+                    _queue.AddFirst(e);
                     _top = _queue.First.Value;
                     return;
                 }
 
-                current = current.Next;
-            }
+                // Insert in chronological order
+                while (current != null)
+                {
+                    if (e.TimestampNsec < current.Value.TimestampNsec)
+                    {
+                        // This might be our new first element, so reset Top
+                        _queue.AddBefore(current, e);
+                        _top = _queue.First.Value;
+                        return;
+                    }
 
-            // Add at end
-            _queue.AddLast(e);
+                    current = current.Next;
+                }
+
+                // Add at end
+                _queue.AddLast(e);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -326,24 +301,39 @@ namespace PERQemu
         {
             SchedulerEvent e = _top;
 
-            _queue.RemoveFirst();
-            _top = _queue.First != null ? _queue.First.Value : null;
-
+            lock (_queueLock)
+            {
+#if DEBUG
+                // Should NEVER attempt to pop the sentinel!  Either the list
+                // was not initialized properly or there's a bug in Clock()...
+                if (_queue.Count <= 1)
+                    throw new InvalidOperationException($"Pop from schedule with {_queue.Count} elements");
+#endif
+                _queue.RemoveFirst();
+                _top = _queue.First.Value;
+            }
             return e;
         }
 
         public void Remove(SchedulerEvent e)
         {
-            if (_queue.Contains(e))
+            lock (_queueLock)
             {
-                if (_top == e)
+                if (_queue.Contains(e))
                 {
-                    _queue.RemoveFirst();
-                    _top = _queue.First != null ? _queue.First.Value : null;
-                }
-                else
-                {
-                    _queue.Remove(e);
+#if DEBUG
+                    if (e == _last)
+                        throw new InvalidOperationException("Attempt to pop sentinel from schedule");
+#endif           
+                    if (_top == e)
+                    {
+                        _queue.RemoveFirst();
+                        _top = _queue.First.Value;
+                    }
+                    else
+                    {
+                        _queue.Remove(e);
+                    }
                 }
             }
         }
@@ -355,7 +345,7 @@ namespace PERQemu
             {
                 foreach (var e in _queue)
                 {
-                    if (e.TimestampNsec < uint.MaxValue)
+                    if (e != _last)
                     {
                         Console.WriteLine("event {0} at {1}",
                                           e.EventCallback.Method.Name,
@@ -370,6 +360,9 @@ namespace PERQemu
         }
 
         private LinkedList<SchedulerEvent> _queue;
+        private object _queueLock;
+
         private SchedulerEvent _top;
+        private SchedulerEvent _last;
     }
 }
