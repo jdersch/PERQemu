@@ -26,8 +26,7 @@ namespace PERQemu.IO.DiskDevices
 {
     /// <summary>
     /// Emulates the mechanical operation of a Shugart SA851 8" floppy drive
-    /// and access to the floppy's data (if loaded).  Provides a Track 
-    /// abstraction that the FDC finds useful for some operations.
+    /// and access to the floppy's data (if loaded).
     /// </summary>
     public class FloppyDisk : StorageDevice
     {

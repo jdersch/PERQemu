@@ -106,7 +106,7 @@ namespace PERQemu.IO.Z80
             _z80Debugger = new Z80Debugger();
 
             // Rate limit
-            _heartbeat = new SystemTimer(1f, IOBoard.Z80CycleTime);
+            _heartbeat = new SystemTimer(5f, IOBoard.Z80CycleTime);
         }
 
         public bool SupportsAsync => true;
@@ -151,6 +151,7 @@ namespace PERQemu.IO.Z80
             {
                 // During a "soft" reset (where the PERQ initiates through a
                 // control register) the hardware only actually resets these:
+                _fdc.Reset();
                 _z80ctc.Reset();
                 _z80sio.Reset();
                 _tms9914a.Reset();

@@ -62,7 +62,7 @@ namespace PERQemu.Processor
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Rate limiter
-            _heartbeat = new SystemTimer(1f, CPU.MicroCycleTime);
+            _heartbeat = new SystemTimer(5f, CPU.MicroCycleTime);
         }
 
         public CPU Processor => _processor;

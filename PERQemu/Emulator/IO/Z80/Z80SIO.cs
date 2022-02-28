@@ -31,9 +31,14 @@ namespace PERQemu.IO.Z80
     {
         public Z80SIO(byte baseAddress, Scheduler scheduler)
         {
-            _baseAddress = baseAddress;
             _scheduler = scheduler;
-            _ports = new byte[] { baseAddress, (byte)(baseAddress + 1), (byte)(baseAddress + 2), (byte)(baseAddress + 3) };
+
+            _baseAddress = baseAddress;
+            _ports = new byte[] { baseAddress,
+                                (byte)(baseAddress + 1),
+                                (byte)(baseAddress + 2),
+                                (byte)(baseAddress + 3)
+            };
 
             _channels = new Channel[2];
             _channels[0] = new Channel(0);
@@ -181,13 +186,13 @@ namespace PERQemu.IO.Z80
                 {
                     byte value = _readRegs[_selectedRegister];
                     Log.Debug(Category.SIO, "Channel {0} read {1:x} from register {2}",
-                              _channelNumber, value, _selectedRegister);
+                                            _channelNumber, value, _selectedRegister);
                     return value;
                 }
                 else
                 {
                     Log.Debug(Category.SIO, "Channel {0} read from invalid register {2}",
-                              _channelNumber, _selectedRegister);
+                                            _channelNumber, _selectedRegister);
                     return 0;
                 }
             }
@@ -203,21 +208,21 @@ namespace PERQemu.IO.Z80
                 }
 
                 Log.Debug(Category.SIO, "Channel {0} data read: {1:x2}",
-                          _channelNumber, data);
+                                        _channelNumber, data);
                 return data;
             }
 
             public void WriteData(byte value)
             {
                 Log.Debug(Category.SIO, "Channel {0} data write: {1:x2}",
-                          _channelNumber, value);
+                                        _channelNumber, value);
                 // Nothing right now.
             }
 
             public void WriteRegister(byte value)
             {
                 Log.Debug(Category.SIO, "Channel {0} write {1:x2} to register {2}",
-                          _channelNumber, value, _selectedRegister);
+                                        _channelNumber, value, _selectedRegister);
 
                 _writeRegs[_selectedRegister] = value;
 
@@ -276,7 +281,7 @@ namespace PERQemu.IO.Z80
                 }
 
                 Log.Debug(Category.SIO, "Channel {0} register pointer now {1}",
-                          _channelNumber, _selectedRegister);
+                                        _channelNumber, _selectedRegister);
             }
 
             /// <summary>
@@ -302,7 +307,7 @@ namespace PERQemu.IO.Z80
                             _rxFifo.Enqueue(data);
                             UpdateFlags();
                             Log.Debug(Category.SIO, "Channel {0} enqueued byte {1:x2}, fifo depth now {2}",
-                                      _channelNumber, data, _rxFifo.Count);
+                                                    _channelNumber, data, _rxFifo.Count);
                         }
                     }
                     else // Async mode

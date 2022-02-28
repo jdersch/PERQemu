@@ -35,6 +35,8 @@ namespace PERQemu.IO.Z80
             _devices = new List<IZ80Device>();
             _devicePorts = new IZ80Device[Size];
             _z80System = system;
+
+            _status = new bool[Size];   // debug
         }
 
         public void Reset()
@@ -48,14 +50,25 @@ namespace PERQemu.IO.Z80
             }
         }
 
-
+        // debug: print transitions of z80 irq signals
+        // for eio this might have to actually become a standalone priority encoder (am9517)
         public void ActiveInterrupts()
         {
-            foreach (var d in _devices)
+            for (var d = 0; d < _devices.Count; d++)
             {
-                if (d.IntLineIsActive)
+                if (_devices[d].IntLineIsActive)
                 {
-                    Log.Write(Category.Z80IRQ, "cycle {0}: device {1} is active, vector is {2:x2}", _z80System.Clocks, d.Name, d.ValueOnDataBus);
+                    if (!_status[d])
+                        Log.Write(Category.Z80IRQ, "cycle {0}: device {1} raised, vector is {2:x2}",
+                                  _z80System.Clocks, _devices[d].Name, _devices[d].ValueOnDataBus);
+                    _status[d] = true;
+                }
+                else
+                {
+                    if (_status[d])
+                        Log.Write(Category.Z80IRQ, "cycle {0}: device {1} cleared",
+                                  _z80System.Clocks, _devices[d].Name);
+                    _status[d] = false;
                 }
             }
         }
@@ -136,6 +149,9 @@ namespace PERQemu.IO.Z80
                 Log.Warn(Category.Z80, "Unhandled Write of 0x{0:x} to port 0x{1:x}", value, port);
             }
         }
+
+        // debug
+        private bool[] _status;
 
         private List<IZ80Device> _devices;
         private IZ80Device[] _devicePorts;

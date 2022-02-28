@@ -70,8 +70,11 @@ namespace PERQemu.IO.Z80
                 new CommandData(Command.Specify, 0xff, 3, SpecifyExecutor),
                 new CommandData(Command.SenseDriveStatus, 0xff, 2, SenseDriveStatusExecutor),
                 new CommandData(Command.ScanHighOrEqual, 0x1f, 9, StubExecutor),
-                new CommandData(Command.Seek, 0xff, 3, SeekExecutor),
+                new CommandData(Command.Seek, 0xff, 3, SeekExecutor)
             };
+
+            // Catch anything that falls outside the table
+            _invalidCommand = new CommandData(Command.Invalid, 0x1f, 1, InvalidCommandExecutor);
         }
 
         public void Reset()
@@ -109,11 +112,10 @@ namespace PERQemu.IO.Z80
             Log.Debug(Category.FloppyDisk, "Controller reset");
         }
 
-
         public string Name => "uPD765A FDC";
         public byte[] Ports => _ports;
         public byte? ValueOnDataBus => 0x24; // FLPVEC
-        public bool IntLineIsActive => _interruptActive & _interruptsEnabled;
+        public bool IntLineIsActive => _interruptActive && _interruptsEnabled;
 
         public bool InterruptsEnabled
         {
@@ -186,17 +188,17 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
+            _interruptActive = false;
+
             if (portAddress == StatusPort)
             {
-               Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
-                                               _status, (byte)_status);
-                _interruptActive = false;
+                Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
+                                                _status, (byte)_status);
                 return (byte)_status;
             }
 
             if (portAddress == DataPort)
             {
-                _interruptActive = false;
                 byte data = 0;
 
                 if (_state == State.Result)
@@ -204,7 +206,7 @@ namespace PERQemu.IO.Z80
                     // Read result data
                     if (_statusData.Count > 0)
                     {
-                        byte value = _statusData.Dequeue();
+                        data = _statusData.Dequeue();
 
                         // Clear RQM for the next 12 uSec
                         _status &= (~Status.RQM);
@@ -224,14 +226,9 @@ namespace PERQemu.IO.Z80
                                 _status &= (~Status.DIO);
                                 _status |= Status.RQM;
                                 _state = State.Command;
-
-                                // Returning to command mode is probably a good
-                                // time to check if the drives need a pollin'
-                                if (_pollPending) PollDrives();
                             }
                         });
 
-                        data = value;
                     }
                     else
                     {
@@ -261,6 +258,7 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException($"Unexpected FDC register read from 0x{portAddress:x}");
         }
 
+
         public void Write(byte portAddress, byte value)
         {
             if (portAddress != DataPort)
@@ -274,6 +272,8 @@ namespace PERQemu.IO.Z80
             {
                 if (_commandData.Count == 0)
                 {
+                    _currentCommand = _invalidCommand;
+
                     // Figure out what command this is
                     foreach (CommandData data in _commands)
                     {
@@ -284,8 +284,6 @@ namespace PERQemu.IO.Z80
                             break;
                         }
                     }
-
-                    // TODO: Invalid command, handle this properly
                 }
 
                 // Store the command data away, reset bits 6 and 7 of the status
@@ -346,6 +344,22 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException("FDC command not implemented");
         }
 
+        private void InvalidCommandExecutor(ulong skewNsec, object context)
+        {
+            var badCmd = _commandData.Dequeue();
+
+            Log.Warn(Category.FloppyDisk, "FDC Invalid command 0x{0:x2}", badCmd);
+
+            // Invalid commands:
+            //      Do not generate an interrupt;
+            //      Set DIO & RQM to force result phase
+            //      Queue up Invalid Command (0x80) result byte
+
+            _errorStatus = StatusRegister0.InvalidCommandIssue;
+            _statusData.Enqueue((byte)_errorStatus);
+            FinishCommand(false);
+        }
+
         #region Seek, Specify, Sense
 
         /// <summary>
@@ -368,13 +382,27 @@ namespace PERQemu.IO.Z80
             _commandData.Dequeue();     // SRT/HUT
             _nonDMAMode = (_commandData.Dequeue() & 0x1) != 0;
 
-            // If we aren't polling, start the loop
+            // If we aren't already polling, start the loop
             if (_pollEvent == null)
             {
-                PollTimer(0, null);
+                PollDrives(0, null);
             }
 
-            FinishCommand();
+            //
+            // NB: This is WRONG.  The FDC datasheet makes NO mention of Specify
+            // raising the interrupt and it provides NO result bytes (which is
+            // weird).  But the v8.7 floppy initialization code seems to depend
+            // on getting an interrupt from the FDC to proceed; if not here, it
+            // never sets its Idle bit and a weird side effect is that the Z80
+            // doesn't transmit any data to the PERQ.  At all.  WTAF.
+            // 
+            // My best guess is that the chip initiates its first drive poll at
+            // this point (this is mentioned in the doc) and that produces the
+            // interrupt the PERQ expects?  But I implemented the drive polling
+            // with the assumption that the chip does NOT interrupt if there has
+            // not been a status change.  Ugh.
+            //
+            FinishCommand(true);
         }
 
         /// <summary>
@@ -417,31 +445,31 @@ namespace PERQemu.IO.Z80
             // Simply implode!
             SetErrorStatus(StatusRegister0.None);
 
-            // Clear drive "Busy" bit and interrupt
+            // Clear drive "Busy" bit
             _status &= ~((Status)(0x1 << _unitSelect));
-            _interruptActive = true;
 
             Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} completed", _unitSelect, _pcn[_unitSelect]);
-            FinishCommand();
+            FinishCommand(true);
         }
 
-
+        /// <summary>
+        /// Returns data from Sense Interrupt Status command, to indicate the
+        /// completion of a seek/recalibrate or a drive polling status change.
+        /// </summary>
         private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
         {
-            _commandData.Dequeue();     // toss command byte
+            _commandData.Dequeue();                     // toss command byte
 
-            // Return ST0 and PCN, and clear the interrupt active flag
-            _interruptActive = false;
-
+            // Return ST0 and PCN
             _statusData.Enqueue((byte)_errorStatus);    // ST0 (SEEK END)
             _statusData.Enqueue(_pcn[_unitSelect]);     // PCN
 
             Log.Debug(Category.FloppyDisk, "SenseInterruptStatus: {0}", _errorStatus);
-            FinishCommand();
+            FinishCommand(false);
         }
 
         /// <summary>
-        /// Executes the floppy SENSE DRIVE STATUS command.  Not used by the
+        /// Executes the floppy Sense Drive Status command.  Not used by the
         /// old IOB Z80, but used by the new EIO Z80!
         /// </summary>
         private void SenseDriveStatusExecutor(ulong skewNsec, object context)
@@ -470,7 +498,7 @@ namespace PERQemu.IO.Z80
             _statusData.Enqueue((byte)ST3);
 
             Log.Debug(Category.FloppyDisk, "SenseDriveStatus: {0}", ST3);
-            FinishCommand();
+            FinishCommand(false);
         }
 
         #endregion
@@ -531,10 +559,8 @@ namespace PERQemu.IO.Z80
             // Transfers set the busy bit
             _status |= Status.CB;
 
-#if DEBUG
             if (_transfer.MultiTrack)
                 throw new InvalidOperationException("Floppy multi-track not supported");
-#endif
 
             Log.Debug(Category.FloppyDisk,
                       "{0} unit {1}, C/H/S {2}/{3}/{4} (eot={5}, length={6})",
@@ -772,6 +798,9 @@ namespace PERQemu.IO.Z80
             _transfer.SectorLength = (ushort)(128 << _transfer.Number);
             _transfer.SectorIndex = 0;
 
+            // (Let's assume) Format sets the busy bit
+            _status |= Status.CB;
+
             // Should we do this?
             if (!SelectedUnit.Info.IsWritable)
             {
@@ -903,7 +932,7 @@ namespace PERQemu.IO.Z80
                 _readDataReady = false;
                 _writeDataReady = false;
             }
-            
+
             // Apply the "ID Information at Result Phase" rules
             // todo: if anything uses MT, that subtly changes things at eot
             if (request.Sector < request.EndOfTrack)
@@ -933,15 +962,15 @@ namespace PERQemu.IO.Z80
 
             // Shut off the busy bit and raise the interrupt
             _status &= (~Status.CB);
-            _interruptActive = true;
-            FinishCommand();
+
+            FinishCommand(true);
         }
 
         /// <summary>
         /// Finish command processing by setting state, status and clearing
         /// the command data queue.
         /// </summary>
-        private void FinishCommand()
+        private void FinishCommand(bool raiseInterrupt)
         {
             // Reset EXM, set RQM and DIO to let the processor know results are
             // ready to read.
@@ -960,6 +989,7 @@ namespace PERQemu.IO.Z80
             }
 
             _commandData.Clear();
+            _interruptActive = raiseInterrupt;
         }
 
         /// <summary>
@@ -982,11 +1012,11 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                // There ain't no drive there!  How will the PERQ react?
+                // There ain't no drive there!  How will the PERQ react? (Careful, it's touchy)
                 //      Seek End = 0, Intr Code = Ready line state changed
                 //      Seek End = 1, Intr Code = Abnormal termination (Seek/Recal)
                 _errorStatus |= _seekEnd ? (StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk) :
-                                           (StatusRegister0.ReadySignalChanged /* | StatusRegister0.NotReady*/ );
+                                           (StatusRegister0.ReadySignalChanged | StatusRegister0.NotReady);
             }
 
             return _errorStatus;
@@ -1003,19 +1033,18 @@ namespace PERQemu.IO.Z80
         /// If a change in the ready status is detected (in our case, a floppy
         /// Load or Unload has set the DiskChange signal) then an interrupt is
         /// generated and a subsequent Sense Interrupt Status will return
-        /// ReadySignalChanged in ST0.  It's unclear if the PERQ actually
-        /// notices this, but it's built-in to the chip and it provides a way
-        /// to clear DiskChange so we should do it.  Only checked once per
-        /// second so it's very low overhead.
+        /// ReadySignalChanged in ST0.  The PERQ actually notices this and will
+        /// check the NotReady status in the reply to determine if the drive is
+        /// ready or not.  Only checked once per second (if the controller isn't
+        /// already busy) so it should be very low overhead.
         /// </remarks>
-        private void PollDrives()
+        private void PollDrives(ulong skewNsec, object context)
         {
-            // In Command mode and no busy flags?
-            if (_state == State.Command && ((byte)_status & 0x1f) == 0)
+            // In Command mode, idle, and no busy flags?
+            if (_state == State.Command && _commandData.Count == 0 && ((byte)_status & 0x1f) == 0)
             {
                 Log.Detail(Category.FloppyDisk, "Starting drive poll");
 
-                // Ok to poll
                 var changed = false;
 
                 for (var d = 0; d < _drives.Length; d++)
@@ -1028,34 +1057,26 @@ namespace PERQemu.IO.Z80
                     }
                 }
 
-                // Set ST0 and Interrupt...
                 if (changed)
                 {
                     Log.Debug(Category.FloppyDisk, "Signalling status change!");
+
+                    // Set our status and fire the interrupt; the PERQ has to
+                    // respond with a SenseInterruptStatus command to get the
+                    // result.  Set _seekEnd false so that if the drive just
+                    // went offline we'll send a ReadySignalChanged status code
                     _seekEnd = false;
                     SetErrorStatus(StatusRegister0.ReadySignalChanged);
-                    _interruptActive = true;
+                    _statusData.Clear();    // hmm...
+                    FinishCommand(true);
                 }
 
-                Log.Detail(Category.FloppyDisk, "Drive poll completed @ {0}", _scheduler.CurrentTimeNsec);
+                Log.Detail(Category.FloppyDisk, "Drive poll completed");
             }
 
-            // Reset for next time
-            _pollPending = false;
-        }
-
-        /// <summary>
-        /// Signal that the drives should be polled for status changes, then
-        /// reschedule again, until reset.  (The actual call to poll the drives
-        /// can then be done when the controller isn't busy, avoiding weird
-        /// state interactions having this run asynchronously.)
-        /// </summary>
-        private void PollTimer(ulong skewNsec, object context)
-        {
-            Log.Detail(Category.FloppyDisk, "Drive status poll requested @ {0}", _scheduler.CurrentTimeNsec);
-
-            _pollPending = true;
-            _pollEvent = _scheduler.Schedule(PollTimeNsec, PollTimer);
+            // Reschedule
+            _pollEvent = _scheduler.Schedule(PollTimeNsec, PollDrives);
+            Log.Detail(Category.FloppyDisk, "Drive status poll requested");
         }
 
         #endregion
@@ -1176,6 +1197,7 @@ namespace PERQemu.IO.Z80
 
         private enum Command
         {
+            Invalid = 0x00,
             ReadTrack = 0x02,
             ReadData = 0x06,
             ReadDeletedData = 0x0c,
@@ -1221,6 +1243,7 @@ namespace PERQemu.IO.Z80
 
         private CommandData[] _commands;
         private CommandData _currentCommand;
+        private CommandData _invalidCommand;
         private Queue<byte> _commandData;
         private Queue<byte> _statusData;
 
@@ -1253,7 +1276,6 @@ namespace PERQemu.IO.Z80
         // Status polling interval
         private readonly ulong PollTimeNsec = 1024 * Conversion.MsecToNsec;
 
-        private volatile bool _pollPending;
         private SchedulerEvent _pollEvent;
 
         // System interface
