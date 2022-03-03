@@ -637,6 +637,7 @@
     <None Include="Disks\f1.phd">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="ChangeLog.txt" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="PERQemu.ico" />

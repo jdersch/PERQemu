@@ -161,10 +161,9 @@ namespace PERQemu.IO.Z80
 							_data = _memoryBus[sourceAddress];
 						}
 
-						//Log.Detail(Category.Z80DMA,
-						Log.Info(Category.Z80DMA,
-								  "Source read 0x{0:x2} from {1} (0x{2:x4})",
-								 _data, source, sourceAddress);
+                        Log.Detail(Category.Z80DMA,
+                                   "Source read 0x{0:x2} from {1} (0x{2:x4})",
+                                   _data, source, sourceAddress);
 
 						nextState = DMAState.DestWrite;
 					}
@@ -188,14 +187,9 @@ namespace PERQemu.IO.Z80
 						// Update addresses & counters
 						_byteCounter--;
 
-						//Log.Detail(Category.Z80DMA,
-						//Log.Info(Category.Z80DMA,
-						//          "Transfer of 0x{0:x2} from {1} (0x{2:x4}) to {3} (0x{4:x4}), {5} bytes left",
-						//          _data, source, sourceAddress, dest, destAddress, _byteCounter);
-
-						Log.Info(Category.Z80DMA,
-								  "Dest write 0x{0:x2} to {1} (0x{2:x4}), {3} bytes left",
-								  _data, dest, destAddress, _byteCounter);
+                        Log.Detail(Category.Z80DMA,
+                                   "Dest write 0x{0:x2} to {1} (0x{2:x4}), {3} bytes left",
+                                   _data, dest, destAddress, _byteCounter);
 
 						if ((wr1 & WR1.PortAAddressFixed) == 0)
 						{

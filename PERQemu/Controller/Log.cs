@@ -18,6 +18,9 @@
 //
 
 using System;
+using System.IO;
+using System.Text;
+using System.Threading;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -102,10 +105,12 @@ namespace PERQemu
     /// verbosity and other nice features (to aid in debugging, mostly).
     /// </summary>
     /// <design>
-    /// By default, formats and writes messages on the console (using colors
-    /// for each category).  Can also write to a directory, which the user
-    /// can specify (along with a file name pattern and limits on the amount
-    /// of data to collect).
+    /// By default, formats and writes messages on the console (using colors for
+    /// each category).  Can also write to a directory, specified as OutputDir
+    /// (user settable); currently the filename pattern, number and size of the
+    /// files are fixed and not exposed as Settings.  Note that enabling All
+    /// categories in Verbose mode can fill 100MB of logs before VFY even starts
+    /// up, so *selective* logging is key.  Bumped the default log size to 10MB.
     /// </design>
     /// <remarks>
     /// While indispensible in debugging, logging is _painfully_ slow, so most
@@ -115,25 +120,31 @@ namespace PERQemu
     {
         static Log()
         {
-            _level = Severity.Normal;           // This is normal
             _categories = Category.None;        // Nothing selected
 
+            _consLevel = Severity.Normal;       // This is normal
             _logToConsole = true;               // On by default
+
+            _fileLevel = Severity.Info;         // A bit more info to the file
             _logToFile = false;                 // Log only to the console
 
-            _logSize = 1048576;                 // Default log size is 1MB?
+            _logSize = 1024 * 1024 * 10;        // Default log size is 10MB?
             _logLimit = 99;                     // Keep 100 files? (0..99)
             _logFilePattern = "debug{0:d2}.log";
             _logDirectory = Paths.OutputDir;
 
+            _log = null;
+            _turnstile = -1;
             _currentFile = string.Empty;
+            _currentFileNum = 0;
+
             _lastOutput = string.Empty;
             _repeatCount = 0;
 
             SetColors();
 #if DEBUG
             // Set a _reasonable_ default for debugging
-            _level = Severity.Debug;
+            _consLevel = Severity.Debug;
             _categories = Category.Emulator | Category.Controller | Category.UI;
 #endif
 
@@ -142,12 +153,22 @@ namespace PERQemu
 #else
             _loggingAvailable = false;
 #endif
+
+            _minLevel = (Severity)Math.Min((int)_consLevel, (int)_fileLevel);
+
+            Initialize();
         }
 
         public static Severity Level
         {
-            get { return _level; }
-            set { _level = value; }
+            get { return _consLevel; }
+            set { _consLevel = value; }
+        }
+
+        public static Severity FileLevel
+        {
+            get { return _fileLevel; }
+            set { _fileLevel = value; }
         }
 
         public static Category Categories
@@ -159,7 +180,7 @@ namespace PERQemu
         public static bool ToFile
         {
             get { return _logToFile; }
-            set { _logToFile = value; }
+            set { _logToFile = Enable(value); }
         }
 
         public static bool ToConsole
@@ -251,7 +272,7 @@ namespace PERQemu
         private static void WriteInternal(Severity s, Category c, string fmt, params object[] args)
         {
             // Apply filters before we do the work to format the output
-            if ((s >= _level) && ((c & _categories) != 0))
+            if ((s >= _minLevel) && ((c & _categories) != 0))
             {
                 var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
 
@@ -264,7 +285,7 @@ namespace PERQemu
                     return;
                 }
 
-                if (_logToConsole)
+                if (_logToConsole && s >= _consLevel)
                 {
                     // Was the last message repeated?
                     if (_repeatCount > 0)
@@ -307,22 +328,154 @@ namespace PERQemu
 
                     Console.ForegroundColor = _defaultForeground;
 
-                    System.Threading.Thread.Sleep(0);   // Give it a rest why dontcha
+                    Thread.Sleep(0);   // Give it a rest why dontcha
                 }
 
-                if (_logToFile)
+                if (_logToFile && s >= _fileLevel)
                 {
-                    // TODO:
-                    // check the length of the current file
-                    //      if curlen + len(output) > _logSize
-                    //          RotateFile();
-                    // check for repeats (as above)
-                    //_stream.WriteLine(datestamp + output);
+                    // Add a sortable timestamp to each line
+                    var stamp = Encoding.ASCII.GetBytes(
+                                    string.Format("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}\n",
+                                    DateTime.Now, Thread.CurrentThread.ManagedThreadId, output)
+                    );
+
+                    // Does the file need to be rotated?
+                    if (Interlocked.Read(ref _turnstile) < 0 && _log.Length > _logSize)
+                    {
+                        // Make sure only one thread does it!
+                        if (Interlocked.Exchange(ref _turnstile, _currentFileNum) < 0)
+                        {
+                            RotateFile();
+                        }
+                    }
+
+                    // If the rotation is in progress, hold up here
+                    if (Interlocked.Read(ref _turnstile) >= 0)
+                    {
+                        var spins = 0;
+                        SpinWait spin = new SpinWait();
+
+                        while (Interlocked.Read(ref _turnstile) >= 0)
+                        {
+                            spin.SpinOnce();
+                            spins++;
+                        }
+                    }
+
+                    // Okay, safe to write it out
+                    _log.Write(stamp, 0, stamp.Length);
                 }
 
                 _lastOutput = output;
                 _repeatCount = 0;
             }
+        }
+
+        /// <summary>
+        /// Enumerate the existing log files in the output directory.  Since this
+        /// can take some time, we do it once at startup.
+        /// </summary>
+        /// <remarks>
+        /// Sets _currentFile and _currentFileNum, and if necessary creates the
+        /// OutputDir.
+        /// </remarks>
+        public static void Initialize()
+        {
+            // Create the output directory if necessary
+            if (!Directory.Exists(_logDirectory))
+            {
+                Directory.CreateDirectory(_logDirectory);
+                Console.WriteLine("Created output directory: " + Paths.Canonicalize(_logDirectory));
+
+                _currentFileNum = 0;
+                _currentFile = string.Format(_logFilePattern, _currentFileNum);
+                return;
+            }
+
+            // Now look for the newest file and make that our current log
+            _currentFile = string.Empty;
+            _currentFileNum = 0;
+            var latest = DateTime.MinValue;
+
+            foreach (var file in Directory.GetFiles(_logDirectory, "debug??.log"))
+            {
+                if (File.GetLastWriteTime(file) > latest)
+                {
+                    _currentFile = file;
+                    latest = File.GetLastWriteTime(file);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(_currentFile))
+            {
+                _currentFileNum = GetFileNum(_currentFile);
+            }
+
+            // Ready for if/when file logging is enabled
+            _currentFile = Paths.BuildOutputPath(string.Format(_logFilePattern, _currentFileNum));
+        }
+
+        private static int GetFileNum(string filename)
+        {
+            // For now, assume the fixed pattern "debugNN.log".  Yuck...
+            return Convert.ToInt32(Path.GetFileName(_currentFile).Substring(5, 2));
+        }
+
+        /// <summary>
+        /// Enable or disable logging to file.  When enabling, always opens an
+        /// existing file in Append mode, or creates it anew.
+        /// </summary>
+        private static bool Enable(bool enable)
+        {
+            if (enable == _logToFile)
+            {
+                return enable;      // No change
+            }
+
+            if (enable)
+            {
+                _log = File.Open(_currentFile, FileMode.Append);
+                return true;
+            }
+
+            if (_log != null)
+            {
+                _log.Flush();       // A bit of overkill, hmm?
+                _log.Close();
+                _log.Dispose();
+                _log = null;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Rotates the current log file.
+        /// </summary>
+        private static void RotateFile()
+        {
+            // Prep the next filename
+            _currentFileNum = (_currentFileNum < _logLimit ? _currentFileNum + 1 : 0);
+            _currentFile = Paths.BuildOutputPath(string.Format(_logFilePattern, _currentFileNum));
+
+            // Do the switcheroo
+            _log.Flush();
+            _log.Close();
+            _log.Dispose();
+
+            _log = File.Open(_currentFile, FileMode.Create, FileAccess.Write);
+
+            // We're through, reset for next time!
+            Interlocked.Exchange(ref _turnstile, -1);
+        }
+
+        /// <summary>
+        /// Last one out, turn off the lights.
+        /// </summary>
+        public static void Shutdown()
+        {
+            ToConsole = false;
+            WriteInternal(Severity.None, Category.All, "PERQemu shutting down at {0}", DateTime.Now);
+            Enable(false);
         }
 
         /// <summary>
@@ -409,8 +562,11 @@ namespace PERQemu
             }
         }
 
-        private static Severity _level;
+        private static Severity _minLevel;
+        private static Severity _consLevel;
+        private static Severity _fileLevel;
         private static Category _categories;
+
         private static Dictionary<Category, ConsoleColor> _colors;
 
         private static ConsoleColor _defaultForeground = Console.ForegroundColor;
@@ -426,5 +582,9 @@ namespace PERQemu
         private static int _repeatCount;
         private static int _logSize;
         private static int _logLimit;
+        private static int _currentFileNum;
+
+        private static long _turnstile;
+        private static FileStream _log;
     }
 }

@@ -45,7 +45,6 @@ namespace PERQemu
     /// </remarks>
     public partial class DebugCommands
     {
-
         [Command("debug", "Enter the debugging subsystem")]
         [Command("debug z80 done", "Return to PERQ debugger")]
         public void SetDebugPrefix()
@@ -71,17 +70,28 @@ namespace PERQemu
         public void ShowDebugSettings()
         {
             Console.WriteLine("Current debugger settings:");
+
             if (Log.LoggingAvailable)
             {
-                Console.WriteLine("Console logging {0} enabled.", Log.ToConsole ? "is" : "is not");
+                if (Log.ToConsole)
+                {
+                    Console.WriteLine("Console logging is enabled, threshold '{0}'", Log.Level);
+                }
+                else
+                {
+                    Console.WriteLine("Console logging is disabled");
+                }
 
                 if (Log.ToFile)
                 {
-                    Console.WriteLine("File logging is enabled, current file is {0}",
-                                      Paths.Canonicalize(Log.OutputFile));
+                    Console.WriteLine("File logging is enabled, threshold '{0}'", Log.FileLevel);
+                    Console.WriteLine("Current file is {0}", Paths.Canonicalize(Log.OutputFile));
+                }
+                else
+                {
+                    Console.WriteLine("File logging is disabled");
                 }
 
-                Console.WriteLine("Log level: {0}", Log.Level);
                 Console.WriteLine("Logging categories:");
                 PERQemu.CLI.Columnify(Log.Categories.ToString().Split(' '));
             }
@@ -105,8 +115,8 @@ namespace PERQemu
             }
         }
 
-        [Command("step")]
-        [Command("debug step", "Run one microinstruction")]
+        [Command("step", Repeatable = true)]
+        [Command("debug step", "Run one microinstruction", Repeatable = true)]
         public void DebugStep()
         {
             if (PERQemu.Controller.State <= RunState.Off)
@@ -120,8 +130,8 @@ namespace PERQemu
             }
         }
 
-        [Command("inst")]
-        [Command("debug inst", "Run one opcode")]
+        [Command("inst", Repeatable = true)]
+        [Command("debug inst", "Run one opcode", Repeatable = true)]
         public void DebugInst()
         {
             if (PERQemu.Controller.State <= RunState.Off)
@@ -156,7 +166,6 @@ namespace PERQemu
         //
 
         [Command("debug set logging", "Set logging for specific events")]
-        [Conditional("TRACING_ENABLED")]
         public void SetLogging(Category category)
         {
             Log.Categories |= category;
@@ -164,24 +173,33 @@ namespace PERQemu
         }
 
         [Command("debug clear logging", "Clear logging for certain events")]
-        [Conditional("TRACING_ENABLED")]
         public void ClearLogging(Category category)
         {
             Log.Categories &= ~category;
             Console.WriteLine("Logging: {0}", Log.Categories);
         }
 
-        [Command("debug set loglevel", "Set logging threshold")]
-        public void SetSeverity(Severity severity)
+        [Command("debug set console loglevel", "Set severity threshold for console logging")]
+        public void SetConsoleSeverity(Severity severity)
         {
             if (severity != Log.Level)
             {
                 Log.Level = severity;
-                Console.WriteLine("Logging level set to " + severity);
+                Console.WriteLine("Console logging level set to " + severity);
             }
         }
 
-        [Command("debug enable logging to console", "Enable logging to the console")]
+        [Command("debug set file loglevel", "Set severity threshold for file logging")]
+        public void SetFileSeverity(Severity severity)
+        {
+            if (severity != Log.FileLevel)
+            {
+                Log.FileLevel = severity;
+                Console.WriteLine("File logging level set to " + severity);
+            }
+        }
+
+        [Command("debug enable console logging", "Enable logging to the console")]
         [Conditional("TRACING_ENABLED")]
         public void EnableLogging()
         {
@@ -192,7 +210,7 @@ namespace PERQemu
             }
         }
 
-        [Command("debug disable logging to console", "Disable logging to the console")]
+        [Command("debug disable console logging", "Disable logging to the console")]
         [Conditional("TRACING_ENABLED")]
         public void DisableLogging()
         {
@@ -203,26 +221,28 @@ namespace PERQemu
             }
         }
 
-        [Command("debug enable logging to file", "Enable logging to file")]
+        [Command("debug enable file logging", "Enable logging to file")]
         [Conditional("TRACING_ENABLED")]
         public void EnableFileLogging()
         {
             if (!Log.ToFile)
             {
-                Log.ToConsole = true;
-                // todo: call to init current log file?
+                Log.ToFile = true;
+                Log.Write(Severity.None, Category.All, "Logging started at {0}", DateTime.Now);
+
                 Console.WriteLine("File logging enabled.");
             }
         }
 
-        [Command("debug disable logging to file", "Disable logging to file")]
+        [Command("debug disable file logging", "Disable logging to file")]
         [Conditional("TRACING_ENABLED")]
         public void DisableFileLogging()
         {
             if (Log.ToFile)
             {
+                Log.Write(Severity.None, Category.All, "Logging stopped at {0}", DateTime.Now);
                 Log.ToFile = false;
-                // todo: call to close current log file
+
                 Console.WriteLine("File logging disabled.");
             }
         }
@@ -317,15 +337,8 @@ namespace PERQemu
                     char high = (char)((PERQemu.Sys.Memory.FetchWord(j) & 0xff00) >> 8);
                     char low = (char)(PERQemu.Sys.Memory.FetchWord(j) & 0xff);
 
-                    if (!PERQemu.CLI.IsPrintable(high))
-                    {
-                        high = '.';
-                    }
-
-                    if (!PERQemu.CLI.IsPrintable(low))
-                    {
-                        low = '.';
-                    }
+                    high = PERQemu.CLI.IsPrintable(high) ? high : '.';
+                    low = PERQemu.CLI.IsPrintable(low) ? low : '.';
 
                     line.AppendFormat("{0}{1}", low, high);     // Reversed so strings read right :)
                 }

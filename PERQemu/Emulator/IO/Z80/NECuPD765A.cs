@@ -302,7 +302,8 @@ namespace PERQemu.IO.Z80
 
                     if (_currentCommand.Command != Command.SenseInterruptStatus)
                     {
-                        // Don't reset this for SenseInterruptStatus since this command needs this value
+                        // Don't reset for SenseInterruptStatus since seek status
+                        // is significant when sending the result status
                         _seekEnd = false;
                     }
                     _scheduler.Schedule(12 * Conversion.UsecToNsec, _currentCommand.Executor);
@@ -385,24 +386,15 @@ namespace PERQemu.IO.Z80
             // If we aren't already polling, start the loop
             if (_pollEvent == null)
             {
-                PollDrives(0, null);
+                _pollEvent = _scheduler.Schedule(PollTimeNsec, PollDrives);
             }
 
             //
-            // NB: This is WRONG.  The FDC datasheet makes NO mention of Specify
-            // raising the interrupt and it provides NO result bytes (which is
-            // weird).  But the v8.7 floppy initialization code seems to depend
-            // on getting an interrupt from the FDC to proceed; if not here, it
-            // never sets its Idle bit and a weird side effect is that the Z80
-            // doesn't transmit any data to the PERQ.  At all.  WTAF.
-            // 
-            // My best guess is that the chip initiates its first drive poll at
-            // this point (this is mentioned in the doc) and that produces the
-            // interrupt the PERQ expects?  But I implemented the drive polling
-            // with the assumption that the chip does NOT interrupt if there has
-            // not been a status change.  Ugh.
+            // Specify does NOT raise an interrupt on completion, and the old
+            // Z80 code issues it with interrupts disabled?  There's no Result
+            // Phase, either, which is unlike all the other commands.  Ugh.
             //
-            FinishCommand(true);
+            FinishCommand(false);
         }
 
         /// <summary>
@@ -458,7 +450,12 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
         {
+            // todo/fixme?  Technically this should be treated as an invalid
+            // command if called without an interrupt pending.  Is that what the
+            // PRQINI routine expects by "waiting for the floppy to go idle?"
+
             _commandData.Dequeue();                     // toss command byte
+
 
             // Return ST0 and PCN
             _statusData.Enqueue((byte)_errorStatus);    // ST0 (SEEK END)

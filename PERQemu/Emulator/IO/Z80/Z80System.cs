@@ -156,6 +156,11 @@ namespace PERQemu.IO.Z80
                 _z80sio.Reset();
                 _tms9914a.Reset();
 
+                // This appears to be necessary even if not technically correct
+                _z80ToPerqFifo.Reset();
+                _perqToZ80Fifo.Reset();
+                _seekControl.Reset();
+
                 // If our heartbeat stopped, restart it (relevant only in
                 // asynch mode!)
                 if (cpr)
@@ -350,10 +355,11 @@ namespace PERQemu.IO.Z80
             }
         }
 
+        // todo: these don't really belong here
         public void SetSerialPort(ISerialDevice dev) { }
         public string GetSerialPort() { return string.Empty; }
 
-        // todo:  move this into Z80DebugCommands?
+        // todo: move this into Z80DebugCommands?
         //[DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
         public void ShowZ80State()
         {

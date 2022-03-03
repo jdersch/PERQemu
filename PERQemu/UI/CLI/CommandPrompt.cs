@@ -187,8 +187,12 @@ namespace PERQemu.UI
             // Done.  Add to history if input is non-empty
             if (_input != string.Empty)
             {
-                _commandHistory.Add(_input);
-                HistoryIndex = _commandHistory.Count - 1;
+                // Don't add if we repeat the previous command, since that's annoying
+                if (_commandHistory.Count == 0 || _commandHistory[HistoryIndex] != _input)
+                {
+                    _commandHistory.Add(_input);
+                    HistoryIndex = _commandHistory.Count - 1;
+                }
             }
 
             return _input;

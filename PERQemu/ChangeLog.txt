@@ -1,0 +1,207 @@
+﻿PERQemu "experiments" branch ChangeBlog
+
+If you don't wait with bated breath for more scintillating prose and/or lunatic
+ravings with every Git commit log entry, here's a summary of the significant
+changes to the experiments branch since I resumed hacking on it in late 2021.
+Newest entries added fresh regularly at the end.
+
+
+Summary of changes on this branch since October, 2021:
+
+    1. New SDL2 Display.cs has been hacked to allow it to run on Mono under
+    macOS.  The Windows version may be able to spawn a separate thread for
+    SDL's event loop, but on Mac (and Linux?) this is apparently impossible;
+    thus, I've clumsily forced it back onto the main thread.
+   
+    2. Verified that this version runs on MacOS X 10.11 (El Capitan) AND on
+    10.13 (High Sierra).  These are the newest versions I have available
+    for testing.  They run in both 32- and 64-bit mode!  The horrible Mac
+    keyboard hack is no longer required, which is good since we can't
+    support the old Mono 4.6.1 runtime anymore. :-/  Absolutely no idea
+    if anything runs on 10.14+, and I haven't tried to fire up the Linux VM
+    in quite some time... will get to that when we get closer to wrapping up
+    an actual release!
+
+    3. The CPU class has been refactored to include support for the 24-bit
+    processor!  Configurator allows up to 8MB (4MW) of memory, and the
+    VideoController should properly decode addresses for the >2MB configs.
+    Landscape display is supported but can't (yet) be tested until a newer
+    OS can boot (requires CIO/EIO for "new" Z80).
+
+    4. Enhancements to the CLI that make it more TOPS-20/Cisco IOS-like,
+    with tab-expansion providing matching for enumerated options and more
+    in-line help.  There are still some enhancements that Josh folded into
+    the old Debugger yet to be incorporated (the ":variable" syntax is
+    missing/busted at the moment).
+
+    5. If I could back-port a 64-bit Cocoa WinForms driver (<bashes head
+    on desk>) to run on 10.11-10.13, a pretty slick graphical configuration
+    tool and front end is already written, but abandoned due to 32-bit app
+    support being dropped by Apple.  Sigh.
+
+
+Updates in November, 2021:
+
+    1. Removed the old Z80 and moved Z80_new into its place.  Started to
+    refactor the IO so that different board types can be selected -- the
+    EIO for the PERQ-2 is rather different than the old IOB.  Have quite a
+    bit of work to do before we can start building virtual PERQ-2 machines
+    but there's a pinprick of light at the end of that long dark tunnel. :-)
+
+    2. Amazingly, with all of my ham-fisted shenanigans over the last month,
+    it still builds and runs!  Getting ~ 32fps pretty consistently on my
+    old Mac now, and really hope that moving the bulk of the CPU onto its
+    own thread will finally get me closer to 170ns/60fps emulation (on my
+    "old" hardware).  Then I can drop in the rate-limiting stuff for those
+    of you with hardware built in the last decade, where it should really fly.
+
+
+December, 2021 update:
+
+    1. The PERQ now runs on its own thread, and some "improvements" to speed
+    up video have been removed, because apparently writing worse code somehow
+    makes it go faster.  Sure.  Removing the 1bpp to 32bpp translation loop
+    adds 10-12fps (shaves 80-90ns off the average microcycle time) so there
+    has to be a way to speed that up and/or move it off the CPU thread that
+    isn't too horrible.  Although doing it in the most idiotic way possible
+    will probably make it go even faster, so I need to clearly bash myself
+    over the head with a shovel and snort a fifth of Chivas Regal before
+    coding that up.  Maybe throw in some GOTOs and really make it fly.
+
+    All of the documentation clearly needs to be rewritten.  More to come.
+
+
+Holy crap it's January, 2022:
+
+    1. PERQmedia is a new unified storage object complete with a new common
+    file format for storing PERQ hard disk, floppy and even tape images.  It
+    works with all the old formats, but removes ALL of the file reading and
+    writing grunge from the Emulator proper.  Included as a shared subproject
+    here, it is also used by PERQdisk (a POS filesystem interrogator and file
+    extractor) and will soon/eventually be integrated into PERQfloppy (RT-11
+    floppy utility) and Stut (which reads PERQ "STUT" QIC tapes).  Bunch o'
+    docs included in the PERQmedia project folder.
+
+    2. The first two storage devices have been converted to work with the new
+    PERQmedia StorageDevice class.  Now Shugart SA4000-series hard drives and
+    the SA851 floppy drive are split in half:  the "mechanical" operation and
+    block-level access to the data are in HardDisk and FloppyDisk classes,
+    while the ShugartDiskController and NECuPD765 (floppy disk controller)
+    provide the register-level interface to the PERQ and Z80 respectively.
+
+    3. Disk access is actually frighteningly realistic now.  The Z80 CTC,
+    HardDiskSeekControl and Scheduler classes were all updated to allow the
+    actual Z80 ROM code to drive the emulated disk drive using "buffered"
+    seeks.  To be truly perverse, PERQemu will even mimic the startup delay
+    of each drive type -- but after the first time you wait 90 actual seconds
+    for a simulated disk to "spin up" you'll want to turn off that option too.
+    :-)
+
+    4. An extensible database of supported media types is loaded at runtime
+    so the groundwork is there to allow all of the PERQ-2 disk types to be
+    created, formatted and mounted.  Soon...
+
+    5. There is a ton of work to do to make the new threading approach more
+    robust, and completely rethink the way the main application loop works.
+    While I flirted with 40-42fps performance in AoT/optimized Release mode
+    builds, having to introduce locking in the Scheduler was a hit; still,
+    my old Mac is consistently running at 37fps, up from ~30fps in the old
+    WinForms version.  Yes, it has to go much, much faster.  Or you can try
+    it on a machine that's less than a decade old.
+
+
+February, 2022:
+
+    Lots of stuff in progress.  The goal is to get the restructured Emulator
+    at least back to the level of stability as the current master branch
+    before attempting to sync "experiments" back up.  Lots of plumbing to do.
+    GPIB/Tablet support is a big hurdle since older OSes require the BitPad;
+    working out all the kinks in the ExecutionController so that virtual
+    machines can be reliably and accurately managed is top priority.  Adding
+    the CIO option (executing the new Z80 code from an actual ROM dump) gives
+    us the ability to finally let PERQ-1s run all the newer OSes and software!
+
+    PERQ-2 support will then follow, gracefully and effortlessly.  bwaaaahahahahahahaha no stop it hahahaha sigh.
+
+    1. Worked the Debugger and :var syntax back in, and integrated it with the
+    new CLI.  Still some work to do to make it more friendly - like adding tab
+    completion on the variable list?  Additional items on the to-do list for
+    the CLI are to add global commands, pathname expansion, and a more dynamic
+    way to expand the parse tree so that certain string variables can be used
+    like enumerated types but updated at runtime).
+
+    2. Hard and floppy disk support is stable again, and feeling more solid.
+    May have to implement the Shugart seek ramp timing to match the Z80's
+    crazy built-in timing scheme to avoid the occasional disk timeout (but
+    they are mostly evident on my slow machine, are not fatal, and just add
+    the authenticity of the PERQ experience!).
+
+    3. GPIB controller and bus rewritten to work with the new Z80, and the
+    BitPadOne tablet is working again.  A few rough edges and debugging to do.
+    (The Kriz tablet is much more efficient but to run Accent S4 or POS F.0 or
+    older OSes the BitPad is required.)
+
+    4. All of the hard/floppy disk loading, unloading and saving commands are
+    being cleaned up and revamped to work with the new storage architecture.
+    A simple search path is implemented to save typing -- "load foo" will look
+    for foo, Disks/foo, or apply various file known filename extensions.  New
+    commands to create blank disks or even describe the geometry and specs for
+    entirely new types of drives are included for advanced users.
+
+    5. Configurations are now loaded from the Conf/ directory, and a number of
+    "prefab" systems are included there.  Similar path rules apply so that
+    "configure load foo" will find Conf/foo.cfg.  You can assign media files
+    to disk drives and save them in the configuration so that the config can
+    be loaded and run directly.  In addition, the "preferences" file will
+    remember the last configuration you ran and load that by default the next
+    time you start PERQemu.
+
+    6. Believe it or not, this Readme has been trimmed substantially to create
+    a new UserGuide.  This wad of verbiage will be eventually pruned, rolled
+    into a history/change log...
+
+    7. You can now set a preference to turn off the system default arrow cursor
+    or change it to a smaller crosshairs cursor when in the Display window.
+    Not every change has to be Earth shattering, y'know?
+
+    8. Floppy updates: Write protected floppies are now write protected; status
+    change polling implemented; fixed a stooopid bug in the PRQM formatter that
+    broke CRCs; testing and refactoring of floppy formatting and debugging why
+    writes are failing.  Update: writes were working but the PERQ<->Z80 FIFOs
+    and Z80 DMA were/are randomly injecting nulls and corrupting the floppy data.
+    It's going to get worse before it gets better.  Or it'll just get worse, full
+    stop.  Entropy wins again.
+
+
+March, 2022:
+
+    1. No good deed goes unpunished.  Having almost nailed down an accurate and
+    reliable replacement for the old PERQ<->Z80 FIFOs, it is becoming clear
+    that the song and dance necessary to work around the extreme fragility of
+    the Z80 code requires that I back that all out and put in at least a short
+    queue to allow the Z80 to run properly during the boot phase.  The pre-boot
+    environment (SYSB) is so absurdly specific in its requirements that even
+    the slightest perturbation of the expected output from the Z80 derails the
+    entire process.  The Z80 _really_ wants to send a Status Change message to
+    the PERQ, but during SYSB the PERQ is *only* listening for very specific
+    responses -- and an extraneous Status Change ain't one of 'em.  Normally it
+    reaches a point where it reads and discards those bytes from the Z80, but
+    now (with the 1-byte Z80->PERQ latch) the Z80 itself loops furiously trying
+    to send the remaining bytes of that damned message, so when the PERQ does
+    get around to reading it the whole delicate dance between the processors
+    has been thrown off, and once out of step they don't recover.  Result is a
+    157 on the DDS (disk error).  Sigh.  [Update: DDS stops at 158 now.  Woo!
+    The Z80 initialization is not getting some as-yet unknown response from the
+    floppy which screws up the Z80's state machine and may explain why other
+    problems like the boot char being ignored as well.]
+
+    2. Debug logging to files added.  Now you can fill up your hard disk with
+    frightening rapidity with debug output.  Creates the Output/ directory if
+    not already present, and rotates through up to 100 files of 10MB each (for
+    now, hardcoded but in future probably tunable through user settings).  Can
+    specify one "severity" level for logging to the console and another for the
+    file logs and enable/disable them separately.
+
+
+---
+Last update: skeezics    Thu Mar  3 13:25:48 PST 2022

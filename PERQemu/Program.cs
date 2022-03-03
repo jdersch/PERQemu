@@ -74,18 +74,18 @@ namespace PERQemu
                 return;
             }
 
+            // Since we use reflection to build up our CLI and GUI, let the
+            // user know this might take a while.  It's the polite thing to do.
+            Console.WriteLine("Initializing, please wait...");
+            Console.Out.Flush();
+
             if (_switches.debug)
             {
                 Log.Level = Severity.Debug;
                 Log.Categories = Category.All;
             }
 
-            // Since we use reflection to build up our CLI and GUI, let the
-            // user know this might take a while.  It's the polite thing to do.
-            Console.WriteLine("Initializing, please wait...");
-            Console.Out.Flush();
-
-           // Set up command-line parser and GUI manager
+            // Set up command-line parser and GUI manager
             _cli = new CommandProcessor();
 
             //_gui = new FormsManager();
@@ -108,6 +108,7 @@ namespace PERQemu
             // Save the settings if they've changed
             Settings.Save();
             Log.Info(Category.All, Settings.Reason);
+            Log.Shutdown();
         }
 
         public static void Run()
