@@ -198,7 +198,7 @@ namespace PERQemu
                     break;
 
                 case RunState.Running:
-                    Run();
+                    Run();  // todo: just inline this if our simplified approach works out
                     break;
 
                 case RunState.SingleStep:
@@ -210,8 +210,8 @@ namespace PERQemu
                     // be more correct.
                     RunGuarded(() =>
                         {
-                            _iob.Run();
                             _cpu.Run();
+                            _iob.Run();
                             _state = RunState.Paused;
                         });
                     break;
@@ -223,8 +223,8 @@ namespace PERQemu
                         {
                             do
                             {
-                                _iob.Run();
                                 _cpu.Run();
+                                _iob.Run();
                             }
                             while (!CPU.IncrementBPC);
 
@@ -269,8 +269,8 @@ namespace PERQemu
             if (_mode == ExecutionMode.Asynchronous)
             {
                 // Start up the background threads
-                _iob.RunAsync();
                 _cpu.RunAsync();
+                _iob.RunAsync();
             }
             else
             {
@@ -279,15 +279,8 @@ namespace PERQemu
                     {
                         while (_state == RunState.Running)
                         {
-                            // Run the IOB for one Z80 instruction, then run the PERQ CPU for
-                            // the number of microinstructions equivalent to that wall-clock time.
-                            var count = _iob.Run();
-
-                            // Calculate the fudge factor, accumulating fractions
-                            var clocks = Math.Ceiling((double)count * (IOBoard.Z80CycleTime / CPU.MicroCycleTime));
-
-                            // Run the main CPU.  Rate limiting?  Hmm.
-                            _cpu.Run((uint)clocks);
+                            _cpu.Run();
+                            _iob.Run();
                         }
                     });
             }
@@ -419,21 +412,26 @@ namespace PERQemu
 
                     // Spin 'er up
                     _volumes[drive.Unit] = _iob.LoadDisk(drive);
-                    break;
+
+                    // Load indicates success!
+                    return _volumes[drive.Unit].IsLoaded;
 
                 case DeviceType.Floppy:
                     if (_volumes[drive.Unit] == null)
                     {
                         // Add the drive (with or without media)
                         _volumes[drive.Unit] = _iob.LoadDisk(drive);
+
+                        // Okay if there was no media
+                        return _volumes[drive.Unit] != null;
                     }
-                    else
-                    {
-                        // Place a new diskette in the drive!  Since we're
-                        // reloading, assume the pathname changed
-                        _volumes[drive.Unit].LoadFrom(drive.MediaPath);
-                    }
-                    break;
+
+                    // Place a new diskette in the drive!  Since we're
+                    // reloading, assume the pathname changed
+                    _volumes[drive.Unit].LoadFrom(drive.MediaPath);
+
+                    // Fail if the file given couldn't be loaded
+                    return (!string.IsNullOrEmpty(drive.MediaPath) && _volumes[drive.Unit].IsLoaded);
 
                 // case DriveType.DiskSMD:
                 //  _oio.LoadDisk();
@@ -444,8 +442,6 @@ namespace PERQemu
                 default:
                     throw new UnimplementedHardwareException($"Drive type {drive.Type}");
             }
-
-            return _volumes[drive.Unit].IsLoaded;
         }
 
 

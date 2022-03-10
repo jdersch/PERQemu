@@ -147,7 +147,7 @@ namespace PERQemu.Processor
 
 #if TRACING_ENABLED
             // This is a very expensive log, so only call it if we have to
-            if ((Log.Categories & Category.Instruction) != 0)
+            if (Log.Categories.HasFlag(Category.Instruction))
             {
                 Log.Debug(Category.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
             }

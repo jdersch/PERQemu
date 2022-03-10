@@ -107,14 +107,18 @@ namespace PERQemu
         /// away the initial events registered prior to starting the machine.
         /// This is something of a hack, but given that the Z80 can be "turned
         /// off" and restarted it's necessary to prevent greater ugliness. :-|
+        /// 
+        /// Such as: the Z80/IO scheduler can pass in the initial time upon reset.
+        /// This supports the new cooperative model where the Z80 synchronizes
+        /// itself to the main CPU for speed regulation.
         /// </remarks>
-        public void Reset()
+        public void Reset(ulong startTime = 0)
         {
-            if (_currentTimeNsec > 0)
+            if (_currentTimeNsec > 0 || startTime > 0)
             {
-                _currentTimeNsec = 0;
+                _currentTimeNsec = startTime;
                 _schedule.Clear();
-                Log.Debug(Category.Scheduler, "Reset ({0})", _timeStepNsec);
+                Log.Debug(Category.Scheduler, "Reset (step {0}ns, time {1})", _timeStepNsec, _currentTimeNsec);
             }
         }
 

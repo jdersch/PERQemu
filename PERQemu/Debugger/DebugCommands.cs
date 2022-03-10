@@ -70,35 +70,28 @@ namespace PERQemu
         public void ShowDebugSettings()
         {
             Console.WriteLine("Current debugger settings:");
-
-            if (Log.LoggingAvailable)
+            if (Log.ToConsole)
             {
-                if (Log.ToConsole)
-                {
-                    Console.WriteLine("Console logging is enabled, threshold '{0}'", Log.Level);
-                }
-                else
-                {
-                    Console.WriteLine("Console logging is disabled");
-                }
-
-                if (Log.ToFile)
-                {
-                    Console.WriteLine("File logging is enabled, threshold '{0}'", Log.FileLevel);
-                    Console.WriteLine("Current file is {0}", Paths.Canonicalize(Log.OutputFile));
-                }
-                else
-                {
-                    Console.WriteLine("File logging is disabled");
-                }
-
-                Console.WriteLine("Logging categories:");
-                PERQemu.CLI.Columnify(Log.Categories.ToString().Split(' '));
+                Console.WriteLine("Console logging is enabled, threshold {0}", Log.Level);
             }
             else
             {
-                Console.WriteLine("Logging is not available.");
+                Console.WriteLine("Console logging is disabled");
             }
+
+            if (Log.ToFile)
+            {
+                Console.WriteLine("File logging is enabled, threshold {0}", Log.FileLevel);
+                Console.WriteLine("Current file is {0}", Paths.Canonicalize(Log.OutputFile));
+            }
+            else
+            {
+                Console.WriteLine("File logging is {0}", Log.LoggingAvailable ? "disabled" : "not available");
+            }
+
+            Console.WriteLine("Logging categories:");
+            PERQemu.CLI.Columnify(Log.Categories.ToString().Split(' '));
+
             // radix, step mode, whatever
         }
 
@@ -189,18 +182,7 @@ namespace PERQemu
             }
         }
 
-        [Command("debug set file loglevel", "Set severity threshold for file logging")]
-        public void SetFileSeverity(Severity severity)
-        {
-            if (severity != Log.FileLevel)
-            {
-                Log.FileLevel = severity;
-                Console.WriteLine("File logging level set to " + severity);
-            }
-        }
-
         [Command("debug enable console logging", "Enable logging to the console")]
-        [Conditional("TRACING_ENABLED")]
         public void EnableLogging()
         {
             if (!Log.ToConsole)
@@ -211,7 +193,6 @@ namespace PERQemu
         }
 
         [Command("debug disable console logging", "Disable logging to the console")]
-        [Conditional("TRACING_ENABLED")]
         public void DisableLogging()
         {
             if (Log.ToConsole)
@@ -221,8 +202,19 @@ namespace PERQemu
             }
         }
 
+#if TRACING_ENABLED
+
+        [Command("debug set file loglevel", "Set severity threshold for file logging")]
+        public void SetFileSeverity(Severity severity)
+        {
+            if (severity != Log.FileLevel)
+            {
+                Log.FileLevel = severity;
+                Console.WriteLine("File logging level set to " + severity);
+            }
+        }
+
         [Command("debug enable file logging", "Enable logging to file")]
-        [Conditional("TRACING_ENABLED")]
         public void EnableFileLogging()
         {
             if (!Log.ToFile)
@@ -235,7 +227,6 @@ namespace PERQemu
         }
 
         [Command("debug disable file logging", "Disable logging to file")]
-        [Conditional("TRACING_ENABLED")]
         public void DisableFileLogging()
         {
             if (Log.ToFile)
@@ -246,6 +237,23 @@ namespace PERQemu
                 Console.WriteLine("File logging disabled.");
             }
         }
+
+#else
+        // Define these to spit out an explanation rather than "Invalid command."
+
+        [Command("debug set file loglevel", "Set severity threshold for file logging")]
+        private void NoLogLevel(Severity s)
+        {
+            Console.WriteLine("File logging is not available.");
+        }
+
+        [Command("debug enable file logging", "Enable logging to file")]
+        [Command("debug disable file logging", "Disable logging to file")]
+        private void NoLogging()
+        {
+            Console.WriteLine("File logging is not available.");
+        }
+#endif
 
         //
         // Registers and Stacks
@@ -286,6 +294,9 @@ namespace PERQemu
             }
             PERQemu.CLI.Columnify(values);
         }
+
+        // todo: if :xy[n] works, and :xy[n]=m works, then these could be removed
+        // and the previous one could be "show xy registers" to dump all of 'em
 
         [Command("debug show xy register", "Display the value of an XY register")]
         private void ShowRegister(byte reg)
@@ -382,6 +393,10 @@ namespace PERQemu
         {
             PERQemu.Sys.Memory.DumpQueues();
         }
+
+        // todo: most of the really detailed rasterop debugging stuff is no longer
+        // needed?  the rasterop unit seems to be 100% now, so other than performance
+        // tuning much of this can be removed and archived...
 
         [Command("debug set rasterop debug", "Enable extended RasterOp debugging")]
         private void SetRopDebug()
@@ -480,7 +495,7 @@ namespace PERQemu
         // Microcode
         //
 
-        [Command("debug load microcode", "Loads the specified microcode file into the PERQ's writable control store")]
+        [Command("debug load microcode", "Load a microcode file into the PERQ's writable control store")]
         private void LoadMicrocode(string ucodeFile)
         {
             try
@@ -493,19 +508,19 @@ namespace PERQemu
             }
         }
 
-        [Command("debug disassemble microcode", "Disassembles microcode instructions from the WCS (@ current PC)")]
+        [Command("debug disassemble microcode", "Disassemble microcode instructions from the WCS (@ current PC)")]
         private void DisassembleMicrocode()
         {
             DisassembleMicrocode(PERQemu.Sys.CPU.PC, 16);
         }
 
-        [Command("debug disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr])")]
+        [Command("debug disassemble microcode", "Disassemble microcode instructions from the WCS (@ [addr])")]
         private void DisassembleMicrocode(ushort startAddress)
         {
             DisassembleMicrocode(startAddress, 16);
         }
 
-        [Command("debug disassemble microcode", "Disassembles microcode instructions from the WCS (@ [addr, len])")]
+        [Command("debug disassemble microcode", "Disassemble microcode instructions from the WCS (@ [addr, len])")]
         private void DisassembleMicrocode(ushort startAddress, ushort length)
         {
             ushort endAddr = (ushort)(startAddress + length);
@@ -555,5 +570,13 @@ namespace PERQemu
         {
             HighResolutionTimer.DumpTimers();
         }
+
+        [Command("debug dump fifos")]
+        private void DumpFifos()
+        {
+            // dump the PERQ<->Z80 fifos and status bits
+            Console.WriteLine("Oh, wouldn't YOU like to know");
+        }
+
     }
 }

@@ -48,6 +48,9 @@ namespace PERQemu
     /// <summary>
     /// Bitmap to filter what categories of output to log.
     /// </summary>
+    /// <remarks>
+    /// Did you forget to add your new category to the colors dictionary?
+    /// </remarks>
     [Flags]
     public enum Category : ulong
     {
@@ -77,24 +80,25 @@ namespace PERQemu
         FIFO        = 0x400000,
         DDS         = 0x800000,
         Z80         = 0x1000000,
-        Z80IRQ      = 0x2000000,
-        Z80DMA      = 0x4000000,
-        CTC         = 0x8000000,
-        SIO         = 0x10000000,
-        RTC         = 0x20000000,
-        FloppyDisk  = 0x40000000,
-        Keyboard    = 0x80000000,
-        Tablet      = 0x100000000,
-        GPIB        = 0x200000000,
-        RS232       = 0x400000000,
-        Speech      = 0x800000000,
-        Link        = 0x1000000000,
-        HardDisk    = 0x2000000000,
-        Ethernet    = 0x4000000000,
-        Canon       = 0x8000000000,
-        Streamer    = 0x10000000000,
-        Multibus    = 0x20000000000,
-        SMD         = 0x40000000000,
+        Z80Inst     = 0x2000000,
+        Z80IRQ      = 0x4000000,
+        Z80DMA      = 0x8000000,
+        CTC         = 0x10000000,
+        SIO         = 0x20000000,
+        RTC         = 0x40000000,
+        FloppyDisk  = 0x80000000,
+        Keyboard    = 0x100000000,
+        Tablet      = 0x200000000,
+        GPIB        = 0x400000000,
+        RS232       = 0x800000000,
+        Speech      = 0x1000000000,
+        Link        = 0x2000000000,
+        HardDisk    = 0x4000000000,
+        Ethernet    = 0x8000000000,
+        Canon       = 0x10000000000,
+        Streamer    = 0x20000000000,
+        Multibus    = 0x40000000000,
+        SMD         = 0x80000000000,
         MediaLoader = 0x100000000000000,
         UI          = 0x1000000000000000,
         All         = 0xffffffffffffffff
@@ -142,34 +146,22 @@ namespace PERQemu
             _repeatCount = 0;
 
             SetColors();
+
 #if DEBUG
             // Set a _reasonable_ default for debugging
             _consLevel = Severity.Debug;
             _categories = Category.Emulator | Category.Controller | Category.UI;
 #endif
 
+
 #if TRACING_ENABLED
             _loggingAvailable = true;
+            Initialize();
 #else
             _loggingAvailable = false;
 #endif
-
-            _minLevel = (Severity)Math.Min((int)_consLevel, (int)_fileLevel);
-
-            Initialize();
         }
 
-        public static Severity Level
-        {
-            get { return _consLevel; }
-            set { _consLevel = value; }
-        }
-
-        public static Severity FileLevel
-        {
-            get { return _fileLevel; }
-            set { _fileLevel = value; }
-        }
 
         public static Category Categories
         {
@@ -177,10 +169,32 @@ namespace PERQemu
             set { _categories = value; }
         }
 
+        public static Severity Level
+        {
+            get { return _consLevel; }
+            set { _consLevel = value; SetMinLevel(); }
+        }
+
+        public static Severity FileLevel
+        {
+#if TRACING_ENABLED
+            get { return _fileLevel; }
+            set { _fileLevel = value; SetMinLevel(); }
+#else
+            get { return Severity.None; }
+            set { _fileLevel = value; }
+#endif
+        }
+
         public static bool ToFile
         {
+#if TRACING_ENABLED
             get { return _logToFile; }
             set { _logToFile = Enable(value); }
+#else
+            get { return false; }
+            set { _logToFile = value; }
+#endif
         }
 
         public static bool ToConsole
@@ -192,22 +206,54 @@ namespace PERQemu
         public static bool LoggingAvailable => _loggingAvailable;
         public static string OutputFile => _currentFile;
 
-        /// <summary>
-        /// A plain Write() is always displayed.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Write(string fmt, params object[] args)
+
+        private static void SetMinLevel()
         {
-            WriteInternal(Severity.None, Category.All, fmt, args);
+            _minLevel = (Severity)Math.Min((int)_consLevel, (int)_fileLevel);
+        }
+
+        /// <summary>
+        /// A shortcut for logging debugging output.  Makes a slow Debug process
+        /// that much slower but is compiled out entirely in Release builds.
+        /// </summary>
+        [Conditional("DEBUG")]
+        [Conditional("TRACING_ENABLED")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Debug(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Debug, c, fmt, args);
+        }
+
+        /// <summary>
+        /// A shortcut for logging extra detailed debugging output.  Like, stuff
+        /// that's reeeally verbose.  Like Debug, adds a ton of overhead but is
+        /// compiled out entirely in Release builds.
+        /// </summary>
+        [Conditional("DEBUG")]
+        [Conditional("TRACING_ENABLED")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Detail(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Verbose, c, fmt, args);
         }
 
         /// <summary>
         /// Shortcut for displaying informational messages (verbose mode,
         /// not in performance-critical situations).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Info(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Info, c, fmt, args);
+        }
+
+        /// <summary>
+        /// Shortcut for debug warnings that should stand out (but are non-fatal
+        /// and can be ignored in Release builds).
+        /// </summary>
+        public static void Warn(Category c, string fmt, params object[] args)
+        {
+            WriteInternal(Severity.Warning, c, fmt, args);
         }
 
         /// <summary>
@@ -222,47 +268,20 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// A shortcut for logging debugging output.  Makes a slow Debug process
-        /// that much slower but is compiled out entirely in Release builds.
+        /// A plain Write() is always displayed.
         /// </summary>
-        [Conditional("DEBUG")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Debug(Category c, string fmt, params object[] args)
+        public static void Write(string fmt, params object[] args)
         {
-            WriteInternal(Severity.Debug, c, fmt, args);
+            WriteInternal(Severity.None, Category.All, fmt, args);
         }
 
-        /// <summary>
-        /// A shortcut for logging extra detailed debugging output.  Like, stuff
-        /// that's reeeally verbose.  Like Debug, adds a ton of overhead but is
-        /// compiled out entirely in Release builds.
-        /// </summary>
-        [Conditional("DEBUG")]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Detail(Category c, string fmt, params object[] args)
-        {
-            WriteInternal(Severity.Verbose, c, fmt, args);
-        }
-
-        /// <summary>
-        /// Shortcut for debug warnings that should stand out (but are non-fatal
-        /// and can be ignored in Release builds).
-        /// </summary>
-        //[Conditional("DEBUG")]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Warn(Category c, string fmt, params object[] args)
-        {
-            WriteInternal(Severity.Warning, c, fmt, args);
-        }
-
-        //[Conditional("TRACING_ENABLED")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(Category c, string fmt, params object[] args)
         {
             WriteInternal(Severity.Normal, c, fmt, args);
         }
 
-        //[Conditional("TRACING_ENABLED")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write(Severity s, Category c, string fmt, params object[] args)
         {
@@ -293,7 +312,7 @@ namespace PERQemu
                         if (_repeatCount == 1)
                             Console.WriteLine(_lastOutput);     // one repeat is ok :-)
                         else
-                            Console.WriteLine("[Last message repeated {0} times]", _repeatCount);
+                            Console.WriteLine($"[Last message repeated {_repeatCount} times]");
                     }
 
                     // Set the text color; in severe cases, override them to standout
@@ -331,6 +350,10 @@ namespace PERQemu
                     Thread.Sleep(0);   // Give it a rest why dontcha
                 }
 
+                _lastOutput = output;
+                _repeatCount = 0;
+
+#if TRACING_ENABLED
                 if (_logToFile && s >= _fileLevel)
                 {
                     // Add a sortable timestamp to each line
@@ -365,11 +388,12 @@ namespace PERQemu
                     // Okay, safe to write it out
                     _log.Write(stamp, 0, stamp.Length);
                 }
-
-                _lastOutput = output;
-                _repeatCount = 0;
+#endif
             }
         }
+
+
+#if TRACING_ENABLED
 
         /// <summary>
         /// Enumerate the existing log files in the output directory.  Since this
@@ -414,7 +438,6 @@ namespace PERQemu
             // Ready for if/when file logging is enabled
             _currentFile = Paths.BuildOutputPath(string.Format(_logFilePattern, _currentFileNum));
         }
-
         private static int GetFileNum(string filename)
         {
             // For now, assume the fixed pattern "debugNN.log".  Yuck...
@@ -467,15 +490,17 @@ namespace PERQemu
             // We're through, reset for next time!
             Interlocked.Exchange(ref _turnstile, -1);
         }
+#endif
 
         /// <summary>
         /// Last one out, turn off the lights.
         /// </summary>
+        [Conditional("TRACING_ENABLED")]
         public static void Shutdown()
         {
             ToConsole = false;
             WriteInternal(Severity.None, Category.All, "PERQemu shutting down at {0}", DateTime.Now);
-            Enable(false);
+            ToFile = false;
         }
 
         /// <summary>
@@ -528,6 +553,7 @@ namespace PERQemu
             _colors.Add(Category.Interrupt, ConsoleColor.Red);
             _colors.Add(Category.FIFO, ConsoleColor.DarkYellow);
             _colors.Add(Category.Z80, ConsoleColor.Green);
+            _colors.Add(Category.Z80Inst, ConsoleColor.Gray);
             _colors.Add(Category.Z80DMA, ConsoleColor.DarkGreen);
             _colors.Add(Category.Z80IRQ, ConsoleColor.DarkRed);
             _colors.Add(Category.CTC, ConsoleColor.Cyan);

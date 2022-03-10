@@ -114,7 +114,7 @@ namespace PERQemu.IO.Z80
 
         public string Name => "uPD765A FDC";
         public byte[] Ports => _ports;
-        public byte? ValueOnDataBus => 0x24; // FLPVEC
+        public byte? ValueOnDataBus => 0x24;    // FLPVEC
         public bool IntLineIsActive => _interruptActive && _interruptsEnabled;
 
         public bool InterruptsEnabled
@@ -155,8 +155,8 @@ namespace PERQemu.IO.Z80
                 throw new ArgumentOutOfRangeException(nameof(unit));
             }
 
-            Log.Debug(Category.FloppyDisk, "Attached floppy unit {0}", unit);
             _drives[unit] = drive;
+            Log.Debug(Category.FloppyDisk, "Attached floppy unit {0}", unit);
         }
 
         /// <summary>
@@ -188,18 +188,19 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
-            _interruptActive = false;
-
             if (portAddress == StatusPort)
             {
-                Log.Debug(Category.FloppyDisk, "FDC Status read: {0} (0x{1:x})",
-                                                _status, (byte)_status);
+                Log.Debug(Category.FloppyDisk, "FDC status read: {0} (0x{1:x})", _status, (byte)_status);
                 return (byte)_status;
             }
 
             if (portAddress == DataPort)
             {
                 byte data = 0;
+
+                // NB: According to the documentation, this is technically wrong;
+                // the interrupt is cleared only on read of the first result byte
+                _interruptActive = false;
 
                 if (_state == State.Result)
                 {
@@ -211,6 +212,8 @@ namespace PERQemu.IO.Z80
                         // Clear RQM for the next 12 uSec
                         _status &= (~Status.RQM);
 
+                        Log.Detail(Category.FloppyDisk, "FDC result byte 0x{0:x}", data);
+
                         _scheduler.Schedule(12 * Conversion.UsecToNsec, (skew, context) =>
                         {
                             // Set DIO and RQM appropriately to signify readiness for next data
@@ -221,19 +224,19 @@ namespace PERQemu.IO.Z80
                             }
                             else
                             {
-                                // No more data, clear DIO (waiting for transfer
-                                // from processor) and set RQM (ready to receive)
-                                _status &= (~Status.DIO);
+                                // No more data: clear CB (FDC busy indicator,
+                                // clear DIO (awaiting transfer from processor)
+                                // and set RQM (ready to receive)
+                                _status &= (~Status.DIO & ~Status.CB);
                                 _status |= Status.RQM;
                                 _state = State.Command;
                             }
                         });
-
                     }
                     else
                     {
                         // Unexpected right now
-                        throw new InvalidOperationException("FDC Status Read with no data available");
+                        throw new InvalidOperationException("FDC status read with no data available");
                     }
                 }
                 else if (_state == State.Execution)
@@ -249,7 +252,7 @@ namespace PERQemu.IO.Z80
                 else
                 {
                     // Unsure exactly what should happen here
-                    throw new InvalidOperationException("FDC Status Read in Command phase");
+                    throw new InvalidOperationException("FDC status read in Command phase");
                 }
 
                 return data;
@@ -280,17 +283,18 @@ namespace PERQemu.IO.Z80
                         if ((value & data.Mask) == (int)data.Command)
                         {
                             _currentCommand = data;
-                            Log.Debug(Category.FloppyDisk, "Command is {0}", _currentCommand.Command);
+                            Log.Debug(Category.FloppyDisk, "FDC command is: {0}", _currentCommand.Command);
                             break;
                         }
                     }
                 }
 
-                // Store the command data away, reset bits 6 and 7 of the status
-                // register, and queue a workitem to set the bits.
-                // If this is the last byte of the command, commence execution.
+                // Store the command data away, set bit 5 to indicate busy,
+                // reset bits 6 and 7 of the status register.  If this is the
+                // last byte of the command, commence execution.
                 _commandData.Enqueue(value);
 
+                _status |= Status.CB;
                 _status &= (~Status.DIO & ~Status.RQM);
 
                 if (_commandData.Count == _currentCommand.ByteCount)
@@ -303,7 +307,7 @@ namespace PERQemu.IO.Z80
                     if (_currentCommand.Command != Command.SenseInterruptStatus)
                     {
                         // Don't reset for SenseInterruptStatus since seek status
-                        // is significant when sending the result status
+                        // is significant when sending the result code
                         _seekEnd = false;
                     }
                     _scheduler.Schedule(12 * Conversion.UsecToNsec, _currentCommand.Executor);
@@ -312,7 +316,7 @@ namespace PERQemu.IO.Z80
                 {
                     _scheduler.Schedule(12 * Conversion.UsecToNsec, (skew, context) =>
                     {
-                        // Set DIO and RQM appropriately to signify readiness for next data
+                        // Set RQM to signify readiness for next data
                         _status |= (Status.RQM);
                     });
                 }
@@ -349,7 +353,7 @@ namespace PERQemu.IO.Z80
         {
             var badCmd = _commandData.Dequeue();
 
-            Log.Warn(Category.FloppyDisk, "FDC Invalid command 0x{0:x2}", badCmd);
+            Log.Warn(Category.FloppyDisk, "FDC Invalid command: 0x{0:x2}", badCmd);
 
             // Invalid commands:
             //      Do not generate an interrupt;
@@ -372,29 +376,34 @@ namespace PERQemu.IO.Z80
         private void SpecifyExecutor(ulong skewNsec, object context)
         {
             //
-            // Read the data specified.
-            // We currently ignore SRT (Step Rate Time), HUT (Head Unload Time)
-            // and HLT (Head Load Time) because I'm not anal retentive.
-            // TODO: However... the old Z80 actually sets these, and Accent
-            // actually programs the values too.  So we _could_ actually set up
-            // the proper delays that the I/O code expects... :-)
+            // Read the data specified.  Although the Z80 actually sets these,
+            // and Accent programs the values too, we basically ignore them;
+            // HUT (Head Unload Time) and HLT (Head Load Time) are about drive
+            // mechanics that aren't relevant to our emulation, while SRT (Step
+            // Rate Time is basically built-in to the DevicePerformance record.
             //
             _commandData.Dequeue();     // command byte
             _commandData.Dequeue();     // SRT/HUT
             _nonDMAMode = (_commandData.Dequeue() & 0x1) != 0;
 
-            // If we aren't already polling, start the loop
+            //
+			// Specify does NOT raise an interrupt on completion, and there's no
+			// Result Phase, either, which is unlike all the other commands.  So
+            // clear/reset the status bits early, before starting the drive poll
+            //
+			FinishCommand(false);
+
+            //
+            // If not already polling, start immediately?  It's implied but NOT
+            // specified that an initial check happens, but who knows?  Unless/
+            // until I can put a logic analyzer on an actual 765 with a Shugart
+            // attached, this is just guesswork; right now NEITHER way works :-|
+            //
             if (_pollEvent == null)
             {
                 _pollEvent = _scheduler.Schedule(PollTimeNsec, PollDrives);
+                //PollDrives(0, null);
             }
-
-            //
-            // Specify does NOT raise an interrupt on completion, and the old
-            // Z80 code issues it with interrupts disabled?  There's no Result
-            // Phase, either, which is unlike all the other commands.  Ugh.
-            //
-            FinishCommand(false);
         }
 
         /// <summary>
@@ -406,12 +415,16 @@ namespace PERQemu.IO.Z80
             SelectUnitHead(_commandData.Dequeue());
             var cylinder = (cmd == Command.Seek) ? _commandData.Dequeue() : (byte)0;
 
-            // Set "Busy" bit for this drive:
-            _status |= (Status)(0x1 << _unitSelect);
+            // Technically, once the seek starts the CB bit goes low to allow
+            // another drive to be selected for a seek operation in parallel;
+            // something to note if we ever add support for a second drive?
 
             if (SelectedUnitIsReady)
             {
                 Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} scheduled", _unitSelect, cylinder);
+
+                // Set "Busy" bit for this drive:
+                _status |= (Status)(0x1 << _unitSelect);
 
                 _pcn[_unitSelect] = cylinder;
                 SelectedUnit.SeekTo(cylinder, SeekCompleteCallback);
@@ -421,8 +434,9 @@ namespace PERQemu.IO.Z80
                 // Can't seek on a drive that's not ready (or not connected)
                 Log.Warn(Category.FloppyDisk, "{0} issued but drive {1} not ready", cmd, _unitSelect);
 
-                // Fire the callback to complete command
-                SeekCompleteCallback(0, null);
+                _seekEnd = true;
+                SetErrorStatus(StatusRegister0.AbnormalTermination);
+                FinishCommand(true);
             }
         }
 
@@ -431,10 +445,7 @@ namespace PERQemu.IO.Z80
             // Stimpy!  We made it!
             _seekEnd = true;
 
-            // Can't ya read?  Exact change ONLY!
-            _seekEnd &= !SelectedUnit.DiskChange;
-
-            // Simply implode!
+            // Set status
             SetErrorStatus(StatusRegister0.None);
 
             // Clear drive "Busy" bit
@@ -450,12 +461,7 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
         {
-            // todo/fixme?  Technically this should be treated as an invalid
-            // command if called without an interrupt pending.  Is that what the
-            // PRQINI routine expects by "waiting for the floppy to go idle?"
-
             _commandData.Dequeue();                     // toss command byte
-
 
             // Return ST0 and PCN
             _statusData.Enqueue((byte)_errorStatus);    // ST0 (SEEK END)
@@ -467,7 +473,7 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Executes the floppy Sense Drive Status command.  Not used by the
-        /// old IOB Z80, but used by the new EIO Z80!
+        /// old IOB Z80, but used by the new/EIO Z80!
         /// </summary>
         private void SenseDriveStatusExecutor(ulong skewNsec, object context)
         {
@@ -553,9 +559,6 @@ namespace PERQemu.IO.Z80
             _transfer.SectorLength = (_transfer.Number == 0) ? dtl : (ushort)(128 << _transfer.Number);
             _transfer.Aborted = false;
 
-            // Transfers set the busy bit
-            _status |= Status.CB;
-
             if (_transfer.MultiTrack)
                 throw new InvalidOperationException("Floppy multi-track not supported");
 
@@ -601,30 +604,29 @@ namespace PERQemu.IO.Z80
             // Simulate the initial search for the sector, then kick off the sector transfer:
             Log.Detail(Category.FloppyDisk, "In transfer callback");
 
-            // Set preliminary status info
-            _transfer.ST0 = SetErrorStatus(StatusRegister0.None);
+            // Reset preliminary status info
+            _transfer.ST0 = StatusRegister0.None;
+            _transfer.ST1 = StatusRegister1.None;
+            _transfer.ST2 = StatusRegister2.None;
 
             // Validate the operation:  if the cylinder is out of range or the
             // sector does not exist on disk, flag the appropriate error and exit
             if (_transfer.Cylinder > SelectedUnit.Geometry.Cylinders ||
                 _transfer.Cylinder != SelectedUnit.Cylinder)
             {
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST2 = StatusRegister2.WrongCylinder;
                 FinishTransfer(_transfer);
                 return;
             }
 
-            // Validate the head vs. the number of sides on the disk:
-            //if (SelectedUnit.IsSingleSided && _transfer.Head != 0)
+            // Validate the head vs. the number of sides on the disk
             if (!SelectedUnitIsReady)
             {
                 // The SA851 drive drops the Ready line if head 1 is selected
-                // with a single sided diskette inserted; probably doesn't hurt
-                // to set the NoData flag, but NotReady should cover it?  This
-                // should also catch if an eject was done unexpectedly...
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
-                _transfer.ST1 = StatusRegister1.NoData;
+                // with a single sided diskette inserted; should also catch if
+                // an eject was done unexpectedly
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 FinishTransfer(_transfer);
                 return;
             }
@@ -647,18 +649,19 @@ namespace PERQemu.IO.Z80
             if (_transfer.SectorData.Data.Length == 0)
             {
                 // No sector data available:
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST1 = StatusRegister1.NoData;      // Sector not found
                 FinishTransfer(_transfer);
                 return;
             }
 
-            // Check sector format; expect either FM500 or MFM500, matching the MFM flag
-            if ((_transfer.MFM && _transfer.SectorLength != 256) ||
-               (!_transfer.MFM && _transfer.SectorLength != 128))
+            // Check sector format; expect either FM500 or MFM500, matching both
+            // the MFM flag and the drive's currently loaded media type
+            if ((_transfer.MFM && (_transfer.SectorLength != 256 || !SelectedUnit.IsDoubleDensity)) ||
+               (!_transfer.MFM && (_transfer.SectorLength != 128 || SelectedUnit.IsDoubleDensity)))
             {
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
-                _transfer.ST1 = StatusRegister1.NoData;      // Sector not found (TODO: is this correct?)
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
+                _transfer.ST1 = StatusRegister1.NoData;      // Sector not found (TODO: correct?)
                 FinishTransfer(_transfer);
                 return;
             }
@@ -699,7 +702,7 @@ namespace PERQemu.IO.Z80
             // If the last byte was not read by now, this is an overrun
             if (_readDataReady)
             {
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST1 = StatusRegister1.OverRun;
                 FinishTransfer(_transfer);
                 return;
@@ -722,7 +725,7 @@ namespace PERQemu.IO.Z80
             // If the last byte was not written, this is an overrun
             if (_writeDataReady)
             {
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST1 = StatusRegister1.OverRun;
                 FinishTransfer(_transfer);
                 return;
@@ -763,8 +766,6 @@ namespace PERQemu.IO.Z80
             if (_transfer.Aborted || _transfer.Sector == _transfer.EndOfTrack)
             {
                 // We're done, so report success
-                _transfer.ST1 = StatusRegister1.None;
-                _transfer.ST2 = StatusRegister2.None;
                 FinishTransfer(_transfer);
                 return;
             }
@@ -795,9 +796,6 @@ namespace PERQemu.IO.Z80
             _transfer.SectorLength = (ushort)(128 << _transfer.Number);
             _transfer.SectorIndex = 0;
 
-            // (Let's assume) Format sets the busy bit
-            _status |= Status.CB;
-
             // Should we do this?
             if (!SelectedUnit.Info.IsWritable)
             {
@@ -823,7 +821,7 @@ namespace PERQemu.IO.Z80
             // If the last byte was not written, this is an overrun
             if (_writeDataReady)
             {
-                _transfer.ST0 |= StatusRegister0.AbnormalTermination;
+                _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST1 = StatusRegister1.OverRun;
                 FinishTransfer(_transfer);
                 return;
@@ -957,9 +955,7 @@ namespace PERQemu.IO.Z80
             _statusData.Enqueue((byte)request.Sector);
             _statusData.Enqueue((byte)request.Number);
 
-            // Shut off the busy bit and raise the interrupt
-            _status &= (~Status.CB);
-
+            // Finish and raise the interrupt
             FinishCommand(true);
         }
 
@@ -970,7 +966,7 @@ namespace PERQemu.IO.Z80
         private void FinishCommand(bool raiseInterrupt)
         {
             // Reset EXM, set RQM and DIO to let the processor know results are
-            // ready to read.
+            // ready to read.  If no Result bytes, reset CB as well.
             _status &= (~Status.EXM);
 
             if (_statusData.Count > 0)
@@ -980,7 +976,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                _status &= (~Status.DIO);
+                _status &= (~Status.DIO & ~Status.CB);
                 _status |= Status.RQM;
                 _state = State.Command;
             }
@@ -991,19 +987,18 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Fill in the common fields of Status Register 0.  This is done often
-        /// enough to do it consistently.  If a non-existent drive is selected,
-        /// returns AbnormalTermination with NotReady and EquipChk set.
+        /// enough to do it consistently.  The caller can pass in a status code
+        /// and the actual drive status bits or error code is filled in.
         /// </summary>
         private StatusRegister0 SetErrorStatus(StatusRegister0 error)
         {
-            _errorStatus = error |
-                           (StatusRegister0)_unitSelect |
-                           (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None);
+            _errorStatus = error | (StatusRegister0)_unitSelect;
 
             if (SelectedUnitIsReady)
             {
-                // Give back actual drive status
-                _errorStatus |= (SelectedUnit.HeadSelect > 0 ? StatusRegister0.Head : StatusRegister0.None) |
+                // Give back actual drive/seek status
+                _errorStatus |= (_seekEnd ? StatusRegister0.SeekEnd : StatusRegister0.None) |
+                                (SelectedUnit.HeadSelect > 0 ? StatusRegister0.Head : StatusRegister0.None) |
                                 (SelectedUnit.Fault ? StatusRegister0.EquipChk : StatusRegister0.None) |
                                 (SelectedUnit.Ready ? StatusRegister0.None : StatusRegister0.NotReady);
             }
@@ -1012,8 +1007,17 @@ namespace PERQemu.IO.Z80
                 // There ain't no drive there!  How will the PERQ react? (Careful, it's touchy)
                 //      Seek End = 0, Intr Code = Ready line state changed
                 //      Seek End = 1, Intr Code = Abnormal termination (Seek/Recal)
-                _errorStatus |= _seekEnd ? (StatusRegister0.AbnormalTermination | StatusRegister0.EquipChk) :
-                                           (StatusRegister0.ReadySignalChanged | StatusRegister0.NotReady);
+                if (_seekEnd)
+                {
+                    _errorStatus = StatusRegister0.AbnormalTermination |
+                                   StatusRegister0.SeekEnd |
+                                   StatusRegister0.EquipChk;
+                }
+                else
+                {
+                    _errorStatus = StatusRegister0.ReadySignalChanged |
+                                   StatusRegister0.NotReady;
+                }
             }
 
             return _errorStatus;
@@ -1037,8 +1041,8 @@ namespace PERQemu.IO.Z80
         /// </remarks>
         private void PollDrives(ulong skewNsec, object context)
         {
-            // In Command mode, idle, and no busy flags?
-            if (_state == State.Command && _commandData.Count == 0 && ((byte)_status & 0x1f) == 0)
+            // In Command mode, and no busy flags?
+            if (_state == State.Command && ((byte)_status & 0x1f) == 0)
             {
                 Log.Detail(Category.FloppyDisk, "Starting drive poll");
 
@@ -1064,7 +1068,6 @@ namespace PERQemu.IO.Z80
                     // went offline we'll send a ReadySignalChanged status code
                     _seekEnd = false;
                     SetErrorStatus(StatusRegister0.ReadySignalChanged);
-                    _statusData.Clear();    // hmm...
                     FinishCommand(true);
                 }
 
@@ -1073,7 +1076,7 @@ namespace PERQemu.IO.Z80
 
             // Reschedule
             _pollEvent = _scheduler.Schedule(PollTimeNsec, PollDrives);
-            Log.Detail(Category.FloppyDisk, "Drive status poll requested");
+            Log.Detail(Category.FloppyDisk, "Drive status poll scheduled");
         }
 
         #endregion
@@ -1295,12 +1298,36 @@ namespace PERQemu.IO.Z80
     for those commands to be sent and the SK bit checked?
     
     Accent may have used the Read Track command; will probably implement that
-    at some point.
+    at some point.  In fact, the new Z80 code uses or allows for all of the FDC
+    commands except the search functions, so the unimplemented features will be
+    needed eventually.
 
     The head loading/settling/unloading times given in the Specify command are
     actually set by the firmware and by Accent's floppy drive, though there's
     little-to-no benefit to using them; the default 3ms head settling value is
     set in the DevicePerformance record and the FloppyDisk could reference it
     just to make floppy operations that much more agonizingly accurate. :-)
- 
- */
+
+    Status bits set by Sense Interrupt Status may as well be randomly generated.
+    For some insane/stupid reason the old Z80 flips out if NotReady is set in
+    response to a Seek/Recalibrate and looks for EquipCheck instead.  Thus, the
+    boot code (ROM and SYSB) fail to initialize properly if there's no floppy in
+    the drive at boot time -- which might be okay since they "turn-it-off-and-
+    back-on-again" and reinitialize everything once the OS comes up and Pascal
+    IO code takes over.  BUT THE PASCAL CODE SEEMS TO EXPECT THE NOTREADY BIT,
+    so you're damned either way.  WTAF.
+    
+    It doesn't actually look like the Z80 ever looks at the EC bit, and ONLY
+    checks for NR (when it bothers to at all).  And does it care about the
+    status change interrupt at all?  If you boot POS without a floppy in the
+    drive it properly reports an error, retries, and finally returns to the
+    prompt.  If you then mount, interact with, and unmount a floppy, *any* new
+    command just hangs the OS entirely until you load another floppy.  Then it
+    springs back to life.  Sure.  I've traced this instruction-by-instruction
+    and the results are purely non-deterministic; it exhibits completely random
+    behavior from the various software layers based, I can only surmise, on some
+    highly specific quirks of the original IOB hardware/software implementation.
+    The best part is that it's all sure to change when we try to run v10.017 on
+    this thing.  Just shoot me now.
+
+*/

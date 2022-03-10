@@ -28,8 +28,7 @@ namespace PERQemu.IO.Z80
     /// </summary>
     /// <remarks>
     /// For the original I/O board (IOB, CIO) this is a single 8-bit latch.
-    /// We incorporate I/O REG 1 (status bit) here.  This class must be thread
-    /// safe, so the _fifo (data latch) and _valid flag are protected by a lock.
+    /// We incorporate I/O REG 1 (status bit) here.
     /// </remarks>
     public class Z80ToPERQFIFO : IZ80Device
     {
@@ -74,18 +73,18 @@ namespace PERQemu.IO.Z80
                 // Clear the PERQ interrupt on every read
                 _system.CPU.ClearInterrupt(InterruptSource.Z80DataOut);
 
-                if (_valid)
+                if (!_valid)
                 {
-                    value = _fifo;
-                    _valid = false;
-
-                    Log.Detail(Category.FIFO, "cycle {0}: PERQ read byte 0x{1:x2} from latch", _system.IOB.Z80System.Clocks, value);
+                    Log.Warn(Category.FIFO, "PERQ read from empty latch, returning 0");
                 }
                 else
                 {
-                    Log.Warn(Category.FIFO, "cycle {0}: PERQ read from empty latch, returning 0", _system.IOB.Z80System.Clocks);
+                    value = _fifo;
+                    _valid = false;
                 }
             }
+
+            Log.Detail(Category.FIFO, "PERQ read byte 0x{0:x2} from latch", value);
             return value;
         }
 
@@ -106,7 +105,7 @@ namespace PERQemu.IO.Z80
             {
                 if (_valid)
                 {
-                    Log.Warn(Category.FIFO, "cycle {0}: Z80 overran latch, byte 0x{1:x2} will be lost", _system.IOB.Z80System.Clocks, _fifo);
+                    Log.Warn(Category.FIFO, "Z80 overran latch, byte 0x{0:x2} will be lost", _fifo);
                 }
 
                 _fifo = value;
@@ -116,14 +115,13 @@ namespace PERQemu.IO.Z80
                 _system.CPU.RaiseInterrupt(InterruptSource.Z80DataOut);
             }
 
-            // Slow log moved outside the lock
-            Log.Detail(Category.FIFO, "cycle {0}: Z80 wrote byte 0x{1:x2} to latch", _system.IOB.Z80System.Clocks, value);
+            Log.Detail(Category.FIFO, "Z80 wrote byte 0x{0:x2} to latch", value);
         }
 
 
         private byte _fifo;
-        private volatile bool _valid;
-        private object _lock;
+        private bool _valid;
+        private readonly object _lock;
 
         private byte[] _ports = { 0x88, 0xd0 };     // IOReg1, PERQW
 

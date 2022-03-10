@@ -62,7 +62,7 @@ namespace PERQemu.Processor
             _scheduler = new Scheduler(CPU.MicroCycleTime);
 
             // Rate limiter
-            _heartbeat = new SystemTimer(5f, CPU.MicroCycleTime);
+            _heartbeat = new SystemTimer(10f, CPU.MicroCycleTime);
         }
 
         public CPU Processor => _processor;
@@ -145,7 +145,7 @@ namespace PERQemu.Processor
             Log.Debug(Category.Controller, "[CPU thread stopped]");
             _heartbeat.Enable(false);
 
-            // Detach
+            // Detach - fixme: this has to happen if we halt?!
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
@@ -159,13 +159,13 @@ namespace PERQemu.Processor
                 return;
             }
 
-            Log.Debug(Category.Controller, "[Stop() CPU thread called on {0}]", Thread.CurrentThread.ManagedThreadId);
+            Log.Debug(Category.Controller, "[Stop() called on CPU thread]");
             _stopAsyncThread = true;
             _heartbeat.Enable(false);
 
             if (Thread.CurrentThread != _asyncThread)
             {
-                Log.Debug(Category.Controller, "[CPU thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
+                Log.Debug(Category.Controller, "[CPU thread join called...]");
                 // Waaaaait for it
                 while (!_asyncThread.Join(10))
                 {
@@ -194,7 +194,8 @@ namespace PERQemu.Processor
             }
             catch
             {
-                Log.Error(Category.CPU, "Could not load boot ROM from {0}!", file);
+                Log.Error(Category.CPU, "Could not load boot ROM from {0}!",
+                          Paths.Canonicalize(file));
                 throw;
             }
         }

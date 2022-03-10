@@ -104,9 +104,6 @@ namespace PERQemu.IO.Z80
 
             // Attach our debugger
             _z80Debugger = new Z80Debugger();
-
-            // Rate limit
-            _heartbeat = new SystemTimer(5f, IOBoard.Z80CycleTime);
         }
 
         public bool SupportsAsync => true;
@@ -117,9 +114,6 @@ namespace PERQemu.IO.Z80
         public Scheduler Scheduler => _scheduler;
         public Keyboard Keyboard => _keyboard;
 
-        // Not accessed externally...
-        //public PERQToZ80FIFO PERQReadFIFO => _perqToZ80Fifo;
-        //public Z80ToPERQFIFO PERQWriteFIFO => _z80ToPerqFifo;
 
         // DMA Capable devices
         public NECuPD765A FDC => _fdc;
@@ -141,10 +135,8 @@ namespace PERQemu.IO.Z80
         /// </remarks>
         public void Reset(bool soft = false)
         {
-            bool cpr = _heartbeat.IsEnabled;
-
-            _heartbeat.Reset();
-            _scheduler.Reset();
+            // Synchronize our scheduler to the main processor!
+            _scheduler.Reset(_system.Scheduler.CurrentTimeNsec);
             _cpu.Reset();
 
             if (soft)
@@ -160,13 +152,6 @@ namespace PERQemu.IO.Z80
                 _z80ToPerqFifo.Reset();
                 _perqToZ80Fifo.Reset();
                 _seekControl.Reset();
-
-                // If our heartbeat stopped, restart it (relevant only in
-                // asynch mode!)
-                if (cpr)
-                {
-                    _heartbeat.Enable(true);
-                }
 
                 Log.Debug(Category.Z80, "System (soft) reset");
             }
@@ -184,30 +169,59 @@ namespace PERQemu.IO.Z80
         /// Runs the Z80 for one instruction (either mode).  If the Z80 is
         /// "turned off" by the PERQ, it's effectively a no-op.
         /// </summary>
+        /// <remarks>
+        /// The Z80 syncs itself to the main processor by comparing Scheduler
+        /// time stamps; if the Z80 is behind the PERQ, it runs instructions
+        /// until it catches up/exceeds the main CPU, then pauses/no-ops until
+        /// it falls behind again.  In this way the Z80 always stays within a
+        /// few microseconds (ahead or behind) and the crude/chunky "heartbeat"
+        /// timer is eliminated.  This should better regulate the exchange of
+        /// data through the FIFOs and resolve some annoying timing difficulties.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public uint Run(int clocks = 1)
+        public void Run(int clocks = 1)
         {
-            var ticks = 0;
-
             do
             {
                 if (_running)
                 {
-                    _bus.ActiveInterrupts();
+                    var ticks = 0;
 
-                    ticks = _cpu.ExecuteNextInstruction();
-                    _z80dma.Clock();
-                    _scheduler.Clock(ticks);
+                    // Is the master CPU clock ahead of us?
+                    var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
+
+                    if (diff > 0)
+                    {
+#if DEBUG
+                        // for now: debugging; future: actual InterruptEncoder as a bus device?
+                        _bus.ActiveInterrupts();
+
+                        // this is hugely expensive so only call it if selected
+                        if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
+#endif
+                        // Yes!  Run an instruction
+                        ticks = _cpu.ExecuteNextInstruction();
+
+                        // And a DMA cycle
+                        _z80dma.Clock();
+
+                        // Run the scheduler
+                        _scheduler.Clock(ticks);
+                    }
+                    else
+                    {
+                        // We really need a nanosleep here... a typical Z80 instruction
+                        // at 2.4576Mhz might take 3-9usec, or up to 52ish CPU uinsts.
+                        ticks = 1;
+                    }
+
                     clocks -= ticks;
                 }
                 else
                 {
-                    ticks += 1;
                     clocks -= 1;
                 }
             } while (clocks > 0);
-
-            return (uint)ticks;
         }
 
         /// <summary>
@@ -234,22 +248,15 @@ namespace PERQemu.IO.Z80
             // Catch events from the controller
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
 
-            _heartbeat.Enable(true);
             Log.Debug(Category.Controller, "[Z80 running on thread {0}]", Thread.CurrentThread.ManagedThreadId);
 
             do
             {
                 try
                 {
-                    Run((int)_heartbeat.Period);
+                    Run();
 
                     if (_stopAsyncThread) break;
-
-                    // Should probably always rate limit the Z80 for device timings to work
-                    //if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
-                    {
-                        _heartbeat.WaitForHeartbeat();
-                    }
                 }
                 catch (Exception e)
                 {
@@ -259,9 +266,8 @@ namespace PERQemu.IO.Z80
             while (!_stopAsyncThread);
 
             Log.Debug(Category.Controller, "[Z80 thread stopped]");
-            _heartbeat.Enable(false);
 
-            // Detach
+            // Detach - fixme: this has to happen if we halt?!
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
@@ -275,17 +281,15 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Log.Debug(Category.Controller, "[Stop() Z80 thread called on {0}]", Thread.CurrentThread.ManagedThreadId);
+            Log.Debug(Category.Controller, "[Stop() called on Z80 thread]");
             _stopAsyncThread = true;
-            _heartbeat.Enable(false);
 
             if (Thread.CurrentThread != _asyncThread)
             {
-                Log.Debug(Category.Controller, "[Z80 thread join called on {0}...]", Thread.CurrentThread.ManagedThreadId);
+                Log.Debug(Category.Controller, "[Z80 thread join called...]");
                 while (!_asyncThread.Join(10))
                 {
                     Log.Debug(Category.Controller, "[Waiting for Z80 thread to finish...]");
-                    _heartbeat.Reset();
                 }
                 _asyncThread = null;
                 Log.Debug(Category.Controller, "[Z80 thread exited]");
@@ -359,24 +363,21 @@ namespace PERQemu.IO.Z80
         public void SetSerialPort(ISerialDevice dev) { }
         public string GetSerialPort() { return string.Empty; }
 
-        // todo: move this into Z80DebugCommands?
-        //[DebugFunction("show z80 registers", "Displays the values of the Z80 registers")]
         public void ShowZ80State()
         {
             IZ80Registers regs = _cpu.Registers;
 
             // TODO: should display shadow regs?
-            Console.WriteLine("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}",
-                              regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
-            Console.WriteLine("    IX=${0:x4} IY=${1:x4}", regs.IX, regs.IY);
+            Log.Debug(Category.Z80Inst, "Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}",
+                      regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
+            Log.Debug(Category.Z80Inst, "    IX=${0:x4} IY=${1:x4}", regs.IX, regs.IY);
 
             // TODO: this doesn't really belong here
             ushort offset = 0;
             string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
             string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
 
-            Console.WriteLine();
-            Console.WriteLine("{0}+0x{1:x} : {2}", symbol, offset, source);
+            Log.Debug(Category.Z80Inst, "{0}+0x{1:x} : {2}", symbol, offset, source);
         }
 
         /// <summary>
@@ -390,14 +391,13 @@ namespace PERQemu.IO.Z80
             }
             catch
             {
-                Log.Error(Category.Emulator, "Could not open Z80 ROM from {0}!", file);
+                Log.Error(Category.Emulator, "Could not open Z80 ROM from {0}!",
+                          Paths.Canonicalize(file));
                 throw;
             }
         }
 
-        //
-        // Z80System is a big sucka!
-        //
+
         private Z80Processor _cpu;
         private Z80MemoryBus _memory;
         private Z80IOBus _bus;
@@ -419,7 +419,6 @@ namespace PERQemu.IO.Z80
         private PERQSystem _system;
 
         private Thread _asyncThread;
-        private SystemTimer _heartbeat;
 
         private volatile bool _running;
         private volatile bool _stopAsyncThread;

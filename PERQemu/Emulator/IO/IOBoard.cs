@@ -83,9 +83,9 @@ namespace PERQemu.IO
         /// <summary>
         /// Runs one Z80 instruction, synchronously.
         /// </summary>
-        public virtual uint Run()
+        public virtual void Run()
         {
-            return _z80System.Run();
+            _z80System.Run();
         }
 
         /// <summary>

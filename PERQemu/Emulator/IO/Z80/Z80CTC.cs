@@ -55,6 +55,7 @@ namespace PERQemu.IO.Z80
             _channels.Initialize();
 
             _interruptVector = null;
+            _interruptActive = false;
 
             Log.Debug(Category.CTC, "Reset");
         }
@@ -62,7 +63,7 @@ namespace PERQemu.IO.Z80
         public string Name => "Z80 CTC";
         public byte[] Ports => _ports;
 
-        public bool IntLineIsActive => AssertInterrupt();
+        public bool IntLineIsActive => _interruptActive;
         public byte? ValueOnDataBus => AcknowledgeInterrupt();
 
         public event EventHandler NmiInterruptPulse;
@@ -136,7 +137,11 @@ namespace PERQemu.IO.Z80
         /// Raises the CTC interrupt flag and sets the vector if one or more
         /// channels are enabled and requesting service; otherwise, clears it.
         /// </summary>
-        public bool AssertInterrupt()
+        /// <remarks>
+        /// The individual channels request a rescan when one of their interrupt
+        /// conditions is asserted (or cleared).  The scan is in priority order.
+        /// </remarks>
+        public void AssertInterrupt()
         {
             // Check all the channels
             for (var ch = 0; ch < _channels.Length; ch++)
@@ -144,15 +149,15 @@ namespace PERQemu.IO.Z80
                 if (_channels[ch].InterruptRequested && _channels[ch].Control.HasFlag(ControlFlags.Interrupt))
                 {
                     _interruptVector = (byte)(_interruptVectorBase + ch * 2);
+                    _interruptActive = true;
                     Log.Debug(Category.CTC, "Interrupt raised (chan={0})", ch);
-                    return true;
+                    return;
                 }
             }
 
             // Nobody's home
             _interruptVector = null;
-
-            return false;
+            _interruptActive = false;
         }
 
         /// <summary>
@@ -179,9 +184,6 @@ namespace PERQemu.IO.Z80
 
             if (ch < 0 || ch > 3)
                 Console.WriteLine("Vector {0} out of range on acknowledge", ch);
-
-            if (!_channels[ch].InterruptRequested)
-                Console.WriteLine("Vector {0} for channel not requesting an interrupt", ch);
 #endif
 
             _channels[ch].InterruptRequested = false;
@@ -192,6 +194,8 @@ namespace PERQemu.IO.Z80
 
         protected Scheduler _scheduler;
         private Channel[] _channels;
+
+        private bool _interruptActive;
 
         private byte _interruptVectorBase;
         private byte? _interruptVector;
@@ -287,6 +291,8 @@ namespace PERQemu.IO.Z80
 
                         // Reached TC?  Request an interrupt (if configured)
                         InterruptRequested = (Counter == 0);
+
+                        if (InterruptRequested) _ctc.AssertInterrupt();
                     }
                 }
                 else
@@ -307,6 +313,7 @@ namespace PERQemu.IO.Z80
                 {
                     Running = false;
                     InterruptRequested = false;
+                    _ctc.AssertInterrupt();
 
                     _ctc._scheduler.Cancel(Trigger);
                     Trigger = null;
@@ -331,6 +338,7 @@ namespace PERQemu.IO.Z80
 
                 // If we had previously asserted an interrupt, clear it?
                 InterruptRequested = false;
+                _ctc.AssertInterrupt();
 
                 Log.Debug(Category.CTC, "Channel {0} counter reset ({1})", Number, Counter);
             }
@@ -375,6 +383,8 @@ namespace PERQemu.IO.Z80
                 Log.Debug(Category.CTC, "Channel {0} timer callback fired at {1}",
                                         context, _ctc._scheduler.CurrentTimeNsec);
 
+                var oldIntr = InterruptRequested;
+
                 if (Running && Control.HasFlag(ControlFlags.Interrupt))
                 {
                     // Poke the Z80
@@ -393,6 +403,10 @@ namespace PERQemu.IO.Z80
                     InterruptRequested = false;
                     Log.Debug(Category.CTC, "[Channel {0} timer not renewed]", context);
                 }
+
+                // Rescan if status changed
+                if (InterruptRequested != oldIntr)
+                    _ctc.AssertInterrupt();
             }
         }
     }

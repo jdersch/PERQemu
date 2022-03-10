@@ -50,7 +50,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        // debug: print transitions of z80 irq signals
+        // debugging: print transitions of z80 irq signals
         // for eio this might have to actually become a standalone priority encoder (am9517)
         public void ActiveInterrupts()
         {
@@ -59,15 +59,14 @@ namespace PERQemu.IO.Z80
                 if (_devices[d].IntLineIsActive)
                 {
                     if (!_status[d])
-                        Log.Write(Category.Z80IRQ, "cycle {0}: device {1} raised, vector is {2:x2}",
-                                  _z80System.Clocks, _devices[d].Name, _devices[d].ValueOnDataBus);
+                        Log.Write(Category.Z80IRQ, "Device {0} raised, vector is {1:x2}",
+                                  _devices[d].Name, _devices[d].ValueOnDataBus);
                     _status[d] = true;
                 }
                 else
                 {
                     if (_status[d])
-                        Log.Write(Category.Z80IRQ, "cycle {0}: device {1} cleared",
-                                  _z80System.Clocks, _devices[d].Name);
+                        Log.Write(Category.Z80IRQ, "Device {0} cleared", _devices[d].Name);
                     _status[d] = false;
                 }
             }

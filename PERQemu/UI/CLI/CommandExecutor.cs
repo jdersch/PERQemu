@@ -739,7 +739,6 @@ namespace PERQemu.UI
             QuotedString = 2,
         }
 
-        private CommandNode _globalRoot;
         private CommandNode _commandRoot;
         private CommandNode _currentRoot;
 

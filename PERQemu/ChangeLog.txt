@@ -182,18 +182,7 @@ March, 2022:
     queue to allow the Z80 to run properly during the boot phase.  The pre-boot
     environment (SYSB) is so absurdly specific in its requirements that even
     the slightest perturbation of the expected output from the Z80 derails the
-    entire process.  The Z80 _really_ wants to send a Status Change message to
-    the PERQ, but during SYSB the PERQ is *only* listening for very specific
-    responses -- and an extraneous Status Change ain't one of 'em.  Normally it
-    reaches a point where it reads and discards those bytes from the Z80, but
-    now (with the 1-byte Z80->PERQ latch) the Z80 itself loops furiously trying
-    to send the remaining bytes of that damned message, so when the PERQ does
-    get around to reading it the whole delicate dance between the processors
-    has been thrown off, and once out of step they don't recover.  Result is a
-    157 on the DDS (disk error).  Sigh.  [Update: DDS stops at 158 now.  Woo!
-    The Z80 initialization is not getting some as-yet unknown response from the
-    floppy which screws up the Z80's state machine and may explain why other
-    problems like the boot char being ignored as well.]
+    entire process. [Update below]
 
     2. Debug logging to files added.  Now you can fill up your hard disk with
     frightening rapidity with debug output.  Creates the Output/ directory if
@@ -202,6 +191,20 @@ March, 2022:
     specify one "severity" level for logging to the console and another for the
     file logs and enable/disable them separately.
 
+    3. Reworking the FDC, continued.  The old Z80 code is a complete train wreck
+    and the difference between the IOB and the EIO is night and day.  Currently
+    the debugging effort is like nailing jelly to a tree; tracing execution of
+    Z80 assembler line by line shows that the initialization process seems to be
+    completely non-deterministic.  To try to bring some measure of sanity to the
+    process, the Z80 is not rate-limited by its own heartbeat timer, and instead
+    now tracks the PERQ's Scheduler in a sort of "cooperative threading" model;
+    the Z80 only executes an instruction when it falls behind the PERQ CPU, and
+    spins when it's ahead (lacking a "nanosleep()" it's real ugly right now, but
+    it's accurate).  Since the whole emulated machine now runs in "virtual time"
+    the 2.4:1 ratio (1.48:1 for the EIO) of execution speeds is maintained, and
+    if the host can run the main processor at full speed the Z80 (and display)
+    will automatically be regulated as well.  That'll be the day...
+
 
 ---
-Last update: skeezics    Thu Mar  3 13:25:48 PST 2022
+Last update: skeezics    Sun Mar  6 20:26:37 PST 2022
