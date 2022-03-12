@@ -205,6 +205,29 @@ March, 2022:
     if the host can run the main processor at full speed the Z80 (and display)
     will automatically be regulated as well.  That'll be the day...
 
+    4. FINALLY tracked down the data corruption issue: the old Z80 ROM uses the
+    "INIR" instruction to do block transfers from the PERQ with interrupts off;
+    turns out the hardware does provide a signal to pull the Z80 WAIT line low
+    so that reads from the PERQR register block.  This blocking behavior is now
+    incorporated into the Z80's execution loop; thus, when processing variable-
+    length messages from the PERQ using INIR the risk of overrunning the latch
+    and getting back zeros is eliminated.  This fixes: data corruption during
+    floppy sector transfers, keyboard and tablet enable/disable messages being
+    munged, and the problem of the boot character being ignored!  There are
+    STILL difficulties around getting the FDC to give back responses that the
+    POS FLOPPY program will accept when the media is ejected -- but at least now
+    files can be reliably read and written.  Double density works too!
+
+    5. Now that we can actually invoke alternate boots again, the GPIB tablet
+    has been verified to work with POS D.6, POS F.*, MPOS E.29, Accent S4 and
+    PNX 1.x.  A fix to GPIB protocol handling in the TMS9914 corrected the bug
+    where the pointer was jammed up against the left edge of the display; again,
+    POS ignored the errant behavior but Accent got tripped up by it, evoking a
+    mild flashback to The Great Comma Incident of 2018. <shudder>
+
+    Oh, but now the Kriz tablet doesn't work.  Digging into the SIO code to
+    figure out why.  It never ends.
+
 
 ---
-Last update: skeezics    Sun Mar  6 20:26:37 PST 2022
+Last update: skeezics    Fri Mar 11 17:44:01 PST 2022

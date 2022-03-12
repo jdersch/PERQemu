@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-3/01/2022 - skeezicsb - v0.4.6 (experimental)
+3/11/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -338,7 +338,7 @@ The following hardware has been implemented in the emulator:
       useful on POS F.1 and later (no support in D.6, F.0, PNX 1, or Accent S4);
     - The simulated Summagraphics BitPadOne works with the new GPIB; it is
       supported on all PERQ OSes;
-    - The BitPad/new GPIB are buggy and occasionally get unplugged/out of sync;
+    - The BitPad/new GPIB requires a ton of processing due to protocol overhead;
       the Kriz is a far more efficient tablet and is generally preferred on
       any OS that supports it!
 
