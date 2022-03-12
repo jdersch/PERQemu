@@ -115,7 +115,7 @@ namespace PERQemu
         // Miscellany
         //
 
-        // fixme crap.  have to fix the ambiguity issue in the commandprompt where an
+        // todo:  have to fix the ambiguity issue in the commandprompt where an
         // exact match that's a substring of a longer match is "ambiguous" even
         // when the user types a space or tab -- "set" and "settings" conflict, but
         // somehow it's not accepting the "set bootchar" even when typing it in full...

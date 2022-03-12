@@ -356,37 +356,41 @@ namespace PERQemu
 #if TRACING_ENABLED
                 if (_logToFile && s >= _fileLevel)
                 {
-                    // Add a sortable timestamp to each line
-                    var stamp = Encoding.ASCII.GetBytes(
-                                    string.Format("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}\n",
-                                    DateTime.Now, Thread.CurrentThread.ManagedThreadId, output)
-                    );
+                    var me = Thread.CurrentThread.ManagedThreadId;
 
                     // Does the file need to be rotated?
-                    if (Interlocked.Read(ref _turnstile) < 0 && _log.Length > _logSize)
+                    if (Interlocked.Read(ref _turnstile) < 0 && _log.BaseStream.Length > _logSize)
                     {
                         // Make sure only one thread does it!
                         if (Interlocked.Exchange(ref _turnstile, _currentFileNum) < 0)
                         {
                             RotateFile();
+
+                            // While we're here...
+                            _log.WriteLine("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}",
+                                           DateTime.Now, me, output);
+
+                            // Reset for next time!
+                            Interlocked.Exchange(ref _turnstile, -1);
+
+                            return;
                         }
                     }
 
                     // If the rotation is in progress, hold up here
                     if (Interlocked.Read(ref _turnstile) >= 0)
                     {
-                        var spins = 0;
-                        SpinWait spin = new SpinWait();
-
                         while (Interlocked.Read(ref _turnstile) >= 0)
                         {
-                            spin.SpinOnce();
-                            spins++;
+                            Thread.SpinWait(10);
                         }
                     }
 
-                    // Okay, safe to write it out
-                    _log.Write(stamp, 0, stamp.Length);
+                    // Write it, lazy & slow (_log is Synchronized)
+                    // But this is still wrong, results in corrupt log
+                    // entries, and someday I should fix it but right now it's enough to help debug the infinite number of other problems and I just am so fucking tired of this I could weep so throw it on the todo pile 
+                    _log.WriteLine("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}",
+                                   DateTime.Now, me, output);
                 }
 #endif
             }
@@ -438,6 +442,7 @@ namespace PERQemu
             // Ready for if/when file logging is enabled
             _currentFile = Paths.BuildOutputPath(string.Format(_logFilePattern, _currentFileNum));
         }
+
         private static int GetFileNum(string filename)
         {
             // For now, assume the fixed pattern "debugNN.log".  Yuck...
@@ -457,7 +462,8 @@ namespace PERQemu
 
             if (enable)
             {
-                _log = File.Open(_currentFile, FileMode.Append);
+                _log = File.AppendText(_currentFile);
+                Stream.Synchronized(_log.BaseStream);
                 return true;
             }
 
@@ -485,10 +491,8 @@ namespace PERQemu
             _log.Close();
             _log.Dispose();
 
-            _log = File.Open(_currentFile, FileMode.Create, FileAccess.Write);
-
-            // We're through, reset for next time!
-            Interlocked.Exchange(ref _turnstile, -1);
+            _log = File.AppendText(_currentFile);
+            Stream.Synchronized(_log.BaseStream);
         }
 #endif
 
@@ -611,6 +615,6 @@ namespace PERQemu
         private static int _currentFileNum;
 
         private static long _turnstile;
-        private static FileStream _log;
+        private static StreamWriter _log;
     }
 }

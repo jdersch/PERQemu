@@ -210,7 +210,7 @@ namespace PERQemu.IO.Z80
                         data = _statusData.Dequeue();
 
                         // Clear RQM for the next 12 uSec
-                        _status &= (~Status.RQM);
+                        _status &= ~Status.RQM;
 
                         Log.Detail(Category.FloppyDisk, "FDC result byte 0x{0:x}", data);
 
@@ -227,7 +227,7 @@ namespace PERQemu.IO.Z80
                                 // No more data: clear CB (FDC busy indicator,
                                 // clear DIO (awaiting transfer from processor)
                                 // and set RQM (ready to receive)
-                                _status &= (~Status.DIO & ~Status.CB);
+                                _status &= ~(Status.DIO | Status.CB);
                                 _status |= Status.RQM;
                                 _state = State.Command;
                             }
@@ -295,7 +295,7 @@ namespace PERQemu.IO.Z80
                 _commandData.Enqueue(value);
 
                 _status |= Status.CB;
-                _status &= (~Status.DIO & ~Status.RQM);
+                _status &= ~(Status.DIO | Status.RQM);
 
                 if (_commandData.Count == _currentCommand.ByteCount)
                 {
@@ -967,7 +967,7 @@ namespace PERQemu.IO.Z80
         {
             // Reset EXM, set RQM and DIO to let the processor know results are
             // ready to read.  If no Result bytes, reset CB as well.
-            _status &= (~Status.EXM);
+            _status &= ~Status.EXM;
 
             if (_statusData.Count > 0)
             {
@@ -976,7 +976,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                _status &= (~Status.DIO & ~Status.CB);
+                _status &= ~(Status.DIO | Status.CB);
                 _status |= Status.RQM;
                 _state = State.Command;
             }

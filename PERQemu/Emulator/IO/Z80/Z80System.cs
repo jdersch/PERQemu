@@ -114,7 +114,6 @@ namespace PERQemu.IO.Z80
         public Scheduler Scheduler => _scheduler;
         public Keyboard Keyboard => _keyboard;
 
-
         // DMA Capable devices
         public NECuPD765A FDC => _fdc;
         public Z80SIO SIOA => _z80sio;
@@ -181,6 +180,8 @@ namespace PERQemu.IO.Z80
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Run(int clocks = 1)
         {
+            IZ80Registers regs = _cpu.Registers;
+
             do
             {
                 if (_running)
@@ -189,6 +190,16 @@ namespace PERQemu.IO.Z80
 
                     // Is the master CPU clock ahead of us?
                     var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
+
+                    // Deal with the INIR special condition :-/
+                    if (_memory[regs.PC] == 0xed && _memory[regs.PC + 1] == 0xb2 && !_perqToZ80Fifo.IsReady)
+                    {
+                        // This is a cheap way to inject a wait state; this
+                        // emulates the blocking read of the PERQR latch
+                        diff = 0;
+
+                        Log.Detail(Category.FIFO, "Wait state for FIFO read (INIR)");
+                    }
 
                     if (diff > 0)
                     {
@@ -260,6 +271,7 @@ namespace PERQemu.IO.Z80
                 }
                 catch (Exception e)
                 {
+                    _stopAsyncThread = true;
                     _system.Halt(e);
                 }
             }
@@ -267,7 +279,7 @@ namespace PERQemu.IO.Z80
 
             Log.Debug(Category.Controller, "[Z80 thread stopped]");
 
-            // Detach - fixme: this has to happen if we halt?!
+            // Detach
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
@@ -284,7 +296,7 @@ namespace PERQemu.IO.Z80
             Log.Debug(Category.Controller, "[Stop() called on Z80 thread]");
             _stopAsyncThread = true;
 
-            if (Thread.CurrentThread != _asyncThread)
+            if (!Thread.CurrentThread.Equals(_asyncThread))
             {
                 Log.Debug(Category.Controller, "[Z80 thread join called...]");
                 while (!_asyncThread.Join(10))

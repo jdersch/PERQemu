@@ -116,6 +116,8 @@ namespace PERQemu.IO.Z80
 
         private void AssertInterrupt()
         {
+            var oldIntr = _interruptActive;
+
             // Int0 and Int1 in the Interrupt Status 0 register are not storage
             // bits; they are asserted only when the following conditions are met:
             //      any unmasked bit in InterruptStatus1 is set, and/or
@@ -130,7 +132,8 @@ namespace PERQemu.IO.Z80
 
             _interruptActive = ((int0 || int1) && _interruptsEnabled);
 
-            Log.Debug(Category.GPIB, "Interrupt {0}", _interruptActive ? "asserted" : "cleared");
+            if (_interruptActive != oldIntr)
+                Log.Debug(Category.GPIB, "Interrupt {0}", _interruptActive ? "asserted" : "cleared");
         }
 
         public byte Read(byte portAddress)
@@ -141,11 +144,10 @@ namespace PERQemu.IO.Z80
             switch ((ReadRegister)reg)
             {
                 case ReadRegister.IntStatus0:
-                    //
                     // To read the Interrupt Status 0 register, the INT0 and INT1
-                    // bits have to be computed.  Then we save the current status,
-                    // turn OFF both BI and BO, and return with the saved value.
-                    // 
+                    // bits have to be computed (as above).  But then we save the
+                    // current status, turn OFF both BI and BO, and return the
+                    // saved value.
                     bool int0 = (((_rdRegisters[(int)ReadRegister.IntStatus0] &
                                    _wrRegisters[(int)WriteRegister.IntMask0]) & 0x3f) != 0);
 
@@ -156,17 +158,12 @@ namespace PERQemu.IO.Z80
                                     (int0 ? (byte)InterruptStatus0.Int0 : 0x0) |
                                     (int1 ? (byte)InterruptStatus0.Int1 : 0x0));
 
-                    Log.Debug(Category.GPIB, "Read 0x{0:x2} from register {1}", retval, reg);
-
                     // A read from the Interrupt Status 0 reg clears _both_ BI & BO!
                     _rdRegisters[(int)ReadRegister.IntStatus0] &= (byte)~InterruptStatus0.BO;
+                    _rdRegisters[(int)ReadRegister.IntStatus0] &= (byte)~InterruptStatus0.BI;
 
-                    // But we only clear BI if there's no data left in the queue... 
-                    if (_busFifo.Count == 0)
-                    {
-                        _rdRegisters[(int)ReadRegister.IntStatus0] &= (byte)~InterruptStatus0.BI;
-                    }
-
+                    Log.Debug(Category.GPIB, "Read 0x{0:x2} ({1}) from register {2}",
+                                              retval, (InterruptStatus0)retval, reg);
                     AssertInterrupt();
                     return retval;
 
@@ -179,45 +176,51 @@ namespace PERQemu.IO.Z80
 
                 case ReadRegister.CmdPassThrough:
                     // This just reads the data lines...
-                    retval = (byte)(_busFifo.Count > 0 ? _busFifo.Peek() : 0x0);
+                    retval = (byte)(_busFifo.Count > 0 ? (_busFifo.Peek() >> 8) : 0x0);
                     Log.Debug(Category.GPIB, "Read 0x{0:x2} from register {1}", retval, reg);
                     return retval;
 
                 case ReadRegister.DataIn:
-                    // Do we have data?
+                    // Retrieve the latest data byte from the bus
+                    ushort word = 0;
+
+                    // Should only get here on a BI interrupt...
                     if (_busFifo.Count > 0)
                     {
-                        // Yes, but if I'm not listening to the bus, then don't send 
-                        // anything back to the Z80.  In POS F turning off the tablet
-                        // actually 'untalks' it so it stops transmitting, but POS G
-                        // (and others?) just "cheat" and turn off GPIB interrupts --
-                        // so without the actual hardware in place to respond to that
-                        // (presumably dropping the incoming data stream, which would
-                        // keep coming from the tablet!?) our "bottomless" FIFO will
-                        // just grow and grow...
-                        if (!_iListen)
-                        {
-                            Log.Debug(Category.GPIB, "DataIn read but controller not listening! (Cleared {0} bytes)", _busFifo.Count);
-                            _busFifo.Clear();
-                        }
-                        else
-                        {
-                            // Pull apart the next word (see below)
-                            var word = _busFifo.Dequeue();
-                            var flags = (BusStatus)(word & 0xff);
-                            retval = (byte)(word >> 8);
+                        // Get the current byte
+                        word = _busFifo.Dequeue();
+                        retval = (byte)(word >> 8);
+                    }
+                    else
+                    {
+                        Log.Warn(Category.GPIB, "DataIn read from empty register, returning 0");
+                    }
 
-                            // Set an END interrupt if that byte was EOI
-                            if (flags.HasFlag(BusStatus.EOI))
-                            {
-                                _rdRegisters[(int)ReadRegister.IntStatus0] |= (byte)InterruptStatus0.END;
-                            }
-                            else
-                            {
-                                _rdRegisters[(int)ReadRegister.IntStatus0] &= (byte)~InterruptStatus0.END;
-                            }
-                            // ANYTHING ELSE HERE?  GOT LOTSA OTHER FLAGS Y'KNOW
+                    // Now set up the flags for the next one (if any).  We do this
+                    // here since the END interrupt (if unmasked) has to fire when
+                    // BI is true prior to the byte being read!  (Without our FIFO
+                    // to handwave over all the actual bus protocol, BI/END would
+                    // get set by BusRead and just be cleared here.)
+                    if (_busFifo.Count > 0)
+                    {
+                        word = _busFifo.Peek();
+                        var flags = (BusStatus)(word & 0xff);
+
+                        // Re-raise BI since there's another byte waiting
+                        _rdRegisters[(int)ReadRegister.IntStatus0] |= (byte)InterruptStatus0.BI;
+
+                        // And set the END bit on the NEXT byte if EOI set
+                        if (flags.HasFlag(BusStatus.EOI))
+                        {
+                            _rdRegisters[(int)ReadRegister.IntStatus0] |= (byte)InterruptStatus0.END;
                         }
+
+                        Log.Detail(Category.GPIB, "EOI on next byte {0}", flags.HasFlag(BusStatus.EOI));
+                    }
+                    else
+                    {
+                        // That was the last byte
+                        _rdRegisters[(int)ReadRegister.IntStatus0] &= (byte)~(InterruptStatus0.BI | InterruptStatus0.END);
                     }
 
                     Log.Debug(Category.GPIB, "DataIn read 0x{0:x2} ({1} bytes remaining)", retval, _busFifo.Count);
@@ -247,6 +250,7 @@ namespace PERQemu.IO.Z80
                 case WriteRegister.AddressRegister:
                 case WriteRegister.ParallelPoll:
                 case WriteRegister.SerialPoll:
+                    // Just note it for now, not sure what to do with these...
                     Log.Debug(Category.GPIB, "Wrote 0x{0:x2} to register {1}", value, reg);
                     break;
 
@@ -323,7 +327,20 @@ namespace PERQemu.IO.Z80
         /// </summary>
         public void BusRead(byte value, BusStatus flags)
         {
-            //
+            // If the controller has stopped listening to the bus, drop the data
+            // on the floor.  OSes running the "old Z80" turn off the tablet by
+            // sending an 'untalk' to the tablet it so it stops transmitting.
+            // But POS G (and others?) take a shortcut: they just turn off GPIB
+            // interrupts.  Presumably the BitPad keeps yakking but the 9914
+            // ignores the data?  Or maybe the "holdoff"/handshaking stuff in
+            // the protocol clues in the tablet that it's being ignored?  In any
+            // case, we drop the bytes so the FIFO doesn't grow and grow...
+            if (!_iListen)
+            {
+                Log.Debug(Category.GPIB, "Bus read but controller not listening! (Dropped byte 0x{0:x2})", value);
+                return;
+            }
+
             // NB: I just push the status flags into the high byte of a 16-bit
             // word, to avoid using a struct or class for this.  Because we
             // don't want to do a bloody full-blown state machine to deal with
@@ -333,11 +350,20 @@ namespace PERQemu.IO.Z80
             // Z80 does its little dance to read bytes into its circular buffer
             // and ultimately feed them to the PERQ, which hands them from the
             // microcode to Pascal.  Woof.
-            //
             _busFifo.Enqueue((ushort)((value << 8) + (byte)flags));
 
             // Set BI!
             _rdRegisters[(int)ReadRegister.IntStatus0] |= (byte)InterruptStatus0.BI;
+
+            // Set an END interrupt too?
+            if (_busFifo.Count == 1 && flags.HasFlag(BusStatus.EOI))
+            {
+                // If this is our first byte and EOI is set, we need to assert
+                // the END bit too (the spec says END and BI get set at the same
+                // time).  Reading from DataIn resets them.
+                _rdRegisters[(int)ReadRegister.IntStatus0] |= (byte)InterruptStatus0.END;
+            }
+
             AssertInterrupt();
         }
 
@@ -347,7 +373,7 @@ namespace PERQemu.IO.Z80
 
         private void ResetGPIB()
         {
-            // fixme/todo determine if this is anywhere close to correct :-/
+            // todo: determine if this is anywhere close to correct :-/
             _iListen = false;
             _iTalk = false;
             _listener = 0x1f;   // nobody

@@ -41,15 +41,16 @@ namespace PERQemu.IO.GPIB
         public byte DeviceID => 8;
 
         //
-        // The Summagraphics factory default is continuous streaming at 200
-        // samples/sec, but the ICL T2 Service Guide suggests that ICL/3RCC set
-        // it to 40 samples/sec.  POS, and likely the other OSes, will ignore a
-        // few samples every time the puck or stylus is returned to the surface
-        // (though we don't yet simulate the stylus), and they collect the data
-        // in a FIFO and average several samples to reduce jitter; effectively
-        // the rate is reduced a bit from the BitPad's hardware setting.  In any
-        // case, choose a speed that balances overhead with responsiveness (not
-        // necessarily limited to the table of available rates in the manual).
+        // The Summagraphics factory default is continuous streaming at 125
+        // samples/sec (max GPIB rate), but the ICL T2 Service Guide suggests
+        // that ICL/3RCC set it to 40 samples/sec.  POS, and likely the other
+        // OSes, will ignore a few samples every time the puck or stylus is
+        // returned to the surface.  POS queues the tablet updates in a FIFO
+        // and averages several samples to reduce jitter; the effective rate
+        // is thus reduced a bit from the BitPad's hardware setting.  In any
+        // case, we are free to choose a sample rate that balances overhead
+        // with responsiveness (not limited to the table of available values
+        // in the manual).
         //
         public const int SampleRate = 40;
 
@@ -108,13 +109,12 @@ namespace PERQemu.IO.GPIB
             Log.Debug(Category.GPIB, "BitPadOne {0} listening", (_listening ? "is" : "is NOT"));
         }
 
-
         /// <summary>
         /// Samples the mouse position and buttons n times per second and sends
-        /// an update to the PERQ (via the 9914/Z80).  Due to the asynchronous and unpredictable
-        /// nature of the GPIB controller's polling -- the PERQ turns the tablet
-        /// off and on quite frequently -- we only cache a couple of updates.
-        /// If we're the GPIB Talker after a collection, queue up the next one.
+        /// an update to the PERQ via the 9914/Z80.  Due to the asynchronous and
+        /// unpredictable nature of the GPIB controller's polling -- the PERQ
+        /// turns the tablet off and on quite frequently -- we collect the mouse
+        /// data every trip, but only send it if we're the GPIB Talker.
         /// </summary>
         private void SendData(ulong skewNsec, object context)
         {
@@ -128,6 +128,8 @@ namespace PERQemu.IO.GPIB
             // 0000-2200; D1 is configured to be "," (a *$!%#! COMMA) and D2 is
             // a Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual,
             // which clearly and INCORRECTLY shows D1 as a single quote mark.)
+            // The origin is defined as the lower left, so for the PERQ we flip
+            // the Y coordinate.
             //
             // The delimiters and the range (switching between US/Metric) can be
             // configured on the BitPad itself, but the PERQ software requires
@@ -142,16 +144,15 @@ namespace PERQemu.IO.GPIB
             // report "puck off tablet" status, but it does stop transmitting
             // in that case; POS G (at least) has code to detect that.
             // 
-            // Calculate X and Y positions.  The offsets tacked onto the end
-            // are based on playing around with the interface, not on solid
-            // data and could be incorrect.
+            // Calculate X and Y positions.  The offsets tacked onto the coords
+            // are based on the "kluge" factors from POS (and Accent) sources.
             //
             int x = 0;
             int y = 0;
             byte button = 0;
 
-            y = (_system.VideoController.DisplayHeight - _system.Mouse.MouseY) * 2 + 80;
-            x = (_system.Mouse.MouseX) * 2 + 76;
+            x = (_system.Mouse.MouseX + 38) * 2;
+            y = (_system.VideoController.DisplayHeight - _system.Mouse.MouseY + 39) * 2;
 
             button = (byte)_system.Mouse.MouseButton;
 
@@ -184,7 +185,7 @@ namespace PERQemu.IO.GPIB
 
         /// <summary>
         /// Sends the X, Y integer coordinates as four digit ASCII strings.
-        /// Because THAT's efficient, 200 times a second.
+        /// Because THAT's efficient, 125 times a second.
         /// </summary>
         private void WriteIntAsStringToQueue(int i)
         {

@@ -56,16 +56,19 @@ namespace PERQemu.IO.Z80
         {
             _lastKeycode = key;
             _interruptActive = true;
+
+            Log.Detail(Category.Keyboard, "Queued key '{0}' (0x{1:x2})", (char)_lastKeycode, _lastKeycode);
         }
 
         public byte Read(byte portAddress)
         {
             if (!_interruptsEnabled)
             {
-                Log.Debug(Category.Keyboard,
-                          "Read while interrupts ignored (key {0} at dds {1}, {2} cycles)",
-                          _lastKeycode, PERQemu.Sys.CPU.DDS, PERQemu.Sys.IOB.Z80System.Clocks);
+                Log.Debug(Category.Keyboard, "Read while interrupts disabled (active={0}) at DDS {1}",
+                                             _interruptActive, PERQemu.Sys.CPU.DDS);
             }
+
+            Log.Detail(Category.Keyboard, "Read key '{0}' (0x{1:x2})", (char)_lastKeycode, _lastKeycode);
 
             _interruptActive = false;
             return _lastKeycode;
@@ -81,6 +84,6 @@ namespace PERQemu.IO.Z80
         private bool _interruptsEnabled;
         private bool _interruptActive;
 
-        private byte[] _ports = new byte[] { 0x80 };
+        private byte[] _ports = { 0x80 };
     }
 }

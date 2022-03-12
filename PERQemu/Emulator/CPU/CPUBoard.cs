@@ -137,6 +137,7 @@ namespace PERQemu.Processor
                 }
                 catch (Exception e)
                 {
+                    _stopAsyncThread = true;
                     _system.Halt(e);
                 }
             }
@@ -145,7 +146,7 @@ namespace PERQemu.Processor
             Log.Debug(Category.Controller, "[CPU thread stopped]");
             _heartbeat.Enable(false);
 
-            // Detach - fixme: this has to happen if we halt?!
+            // Detach
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
@@ -163,7 +164,7 @@ namespace PERQemu.Processor
             _stopAsyncThread = true;
             _heartbeat.Enable(false);
 
-            if (Thread.CurrentThread != _asyncThread)
+            if (!Thread.CurrentThread.Equals(_asyncThread))
             {
                 Log.Debug(Category.Controller, "[CPU thread join called...]");
                 // Waaaaait for it

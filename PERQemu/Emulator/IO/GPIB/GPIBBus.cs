@@ -75,7 +75,7 @@ namespace PERQemu.IO.GPIB
         {
             if (_devices.Contains(device))
             {
-                throw new InvalidOperationException("This component has already been added to the GPIB bus");
+                throw new InvalidOperationException("This device has already been added to the GPIB bus");
             }
 
             _devices.Add(device);
@@ -114,20 +114,20 @@ namespace PERQemu.IO.GPIB
 
             if (_deviceDispatch[_listenerId] == null)
             {
-                Log.Warn(Category.GPIB, "Bus write from {0} but no listener: {1} 0x{2:x2}",
-                         talkerId, flags, value);
+                Log.Warn(Category.GPIB, "Bus write ({0} 0x{1:x2}) from talker {2} but no listener",
+                                        flags, value, talkerId);
                 return;
             }
 
             if (talkerId != _talkerId)
             {
-                Log.Debug(Category.GPIB, "Spurious or old data ({0} 0x{1:x2}) from talker {1} ignored",
-                          flags, value, talkerId);
+                Log.Debug(Category.GPIB, "Spurious or old data ({0} 0x{1:x2}) from device {2} ignored",
+                                         flags, value, talkerId);
                 return;
             }
 
-            Log.Debug(Category.GPIB, "Write to device {0:x2} ({1:x2}) handled by {2}",
-                                     _listenerId, value, _deviceDispatch[_listenerId]);
+            Log.Debug(Category.GPIB, "Bus write ({0} 0x{1:x2}) from talker {2} to listener {3}",
+                                     flags, value, _talkerId, _listenerId);
 
             // Do the BusRead on the listener!  Should we send our talker id so
             // the listener knows where it came from?  Mayyyybe.  We can add that.

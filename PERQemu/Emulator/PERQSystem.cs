@@ -551,7 +551,10 @@ namespace PERQemu
         {
             if (PERQemu.Controller.BootChar != 0)
             {
-                Scheduler.Schedule(1 * Conversion.MsecToNsec, BootCharCallback);
+                Log.Info(Category.Emulator, "Selecting '{0}' boot...",
+                                            (char)PERQemu.Controller.BootChar);
+                var count = 16;
+                BootCharCallback(0, count);
             }
         }
 
@@ -566,17 +569,23 @@ namespace PERQemu
         /// restarting it, enabling the keyboard to read the boot character,
         /// then turning everything off again while it continues the bootstrap.
         /// The microcode waits up to 4.2M cycles (around .7 seconds) to get a
-        /// key from the keyboard before defaulting to 'a' boot.
+        /// key from the keyboard before defaulting to 'a' boot.  The startup
+        /// sequence always does at least one dummy read to clear the keyboard
+        /// register so we really only need to jam the key in there 2-3 times...
         /// </remarks>
         private void BootCharCallback(ulong skewNsec, object context)
         {
-            if (CPU.DDS < 151)
+            var count = (int)context - 1;
+
+            if (CPU.DDS < 152 && count > 0)
             {
                 // Send the key:
                 _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
 
                 // And do it again
-                Scheduler.Schedule(100 * Conversion.MsecToNsec, BootCharCallback);
+                Scheduler.Schedule(5 * Conversion.MsecToNsec, BootCharCallback, count);
+
+                Log.Detail(Category.Keyboard, "Pressing the bootchar again in 5msec, retry {0}", count);
             }
         }
 

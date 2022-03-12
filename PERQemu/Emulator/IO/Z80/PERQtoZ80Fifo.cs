@@ -59,6 +59,11 @@ namespace PERQemu.IO.Z80
         public byte[] Ports => _ports;
         public byte? ValueOnDataBus => 0x20;    // PRQVEC
 
+        public bool IsReady
+        {
+            get { lock (_lock) { return _valid; } }
+        }
+
         public bool IntLineIsActive
         {
             get { lock (_lock) { return (_interruptActive && _interruptsEnabled && _valid); } }
@@ -114,10 +119,15 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Reads a byte from the PERQ.  This should only be called in response
-        /// to an interrupt, and yet, the Z80 seems to just decide to call it
-        /// whenever it damn well pleases.
+        /// Reads a byte from the PERQ.  This is generally called in response to
+        /// an interrupt.  Returns 0x0 if the latch is empty.
         /// </summary>
+        /// <remarks>
+        /// The INIR instruction is used in the old v8.7 code  to read commands
+        /// from the PERQ.  It turns off the PERQ interrupts to loop through a
+        /// variable length multi-byte sequence and relies on the hardware to
+        /// assert WAIT_L on the Z80 until a new byte arrives.
+        /// </remarks>
         public byte Read(byte portAddress)
         {
             byte value = 0;
