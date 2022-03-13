@@ -159,11 +159,11 @@ namespace PERQemu.IO.Z80
                 _rxInterruptLatched = false;
                 _rxIntOnNextCharacter = false;
 
-                // Redundant: Attached devices will be reset by the Bus
-                //if (_device != null)
-                //{
-                //    _device.Reset();
-                //}
+                // Reset attached devices
+                if (_device != null)
+                {
+                    _device.Reset();
+                }
 
                 UpdateFlags();
 
@@ -185,7 +185,7 @@ namespace PERQemu.IO.Z80
                 if (_selectedRegister < 3)
                 {
                     byte value = _readRegs[_selectedRegister];
-                    Log.Debug(Category.SIO, "Channel {0} read {1:x} from register {2}",
+                    Log.Debug(Category.SIO, "Channel {0} read 0x{1:x2} from register {2}",
                                             _channelNumber, value, _selectedRegister);
                     return value;
                 }
@@ -207,21 +207,21 @@ namespace PERQemu.IO.Z80
                     UpdateFlags();
                 }
 
-                Log.Debug(Category.SIO, "Channel {0} data read: {1:x2}",
+                Log.Debug(Category.SIO, "Channel {0} data read: 0x{1:x2}",
                                         _channelNumber, data);
                 return data;
             }
 
             public void WriteData(byte value)
             {
-                Log.Debug(Category.SIO, "Channel {0} data write: {1:x2}",
+                Log.Debug(Category.SIO, "Channel {0} data write: 0x{1:x2}",
                                         _channelNumber, value);
-                // Nothing right now.
+                // Nothing right now
             }
 
             public void WriteRegister(byte value)
             {
-                Log.Debug(Category.SIO, "Channel {0} write {1:x2} to register {2}",
+                Log.Debug(Category.SIO, "Channel {0} write 0x{1:x2} to register {2}",
                                         _channelNumber, value, _selectedRegister);
 
                 _writeRegs[_selectedRegister] = value;
@@ -273,7 +273,7 @@ namespace PERQemu.IO.Z80
                             break;
 
                         case 4:
-                            
+                            // ?
                             break;
                     }
                     // Write to other register, next access is to reg 0

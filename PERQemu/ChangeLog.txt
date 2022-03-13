@@ -225,8 +225,7 @@ March, 2022:
     POS ignored the errant behavior but Accent got tripped up by it, evoking a
     mild flashback to The Great Comma Incident of 2018. <shudder>
 
-    Oh, but now the Kriz tablet doesn't work.  Digging into the SIO code to
-    figure out why.  It never ends.
+    The Kriz tablet works again too.  It wasn't being enabled.  Oops.
 
 
 ---

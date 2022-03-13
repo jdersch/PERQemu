@@ -158,10 +158,6 @@ namespace PERQemu.IO.GPIB
 
             if (_talking && !_system.Mouse.MouseOffTablet)
             {
-                // Log the Tablet update
-                Log.Debug(Category.Tablet, "BitPadOne sampled: x={0} y={1} button={2} ({3})",
-                          x, y, button, (char)_buttonMapping[button]);
-
                 // Send it!
                 WriteIntAsStringToQueue(x);
                 _txDelegate(DeviceID, _delimiter1, BusStatus.DAV);
@@ -169,6 +165,10 @@ namespace PERQemu.IO.GPIB
                 _txDelegate(DeviceID, _delimiter1, BusStatus.DAV);
                 _txDelegate(DeviceID, _buttonMapping[button], BusStatus.DAV);
                 _txDelegate(DeviceID, _delimiter2, BusStatus.DAV | BusStatus.EOI);
+
+                // Log the Tablet update
+                Log.Debug(Category.Tablet, "BitPadOne sampled: x={0} y={1} button={2} ({3})",
+                          x, y, button, (char)_buttonMapping[button]);
             }
 
             // Still the talker?  Then reschedule our next update (though the

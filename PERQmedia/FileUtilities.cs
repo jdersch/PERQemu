@@ -123,6 +123,6 @@ namespace PERQmedia
             }
         }
 
-        public static readonly string[] KnownExtensions = { ".prqm", ".phd", ".imd", ".pfd", ".raw" };
+        public static readonly string[] KnownExtensions = { ".prqm", ".phd", ".imd", ".IMD", ".pfd", ".raw" };
     }
 }
