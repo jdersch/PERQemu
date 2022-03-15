@@ -387,8 +387,9 @@ namespace PERQemu
                     }
 
                     // Write it, lazy & slow (_log is Synchronized)
-                    // But this is still wrong, results in corrupt log
-                    // entries, and someday I should fix it but right now it's enough to help debug the infinite number of other problems and I just am so fucking tired of this I could weep so throw it on the todo pile 
+                    // But this is still wrong, results in corrupt log entries,
+                    // and someday I should fix it but right now it's enough to
+                    // help with the debugging sigh.
                     _log.WriteLine("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}",
                                    DateTime.Now, me, output);
                 }
