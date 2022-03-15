@@ -19,9 +19,6 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Collections.Generic;
-
 namespace PERQmedia
 {
     /// <summary>
@@ -81,5 +78,8 @@ namespace PERQmedia
         public bool IsWritable;
         public bool IsBootable;
         public bool IsRemovable;
+
+        // Define a basic (empty) floppy drive
+        public static DeviceInfo SA851 = new DeviceInfo(DeviceType.Floppy, "SA851", "Shugart SA851 8\" Floppy drive", canRemove: true);
     }
 }

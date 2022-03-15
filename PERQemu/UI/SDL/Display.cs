@@ -319,7 +319,6 @@ namespace PERQemu.UI
             PERQemu.GUI.ReleaseDelegate(_renderEvent.type);
             PERQemu.GUI.ReleaseDelegate(_fpsUpdateEvent.type);
 
-
             // Clear the renderer
             if (_sdlRenderer != IntPtr.Zero)
             {

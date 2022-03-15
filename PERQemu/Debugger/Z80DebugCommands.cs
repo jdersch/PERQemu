@@ -69,6 +69,24 @@ namespace PERQemu
             PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
         }
 
+        // todo: bare bones right now - just display one byte.  expand this to
+        // allow ranges and output options (radix, ascii, etc?)
+        [Command("debug z80 show memory", "Display value at a given memory location")]
+        private void ShowZ80Memory(ushort addr)
+        {
+            try
+            {
+                byte value = PERQemu.Sys.IOB.Z80System.Memory[addr];
+                Console.WriteLine($"Address: 0x{addr:x4}  Value: 0x{value:x2}");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Couldn't read {addr}: {e.Message}");
+            }
+        }
+
+        // todo: rom disassembler, like the perq microcode disassembler?
+        // todo: i/o port reads - and writes!?
         // todo: interrogate memory, fifos, peripheral controllers & registers, etc.
     }
 }

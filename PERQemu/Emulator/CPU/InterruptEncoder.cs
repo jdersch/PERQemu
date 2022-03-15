@@ -56,7 +56,7 @@ namespace PERQemu.Processor
     }
 
     /// <summary>
-    /// InterruptEncoder manages the thread-safe raising and lowering of
+    /// InterruptEncoder manages the mostly thread-safe raising and lowering of
     /// interrupt flags by the peripheral controllers.
     /// </summary>
     /// <remarks>
@@ -67,7 +67,7 @@ namespace PERQemu.Processor
     /// methods, but a test with NO Interlocks also shows that just setting/
     /// clearing the array values seems to run without conflicts or threading
     /// issues (since generally the only code that raises an interrupt also
-    /// clears it).  But it seems to be just as fast WITH the interlocks, so...
+    /// clears it, on the same thread).
     /// </remarks>
     public class InterruptEncoder
     {
@@ -93,16 +93,8 @@ namespace PERQemu.Processor
 
         /// <summary>
         /// Returns the integer vector of the highest priority interrupt
-        /// currently signalled.
+        /// currently signaled.
         /// </summary>
-        /// <remarks>
-        /// Tests show it's safe to avoid Interlocked.Read() on all these
-        /// since the only possible ill effect is if Z80DataIn/Out changes,
-        /// but the protocol itself should cope just fine (the state machine
-        /// can wait a blown cycle *or* deal with a read from an empty FIFO).
-        /// I'm probably just handwaving away potential thread-safety issues
-        /// but feh, if something blows up we can revisit it.  La la la la la...
-        /// </remarks>
         public int Priority
         {
             get

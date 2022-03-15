@@ -142,12 +142,8 @@ namespace PERQmedia
                 }
 
                 // Assuming a floppy image of SOME kind, assign reasonable defaults
+                dev.Info = DeviceInfo.SA851;
                 dev.Specs = DevicePerformance.SA851;
-
-                dev.Info.Type = DeviceType.Floppy;
-                dev.Info.Name = "Floppy";
-                dev.Info.Description = "8\" floppy diskette";
-                dev.Info.IsRemovable = true;
 
                 dev.FileInfo.Format = Formatters.RawFormat;
 

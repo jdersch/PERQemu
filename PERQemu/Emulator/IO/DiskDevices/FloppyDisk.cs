@@ -34,6 +34,13 @@ namespace PERQemu.IO.DiskDevices
         {
             _scheduler = sched;
 
+            // If instantiated without a diskette loaded!
+            if (string.IsNullOrEmpty(filename))
+            {
+                Info = DeviceInfo.SA851;
+                Geometry = DeviceGeometry.NoMedia;
+            }
+
             _ready = false;
             _fault = false;
             _diskChange = false;
@@ -71,7 +78,12 @@ namespace PERQemu.IO.DiskDevices
         public bool Track0 => (_cylinder == 0);
         public bool IsSingleSided => _isSingleSided;
         public bool IsDoubleDensity => _isDoubleDensity;
-        public bool DiskChange => _diskChange;
+
+        public bool DiskChange
+        {
+            get { return _diskChange; }
+            set { _diskChange = value; }
+        }
 
         public bool DriveSelect
         {
@@ -127,6 +139,7 @@ namespace PERQemu.IO.DiskDevices
 
             // Make sure we don't fly off the end
             _cylinder = Math.Min(track, Geometry.Cylinders);
+
             Log.Debug(Category.FloppyDisk, "Drive seek to cyl {0} in {1}ms", _cylinder, delay);
         }
 
@@ -173,6 +186,7 @@ namespace PERQemu.IO.DiskDevices
         {
             _ready = false;
             _fault = false;
+            _driveSelect = false;
             _diskChange = true;
             _isSingleSided = (Geometry.Heads == 1);
             _isDoubleDensity = (Geometry.SectorSize == 256);
@@ -185,9 +199,11 @@ namespace PERQemu.IO.DiskDevices
 
             _loadDelayEvent = _scheduler.Schedule((ulong)startup * Conversion.MsecToNsec, (skewNsec, context) =>
             {
-                Log.Info(Category.FloppyDisk, "{0} online: {1}", Info.Description, Geometry);
                 _loadDelayEvent = null;
+                _cylinder = 1;
+                _head = 0;
                 _ready = true;
+                Log.Info(Category.FloppyDisk, "{0} online: {1}", Info.Description, Geometry);
             });
 
             base.OnLoad();
@@ -199,13 +215,17 @@ namespace PERQemu.IO.DiskDevices
 
             // DiskChange will signal the FDC at the next Poll that the floppy
             // was ejected.  On the cable interface most of the drive signals
-            // are pulled up, so we set some relevant ones here accordingly.
+            // are pulled up, so we set some relevant ones here accordingly
             _ready = false;
+            _fault = false;
+            _driveSelect = false;
             _diskChange = true;
             _isSingleSided = true;
             _isDoubleDensity = false;
-            _cylinder = 1;
-            _head = 0;
+
+            // Reset to show unloaded status
+            Info = DeviceInfo.SA851;
+            Geometry = DeviceGeometry.NoMedia;
 
             base.Unload();
         }

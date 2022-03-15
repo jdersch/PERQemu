@@ -60,11 +60,7 @@ namespace PERQmedia
                 // Fill in some gaps
                 dev.FileInfo.Format = Formatters.IMDFormat;
 
-                dev.Info.Type = DeviceType.Floppy;
-                dev.Info.Name = "Floppy";
-                dev.Info.Description = "8\" floppy diskette";
-                dev.Info.IsRemovable = true;
-
+                dev.Info = DeviceInfo.SA851;
                 dev.Specs = DevicePerformance.SA851;
 
                 // We'll set the Geometry after reading the data portion.
