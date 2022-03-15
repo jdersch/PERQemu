@@ -18,8 +18,6 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
 
 namespace PERQemu.IO.GPIB
 {
@@ -40,18 +38,7 @@ namespace PERQemu.IO.GPIB
         // The PERQ expects the factory default device address of 010 (octal)
         public byte DeviceID => 8;
 
-        //
-        // The Summagraphics factory default is continuous streaming at 125
-        // samples/sec (max GPIB rate), but the ICL T2 Service Guide suggests
-        // that ICL/3RCC set it to 40 samples/sec.  POS, and likely the other
-        // OSes, will ignore a few samples every time the puck or stylus is
-        // returned to the surface.  POS queues the tablet updates in a FIFO
-        // and averages several samples to reduce jitter; the effective rate
-        // is thus reduced a bit from the BitPad's hardware setting.  In any
-        // case, we are free to choose a sample rate that balances overhead
-        // with responsiveness (not limited to the table of available values
-        // in the manual).
-        //
+        // Number of updates per second
         public const int SampleRate = 40;
 
         public void BusReset()
@@ -82,8 +69,7 @@ namespace PERQemu.IO.GPIB
 
         /// <summary>
         /// If the controller selects our address as the talker, enable sending
-        /// tablet updates and start sampling the mouse.  Otherwise, don't send
-        /// any response to Poll()s.
+        /// tablet updates and start sampling the mouse.
         /// </summary>
         public void SetTalker(byte address)
         {
@@ -118,39 +104,13 @@ namespace PERQemu.IO.GPIB
         /// </summary>
         private void SendData(ulong skewNsec, object context)
         {
-            //
-            // From the BitPadOne documentation and from perusing the iogpib.pas
-            // the data sent back to the PERQ looks like:
-            //
-            //      X X X X D1 Y Y Y Y D1 F D2
-            //
-            // Where XXXX/YYYY are X,Y coordinates in plain ASCII, ranging from
-            // 0000-2200; D1 is configured to be "," (a *$!%#! COMMA) and D2 is
-            // a Linefeed (12 octal).  (This is "HPIB Format" in the BP1 manual,
-            // which clearly and INCORRECTLY shows D1 as a single quote mark.)
-            // The origin is defined as the lower left, so for the PERQ we flip
-            // the Y coordinate.
-            //
-            // The delimiters and the range (switching between US/Metric) can be
-            // configured on the BitPad itself, but the PERQ software requires
-            // that D2 is LF (D1 can be any non-numeric character for POS, but
-            // Accent expects a COMMA), and the US/Metric switch would obviously
-            // only affect the positioning of the cursor. This could be made
-            // configurable by the user but I don't see much use.
-            //
-            // The PERQ expects a steady stream of updates from the BitPad when
-            // the puck/stylus is on the tablet, even if the mouse hasn't moved. 
-            // Note also that unlike the Kriz tablet, the BitPadOne does not
-            // report "puck off tablet" status, but it does stop transmitting
-            // in that case; POS G (at least) has code to detect that.
-            // 
-            // Calculate X and Y positions.  The offsets tacked onto the coords
-            // are based on the "kluge" factors from POS (and Accent) sources.
-            //
+            // Please see the Notes below for tablet data format details!
+
             int x = 0;
             int y = 0;
             byte button = 0;
 
+            // Calculate X and Y positions based on the "fudge factors" below:
             x = (_system.Mouse.MouseX + 38) * 2;
             y = (_system.VideoController.DisplayHeight - _system.Mouse.MouseY + 39) * 2;
 
@@ -213,3 +173,55 @@ namespace PERQemu.IO.GPIB
         private PERQSystem _system;
     }
 }
+
+/*
+
+    Notes:
+
+    The Summagraphics factory default is continuous streaming at 125 samples/sec
+    (max GPIB rate), but the ICL T2 Service Guide suggests that ICL/3RCC set it
+    to 40 samples/sec.  POS, and likely the other OSes, ignores a few samples
+    every time the puck or stylus is returned to the surface.  POS queues the
+    tablet updates in a FIFO and averages several samples to reduce jitter; the
+    effective rate is thus reduced a bit from the BitPad's hardware setting.
+    For emulation purposes we are free to choose a sample rate that balances
+    overhead with responsiveness (not limited to the table of available values
+    in the manual).
+
+
+    From the BitPadOne documentation and from perusing the iogpib.pas the data
+    sent back to the PERQ looks like:
+
+      X X X X D1 Y Y Y Y D1 F D2
+
+    Where XXXX/YYYY are X,Y coordinates in plain ASCII, ranging from 0000-2200;
+    D1 is configured to be "," (a *$!%#! COMMA) and D2 is a Linefeed (12 octal).
+    (This is "HPIB Format" in the BP1 manual, which clearly and INCORRECTLY
+    shows D1 as a single quote mark.)  The origin is defined as the lower left,
+    so for the PERQ we flip the Y coordinate.
+
+    The delimiters and the range (switching between US/Metric) can be configured
+    on the BitPad itself, but the PERQ software requires that D2 is LF (D1 can
+    be any non-numeric character for POS, but Accent expects a COMMA), and the
+    US/Metric switch would obviously only affect the positioning of the cursor.
+    This could be made configurable by the user but I don't see much use.
+
+    The PERQ expects a steady stream of updates from the BitPad when the puck
+    or stylus is on the tablet, even if the mouse hasn't moved.  Note also that
+    unlike the Kriz tablet, the BitPadOne does not report "puck off tablet"
+    status, but it does stop transmitting in that case; POS G (at least) has
+    code to detect that.
+
+
+    { Fudge factors for BitPad. }
+    GPIBxFudge = 38;        { actual range in X and Y for BitPad: 0..2200 }
+    GPIByFudge = 1061;      { of TX and TY: 0..1100 }
+                            { of TabAbsX: 0..1100 }
+                            { of TabAbsY: 0..1100 }
+                            { of TabRelX: -38..1062   limited to 0..767 }
+                            { of TabRelY: 1061..-39   limited to 1023..0 }
+
+    With the introduction of the Landscape display, the driver modifies the
+    width scaling accordingly.
+    
+*/

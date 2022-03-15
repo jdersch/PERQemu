@@ -193,7 +193,6 @@
     <Compile Include="Emulator\IO\Z80\ISIODevice.cs" />
     <Compile Include="Emulator\IO\Z80\IZ80Device.cs" />
     <Compile Include="Emulator\IO\Z80\Keyboard.cs" />
-    <Compile Include="Emulator\IO\Z80\KrizTablet.cs" />
     <Compile Include="Emulator\IO\Z80\NECuPD765A.cs" />
     <Compile Include="Emulator\IO\Z80\Z80toPERQFifo.cs" />
     <Compile Include="Emulator\IO\Z80\TMS9914A.cs" />
@@ -222,6 +221,9 @@
     <Compile Include="UI\SDL\EventLoop.cs" />
     <Compile Include="UI\SDL\InputDevices.cs" />
     <Compile Include="Emulator\IO\Z80\PERQtoZ80Fifo.cs" />
+    <Compile Include="Emulator\IO\SerialDevices\KrizTablet.cs" />
+    <Compile Include="Emulator\IO\SerialDevices\SerialKeyboard.cs" />
+    <Compile Include="Emulator\IO\SerialDevices\Speech.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

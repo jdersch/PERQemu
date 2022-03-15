@@ -19,13 +19,17 @@
 
 using System;
 
-namespace PERQemu.IO.Z80
+using PERQemu.IO.Z80;
+
+namespace PERQemu.IO.SerialDevices
 {
     /// <summary>
-    /// Implements the Kriz tablet.
+    /// Implements the Kriz tablet.  This is a custom electromagnetic ranging
+    /// tablet designed and patented by PERQ engineer J. Stanley Kriz, used
+    /// primarily on the PERQ-2 line of workstations.  Comes in both portrait
+    /// and landscape orientations to match the selected display.  Interfaces
+    /// with the Z80 via a serial port.
     /// </summary>
-    // todo: This should be moved to a common peripherals directory/namespace
-    // once the final organization of IOB-related goods is determined.
     public class KrizTablet : ISIODevice
     {
         public KrizTablet(Scheduler scheduler, PERQSystem system)
@@ -37,8 +41,8 @@ namespace PERQemu.IO.Z80
 
         public void Reset()
         {
-            // Schedule the first Kriz data event, which runs once every 1/60th
-            // of a second, forever.  But don't re-register it again and again...
+            // Schedule the first data event, which runs once every 1/60th of
+            // a second, forever.  But don't re-register it again and again...
             if (_sendEvent != null)
             {
                 _scheduler.Cancel(_sendEvent);
@@ -55,19 +59,19 @@ namespace PERQemu.IO.Z80
 
         public void TransmitAbort()
         {
-            // Should never happen.
+            // Should never happen
             throw new NotImplementedException();
         }
 
         public void TransmitBreak()
         {
-            // Should never happen.
+            // Should never happen
             throw new NotImplementedException();
         }
 
         public void Transmit(byte value)
         {
-            // Should never receive data.
+            // Should never receive data
             throw new NotImplementedException();
         }
 
@@ -75,10 +79,10 @@ namespace PERQemu.IO.Z80
         {
             // See the Notes below for message format details!
 
-            // Calc Y and X positions, coordinate translation based on tweaking
-            // so the host screen coordinates line up with the PERQ's.  Note that
-            // SDL neatly clips to the screen dimensions for us, so there's no
-            // need to adjust for display width!
+            // Calc Y and X positions.  SDL provides absolute mouse positions
+            // clipped to the PERQ screen dimensions for us, so there's no need
+            // to adjust for display width.  Apply the X/Y "kluge" values based
+            // on the POS tablet driver's expectations (see below)
             int tabX = _system.Mouse.MouseX + 64;
             int tabY = _system.VideoController.DisplayHeight - _system.Mouse.MouseY + 64;
 
@@ -116,6 +120,8 @@ namespace PERQemu.IO.Z80
 }
 
 /*
+    Notes:
+ 
     The Kriz tablets send updates every 1/60th of a second to the Z80 on
     serial port SIO B.  The message format is:
         <sync><data0>..<data4><pad0><pad1>
@@ -152,7 +158,17 @@ namespace PERQemu.IO.Z80
     
         ; Note: Tablet data is active low.
 
-    This is useful information as it turns out.
+    This is useful information as it turns out, as are the "fudge factors" for
+    applying cursor offsets (io_private.pas):
+
+    { Fudge factors for Kriz Tablet. }
+    KrizXfudge = 64;        { actual range of X is 0..895 }
+    KrizYfudge = 1087;      { actual range of Y is 0..1151 }
+                            { of TX, TabAbsX: 0..895  }
+                            { of TX, TabAbsY: 0..1151 }
+                            { of TabRelX: -64..831    limited to 0..767 }
+                            { of TabRelY: 1087..-64   limited to 1023..0 }
+
 
     Note that the only way for the tablet itself to "know" if it's been enabled
     or disabled is to peek at the SIO's receiver status.  The hardware obviously
