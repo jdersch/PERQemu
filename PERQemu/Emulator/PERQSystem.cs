@@ -20,6 +20,7 @@
 using System;
 using System.Collections.Generic;
 
+using SDL2;
 using PERQmedia;
 
 using PERQemu.Config;
@@ -202,12 +203,10 @@ namespace PERQemu
                     break;
 
                 case RunState.SingleStep:
-                case RunState.RunZ80Inst:
-                    // For now:   Run the IOB for one Z80 instruction, then
-                    // run the PERQ CPU for one instruction.  Timing-wise
-                    // this is very inaccurate.  It would be nice to allow
-                    // single-stepping either processor and have the timings
-                    // be more correct.
+                    //
+                    // Run a single microinstruction.  Due to the discrepancy in
+                    // execution rates, the Z80 may or may not execute an opcode!
+                    //
                     RunGuarded(() =>
                         {
                             _cpu.Run();
@@ -217,8 +216,10 @@ namespace PERQemu
                     break;
 
                 case RunState.RunInst:
-                    // Run a single QCode.  As above, except we execute
-                    // PERQ CPU instructions until the start of the next QCode.
+                    //
+                    // Run a single QCode.  As above, except we execute PERQ
+                    // microinstructions until the start of the next QCode.
+                    //
                     RunGuarded(() =>
                         {
                             do
@@ -227,6 +228,26 @@ namespace PERQemu
                                 _iob.Run();
                             }
                             while (!CPU.IncrementBPC);
+
+                            _state = RunState.Paused;
+                        });
+                    break;
+
+                case RunState.RunZ80Inst:
+                    //
+                    // The Z80 won't execute if it has leapfrogged the main CPU;
+                    // single step the PERQ until the main system clock catches
+                    // up and the Z80 runs its next opcode.
+                    //
+                    RunGuarded(() =>
+                        {
+                            var startTime = _iob.Z80System.Clocks;
+                            do
+                            {
+                                _cpu.Run();
+                                _iob.Run();
+                            }
+                            while (_iob.Z80System.Clocks == startTime);
 
                             _state = RunState.Paused;
                         });
@@ -417,16 +438,16 @@ namespace PERQemu
                     return _volumes[drive.Unit].IsLoaded;
 
                 case DeviceType.Floppy:
+                    // Add the drive?
                     if (_volumes[drive.Unit] == null)
                     {
-                        // Add the drive (with or without media)
                         _volumes[drive.Unit] = _iob.LoadDisk(drive);
 
                         // Okay if there was no media
                         return _volumes[drive.Unit] != null;
                     }
 
-                    // Place a new diskette in the drive!  Since we're
+                    // Place a new diskette in the existing drive!  Since we're
                     // reloading, assume the pathname changed
                     _volumes[drive.Unit].LoadFrom(drive.MediaPath);
 
@@ -444,14 +465,24 @@ namespace PERQemu
             }
         }
 
-
         /// <summary>
-        /// Unload a device and remove it from the Volumes list.
+        /// Unload a device and remove it from the Volumes list.  If modified
+        /// and not saved, gives the user a chance to save first (depending on
+        /// autosave Settings).
         /// </summary>
         public void UnloadMedia(int unit)
         {
             if (_volumes[unit] == null)
                 throw new InvalidOperationException($"Drive {unit} is not loaded");
+
+            // We get ONE shot at this...
+            if (_volumes[unit].IsModified && SaveRequested(unit))
+            {
+                if (SaveMedia(unit))
+                {
+                    Console.WriteLine($"Drive {unit} saved.");
+                }
+            }
 
             // Tell the device to unload
             _volumes[unit].Unload();
@@ -462,7 +493,6 @@ namespace PERQemu
                 _volumes[unit] = null;
             }
         }
-
 
         /// <summary>
         /// Report the status of loaded storage devices.  Basic info for now.
@@ -475,19 +505,28 @@ namespace PERQemu
 
                 if (dev != null)
                 {
-                    Console.Write($"Drive {unit} ({dev.Info.Type}) is online");
-                    if (dev.IsLoaded) Console.Write($", is loaded ({dev.Filename})");
-                    if (dev.IsModified) Console.Write(", is modified");
-                    if (dev.Info.IsWritable) Console.Write(", is writable");
+                    Console.Write($"Drive {unit} ({dev.Info.Type}) is online, ");
+                    if (dev.Info.IsRemovable) Console.Write("removable, ");
+
+                    if (dev.IsLoaded)
+                    {
+                        Console.Write($"loaded ({dev.Filename})");
+                        if (dev.Info.IsBootable) Console.Write(", bootable");
+                        if (dev.Info.IsWritable) Console.Write(", writable");
+                        if (dev.IsModified) Console.Write(", modified");
+                    }
+                    else
+                    {
+                        Console.Write("no media loaded");
+                    }
                     Console.WriteLine();
                 }
             }
         }
 
         /// <summary>
-        /// Tells all the loaded storage devices to save themselves, depending
-        /// on user preferences.  Called at shutdown, saves each device to its
-        /// original format and filename.
+        /// Called at shutdown, tells all the loaded storage devices to unload
+        /// themselves.
         /// </summary>
         public void SaveAllMedia()
         {
@@ -495,7 +534,7 @@ namespace PERQemu
             {
                 if (_volumes[unit] != null)
                 {
-                    SaveMedia(unit);
+                    UnloadMedia(unit);
                 }
             }
         }
@@ -540,6 +579,95 @@ namespace PERQemu
 
             // A successful save clears the Modified flag
             return !_volumes[unit].IsModified;
+        }
+
+
+        /// <summary>
+        /// Painstakingly assemble an SDL2 MessageBoxData structure one bloody
+        /// manual step at a time.  Because why even bother with constructors
+        /// when this is so much more fun?  <jams_dull_spoon_into_brain>
+        /// </summary>
+        private SDL.SDL_MessageBoxData MakeMessageBox(StorageDevice dev, int unit)
+        {
+            var yesBtn = new SDL.SDL_MessageBoxButtonData();
+            yesBtn.buttonid = 0;
+            yesBtn.text = "Yep!";
+            yesBtn.flags = SDL.SDL_MessageBoxButtonFlags.SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
+
+            var noBtn = new SDL.SDL_MessageBoxButtonData();
+            noBtn.buttonid = 1;
+            noBtn.text = "Nope";
+            noBtn.flags = SDL.SDL_MessageBoxButtonFlags.SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
+
+            var mbData = new SDL.SDL_MessageBoxData();
+            mbData.flags = SDL.SDL_MessageBoxFlags.SDL_MESSAGEBOX_INFORMATION;
+            mbData.title = "Save modified media";
+            mbData.message = $"Drive {unit} ({dev.Info.Type}) is modified.\n" +
+                             $"Save the file '{dev.Filename}' before unloading?";
+
+            mbData.numbuttons = 2;
+            mbData.buttons = new SDL.SDL_MessageBoxButtonData[] { yesBtn, noBtn };
+
+            mbData.colorScheme = null;                  // Use default colors
+            mbData.window = PERQemu.GUI.DisplayWindow;  // Set parent window
+
+            return mbData;
+        }
+
+        /// <summary>
+        /// For a modified device, consults the user's preferences to determine
+        /// if it should be saved or not.  For Yes or No does the obvious thing;
+        /// for Maybe it pops up a dialog and lets the user decide.
+        /// </summary>
+        private bool SaveRequested(int unit)
+        {
+            var dev = _volumes[unit];
+            bool doit = false;
+
+            switch (dev.Info.Type)
+            {
+                case DeviceType.Floppy:
+                    if (Settings.SaveFloppyOnEject == Ask.Maybe)
+                    {
+                        int btn = 0;
+                        var mbData = MakeMessageBox(dev, unit);
+                        var ret = SDL.SDL_ShowMessageBox(ref mbData, out btn);
+
+                        // Assume a failure to mean don't save...
+                        doit = (ret == 0 && btn == 0);
+                    }
+                    else
+                    {
+                        doit = (Settings.SaveFloppyOnEject == Ask.Yes);
+                    }
+                    return doit;
+
+                case DeviceType.Disk14Inch:
+                case DeviceType.Disk8Inch:
+                case DeviceType.Disk5Inch:
+                case DeviceType.DiskSMD:
+                    if (Settings.SaveDiskOnShutdown == Ask.Maybe)
+                    {
+                        int btn = 0;
+                        var mbData = MakeMessageBox(dev, unit);
+                        var ret = SDL.SDL_ShowMessageBox(ref mbData, out btn);
+
+                        doit = (ret == 0 && btn == 0);
+                    }
+                    else
+                    {
+                        doit = (Settings.SaveDiskOnShutdown == Ask.Yes);
+                    }
+                    return doit;
+
+                case DeviceType.TapeQIC:
+                case DeviceType.Tape9Track:
+                    // Not supported yet
+                    return false;
+
+                default:
+                    throw new InvalidConfigurationException($"Device type {dev} is not supported, cannot save");
+            }
         }
 
         /// <summary>

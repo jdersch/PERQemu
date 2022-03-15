@@ -54,6 +54,7 @@ namespace PERQemu.Config
         public void Initialize()
         {
             // Set up our built-in device data
+            AddGeometry("NoMedia", DeviceGeometry.NoMedia);
             AddGeometry("SSSD", DeviceGeometry.SSSD);
             AddGeometry("DSSD", DeviceGeometry.DSSD);
             AddGeometry("SSDD", DeviceGeometry.SSDD);
@@ -821,6 +822,12 @@ namespace PERQemu.Config
                                 break;
                         }
                         break;
+                }
+
+                if (keepMedia && !AssignMediaTo(unit, conf.Drives[unit].MediaPath))
+                {
+                    Console.WriteLine($"--> media file for unit {unit} wrong type");
+                    keepMedia = false;
                 }
 
                 if (!keepMedia)

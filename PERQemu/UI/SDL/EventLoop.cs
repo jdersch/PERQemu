@@ -34,11 +34,14 @@ namespace PERQemu.UI
         public EventLoop()
         {
             _sdlRunning = false;
+            _displayWindow = IntPtr.Zero;
             _timerHandle = -1;
             _uiEventDispatch = new Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate>();
         }
 
         public delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
+
+        public IntPtr DisplayWindow => _displayWindow;
 
         /// <summary>
         /// Initialize the SDL2 library.  Must be called from the main thread.
@@ -135,19 +138,17 @@ namespace PERQemu.UI
             if (_uiEventDispatch.ContainsKey(e))
                 throw new InvalidOperationException($"Delegate already registered for event type {e}");
 
+            _uiEventDispatch.Add(e, d);
             Log.Detail(Category.UI, "Attached delegate for SDL event type {0}", e);
-            _uiEventDispatch[e] = d;
         }
-
 
         /// <summary>
         /// Release a delegate for an SDL event.
         /// </summary>
         public void ReleaseDelegate(SDL.SDL_EventType e)
         {
-            if (_uiEventDispatch.ContainsKey(e))
+            if (_uiEventDispatch.Remove(e))
             {
-                _uiEventDispatch[e] = null;
                 Log.Detail(Category.UI, "Released delegate for SDL event type {0}", e);
             }
         }
@@ -213,7 +214,7 @@ namespace PERQemu.UI
                         UnhideOrRestore();
                         return;
 
-                    // also: max/minimize for someday laying out a fulllscreen mode?
+                    // also: max/minimize for someday laying out a fullscreen mode?
 
                     default:
                         Log.Detail(Category.UI, "Unhandled window event {0}", winEvent);

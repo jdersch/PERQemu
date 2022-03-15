@@ -130,7 +130,7 @@ namespace PERQemu
         /// </summary>
         public void PowerOn()
         {
-            Console.WriteLine("Power ON requested.");
+            Console.WriteLine("Power on requested.");
 
             if (!PERQemu.Config.Current.IsValid)
             {
@@ -147,24 +147,23 @@ namespace PERQemu
                 _system = null;
             }
 
-                // In with the new?
-                if (!Initialize(PERQemu.Config.Current))
-                {
-                    Console.WriteLine("System initialization failed.");
-                    // No worky Perqy
-                    _system = null;
-                    return;
-                }
+            // In with the new?
+            if (!Initialize(PERQemu.Config.Current))
+            {
+                Console.WriteLine("System initialization failed.");
+                // No worky Perqy
+                _system = null;
+                return;
+            }
 
-                // Load the configured storage devices
-                if (!_system.LoadAllMedia())
-                {
-                    Console.WriteLine("Storage initialization failed.");
-                    // Give an opportunity to try again
-                    Halt();
-                    return;
-                }
-
+            // Load the configured storage devices
+            if (!_system.LoadAllMedia())
+            {
+                Console.WriteLine("Storage initialization failed.");
+                // Give an opportunity to try again
+                Halt();
+                return;
+            }
 
             // (Re-)Start the machine
             SetState(RunState.WarmingUp);
@@ -225,7 +224,7 @@ namespace PERQemu
         {
             if (State <= RunState.Off) return;
 
-            Console.WriteLine("Power OFF requested on {0}.", Thread.CurrentThread.ManagedThreadId);
+            Console.WriteLine("Power off requested.");
 
             // Force the machine to pause if in any other state
             Break();

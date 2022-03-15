@@ -43,7 +43,7 @@ namespace PERQemu.IO
             // constructor, setting up ports and other goodies
         }
 
-        public IOBoard(PERQSystem system)
+        protected IOBoard(PERQSystem system)
         {
             _sys = system;
         }

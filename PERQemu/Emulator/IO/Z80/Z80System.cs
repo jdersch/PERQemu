@@ -111,6 +111,7 @@ namespace PERQemu.IO.Z80
         public ulong Clocks => _cpu.TStatesElapsedSinceReset;
 
         public Z80Processor CPU => _cpu;
+        public Z80MemoryBus Memory => _memory;
         public Scheduler Scheduler => _scheduler;
         public Keyboard Keyboard => _keyboard;
 

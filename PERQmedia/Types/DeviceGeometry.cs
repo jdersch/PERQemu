@@ -71,6 +71,11 @@ namespace PERQmedia
         public int TotalBytes => TotalBlocks * (SectorSize + HeaderSize + Sector.SECTOR_OVERHEAD);
 
         //
+        // To support drives with removable media, define an "empty" geometry
+        //
+        public static DeviceGeometry NoMedia = new DeviceGeometry(0, 1, 0, 0);
+
+        //
         // As the PERQ only officially supported 8" floppies, we can pre-define
         // the standard floppy geometries 3RCC used.  (Note that SS/DD was not
         // really a thing but I don't see anything in the Floppy program that

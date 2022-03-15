@@ -59,14 +59,14 @@ namespace PERQemu.IO.Z80
                 if (_devices[d].IntLineIsActive)
                 {
                     if (!_status[d])
-                        Log.Write(Category.Z80IRQ, "Device {0} raised, vector is {1:x2}",
+                        Log.Debug(Category.Z80IRQ, "Device {0} raised, vector is {1:x2}",
                                   _devices[d].Name, _devices[d].ValueOnDataBus);
                     _status[d] = true;
                 }
                 else
                 {
                     if (_status[d])
-                        Log.Write(Category.Z80IRQ, "Device {0} cleared", _devices[d].Name);
+                        Log.Debug(Category.Z80IRQ, "Device {0} cleared", _devices[d].Name);
                     _status[d] = false;
                 }
             }

@@ -227,6 +227,20 @@ March, 2022:
 
     The Kriz tablet works again too.  It wasn't being enabled.  Oops.
 
+    6. Debugging continues.  There are a number of annoyances and corner cases
+    that will require more digging; the intractable POS Floppy "misfeature" is
+    unsolved.  For now, don't attempt to access the floppy if there's no media
+    in the drive or it will hang until you load a file.  Setting the FDC status
+    bits that lets the Pascal code avoid these hangs confuses the Z80, but NOT
+    setting the bits lets the Z80 execute without complaint but screws up the
+    OS and higher layers.  I am throwing my hands up on this one after days of
+    fruitless struggle to move on to other things.
+
+    So while the emulator seems stable again, the execution controls are a
+    flimsy wreck and performance is steadily getting WORSE (so my quest to
+    actually invert the flow of time is proceeding apace!).  Typical frame
+    rates are now around 21-22fps.  What can I say?  It's a talent.
+    
 
 ---
-Last update: skeezics    Fri Mar 11 17:44:01 PST 2022
+Last update: skeezics    Mon Mar 14 23:34:37 PDT 2022

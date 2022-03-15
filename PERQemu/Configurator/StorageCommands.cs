@@ -64,8 +64,13 @@ namespace PERQemu.UI
         [Command("storage status", "Show status of loaded storage devices")]
         private void StorageStatus()
         {
-            if (PERQemu.Controller.State != RunState.Unavailable)
-                PERQemu.Sys.CheckMedia();
+            if (PERQemu.Controller.State == RunState.Unavailable)
+            {
+                Console.WriteLine("The PERQ is powered off.");
+                return;
+            }
+
+            PERQemu.Sys.CheckMedia();
         }
 
         //
@@ -151,8 +156,14 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("unload harddisk", "Unload a hard disk")]
-        private void UnloadHardDisk(int unit = 1)
+        [Command("unload harddisk", "Unload the primary hard disk [unit 1]")]
+        private void UnloadHardDisk()
+        {
+            UnloadHardDisk(1);
+        }
+
+        [Command("unload harddisk", "Unload a hard disk [unit #]")]
+        private void UnloadHardDisk(int unit)   // "int unit = 1" here doesn't work
         {
             if (!OKtoLoad()) return;
 
@@ -166,7 +177,7 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("save harddisk", "Save the hard disk with a new name")]
+        [Command("save harddisk", "Save the hard disk")]
         private void SaveHardDisk()
         {
             SaveHardDiskAs("");     // Yeah, silly.
@@ -185,59 +196,6 @@ namespace PERQemu.UI
             }
         }
 
-        /// <summary>
-        /// For a modified device, consults the user's preferences to determine
-        /// if it should be saved or not.  Currently only Yes or No; the Ask mode
-        /// requires changes the CLI and GUI to interactively prompt for and
-        /// gather a response.
-        /// </summary>
-        /// <remarks>
-        /// It is worth investigating the SDL built-in Dialog function to see if
-        /// even a simple Yes/No box can be popped up without writing a ton of
-        /// gritty low-level code.
-        /// 
-        /// Also, a possibly clever hack for the CLI might be to have a special
-        /// command tree with just Yes/No nodes so that the editor could be used
-        /// without modification -- literally just SetPrefix(yesOrNode) :-) and
-        /// then let the editor do its thing.  Of course, getting the callback
-        /// with the result could be, uh, fun...  oh yeah.  There's that.  Hmm.
-        /// </remarks>
-        private bool SaveRequested(DeviceType dev)
-        {
-            switch (dev)
-            {
-                case DeviceType.Floppy:
-                    if (Settings.SaveFloppyOnEject == Ask.Maybe)
-                    {
-                        Console.WriteLine("If you have to ask, you can't afford it.");
-                        // someday we'll actually be able to do this interactively
-                        // pause if running
-                        //      gui: dialog box (with save as options)
-                        //      cli: "modal" command prompt
-                        // resume if was running
-                    }
-                    return (Settings.SaveFloppyOnEject == Ask.Yes);
-
-                case DeviceType.Disk14Inch:
-                case DeviceType.Disk8Inch:
-                case DeviceType.Disk5Inch:
-                case DeviceType.DiskSMD:
-                    if (Settings.SaveDiskOnShutdown == Ask.Maybe)
-                    {
-                        // same deal
-                        Console.WriteLine("Save, or save not: there is no try.");
-                    }
-                    return (Settings.SaveDiskOnShutdown == Ask.Yes);
-
-                case DeviceType.TapeQIC:
-                case DeviceType.Tape9Track:
-                    // Not supported yet
-                    return false;
-
-                default:
-                    throw new InvalidConfigurationException($"Device type {dev} is not supported, cannot save");
-            }
-        }
 
         //
         // Common Routines
@@ -261,6 +219,21 @@ namespace PERQemu.UI
         /// </remarks>
         private bool LoadInternal(int unit, string filename)
         {
+            // If the machine is defined, see if the drive is loaded
+            if (PERQemu.Controller.State > RunState.Unavailable && PERQemu.Sys.Volumes[unit].IsLoaded)
+            {
+                // Is the drive modified?
+                if (PERQemu.Sys.Volumes[unit].IsModified)
+                {
+                    // Grumble about it.  Could let Unload prompt them to save...
+                    Console.WriteLine($"Drive {unit} is modified; please save/unload first.");
+                    return false;
+                }
+
+                // Nope! Do the implicit unload, go ahead with the reload
+                UnloadInternal(unit);
+            }
+
             // The Configurator performs a bunch of sanity checks, and if the
             // file is kosher sets the new canonicalized path in the Config
             // record.  On success or failure we get back a Reason string with
@@ -306,16 +279,16 @@ namespace PERQemu.UI
             // If the machine is defined, check the drive and unload it
             if (PERQemu.Controller.State != RunState.Unavailable)
             {
-                var drive = PERQemu.Sys.Volumes[unit];
+                //var drive = PERQemu.Sys.Volumes[unit];
 
-                if (drive.IsModified && SaveRequested(drive.Info.Type))
-                {
-                    // Tell the PERQ to save the device
-                    if (PERQemu.Sys.SaveMedia(unit))
-                    {
-                        Console.WriteLine($"Drive {unit} saved to '{drive.Filename}'.");
-                    }
-                }
+                //if (drive.IsModified && SaveRequested(drive, unit))
+                //{
+                //    // Tell the PERQ to save the device
+                //    if (PERQemu.Sys.SaveMedia(unit))
+                //    {
+                //        Console.WriteLine($"Drive {unit} saved to '{drive.Filename}'.");
+                //    }
+                //}
 
                 // Tell the PERQ to unload it
                 PERQemu.Sys.UnloadMedia(unit);
@@ -344,7 +317,7 @@ namespace PERQemu.UI
         ///     if bad unit, drive not loaded, is readonly - no save
         ///     if the format IS changed, the filename is changed;
         ///     if the filename IS changed:
-        ///         qualify new name/new ext and check if the new path is
+        ///         qualify new name/new ext and check the new path:
         ///             valid? proceed, otherwise - no save
         ///             exists, and overwrite set? proceed, otherwise - no save
         ///         changes to filename sets IS modified
@@ -451,6 +424,18 @@ namespace PERQemu.UI
                 Console.WriteLine($"File '{pathname}' already exists.  Please choose another name,");
                 Console.WriteLine("or to replace the file repeat the command with overwrite 'true'.");
                 return;
+            }
+
+            // Don't create a file with the same name as one that's loaded!
+            // This might not be foolproof, but make the check all the same
+            foreach (var drive in PERQemu.Sys.Volumes)
+            {
+                if (drive?.Filename == pathname)
+                {
+                    Console.WriteLine($"File '{pathname}' is currently loaded!");
+                    Console.WriteLine("Please unload the drive first, or choose another filename.");
+                    return;
+                }
             }
 
             // Create a new copy
