@@ -244,7 +244,7 @@ namespace PERQemu.UI
         [Command("configure name", "Name the current configuration")]
         public void SetName(string name)
         {
-           var key = name.Trim().ToLower();
+            var key = name.Trim().ToLower();
 
             if (PERQemu.Config.GetConfigByName(key) != null)
             {
@@ -280,6 +280,9 @@ namespace PERQemu.UI
                     PERQemu.Config.Current.Chassis = perq;
                     PERQemu.Config.Changed = true;
                     Console.WriteLine("{0} chassis selected.", perq);
+
+                    // Check the storage configuration here too...
+                    PERQemu.Config.UpdateStorage(PERQemu.Config.Current.IOBoard);
                 }
             }
         }
@@ -574,9 +577,69 @@ namespace PERQemu.UI
                 {
                     PERQemu.Config.Current.Tablet = tab;
                     PERQemu.Config.Changed = true;
-                    Console.WriteLine("Tablet option {0} selected.", tab);
+                    Console.WriteLine($"Tablet option {tab} selected.");
                 }
             }
+        }
+
+
+        [Command("configure enable rs232", "Enable use of a serial port")]
+        public void EnableRS232(char port)
+        {
+            if (OKtoReconfig())
+            {
+                bool changed = EnableOrDisableSerial(port, true);
+
+                if (changed && !PERQemu.Config.Quietly)
+                    Console.WriteLine($"RS-232 port {Char.ToUpper(port)} enabled.");
+            }
+        }
+
+        [Command("configure disable rs232", "Disable use of a serial port")]
+        public void DisableRS232(char port)
+        {
+            if (OKtoReconfig())
+            {
+                bool changed = EnableOrDisableSerial(port, false);
+
+                if (changed && !PERQemu.Config.Quietly)
+                    Console.WriteLine($"RS-232 port {Char.ToUpper(port)} disabled.");
+            }
+        }
+
+        private bool EnableOrDisableSerial(char port, bool flag)
+        {
+            switch (port)
+            {
+                case 'a':
+                case 'A':
+                    if (!PERQemu.Config.Current.RSAEnable)
+                    {
+                        PERQemu.Config.Current.RSAEnable = flag;
+                        PERQemu.Config.Changed = true;
+                        return true;
+                    }
+                    return false;
+
+                case 'b':
+                case 'B':
+                    if (PERQemu.Config.Current.IOBoard == IOBoardType.EIO ||
+                        PERQemu.Config.Current.IOBoard == IOBoardType.NIO)
+                    {
+                        if (!PERQemu.Config.Current.RSBEnable)
+                        {
+                            PERQemu.Config.Current.RSBEnable = flag;
+                            PERQemu.Config.Changed = true;
+                            return true;
+                        }
+                        return false;
+                    }
+                    break;
+            }
+
+            // Fall through if bad port
+            Console.WriteLine($"Invalid RS-232 port '{port}'.");
+            return false;
         }
 
         /// <summary>

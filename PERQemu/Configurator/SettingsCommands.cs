@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.IO;
 
 namespace PERQemu.UI
 {
@@ -68,7 +69,12 @@ namespace PERQemu.UI
             Console.WriteLine("Default output directory:   " + Settings.OutputDirectory);
             Console.WriteLine("Screenshot file format:     " + Settings.ScreenshotFormat);
             Console.WriteLine("Canon output file format:   " + Settings.CanonFormat);
-
+            Console.WriteLine();
+            Console.Write("Host serial port A device:  ");
+            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" : Settings.RSADevice);
+            Console.Write("Host serial port B device:  ");
+            Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" : Settings.RSBDevice);
+           
             if (Settings.Changed)
             {
                 Console.WriteLine("\nModified settings have not been saved.");
@@ -185,10 +191,125 @@ namespace PERQemu.UI
             }
         }
 
+
+        [Command("settings assign rs232 device", "Map a host device to a PERQ serial port")]
+        public void SetRS232Device(char port, string hostDevice)
+        {
+            var dev = hostDevice;
+            var curDev = string.Empty;
+
+            switch (port)
+            {
+                case 'a':
+                case 'A':
+                    curDev = Settings.RSADevice;
+                    port = 'A';
+                    break;
+
+                case 'b':
+                case 'B':
+                    curDev = Settings.RSBDevice;
+                    port = 'B';
+                    break;
+
+                default:
+                    Console.WriteLine($"Port {port} is invalid; please choose 'A' or 'B'.");
+                    return;
+            }
+
+            if (CheckDevice(ref dev))
+            {
+                if (dev != curDev)
+                {
+                    if (port == 'A')
+                        Settings.RSADevice = dev;
+                    else
+                        Settings.RSBDevice = dev;
+                    
+                    Settings.Changed = true;
+                    Console.WriteLine($"Device '{dev}' assigned to serial port {port}.");
+                }
+
+                return;
+            }
+
+            Console.WriteLine($"Device '{dev}' invalid or not found; port {port} unchanged.");
+        }
+
+        [Command("settings unassign rs232 device", "Unmap a device from a PERQ serial port")]
+        private void UnSetRS232Device(char port)
+        {
+            var curDev = string.Empty;
+
+            switch (port)
+            {
+                case 'a':
+                case 'A':
+                    curDev = Settings.RSADevice;
+                    port = 'A';
+                    break;
+
+                case 'b':
+                case 'B':
+                    curDev = Settings.RSBDevice;
+                    port = 'B';
+                    break;
+
+                default:
+                    Console.WriteLine($"Port {port} is invalid; please choose 'A' or 'B'.");
+                    return;
+            }
+
+            if (!string.IsNullOrEmpty(curDev))
+            {
+                if (port == 'A')
+                    Settings.RSADevice = string.Empty;
+                else
+                    Settings.RSBDevice = string.Empty;
+                
+                Settings.Changed = true;
+                Console.WriteLine($"Serial port {port} unassigned.");
+            }
+        }
+
+        /// <summary>
+        /// Checks a host serial device specification.
+        /// </summary>
+        // todo: generalize this when Ethernet, audio devices are added
+        private bool CheckDevice(ref string dev)
+        {
+            // Any host:  allow "rsx" or "rsx:", upcase it
+            if (dev.ToUpper() == "RSX" || dev.ToUpper() == "RSX:")
+            {
+                dev = "RSX:";
+                return true;
+            }
+
+            // If Unix, allow "devN" or /dev/devN" form; prepend /dev if not supplied
+            if (PERQemu.HostIsUnix)
+            {
+                if (!dev.StartsWith("/dev", StringComparison.InvariantCulture))
+                    dev = "/dev/" + dev;
+
+                return File.Exists(dev);
+            }
+
+            // If Windows, expect 'COMn:' form; append the ':' if not present
+            if (dev.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
+            {
+                dev = dev.ToUpper();
+
+                if (!dev.EndsWith(":", StringComparison.InvariantCulture))
+                    dev = dev + ":";
+
+                return File.Exists(dev);
+            }
+
+            return false;
+        }
+
         /*
             TODO:
-            settings::cursorpreference          -- hook into window focus events?
-            settings::pausewhenminimized        -- hook into sdl window events
             settings::screenshot format [jpg, png, tiff, ?]
             settings::screenshot template [str] -- really?  cmon...
             settings::canon format [jpg, png, tiff, bmp, PDF!?]
@@ -205,7 +326,6 @@ namespace PERQemu.UI
             settings::ethernet device [dev]         -- host interface to use
             settings::ethernet encapsulation [raw, udp, 3to10bridge]
             settings::ethernet use3rccPrefix        -- :-)
-            settings::serial device [a, b] [dev]    -- host serial port devices
             settings::audio device [dev]            -- audio output device?
 
             When the PERQ Ethernet device is configured, we configure the
@@ -214,9 +334,6 @@ namespace PERQemu.UI
             configure::ethernet device [eio, oio]   -- only one or the other (automatic?)
             configure::ethernet address [n] [m]     -- last two octets only
                                                     -- or just one for 3mbit!?
-            configure::rs232 [ab] [dev, rsx, none]  -- attach to the port the
-                                                    -- host defines, the pseudo-
-                                                    -- dev rsx:, or turn it off?
 
             Can we use SDL2 for network access without requiring additional
             libraries like Pcap?  Can we use the SDL2 audio without worrying

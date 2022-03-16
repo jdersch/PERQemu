@@ -102,6 +102,21 @@ namespace PERQemu.IO.Z80
                 _z80sio.AttachDevice(1, tablet);
             }
 
+            // todo: RSXFilePort and PhysicalPort have to be converted to ISIODevice
+            //if (system.Config.RSAEnable && Settings.RSADevice != string.Empty)
+            //{
+            //    if (Settings.RSADevice == "RSX:")
+            //    {
+            //        var rsx = new RSXFilePort();
+            //        _z80sio.AttachDevice(0, rsx);
+            //    }
+            //    else
+            //    {
+            //        var rsa = new PhysicalPort(Settings.RSADevice);
+            //        _z80sio.AttachDevice(0, rsa);
+            //    }
+            //}
+
             // Attach our debugger
             _z80Debugger = new Z80Debugger();
         }
@@ -372,9 +387,6 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        // todo: these don't really belong here
-        public void SetSerialPort(ISerialDevice dev) { }
-        public string GetSerialPort() { return string.Empty; }
 
         public void ShowZ80State()
         {

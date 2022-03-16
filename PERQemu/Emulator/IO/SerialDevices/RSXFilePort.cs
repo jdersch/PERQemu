@@ -25,20 +25,24 @@ using System.IO;
 namespace PERQemu.IO.SerialDevices
 {
     /// <summary>
-    /// FilePort provides logic that emulates an RSX-11 host connected to the PERQ's simulated
-    /// serial port.
+    /// FilePort provides logic that emulates an RSX-11 host connected to the
+    /// PERQ's simulated serial port.
+    /// </summary>
+    /// <remarks>
+    /// In doing so, it provides a crude way to copy a file from the host to the
+    /// emulated PERQ.  Under POS, one can do:
     /// 
-    /// In doing so, it provides a crude way to copy a file from the host to the emulated PERQ.
-    /// Under POS, one can do a "copy RSX:remoteFileName localFileName" and it will copy incoming
-    /// serial data to a file on the PERQ.
+    ///     "copy RSX:remoteFileName localFileName"
     /// 
-    /// Conversely, one can do a "copy localFileName RSX:remoteFileName" to copy a PERQ file to
-    /// the serial port.
+    /// and it will copy incoming serial data to a file on the PERQ.
     /// 
-    /// This class acts as a serial sink/source and either provides a data stream from a local file
-    /// (on the host) or writes an incoming stream to a local file.  This is a pretty nifty way
-    /// to allow the PERQ limited access to the filesystem on the emulation host.  (Alas, no directory
-    /// support...)
+    /// Conversely, one can do a "copy localFileName RSX:remoteFileName" to copy
+    /// a PERQ file to the serial port.
+    /// 
+    /// This class acts as a serial sink/source and either provides a datastream
+    /// from a local file (on the host) or writes an incoming stream to a local
+    /// file.  This is a pretty nifty way to allow the PERQ limited access to the
+    /// filesystem on the emulation host.  (Alas, no directory support...)
     /// 
     /// Unfortunately it only supports text files.
     ///         
@@ -63,16 +67,19 @@ namespace PERQemu.IO.SerialDevices
     ///     end of line, and the ^S is not sent after
     ///     the end of file is received.
     ///     
-    /// The above makes it obvious that the transfer is fairly idiosyncractic.  It depends on specific
-    /// (badly documented) behaviors of both POS and RSX-11.  In particular, the ^Q/^S bookending for the
-    /// RSX: input device is basically enforcing flow control over a serial line that doesn't implement it
-    /// (^S pauses the RSX-11's output, ^Q resumes it).  This code does not pay attention to the ^Q/^S,
-    /// instead relying on some hackery in the RS232 class to pace the data such that the PERQ won't lose
-    /// anything.  (It makes things a lot simpler here at the cost of a bit of throughput.)
+    /// The above makes it obvious that the transfer is fairly idiosyncractic.
+    /// It depends on specific (badly documented) behaviors of both POS and
+    /// RSX-11.  In particular, the ^Q/^S bookending for the RSX: input device
+    /// is basically enforcing flow control over a serial line that doesn't
+    /// implement it (^S pauses the RSX-11's output, ^Q resumes it).  This code
+    /// does not pay attention to the ^Q/^S, instead relying on some hackery in
+    /// the RS232 class to pace the data such that the PERQ won't lose anything.
+    /// (It makes things a lot simpler here at the cost of a bit of throughput.)
     /// 
-    /// I've tried to comment up all of the oddities I've encountered.  This is very much a hack, but it
-    /// is fairly useful to have (makes uploading source written on the host a lot easier).
-    /// </summary>
+    /// I've tried to comment up all of the oddities I've encountered.  This is
+    /// very much a hack, but it is fairly useful to have (makes uploading source
+    /// written on the host a lot easier).
+    /// </remarks>
     public class RSXFilePort : ISerialDevice
     {
         public RSXFilePort()
@@ -140,6 +147,7 @@ namespace PERQemu.IO.SerialDevices
             _isOpen = false;
         }
 
+
         public byte ReadByte()
         {
             if (_inputQueue.Count == 0)
@@ -168,6 +176,7 @@ namespace PERQemu.IO.SerialDevices
             return b;
         }
 
+
         public void Write(byte[] data, int index, int length)
         {
             for (int i = 0; i < length; i++)
@@ -175,9 +184,9 @@ namespace PERQemu.IO.SerialDevices
                 byte b = data[i + index];
 
                 //
-                // The RSX transfer needs the simulated RSX machine to echo back data
-                // during the command input phase and during RSX-as-output.
-                // Additionally, it expects that if a CR is sent, an LF is echoed back...
+                // The RSX transfer needs the simulated RSX machine to echo back
+                // data during the command input phase and during RSX-as-output.
+                // Additionally, it expects that if CR is sent an LF is echoed back...
                 // 
                 if ((_transferState == TransferState.Transferring && _fileAccess == FileAccess.Write) ||
                     _transferState == TransferState.WaitingForCtrlQ ||
@@ -206,9 +215,7 @@ namespace PERQemu.IO.SerialDevices
                     case TransferState.WaitingForRSXCommand:
                         if (b != _cr)
                         {
-                            //
-                            // Ignore control characters.
-                            //
+                            // Ignore control characters
                             if (b >= 0x20)
                             {
                                 _rsxCommand += (char)b;
@@ -217,33 +224,28 @@ namespace PERQemu.IO.SerialDevices
                         else
                         {
                             // Command input complete, parse it to determine the
-                            // filename and the mode if the input is correct.
+                            // filename and the mode if the input is correct
                             bool success = ParseRSXCommand();
 
                             if (success)
                             {
-                                //
-                                // Command input is valid.  We should have the file name
-                                // and mode now.
-                                //
+                                // Command input is valid.  We should have the
+                                // file name and mode now
                                 _transferState = TransferState.Transferring;
 
-                                //
                                 // Open the file in the correct mode...
-                                //
                                 try
                                 {
                                     _fileStream = new FileStream(_fileName, _fileMode, _fileAccess);
                                 }
                                 catch (Exception e)
                                 {
-                                    //
-                                    // Couldn't open the filestream for whatever reason.
-                                    // The POS RSX: transfer protocol doesn't seem to have a good 
-                                    // facility for ending the transfer due to an error.
-                                    // For writes, we'll just end up dropping the output bits on the floor.  
-                                    // For reads, we'll just return an empty file.
-                                    //
+                                    // Couldn't open the filestream for whatever
+                                    // reason.  The POS RSX: transfer protocol
+                                    // doesn't seem to have a good facility for
+                                    // ending the transfer due to an error; For
+                                    // writes, we just drop the output bits on
+                                    // the floor.  Reads return an empty file.
                                     _errorString = e.Message;
 
                                     Log.Write("Could not open {0} on host. Error: {1}",
@@ -252,16 +254,14 @@ namespace PERQemu.IO.SerialDevices
 
                                 if (_fileAccess == FileAccess.Read)
                                 {
-                                    // Read the file into the input queue, and append the special
-                                    // eol/eot marker.
+                                    // Read the file into the input queue, and
+                                    // append the special eol/eot marker
                                     UploadFileToBuffer();
                                 }
                             }
                             else
                             {
-                                //
-                                // Command input was invalid, return to start of state machine.
-                                //
+                                // Command input was invalid; restart state machine
                                 ResetState();
                             }
                         }
@@ -269,7 +269,7 @@ namespace PERQemu.IO.SerialDevices
 
                     case TransferState.Transferring:
                         // We can handle the write case here, otherwise
-                        // we handle it under Read() and do nothing here.
+                        // we handle it under Read() and do nothing here
                         if (_fileAccess == FileAccess.Write)
                         {
                             // File transfer ends on Ctrl-Z
@@ -282,7 +282,7 @@ namespace PERQemu.IO.SerialDevices
                             }
                             else
                             {
-                                // Transfer is done.
+                                // Transfer is done
                                 if (_fileStream != null)
                                 {
                                     _fileStream.Close();
@@ -291,9 +291,7 @@ namespace PERQemu.IO.SerialDevices
 
                                 ResetState();
 
-                                //
-                                // POS expects an LF from RSX at the end of the transfer.
-                                //                                
+                                // POS expects an LF from RSX at the end of the transfer
                                 _inputQueue.Enqueue(_lf);
 
                                 Log.Write("Transfer of {0} to host is complete.", _fileName);
@@ -304,21 +302,21 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
+
         private void ResetState()
         {
             _transferState = TransferState.WaitingForCtrlQ;
             _inputQueue.Clear();
         }
 
+
         private bool ParseRSXCommand()
         {
             bool success = true;
 
-            //
             // We expect one of two formats:
-            // Input:  Pip TI:=FileName
-            // Output: Pip FileName=TI:
-            //
+            //      Input:  Pip TI:=FileName
+            //      Output: Pip FileName=TI:
             string[] tokens = _rsxCommand.Split(_separators);
 
             // Should be three tokens, and first token must be "Pip"
@@ -329,7 +327,7 @@ namespace PERQemu.IO.SerialDevices
             }
             else
             {
-                // Second token is either "TI:" or the filename.
+                // Second token is either "TI:" or the filename
                 if (tokens[1] == _TIToken)
                 {
                     // Mode is Input from emulation host to PERQ
@@ -340,14 +338,14 @@ namespace PERQemu.IO.SerialDevices
                 // If token #2 is the filename, then #3 must be "TI:"
                 else if (tokens[2] == _TIToken)
                 {
-                    // Mode is output from PERQ to emulation host.
+                    // Mode is output from PERQ to emulation host
                     _fileMode = FileMode.Create;
                     _fileAccess = FileAccess.Write;
                     _fileName = tokens[1];
                 }
                 else
                 {
-                    // Something's wrong, restart the state machine.
+                    // Something's wrong, restart the state machine
                     success = false;
                 }
             }
@@ -360,18 +358,17 @@ namespace PERQemu.IO.SerialDevices
             return success;
         }
 
+
         private void UploadFileToBuffer()
         {
             _inputQueue.Clear();
 
-            //
-            // POS's RSX code expects a CR/LF before the real file data begins.
-            //
+            // POS's RSX code expects a CR/LF before the real file data begins
             _inputQueue.Enqueue(_cr);
             _inputQueue.Enqueue(_lf);
 
             // We must handle the null case -- it indicates the input file
-            // could not be opened.  In this case we just return an empty file.
+            // could not be opened.  In this case we just return an empty file
             if (_fileStream != null)
             {
                 for (int i = 0; i < _fileStream.Length; i++)
@@ -381,7 +378,7 @@ namespace PERQemu.IO.SerialDevices
             }
             else
             {
-                // We will write the error into the file.
+                // We will write the error into the file
                 for (int i = 0; i < _errorString.Length; i++)
                 {
                     _inputQueue.Enqueue((byte)_errorString[i]);
@@ -390,12 +387,11 @@ namespace PERQemu.IO.SerialDevices
                 _inputQueue.Enqueue(_lf);
             }
 
-            //
-            // End-of-file is indicated by a CR followed by a '>' character.
-            //
+            // End-of-file is indicated by a CR followed by a '>' character
             _inputQueue.Enqueue(_cr);
             _inputQueue.Enqueue(_eot);
         }
+
 
         private enum TransferState
         {
@@ -404,22 +400,25 @@ namespace PERQemu.IO.SerialDevices
             Transferring
         }
 
-        private bool _isOpen;
+
         private Queue<byte> _inputQueue;
+
+        private string _fileName;
         private FileMode _fileMode;
         private FileAccess _fileAccess;
         private FileStream _fileStream;
+        private bool _isOpen;
+
         private TransferState _transferState;
         private string _rsxCommand;
-        private string _fileName;
         private string _errorString;
 
         private const byte _ctrlQ = 0x11;      // ^Q
         private const byte _ctrlS = 0x13;      // ^S
         private const byte _ctrlZ = 0x1a;      // ^Z
-        private const byte _lf    = 0x0a;      // LF
-        private const byte _cr    = 0x0d;      // CR/EOL
-        private const byte _eot   = (byte)'>'; // special EOT token for RSX transfer from PERQ
+        private const byte _lf = 0x0a;      // LF
+        private const byte _cr = 0x0d;      // CR/EOL
+        private const byte _eot = (byte)'>'; // special EOT token for RSX transfer from PERQ
 
         private const string _pipToken = "Pip";
         private const string _TIToken = "TI:";

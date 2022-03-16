@@ -53,7 +53,7 @@ namespace PERQemu
         AccurateDiskSpeedEmulation = 0x2,       // feel the pain
         AccurateStartupDelays = 0x04,           // for the truly hardcore
         Accurate = 0x03,                        // shortcut (leave some room)
-        AllowFrameSkipping = 0x10,              // sigh
+        AllowFrameSkipping = 0x10               // sigh
     }
 
     public static class Settings
@@ -84,31 +84,34 @@ namespace PERQemu
             CanonFormat = ImageFormat.Tiff;
             CanonTemplate = "{0}_{1:000}.{2}";
 
+            RSADevice = string.Empty;
+            RSBDevice = string.Empty;
+
             Reason = "Settings reset to defaults.";
             Changed = false;
         }
 
         // General
-        public static Ask SaveDiskOnShutdown { get; set; }
-        public static Ask SaveFloppyOnEject { get; set; }
-        public static bool PauseOnReset { get; set; }
+        public static Ask SaveDiskOnShutdown;
+        public static Ask SaveFloppyOnEject;
+        public static bool PauseOnReset;
 
-        public static bool PauseWhenMinimized { get; set; }
-        public static Cursor CursorPreference { get; set; }
+        public static bool PauseWhenMinimized;
+        public static Cursor CursorPreference;
 
         // Performance
-        public static RateLimit Performance { get; set; }
-        public static ExecutionMode RunMode { get; set; }
+        public static RateLimit Performance;
+        public static ExecutionMode RunMode;
 
         // Debugger
-        public static Radix DebugRadix { get; set; }
-        public static Radix Z80Radix { get; set; }
+        public static Radix DebugRadix;
+        public static Radix Z80Radix;
 
         // Output
-        public static string OutputDirectory { get; set; }
-        public static ImageFormat ScreenshotFormat { get; set; }
+        public static string OutputDirectory;
+        public static ImageFormat ScreenshotFormat;
         public static string ScreenshotTemplate { get; private set; }
-        public static ImageFormat CanonFormat { get; set; }
+        public static ImageFormat CanonFormat;
         public static string CanonTemplate { get; private set; }
 
         // Logging - see Log.cs
@@ -118,16 +121,16 @@ namespace PERQemu
         //public static int LogLimit;
 
         // Host Devices
-        //public static string RSADevice;
-        //public static string RSBDevice;
+        public static string RSADevice;
+        public static string RSBDevice;
         //public static string AudioDevice;
         //public static string EtherDevice;
         //public static EtherEncapsulationType EtherEncapsulation;
         //public static bool Use3RCCEtherMACPrefix;
 
         // Housekeeping
-        public static string Reason { get; set; }
-        public static bool Changed { get; set; }
+        public static string Reason;
+        public static bool Changed;
 
 
         /// <summary>
@@ -188,9 +191,13 @@ namespace PERQemu
                     sw.WriteLine("# canon format " + CanonFormat);
 
                     if (!string.IsNullOrEmpty(OutputDirectory))
-                    {
                         sw.WriteLine("output directory \"" + OutputDirectory + "\"");
-                    }
+
+                    if (!string.IsNullOrEmpty(RSADevice))
+                        sw.WriteLine("assign rs232 device a " + RSADevice);
+
+                    if (!string.IsNullOrEmpty(RSBDevice))
+                        sw.WriteLine("assign rs232 device b " + RSBDevice);
 
                     sw.WriteLine("done");
 

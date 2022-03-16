@@ -139,49 +139,6 @@ namespace PERQemu
             }
         }
 
-        // todo: on eio/nio, allow for port b... hmm.
-        // todo: move the interface to PERQsystem? or provide a hook to Z80system
-        // todo: move these to SettingsCommands so they can be saved/reloaded
-        //[Command("set rs232", "Configure the emulated serial port to use the specified device")]
-        private void SetSerialPort(string devName)
-        {
-            ISerialDevice dev = null;
-
-            try
-            {
-                if (!PERQemu.HostIsUnix && devName.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    // COM port.  Try to instantiate & assign to system.
-                    dev = new PhysicalPort(devName);
-                }
-                else if (PERQemu.HostIsUnix && devName.StartsWith("/dev", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    // Unix device path.  Try to instantiate & assign to system.
-                    dev = new PhysicalPort(devName);
-                }
-                else if (devName.Equals("rsx:", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    // RSX device.
-                    dev = new RSXFilePort();
-                }
-                else
-                {
-                    throw new ArgumentOutOfRangeException("Invalid device name. Expected /dev/path, COMn: or RSX:");
-                }
-
-                PERQemu.Sys.IOB.Z80System.SetSerialPort(dev);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Unable to set rs232 port - {0}", e.Message);
-            }
-        }
-
-        //[Command("show rs232", "Displays the current rs232 device")]
-        private void ShowSerialPort()
-        {
-            Console.WriteLine("RS232 port is set to {0}", PERQemu.Sys.IOB.Z80System.GetSerialPort());
-        }
 
         // todo: allow for png formatter (read Settings.ScreenFormat)
         // todo: make path relative to Output/ (or Settings.OutputDir)

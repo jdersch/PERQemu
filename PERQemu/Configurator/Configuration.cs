@@ -70,6 +70,10 @@ namespace PERQemu.Config
             _drives[2] = new Drive(2, DeviceType.Unused);
             _drives[3] = new Drive(3, DeviceType.Unused);
 
+            // Users must explicitly enable the RS-232 ports
+            _rsaEnabled = false;
+            _rsbEnabled = false;
+
             _validated = true;
             _modified = false;
             _saved = false;
@@ -187,6 +191,18 @@ namespace PERQemu.Config
             set { _ioBoard = value; }
         }
 
+        public bool RSAEnable
+        {
+            get { return _rsaEnabled; }
+            set { _rsaEnabled = value; }
+        }
+
+        public bool RSBEnable
+        {
+            get { return _rsbEnabled; }
+            set { _rsbEnabled = value; }
+        }
+
         public OptionBoardType IOOptionBoard
         {
             get { return _ioOptionBoard; }
@@ -239,6 +255,18 @@ namespace PERQemu.Config
             sb.AppendLine("Tablet type:   " + Tablet);
             sb.AppendLine("IO board:      " + IOBoard);
 
+            if (_rsaEnabled)
+            {
+                sb.Append("    RS-232 A:  ");
+                sb.AppendLine(Settings.RSADevice == string.Empty ? "<unassigned>" : Settings.RSADevice);
+            }
+
+            if ((IOBoard == IOBoardType.EIO || IOBoard == IOBoardType.NIO) && _rsbEnabled)
+            {
+                sb.Append("    RS-232 B:  ");
+                sb.AppendLine(Settings.RSBDevice == string.Empty ? "<unassigned>" : Settings.RSBDevice);
+            }
+
             if (IOOptionBoard != OptionBoardType.None)
             {
                 sb.Append("Option board:  " + IOOptionBoard);
@@ -257,13 +285,13 @@ namespace PERQemu.Config
             for (var unit = 0; unit < _drives.Length; unit++)
             {
                 var drive = _drives[unit];
-            
+
                 if (drive.Type != DeviceType.Unused)
                 {
                     var hack = sb.Length;
                     sb.AppendFormat("Unit: {0}  Type: {1}", unit, drive.Type);
                     sb.AppendFormat("{0}File: {1}\n", " ".PadLeft(hack + 28 - sb.Length),
-                                    (string.IsNullOrEmpty(drive.MediaPath) ? "<not assigned>" : Paths.Canonicalize(drive.MediaPath)));
+                                    (string.IsNullOrEmpty(drive.MediaPath) ? "<unassigned>" : Paths.Canonicalize(drive.MediaPath)));
                 }
             }
 
@@ -335,6 +363,9 @@ namespace PERQemu.Config
         private DisplayType _displayType;
         private TabletType _tabletType;
         private Drive[] _drives;
+
+        private bool _rsaEnabled;
+        private bool _rsbEnabled;
 
         private string _reason;
         private bool _validated;

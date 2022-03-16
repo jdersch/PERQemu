@@ -693,13 +693,16 @@ namespace PERQemu
         /// it to the microcode (by DDS 151).  Deschedules itself after that.
         /// </summary>
         /// <remarks>
-        /// Most versions of SYSB start by immediately turning off the Z80,
-        /// restarting it, enabling the keyboard to read the boot character,
-        /// then turning everything off again while it continues the bootstrap.
-        /// The microcode waits up to 4.2M cycles (around .7 seconds) to get a
-        /// key from the keyboard before defaulting to 'a' boot.  The startup
-        /// sequence always does at least one dummy read to clear the keyboard
-        /// register so we really only need to jam the key in there 2-3 times...
+        /// SYSB starts by immediately turning off the Z80, restarting it,
+        /// enabling the keyboard to read the boot character, then turning the
+        /// Z80 off again while it continues the bootstrap.  The microcode waits
+        /// up to 4.2M cycles (around .7 seconds) to get a key from the keyboard
+        /// before defaulting to 'a' boot.  The Z80 startup sequence always does
+        /// at least one dummy read to clear the keyboard register so we really
+        /// only need to jam the key in there 2-3 times... but the timing _must_
+        /// be such that a keyboard interrupt is generated within the window so
+        /// that the keystroke is actually sent to the PERQ in a message -- it
+        /// isn't enough to just have the boot character in the keyboard buffer!
         /// </remarks>
         private void BootCharCallback(ulong skewNsec, object context)
         {

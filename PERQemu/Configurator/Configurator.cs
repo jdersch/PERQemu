@@ -372,7 +372,7 @@ namespace PERQemu.Config
                             CheckIO(conf) &&
                             CheckOptions(conf) &&
                             CheckStorage(conf));
-            
+
             return conf.IsValid;
         }
 
@@ -508,6 +508,12 @@ namespace PERQemu.Config
             {
                 conf.Reason = $"IO Board type {conf.IOBoard} not compatible with {conf.Chassis} chassis.";
                 return false;
+            }
+
+            // Make sure the serial ports exist; IOB/CIO only has one
+            if ((conf.IOBoard == IOBoardType.IOB || conf.IOBoard == IOBoardType.CIO) && conf.RSBEnable)
+            {
+                conf.RSBEnable = false;
             }
 
             // A few little sanity checks
@@ -659,12 +665,13 @@ namespace PERQemu.Config
                         {
                             case IOBoardType.IOB:
                             case IOBoardType.CIO:
-                                if (!((drive.Type == DeviceType.Disk14Inch) ||
-                                      (drive.Type == DeviceType.Disk8Inch && conf.IOBoard == IOBoardType.CIO)))
+                                if (!(drive.Type == DeviceType.Disk14Inch ||
+                                     (drive.Type == DeviceType.Disk8Inch && conf.IOBoard == IOBoardType.CIO)))
                                 {
                                     conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
                                     return false;
                                 }
+
                                 driveCount++;
                                 if (driveCount > 1)
                                 {
@@ -681,6 +688,7 @@ namespace PERQemu.Config
                                     conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
                                     return false;
                                 }
+
                                 driveCount++;
                                 if (driveCount > 2)
                                 {
@@ -722,12 +730,12 @@ namespace PERQemu.Config
         }
 
         /// <summary>
-        /// If the user configures a new IO board, we try to map over any
-        /// already defined drives so they don't have to specify them again.
-        /// Types are remapped for the kind of controller present on the new
-        /// board, and media paths removed (assuming incompatibilities).  This
-        /// is kind of a giant hack, one case where a GUI actually makes a LOT
-        /// more sense.  Sigh.
+        /// If the user configures a new IO board or switches chassis types, try
+        /// to map over any already defined drives so they don't have to specify
+        /// them again.  Types are remapped for the kind of controller present
+        /// on the new board, and media paths removed if incompatible.  This is
+        /// kind of a giant hack, one case where a GUI actually makes a LOT more
+        /// sense.  Sigh.
         /// </summary>
         public void UpdateStorage(Configuration conf, IOBoardType newType)
         {
@@ -768,9 +776,9 @@ namespace PERQemu.Config
                             case IOBoardType.NIO:
                                 // Nope, change it
                                 if (conf.Chassis == ChassisType.PERQ2)
-                                    conf.Drives[unit].Type = DeviceType.Disk8Inch;
+                                    conf.SetDeviceType(unit, DeviceType.Disk8Inch);
                                 else if (conf.Chassis == ChassisType.PERQ2T2)
-                                    conf.Drives[unit].Type = DeviceType.Disk5Inch;
+                                    conf.SetDeviceType(unit, DeviceType.Disk5Inch);
                                 break;
                         }
                         break;
@@ -783,7 +791,7 @@ namespace PERQemu.Config
                         {
                             case IOBoardType.IOB:
                                 // Nope
-                                conf.Drives[unit].Type = DeviceType.Disk14Inch;
+                                conf.SetDeviceType(unit, DeviceType.Disk14Inch);
                                 break;
 
                             case IOBoardType.CIO:
@@ -798,7 +806,7 @@ namespace PERQemu.Config
                                 if (conf.Chassis == ChassisType.PERQ2)
                                     keepMedia = true;
                                 else
-                                    conf.Drives[unit].Type = DeviceType.Disk5Inch;
+                                    conf.SetDeviceType(unit, DeviceType.Disk5Inch);
                                 break;
                         }
                         break;
@@ -810,7 +818,7 @@ namespace PERQemu.Config
                         {
                             case IOBoardType.IOB:
                             case IOBoardType.CIO:
-                                conf.Drives[unit].Type = DeviceType.Disk14Inch;
+                                conf.SetDeviceType(unit, DeviceType.Disk14Inch);
                                 break;
 
                             case IOBoardType.EIO:
@@ -818,23 +826,26 @@ namespace PERQemu.Config
                                 if (conf.Chassis == ChassisType.PERQ2T2)
                                     keepMedia = true;
                                 else
-                                    conf.Drives[unit].Type = DeviceType.Disk8Inch;
+                                    conf.SetDeviceType(unit, DeviceType.Disk8Inch);
                                 break;
                         }
                         break;
                 }
 
-                if (keepMedia && !AssignMediaTo(unit, conf.Drives[unit].MediaPath))
+                if (keepMedia && !string.IsNullOrEmpty(d.MediaPath))
                 {
-                    Console.WriteLine($"--> media file for unit {unit} wrong type");
-                    keepMedia = false;
+                    if (!AssignMediaTo(unit, d.MediaPath))
+                    {
+                        Console.WriteLine($"--> media file for unit {unit} wrong type");
+                        keepMedia = false;
+                    }
                 }
 
                 if (!keepMedia)
                 {
                     // fixme debugging
                     Console.WriteLine($"--> media for unit {unit} unloaded");
-                    conf.Drives[unit].MediaPath = string.Empty;
+                    conf.SetMediaPath(unit, string.Empty);
                 }
             }
         }
