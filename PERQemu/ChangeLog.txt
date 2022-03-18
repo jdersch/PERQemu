@@ -241,6 +241,16 @@ March, 2022:
     actually invert the flow of time is proceeding apace!).  Typical frame
     rates are now around 21-22fps.  What can I say?  It's a talent.
     
+    7. Starting to reintegrate the RS232 port(s).  Added configuration and
+    settings commands for mapping a host device to the serial port(s) so both
+    "real" ports (almost always a USB->serial adapter, these days) or the RSX:
+    pseudo-device may be attached.  Have to rewrite the old interface to work
+    with the new Z80/SIO, however.
+
+    8. Refactoring to add in CIO and Micropolis 8" hard disk support.  Also
+    reworked the Z80 rate limiting to let the thread "breathe" a bit; average
+    frame rate jumped back to ~30fps.  Huh.
+
 
 ---
-Last update: skeezics    Mon Mar 14 23:34:37 PDT 2022
+Last update: skeezics    Thu Mar 17 20:54:21 PDT 2022

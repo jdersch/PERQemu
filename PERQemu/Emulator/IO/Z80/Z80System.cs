@@ -55,6 +55,8 @@ namespace PERQemu.IO.Z80
             _cpu.PortsSpace = _bus;
             _cpu.ClockSynchronizer = null;      // We'll do our own rate limiting
 
+            _sync = new ManualResetEventSlim();
+
             // todo: assign ports/base addresses of each peripheral chip or latch
             // based on the configured IO Board type.
 
@@ -177,7 +179,9 @@ namespace PERQemu.IO.Z80
                 Log.Debug(Category.Z80, "System reset");
             }
 
+            // Release the hounds
             _running = true;
+            _sync.Set();
         }
 
         /// <summary>
@@ -194,61 +198,68 @@ namespace PERQemu.IO.Z80
         /// data through the FIFOs and resolve some annoying timing difficulties.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Run(int clocks = 1)
+        public void Run()
         {
             IZ80Registers regs = _cpu.Registers;
 
-            do
+            if (_running)
             {
-                if (_running)
+                // Is the master CPU clock ahead of us?
+                var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
+
+                // Deal with the INIR special condition :-/
+                if (_memory[regs.PC] == 0xed && _memory[regs.PC + 1] == 0xb2 && !_perqToZ80Fifo.IsReady)
                 {
-                    var ticks = 0;
+                    // This is a cheap way to inject a wait state; this
+                    // emulates the blocking read of the PERQR latch
+                    diff = 0;
 
-                    // Is the master CPU clock ahead of us?
-                    var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
+                    Log.Detail(Category.FIFO, "Wait state for FIFO read (INIR)");
+                    // fixme uh, or just return since we're not looping anymore...
+                }
 
-                    // Deal with the INIR special condition :-/
-                    if (_memory[regs.PC] == 0xed && _memory[regs.PC + 1] == 0xb2 && !_perqToZ80Fifo.IsReady)
-                    {
-                        // This is a cheap way to inject a wait state; this
-                        // emulates the blocking read of the PERQR latch
-                        diff = 0;
-
-                        Log.Detail(Category.FIFO, "Wait state for FIFO read (INIR)");
-                    }
-
-                    if (diff > 0)
-                    {
+                if (diff > 0)
+                {
 #if DEBUG
-                        // for now: debugging; future: actual InterruptEncoder as a bus device?
-                        _bus.ActiveInterrupts();
+                    // for now: debugging; future: actual InterruptEncoder as a bus device?
+                    _bus.ActiveInterrupts();
 
-                        // this is hugely expensive so only call it if selected
-                        if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
+                    // this is hugely expensive so only call it if selected
+                    if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
 #endif
-                        // Yes!  Run an instruction
-                        ticks = _cpu.ExecuteNextInstruction();
+                    // Yes!  Run an instruction
+                    var ticks = _cpu.ExecuteNextInstruction();
 
-                        // And a DMA cycle
-                        _z80dma.Clock();
+                    // And a DMA cycle
+                    _z80dma.Clock();
 
-                        // Run the scheduler
-                        _scheduler.Clock(ticks);
-                    }
-                    else
-                    {
-                        // We really need a nanosleep here... a typical Z80 instruction
-                        // at 2.4576Mhz might take 3-9usec, or up to 52ish CPU uinsts.
-                        ticks = 1;
-                    }
-
-                    clocks -= ticks;
+                    // Run the scheduler
+                    _scheduler.Clock(ticks);
                 }
                 else
                 {
-                    clocks -= 1;
+                    // If we are more than one full CPU cycle ahead, block (when
+                    // we return to Run()) and schedule our own wakeup; this lets
+                    // the Z80 thread actually sleep while the CPU churns through
+                    // the ~9-55 cycles (1.6-9.3usec) needed to catch up to us
+                    diff = -diff;
+
+                    if ((ulong)diff < _system.Scheduler.TimeStepNsec)
+                    {
+                        _sync.Reset();
+
+                        _scheduler.Schedule((ulong)diff, (skewNsec, context) =>
+                        {
+                            _sync.Set();
+                        });
+                    }
                 }
-            } while (clocks > 0);
+            }
+            else
+            {
+                // Pause the thread until the Z80 is turned back on
+                _sync.Reset();
+            }
         }
 
         /// <summary>
@@ -260,6 +271,9 @@ namespace PERQemu.IO.Z80
             {
                 throw new InvalidOperationException("Z80 thread is already running; Stop first");
             }
+
+            // Unblock the CPU
+            _sync.Set();
 
             // Fire off the Z80 thread
             _stopAsyncThread = false;
@@ -283,7 +297,7 @@ namespace PERQemu.IO.Z80
                 {
                     Run();
 
-                    if (_stopAsyncThread) break;
+                    if (!_sync.IsSet) _sync.Wait(1);
                 }
                 catch (Exception e)
                 {
@@ -311,6 +325,7 @@ namespace PERQemu.IO.Z80
 
             Log.Debug(Category.Controller, "[Stop() called on Z80 thread]");
             _stopAsyncThread = true;
+            _sync.Set();
 
             if (!Thread.CurrentThread.Equals(_asyncThread))
             {
@@ -442,6 +457,8 @@ namespace PERQemu.IO.Z80
         private Z80Debugger _z80Debugger;
         private Scheduler _scheduler;
         private PERQSystem _system;
+
+        private ManualResetEventSlim _sync;
 
         private Thread _asyncThread;
 

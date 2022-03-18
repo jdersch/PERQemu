@@ -224,6 +224,8 @@
     <Compile Include="Emulator\IO\SerialDevices\KrizTablet.cs" />
     <Compile Include="Emulator\IO\SerialDevices\SerialKeyboard.cs" />
     <Compile Include="Emulator\IO\SerialDevices\Speech.cs" />
+    <Compile Include="Emulator\IO\IStorageController.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\MicropolisDiskController.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

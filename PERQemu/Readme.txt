@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-3/11/2022 - skeezicsb - v0.4.6 (experimental)
+3/17/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -164,8 +164,9 @@ There are several subdirectories:
         Contains dumps of PERQ ROMs necessary for operation.
 
     Output/
-        When screenshots, printing or logging debug output to disk is
-        implemented, those files will go here by default.
+        When logging debug output to disk is enabled, those files go here by
+        default.  When screenshots and printing are implemented, that output
+        will land here too.  (Output directory will be a settable preference.)
 
 
 To start the emulator, just run PERQemu.exe:
@@ -321,13 +322,16 @@ The following hardware has been implemented in the emulator:
   RS-232:
     - The Z80 SIO chip is implemented to work with the new Z80 emulator;
     - Software running under emulation should/will be able to control a real
-      physical serial port on the host, but this has not been tested yet with
-      the new Z80 code, and Configurator support to assign the host device is
-      not yet available.
+      physical serial port on the host, but this has not yet been rewritten to
+      work with the new Z80 code.  Settings and Configurator support to assign
+      the host device path and enable the port is in place, however;
+    - The nifty RSX: pseudo-device for transferring text files from the host to
+      POS will be reinstated too.
 
   GPIB:
-    - The TMS9914 controller chip is implemented to work with the new Z80,
-      but it is very fresh and still incomplete and occasionally loses the plot;
+    - The TMS9914 controller chip is implemented to work with the new Z80, but
+      it is still incomplete and occasionally seems to confuse POS (reporting
+      non-fatal errors that don't seem to negatively affect operation);
     - Supports basic System Controller, Talker and Listener features, but just
       enough to support what the PERQ needs.  Being able to drive a real GPIB
       card in the host computer would be pretty darn cool but I wouldn't hold
@@ -358,7 +362,8 @@ Docs/ directory for way, way more information than you need.  Way more.
 - PERQLink.  Unimplemented other than a stub that tells the microcode that
   there's nothing connected to it.
  
-- Sound.  Implemented, but not hooked up to any sort of host output device.
+- Sound.  Yet to be rewritten to work with the new Z80/SIO and hooked up to
+  any sort of host output device.
 
 - Multibus option and SMD disk/9-track tape support.  Dream on!
 

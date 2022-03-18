@@ -17,6 +17,8 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System.Runtime.CompilerServices;
+
 namespace PERQemu.Processor
 {
 
@@ -42,7 +44,10 @@ namespace PERQemu.Processor
 
         public int Value
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return ((_hi << _loBits) | _lo); }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
                 _lo = (ushort)(value & _loMask);                // Lo = value;
@@ -52,7 +57,10 @@ namespace PERQemu.Processor
 
         public ushort Lo
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return _lo; }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set { _lo = (ushort)(value & _loMask); }
         }
 

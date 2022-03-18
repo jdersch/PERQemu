@@ -60,8 +60,7 @@ namespace PERQemu.IO
         public Z80System Z80System => _z80System;
         public bool SupportsAsync => _z80System.SupportsAsync;
 
-        // public IStorageController DiskController
-        public ShugartDiskController DiskController => _hardDiskController;
+        public IStorageController DiskController => _hardDiskController;
 
         public bool HandlesPort(byte port)
         {
@@ -138,9 +137,7 @@ namespace PERQemu.IO
 
                 hard.Load();
 
-                // Unit # is irrelevant (for now); we only support one drive
-                // FIXME when we switch to IStorageController for EIO...
-                _hardDiskController.AttachDrive(hard);
+                _hardDiskController.AttachDrive((uint)dev.Unit, hard);
                 return hard;
             }
 
@@ -174,9 +171,7 @@ namespace PERQemu.IO
 
         // Devices required by all I/O boards
         protected Z80System _z80System;
-
-        //protected IStorageController _hardDisk;
-        protected ShugartDiskController _hardDiskController;
+        protected IStorageController _hardDiskController;
 
         // I/O port map for this board
         private static bool[] _portsHandled = new bool[256];

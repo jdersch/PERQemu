@@ -80,51 +80,31 @@ namespace PERQemu.IO
             switch (port)
             {
                 case 0xc1:  // Shugart command/control register & Z80 status register
-                    _hardDiskController.LoadCommandRegister(value & 0x7f);
+                    _hardDiskController.LoadRegister(port, value & 0x7f);
                     _z80System.WriteStatus(value & 0x80);
-                    break;
-
-                case 0xc2:  // Shugart Head register
-                    _hardDiskController.LoadHeadRegister(value);
                     break;
 
                 case 0xc7:  // Z80 data port
                     _z80System.WriteData(value);
                     break;
 
+                case 0xc2:  // Shugart Head register
                 case 0xc8:  // Shugart Cylinder/Sector register
-                    _hardDiskController.LoadCylSecRegister(value);
-                    break;
-
                 case 0xc9:  // Shugart File SN Low Register
-                    _hardDiskController.LoadSerialLowRegister(value);
-                    break;
-
                 case 0xca:  // Shugart File SN High register
-                    _hardDiskController.LoadSerialHighRegister(value);
-                    break;
-
                 case 0xcb:  // Shugart Block Number register
-                    _hardDiskController.LoadBlockRegister(value);
-                    break;
-
                 case 0xd0:  // Shugart Data Buffer Address High register
-                    _hardDiskController.LoadDataBufferAddrHighRegister(value);
-                    break;
-
                 case 0xd1:  // Shugart Header Address High register
-                    _hardDiskController.LoadHeaderAddrHighRegister(value);
-                    break;
-
-                // 0xd4,d5,dc,dd: load DMA registers -- Canon, Streamer interfaces?
-
                 case 0xd8:  // Shugart Data Buffer Address Low register
-                    _hardDiskController.LoadDataBufferAddrLowRegister(value);
+                case 0xd9:  // Shugart Header Address low register
+                    _hardDiskController.LoadRegister(port, value);
                     break;
 
-                case 0xd9:  // Shugart Header Address low register
-                    _hardDiskController.LoadHeaderAddrLowRegister(value);
-                    break;
+                case 0xd4:
+                case 0xd5:
+                case 0xdc:
+                case 0xdd:  // Just to see if anything calls these...
+                    throw new InvalidOperationException($"IOB DMA not yet implemented");
 
                 default:
                     Log.Warn(Category.IO, "Unhandled IOB Write to port {0:x2}, data {1:x4}", port, value);

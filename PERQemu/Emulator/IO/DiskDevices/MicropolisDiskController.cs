@@ -1,10 +1,10 @@
-//
-// ShugartController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+﻿//
+// MicropolisDiskController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
-// PERQemu is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// PERQemu is free software: you can redistribute it and/or modify it
+// under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
@@ -20,20 +20,33 @@
 using System;
 
 using PERQmedia;
+using PERQemu.Config;
 using PERQemu.Processor;
 
 namespace PERQemu.IO.DiskDevices
 {
     /// <summary>
-    /// Represents a PERQ 1's Shugart hard drive controller which manages
-    /// drives in the Disk14Inch class (SA4000 interface).
+    /// Represents a Micropolis 8" hard drive controller which manages disk
+    /// drives in the Disk8Inch class.  This is implemented in the PERQ as an
+    /// adapter from the SA4000 interface to the Micropolis 1200-series drives.
+    /// May be connected to an IOB (single drive?) or an EIO (1 or 2 drives).
     /// </summary>
-    public sealed class ShugartDiskController : IStorageController
+    /// <remarks>
+    /// This is all hugely speculative and likely to change as I dig into the
+    /// microcode and state machine firmware.  Ugh.  For one thing, we'll just
+    /// assume that the microcode doesn't try to get fancy and do interleaved
+    /// seek operations across both drives, so any kind of unit select signal
+    /// remains constant for the duration of the op.  Have got to try to find a
+    /// source for the IOB version of the "new" Z80 code, to compare with the
+    /// EIO, though even a disassembly of the actual ROM is better than nothing?
+    /// </remarks>
+    public sealed class MicropolisDiskController : IStorageController
     {
-        public ShugartDiskController(PERQSystem system)
+        public MicropolisDiskController(PERQSystem system)
         {
             _system = system;
-            _disk = null;
+            _disks = new HardDisk[2];
+            _selected = 0;
             _busyEvent = null;
         }
 
@@ -42,10 +55,9 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         public void Reset()
         {
-            if (_disk != null)
-            {
-                _disk.Reset();
-            }
+            // Reset the attached drive(s)
+            if (_disks[0] != null) _disks[0].Reset();
+            if (_disks[1] != null) _disks[1].Reset();
 
             _cylinder = 0;
             _head = 0;
@@ -57,8 +69,10 @@ namespace PERQemu.IO.DiskDevices
             // Force a soft reset (calls ResetFlags)
             LoadCommandRegister((int)Command.Reset);
 
-            Log.Debug(Category.HardDisk, "Shugart controller reset");
+            Log.Debug(Category.HardDisk, "Micropolis controller reset");
         }
+
+        private HardDisk SelectedDisk => _disks[_selected];
 
         /// <summary>
         /// Resets the flags ("soft" reset under microcode control).
@@ -77,18 +91,27 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Attach the physical drive.  For Shugart, unit # is irrelevant.
+        /// Attach a drive.  For CIO (PERQ-1) we assume 1 max?  EIO (PERQ-2)
+        /// can handle two drives.
         /// </summary>
-        public void AttachDrive(uint unit, StorageDevice dev)
+        /// <remarks>
+        /// For now, assume units 1..2 -> _disks[0..1].  Ugh.  Messy.  Just use
+        /// a dictionary?
+        /// </remarks>
+		public void AttachDrive(uint unit, StorageDevice dev)
         {
-            if (_disk != null)
-                throw new InvalidOperationException("ShugartController only supports 1 disk");
 
-            _disk = dev as HardDisk;
+            if (unit < 1 || (_system.Config.Chassis == ChassisType.PERQ1 && unit > 1) ||
+                            (_system.Config.Chassis != ChassisType.PERQ1 && unit > 2))
+                throw new InvalidOperationException($"MicropolisController unit {unit} out of range");
+            
+            unit--;
 
-            _disk.SetSeekCompleteCallback(SeekCompletionCallback);
+            _disks[unit] = dev as HardDisk;
 
-            Log.Debug(Category.HardDisk, "Attached disk '{0}'", _disk.Info.Name);
+            _disks[unit].SetSeekCompleteCallback(SeekCompletionCallback);
+
+            Log.Debug(Category.HardDisk, "Attached disk '{0}' (unit {1})", _disks[unit].Info.Name, unit);
         }
 
         /// <summary>
@@ -99,7 +122,7 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public int ReadStatus()
         {
-            Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4}", DiskStatus);
+            Log.Debug(Category.HardDisk, "Read Micropolis status, returned {0:x4}", DiskStatus);
             return DiskStatus;
         }
 
@@ -115,61 +138,61 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 case 0xc2:      // Head register
-                    // Hardware latches 4 bits
+                                // Hardware latches 4 bits
                     _head = (byte)(value & 0x0f);
-                    _disk.HeadSelect(_head);
+                    SelectedDisk.HeadSelect(_head);
 
-                    Log.Debug(Category.HardDisk, "Shugart head latch set to {0}", _head);
+                    Log.Debug(Category.HardDisk, "Micropolis head latch set to {0}", _head);
                     break;
 
-                case 0xc8:  // Shugart Cylinder/Sector register
+                case 0xc8:  // Micropolis Cylinder/Sector register
                     _sector = (ushort)(value & 0x1f);
                     _head = (byte)((value & 0xe0) >> 5);
                     _cylinder = (ushort)((value & 0xff80) >> 8);
 
-                    Log.Debug(Category.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
+                    Log.Debug(Category.HardDisk, "Micropolis cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
                     break;
 
-                case 0xc9:  // Shugart File SN Low Register
+                case 0xc9:  // Micropolis File SN Low Register
                     _serialNumberLow = value & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
+                    Log.Debug(Category.HardDisk, "Micropolis File Serial # Low set to {0:x4}", _serialNumberLow);
                     break;
 
-                case 0xca:  // Shugart File SN High register
+                case 0xca:  // Micropolis File SN High register
                     _serialNumberHigh = value & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
+                    Log.Debug(Category.HardDisk, "Micropolis File Serial # High set to {0:x4}", _serialNumberHigh);
                     break;
 
-                case 0xcb:  // Shugart Block Number register
+                case 0xcb:  // Micropolis Block Number register
                     _blockNumber = (value & 0xffff);
 
-                    Log.Debug(Category.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
+                    Log.Debug(Category.HardDisk, "Micropolis Block # set to {0:x4}", _blockNumber);
                     break;
 
-                case 0xd0:  // Shugart Data Buffer Address High register
+                case 0xd0:  // Micropolis Data Buffer Address High register
                     _dataBufferHigh = (~value) & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
+                    Log.Debug(Category.HardDisk, "Micropolis Data Buffer Address High set to {0:x4}", _dataBufferHigh);
                     break;
 
-                case 0xd1:  // Shugart Header Address High register
+                case 0xd1:  // Micropolis Header Address High register
                     _headerAddressHigh = (~value) & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
+                    Log.Debug(Category.HardDisk, "Micropolis Header Address High set to {0:x4}", _headerAddressHigh);
                     break;
 
-                case 0xd8:  // Shugart Data Buffer Address Low register
+                case 0xd8:  // Micropolis Data Buffer Address Low register
                     _dataBufferLow = (Unfrob(value)) & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
+                    Log.Debug(Category.HardDisk, "Micropolis Data Buffer Address Low set to {0:x4}", _dataBufferLow);
                     break;
 
-                case 0xd9:  // Shugart Header Address low register
+                case 0xd9:  // Micropolis Header Address low register
                     _headerAddressLow = (Unfrob(value)) & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
+                    Log.Debug(Category.HardDisk, "Micropolis Header Address Low set to {0:x4}", _headerAddressLow);
                     break;
 
                 default:
@@ -178,10 +201,10 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Loads the Shugart command register.
+        /// Loads the Micropolis command register.
         /// </summary>
         /// <remarks>
-        /// Note:  Most of the info gleaned about the Shugart controller register
+        /// Note:  Most of the info gleaned about the Micropolis controller register
         /// behavior is from microcode (Boot, SysB, IO) sources.
         ///     Command bits:
         ///       0:2     drive command data      passed to state machine
@@ -195,13 +218,13 @@ namespace PERQemu.IO.DiskDevices
             var command = (Command)(data & 0x07);
             _seekCommand = (SeekCommand)(data & 0x78);
 
-            Log.Detail(Category.HardDisk, "Shugart command data: {0:x4}", data);
-            Log.Debug(Category.HardDisk, "Shugart command is: {0}", command);
+            Log.Detail(Category.HardDisk, "Micropolis command data: {0:x4}", data);
+            Log.Debug(Category.HardDisk, "Micropolis command is: {0}", command);
 
             // If the FaultClear bit is set, send that to the drive now
             if (_seekCommand.HasFlag(SeekCommand.FaultClear))
             {
-                _disk.FaultClear();
+                SelectedDisk.FaultClear();
             }
 
             // Look at the command bits
@@ -216,7 +239,7 @@ namespace PERQemu.IO.DiskDevices
                     // Reset clears the state machine, interrupts when done
                     ResetFlags();
 
-                    Log.Debug(Category.HardDisk, "Shugart state machine reset");
+                    Log.Debug(Category.HardDisk, "Micropolis state machine reset");
                     SetBusyState();
                     break;
 
@@ -241,7 +264,7 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 default:
-                    Log.Error(Category.HardDisk, "Unhandled Shugart command {0}", command);
+                    Log.Error(Category.HardDisk, "Unhandled Micropolis command {0}", command);
                     break;
             }
 
@@ -253,12 +276,12 @@ namespace PERQemu.IO.DiskDevices
         {
             get
             {
-                return ((int)_controllerStatus | (_disk == null ? 0 :
-                        (int)((_disk.Index ? HardStatus.Index : 0) |
-                              (_disk.Track0 ? HardStatus.TrackZero : 0) |
-                              (_disk.Fault ? HardStatus.DriveFault : 0) |
-                              (_disk.SeekComplete ? 0 : HardStatus.SeekComplete) |  // On Cylinder (inverted)
-                              (_disk.Ready ? HardStatus.UnitReady : 0))));
+                return ((int)_controllerStatus | (SelectedDisk == null ? 0 :
+                        (int)((SelectedDisk.Index ? HardStatus.Index : 0) |
+                              (SelectedDisk.Track0 ? HardStatus.TrackZero : 0) |
+                              (SelectedDisk.Fault ? HardStatus.DriveFault : 0) |
+                              (SelectedDisk.SeekComplete ? 0 : HardStatus.SeekComplete) |  // On Cylinder (inverted)
+                              (SelectedDisk.Ready ? HardStatus.UnitReady : 0))));
             }
         }
 
@@ -277,13 +300,13 @@ namespace PERQemu.IO.DiskDevices
             {
                 // Low to high
                 _seekState = SeekState.WaitForStepRelease;
-                Log.Detail(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                Log.Detail(Category.HardDisk, "Micropolis seek state transition to {0}", _seekState);
             }
             else if (_seekState == SeekState.WaitForStepRelease && !_seekCommand.HasFlag(SeekCommand.Step))
             {
                 // High to low
                 _seekState = SeekState.WaitForSeekComplete;
-                Log.Detail(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+                Log.Detail(Category.HardDisk, "Micropolis seek state transition to {0}", _seekState);
 
                 // Don't queue a standard busy delay?  Wait for "on cylinder"
                 // (i.e., SeekComplete) and then fire an interrupt.  But if the
@@ -311,12 +334,12 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public void DoSingleSeek()
         {
-            _disk.SeekStep(_seekCommand.HasFlag(SeekCommand.Direction) ? 1 : 0);
+            SelectedDisk.SeekStep(_seekCommand.HasFlag(SeekCommand.Direction) ? 1 : 0);
         }
 
         /// <summary>
         /// Seek completion just resets the state machine.  Apparently the
-        /// Shugart controller doesn't actually interrupt in this case, and
+        /// Micropolis controller doesn't actually interrupt in this case, and
         /// for seeks it doesn't even set the "busy" status bits!?
         /// </summary>
         /// <remarks>
@@ -331,7 +354,7 @@ namespace PERQemu.IO.DiskDevices
         public void SeekCompletionCallback(ulong skewNsec, object context)
         {
             _seekState = SeekState.WaitForStepSet;
-            Log.Detail(Category.HardDisk, "Shugart seek state transition to {0}", _seekState);
+            Log.Detail(Category.HardDisk, "Micropolis seek state transition to {0}", _seekState);
 
             // Clear busy status
             // Technically if Track0 is true we should raise the interrupt
@@ -347,14 +370,14 @@ namespace PERQemu.IO.DiskDevices
         {
             // todo: This is actually a DMA operation, but that's not
             // implemented yet.  So just do the whole block, lickety split
-
-            if (_disk.CurCylinder != _cylinder || _disk.CurHead != _head)
-                Log.Warn(Category.HardDisk,
-                         "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
-                         _disk.CurCylinder, _cylinder, _disk.CurHead, _head);
-
+#if DEBUG
+			if (SelectedDisk.CurCylinder != _cylinder || SelectedDisk.CurHead != _head)
+				Log.Warn(Category.HardDisk,
+						 "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
+						 SelectedDisk.CurCylinder, _cylinder, SelectedDisk.CurHead, _head);
+#endif
             // Read the sector from the disk
-            Sector sec = _disk.GetSector(_cylinder, _head, _sector);
+            Sector sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -374,7 +397,7 @@ namespace PERQemu.IO.DiskDevices
             }
 
             Log.Debug(Category.HardDisk,
-                      "Shugart sector read complete from {0}/{1}/{2}, to memory at {3:x6}",
+                      "Micropolis sector read complete from {0}/{1}/{2}, to memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
             SetBusyState();
@@ -387,13 +410,13 @@ namespace PERQemu.IO.DiskDevices
         private void WriteBlock(bool writeHeader)
         {
 #if DEBUG
-            if (_disk.CurCylinder != _cylinder || _disk.CurHead != _head)
+            if (SelectedDisk.CurCylinder != _cylinder || SelectedDisk.CurHead != _head)
                 Log.Warn(Category.HardDisk,
                          "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
-                         _disk.CurCylinder, _cylinder, _disk.CurHead, _head);
+                         SelectedDisk.CurCylinder, _cylinder, SelectedDisk.CurHead, _head);
 #endif
             // todo: Should be a DMA op.  See above.
-            Sector sec = _disk.GetSector(_cylinder, _head, _sector);
+            Sector sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -416,10 +439,10 @@ namespace PERQemu.IO.DiskDevices
             }
 
             // Write the sector to the disk...
-            _disk.SetSector(sec);
+            SelectedDisk.SetSector(sec);
 
             Log.Debug(Category.HardDisk,
-                      "Shugart sector write complete to {0}/{1}/{2}, from memory at {3:x6}",
+                      "Micropolis sector write complete to {0}/{1}/{2}, from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
             SetBusyState();
@@ -432,8 +455,8 @@ namespace PERQemu.IO.DiskDevices
         private void FormatBlock()
         {
             Sector sec = new Sector(_cylinder, _head, _sector,
-                                    _disk.Geometry.SectorSize,
-                                    _disk.Geometry.HeaderSize);
+                                    SelectedDisk.Geometry.SectorSize,
+                                    SelectedDisk.Geometry.HeaderSize);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -454,10 +477,10 @@ namespace PERQemu.IO.DiskDevices
             }
 
             // Write the sector to the disk...
-            _disk.SetSector(sec);
+            SelectedDisk.SetSector(sec);
 
             Log.Debug(Category.HardDisk,
-                      "Shugart sector format of {0}/{1}/{2} complete, from memory at {3:x6}",
+                      "Micropolis sector format of {0}/{1}/{2} complete, from memory at {3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
             SetBusyState();
@@ -543,7 +566,7 @@ namespace PERQemu.IO.DiskDevices
         /// interface cable!
         /// </summary>
         /// <remarks>
-        /// The Shugart controller on the IOB hardwires unit select 0 (pulled
+        /// The Micropolis controller on the IOB hardwires unit select 0 (pulled
         /// to GND) and leaves unit select 1 and 2 unconnected. (The pin used
         /// for unit 3 is jumpered to provide Seek Complete.)  The register
         /// that latches the command bits could easily provide unit select 1
@@ -585,12 +608,13 @@ namespace PERQemu.IO.DiskDevices
         }
 
         // The physical disk data
-        private HardDisk _disk;
+        private HardDisk[] _disks;
 
         // Controller status (3 bits)
         private Status _controllerStatus;
 
         // Registers
+        private int _selected;
         private ushort _cylinder;
         private byte _head;
         private ushort _sector;

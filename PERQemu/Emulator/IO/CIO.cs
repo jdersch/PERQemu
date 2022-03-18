@@ -19,6 +19,7 @@
 
 using System;
 
+using PERQmedia;
 using PERQemu.IO.Z80;
 using PERQemu.IO.DiskDevices;
 
@@ -46,7 +47,16 @@ namespace PERQemu.IO
 
         public CIO(PERQSystem system) : base(system)
         {
-            _hardDiskController = new ShugartDiskController(system);
+            // See the Docs/IOBoard.txt for a discussion of "CIO" Micropolis
+            if (system.Config.GetDrivesOfType(DeviceType.Disk8Inch).Length > 0 ||
+                system.Config.GetDrivesOfType(DeviceType.DCIOMicrop).Length > 0)
+            {
+                _hardDiskController = new MicropolisDiskController(system);
+            }
+            else
+            {
+                _hardDiskController = new ShugartDiskController(system);
+            }
 
             _z80System = new Z80System(system);
             _z80System.LoadZ80ROM("cioz80.bin");    // "new" Z80 ROM
@@ -80,56 +90,33 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                case 0xc1:  // Shugart command/control register & Z80 status register
-                    _hardDiskController.LoadCommandRegister(value);
+                case 0xc1:  // Shugart/Microp command/control register & Z80 status register
+                    _hardDiskController.LoadRegister(port, value & 0x7f);
                     _z80System.WriteStatus(value);
-                    break;
-
-                case 0xc2:  // Shugart Head register
-                    _hardDiskController.LoadHeadRegister(value);
                     break;
 
                 case 0xc7:  // Z80 data port
                     _z80System.WriteData(value);
                     break;
 
-                case 0xc8:  // Shugart Cylinder/Sector register
-                    _hardDiskController.LoadCylSecRegister(value);
+                case 0xc2:  // Shugart/Micropolis Head register
+                case 0xc8:  // Shugart/Micropolis Cylinder/Sector register
+                case 0xc9:  // Shugart/Micropolis File SN Low Register
+                case 0xca:  // Shugart/Micropolis File SN High register
+                case 0xcb:  // Shugart/Micropolis Block Number register
+                case 0xcc:  // Micropolis Sector Number register
+                case 0xd0:  // Shugart/Micropolis Data Buffer Address High register
+                case 0xd1:  // Shugart/Micropolis Header Address High register
+                case 0xd8:  // Shugart/Micropolis Data Buffer Address Low register
+                case 0xd9:  // Shugart/Micropolis Header Address low register
+                    _hardDiskController.LoadRegister(port, value);
                     break;
 
-                case 0xc9:  // Shugart File SN Low Register
-                    _hardDiskController.LoadSerialLowRegister(value);
-                    break;
-
-                case 0xca:  // Shugart File SN High register
-                    _hardDiskController.LoadSerialHighRegister(value);
-                    break;
-
-                case 0xcb:  // Shugart Block Number register
-                    _hardDiskController.LoadBlockRegister(value);
-                    break;
-
-                case 0xcc:  // Micropolis Sector Number register?
-                    // TODO: investigate how the early Micropolis support differed
-                    break;
-
-                case 0xd0:  // Shugart Data Buffer Address High register
-                    _hardDiskController.LoadDataBufferAddrHighRegister(value);
-                    break;
-
-                case 0xd1:  // Shugart Header Address High register
-                    _hardDiskController.LoadHeaderAddrHighRegister(value);
-                    break;
-
-                // 0xd4,d5,dc,dd: load DMA registers -- Canon, Streamer interfaces?
-
-                case 0xd8:  // Shugart Data Buffer Address Low register
-                    _hardDiskController.LoadDataBufferAddrLowRegister(value);
-                    break;
-
-                case 0xd9:  // Shugart Header Address low register
-                    _hardDiskController.LoadHeaderAddrLowRegister(value);
-                    break;
+                case 0xd4:
+                case 0xd5:
+                case 0xdc:
+                case 0xdd:  // Just to see if anything calls these...
+                    throw new InvalidOperationException($"CIO DMA not yet implemented");
 
                 default:
                     Log.Warn(Category.IO, "Unhandled CIO Write to port {0:x2}, data {1:x4}", port, value);
