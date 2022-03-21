@@ -27,6 +27,8 @@
 using System;
 using System.IO;
 
+using PERQemu;
+
 namespace PERQmedia
 {
     /// <summary>
@@ -49,7 +51,7 @@ namespace PERQmedia
 
                 if (!_helper.TryParseHeader(fs, dev))
                 {
-                    Console.WriteLine("Malformed header line or missing cookie -- not a valid IMD image");
+                    Log.Debug(Category.MediaLoader, "Not a valid IMD image: Malformed header line or missing cookie");
                     return false;
                 }
 
@@ -69,7 +71,7 @@ namespace PERQmedia
             }
             catch (EndOfStreamException e)
             {
-                Console.WriteLine(e.Message + " -- not a valid IMD image");
+                Log.Debug(Category.MediaLoader, "Not a valid IMD image: {0}", e.Message);
                 return false;
             }
         }
@@ -104,7 +106,7 @@ namespace PERQmedia
             }
             catch (EndOfStreamException e)
             {
-                Console.WriteLine(e.Message + " -- not a valid IMD image");
+                Log.Debug(Category.MediaLoader, "Not a valid IMD image: {0}", e.Message);
                 return false;
             }
         }

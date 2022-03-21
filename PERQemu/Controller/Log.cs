@@ -134,13 +134,8 @@ namespace PERQemu
 
             _logSize = 1024 * 1024 * 10;        // Default log size is 10MB?
             _logLimit = 99;                     // Keep 100 files? (0..99)
-            _logFilePattern = "debug{0:d2}.log";
             _logDirectory = Paths.OutputDir;
-
-            _log = null;
-            _turnstile = -1;
             _currentFile = string.Empty;
-            _currentFileNum = 0;
 
             _lastOutput = string.Empty;
             _repeatCount = 0;
@@ -156,6 +151,12 @@ namespace PERQemu
 
 #if TRACING_ENABLED
             _loggingAvailable = true;
+
+            _log = null;
+            _turnstile = -1;
+            _logFilePattern = "debug{0:d2}.log";
+            _currentFileNum = 0;
+
             Initialize();
 #else
             _loggingAvailable = false;
@@ -607,15 +608,18 @@ namespace PERQemu
         private static bool _logToConsole;
         private static bool _logToFile;
         private static string _logDirectory;
-        private static string _logFilePattern;
         private static string _currentFile;
         private static string _lastOutput;
         private static int _repeatCount;
         private static int _logSize;
         private static int _logLimit;
+
+#if TRACING_ENABLED
+        private static string _logFilePattern;
         private static int _currentFileNum;
 
         private static long _turnstile;
         private static StreamWriter _log;
+#endif
     }
 }

@@ -22,6 +22,8 @@
 using System;
 using System.IO;
 
+using PERQemu;
+
 namespace PERQmedia
 {
     /// <summary>
@@ -44,7 +46,7 @@ namespace PERQmedia
 
                     if (b != _cookie[i])
                     {
-                        Console.WriteLine("Bad cookie -- not a valid PHD image");
+                        Log.Debug(Category.MediaLoader, "Not a valid PHD image: Bad cookie");
                         fs.Seek(0, SeekOrigin.Begin);
                         return false;
                     }
@@ -56,7 +58,7 @@ namespace PERQmedia
                 // Ensure sector header data is present
                 if (fs.ReadByte() != 1)
                 {
-                    Console.WriteLine("Sector header data must be present -- not a valid PHD image");
+                    Log.Debug(Category.MediaLoader, "Not a valid PHD image: Sector header data must be present");
                     fs.Seek(0, SeekOrigin.Begin);
                     return false;
                 }
@@ -94,7 +96,7 @@ namespace PERQmedia
 
                         default:
                             // Whoops.  Should we just continue?
-                            Console.WriteLine("Bad Shugart disk geometry!");
+                            Log.Warn(Category.MediaLoader, "Bad Shugart disk geometry!");
                             break;
                     }
                 }
@@ -104,7 +106,7 @@ namespace PERQmedia
             }
             catch (EndOfStreamException e)
             {
-                Console.WriteLine(e.Message + " -- not a valid PHD image");
+                Log.Debug(Category.MediaLoader, "Not a valid PHD image: {0}", e.Message);
                 return false;
             }
         }
@@ -141,18 +143,20 @@ namespace PERQmedia
                         }
                     }
                 }
-#if DEBUG
+
                 if (fs.Position != fs.Length)
                 {
-                    Console.WriteLine("Data underrun? Read {0} bytes, file has {1} bytes", fs.Position, fs.Length);
+                    Log.Debug(Category.MediaLoader,
+                              "Data underrun? Read {0} bytes, file has {1} bytes",
+                              fs.Position, fs.Length);
                 }
-#endif 
+
                 // We made it!
                 dev.IsLoaded = true;
             }
             catch (EndOfStreamException e)
             {
-                Console.WriteLine("Read failed: " + e.Message);
+                Log.Debug(Category.MediaLoader, "Read failed: {0}", e.Message);
                 dev.IsLoaded = false;
             }
 

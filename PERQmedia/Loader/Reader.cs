@@ -19,8 +19,9 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
 using System.IO;
+
+using PERQemu;
 
 namespace PERQmedia
 {
@@ -94,7 +95,7 @@ namespace PERQmedia
 
             if (dev.IsLoaded)
             {
-                Console.WriteLine("Loaded {0}.", pathname);
+                Log.Write("Loaded {0}.", pathname);
 
                 // Save it
                 dev.Filename = pathname;
@@ -109,7 +110,7 @@ namespace PERQmedia
                     if (dev.Sectors[1, 0, 0].ReadByte(0) == 0x55 &&
                         dev.Sectors[1, 0, 0].ReadByte(1) == 0xaa)
                     {
-                        Console.WriteLine("Boot floppy signature detected.");
+                        Log.Info(Category.MediaLoader, "Boot floppy signature detected.");
                         dev.Info.IsBootable = true;
                     }
 
@@ -127,7 +128,7 @@ namespace PERQmedia
             else
             {
                 // No joy.  Fell off the end, so all we can do is bail
-                Console.WriteLine($"File {pathname} could not be read (unknown/bad format)");
+                Log.Write("File {0} could not be read (unknown/bad format).", pathname);
             }
         }
     }

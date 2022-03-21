@@ -22,6 +22,8 @@
 using System;
 using System.IO;
 
+using PERQemu;
+
 namespace PERQmedia
 {
     /// <summary>
@@ -45,14 +47,14 @@ namespace PERQmedia
 
                     if (b != _cookie[i])
                     {
-                        Console.WriteLine("Bad cookie -- not a valid PFD image (trying Raw)");
+                        Log.Debug(Category.MediaLoader, "Not a valid PFD image: Bad cookie (trying Raw)");
                         goto Rewind;  // Yep.  This is happening.
                     }
                 }
 
                 // Parse out the geometry hint
                 b = (byte)fs.ReadByte();
-                //Console.WriteLine("PFD geometry hint: {0:x2}", b);
+                Log.Detail(Category.MediaLoader, "PFD geometry hint: {0:x2}", b);
 
                 // There are only four valid codes... but some super early
                 // ones might still exist with even older hints.  Sigh.
@@ -81,7 +83,7 @@ namespace PERQmedia
 
                 // Make some sense of the filesystem hint byte
                 b = (byte)fs.ReadByte();
-                //Console.WriteLine("PFD filesystem hint: {0:x2}", b);
+                Log.Detail(Category.MediaLoader, "PFD filesystem hint: {0:x2}", b);
 
                 // Only 5 values were defined...
                 switch (b)
@@ -122,7 +124,8 @@ namespace PERQmedia
                     // Just bail if the size is ridiculous
                     if (fs.Length < 256256 || fs.Length > 1025024)
                     {
-                        Console.WriteLine("File too small or too big to be a valid raw/PFD floppy!");
+                        Log.Debug(Category.MediaLoader,
+                                  "File too small or too big to be a valid raw/PFD floppy!");
                         return false;
                     }
 
@@ -154,7 +157,7 @@ namespace PERQmedia
             }
             catch (EndOfStreamException e)
             {
-                Console.WriteLine(e.Message + " -- not a valid raw/PFD image");
+                Log.Debug(Category.MediaLoader, "Not a valid raw/PFD image: {0}", e.Message);
                 return false;
             }
         }
@@ -166,8 +169,9 @@ namespace PERQmedia
 #if DEBUG
                 if (dev.Geometry.HeaderSize > 0)
                 {
-                    Console.WriteLine("Preposterous! Floppies don't have sector headers!  Ignoring.");
-                    // Um, this is probably an error but we'll try anyway?
+                    Log.Write(Severity.Heresy, Category.MediaLoader,
+                              "Preposterous! Floppies don't have sector headers!  Ignoring.");
+                    // Um, this is probably a fatal error but we'll try anyway?
                 }
 #endif
                 // Allocate the space
@@ -191,7 +195,9 @@ namespace PERQmedia
 #if DEBUG
                 if (fs.Position != fs.Length)
                 {
-                    Console.WriteLine("Data underrun? Read {0} bytes, file has {1} bytes", fs.Position, fs.Length);
+                    Log.Debug(Category.MediaLoader,
+                              "Data underrun? Read {0} bytes, file has {1} bytes",
+                              fs.Position, fs.Length);
                 }
 #endif 
                 // We made it!
@@ -199,7 +205,7 @@ namespace PERQmedia
             }
             catch (EndOfStreamException e)
             {
-                Console.WriteLine(e.Message + " -- unable to load floppy image");
+                Log.Debug(Category.MediaLoader, "Unable to load floppy image: {0}", e.Message);
                 return false;
             }
         }

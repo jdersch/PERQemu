@@ -22,6 +22,8 @@
 using System;
 using System.IO;
 
+using PERQemu;
+
 namespace PERQmedia
 {
     /// <summary>
@@ -80,8 +82,8 @@ namespace PERQmedia
                         break;
 
                     default:
-                        Console.WriteLine("Unknown or unimplemented file formatter!");
-                        Console.WriteLine("Using default PERQmedia format...");
+                        Log.Info(Category.MediaLoader, "Unknown or unimplemented file formatter!");
+                        Log.Info(Category.MediaLoader, "Using default PERQmedia format...");
                         formatter = new PRQFormatter();
                         break;
                 }
@@ -91,7 +93,7 @@ namespace PERQmedia
 
                 dev.IsModified = false;
 
-                Console.WriteLine($"Saved {pathname}.");
+                Log.Write("Saved {0}.", pathname);
             }
         }
     }

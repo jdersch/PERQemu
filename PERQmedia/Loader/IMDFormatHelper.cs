@@ -26,6 +26,8 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
+using PERQemu;
+
 namespace PERQmedia
 {
     /// <summary>
@@ -80,13 +82,16 @@ namespace PERQmedia
 
                 if (dev.FileInfo.Version != _imdVersion)
                 {
-                    Console.WriteLine("Note: File was written with IMD version ({0}.{1})!", major, minor);
-                    Console.WriteLine("Continuing...");
+                    Log.Debug(Category.MediaLoader,
+                              "Note: File was written with IMD version ({0}.{1})!",
+                              major, minor);
+                    Log.Debug(Category.MediaLoader, "Continuing...");
                 }
 
                 // Save our archive date for posterity
-                dev.FileInfo.ArchiveDate = DateTime.ParseExact(match.Groups[3].Value, "dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-
+                dev.FileInfo.ArchiveDate = DateTime.ParseExact(match.Groups[3].Value,
+                                                               "dd/MM/yyyy HH:mm:ss",
+                                                               CultureInfo.InvariantCulture);
                 // That was the easy part...
                 return true;
             }
@@ -126,10 +131,9 @@ namespace PERQmedia
             var count = (ushort)fs.ReadByte();
             var sizeIndex = fs.ReadByte();
 
-#if DEBUG
-            //Console.WriteLine("Reading fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
-            //                  format, cyl, head, count, _sectorSizes[sizeIndex], fs.Position);
-#endif
+            Log.Detail(Category.MediaLoader,
+                       "Reading fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
+                       format, cyl, head, count, _sectorSizes[sizeIndex], fs.Position);
 
             // Sanity check.  The 8" floppy format is fixed at 77 cylinders,
             // 2 heads, 26 sectors, and the PERQ only supported 128-256 byte
@@ -166,9 +170,9 @@ namespace PERQmedia
             {
                 _sectorOrdering.Add((ushort)fs.ReadByte());
             }
-#if DEBUG
-            //Console.WriteLine("Sector map: " + string.Join(" ", _sectorOrdering.ToArray()));
-#endif
+
+            Log.Detail(Category.MediaLoader, "Sector map: {0}", string.Join(" ", _sectorOrdering.ToArray()));
+
             //
             // At this time, cyl and head maps are not supported.  It's not
             // expected any PERQ disk would use such a format, so if they're
@@ -177,13 +181,13 @@ namespace PERQmedia
             //
             if (bCylMap)
             {
-                Console.WriteLine("IMD Cylinder mas not supported (ignored).");
+                Log.Debug(Category.MediaLoader, "IMD Cylinder mas not supported (ignored).");
                 fs.Seek(count, SeekOrigin.Current);
             }
 
             if (bHeadMap)
             {
-                Console.WriteLine("IMD Head map not supported (ignored).");
+                Log.Debug(Category.MediaLoader, "IMD Head map not supported (ignored).");
                 fs.Seek(count, SeekOrigin.Current);
             }
 
@@ -198,7 +202,8 @@ namespace PERQmedia
 
             if ((_sectorSize > 0 && _sectorSize != size) || size > 256)
             {
-                Console.WriteLine("WARNING: sector size changed from {0} to {1}", _sectorSize, size);
+                Log.Debug(Category.MediaLoader, 
+                          "WARNING: sector size changed from {0} to {1}", _sectorSize, size);
             }
 
             //
@@ -226,9 +231,11 @@ namespace PERQmedia
                 var sector = new Sector(cyl, head, (ushort)(sec - 1), _sectorSize, 0);
 
                 SectorRecordType type = (SectorRecordType)fs.ReadByte();
-#if DEBUG
-                //Console.WriteLine($"Reading sector {i} (mapped {sec}), type {type} @ {fs.Position}");
-#endif
+
+                Log.Detail(Category.MediaLoader,
+                           "Reading sector {0} (mapped {1}), type {2} @ {3}",
+                           i, sec, type, fs.Position);
+
                 switch (type)
                 {
                     case SectorRecordType.Unavailable:
@@ -287,18 +294,18 @@ namespace PERQmedia
         /// </summary>
         public void MapTracksToDevice(StorageDevice dev)
         {
-#if DEBUG
             //
             // This will happen on almost every IMD floppy since the PERQ
             // never formatted track 0... All of the PERQmedia formatters
             // will write out the blank track 0 to avoid this warning.
             //
             if (_sectors.Count != dev.Geometry.TotalBlocks)
-                Console.WriteLine("Sector count from image {0} doesn't match expected {1}!",
-                                  _sectors.Count, dev.Geometry.TotalBlocks);
+                Log.Debug(Category.MediaLoader,
+                          "Sector count from image {0} doesn't match expected {1}!",
+                          _sectors.Count, dev.Geometry.TotalBlocks);
             else
-                Console.WriteLine("Copying {0} sectors", _sectors.Count);
-#endif
+                Log.Detail(Category.MediaLoader, "Copying {0} sectors", _sectors.Count);
+
             foreach (var sec in _sectors)
             {
                 dev.Write(sec);
@@ -342,9 +349,11 @@ namespace PERQmedia
 
             byte format = DoubleDensity ? (byte)Modulation.MFM500 : (byte)Modulation.FM500;
             byte count = (byte)dev.Geometry.Sectors;
-#if DEBUG
-            Console.WriteLine($"WriteTracks {_heads} heads, size {_sectorSize}, fmt {format}, count {count}");
-#endif
+
+            Log.Detail(Category.MediaLoader,
+                       "WriteTracks {0} heads, size {1}, fmt {2}, count {3}",
+                       _heads, _sectorSize, format, count);
+
             // We only officially support two sector sizes (128 or 256) but
             // let's actually look up the code rather than fudge it
             byte sizeIndex = 0;
@@ -352,13 +361,15 @@ namespace PERQmedia
             {
                 sizeIndex++;
             }
-#if DEBUG
+
             // Sanity check
             if (sizeIndex > 1)
             {
-                Console.WriteLine($"SizeIndex {sizeIndex} ({_sectorSizes[sizeIndex]} bytes) makes no sense");
+                Log.Warn(Category.MediaLoader, 
+                         "SizeIndex {0} ({1} bytes) makes no sense",
+                         sizeIndex, _sectorSizes[sizeIndex]);
             }
-#endif
+
             // Start makin' tracks
             for (byte c = 0; c < dev.Geometry.Cylinders; c++)
             {
@@ -376,10 +387,11 @@ namespace PERQmedia
                     {
                         fs.WriteByte(i);
                     }
-#if DEBUG
-                    Console.WriteLine("Writing fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
-                                      (Modulation)format, c, h, count, _sectorSizes[sizeIndex], fs.Position);
-#endif
+
+                    Log.Detail(Category.MediaLoader,
+                               "Writing fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
+                               (Modulation)format, c, h, count, _sectorSizes[sizeIndex], fs.Position);
+
                     // Write the sectors in order, no interleave
                     for (byte s = 0; s < count; s++)
                     {

@@ -131,7 +131,7 @@ performance V100
 done
 
 define Disk5Inch Vertex85
-description "Priam/Vertex V1850 85MB hard disk"
+description "Priam/Vertex V185 85MB hard disk"
 geometry V185 1166 7 16 512 16
 performance V100
 done

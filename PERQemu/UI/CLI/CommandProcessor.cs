@@ -94,6 +94,7 @@ namespace PERQemu
             {
                 ResetPrefix();
                 _exec.ExecuteScript(Paths.Canonicalize(script));
+                SetPrefix(curPrefix);
             }
             catch
             {
@@ -259,10 +260,9 @@ namespace PERQemu
                               "input word, or preview the next expected argument.  Pressing the SPACE BAR\n" +
                               "or TAB key will expand the current input up to the longest unambiguous match.\n");
 
-            Console.WriteLine("String arguments must be surrounded by quotes if they contain spaces.\n");
-
-            Console.WriteLine("Numeric arguments may be specified in decimal (default), or in another common\n" +
-                              "base depending on preference or context:\n" +
+            Console.WriteLine("String arguments must be surrounded by quotes if they contain spaces.  Numeric\n" +
+                              "arguments may be specified in decimal (default), or in another common base\n" +
+                              "depending on preference or context:\n" +
                               "\tBase    \t Prefix    \tExample\n" +
                               "\tBinary: \t    b      \tb10001100\n" +
                               "\tOctal:  \t  o or %   \to377 or %177600\n" +
@@ -277,16 +277,9 @@ namespace PERQemu
         private void HelpConfig()
         {
             Console.WriteLine("The Configurator lets you load, modify and save PERQ configurations.  Several\n" +
-                              "pre-defined system types are provided.  The default configuration is a typical\n" +
-                              "early PERQ-1A similar to the machine emulated by earlier versions of PERQemu;\n" +
-                              "type 'configure show' to see the current selection.\n");
-
-            Console.WriteLine($"Configurations are saved in the {Paths.ConfigDir} directory.  Use the 'configure list'\n" +
-                              "command to see the available selection.  When you use the 'configure' commands\n" +
-                              "to create or modify your own custom configuration, PERQemu will generate the\n" +
-                              "filename automatically based on the name you assign; use 'configure name' to set\n" +
-                              "a short, unique name which PERQemu will use with the 'configure load' and 'save'\n" +
-                              "commands for easy recall.  See the User Guide for more information.");
+                              "predefined system types are provided.  The default configuration is a typical\n" +
+                              "PERQ-1A similar to the machine emulated by earlier versions of PERQemu; type\n" +
+                              "'configure show' to see the current selection.\n");
 
             Console.WriteLine("Type 'configure' by itself to enter the interactive configuration subsystem.\n" +
                               "Tab completion will guide the configuration process by prompting you for any\n" +

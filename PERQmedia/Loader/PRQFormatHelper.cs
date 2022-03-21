@@ -24,6 +24,8 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 
+using PERQemu;
+
 namespace PERQmedia
 {
     /// <summary>
@@ -86,7 +88,7 @@ namespace PERQmedia
 
                 if (b != _cookie[i])
                 {
-                    Console.WriteLine("Bad cookie -- not a valid PRQM image");
+                    Log.Debug(Category.MediaLoader, "Not a valid PRQM image: Bad cookie");
                     return false;
                 }
             }
@@ -94,7 +96,7 @@ namespace PERQmedia
             // Check the file version
             if ((b = (byte)fs.ReadByte()) != _fileVersion)
             {
-                Console.WriteLine("Version byte ({0}) doesn't match -- not a valid PRQM image", b);
+                Log.Debug(Category.MediaLoader, "Not a valid PRQM image: Version byte ({0}) doesn't match", b);
                 return false;
             }
 
@@ -189,10 +191,10 @@ namespace PERQmedia
         [Conditional("DEBUG")]
         public void PrintDirectory()
         {
-            Console.WriteLine("Section\tStart\tSize");
+            Log.Write("Section\tStart\tSize");
             for (int i = 0; i < PM_DIR_ENTRIES; i++)
             {
-                Console.WriteLine("  {0}\t{1}\t{2}", i, _directory[i * 2], _directory[i * 2 + 1]);
+                Log.Write("  {0}\t{1}\t{2}", i, _directory[i * 2], _directory[i * 2 + 1]);
             }
         }
 
