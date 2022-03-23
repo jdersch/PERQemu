@@ -47,7 +47,7 @@ namespace PERQemu
             PERQemu.Sys.VideoController.Status();
         }
 
-        [Command("power on", "Turn on the configured PERQ!")]
+        [Command("power on", "Turn on the configured PERQ")]
         public void PowerOn()
         {
             if (PERQemu.Controller.State > RunState.Off)
@@ -59,7 +59,7 @@ namespace PERQemu
             PERQemu.Controller.PowerOn();
         }
 
-        [Command("power off", "Turn off the PERQ")]
+        [Command("power off", "Turn off the running PERQ")]
         public void PowerOff()
         {
             if (PERQemu.Controller.State <= RunState.Off)
@@ -115,14 +115,10 @@ namespace PERQemu
         // Miscellany
         //
 
-        // todo:  have to fix the ambiguity issue in the commandprompt where an
-        // exact match that's a substring of a longer match is "ambiguous" even
-        // when the user types a space or tab -- "set" and "settings" conflict, but
-        // somehow it's not accepting the "set bootchar" even when typing it in full...
-        [Command("bootchar", "Set the boot character (selects the OS to boot)")]
-        private void SetBootChar(char ch)
+        [Command("bootchar", "Set the boot character (selects OS to boot)")]
+        private void SetBootChar(char key)
         {
-            PERQemu.Controller.BootChar = (byte)ch;
+            PERQemu.Controller.BootChar = (byte)key;
         }
 
         [Command("bootchar", "Show the boot character")]
@@ -139,13 +135,13 @@ namespace PERQemu
             }
         }
 
-
+        // todo: obviously the machine has to be running
         // todo: allow for png formatter (read Settings.ScreenFormat)
         // todo: make path relative to Output/ (or Settings.OutputDir)
         [Command("save screenshot", "Save a screenshot of the current PERQ display")]
-        private void SaveScreenshot(string filePath)
+        private void SaveScreenshot(string file)
         {
-            string outputPath = filePath + ".jpg";  // FIXME
+            string outputPath = file + ".jpg";  // FIXME
 
             try
             {
@@ -153,7 +149,7 @@ namespace PERQemu
             }
             catch (Exception e)
             {
-                Console.WriteLine("Error saving screenshot to {0} - Error: {1}", outputPath, e.Message);
+                Console.WriteLine($"Error saving screenshot to {outputPath}: {e.Message}");
             }
         }
 

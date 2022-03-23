@@ -114,7 +114,7 @@ namespace PERQemu.UI
             }
             else if (line.StartsWith("@", StringComparison.CurrentCulture))
             {
-                // A line beginning with an "@" indicates a script to execute.
+                // A line beginning with an "@" indicates a script to execute
                 string scriptFile = line.Substring(1);
 
                 ExecuteScript(scriptFile, true);
@@ -135,42 +135,36 @@ namespace PERQemu.UI
             }
         }
 
-        /// <summary>
-        /// Shows a top-level command summary.
-        /// </summary>
-        public void ShowCommands(CommandNode root)
+
+        public void ShowCommands(string key)
         {
-            // todo/fixme: given changes in the node structure and argument
-            // lists, we're missing many methods and not displaying all the
-            // available commands.  instead of chasing that down every time
-            // the command is run, populate the complete command lists when
-            // the tree is first created when all the information needed is
-            // already at hand.  this routine then just quickly prints the
-            // sorted and nicely formatted list from the given root.  nice!
-
-            // Start at the given root
-            foreach (var cmd in root.SubNodes)
+            if (_commandsAtNode.ContainsKey(key))
             {
-                if (!cmd.Hidden && !string.IsNullOrEmpty(cmd.Description))
+                foreach (var val in _commandsAtNode[key])
                 {
-                    if (cmd.Arguments == null)
-                    {
-                        Console.WriteLine("{0} - {1}", cmd.Name, cmd.Description);
-                    }
-                    else
-                    {
-                        var helper = cmd.Arguments;
+                    // todo: make the color scheme fit with the overal gestalt
+                    // todo: take the terminal width into account
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.Write("{0}{1}", " ".PadLeft(Math.Max(1, val.Pad)), val.Cmd);
 
-                        if (helper.Helpers.Count == 1)
-                        {
-                            Console.WriteLine("{0} [{1}] - {2}", cmd.Name, cmd.Arguments.Name, cmd.Description);
-                        }
-                        else
-                        {
-                            Console.WriteLine("{0} [*] - {1}", cmd.Name, cmd.Description);
-                        }
+#if DEBUG
+                    // This messes up our pretty formatting.  Should figure
+                    // out a nice way to wrap long lines, then make that the
+                    // standard output form?
+                    if (val.Args != string.Empty)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Gray;
+                        Console.Write(val.Args);
                     }
+#endif
+
+                    Console.ResetColor();
+                    Console.WriteLine($" - {val.Desc}");
                 }
+            }
+            else
+            {
+                Console.WriteLine($"No commands help available for '{key}'");
             }
         }
 
@@ -207,15 +201,14 @@ namespace PERQemu.UI
                     // Run out of supplied arguments, try the default value
                     invokeParams[paramIndex] = p.DefaultValue;
 
-                    // At this point this is the last argument (or by definition,
-                    // any remaining arguments will also have default values!)
+                    // Any remaining arguments must also have default values!
                     continue;
                 }
 
                 if (p.ParameterType.IsEnum)
                 {
-                    // This is an enumeration type. See if we can find an
-                    // enumerant that matches the argument.
+                    // This is an enumeration type; see if we can find an
+                    // enumerant that matches the argument
                     FieldInfo[] fields = p.ParameterType.GetFields();
 
                     foreach (FieldInfo f in fields)
@@ -288,7 +281,6 @@ namespace PERQemu.UI
             //
             command.Method.Method.Invoke(command.Method.Instance, invokeParams);
         }
-
 
         /// <summary>
         /// Splits a command into a list of words, taking care to handle quoted
@@ -578,6 +570,10 @@ namespace PERQemu.UI
         {
             // Create the root of the command tree
             _commandRoot = new CommandNode("Root", "");
+            _commandRoot.Prefix = true;
+
+            // Build a list to hold "commands" help 
+            var helpers = new List<CommandHelp>();
 
             // Now go discover our CommandAttributes!
             foreach (object commandObject in commandObjects)
@@ -604,8 +600,20 @@ namespace PERQemu.UI
                         var cmdNode = new CommandNode(tokens[tokens.Count - 1],
                                                       function.Description);
 
-                        // The better part of valor?
+                        // Set any attribute flags in the node
+                        cmdNode.Prefix = function.Prefix;
                         cmdNode.Hidden = function.Discreet;
+                        cmdNode.Repeats = function.Repeatable;
+
+                        // Create a fresh help node
+                        var cmdHelp = new CommandHelp(function.Name,
+                                                      string.Empty,
+                                                      function.Description,
+                                                      function.Prefix,
+                                                      function.Discreet);
+
+                        // Save a little effort later...
+                        if (cmdHelp.Prefix) cmdHelp.Pad = tokens.Count;
 
                         // Do we have any parameters?
                         var args = info.GetParameters();
@@ -623,6 +631,9 @@ namespace PERQemu.UI
                             // Create a new "arguments" node
                             var argNode = new ArgumentNode(args[0].Name, "", args[0],
                                             new MethodInvokeInfo(info, commandObject));
+
+                            // Save the args string
+                            cmdHelp.Args = $" [{args[0].Name}]";
 
                             // Attach it to our command node
                             cmdNode.Arguments = argNode;
@@ -652,6 +663,12 @@ namespace PERQemu.UI
                             // Now loop over the arguments and link 'em in
                             for (var i = 0; i < args.Length; i++)
                             {
+                                // Save it to the helper node
+                                if (args[i].IsOptional)
+                                    cmdHelp.Args += " {" + args[i].Name + "}";
+                                else
+                                    cmdHelp.Args += $" [{args[i].Name}]";
+
                                 // Build a new parameter node
                                 var argNode = new ArgumentNode(args[i].Name, "", args[i]);
 
@@ -678,20 +695,28 @@ namespace PERQemu.UI
                                 tempRoot = argNode;
                             }
                         }
+
+                        // Save the help node in the temporary list
+                        helpers.Add(cmdHelp);
                     }
                 }
             }
+
+            // Organize the commands help
+            BuildCommandsHelp(helpers);
         }
 
         [Conditional("DEBUG")]
         public void DumpCommandTree(CommandNode node, int _indent)
         {
             Console.Write("".PadLeft(_indent));
-            Console.WriteLine("Node: {0} - {1} (subnodes={2} hidden={3})",
+            Console.WriteLine("Node: {0} - {1} (subnodes={2} hidden={3} prefix={4} repeat={5})",
                               node.Name,
                               node.Description,
                               node.SubNodes.Count,
-                              node.Hidden
+                              node.Hidden,
+                              node.Prefix,
+                              node.Repeats
                              );
 
             if (node.Method != null)
@@ -705,9 +730,10 @@ namespace PERQemu.UI
                 ArgumentNode argNode = node.Arguments;
 
                 Console.Write("".PadLeft(_indent + 2));
-                Console.WriteLine("Parameter: {0} Pos: {1} {2}{3} Helpers: {4}",
+                Console.WriteLine("Parameter: {0} Pos: {1} {2}{3}{4} Helpers: {5}",
                                   argNode.Name,
                                   argNode.Param.Position,
+                                  argNode.Param.IsOptional ? "(Optional)" : "",
                                   argNode.Param.HasDefaultValue ? "(HasDefault) " : "",
                                   argNode.Param.ParameterType.IsEnum ? "(IsEnum) " : "",
                                   string.Join(" ", argNode.Helpers.ToArray()));
@@ -732,6 +758,117 @@ namespace PERQemu.UI
             }
         }
 
+
+        /// <summary>
+        /// Precompute a dictionary of nicely formatted lists of commands and
+        /// their descriptions, organized by subsystem.  This lets ShowCommands()
+        /// run fast without thinking hard.
+        /// </summary>
+        /// <remarks>
+        /// This cheeky little routine transforms the single list of CommandHelp
+        /// structs built up as the Command attributes were parsed to build the
+        /// command tree.  It plucks out the "prefix" nodes which serve as keys
+        /// into the _commandsAtNode dictionary, then filters and transfers the
+        /// CommandHelp nodes.  Sure, it's a slow and horrible hack, but it only
+        /// runs once at startup and it's way simpler than trying to construct
+        /// the list by traversing the command tree after the fact.
+        /// </remarks>
+        private void BuildCommandsHelp(List<CommandHelp> list)
+        {
+            // Allocate the dictionary to copy into (by key)
+            _commandsAtNode = new Dictionary<string, CommandHelp[]>();
+
+            var keys = new List<CommandHelp>();
+            var cmds = new List<CommandHelp>();
+            var matches = new List<CommandHelp>();
+            int widest = 0;
+
+            // Look through the list to find prefix nodes
+            keys.AddRange(list.FindAll((obj) => obj.Prefix));
+
+            // Longest matches first!  (We stashed the # of tokens in Pad :-)
+            keys.Sort((x, y) => y.Pad.CompareTo(x.Pad));
+
+            // Add an empty key to catch the leftovers at the end
+            keys.Add(new CommandHelp("", "", ""));
+
+            foreach (var key in keys)
+            {
+                cmds.Clear();
+                matches.Clear();
+
+                // A pure, unreconstructed hack
+                var match = (key.Cmd == "") ? "" : $"{key.Cmd} ";
+
+                matches.AddRange(list.FindAll((obj) => obj.Cmd.StartsWith(match, StringComparison.InvariantCultureIgnoreCase)));
+
+                // Transfer nodes that match this key
+                foreach (var cmd in matches)
+                {
+#if DEBUG
+                    // In DEBUG mode, expose the "hidden" commands...
+                    if (!string.IsNullOrEmpty(cmd.Desc))
+#else
+                    if (!key.Hidden && !cmd.Hidden && !string.IsNullOrEmpty(cmd.Desc))
+#endif
+                    {
+                        cmds.Add(cmd);
+                    }
+
+                    // Remove from the master list
+                    list.Remove(cmd);
+                }
+
+                var cmdArray = cmds.ToArray();
+                widest = 0;
+
+                // Now measure and trim the bloody command strings
+                for (int i = 0; i < cmdArray.Length; i++)
+                {
+                    if (cmdArray[i].Cmd.StartsWith(match, StringComparison.InvariantCultureIgnoreCase))
+                        cmdArray[i].Cmd = cmdArray[i].Cmd.Substring(match.Length);
+                    
+                    widest = Math.Max(widest, cmdArray[i].Cmd.Length);
+                }
+
+                // Zip through the array and set our pad values
+                for (int i = 0; i < cmdArray.Length; i++)
+                {
+                    cmdArray[i].Pad = (widest - cmdArray[i].Cmd.Length) + 1;
+                }
+
+                // Sort by command.  Sort by description is interesting too
+                Array.Sort(cmdArray, (x, y) => (x.Cmd.CompareTo(y.Cmd)));
+
+                // Set our empty key for the top-level node
+                string k = (key.Cmd == "") ? "root" : key.Cmd;
+
+                // Finally stash 'em in the dictionary
+                _commandsAtNode[k] = cmdArray;
+            }
+        }
+
+
+        public struct CommandHelp
+        {
+            public CommandHelp(string words, string args, string desc, bool pfx = false, bool hide = false)
+            {
+                Cmd = words;
+                Args = args;
+                Desc = desc;
+                Pad = 0;
+                Prefix = pfx;
+                Hidden = hide;
+            }
+
+            public string Cmd;
+            public string Args;
+            public string Desc;
+            public int Pad;
+            public bool Prefix;
+            public bool Hidden;
+        }
+
         enum ParseState
         {
             NonWhiteSpace = 0,
@@ -742,5 +879,6 @@ namespace PERQemu.UI
         private CommandNode _commandRoot;
         private CommandNode _currentRoot;
 
+        private Dictionary<string, CommandHelp[]> _commandsAtNode;
     }
 }

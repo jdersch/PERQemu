@@ -95,7 +95,6 @@ namespace PERQemu.UI
                 UpdateDisplay();
 
                 // Read one keystroke from the console...
-                //ConsoleKeyInfo key = Console.ReadKey(true);
                 ConsoleKeyInfo key = PERQemu.CLI.GetKeyEventually();
 
                 // TODO: allow the classic emacs-like control chars too!
@@ -262,7 +261,7 @@ namespace PERQemu.UI
             }
             catch
             {
-                Console.WriteLine($"Cursor @{_originRow},{_originColumn} out of bounds ({row},{column})");
+                //Console.WriteLine($"Cursor @{_originRow},{_originColumn} out of bounds ({row},{column})");
                 _originRow = Math.Max(0, _originRow);
                 _originRow = Math.Min(Console.BufferHeight, _originRow);
                 row = _originRow;
@@ -590,7 +589,13 @@ namespace PERQemu.UI
             // Always look for a SubNode match first
             foreach (CommandNode c in root.SubNodes)
             {
+#if DEBUG
+                // In DEBUG builds, Discreet commands are rudely visible, how gauche!
+                if (c.Name.StartsWith(word, StringComparison.InvariantCultureIgnoreCase))
+#else
+                // The better part of valor
                 if (!c.Hidden && c.Name.StartsWith(word, StringComparison.InvariantCultureIgnoreCase))
+#endif
                 {
                     match.SearchRoot = c;
                     match.Match = c.Name;
@@ -627,6 +632,7 @@ namespace PERQemu.UI
                 // Start down the chain!
                 match.SearchRoot = argNode;
 
+                // todo: hook in string KeywordMatch check here
                 if (argNode.Param.ParameterType.IsEnum ||
                     argNode.Param.ParameterType == typeof(bool))
                 {

@@ -40,7 +40,11 @@ namespace PERQemu
     /// 
     /// Global optionally flags a command as accessible from any level in the
     /// command tree (i.e., regardless of prefix).  These are only checked if
-    /// the typed command does not match the current tree.
+    /// the typed command does not match the current tree. [not implemented]
+    /// 
+    /// The (reintroduced) Prefix flag explicitly calls out nodes where the
+    /// "commands" list should be built.  This is where we define "subsystems"
+    /// such as "configuration", "settings", "debug", etc.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public class CommandAttribute : Attribute
@@ -51,6 +55,8 @@ namespace PERQemu
             _description = cmdDesc;
             _hidden = false;
             _repeats = false;
+            _global = false;
+            _prefix = false;
         }
 
         public virtual string Name
@@ -81,11 +87,18 @@ namespace PERQemu
             set { _global = value; }
         }
 
+        public virtual bool Prefix
+        {
+            get { return _prefix; }
+            set { _prefix = value; }
+        }
+
         private string _commandName;
         private string _description;
         private bool _hidden;
         private bool _repeats;
         private bool _global;
+        private bool _prefix;
     }
 
     [AttributeUsage(AttributeTargets.Parameter)]

@@ -57,7 +57,7 @@ namespace PERQemu.UI
             return false;
         }
 
-        [Command("configure", "Enter the configuration subsystem")]
+        [Command("configure", "Enter the configuration subsystem", Prefix = true)]
         public void SetConfigPrefix()
         {
             PERQemu.CLI.SetPrefix("configure");
@@ -324,7 +324,7 @@ namespace PERQemu.UI
             return n;
         }
 
-        [Command("configure memory", "Set the memory size")]
+        [Command("configure memory")]
         public void SetMemory()
         {
             Console.WriteLine("Configure the memory capacity, from 256KB to 8MB.  The CPU type determines\n" +
@@ -382,26 +382,26 @@ namespace PERQemu.UI
         }
 
         [Command("configure io board", "Configure the IO board type")]
-        public void SetIO(IOBoardType io)
+        public void SetIO(IOBoardType ioType)
         {
             if (PERQemu.Config.Quietly)
             {
-                PERQemu.Config.Current.IOBoard = io;
+                PERQemu.Config.Current.IOBoard = ioType;
                 return;
             }
 
             if (OKtoReconfig())
             {
-                if (io != PERQemu.Config.Current.IOBoard)
+                if (ioType != PERQemu.Config.Current.IOBoard)
                 {
-                    Console.WriteLine($"IO Board type {io} selected.");
+                    Console.WriteLine($"IO Board type {ioType} selected.");
 
                     // Tell the Configurator to update our storage options
                     // for the new board type, if necessary
-                    PERQemu.Config.UpdateStorage(io);
+                    PERQemu.Config.UpdateStorage(ioType);
 
                     // Now make the switch
-                    PERQemu.Config.Current.IOBoard = io;
+                    PERQemu.Config.Current.IOBoard = ioType;
                     PERQemu.Config.Changed = true;
                 }
 
@@ -413,28 +413,28 @@ namespace PERQemu.UI
         }
 
         [Command("configure option board", "Configure the IO Option board type")]
-        public void SetOptionIO(OptionBoardType oio)
+        public void SetOptionIO(OptionBoardType oioType)
         {
             if (PERQemu.Config.Quietly)
             {
-                PERQemu.Config.Current.IOOptionBoard = oio;
+                PERQemu.Config.Current.IOOptionBoard = oioType;
                 return;
             }
 
             if (OKtoReconfig())
             {
-                if (oio != PERQemu.Config.Current.IOOptionBoard)
+                if (oioType != PERQemu.Config.Current.IOOptionBoard)
                 {
-                    PERQemu.Config.Current.IOOptionBoard = oio;
+                    PERQemu.Config.Current.IOOptionBoard = oioType;
                     PERQemu.Config.Changed = true;
-                    Console.WriteLine($"IO Option board type {oio} selected.");
+                    Console.WriteLine($"IO Option board type {oioType} selected.");
 
                     // Board changed; reset the selected options to defaults
-                    if (oio == OptionBoardType.OIO)
+                    if (oioType == OptionBoardType.OIO)
                     {
                         PERQemu.Config.Current.IOOptions = IOOptionType.Link;
                     }
-                    else if (oio == OptionBoardType.MLO)
+                    else if (oioType == OptionBoardType.MLO)
                     {
                         PERQemu.Config.Current.IOOptions = IOOptionType.SMD;
                     }
@@ -657,7 +657,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Assign a media file to a particular unit #.
         /// </summary>
-        [Command("configure assign", "Assign a media file to a particular storage device")]
+        [Command("configure assign", "Assign a media file to storage device [unit #]")]
         public void ConfigAssign(string file, byte unit)
         {
             PERQemu.Config.AssignMediaTo(unit, file);

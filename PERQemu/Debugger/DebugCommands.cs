@@ -45,8 +45,13 @@ namespace PERQemu
     /// </remarks>
     public partial class DebugCommands
     {
-        [Command("debug", "Enter the debugging subsystem")]
-        [Command("debug z80 done", "Return to PERQ debugger")]
+        /*
+         * TODO: nearly all the debug commands require that the PERQ is
+         * instantiated in order to observe/manipulate state; many of them
+         * could require a pause/resume to operate reliably
+         */
+
+        [Command("debug", "Enter the debugging subsystem", Prefix = true)]
         public void SetDebugPrefix()
         {
             PERQemu.CLI.SetPrefix("debug");
@@ -124,7 +129,7 @@ namespace PERQemu
         }
 
         [Command("inst", Repeatable = true)]
-        [Command("debug inst", "Run one opcode", Repeatable = true)]
+        [Command("debug inst", "Run one Q-code", Repeatable = true)]
         public void DebugInst()
         {
             if (PERQemu.Controller.State <= RunState.Off)
@@ -241,14 +246,14 @@ namespace PERQemu
 #else
         // Define these to spit out an explanation rather than "Invalid command."
 
-        [Command("debug set file loglevel", "Set severity threshold for file logging")]
+        [Command("debug set file loglevel")]
         private void NoLogLevel(Severity s)
         {
             Console.WriteLine("File logging is not available.");
         }
 
-        [Command("debug enable file logging", "Enable logging to file")]
-        [Command("debug disable file logging", "Disable logging to file")]
+        [Command("debug enable file logging")]
+        [Command("debug disable file logging")]
         private void NoLogging()
         {
             Console.WriteLine("File logging is not available.");
@@ -434,15 +439,15 @@ namespace PERQemu
         //
 
         [Command("debug raise interrupt", "Assert a specific CPU interrupt")]
-        public void RaiseInterrupt(InterruptSource i)
+        public void RaiseInterrupt(InterruptSource irq)
         {
-            PERQemu.Sys.CPU.RaiseInterrupt(i);
+            PERQemu.Sys.CPU.RaiseInterrupt(irq);
         }
 
         [Command("debug clear interrupt", "Clear a specific CPU interrupt")]
-        public void ClearInterrupt(InterruptSource i)
+        public void ClearInterrupt(InterruptSource irq)
         {
-            PERQemu.Sys.CPU.ClearInterrupt(i);
+            PERQemu.Sys.CPU.ClearInterrupt(irq);
         }
 
         //
@@ -495,32 +500,32 @@ namespace PERQemu
         // Microcode
         //
 
-        [Command("debug load microcode", "Load a microcode file into the PERQ's writable control store")]
-        private void LoadMicrocode(string ucodeFile)
+        [Command("debug load microcode", "Load a microcode binary into the control store")]
+        private void LoadMicrocode([PathExpand] string binfile)
         {
             try
             {
-                PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(ucodeFile));
+                PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(binfile));
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to load microcode from '{0}': {1}", ucodeFile, e.Message);
+                Console.WriteLine("Unable to load microcode from '{0}': {1}", binfile, e.Message);
             }
         }
 
-        [Command("debug disassemble microcode", "Disassemble microcode instructions from the WCS (@ current PC)")]
+        [Command("debug disassemble microcode", "Disassemble microinstructions (@ current PC)")]
         private void DisassembleMicrocode()
         {
             DisassembleMicrocode(PERQemu.Sys.CPU.PC, 16);
         }
 
-        [Command("debug disassemble microcode", "Disassemble microcode instructions from the WCS (@ [addr])")]
+        [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr])")]
         private void DisassembleMicrocode(ushort startAddress)
         {
             DisassembleMicrocode(startAddress, 16);
         }
 
-        [Command("debug disassemble microcode", "Disassemble microcode instructions from the WCS (@ [addr, len])")]
+        [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
         private void DisassembleMicrocode(ushort startAddress, ushort length)
         {
             ushort endAddr = (ushort)(startAddress + length);
@@ -539,7 +544,7 @@ namespace PERQemu
             }
         }
 
-        [Command("debug jump", "Start or resume execution at a given microinstruction address")]
+        [Command("debug jump", "Start or resume execution at a given microaddress")]
         private void JumpTo(ushort nextPC)
         {
             if (nextPC >= PERQemu.Sys.CPU.Microcode.Length)

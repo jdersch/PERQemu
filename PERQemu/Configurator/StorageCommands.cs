@@ -19,6 +19,7 @@
 
 using System;
 using System.IO;
+using System.Diagnostics;
 
 using PERQmedia;
 using PERQemu.Config;
@@ -43,7 +44,7 @@ namespace PERQemu.UI
         //  storage save <n> <file>     -- save unit <n> as <file> (if loaded)
         //  storage save <n> <file> <fmt> -- saveaswithformat()
 
-        [Command("storage", "Enter the storage configuration subsystem")]
+        [Command("storage", "Enter the storage configuration subsystem", Prefix = true)]
         public void SetStoragePrefix()
         {
             PERQemu.CLI.SetPrefix("storage");
@@ -474,6 +475,31 @@ namespace PERQemu.UI
             }
         }
 
+        /// <summary>
+        /// Shows the detailed specs for a particular drive.
+        /// </summary>
+        [Command("storage show", "Show device specifications")]
+        private void ShowDeviceSpecs([KeywordMatch] string driveType)
+        {
+            var drive = PERQemu.Config.GetKnownDeviceByName(driveType);
+            if (drive == null)
+            {
+                Console.WriteLine($"Unknown drive type '{driveType}'");
+                return;
+            }
+
+            var capacity = drive.Geometry.TotalBytes / 1000000;     // "MB", not "MiB"
+            var specs = drive.Specs.ToString().Split('\n');
+
+            Console.WriteLine($"Device type:  {drive.Info.Name} (class {drive.Info.Type})");
+            Console.WriteLine($"Description:  {drive.Info.Description}");
+            Console.WriteLine($"Capacity:     {capacity}MB (formatted)");
+            Console.WriteLine($"Geometry:     {drive.Geometry}");
+            Console.WriteLine($"Performance:  {specs[0]}");
+            Console.WriteLine($"              {specs[1]}");
+            Console.WriteLine($"Removable:    {drive.Info.IsRemovable}");
+        }
+
         //
         // Defining Storage Types
         //
@@ -489,7 +515,7 @@ namespace PERQemu.UI
         /// Must reference a (previously defined) geometry and performance
         /// record.  Quietly sets the prefix, then restores it on "done".
         /// </summary>
-        [Command("storage define", "Define a new drive type", Discreet = true)]
+        [Command("storage define", "Define a new drive type", Prefix = true, Discreet = true)]
         private void StorageDefine(DeviceType type, string name)
         {
             _dev = new StorageDevice();
@@ -498,13 +524,20 @@ namespace PERQemu.UI
             PERQemu.CLI.SetPrefix("storage define");
         }
 
-        [Command("storage define description", "Set description of the new drive")]
+        [Conditional("DEBUG")]
+        [Command("storage define commands", "Show the sooper sekrit incantations")]
+        private void ShowDefineCommands()
+        {
+            PERQemu.CLI.ShowCommands("storage define");            
+        }
+
+        [Command("storage define description", "Describe the drive's make and model")]
         private void DefineDesc(string desc)
         {
             _dev.Info.Description = desc;
         }
 
-        [Command("storage define geometry", "Define the new drive's geometry")]
+        [Command("storage define geometry", "Define the drive's geometry")]
         private void DefineNewGeometry(string tag, ushort cyl, byte heads, ushort sec, ushort secSize = 512, byte hdrSize = 0)
         {
             // Add a new geometry record to the hash
@@ -519,7 +552,7 @@ namespace PERQemu.UI
             _dev.Geometry = PERQemu.Config.GetGeometry(tag);
         }
 
-        [Command("storage define performance", "Define the new drive's performance characteristics")]
+        [Command("storage define performance", "Define the drive's performance characteristics")]
         private void DefineNewSpecs(string tag, int rpm, int pulse, int delay, int seekMin, int seekMax, int settle, int xfer)
         {
             var specs = new DevicePerformance(rpm, pulse, delay, seekMin, seekMax, settle, xfer);
@@ -533,7 +566,7 @@ namespace PERQemu.UI
             _dev.Specs = PERQemu.Config.GetDriveSpecs(tag);
         }
 
-        [Command("storage define removable", "Define if the drive has removable media")]
+        [Command("storage define removable", "Define whether the drive has removable media")]
         private void DefineRemovable(bool canRemove)
         {
             _dev.Info.IsRemovable = canRemove;
@@ -542,7 +575,15 @@ namespace PERQemu.UI
         [Command("storage define done", "Complete and save the new drive definition")]
         private void DefineDone()
         {
-            PERQemu.Config.AddKnownDrive(_dev);
+            try
+            {
+                PERQemu.Config.AddKnownDrive(_dev);
+            }
+            catch (Exception e)
+            {
+                Log.Error(Category.Emulator, "Could not define drive {0}: {1}",
+                          _dev.Info.Name, e.Message);
+            }
             SetStoragePrefix();
         }
 

@@ -30,13 +30,19 @@ namespace PERQemu
         // Z80 Debugging
         //
 
-        [Command("debug z80", "Enter the Z80 debugging subsystem")]
+        [Command("debug z80", "Enter the Z80 debugging subsystem", Prefix = true)]
         private void SetZ80DebugPrefix()
         {
             PERQemu.CLI.SetPrefix("debug z80");
         }
 
-        [Command("debug z80 commands")]
+        [Command("debug z80 done", "Return to PERQ debugger")]
+        public void Z80DebugDone()
+        {
+            PERQemu.CLI.SetPrefix("debug");
+        }
+
+        [Command("debug z80 commands", "Show Z80 debugging commands")]
         public void ShowZ80DebugCommands()
         {
             PERQemu.CLI.ShowCommands("debug z80");
@@ -56,7 +62,7 @@ namespace PERQemu
             }
         }
 
-        [Command("debug z80 show registers", "Display the values of the Z80 registers")]
+        [Command("debug z80 show registers", "Display contents of the Z80 registers")]
         private void ShowZ80State()
         {
             PERQemu.Sys.IOB.Z80System.ShowZ80State();
@@ -71,7 +77,7 @@ namespace PERQemu
 
         // todo: bare bones right now - just display one byte.  expand this to
         // allow ranges and output options (radix, ascii, etc?)
-        [Command("debug z80 show memory", "Display value at a given memory location")]
+        [Command("debug z80 show memory", "Display contents of a given memory location")]
         private void ShowZ80Memory(ushort addr)
         {
             try

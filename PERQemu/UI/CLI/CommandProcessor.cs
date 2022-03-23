@@ -252,7 +252,7 @@ namespace PERQemu
                               "included with the distribution.");
         }
 
-        [Command("help editor", "Show PERQemu command line editor help")]
+        [Command("help editor", "Show command line editor help")]
         private void HelpCLI()
         {
             Console.WriteLine("Some commands accept optional arguments, while some require them; press the\n" +
@@ -273,7 +273,7 @@ namespace PERQemu
             //                  "[Setting output radix not yet implemented]");
         }
 
-        [Command("help configure", "Show PERQemu Configurator help")]
+        [Command("help configure", "Show configuration help")]
         private void HelpConfig()
         {
             Console.WriteLine("The Configurator lets you load, modify and save PERQ configurations.  Several\n" +
@@ -289,7 +289,7 @@ namespace PERQemu
                               "you have made changes that haven't been saved.  Type 'done' when finished.");
         }
 
-        [Command("help debugger", "Show PERQemu Debugger help")]
+        [Command("help debugger", "Show debugger help")]
         private void HelpDebug()
         {
             Console.WriteLine("PERQemu provides extensive for debugging the emulator itself or code running\n" +
@@ -300,7 +300,7 @@ namespace PERQemu
                               "will be fully documented at a future date.]");
         }
 
-        [Command("help logging", "Show PERQemu logging help")]
+        [Command("help logging", "Show logging help")]
         private void HelpLogging()
         {
             Console.WriteLine("PERQemu provides voluminous debugging output and a set of commands to choose\n" +
@@ -312,25 +312,12 @@ namespace PERQemu
         [Command("commands", "Show console commands and their descriptions")]
         public void ShowCommands()
         {
-            _exec.ShowCommands(_exec.CurrentRoot);
+            _exec.ShowCommands("root");
         }
 
         public void ShowCommands(string prefix)
         {
-            var node = _exec.CommandTreeRoot;       // Help on multiple levels!
-
-            foreach (var level in prefix.Split(' '))
-            {
-                node = node.FindSubNodeByName(level);
-
-                if (node == null)
-                {
-                    Console.WriteLine("No help available for '{0}'.", prefix);
-                    return;
-                }
-            }
-
-            _exec.ShowCommands(node);
+            _exec.ShowCommands(prefix);
         }
 
         [Command("gui", "Start the graphical interface")]
@@ -348,14 +335,14 @@ namespace PERQemu
         }
 
         [Command("exit")]
-        [Command("quit", "Leave PERQemu")]
+        [Command("quit", "Quit PERQemu")]
         private void Quit()
         {
             PERQemu.Controller.PowerOff();
             _running = false;
         }
 
-        [Command("quit without save", "Leave PERQemu without committing changes")]
+        [Command("quit without save", "Quit PERQemu without committing changes")]
         private void QuitNow()
         {
             PERQemu.Controller.PowerOff(false);     // Stop the machine, if running

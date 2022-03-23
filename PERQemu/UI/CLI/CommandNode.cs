@@ -98,10 +98,11 @@ namespace PERQemu.UI
                 }
                 else if (Param.ParameterType == typeof(char))
                 {
-                    return arg.Length > 0;      // force this to be ONE char?
+                    return arg.Length == 1;
                 }
                 else if (Param.ParameterType == typeof(string))
                 {
+                    // todo: check [KeywordMatch] attribute here
                     return !string.IsNullOrEmpty(arg);
                 }
                 else if (Param.ParameterType == typeof(int))
@@ -179,7 +180,7 @@ namespace PERQemu.UI
             }
             else if (Param.ParameterType == typeof(char))
             {
-                Helpers.Add("[char]");
+                Helpers.Add($"[char] ({Param.Name})");
             }
             else
             {
@@ -207,6 +208,8 @@ namespace PERQemu.UI
             Name = name.Trim().ToLower();
             Description = desc;
             Hidden = false;
+            Prefix = false;
+            Repeats = false;
             Method = null;
             Arguments = null;
             SubNodes = new List<CommandNode>();
@@ -220,6 +223,8 @@ namespace PERQemu.UI
         public string Name;
         public string Description;
         public bool Hidden;
+        public bool Prefix;
+        public bool Repeats;
 
         public MethodInvokeInfo Method;
 
@@ -307,6 +312,21 @@ namespace PERQemu.UI
                     if (subNode.Method == null && cmd.Method != null)
                     {
                             subNode.Method = cmd.Method;
+                    }
+
+                    // Update flags, since we can't guarantee the order in which
+                    // nodes will be inserted.  NB: only positive assertions!
+                    if (cmd.Prefix && !subNode.Prefix)
+                    {
+                        subNode.Prefix = cmd.Prefix;
+                    }
+                    if (cmd.Hidden && !subNode.Hidden)
+                    {
+                        subNode.Hidden = cmd.Hidden;
+                    }
+                    if (cmd.Repeats && !subNode.Repeats)
+                    {
+                        subNode.Repeats = cmd.Repeats;
                     }
 
                     return;     // Done

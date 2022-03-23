@@ -32,7 +32,7 @@ namespace PERQemu.UI
     public class SettingsCommands
     {
 
-        [Command("settings", "Enter the settings subsystem")]
+        [Command("settings", "Enter the settings subsystem", Prefix = true)]
         public void SetSettingsPrefix()
         {
             PERQemu.CLI.SetPrefix("settings");
