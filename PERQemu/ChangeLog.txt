@@ -251,6 +251,12 @@ March, 2022:
     reworked the Z80 rate limiting to let the thread "breathe" a bit; average
     frame rate jumped back to ~30fps.  Huh.
 
+    9. Some UI improvements: the "commands" output that went missing after the
+    command tree/CLI was restructured has been restored.  Some small changes to
+    the storage commands.  And the PERQmedia library now uses the logger instead
+    of naked writes to the console.  Taking a breather/gathering strength for
+    the ExecutionController rewrite...
+
 
 ---
-Last update: skeezics    Thu Mar 17 20:54:21 PDT 2022
+Last update: skeezics    Tue Mar 22 18:01:31 PDT 2022

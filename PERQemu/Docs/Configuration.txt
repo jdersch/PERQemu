@@ -158,41 +158,14 @@ from the older IOB/CIO boards.  The EIO supports one or two 8" or 5.25" hard
 disks and sports a faster Z80 subsystem with a second RS-232 port and a real-
 time clock (RTC) chip.
 
-Just to be perverse, the "Ethernet IO" board was offered in a configuration
-without the Ethernet interface.  Known as the "NIO" (Non-Ethernet IO) it's
-really not clear how many, if any of these, were ever actually shipped.  If
-you configure a PERQ-2 without an Ethernet PERQemu will just quietly change
-the board type to NIO, or back to EIO if you add the Ethernet back in.
+The "Ethernet IO" board was allegedly offered in a configuration without the
+Ethernet interface, known as the "NIO" (Non-Ethernet IO).  If you configure a
+PERQ-2 without an Ethernet PERQemu will just quietly change the board type to
+NIO, or back to EIO if you add the Ethernet back in.  Since PERQemu doesn't yet
+support Ethernet, effectively all EIOs are NIOs for now.
 
-    [For too much information about IO Boards, see the supplemental
-     documentation in Docs/IOBoards.txt.]
-    
-
-Optional Boards
----------------
-
-The PERQ's 5-slot backplane offered two expansion slots: a CPU Option and an
-IO Option.  (In PERQemu, we combine these for simplicity.)
-
-Three Rivers never shipped any specific CPU Option boards, but there were two
-"universal" options: the Link board and the Streamer.  These could be fashioned
-to run in either Option slots.  If either of these options are selected, they
-will be emulated by a single IO Option board.  [Link is partially implemented
-but only as a "stub" to allow the machine to boot; the QIC Streaming Tape is
-on the to-do list.]
-
-The standard "OIO" board typically came in one of three variants:  Ethernet,
-Canon laser printer, and Streamer (in any combination).  In addition, a Link
-option could be incorporated as well.  For a PERQ-1, the only way to add
-Ethernet was through the OIO board.
-
-Although the "Multibus/Laser Option" board (MLO) was developed on the PERQ-1
-way earlier than previously thought, the only surviving software seems to rely
-on the PERQ-2's (EIO) DMA hardware.  If/when the MLO is emulated, it will be
-limited to PERQ-2 systems.  It will also sport a Canon laser interface.
-
-    [For even more information about IO Option Boards, see the
-     supplemental documentation in Docs/IOBoards.txt.]
+    [For more information about I/O boards and future I/O Option board
+    types, see the supplemental documentation in Docs/IOBoards.txt.]
 
 
 Storage Options
@@ -342,9 +315,9 @@ them.  These live in Emulator/IO/DiskDevices:
           be subclassed if smoother accelleration ramps desired
         - provides the "mechanical" hard disk emulation, handling seeks,
           head settling, index pulses, etc.
-        - interfaced to an IOBoard through an IDiskController (eventually)
+        - interfaced to an IOBoard through an IStorageController
 
-The IDiskController interface will define the common hooks for the PERQ to
+The IStorageController interface will define the common hooks for the PERQ to
 control the HardDisks using the appropriate protocols.  These are:
 
     ShugartController.cs    - Controller for Shugart SA4000-series drives
@@ -360,7 +333,7 @@ control the HardDisks using the appropriate protocols.  These are:
           drives (21-70MB) used in early PERQ 2 models
         - in theory, a "CIO" PERQ-1 could talk to this controller?  But
           I expect normally it will attach to an NIO/EIO in a PERQ-2?
-        - [not yet implemented]
+        - [under development]
 
     MFMController.cs    - Controller for all generic ST-506/MFM drives
         - loads DeviceType.Disk5Inch images
@@ -452,4 +425,4 @@ let's not get carried away.)
 Wow.  If you read all that, give yourself a cookie!
 
 --
-Last update: skeezics    Fri Feb 11 23:28:31 PST 2022
+Last update: skeezics    Tue Mar 22 18:01:31 PDT 2022

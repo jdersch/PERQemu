@@ -196,15 +196,30 @@ well, if at all.  Using a 128-bit decimal type to specify the speed in Mhz is
 overkill.  Rather than mess with it we set the Z80's default ClockSynchronizer
 to null and the PERQsystem/Z80system does the rate limiting.
 
-To accomplish this, a SystemTimer object registers a periodic timer (with our
-homegrown HighResolutionTimer) and a WaitHandle to provide a "heartbeat" every
-n-milliseconds (initially every 10-20ms).  The number of instruction cycles the
-processor should execute in that time is computed.  Each processor free runs
-until that number of clock cycles is executed, then calls WaitForHeartbeat().
-If the processor is running fast, it blocks until the timer fires, which clears
-the wait and allows the thread to resume.  If the processor is running too slow
-it continues without delay.  This simple strategy seems to work well with the
-2.4576Mhz IOB Z80, where it regulates within +-1ns of the target rate.
+A new synchronization strategy has been devised that seems to work very well.
+There are essentially two time domains in the emulator now:  the "virtual time"
+as ticked off every cycle by the Scheduler objects, and real time which is used
+to rate limit the entire virtual machine.
+
+In real-time, the PERQ CPU runs a SystemTimer object that registers a periodic
+timer with the (homegrown) HighResolutionTimer.  It provides a WaitHandle and a
+"heartbeat" callback every n milliseconds (initially every 10-20ms).  The number
+of instruction cycles the PERQ's processor should execute in that time period is
+computed, and the CPU free runs until that number of clock cycles is executed.
+If the emulator is running fast, the CPU blocks in WaitForHeartbeat() until the
+timer fires, which clears the wait and allows the thread to resume.  If it's
+running too slow it continues without delay.
+
+To keep the Z80 and PERQ in sync with each other, the Z80 now runs entirely in
+the "virtual time" domain.  It simply compares the PERQ Scheduler (clocked every
+170ns) to its own (clocked at 407ns or 250ns, for the IOB or EIO respectively).
+If the Z80 is behind the PERQ, one opcode is executed and the Z80's clock is
+advanced; if it's ahead by more than a typical instruction length, it schedules
+(with the PERQ) a callback to wake it up again, otherwise a brief spin wait is
+used.  This also solves the problem of dealing with disparate clock rates when
+single stepping during debugging; now the "step", "inst" and "z80inst" states
+maintain the clock ratio between the two processors.  This strategy works in
+both asynchronous and synchronous execution modes.
 
 
 I have no idea how we're _supposed_ to program the Z80dotNet peripheral devices
@@ -242,4 +257,4 @@ Bottom line:
 
 
 --
-Last update: skeezics    Thu Feb 10 00:11:23 PST 2022
+Last update: skeezics    Tue Mar 22 18:01:31 PDT 2022
