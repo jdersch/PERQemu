@@ -304,9 +304,7 @@ namespace PERQemu.Config
                     sw.WriteLine("tablet " + _current.Tablet);
                     sw.WriteLine("option board " + _current.IOOptionBoard);
 
-                    //
-                    // Enumerate the IO options, if any.
-                    //
+                    // Enumerate the IO options, if any
                     if (_current.IOOptions != IOOptionType.None)
                     {
                         foreach (IOOptionType opt in Enum.GetValues(typeof(IOOptionType)))
@@ -316,17 +314,12 @@ namespace PERQemu.Config
                         }
                     }
 
-                    //
-                    // Write out the storage configuration.  Only
-                    // save devices with an assigned media file. 
-                    //
+                    // Write out the storage configuration
                     for (var unit = 0; unit < _current.Drives.Length; unit++)
                     {
                         var dev = _current.Drives[unit];
-                        if (!string.IsNullOrEmpty(dev.MediaPath))
-                        {
-                            sw.WriteLine("drive {0} {1}", unit, dev.MediaPath);
-                        }
+
+                        sw.WriteLine("drive {0} {1} {2}", unit, dev.Type, dev.MediaPath);
                     }
 
                     sw.WriteLine("done");

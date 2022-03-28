@@ -120,7 +120,19 @@ namespace PERQemu.IO.Z80
             //}
 
             // Attach our debugger
-            _z80Debugger = new Z80Debugger();
+            switch (system.Config.IOBoard)
+            {
+                case IOBoardType.IOB:
+                    _z80Debugger = new Z80Debugger("pz80.lst");
+                    break;
+
+                case IOBoardType.CIO:
+                    _z80Debugger = new Z80Debugger("cioz80.lst");
+                    break;
+
+                default:
+                    throw new InvalidConfigurationException($"No Z80 debugger for {system.Config.IOBoard}");
+            }
         }
 
         public bool SupportsAsync => true;

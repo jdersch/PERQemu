@@ -205,7 +205,7 @@ namespace PERQemu.IO.DiskDevices
                           "Buffered step to cyl {0}, total seek now {1}ms (step interval={2:n}ms)",
                           _cyl, delay * Conversion.NsecToMsec, interval);
 
-                // Update the seek event with the new delay time.
+                // Update the seek event with the new delay time
                 _seekEvent = _scheduler.ReSchedule(_seekEvent, delay);
             }
         }

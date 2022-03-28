@@ -257,6 +257,13 @@ March, 2022:
     of naked writes to the console.  Taking a breather/gathering strength for
     the ExecutionController rewrite...
 
+    10. Updated the PROM directory for CIO support: new CPU boot microcode and
+    the Z80 code dumped from the v10.17 PROMs.  Updated Z80 DMA to return status
+    info and am filling in the missing/changed parts that IOB doesn't use but
+    CIO needs.  Fixes to PERQmedia to make IMD-format floppy loading reliable
+    (was having issues with bootable POS floppies).  Work proceeding on the new
+    User's Guide (in PDF, text update to follow).
+
 
 ---
-Last update: skeezics    Tue Mar 22 18:01:31 PDT 2022
+Last update: skeezics    Sun Mar 27 21:41:45 PDT 2022

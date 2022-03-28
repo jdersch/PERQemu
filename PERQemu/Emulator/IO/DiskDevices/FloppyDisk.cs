@@ -37,9 +37,11 @@ namespace PERQemu.IO.DiskDevices
             // If instantiated without a diskette loaded!
             if (string.IsNullOrEmpty(filename))
             {
-                Info = DeviceInfo.SA851;
                 Geometry = DeviceGeometry.NoMedia;
             }
+
+            // The only device type we support
+            Info = DeviceInfo.SA851;
 
             _ready = false;
             _fault = false;

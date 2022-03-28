@@ -104,7 +104,7 @@ namespace PERQemu.IO.DiskDevices
             if (unit < 1 || (_system.Config.Chassis == ChassisType.PERQ1 && unit > 1) ||
                             (_system.Config.Chassis != ChassisType.PERQ1 && unit > 2))
                 throw new InvalidOperationException($"MicropolisController unit {unit} out of range");
-            
+
             unit--;
 
             _disks[unit] = dev as HardDisk;
@@ -146,6 +146,12 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 case 0xc8:  // Micropolis Cylinder/Sector register
+                    // Format is different:
+                    // Shugart packs it all in one word (sigh)
+                    // Micropolis breaks it out into the format shared w/MFM
+                    //      head
+                    //      cyl msb
+                    // Sector # is given in a separate register
                     _sector = (ushort)(value & 0x1f);
                     _head = (byte)((value & 0xe0) >> 5);
                     _cylinder = (ushort)((value & 0xff80) >> 8);
@@ -169,6 +175,10 @@ namespace PERQemu.IO.DiskDevices
                     _blockNumber = (value & 0xffff);
 
                     Log.Debug(Category.HardDisk, "Micropolis Block # set to {0:x4}", _blockNumber);
+                    break;
+
+                case 0xcc:
+                    // Sector number
                     break;
 
                 case 0xd0:  // Micropolis Data Buffer Address High register
@@ -327,10 +337,11 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         /// <remarks>
         /// On the PERQ-1 IOB, the Z80 CTC is programmed to issue seek pulses
-        /// to take advantage of buffering in the SA4000 drives.  The microcode
-        /// still has to set up the registers for the DMA addresses, direction,
-        /// and cyl/head/sec.  HardDiskSeekControl calls this routine to issue
-        /// the command to the disk (with the proper Direction set).
+        /// for the SA4000 drives.  With the "CIO Micropolis" I assume that the
+        /// adapter takes advantage of the same strategy.  But when configured
+        /// for the EIO more study will be required as to how the hardware does
+        /// it.  In either case, the microcode still has to set up the registers
+        /// for the DMA addresses, direction, and cyl/head/sec.
         /// </remarks>
         public void DoSingleSeek()
         {
@@ -338,19 +349,8 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Seek completion just resets the state machine.  Apparently the
-        /// Micropolis controller doesn't actually interrupt in this case, and
-        /// for seeks it doesn't even set the "busy" status bits!?
+        // TODO: Seek completion for the Micropolis
         /// </summary>
-        /// <remarks>
-        /// The SA4000 doesn't really provide "seek complete" -- just "on
-        /// cylinder" -- with the requirement that the driver allows ~20ms
-        /// or two index pulses for "head settling" before any read/write
-        /// commands can be issued.  When the Z80 performs seeks, it computes
-        /// the delay based on the seek distance and a table in the code,
-        /// waits that long, then interrupts the PERQ with a reply message to
-        /// signal Seek Complete.  Yikes.
-        /// </remarks>
         public void SeekCompletionCallback(ulong skewNsec, object context)
         {
             _seekState = SeekState.WaitForStepSet;
@@ -371,10 +371,10 @@ namespace PERQemu.IO.DiskDevices
             // todo: This is actually a DMA operation, but that's not
             // implemented yet.  So just do the whole block, lickety split
 #if DEBUG
-			if (SelectedDisk.CurCylinder != _cylinder || SelectedDisk.CurHead != _head)
-				Log.Warn(Category.HardDisk,
-						 "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
-						 SelectedDisk.CurCylinder, _cylinder, SelectedDisk.CurHead, _head);
+            if (SelectedDisk.CurCylinder != _cylinder || SelectedDisk.CurHead != _head)
+                Log.Warn(Category.HardDisk,
+                         "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
+                         SelectedDisk.CurCylinder, _cylinder, SelectedDisk.CurHead, _head);
 #endif
             // Read the sector from the disk
             Sector sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
@@ -490,6 +490,7 @@ namespace PERQemu.IO.DiskDevices
         /// Low words of Data and Header buffer addresses come in XNOR'd with
         /// 0x3ff for unknown reasons (must be some weird controller hardware
         /// quirk).  To get the real address, we do the XNOR operation again...
+        // TODO: is this relevant to the Micropolis?
         /// </summary>
         private int Unfrob(int value)
         {
@@ -499,6 +500,8 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Set the controller Busy status, allow for processing delay, then
         /// raise the HardDisk interrupt.
+        // TODO: figure out interrupt requests from the Micropolis adapter, and
+        // take the masking bit into consideration
         /// </summary>
         private void SetBusyState()
         {
@@ -524,6 +527,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Unconditionally clear the Busy state.  Raise or clear the disk
         /// interrupt, depending on the caller's situation.
+        // TODO: update for Micropolis
         /// </summary>
         private void ClearBusyState(bool raiseInterrupt = false)
         {
@@ -638,3 +642,188 @@ namespace PERQemu.IO.DiskDevices
         private PERQSystem _system;
     }
 }
+
+/*
+struct DiskControl
+{
+    byte DriveSelect;   // bits 7:6
+    byte BA;            // bits 5:4
+    byte B;             // bits 3:0
+}
+
+struct StateMachineControl
+{
+    bool CRCNonFatal;   // bit 7 (unimplemented?)
+    bool BusEnable;     // bit 6
+    bool DBInterrupt;   // bit 5
+    bool InterruptOn;   // bit 4
+    bool Reset;         // bit 3 (active low)
+    byte Function;      // bits 2:0
+}
+
+struct StateMachineStatus
+{
+    DeviceType DiskType;    // bits 10:9
+    bool Index;             // bit 8 ("Index/2")?
+    bool UnitReady;         // bit 7 (active low)
+    bool OnCylinder;        // bit 6 (   "    " )
+    bool Fault;             // bit 5 (   "    " )
+    bool SeekError;         // bit 4 (   "    " )
+    bool SMInterrupt;       // bit 3
+    byte Status;            // bits 2:0
+}
+
+ 
+    Notes:
+
+    parsing "disk.quick" for how to handle micropolis drives
+
+    only two regs for writing?  dskctl and smctl
+     
+     DSKCTL<7>:  SA-4000 - Select Drive #2
+                 M1200   - DriveSelect<0>
+	 DSKCTL<6>:  SA-4000 - Select Drive #3
+                 M1200   - DriveSelect<1>
+	 DSKCTL<5>:  SA-4000 - Direction High = In, Low = Out
+
+				 M1200   - BA<0>
+	 DSKCTL<4>:  SA-4000 - FaultClear Low-High-Low
+				 M1200   - BA<1>
+	 DSKCTL<3>:  SA-4000 - Head<3>
+				 M1200   - B<3>
+	 DSKCTL<2>:  SA-4000 - Head<2>
+				 M1200   - B<2>
+	 DSKCTL<1>:  SA-4000 - Head<1>
+				 M1200   - B<1>
+	 DSKCTL<0>:  SA-4000 - Head<0>
+				 M1200   - B<0>
+				 
+     SMCTL<7>:  T2 H - Makes CRC errors non-fatal(proposed).
+     SMCTL<6>:  SA-4000 - Step H - Low-High-Low causes a disk step
+
+				M1200   - BusEn H - used to latch data into drive control
+						  electronics via DSKCTL<5:0>.
+     SMCTL<5>:  T H - Enables "DB" interrupt.
+	 SMCTL<4>:  Interrupts On H - Enable all interrupts to PERQ
+	 SMCTL<3>:  Reset L - Reset disk controller when Low, must be set High
+
+						  before doing any disk operations.
+	 SMCTL<2>:  F2
+	 SMCTL<1>:  F1 - See Data Operation Table
+	 SMCTL<0>:  F0
+	 
+     SMSTAT<10>          - DiskType<1>
+	 SMSTAT<9>           - DiskType<0>
+	 SMSTAT<8>           - Index/2
+	 SMSTAT<7>           - Unit Ready L
+	 SMSTAT<6>           - On Cylinder L
+	 SMSTAT<5>           - Fault L
+	 SMSTAT<4>    SA4000 - Track 00 L
+				   M1200 - Seek Error L
+	 SMSTAT<3>           - State Machine Interrupt H
+	 SMSTAT<2>           - Status<2>
+	 SMSTAT<1>           - Status<1> See Status<2:0> section
+	 SMSTAT<0>           - Status<0>
+
+	SMSTAT<3>, SMSTAT<4>, SMSTAT<6>, and SMSTAT<7> also cause an interrupt
+    to PERQ when asserted. Unit Ready, SMSTAT<7> will also cause an interrupt
+    if de-asserted.  SMCTL<4> must be High to enable interrupts to PERQ.
+
+    to transfer a byte to the adapter:
+        BA<0:1> must both be high (\060)
+        low bits of the ctrl byte onto low bits of dskctl
+            latched by busen after 2 ucycles
+        next, high bits latched
+            another 2 ucycles
+        then BA<0:1> set to tell the drive what the byte is
+            0 is low 8 cyl bits <7:0>
+            40 is head<2:0> and high cyl bits <11:10>   (i presume that's bits 9:8)
+            20 is a set of function bits:
+                <7> preamp gain high    we can ignore
+                <6> restore             is this a recalibrate/track 0 op?
+                <4> fault clear
+                <3> offset minus
+                <2> offset plus
+                <0> write gate
+                bits 1 & 5 are not used
+
+    this is assumed to be the same strategy as used for the mfm disks!?  or not?
+
+    seek and head sel:  both the low cyl and head/hi cyl bytes must be loaded
+    (hey! they call out the 1223 explicitly, so the DO use the embedded ctrlr)
+
+    the drive electronics figure out if cyl # changed and initiates a seek if 
+    req'd, otherwise just a head sel
+        on cyl deasserted until the seek finishes, then reasserted + interrupt;
+        if an error occurs, seek error asserted + interrupt
+
+    can do a head select only without loading the low cyl byte
+
+    seek error asserted on timeout (500ms) or illegal track addr; seek err is
+    cleared by a restore or reissuing a proper track addr (unless mech failure)
+
+    restore works much like a seek, except it's unrecoverable if it fails
+
+    fault clear is like restore; no effect if the fault can't be cleared; should
+    be nearly instantaneous (no op delay)
+
+    offset +- can be used to nudge the heads on retries  after an error (e.g.)
+    but i don't think the emulator needs to worry about that :-)
+
+    preamp gain boost may help read recoveries (ignore)
+
+    write gate isn't under program control, but must be set to enable writing on
+    the drive; resetting during a write op effects an override (shouldn't happen)
+
+    data xfers:
+
+    smctl<2:0> bits:  see the inscrutable table
+        0 = idle            4 = correct     ("SMD only")
+        1 = format          5 = bread
+        2 = write           6 = fixph       (proposed)
+        3 = cwrite          7 = read
+
+    constants are loaded to define the headers; loaded before starting
+    (these must be the analogues to all the specific registers in the sa4000
+    interface, just not called out separately on the eio?)
+
+    all transfers via dma under control of the disk hardware?  does the network
+    have to share/interleave accesses?
+
+    controller compares constants to find sector numbers, etc.  it "knows" about
+    the logical header/data split format scheme (PH, LH, DB)
+
+    ha!  the two "disk type" bits can adjust the preamble bits for the different
+    supported drive types (shug/microp/mfm)!  sync marks (programmable but MUST
+    be constant or the format becomes unreadable) and crc gen/check is handled
+    by the disk state machine too
+
+        do we really need to generate/check crc bits?  hmm probably not :-)
+
+    four bytes appended after the sync mark during format: cyl, cylhead, sec,
+    and zero.  on reading, cyl, cylhead and sec must match (sector found).  to
+    read a specific sector the disk state machine actually has to watch all the
+    sectors go by until the correct one is found, and then it reads the other
+    parts of the block, otherwise wrong track/error signalled.  fortunately we
+    don't have to do that (but should account for rotational latencies :-)
+
+    writing the LH comes from the dma channel -> constant regs:  first six bytes
+    are compared to the constants to make sure LH and PH agree, otherwise error
+    and intr/abort.  four ops compare the LH/PH: write, read, check, read-check
+
+    no data crc, and only read/write ops on data blocks, as you'd expect
+
+    if any error occurs, smstat contains the code and no other ops performed
+    until smctl<2:0> set to idle.
+
+    ops may be chained, i.e., no need to respecify all the constants/registers
+    between each one.
+
+    it looks like you can program 0xd0 (const ptr) to set the constant register
+    for the next op; subsequent writes to 0xd1 (ramfile) load and increment!
+
+    interrupts can be masked
+
+    where's unit select?
+
+*/

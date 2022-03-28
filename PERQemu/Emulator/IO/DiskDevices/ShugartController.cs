@@ -173,7 +173,7 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 default:
-                    throw new InvalidOperationException($"Bad register {address}");
+                    throw new InvalidOperationException($"Bad register write 0x{address:x2}");
             }
         }
 
@@ -347,12 +347,12 @@ namespace PERQemu.IO.DiskDevices
         {
             // todo: This is actually a DMA operation, but that's not
             // implemented yet.  So just do the whole block, lickety split
-
+#if DEBUG
             if (_disk.CurCylinder != _cylinder || _disk.CurHead != _head)
                 Log.Warn(Category.HardDisk,
                          "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
                          _disk.CurCylinder, _cylinder, _disk.CurHead, _head);
-
+#endif
             // Read the sector from the disk
             Sector sec = _disk.GetSector(_cylinder, _head, _sector);
 

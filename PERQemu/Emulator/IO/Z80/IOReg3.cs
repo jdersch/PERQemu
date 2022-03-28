@@ -49,7 +49,7 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
-            throw new NotImplementedException();
+            throw new NotImplementedException("IOReg3 port read");
         }
 
         public void Write(byte portAddress, byte value)

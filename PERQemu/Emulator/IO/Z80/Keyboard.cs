@@ -75,7 +75,7 @@ namespace PERQemu.IO.Z80
 
         public void Write(byte portAddress, byte value)
         {
-            throw new NotImplementedException();
+            throw new NotImplementedException("Keyboard port write");
         }
 
         private byte _lastKeycode;

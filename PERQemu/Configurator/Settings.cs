@@ -141,13 +141,23 @@ namespace PERQemu
         {
             try
             {
-                PERQemu.CLI.ReadScript(Paths.SettingsPath);
-                Reason = "Settings loaded.";
-                Changed = false;
+                if (!File.Exists(Paths.SettingsPath))
+                {
+                    // First time?  Missing file?  Set to defaults and save
+                    Reset();
+                    Changed = true;
+                    Save();
+                }
+                else
+                {
+                    PERQemu.CLI.ReadScript(Paths.SettingsPath);
+                    Reason = "Settings loaded.";
+                    Changed = false;
+                }
             }
             catch (Exception e)
             {
-                Reason = "Failed to load settings: " + e.Message;
+                Reason = $"Failed to load settings: {e.Message}";
                 Reset();
             }
         }
@@ -184,7 +194,6 @@ namespace PERQemu
                     sw.WriteLine("pause when minimized " + PauseWhenMinimized);
                     sw.WriteLine("display cursor " + CursorPreference);
                     sw.WriteLine("## These options are not yet implemented:");
-                    sw.WriteLine("# performance " + Performance);
                     sw.WriteLine("# debug radix " + DebugRadix);
                     sw.WriteLine("# z80 debug radix " + Z80Radix);
                     sw.WriteLine("# screenshot format " + ScreenshotFormat);
@@ -220,7 +229,7 @@ namespace PERQemu
             catch (Exception e)
             {
                 Changed = true;
-                Reason = "Could not save settings: " + e.Message;
+                Reason = $"Could not save settings: {e.Message}";
                 return false;
             }
         }

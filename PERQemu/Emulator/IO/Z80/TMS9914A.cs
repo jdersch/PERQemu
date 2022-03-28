@@ -93,7 +93,7 @@ namespace PERQemu.IO.Z80
         {
             get
             {
-                throw new NotImplementedException();
+                throw new NotImplementedException("TMS9914A DMA read");
             }
         }
 
@@ -101,13 +101,13 @@ namespace PERQemu.IO.Z80
         {
             get
             {
-                throw new NotImplementedException();
+                throw new NotImplementedException("TMS9914A DMA write");
             }
         }
 
         public void DMATerminate()
         {
-            throw new NotImplementedException();
+            throw new NotImplementedException("TMS9914A DMA terminate");
         }
 
         //

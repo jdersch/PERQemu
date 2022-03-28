@@ -90,8 +90,9 @@ namespace PERQmedia
 
                 // Save our archive date for posterity
                 dev.FileInfo.ArchiveDate = DateTime.ParseExact(match.Groups[3].Value,
-                                                               "dd/MM/yyyy HH:mm:ss",
-                                                               CultureInfo.InvariantCulture);
+                                                               "d/MM/yyyy H:mm:ss",
+                                                               CultureInfo.InvariantCulture,
+                                                               DateTimeStyles.AllowInnerWhite);
                 // That was the easy part...
                 return true;
             }
@@ -224,11 +225,12 @@ namespace PERQmedia
                 // 
                 // Allocate the new sector, accounting for interleave.  Note:
                 // IMD respects traditional floppy sector numbering starting
-                // from 1, not from 0.  So we just quietly map from 1..26 to
-                // 0..25 when reading, then put them back when writing.  Ugh!
+                // from 1, not from 0.  PERQemu overrides the StorageDevice Read
+                // and Write methods to automatically compensate for this; other
+                // clients may use different strategies.
                 // 
                 var sec = _sectorOrdering[i];
-                var sector = new Sector(cyl, head, (ushort)(sec - 1), _sectorSize, 0);
+                var sector = new Sector(cyl, head, sec, _sectorSize, 0);
 
                 SectorRecordType type = (SectorRecordType)fs.ReadByte();
 
@@ -303,11 +305,12 @@ namespace PERQmedia
                 Log.Debug(Category.MediaLoader,
                           "Sector count from image {0} doesn't match expected {1}!",
                           _sectors.Count, dev.Geometry.TotalBlocks);
-            else
-                Log.Detail(Category.MediaLoader, "Copying {0} sectors", _sectors.Count);
+
+            Log.Detail(Category.MediaLoader, "Copying {0} sectors", _sectors.Count);
 
             foreach (var sec in _sectors)
             {
+                Log.Detail(Category.MediaLoader, "Writing {0}", sec);
                 dev.Write(sec);
             }
 
@@ -392,11 +395,15 @@ namespace PERQmedia
                                "Writing fmt {0} cyl {1} hd {2} count {3}, size {4} @ {5}",
                                (Modulation)format, c, h, count, _sectorSizes[sizeIndex], fs.Position);
 
-                    // Write the sectors in order, no interleave
-                    for (byte s = 0; s < count; s++)
+                    // Write the sectors in order, no interleave.
+                    // NB: Although the sector number isn't actually written to
+                    // the file, we use the Read() method and let the underlying
+                    // device do the remapping, rather than reach into Sectors[]
+                    // directly.  While not necessary it's more consistent...
+                    for (byte s = 1; s <= count; s++)
                     {
                         // Fetch the sector and figure out a type
-                        Sector sec = dev.Sectors[c, h, s];
+                        Sector sec = dev.Read(c, h, s);
                         byte fill = 0;
 
                         if (sec.Data == null || sec.Data.Length == 0)

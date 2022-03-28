@@ -27,8 +27,9 @@ namespace PERQemu.IO
 {
     /// <summary>
     /// Represents an IOB card in a PERQ1 system updated to a "CIO" (with new
-    /// Z80 firmware).  This contains hardware for the Shugart disk controller
-    /// and a Z80 for controlling low-speed devices.
+    /// Z80 firmware).  This board supports the "standard" Shugart hard disk
+    /// controller, or (optionally/experimentally) the Micropolis 8" controller
+    /// instead; the IOB Z80 system controls the usual low-speed devices.
     /// </summary>
     public sealed class CIO : IOBoard
     {
@@ -116,7 +117,7 @@ namespace PERQemu.IO
                 case 0xd5:
                 case 0xdc:
                 case 0xdd:  // Just to see if anything calls these...
-                    throw new InvalidOperationException($"CIO DMA not yet implemented");
+                    throw new InvalidOperationException($"CIO DMA not yet implemented (0x{port:x2})");
 
                 default:
                     Log.Warn(Category.IO, "Unhandled CIO Write to port {0:x2}, data {1:x4}", port, value);
@@ -125,7 +126,7 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Ports handled by the IOB.
+        /// Ports handled by the CIO.
         /// </summary>
         private byte[] _handledPorts =
         {

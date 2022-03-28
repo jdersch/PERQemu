@@ -27,15 +27,14 @@ using System.Threading.Tasks;
 namespace PERQemu.Debugger
 {
     /// <summary>
-    /// Provides rudimentary debug support; at this time this is primarily mapping addresses
-    /// to lines in corresponding source listings.
+    /// Provides rudimentary debug support; at this time this is primarily mapping
+    /// addresses to lines in corresponding source listings.
     /// </summary>
     public class Z80Debugger
     {
-        public Z80Debugger()
+        public Z80Debugger(string listing)
         {
-            // todo: create/load .lst files for each of the different z80 roms!
-            LoadZ80Source(Paths.BuildPROMPath("pz80.lst"));
+            LoadZ80Source(Paths.BuildPROMPath(listing));
         }
 
         public string GetSourceLineForAddress(ushort address)
@@ -44,10 +43,8 @@ namespace PERQemu.Debugger
             {
                 return _sourceMap[address];
             }
-            else
-            {
-                return null;
-            }
+
+            return null;
         }
 
         public ushort GetAddressForSymbol(string symbol)
@@ -56,10 +53,8 @@ namespace PERQemu.Debugger
             {
                 return _symbolToAddressMap[symbol];
             }
-            else
-            {
-                return 0;
-            }
+
+            return 0;
         }
 
         public string GetSymbolForAddress(ushort address, out ushort offset)
@@ -69,27 +64,26 @@ namespace PERQemu.Debugger
                 offset = 0;
                 return _addressToSymbolMap[address];
             }
-            
+
             // Find the symbol nearest to the address
             // This could be done more efficiently.
             List<ushort> sortedAddresses = _addressToSymbolMap.Keys.ToList();
             sortedAddresses.Sort();
+
             for (int i = 0; i < sortedAddresses.Count; i++)
             {
                 if (sortedAddresses[i] > address)
                 {
                     if (i == 0)
                     {
-                        // Nearest symbol is the start of the code.
+                        // Nearest symbol is the start of the code
                         offset = address;
                         return "<origin>";
                     }
-                    else
-                    {
-                        // Nearest symbol is the previous one we looked at
-                        offset = (ushort)(address - sortedAddresses[i - 1]);
-                        return _addressToSymbolMap[sortedAddresses[i - 1]];
-                    }
+
+                    // Nearest symbol is the previous one we looked at
+                    offset = (ushort)(address - sortedAddresses[i - 1]);
+                    return _addressToSymbolMap[sortedAddresses[i - 1]];
                 }
             }
 
@@ -112,9 +106,9 @@ namespace PERQemu.Debugger
                 {
                     // Each line looks like:
                     //     ROM:addr <source code line>
-                    // And each source code line may begin with a symbol (i.e. "PRQVEC:") or indented code.
-                    // There should be no badly-formed lines as the listing is machine-generated.
-                    // We'll try to be careful anyway.
+                    // And each source code line may begin with a symbol (i.e. "PRQVEC:")
+                    // or indented code.  There should be no badly-formed lines as the
+                    // listing is machine-generated.  We'll try to be careful anyway.
                     string line = sw.ReadLine();
 
                     if (string.IsNullOrWhiteSpace(line))
@@ -125,7 +119,9 @@ namespace PERQemu.Debugger
                     ushort address = ushort.Parse(line.Substring(4, 4), System.Globalization.NumberStyles.HexNumber);
                     string source = line.Substring(8);
 
-                    // Index the source.
+                    // Log.Detail(Category.Z80Inst, "Loaded Z80 addr {0}, line '{1}'", address, source);
+
+                    // Index the source
                     _sourceMap[address] = source;
 
                     // See if this line begins with a symbol and if so index it.
@@ -150,6 +146,5 @@ namespace PERQemu.Debugger
         private Dictionary<string, ushort> _symbolToAddressMap;
         private Dictionary<ushort, string> _addressToSymbolMap;
         private Dictionary<ushort, string> _sourceMap;
-
     }
 }

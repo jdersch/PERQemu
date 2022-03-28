@@ -353,7 +353,8 @@ namespace PERQemu.IO.Z80
 
         private void StubExecutor(ulong skewNsec, object context)
         {
-            throw new NotImplementedException("FDC command not implemented");
+            var badCmd = _commandData.Dequeue();
+            throw new NotImplementedException($"FDC command 0x{badCmd:x2} not implemented");
         }
 
         private void InvalidCommandExecutor(ulong skewNsec, object context)
@@ -695,7 +696,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                throw new NotImplementedException();
+                throw new NotImplementedException($"FDC transfer type {_transfer.Type}");
             }
         }
 
