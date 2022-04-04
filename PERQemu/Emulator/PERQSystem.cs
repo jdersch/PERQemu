@@ -65,28 +65,49 @@ namespace PERQemu
             // board type is selected, load the appropriate CPU boot ROMs!
             switch (_conf.IOBoard)
             {
+                //
+                // IOB boot ROMs:
+                //      "PB" - IOB, 4K or 16K, old Z80          boot.rom
+                //
                 case IOBoardType.IOB:
                     _iob = new IOB(this);
-                    _cpu.LoadBootROM("boot.bin");      // 4K or 16K, old Z80
+                    _cpu.LoadBootROM("boot.rom");
                     break;
 
+                //
+                // CIO boot ROMs:  Shugart/Micropolis(?)
+                //      "SC" - CIO, 16K CPU, new Z80            cioboot.rom
+                //      "SD" - CIO, 4K CPU, new Z80             cio4kboot.rom
+                //
                 case IOBoardType.CIO:
                     _iob = new CIO(this);
-                    _cpu.LoadBootROM("cioboot.bin");   // 4K or 16K, new Z80
+                    if (CPU.Is4K)
+                    {
+                        _cpu.LoadBootROM("cio4kboot.rom");
+                    }
+                    else
+                    {
+                        _cpu.LoadBootROM("boot.rom");
+                    }
                     break;
 
+                //
+                // EIO boot ROMs:
+                //      "MC" - EIO, 16K, new Z80, 8" disk       eioboot.rom
+                //      "TC" - EIO, 16K, new Z80, 5.25" disk    eio5boot.rom
+                //
                 case IOBoardType.EIO:
                 case IOBoardType.NIO:
-                    //  _iob = new EIO(this);
-                    //  if (_conf.CPU == CPUType.PERQ24)
-                    //  {
-                    //    _cpu.LoadBootROM("eio24boot.bin");    // 16K 24-bit, new Z80
-                    //  }
-                    //  else
-                    //  {
-                    //    _cpu.LoadBootROM("eioboot.bin");      // 16K, new Z80
-                    //  }
-                    //  break;
+                    //_iob = new EIO(this);
+                    //if (_conf.CPU == CPUType.PERQ24) // || disktype == Disk5Inch ...
+                    //{
+                    //    _cpu.LoadBootROM("eio5boot.bin");
+                    //}
+                    //else
+                    //{
+                    //    _cpu.LoadBootROM("eioboot.bin");
+                    //}
+                    //break;
                     throw new UnimplementedHardwareException($"IO board type {_conf.IOBoard}");
 
                 default:

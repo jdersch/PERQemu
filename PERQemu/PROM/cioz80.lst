@@ -13,6 +13,7 @@ ROM:0000 ;
 ROM:0000 ; --
 ROM:0000 ; skeezics    26-mar-2022
 ROM:0000 ;
+ROM:0000 START:     ; fake symbol to avoid an empty dictionary lookup
 ROM:0000 f3                               di
 ROM:0001 c3 14 0b                         jp 0x0b14
 ROM:0004 0a                               ld a,(bc)

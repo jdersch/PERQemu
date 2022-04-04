@@ -37,6 +37,11 @@ namespace PERQemu.Processor
             // constructor, setting various word sizes, masks, etc.
         }
 
+        public CPU()
+        {
+            // Empty, for testing
+        }
+
         public CPU(PERQSystem system)
         {
             _system = system;

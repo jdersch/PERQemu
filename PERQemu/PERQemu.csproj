@@ -226,6 +226,7 @@
     <Compile Include="Emulator\IO\SerialDevices\Speech.cs" />
     <Compile Include="Emulator\IO\IStorageController.cs" />
     <Compile Include="Emulator\IO\DiskDevices\MicropolisDiskController.cs" />
+    <Compile Include="PROM\Unscrambler.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -558,7 +559,6 @@
     <None Include="PROM\rsh00.rom">
     </None>
     <None Include="PROM\rti02.rom" />
-    <None Include="PROM\t1bootrom.rom" />
     <None Include="Scripts\debug.scr" />
     <None Include="PROM\bkm16emu.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -626,13 +626,13 @@
     <Content Include="UserGuide.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <None Include="PROM\boot.bin">
+    <None Include="PROM\boot.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="PROM\pz80.bin">
+    <None Include="PROM\oioz80.bin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="PROM\pz80.lst">
+    <None Include="PROM\oioz80.lst">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Disks\d6.phd">
@@ -642,13 +642,23 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="ChangeLog.txt" />
-    <None Include="PROM\cioboot.bin">
+    <None Include="PROM\cioboot.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="PROM\cioz80.bin">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="PROM\cioz80.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Docs\Hardware References\Ethernet_Guide_Sep81.txt" />
+    <None Include="PROM\cio4kboot.rom">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\eio5boot.rom">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\eioboot.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

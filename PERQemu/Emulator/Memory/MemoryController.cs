@@ -426,15 +426,15 @@ namespace PERQemu.Memory
         private static void LoadBookmarkROM()
         {
             // BKM is a lookup table with an 8-bit index, returning an 8-bit value
-            FileStream fs = new FileStream(Paths.BuildPROMPath("bkm16emu.rom"), FileMode.Open);
-
-            for (int i = 0; i < 256; i++)
+            using (var fs = new FileStream(Paths.BuildPROMPath("bkm16emu.rom"), FileMode.Open))
             {
-                // Split result byte into fields once, rather than on lookup
-                _bkmTable[i] = new BookmarkEntry((byte)fs.ReadByte());
+                for (int i = 0; i < 256; i++)
+                {
+                    // Split result byte into fields once, rather than on lookup
+                    _bkmTable[i] = new BookmarkEntry((byte)fs.ReadByte());
+                }
+                fs.Close();
             }
-            fs.Close();
-
             Log.Info(Category.Emulator, "Initialized BKM ROM lookup table");
         }
 

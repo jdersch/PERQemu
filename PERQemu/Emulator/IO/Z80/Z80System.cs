@@ -123,7 +123,7 @@ namespace PERQemu.IO.Z80
             switch (system.Config.IOBoard)
             {
                 case IOBoardType.IOB:
-                    _z80Debugger = new Z80Debugger("pz80.lst");
+                    _z80Debugger = new Z80Debugger("oioz80.lst");
                     break;
 
                 case IOBoardType.CIO:
@@ -233,10 +233,10 @@ namespace PERQemu.IO.Z80
                 if (diff > 0)
                 {
 #if DEBUG
-                    // for now: debugging; future: actual InterruptEncoder as a bus device?
+                    // For now: debugging; future: actual InterruptEncoder as a bus device?
                     _bus.ActiveInterrupts();
 
-                    // this is hugely expensive so only call it if selected
+                    // This is hugely expensive so only call it if selected
                     if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
 #endif
                     // Yes!  Run an instruction
@@ -414,7 +414,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-
+        // FIXME: should move this to PERQsystem or DebugCommands?
         public void ShowZ80State()
         {
             IZ80Registers regs = _cpu.Registers;

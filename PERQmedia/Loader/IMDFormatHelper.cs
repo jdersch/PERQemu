@@ -145,7 +145,6 @@ namespace PERQmedia
                 (count > 26) ||
                 (sizeIndex > _sectorSizes.Length - 1))
             {
-
                 throw new InvalidOperationException("Invalid track header data");
             }
 
@@ -310,7 +309,6 @@ namespace PERQmedia
 
             foreach (var sec in _sectors)
             {
-                Log.Detail(Category.MediaLoader, "Writing {0}", sec);
                 dev.Write(sec);
             }
 

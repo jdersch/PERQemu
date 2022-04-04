@@ -37,7 +37,7 @@ namespace PERQemu.Processor
         /// Implements the Writable Control Store, and functions to unscramble and
         /// load instructions into it.  Also manages the Boot ROM functionality.
         /// </summary>
-        private class ControlStore
+        public class ControlStore
         {
             public ControlStore()
             {
@@ -182,27 +182,13 @@ namespace PERQemu.Processor
                 switch (word)
                 {
                     case ControlStoreWord.Low:
-                        if (_wcsBits < 16)
-                        {
-                            current = SetBits(data, current,
-                                new int[] { 24, 25, 22, 27, 23, 29, 30, 31, 8, 9, 10, 11, 12, 13, 14, 15 });
-                        }
-                        else
-                        {
-                            current = ((current & 0xffffffff0000) | (ulong)(data));
-                        }
+                        current = SetBits(data, current,
+                            new int[] { 24, 25, 22, 27, 23, 29, 30, 31, 8, 9, 10, 11, 12, 13, 14, 15 });
                         break;
 
                     case ControlStoreWord.Middle:
-                        if (_wcsBits < 16)
-                        {
-                            current = SetBits(data, current,
-                                new int[] { 16, 17, 18, 19, 20, 21, 26, 28, 0, 1, 2, 3, 4, 5, 6, 7 });
-                        }
-                        else
-                        {
-                            current = ((current & 0xffff0000ffff) | (ulong)(data) << 16);
-                        }
+                        current = SetBits(data, current,
+                            new int[] { 16, 17, 18, 19, 20, 21, 26, 28, 0, 1, 2, 3, 4, 5, 6, 7 });
                         break;
 
                     case ControlStoreWord.High:
@@ -217,7 +203,7 @@ namespace PERQemu.Processor
             /// <summary>
             /// Sets a series of bits in the 48-bit destination word from a 16-bit source word.
             /// </summary>
-            private ulong SetBits(ulong sourceWord, ulong destWord, int[] destBits)
+            public ulong SetBits(ulong sourceWord, ulong destWord, int[] destBits)
             {
                 for (int sourceBit = 0; sourceBit < destBits.Length; sourceBit++)
                 {
@@ -238,22 +224,22 @@ namespace PERQemu.Processor
             /// </summary>
             public void LoadROM(string path)
             {
-                FileStream fs = new FileStream(path, FileMode.Open);
-
-                // Read all 512 scrambled instruction words in...
-                for (ushort i = 0; i < _romSize; i++)
+                using (var fs = new FileStream(path, FileMode.Open))
                 {
-                    ushort addr = 0;
-                    ulong word = ReadMicrocodeWord(fs, out addr);
-
-                    // The only address outside of range should be the last (which has addr 0xffff)
-                    if (addr < _romSize)
+                    // Read all 512 scrambled instruction words in...
+                    for (ushort i = 0; i < _romSize; i++)
                     {
-                        _rom[addr] = word;
-                    }
-                }
-                fs.Close();
+                        ushort addr = 0;
+                        ulong word = ReadMicrocodeWord(fs, out addr);
 
+                        // The only address outside of range should be the last (which has addr 0xffff)
+                        if (addr < _romSize)
+                        {
+                            _rom[addr] = word;
+                        }
+                    }
+                    fs.Close();
+                }
                 Log.Info(Category.Emulator, "Loaded boot ROM from {0}", Paths.Canonicalize(path));
             }
 
@@ -266,27 +252,28 @@ namespace PERQemu.Processor
             /// </remarks>
             public void LoadMicrocode(string path)
             {
-                FileStream fs = new FileStream(path, FileMode.Open);
                 bool done = false;
 
-                while (!done)
+                using (var fs = new FileStream(path, FileMode.Open))
                 {
-                    ushort addr = 0;
-                    ulong word = ReadMicrocodeWord(fs, out addr);
+                    while (!done)
+                    {
+                        ushort addr = 0;
+                        ulong word = ReadMicrocodeWord(fs, out addr);
 
-                    // The only address outside of range should be the last (which has addr 0xffff)
-                    if (addr != 0xffff)
-                    {
-                        _microcode[addr] = word;
-                        _microcodeCache[addr] = null;
+                        // The only address outside of range should be the last (which has addr 0xffff)
+                        if (addr != 0xffff)
+                        {
+                            _microcode[addr] = word;
+                            _microcodeCache[addr] = null;
+                        }
+                        else
+                        {
+                            done = true;
+                        }
                     }
-                    else
-                    {
-                        done = true;
-                    }
+                    fs.Close();
                 }
-                fs.Close();
-
                 _romEnabled = false;
 
                 Log.Info(Category.Microstore, "Loaded microcode from {0}", Paths.Canonicalize(path));

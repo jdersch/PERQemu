@@ -264,6 +264,18 @@ March, 2022:
     (was having issues with bootable POS floppies).  Work proceeding on the new
     User's Guide (in PDF, text update to follow).
 
+    11. Emulator is running the new Z80 and CPU boot ROM code but is not yet
+    able to load VFY/SYSB to attempt booting.  Still, it's our first step into
+    a larger world...
+
+
+April, 2022:
+
+    1. Reorganized the CPU and Z80 ROMs a bit, since there were more variations
+    than realized.  Have ripped PB, SC, SD, MC and TC variants of the boot ROMs
+    and have v8.7 and v10.17 Z80 code.  Only the 24-bit set remains to be ripped
+    though full support for the T4 is a ways off.
+
 
 ---
-Last update: skeezics    Sun Mar 27 21:41:45 PDT 2022
+Last update: skeezics    Sat Apr  2 16:36:50 PDT 2022

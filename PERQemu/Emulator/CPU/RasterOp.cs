@@ -147,7 +147,7 @@ namespace PERQemu.Processor
 
         public RasterOp(MemoryBoard mem)
         {
-            _ropShifter = new CPU.Shifter();            // Our own private Idaho
+            _ropShifter = new CPU.Shifter();        // Our own private Idaho
             _srcFifo = new Queue<ROpWord>(16);      // 4 quads (hardware limit)
             _destFifo = new Queue<ROpWord>(4);      // 1 quad
             _halfPipe = new ROpWord();              // 1 word, for overlap
@@ -984,25 +984,25 @@ namespace PERQemu.Processor
         private static void LoadRasterOpROMs()
         {
             // RDS is a lookup table with a 9-bit index, returning a CombinerFlag
-            FileStream fs = new FileStream(Paths.BuildPROMPath("rds00emu.rom"), FileMode.Open);
-
-            for (int i = 0; i < 512; i++)
+            using (var fs = new FileStream(Paths.BuildPROMPath("rds00emu.rom"), FileMode.Open))
             {
-                _rdsTable[i] = (CombinerFlags)fs.ReadByte();
+                for (int i = 0; i < 512; i++)
+                {
+                    _rdsTable[i] = (CombinerFlags)fs.ReadByte();
+                }
+                fs.Close();
             }
-            fs.Close();
-
             Log.Info(Category.Emulator, "Initialized RDS ROM lookup table");
 
             // RSC is a lookup table with an 7-bit index, returning an EdgeStrategy
-            fs = new FileStream(Paths.BuildPROMPath("rsc03emu.rom"), FileMode.Open);
-
-            for (int i = 0; i < 128; i++)
+            using (var fs = new FileStream(Paths.BuildPROMPath("rsc03emu.rom"), FileMode.Open))
             {
-                _rscTable[i] = (EdgeStrategy)fs.ReadByte();
+                for (int i = 0; i < 128; i++)
+                {
+                    _rscTable[i] = (EdgeStrategy)fs.ReadByte();
+                }
+                fs.Close();
             }
-            fs.Close();
-
             Log.Info(Category.Emulator, "Initialized RSC ROM lookup table");
         }
 

@@ -326,8 +326,7 @@ namespace PERQemu
         {
             if (startAddr > PERQemu.Sys.Memory.MemSize - 1)
             {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}",
-                                  PERQemu.Sys.Memory.MemSize - 1);
+                Console.WriteLine("Start address must be in range 0..{0}", PERQemu.Sys.Memory.MemSize - 1);
                 return;
             }
 
@@ -369,7 +368,7 @@ namespace PERQemu
         {
             if (startAddress >= PERQemu.Sys.Memory.MemSize)
             {
-                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", PERQemu.Sys.Memory.MemSize - 1);
+                Console.WriteLine("Start address must be in range 0..{0}", PERQemu.Sys.Memory.MemSize - 1);
                 return;
             }
 
@@ -386,7 +385,7 @@ namespace PERQemu
         {
             if (address >= PERQemu.Sys.Memory.MemSize)
             {
-                Console.WriteLine("Argument out of range -- start address must be between 0 and {0}", PERQemu.Sys.Memory.MemSize - 1);
+                Console.WriteLine("Address must be in range 0..{0}", PERQemu.Sys.Memory.MemSize - 1);
                 return;
             }
 
@@ -509,7 +508,7 @@ namespace PERQemu
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to load microcode from '{0}': {1}", binfile, e.Message);
+                Console.WriteLine($"Unable to load microcode from '{binfile}': {e.Message}");
             }
         }
 
@@ -528,11 +527,11 @@ namespace PERQemu
         [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
         private void DisassembleMicrocode(ushort startAddress, ushort length)
         {
-            ushort endAddr = (ushort)(startAddress + length);
+            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
 
             if (startAddress >= PERQemu.Sys.CPU.Microcode.Length || endAddr >= PERQemu.Sys.CPU.Microcode.Length)
             {
-                Console.WriteLine("Argument out of range -- must be between 0 and {0}", PERQemu.Sys.CPU.Microcode.Length);
+                Console.WriteLine("Address out of range 0..{0}", PERQemu.Sys.CPU.Microcode.Length - 1);
                 return;
             }
 
@@ -556,6 +555,28 @@ namespace PERQemu
                 PERQemu.Sys.CPU.PC = nextPC;
                 // resume execution
             }
+        }
+
+        /// <summary>
+        /// Leverage the Instruction/ControlStore code to assist in building
+        /// boot ROM images from raw hex dumps.  (Once they're all successfully
+        /// ripped, converted to binaries and tested, this can be removed.)
+        /// </summary>
+        [Conditional("DEBUG")]
+        [Command("debug make boot prom", Discreet = true)]
+        private void MakeROM(string basename, string output, bool fourk)
+        {
+            // Turn on logging
+            Log.Categories |= Category.Microstore;
+            Log.Level = Severity.Debug;
+
+            var grinder = new Unscrambler();
+
+            grinder.MakeBootPROM(basename, output, fourk);
+
+            Console.WriteLine("\nDisassembly:");
+            grinder.Reload(output);
+            grinder.ShowDisassembly();
         }
 
         //

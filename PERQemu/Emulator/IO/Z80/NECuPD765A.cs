@@ -174,9 +174,16 @@ namespace PERQemu.IO.Z80
         /// </remarks>
         private void SelectUnitHead(byte select)
         {
+            // Deselect the current drive
+            if (SelectedUnit != null)
+            {
+                SelectedUnit.DriveSelect = false;   // Clears DiskChanged
+            }
+
             _unitSelect = select & 0x3;
             _headSelect = (select & 0x4) >> 2;
 
+            // Select the new one
             if (SelectedUnit != null)
             {
                 SelectedUnit.DriveSelect = true;

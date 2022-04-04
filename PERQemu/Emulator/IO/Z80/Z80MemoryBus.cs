@@ -98,7 +98,7 @@ namespace PERQemu.IO.Z80
 
         public void LoadROM(string path)
         {
-            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
                 if (fs.Read(_rom, 0, _rom.Length) != _rom.Length)
                 {

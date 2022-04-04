@@ -93,7 +93,7 @@ namespace PERQemu.IO
             {
                 case 0xc1:  // Shugart/Microp command/control register & Z80 status register
                     _hardDiskController.LoadRegister(port, value & 0x7f);
-                    _z80System.WriteStatus(value);
+                    _z80System.WriteStatus(value & 0x80);
                     break;
 
                 case 0xc7:  // Z80 data port

@@ -38,6 +38,7 @@ namespace PERQemu.IO.Z80
         {
             _system = system;
             _lock = new object();
+            _interruptsEnabled = false;
         }
 
         public void Reset()
@@ -45,7 +46,6 @@ namespace PERQemu.IO.Z80
             _fifo = 0;
             _valid = false;
 
-            _interruptsEnabled = false;
             _interruptActive = false;
 
             // Assume these reset as well
