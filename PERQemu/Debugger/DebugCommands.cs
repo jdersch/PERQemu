@@ -597,11 +597,11 @@ namespace PERQemu
             HighResolutionTimer.DumpTimers();
         }
 
+        // debug
         [Command("debug dump fifos")]
         private void DumpFifos()
         {
-            // dump the PERQ<->Z80 fifos and status bits
-            Console.WriteLine("Oh, wouldn't YOU like to know");
+            PERQemu.Sys.IOB.Z80System.DumpFifos();
         }
 
     }

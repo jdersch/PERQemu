@@ -4186,6 +4186,8 @@ ROM:1ffd ff                               rst 0x38
 ROM:1ffe ff                               rst 0x38
 ROM:1fff ff                               rst 0x38
 ROM:1fff ; End of cioz80.hi
+ROM:2000 BAD:     ; why is the debugger trying to access this?
+RAM:2C00 RAM:     ; fake symbol to avoid an empty dictionary lookup
 RAM:2C00 ; Begin of fake segment RAM
 RAM:2C00 ; Segment type: Regular
 RAM:2C00		 segment RAM
@@ -5214,5 +5216,4 @@ RAM:2FFD		 ds 1
 RAM:2FFE		 ds 1
 RAM:2FFF		 ds 1
 RAM:2FFF ; End of 'RAM'
-RAM:2FFF
 RAM:2FFF		 end

@@ -368,7 +368,7 @@ namespace PERQemu
                             RotateFile();
 
                             // While we're here...
-                            _log.WriteLine("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}",
+                            _log.WriteLine("{0:yyyyMMdd HHmmss.ffff} [{1}]: {2}",
                                            DateTime.Now, me, output);
 
                             // Reset for next time!
@@ -390,8 +390,11 @@ namespace PERQemu
                     // Write it, lazy & slow (_log is Synchronized)
                     // But this is still wrong, results in corrupt log entries,
                     // and someday I should fix it but right now it's enough to
-                    // help with the debugging sigh.
-                    _log.WriteLine("{0:yyyyMMdd HHmmss.fff} [{1}]: {2}",
+                    // help with the debugging.  At least until (under heavy
+                    // load) it blows up Mono and crashes.  So much for relying
+                    // on the "synchronized" stream.  Time for a more methodical
+                    // locking approach, or per-thread streams and no locking?
+                    _log.WriteLine("{0:yyyyMMdd HHmmss.ffff} [{1}]: {2}",
                                    DateTime.Now, me, output);
                 }
 #endif

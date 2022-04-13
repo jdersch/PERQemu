@@ -29,7 +29,7 @@ namespace PERQemu.IO.DiskDevices
     /// Represents a Micropolis 8" hard drive controller which manages disk
     /// drives in the Disk8Inch class.  This is implemented in the PERQ as an
     /// adapter from the SA4000 interface to the Micropolis 1200-series drives.
-    /// May be connected to an IOB (single drive?) or an EIO (1 or 2 drives).
+    /// May be connected to a CIO (single drive?) or an EIO (1 or 2 drives).
     /// </summary>
     /// <remarks>
     /// This is all hugely speculative and likely to change as I dig into the
@@ -37,7 +37,7 @@ namespace PERQemu.IO.DiskDevices
     /// assume that the microcode doesn't try to get fancy and do interleaved
     /// seek operations across both drives, so any kind of unit select signal
     /// remains constant for the duration of the op.  Have got to try to find a
-    /// source for the IOB version of the "new" Z80 code, to compare with the
+    /// source for the CIO version of the "new" Z80 code, to compare with the
     /// EIO, though even a disassembly of the actual ROM is better than nothing?
     /// </remarks>
     public sealed class MicropolisDiskController : IStorageController

@@ -18,7 +18,6 @@
 //
 
 using System;
-using System.Threading;
 
 using PERQemu.Processor;
 
@@ -39,6 +38,7 @@ namespace PERQemu.IO.Z80
             _system = system;
             _lock = new object();
             _interruptsEnabled = false;
+            _dataReadyInterruptRequested = false;
         }
 
         public void Reset()
@@ -46,10 +46,9 @@ namespace PERQemu.IO.Z80
             _fifo = 0;
             _valid = false;
 
+            // Assume these reset as well
             _interruptActive = false;
 
-            // Assume these reset as well
-            _dataReadyInterruptRequested = false;
             _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
 
             Log.Debug(Category.FIFO, "PERQ->Z80 FIFO reset");
@@ -119,14 +118,13 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Reads a byte from the PERQ.  This is generally called in response to
-        /// an interrupt.  Returns 0x0 if the latch is empty.
+        /// Reads a byte from the PERQ.
         /// </summary>
         /// <remarks>
-        /// The INIR instruction is used in the old v8.7 code  to read commands
-        /// from the PERQ.  It turns off the PERQ interrupts to loop through a
-        /// variable length multi-byte sequence and relies on the hardware to
-        /// assert WAIT_L on the Z80 until a new byte arrives.
+        /// This is generally called in response to an interrupt.  Returns 0x0
+        /// if the latch is empty (though the hardware would return whatever was
+        /// previously latched); this condition should only happen when the PERQ
+        /// restarts the Z80 and forces a read to clear the buffer.
         /// </remarks>
         public byte Read(byte portAddress)
         {
@@ -137,15 +135,19 @@ namespace PERQemu.IO.Z80
                 // Clear the Z80 interrupt
                 _interruptActive = false;
 
-                if (_valid)
-                {
+                //if (_valid)
+                //{
                     value = _fifo;
+
+                if (!_valid)
+                    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0x{0:x2}", _fifo);
+                
                     _valid = false;
-                }
-                else
-                {
-                    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0");
-                }
+                //}
+                //else
+                //{
+                //    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0");
+                //}
 
                 // FIFO is empty; interrupt if the PERQ has asked us to
                 if (_dataReadyInterruptRequested)
@@ -165,6 +167,12 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException("Z80 write to read-only latch");
         }
 
+        // debug
+        public void DumpFifo()
+        {
+            Console.WriteLine($"PERQ->Z80 FIFO: 0x{_fifo:x2} (valid={_valid})");
+            Console.WriteLine($"PERQ->Z80 FIFO: IRQ active={_interruptActive} enabled={_interruptsEnabled} requested={_dataReadyInterruptRequested}");
+        }
 
         private bool _interruptActive;
         private bool _interruptsEnabled;

@@ -118,6 +118,11 @@ namespace PERQemu.IO.Z80
             Log.Detail(Category.FIFO, "Z80 wrote byte 0x{0:x2} to latch", value);
         }
 
+        // debug
+        public void DumpFifo()
+        {
+            Console.WriteLine($"Z80->PERQ FIFO: 0x{_fifo:x2} (valid={_valid})");
+        }
 
         private byte _fifo;
         private bool _valid;

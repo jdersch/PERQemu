@@ -252,7 +252,7 @@ namespace PERQemu
             {
                 if (_requesters[tag].Free)
                 {
-                    Log.Error(Category.Timer, "Request to unregister alread freed timer " + tag);
+                    Log.Error(Category.Timer, "Request to unregister alread freed timer {0}", tag);
                 }
                 else
                 {

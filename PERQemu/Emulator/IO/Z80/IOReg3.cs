@@ -55,21 +55,19 @@ namespace PERQemu.IO.Z80
         public void Write(byte portAddress, byte value)
         {
             //
-            // Configure DMA:
-            // From v87.z80:
+            // Configure DMA.  From v87.z80:
+            //
             //  D.FLOP EQU     1 * 40Q; DMA TO FLOPPY
             //  D.PRQR EQU     2 * 40Q; DMA TO PERQ READ
             //  D.PRQW EQU     3 * 40Q; DMA TO PERQ WRITE
             //  D.SIOA EQU     4 * 40Q; DMA TO SIO CHANNEL A
-            //  D.SIOB EQU     5 * 40Q; DMA TO SIA CHANNEL B
+            //  D.SIOB EQU     5 * 40Q; DMA TO SIO CHANNEL B
             //  D.GPIB EQU     6 * 40Q; DMA TO GPIB
             //
             _dmaRouter.SelectDMADevice((SelectedDMADevice)((value & 0xe0) >> 5));
 
             //
-            // Dole out Interrupt enables here:
-            //
-            // From v87.z80:
+            // Dole out Interrupt enables.  From v87.z80:
             //
             // PRQENB  EQU     4  ;PERQ INTERRUPT ENABLE
             // KBDENB  EQU     2  ;KBD INTERRUPT ENABLE

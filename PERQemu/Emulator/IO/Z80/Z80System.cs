@@ -178,8 +178,8 @@ namespace PERQemu.IO.Z80
                 _tms9914a.Reset();
 
                 // This appears to be necessary even if not technically correct
-                _z80ToPerqFifo.Reset();
-                _perqToZ80Fifo.Reset();
+                //_z80ToPerqFifo.Reset();
+                //_perqToZ80Fifo.Reset();
                 _seekControl.Reset();
 
                 Log.Debug(Category.Z80, "System (soft) reset");
@@ -219,17 +219,6 @@ namespace PERQemu.IO.Z80
                 // Is the master CPU clock ahead of us?
                 var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
 
-                // Deal with the INIR special condition :-/
-                if (_memory[regs.PC] == 0xed && _memory[regs.PC + 1] == 0xb2 && !_perqToZ80Fifo.IsReady)
-                {
-                    // This is a cheap way to inject a wait state; this
-                    // emulates the blocking read of the PERQR latch
-                    diff = 0;
-
-                    Log.Detail(Category.FIFO, "Wait state for FIFO read (INIR)");
-                    // fixme uh, or just return since we're not looping anymore...
-                }
-
                 if (diff > 0)
                 {
 #if DEBUG
@@ -239,6 +228,44 @@ namespace PERQemu.IO.Z80
                     // This is hugely expensive so only call it if selected
                     if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
 #endif
+                    //
+                    // The IOB/CIO hardware will pull the Z80's WAIT line low if access
+                    // to the two FIFO buffers is attempted while the contents are not
+                    // valid; this is true on IN or OUT instructions, as well as looping
+                    // variants INIR (in both IOB and CIO firmware) and OTIR (used only
+                    // by the CIO version).  There's no useful or obvious way to leverage
+                    // Z80dotNet's "Before" memory access delegates to inject a wait state
+                    // so this grody hack peeks ahead in the instruction stream to locate
+                    // IN/OUT or INIR/OUTIR accesses to the FIFOs and check their IsReady
+                    // properties, aborting (delaying) the execution until the microcode
+                    // has read/written data to clear the condition.  Sigh.
+                    //
+
+                    // FIXME: this is okay for debugging CIO, but it introduces serious
+                    // problems in release mode with hiccups/long pauses when running the
+                    // IOB; not a permanent solution. :-(
+
+                    var peek = (ushort)(_memory[regs.PC] << 8 | _memory[regs.PC + 1]);
+
+                    if (peek == 0xdba0 || peek == 0xedb2)
+                    {
+                        if (!_perqToZ80Fifo.IsReady)
+                        {
+                            Log.Debug(Category.FIFO, "Wait state for FIFO op ({0})",
+                                                      (peek == 0xdba0) ? "IN" : "INIR");
+                            return;
+                        }
+                    }
+                    else if (peek == 0xd3d0 || (peek == 0xedb3 && regs.C == 0xd0))
+                    {
+                        if (!_z80ToPerqFifo.IsReady)
+                        {
+                            Log.Debug(Category.FIFO, "Wait state for FIFO op ({0})",
+                                                      (peek == 0xd3d0) ? "OUT" : "OTIR");
+                            return;
+                        }
+                    }
+
                     // Yes!  Run an instruction
                     var ticks = _cpu.ExecuteNextInstruction();
 
@@ -415,22 +442,33 @@ namespace PERQemu.IO.Z80
         }
 
         // FIXME: should move this to PERQsystem or DebugCommands?
+        // FIXME: this massively expensive routine has to be rewritten...
         public void ShowZ80State()
         {
             IZ80Registers regs = _cpu.Registers;
 
             // TODO: should display shadow regs?
-            Log.Debug(Category.Z80Inst, "Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}",
-                      regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL);
-            Log.Debug(Category.Z80Inst, "    IX=${0:x4} IY=${1:x4}", regs.IX, regs.IY);
+            //string state = string.Format("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}\n\tIX=${6:x4} IY=${7:x4}",
+            //                             regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL, regs.IX, regs.IY);
+            // ushort offset = 0;
+            // string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
+            // string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
 
-            // TODO: this doesn't really belong here
-            ushort offset = 0;
-            string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
-            string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
+            // Dump one huge log
+            // Log.Debug(Category.Z80Inst, "{0}\n\t{1}+0x{2:x} : {3}", state, symbol, offset, source);
 
-            Log.Debug(Category.Z80Inst, "{0}+0x{1:x} : {2}", symbol, offset, source);
+            // For now just show the fucking regs and try not to crash Mono FFS
+            Log.Debug(Category.Z80Inst, "Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4} IX=${6:x4} IY=${7:x4}",
+                                         regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL, regs.IX, regs.IY);
         }
+
+        // debug
+        public void DumpFifos()
+        {
+            _z80ToPerqFifo.DumpFifo();
+            _perqToZ80Fifo.DumpFifo();
+        }
+
 
         /// <summary>
         /// Load the ROM code for this IO Board.
@@ -443,8 +481,7 @@ namespace PERQemu.IO.Z80
             }
             catch
             {
-                Log.Error(Category.Emulator, "Could not open Z80 ROM from {0}!",
-                          Paths.Canonicalize(file));
+                Log.Error(Category.Emulator, "Could not open Z80 ROM from {0}!", Paths.Canonicalize(file));
                 throw;
             }
         }

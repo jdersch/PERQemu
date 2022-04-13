@@ -76,8 +76,10 @@ namespace PERQemu
 
                 //
                 // CIO boot ROMs:  Shugart/Micropolis(?)
-                //      "SC" - CIO, 16K CPU, new Z80            cioboot.rom
+                //      "SC" - CIO, 16K CPU, new Z80            cio16kboot.rom
                 //      "SD" - CIO, 4K CPU, new Z80             cio4kboot.rom
+                //      Copied boot partition backups           cioboot.rom
+                // NONE of them work.
                 //
                 case IOBoardType.CIO:
                     _iob = new CIO(this);
@@ -87,7 +89,7 @@ namespace PERQemu
                     }
                     else
                     {
-                        _cpu.LoadBootROM("boot.rom");
+                        _cpu.LoadBootROM("cioboot.rom");
                     }
                     break;
 

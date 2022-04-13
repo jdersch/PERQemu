@@ -276,6 +276,18 @@ April, 2022:
     and have v8.7 and v10.17 Z80 code.  Only the 24-bit set remains to be ripped
     though full support for the T4 is a ways off.
 
+    2. Becoming evident that the CIO hardware and firmware changes -- ALL of
+    which are completely undocumented -- were more extensive and incompatible
+    with the original IOB than previously believed.  Tracing microinstruction
+    AND Z80 opcode execution manually, line by line, to reverse engineer the
+    changes is proving to be painstakingly slow and hugely frustrating.  THREE
+    versions of the boot ROMs, NONE of which agree, all of which hang or fail
+    in completely unique ways.  Sigh.
+
+    3. First successful floppy boot with CIO:  PNX 2.  Huh?  POS still hangs and
+    fails, but the OS I have _zero_ source code for stumbles across the finish
+    line.  Proves the actual PROM code works, so I got that goin' for me.
+
 
 ---
-Last update: skeezics    Sat Apr  2 16:36:50 PDT 2022
+Last update: skeezics    Wed Apr 13 02:36:15 PDT 2022

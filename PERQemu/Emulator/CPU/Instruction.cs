@@ -97,19 +97,21 @@ namespace PERQemu.Processor
 
                         if (SF == 0x7)
                         {
-                            NextAddress = (ushort)((NotZ | ((0xff & (~Y)) << 8)) & _wcsMask);
-
-                            if (Is4K)
+                            if (!Is4K)
+                            {
+                                NextAddress = (ushort)((NotZ | ((0xff & (~Y)) << 8)) & _wcsMask);
+                            }
+                            else
                             {
                                 Log.Warn(Category.Instruction,
                                         "Leap not implemented on the 4K CPU.  Jump to {0:x4} instead, not {1:x4}",
-                                        NextAddress, (ushort)((NotZ) | ((0xff & (~Y)) << 8)) & _wcsMask);
+                                         NextAddress, (NotZ | ((0xff & (~Y)) << 8)) & _wcsMask);
                             }
                         }
                         break;
 
                     case 3:     // Long jump
-                        NextAddress = (ushort)((0xfff & (~((Z | (SF << 8))))));
+                        NextAddress = (ushort)(0xfff & (~(Z | (SF << 8))));
                         break;
 
                     default:

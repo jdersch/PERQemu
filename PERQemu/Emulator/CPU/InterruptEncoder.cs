@@ -79,6 +79,7 @@ namespace PERQemu.Processor
         public void Reset()
         {
             _intr.Initialize();
+            Log.Debug(Category.Interrupt, "Encoder reset.");
         }
 
         public long Raise(InterruptSource i)

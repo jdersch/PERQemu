@@ -211,13 +211,13 @@ EIO's 8"/5.25" implementation.  Since no schematics of the MLO seem to have surv
 that exist do not appear to have the 2910-based disk state machine hardware, this is another source of
 speculation, confusion and intrigue.  It's entirely possible that these ports were only used to develop
 and debug the SA4000->DIB (Micropolis/MFM) controller without interfering with the IOB's Shugart ports,
-and we never included on the MLO?
+and were never included on the MLO?
 
 ------
 
 IOB(0) is a special case: it only explicitly occurs in multibus/tape/micro/iorwregs.micro.  Accent
 modifies the microinstruction to read or write any IO register (part of the kernel debugger).  So
 this is likely just a stand-in so the microassembler won't flag an error.  The modified instruction
-sets the Z field the register to be read/written; the same trick is used to modify the X/Y fields
+sets the Z field to the register to be read/written; the same trick is used to modify the X/Y fields
 to read and write registers in the debugger.  Wild.
 

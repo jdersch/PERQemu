@@ -17,7 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
 using System.Text;
 
 using PERQemu.Processor;
@@ -67,6 +66,7 @@ namespace PERQemu.Debugger
 
             // Append function, if any
             string func = DisassembleFunction(op);
+
             if (func.Length > 0)
             {
                 sb.AppendFormat("{0}. ", DisassembleFunction(op));
@@ -89,7 +89,7 @@ namespace PERQemu.Debugger
                     amux = "Shifter";
                     break;
 
-                case AField.NextOp:
+                case AField.NextOp:     // Next byte from Op
                     amux = "Next Opcode";
                     break;
 
@@ -110,14 +110,7 @@ namespace PERQemu.Debugger
                     break;
 
                 case AField.XYRegister: // XY register at location specified by X field
-                    if (uOp.X < 0x40)
-                    {
-                        amux = string.Format("R{0:x2}%", uOp.X);
-                    }
-                    else
-                    {
-                        amux = string.Format("R{0:x2}", uOp.X);
-                    }
+                    amux = (uOp.X < 0x40) ? $"R{uOp.X:x2}%" : $"R{uOp.X:x2}";
                     break;
 
                 case AField.TOS:        // Expression stack
@@ -136,36 +129,16 @@ namespace PERQemu.Debugger
             // Select BMUX input
             if (uOp.B == 0)
             {
-                if (uOp.Y < 0x40)
-                {
-                    bmux = string.Format("R{0:x2}%", uOp.Y);
-                }
-                else
-                {
-                    bmux = string.Format("R{0:x2}", uOp.Y);
-                }
+                // XY Register selected by Y
+                bmux = (uOp.Y < 0x40) ? $"R{uOp.Y:x2}%" : $"R{uOp.Y:x2}";
             }
             else
             {
-                // Select a constant.  If SF special function 0 (LongConstant) this is
-                // 8 bits from Z, and 8 bits from Y.  Otherwise just 8 bits from Y.
-                if (IsSpecialFunction(uOp) && uOp.SF == 0)
-                {
-                    bmux = string.Format("{0:x4}", (uOp.Z << 8) | (uOp.Y));
-                }
-                else
-                {
-                    bmux = string.Format("{0:x2}", uOp.Y);
-                }
+                // A constant (precomputed)
+                bmux = $"{uOp.BMuxInput:x4}";
             }
 
             return bmux;
-        }
-
-
-        private static bool IsSpecialFunction(CPU.Instruction uOp)
-        {
-            return (uOp.F == 0 || uOp.F == 2);
         }
 
 
@@ -184,59 +157,59 @@ namespace PERQemu.Debugger
                     break;
 
                 case ALUOperation.NotA:
-                    alu = string.Format("NOT {0}", amux);
+                    alu = $"Not {amux}";
                     break;
 
                 case ALUOperation.NotB:
-                    alu = string.Format("NOT {0}", bmux);
+                    alu = $"Not {bmux}";
                     break;
 
                 case ALUOperation.AandB:
-                    alu = string.Format("{0} AND {1}", amux, bmux);
+                    alu = $"{amux} And {bmux}";
                     break;
 
                 case ALUOperation.AandNotB:
-                    alu = string.Format("{0} AND NOT {1}", amux, bmux);
+                    alu = $"{amux} And Not {bmux}";
                     break;
 
                 case ALUOperation.AnandB:
-                    alu = string.Format("{0} NAND {1}", amux, bmux);
+                    alu = $"{amux} Nand {bmux}";
                     break;
 
-                case ALUOperation.AorB:         // a or b
-                    alu = string.Format("{0} OR {1}", amux, bmux);
+                case ALUOperation.AorB:
+                    alu = $"{amux} Or {bmux}";
                     break;
 
-                case ALUOperation.AorNotB:      // a or not b
-                    alu = string.Format("{0} OR NOT {1}", amux, bmux);
+                case ALUOperation.AorNotB:
+                    alu = $"{amux} Or Not {bmux}";
                     break;
 
-                case ALUOperation.AnorB:        // a nor b
-                    alu = string.Format("{0} NOR {1}", amux, bmux);
+                case ALUOperation.AnorB:
+                    alu = $"{amux} Nor {bmux}";
                     break;
 
-                case ALUOperation.AxorB:        // a xor b
-                    alu = string.Format("{0} XOR {1}", amux, bmux);
+                case ALUOperation.AxorB:
+                    alu = $"{amux} Xor {bmux}";
                     break;
 
-                case ALUOperation.AxnorB:       // a xnor b
-                    alu = string.Format("{0} XNOR {1}", amux, bmux);
+                case ALUOperation.AxnorB:
+                    alu = $"{amux} Xnor {bmux}";
                     break;
 
-                case ALUOperation.AplusB:       // a+b
-                    alu = string.Format("{0} + {1}", amux, bmux);
+                case ALUOperation.AplusB:
+                    alu = $"{amux} + {bmux}";
                     break;
 
-                case ALUOperation.AplusBplusCarry:  // a+b+oldcarry
-                    alu = string.Format("{0} + {1} + Cry", amux, bmux);
+                case ALUOperation.AplusBplusCarry:
+                    alu = $"{amux} + {bmux} + Cry";
                     break;
 
-                case ALUOperation.AminusB:      // a-b
-                    alu = string.Format("{0} - {1}", amux, bmux);
+                case ALUOperation.AminusB:
+                    alu = $"{amux} - {bmux}";
                     break;
 
-                case ALUOperation.AminusBminusCarry: // a-b-carry
-                    alu = string.Format("{0} - {1} - Cry", amux, bmux);
+                case ALUOperation.AminusBminusCarry:
+                    alu = $"{amux} - {bmux} - Cry";
                     break;
             }
 
@@ -327,7 +300,7 @@ namespace PERQemu.Debugger
                             break;
 
                         case 0xf:       // IOB function
-                            function += string.Format("IOB({0:x2})", uOp.IOPort);
+                            function += $"IOB({uOp.IOPort:x2})";
                             break;
                     }
                     break;
@@ -356,7 +329,7 @@ namespace PERQemu.Debugger
                             break;
 
                         case 0x5:   // Push long constant
-                            function += string.Format("Push {0:x4}", uOp.Y | (uOp.Z << 8));
+                            function += $"Push {uOp.LongConstant:x4}";
                             break;
 
                         case 0x6:   // address input := Shift
@@ -428,15 +401,13 @@ namespace PERQemu.Debugger
             // See if this is a left or right shift, or a rotate
             if (low == 0xf)
             {
-                shifter = string.Format("Left Shift {0}", high);
+                shifter = $"Left Shift {high}";
             }
             else if ((0xf - low) == high)
             {
-                shifter = string.Format("Right Shift {0}", high);
+                shifter = $"Right Shift {high}";
             }
-            else if (
-                (low == 0xd || low == 0xe) &&
-                (high >= 0x8 && high <= 0xf))
+            else if ((low == 0xd || low == 0xe) && (high >= 0x8 && high <= 0xf))
             {
                 shifter = string.Format("Rotate {0}", (high & 0x7) | (low == 0xd ? 0x0 : 0x8));
             }
@@ -468,7 +439,7 @@ namespace PERQemu.Debugger
                     break;
 
                 case Condition.CarryH:  // C19 or C23
-                    jump = CPU.CPUBits == 20 ? "If C19, {0}" : "If C23, {0}";
+                    jump = (CPU.CPUBits == 20) ? "If C19, {0}" : "If C23, {0}";
                     break;
 
                 case Condition.BPC3:    // Opfile empty
@@ -622,38 +593,20 @@ namespace PERQemu.Debugger
             return type;
         }
 
-        /// <summary>
-        /// Calculate the next microinstruction address.
-        /// </summary>
+
         private static string CalcAddress(CPU.Instruction uOp)
         {
-            ushort addr = 0;
-
             switch (uOp.F)
             {
-                case 0:     // Constant/Short Jump
-                case 1:
-                    if (uOp.SF != 0x7)
-                    {
-                        addr = (ushort)((_pc & 0xf00) | (0xff & (~uOp.Z)));
-                    }
-                    else
-                    {
-                        // Leap
-                        addr = (ushort)(((0xff & (~uOp.Z)) | ((0xff & (~uOp.Y)) << 8)) & 0x3fff);   // 14 bits
-                    }
-
-                    break;
-
+                case 0:     // Short jump
+                case 1:     // Short (or Leap on 16K)
                 case 3:     // Long Jump
-                    addr = (ushort)((0xfff & (~((uOp.Z | (uOp.SF << 8))))));
-                    break;
+                    return $"{uOp.NextAddress:x4}";
 
                 default:
-                    throw new UnimplementedInstructionException("Error: F value does not specify a jump");
+                    //throw new UnimplementedInstructionException("Error: F value does not specify a jump");
+                    return "<ERROR: F does not specify a jump>";
             }
-
-            return $"{addr:x4}";
         }
 
 

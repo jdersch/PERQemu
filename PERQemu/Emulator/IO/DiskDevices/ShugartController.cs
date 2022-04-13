@@ -148,6 +148,13 @@ namespace PERQemu.IO.DiskDevices
                     Log.Debug(Category.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
                     break;
 
+                case 0xcc:  // Micropolis Sector register
+                    // Added to the CIO board but ignored by the Shugart controller
+                    // May initially log things to see that it's always being set to 0
+                    if (value != 0)
+                        Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x2} to MicropSec ignored!", value);
+                    break;
+
                 case 0xd0:  // Shugart Data Buffer Address High register
                     _dataBufferHigh = (~value) & 0xffff;
 
