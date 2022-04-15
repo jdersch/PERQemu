@@ -38,7 +38,6 @@ namespace PERQemu.IO.Z80
             _system = system;
             _lock = new object();
             _interruptsEnabled = false;
-            _dataReadyInterruptRequested = false;
         }
 
         public void Reset()
@@ -48,6 +47,7 @@ namespace PERQemu.IO.Z80
 
             // Assume these reset as well
             _interruptActive = false;
+            _dataReadyInterruptRequested = false;
 
             _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
 
@@ -135,19 +135,15 @@ namespace PERQemu.IO.Z80
                 // Clear the Z80 interrupt
                 _interruptActive = false;
 
-                //if (_valid)
-                //{
+                if (_valid)
+                {
                     value = _fifo;
-
-                if (!_valid)
-                    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0x{0:x2}", _fifo);
-                
                     _valid = false;
-                //}
-                //else
-                //{
-                //    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0");
-                //}
+                }
+                else
+                {
+                    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0");
+                }
 
                 // FIFO is empty; interrupt if the PERQ has asked us to
                 if (_dataReadyInterruptRequested)

@@ -52,7 +52,8 @@ namespace PERQemu.IO.Z80
         /// </summary>
         public void Reset()
         {
-            _channels.Initialize();
+            for (int i = 0; i < 4; i++)
+                _channels[i].Reset();
 
             _interruptVector = null;
             _interruptActive = false;
@@ -104,7 +105,7 @@ namespace PERQemu.IO.Z80
                     // Control word
                     _channels[ch].Control = control;
 
-                    if ((control & ControlFlags.Reset) != 0)
+                    if (control.HasFlag(ControlFlags.Reset))
                     {
                         _channels[ch].Stop();
                     }
@@ -227,6 +228,11 @@ namespace PERQemu.IO.Z80
                 _ctc = parent;
                 Number = num;
 
+                Log.Debug(Category.CTC, "Channel {0} initialized", Number);
+            }
+
+            public void Reset()
+            {
                 Control = 0;
                 TimeConstant = 1;
                 Counter = 0;
@@ -235,8 +241,8 @@ namespace PERQemu.IO.Z80
 
                 Trigger = null;
 
-                Log.Debug(Category.CTC, "Channel {0} initialized", Number);
-            }
+                Log.Debug(Category.CTC, "Channel {0} reset", Number);
+           }
 
             public ControlFlags Control;
             public int Number;

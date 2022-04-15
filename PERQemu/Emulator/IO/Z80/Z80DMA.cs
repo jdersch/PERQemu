@@ -47,7 +47,9 @@ namespace PERQemu.IO.Z80
 
         public void Reset()
         {
-            _wr.Initialize();
+            for (var i = 0; i < _wr.Length; i++)
+                _wr[i] = 0;
+            
             _writeBaseRegister = true;
             _baseRegister = 0;
 

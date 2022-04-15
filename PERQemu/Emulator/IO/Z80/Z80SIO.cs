@@ -148,8 +148,12 @@ namespace PERQemu.IO.Z80
 
             public void Reset()
             {
-                _writeRegs.Initialize();
-                _readRegs.Initialize();
+                for (var i = 0; i < _writeRegs.Length; i++)
+                    _writeRegs[i] = 0;
+
+                for (var i = 0; i < _readRegs.Length; i++)
+                    _readRegs[i] = 0;
+                
                 _rxFifo.Clear();
                 _txFifo.Clear();
 

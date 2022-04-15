@@ -102,11 +102,8 @@ features and peripherals are incorporated.  Please check back often for updates!
 1.3 System Requirements
 -----------------------
 
-You will need a Windows machine with the .NET Framework ?.? installed, or
-a Linux/UNIX/Mac OS machine with the Mono v?.? runtime installed.
-
-    [Todo: Figure out exactly what versions are required to support the
-    .NET Framework 4.8 target we build against.]
+You will need a Windows machine with the .NET Framework 4.8 installed, or
+a Linux/UNIX/Mac OS machine with the Mono v6.12.0.x runtime installed.
 
 PERQemu is a nearly cycle-accurate, register-level emulation of a complex 
 microcoded processor AND a Z80 subsystem -- essentially two emulations running
@@ -282,12 +279,12 @@ The following hardware has been implemented in the emulator:
     - All of the disk support has been completely rewritten to prepare for
       the addition of PERQ-2 emulation.  Currently only the original PERQ-1
       14" Shugart SA4000-series drives and controllers are tested to work with
-      the new Z80 implementation (running the original ROMs);
+      the new Z80 implementation;
     - All of the suppoted 8" Micropolis and 5.25" MFM drives will be available 
       as PERQ-2 support is introduced.
       
   Floppy disk:
-    - Also rewritten to work with the new Z80 and floppy disk controller (FDC);
+    - Rewritten to work with the new Z80 and floppy disk controller (FDC);
     - Supports dynamic loading and unloading of all media types (single- and
       double-sided diskettes, in single- and double-density);
     - There are still a few bugs; testing and debugging is ongoing.
@@ -303,13 +300,11 @@ The following hardware has been implemented in the emulator:
   Z80 I/O Processor:
     - Simulation replaced by a real Z80 emulator running actual PERQ ROM code;
     - Runs asynchronously on its own thread to improve performance;
-    - Will allow different ROMs to be loaded to support CIO and EIO boards,
-      with the ability to support ZBoot loading (Z80 code dynamically loaded
-      by the PERQ at runtime);
+    - Allows different ROMs to be loaded to support CIO and EIO boards;
     - New register-level interface written to support Z80 DMA, CTC, SIO, FDC
       and GPIB controller chips;
     - Z80 Debugger support includes single stepping and source code display
-      (for the current v8.7 ROMs).
+      (for the current v8.7 ROMs; v10.17 source disassembly in progress).
 
   Keyboard:
     - Now uses the SDL2 interface so no more horrible hacks required for MacOS;
@@ -342,7 +337,7 @@ The following hardware has been implemented in the emulator:
       useful on POS F.1 and later (no support in D.6, F.0, PNX 1, or Accent S4);
     - The simulated Summagraphics BitPadOne works with the new GPIB; it is
       supported on all PERQ OSes;
-    - The BitPad/new GPIB requires a ton of processing due to protocol overhead;
+    - The BitPad/GPIB requires a ton of processing due to protocol overhead;
       the Kriz is a far more efficient tablet and is generally preferred on
       any OS that supports it!
 
@@ -387,7 +382,6 @@ v0.7 - TBD
 v0.6 - TBD
   Leverage the new architecture to roll out new models, new peripherals and
   open up the full range of available operating systems!
-  - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
   - PERQ-2 EIO emulation support: expanded IO Board with faster Z80, second
     serial port, RTC chip, support for two hard disks
   - PERQ-2 peripherals: 8" and 5.25" disk drives, VT100-style keyboard,
@@ -398,6 +392,7 @@ v0.5 - TBD
   Merge the experiments back into the master branch once the new Z80 and all
   of the new features are reasonably stable:
   - True Z80 emulation
+  - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
   - Runs on 64-bit Mono/MacOS (no 32-bit WinForms limitation)
   - SDL2 for improved display performance, in theory :-|
   - Unified PERQ media storage architecture and file format

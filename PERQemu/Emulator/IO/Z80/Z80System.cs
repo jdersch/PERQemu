@@ -178,8 +178,8 @@ namespace PERQemu.IO.Z80
                 _tms9914a.Reset();
 
                 // This appears to be necessary even if not technically correct
-                //_z80ToPerqFifo.Reset();
-                //_perqToZ80Fifo.Reset();
+                _z80ToPerqFifo.Reset();
+                _perqToZ80Fifo.Reset();
                 _seekControl.Reset();
 
                 Log.Debug(Category.Z80, "System (soft) reset");

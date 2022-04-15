@@ -89,7 +89,7 @@ namespace PERQemu
                     }
                     else
                     {
-                        _cpu.LoadBootROM("cioboot.rom");
+                        _cpu.LoadBootROM("cio4kboot.rom");
                     }
                     break;
 

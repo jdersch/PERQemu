@@ -429,13 +429,16 @@ namespace PERQemu.UI
 
             // Don't create a file with the same name as one that's loaded!
             // This might not be foolproof, but make the check all the same
-            foreach (var drive in PERQemu.Sys.Volumes)
+            if (PERQemu.Sys != null)
             {
-                if (drive?.Filename == pathname)
+                foreach (var drive in PERQemu.Sys.Volumes)
                 {
-                    Console.WriteLine($"File '{pathname}' is currently loaded!");
-                    Console.WriteLine("Please unload the drive first, or choose another filename.");
-                    return;
+                    if (drive?.Filename == pathname)
+                    {
+                        Console.WriteLine($"File '{pathname}' is currently loaded!");
+                        Console.WriteLine("Please unload the drive first, or choose another filename.");
+                        return;
+                    }
                 }
             }
 

@@ -86,8 +86,8 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                _stepClockEvent = null;
                 Log.Debug(Category.HardDisk, "SeekControl count expired, descheduled");
+                _stepClockEvent = null;
             }
         }
 

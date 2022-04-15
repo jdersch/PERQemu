@@ -93,7 +93,7 @@ namespace PERQemu.Processor
                 // The hardware doesn't enforce stack limits, so we don't either.
                 if (_stackPointer > 15)
                 {
-                    Log.Warn(Category.EStack, "Overflow!");
+                    Log.Debug(Category.EStack, "Overflow!");
                     _stackPointer = 0;
                 }
 
@@ -113,7 +113,7 @@ namespace PERQemu.Processor
                 // Check for stack underflow.  See Push().
                 if (_stackPointer < 0)
                 {
-                    Log.Warn(Category.EStack, "Underflow!");
+                    Log.Debug(Category.EStack, "Underflow!");
                     _stackPointer = 15;
                 }
 

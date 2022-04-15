@@ -117,13 +117,13 @@ namespace PERQemu.IO.Z80
         private byte ReadPort(int port)
         {
             IZ80Device device = _devicePorts[port];
-            byte value = 0x0;
+            byte value = 0xff;
 
             if (device != null)
             {
                 value = device.Read((byte)port);
 
-                Log.Debug(Category.Z80, "Read from port 0x{0:x} ({1}), returning 0x{2:x}", port, device.Name, value);
+                Log.Debug(Category.Z80, "Read 0x{0:x} from port 0x{1:x} ({2})", value, port, device.Name);
             }
             else
             {
@@ -141,7 +141,7 @@ namespace PERQemu.IO.Z80
             {
                 device.Write((byte)port, value);
 
-                Log.Debug(Category.Z80, "Write of 0x{0:x} to port 0x{1:x} ({2})", value, port, device.Name);
+                Log.Debug(Category.Z80, "Write 0x{0:x} to port 0x{1:x} ({2})", value, port, device.Name);
             }
             else
             {

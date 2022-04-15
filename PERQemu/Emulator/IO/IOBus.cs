@@ -71,7 +71,7 @@ namespace PERQemu.IO
 
         public int IORead(byte ioPort)
         {
-            int value = 0x0;
+            int value = 0xffff;
             IIODevice device = _deviceDispatch[ioPort];
 
             if (device != null)
@@ -80,12 +80,11 @@ namespace PERQemu.IO
 
                 // Add this back in if there's too much log spewage
                 //if (!(_deviceDispatch[ioPort] is VideoController))
-                Log.Debug(Category.IO, "Read from 0x{0:x2} ({1}), returning 0x{2:x4}",
-                          ioPort, device.ToString(), value);
+                Log.Debug(Category.IO, "Read 0x{0:x4} from port 0x{1:x2} ({2})", value, ioPort, device.ToString());
             }
             else
             {
-                Log.Warn(Category.IO, "Unhandled Read from 0x{0:x2}, returning 0x00", ioPort);
+                Log.Warn(Category.IO, "Unhandled Read from port 0x{0:x2}, returning 0x{1:x4}", ioPort, value);
             }
 
             return value;
@@ -102,12 +101,11 @@ namespace PERQemu.IO
 
                 // Put this back if it spews too much
                 //if (!(_deviceDispatch[ioPort] is VideoController))
-                Log.Debug(Category.IO, "Write of 0x{0:x4} to 0x{1:x2} ({2})",
-                          value, ioPort, device.ToString());
+                Log.Debug(Category.IO, "Write 0x{0:x4} to port 0x{1:x2} ({2})", value, ioPort, device.ToString());
             }
             else
             {
-                Log.Warn(Category.IO, "Unhandled Write of 0x{0:x4} to 0x{1:x2})", value, ioPort);
+                Log.Warn(Category.IO, "Unhandled Write of 0x{0:x4} to port 0x{1:x2})", value, ioPort);
             }
         }
 

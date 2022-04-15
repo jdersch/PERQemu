@@ -85,7 +85,9 @@ namespace PERQemu.IO.Z80
                 d?.Reset();
             }
 
-            _pcn.Initialize();
+            for (var i = 0; i < _pcn.Length; i++)
+                _pcn[i] = 0;
+            
             _commandData.Clear();
             _statusData.Clear();
 
