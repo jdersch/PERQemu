@@ -87,6 +87,7 @@ namespace PERQemu.Processor
             _clocks = 0;
             _lastPC = 0;
             _lastBmux = 0;
+            _lastOpcode = 0;
             _refillOp = false;
             _incrementBPC = false;
 
@@ -150,14 +151,13 @@ namespace PERQemu.Processor
                 return;
             }
 
-#if TRACING_ENABLED
+#if DEBUG
             // This is a very expensive log, so only call it if we have to
             if (Log.Categories.HasFlag(Category.Instruction))
             {
                 Log.Debug(Category.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
             }
-#endif
-#if DEBUG
+
             // Catch cases where the CPU is looping forever
             if (_lastPC == PC &&
                 uOp.CND == Condition.True &&
@@ -229,9 +229,8 @@ namespace PERQemu.Processor
             // Execute whatever function this op calls for
             DispatchFunction(uOp);
 
-            // Save these for posterity
+            // Save for loop detection
             _lastPC = PC;
-            _lastInstruction = uOp;
 
             // Jump to where we need to go...
             _usequencer.DispatchJump(uOp);
@@ -302,6 +301,20 @@ namespace PERQemu.Processor
         public ushort Victim
         {
             get { return _usequencer.Victim; }
+        }
+
+        /// <summary>
+        /// Support debugging two-byte opcodes.  Returns true if the last byte
+        /// executed with NextInst() was a prefix code.
+        /// </summary>
+        public bool ExtendedOp
+        {
+            get { return _usequencer.ExtendedOp; }
+        }
+
+        public ushort LastOpcode
+        {
+            get { return _lastOpcode; }
         }
 
         /// <summary>
@@ -466,7 +479,16 @@ namespace PERQemu.Processor
                     }
 
                     amux = _opFile[BPC];
-                    _incrementBPC = true;   // Increment BPC at the beginning of the next instruction
+                    _incrementBPC = true;               // Increment BPC at start of next cycle
+
+                    if (_usequencer.ExtendedOp)
+                    {
+                        // Extend to save the prefix byte and add in the current
+                        _lastOpcode = (ushort)((_lastOpcode << 8) | _opFile[BPC]);
+                        _usequencer.ExtendedOp = false;
+
+                        Log.Debug(Category.QCode, "NextOp extended opcode now {0:x4}", _lastOpcode);
+                    }
 
                     Log.Debug(Category.OpFile, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
                     break;
@@ -880,13 +902,23 @@ namespace PERQemu.Processor
             {
                 _system.PressBootKey();
             }
-            // Send the event and let the updates fall where they may
+
+            // debug
+            if (_dds == 198)
+            {
+                Console.WriteLine("Enabling verbose logging!");
+
+                // Crank up the logging so we can trace the S6 init code
+                Log.Categories = Log.Categories | Category.Instruction;
+                Log.FileLevel = Severity.Verbose;
+                Log.ToFile = true;
+            }
+
+            // todo: Send the event (CLI can update the title line, GUI can update
+            // the front panel display, boot key presser hook, breakpoint, etc.)
             // _system.MachineStateChange(DDSChanged, _dds);
 
-            // TODO: a general event-based way to provide hooks or
-            // breakpoints when the DDS reaches a particular value might
-            // be a cleaner way to allow a GUI, the debugger, the console
-            // or the boot key-holder-downer-thingie to hook in...
+            // For now...
             Console.Title = string.Format("DDS {0:d3}", _dds % 1000);
         }
 
@@ -925,8 +957,7 @@ namespace PERQemu.Processor
             _xy.WriteRegister(r, v);
         }
 
-
-        public void ShowPC()
+        public void ShowCPUState()
         {
             // TODO: move me  or  just return the formatted string?
             Console.WriteLine("\nPC={0:x4} BPC={1:x1} Victim={2:x4} DDS={3} UState={4:x2} Interrupt={5}",
@@ -1027,6 +1058,6 @@ namespace PERQemu.Processor
 
         // Trace/debugging support
         private ushort _lastPC;
-        private Instruction _lastInstruction;
+        private ushort _lastOpcode;
     }
 }

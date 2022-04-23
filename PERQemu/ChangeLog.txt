@@ -288,6 +288,17 @@ April, 2022:
     fails, but the OS I have _zero_ source code for stumbles across the finish
     line.  Proves the actual PROM code works, so I got that goin' for me.
 
+    4. First successful hard disk boot with CIO:  POS G.7!  Have been able to
+    complete an install of Accent S6 but it will not boot from the hard disk;
+    some really obscure differences between the IOB and CIO are proving rather
+    difficult to track down, and ROM+microcode bugs and incongruities aren't
+    helping.  Kriz tablet not working on CIO due to unknown SIO/Z80 issue.
+
+    5. To aid debugging, can now switch Qcode sets in the debugger, and decode/
+    display 2-byte opcode sequences.  The older POS/Accent "V4" set is still the
+    default; Accent "V5" codes now available for Accent S5(?) and beyond.  Will
+    add PNX C-codes if/when any kind of source or description of them is found.
+
 
 ---
-Last update: skeezics    Wed Apr 13 02:36:15 PDT 2022
+Last update: skeezics    Sat Apr 23 12:39:41 PDT 2022

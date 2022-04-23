@@ -106,6 +106,12 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Dispatch register writes.
         /// </summary>
+        /// <remarks>
+        /// Low words of Data and Header buffer addresses come in XNOR'd with
+        /// 0x3ff (for reasons to do with programming the hardware's address
+        /// counter).  To get the real address, we do the XNOR operation again.
+        /// Other values are clipped and manipulated as appropriate.
+        /// </remarks>
         public void LoadRegister(byte address, int value)
         {
             switch (address)
@@ -143,7 +149,7 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 case 0xcb:  // Shugart Block Number register
-                    _blockNumber = (value & 0xffff);
+                    _blockNumber = value & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
                     break;
@@ -152,29 +158,29 @@ namespace PERQemu.IO.DiskDevices
                     // Added to the CIO board but ignored by the Shugart controller
                     // May initially log things to see that it's always being set to 0
                     if (value != 0)
-                        Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x2} to MicropSec ignored!", value);
+                        Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x4} to MicropSec ignored!", value);
                     break;
 
-                case 0xd0:  // Shugart Data Buffer Address High register
-                    _dataBufferHigh = (~value) & 0xffff;
+                case 0xd0:  // Shugart Data Buffer Address High register (4 bits)
+                    _dataBufferHigh = (~value) & 0xf;
 
                     Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
                     break;
 
-                case 0xd1:  // Shugart Header Address High register
-                    _headerAddressHigh = (~value) & 0xffff;
+                case 0xd1:  // Shugart Header Address High register (4 bits)
+                    _headerAddressHigh = (~value) & 0xf;
 
                     Log.Debug(Category.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
                     break;
 
-                case 0xd8:  // Shugart Data Buffer Address Low register
-                    _dataBufferLow = (Unfrob(value)) & 0xffff;
+                case 0xd8:  // Shugart Data Buffer Address Low register (unfrobbed)
+                    _dataBufferLow = (~(0x3ff ^ value)) & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
                     break;
 
-                case 0xd9:  // Shugart Header Address low register
-                    _headerAddressLow = (Unfrob(value)) & 0xffff;
+                case 0xd9:  // Shugart Header Address low register (unfrobbed)
+                    _headerAddressLow = (~(0x3ff ^ value)) & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
                     break;
@@ -468,16 +474,6 @@ namespace PERQemu.IO.DiskDevices
                       _cylinder, _head, _sector, dataAddr);
 
             SetBusyState();
-        }
-
-        /// <summary>
-        /// Low words of Data and Header buffer addresses come in XNOR'd with
-        /// 0x3ff for unknown reasons (must be some weird controller hardware
-        /// quirk).  To get the real address, we do the XNOR operation again...
-        /// </summary>
-        private int Unfrob(int value)
-        {
-            return (0x3ff & value) | ((~0x3ff) & (~value));
         }
 
         /// <summary>

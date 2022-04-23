@@ -128,6 +128,7 @@ namespace PERQemu
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clock(int steps = 1)
         {
+            SchedulerEvent e;
 
             while (steps > 0)
             {
@@ -135,16 +136,8 @@ namespace PERQemu
                 _currentTimeNsec += _timeStepNsec;
 
                 // See if we have any events waiting to fire at this timestep
-                while (true)
+                while (_schedule.Pop(_currentTimeNsec, out e))
                 {
-                    if (_currentTimeNsec < _schedule.Top.TimestampNsec)
-                    {
-                        // No more ready events this trip
-                        break;
-                    }
-
-                    SchedulerEvent e = _schedule.Pop();
-
                     // Fire the callback
                     e.EventCallback(_currentTimeNsec - e.TimestampNsec, e.Context);
                 }
@@ -174,8 +167,8 @@ namespace PERQemu
         public SchedulerEvent ReSchedule(SchedulerEvent old, ulong timestampNsec)
         {
             SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, old.Context, old.EventCallback);
-            _schedule.Push(e);
             _schedule.Remove(old);
+            _schedule.Push(e);
 
             return e;
         }
@@ -215,7 +208,7 @@ namespace PERQemu
     /// order on the current queue.
     /// </summary>
     /// <remarks>
-    /// The queue always contains a sentinel node a so that Top is guaranteed
+    /// The queue always contains a sentinel node a so that _top is guaranteed
     /// not to be null.  This simplifies things a lot.
     /// </remarks>
     internal class SchedulerQueue
@@ -229,28 +222,10 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// The Top of the queue (points to sentinel node if no other events).
-        /// </summary>
-        /// <remarks>
-        /// It _should_ be okay to read Top without locking, since the worst
-        /// case is that Clock() misses a cycle due to outdated information.
-        /// All writes to _top are protected.  I'm sure this will be fine...
-        /// </remarks>
-        public SchedulerEvent Top
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                return _top;
-            }
-        }
-
-        /// <summary>
         /// Clear this queue and reset Top by adding in the sentinel value.
         /// </summary>
         public void Clear()
         {
-            _top = null;
             _last = null;
             _queue.Clear();
 
@@ -277,7 +252,7 @@ namespace PERQemu
                 if (current == null)
                 {
                     _queue.AddFirst(e);
-                    _top = _queue.First.Value;
+                    _next = e.TimestampNsec;
                     return;
                 }
 
@@ -286,9 +261,9 @@ namespace PERQemu
                 {
                     if (e.TimestampNsec < current.Value.TimestampNsec)
                     {
-                        // This might be our new first element, so reset Top
+                        // Found our spot, slip it in
                         _queue.AddBefore(current, e);
-                        _top = _queue.First.Value;
+                        _next = _queue.First.Value.TimestampNsec;
                         return;
                     }
 
@@ -301,22 +276,42 @@ namespace PERQemu
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public SchedulerEvent Pop()
+        public bool Pop(ulong timeToFire, out SchedulerEvent e)
         {
-            SchedulerEvent e = _top;
-
+            // Do a fast rough check (outside the lock); it's okay if we
+            // "blow a rev" if the event gets cancelled or rescheduled since
+            // we'll just pick it up next time around
+            if (timeToFire < _next)
+            {
+                e = null;
+                return false;
+            }
+#if DEBUG
+            // Should never attempt to pop the sentinel!  Either the list
+            // was not initialized properly or there's a bug in Clock()...
+            if (_queue.Count <= 1)
+                throw new InvalidOperationException($"Pop from schedule with {_queue.Count} elements");
+#endif
             lock (_queueLock)
             {
-#if DEBUG
-                // Should NEVER attempt to pop the sentinel!  Either the list
-                // was not initialized properly or there's a bug in Clock()...
-                if (_queue.Count <= 1)
-                    throw new InvalidOperationException($"Pop from schedule with {_queue.Count} elements");
-#endif
+                // Are we *reeeally* ready to fire?  Since we've incurred the
+                // cost of acquiring the lock, double check just in case :-/
+                e = _queue.First.Value;
+
+                if (timeToFire < e.TimestampNsec)
+                {
+                    // Aw, crap
+                    Console.WriteLine($"False alarm: list head time {e.TimestampNsec} moved back to {_next}");
+                    return false;
+                }
+
+                // We're good; pop the event
                 _queue.RemoveFirst();
-                _top = _queue.First.Value;
+
+                // Reset
+                _next = _queue.First.Value.TimestampNsec;
+                return true;
             }
-            return e;
         }
 
         public void Remove(SchedulerEvent e)
@@ -329,15 +324,8 @@ namespace PERQemu
                     if (e == _last)
                         throw new InvalidOperationException("Attempt to pop sentinel from schedule");
 #endif           
-                    if (_top == e)
-                    {
-                        _queue.RemoveFirst();
-                        _top = _queue.First.Value;
-                    }
-                    else
-                    {
-                        _queue.Remove(e);
-                    }
+                    _queue.Remove(e);
+                    _next = _queue.First.Value.TimestampNsec;
                 }
             }
         }
@@ -345,28 +333,31 @@ namespace PERQemu
         // DEBUG
         public void Dump()
         {
-            if (_queue.Count > 1)   // ignore the sentinel value :-)
+            lock (_queueLock)
             {
-                foreach (var e in _queue)
+                if (_queue.Count > 1)   // ignore the sentinel value :-)
                 {
-                    if (e != _last)
+                    foreach (var e in _queue)
                     {
-                        Console.WriteLine("event {0} at {1}",
-                                          e.EventCallback.Method.Name,
-                                          e.TimestampNsec);
+                        if (e != _last)
+                        {
+                            Console.WriteLine("event {0} at {1}",
+                                              e.EventCallback.Method.Name,
+                                              e.TimestampNsec);
+                        }
                     }
                 }
-            }
-            else
-            {
-                Console.WriteLine("<queue is empty>");
+                else
+                {
+                    Console.WriteLine("<queue is empty>");
+                }
             }
         }
 
         private LinkedList<SchedulerEvent> _queue;
         private object _queueLock;
 
-        private SchedulerEvent _top;
+        private ulong _next;
         private SchedulerEvent _last;
     }
 }

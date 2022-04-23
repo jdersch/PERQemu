@@ -79,15 +79,15 @@ namespace PERQemu
                 //      "SC" - CIO, 16K CPU, new Z80            cio16kboot.rom
                 //      "SD" - CIO, 4K CPU, new Z80             cio4kboot.rom
                 //      Copied boot partition backups           cioboot.rom
-                // NONE of them work.
+                // NONE of them work?
                 //
                 case IOBoardType.CIO:
                     _iob = new CIO(this);
-                    if (CPU.Is4K)
-                    {
-                        _cpu.LoadBootROM("cio4kboot.rom");
-                    }
-                    else
+                    //if (CPU.Is4K)
+                    //{
+                    //    _cpu.LoadBootROM("cio4kboot.rom");
+                    //}
+                    //else
                     {
                         _cpu.LoadBootROM("cio4kboot.rom");
                     }
@@ -352,7 +352,7 @@ namespace PERQemu
         public void Halt(Exception e)
         {
             // The emulation has hit a serious error.  Return to the CLI.
-            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}.", e.Message);
+            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}", e.Message);
             Log.Error(Category.All, "System state may be inconsistent.\n");
 #if DEBUG
             Log.Write(Environment.StackTrace);
@@ -391,14 +391,24 @@ namespace PERQemu
         public void PrintStatus()
         {
             _iob.Z80System.ShowZ80State();
-            _cpu.Processor.ShowPC();
+            _cpu.Processor.ShowCPUState();
 
             Console.WriteLine("ucode {0}",
-                    Disassembler.Disassemble(CPU.PC, CPU.GetInstruction(CPU.PC)));
+                              Disassembler.Disassemble(CPU.PC, CPU.GetInstruction(CPU.PC)));
 
-            Console.WriteLine("inst  {0:x2}-{1} (@BPC {2})", CPU.OpFile[CPU.BPC],
-                    QCodeHelper.GetQCodeFromOpCode(CPU.OpFile[CPU.BPC]).Mnemonic, CPU.BPC);
+            // Print the current Q-code in 1- or 2-byte form
+            if (CPU.LastOpcode > 255)
+            {
+                Console.WriteLine("inst  {0:x4}+{1} (@BPC {2})", CPU.LastOpcode,
+                                  QCodeHelper.GetExtendedOpCode(CPU.LastOpcode).Mnemonic, CPU.BPC);
+            }
+            else
+            {
+                Console.WriteLine("inst  {0:x2}-{1} (@BPC {2})", CPU.LastOpcode,
+                                  QCodeHelper.GetQCodeFromOpCode((byte)CPU.LastOpcode).Mnemonic, CPU.BPC);
+            }
         }
+
 
         /// <summary>
         /// Initial call to load all of the defined media files from the Config.
@@ -702,8 +712,8 @@ namespace PERQemu
         {
             if (PERQemu.Controller.BootChar != 0)
             {
-                Log.Info(Category.Emulator, "Selecting '{0}' boot...",
-                                            (char)PERQemu.Controller.BootChar);
+                Log.Write("Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
+                //Log.Info(Category.Emulator, "Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
                 var count = 16;
                 BootCharCallback(0, count);
             }

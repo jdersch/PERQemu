@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-4/13/2022 - skeezicsb - v0.4.6 (experimental)
+4/23/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -240,6 +240,12 @@ As of v0.4.2, the following PERQ operating systems are known to boot:
   - MPOS version E.29 (unreleased by 3RCC);
   - Accent S4 (an early version from CMU, unreleased);
   - PNX 1.3 (first public release by ICL).
+
+As of v0.4.6, these PERQ operating systems also boot:
+
+  - POS version G.6 (last official 3RCC release);
+  - POS version G.7 (released by Accent Systems, 1986?);
+  - PNX 2 (beta; runs from floppy but not yet booting from hard disk).
 
 NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
 2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no

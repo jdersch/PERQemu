@@ -75,6 +75,10 @@ namespace PERQemu
         public void ShowDebugSettings()
         {
             Console.WriteLine("Current debugger settings:");
+            Console.WriteLine("--------------------------");
+
+            Console.WriteLine("Loaded Q-code set: {0}", QCodeHelper.Loaded);
+
             if (Log.ToConsole)
             {
                 Console.WriteLine("Console logging is enabled, threshold {0}", Log.Level);
@@ -267,7 +271,7 @@ namespace PERQemu
         [Command("debug show cpu registers", "Display the values of the CPU registers")]
         private void ShowCPURegs()
         {
-            PERQemu.Sys.CPU.ShowPC();
+            PERQemu.Sys.CPU.ShowCPUState();
         }
 
         [Command("debug show opfile", "Display the contents of the opcode file")]
@@ -555,6 +559,12 @@ namespace PERQemu
                 PERQemu.Sys.CPU.PC = nextPC;
                 // resume execution
             }
+        }
+
+        [Command("debug load qcodes", "Load Q-code definitions for opcode disassembly")]
+        private void LoadQCodes(QCodeSets qcodes)
+        {
+            QCodeHelper.LoadQCodeSet(qcodes);
         }
 
         /// <summary>

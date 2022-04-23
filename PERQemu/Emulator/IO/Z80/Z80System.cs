@@ -240,11 +240,6 @@ namespace PERQemu.IO.Z80
                     // properties, aborting (delaying) the execution until the microcode
                     // has read/written data to clear the condition.  Sigh.
                     //
-
-                    // FIXME: this is okay for debugging CIO, but it introduces serious
-                    // problems in release mode with hiccups/long pauses when running the
-                    // IOB; not a permanent solution. :-(
-
                     var peek = (ushort)(_memory[regs.PC] << 8 | _memory[regs.PC + 1]);
 
                     if (peek == 0xdba0 || peek == 0xedb2)
@@ -277,17 +272,19 @@ namespace PERQemu.IO.Z80
                 }
                 else
                 {
-                    // If we are more than one full CPU cycle ahead, block (when
-                    // we return to Run()) and schedule our own wakeup; this lets
-                    // the Z80 thread actually sleep while the CPU churns through
-                    // the ~9-55 cycles (1.6-9.3usec) needed to catch up to us
+                    // If we are less than one full microcycle ahead of the CPU,
+                    // just spin; otherwise, schedule a wakeup on the PERQ's
+                    // scheduler, then block (when we return to Run()).  This
+                    // lets the Z80 thread actually sleep while the CPU churns
+                    // through the ~9-55 cycles (1.6-9.3usec, on average) needed
+                    // to catch up.  A poor man's "nanosleep()"...
                     diff = -diff;
 
-                    if ((ulong)diff < _system.Scheduler.TimeStepNsec)
+                    if ((ulong)diff > _system.Scheduler.TimeStepNsec)
                     {
                         _sync.Reset();
 
-                        _scheduler.Schedule((ulong)diff, (skewNsec, context) =>
+                        _system.Scheduler.Schedule((ulong)diff, (skewNsec, context) =>
                         {
                             _sync.Set();
                         });
@@ -311,7 +308,7 @@ namespace PERQemu.IO.Z80
                 throw new InvalidOperationException("Z80 thread is already running; Stop first");
             }
 
-            // Unblock the CPU
+            // Clear the wait handle
             _sync.Set();
 
             // Fire off the Z80 thread
@@ -336,7 +333,10 @@ namespace PERQemu.IO.Z80
                 {
                     Run();
 
-                    if (!_sync.IsSet) _sync.Wait(1);
+                    if (!_sync.IsSet)
+                    {
+                        _sync.Wait(10);     // don't hang forever...
+                    }
                 }
                 catch (Exception e)
                 {
@@ -448,18 +448,17 @@ namespace PERQemu.IO.Z80
             IZ80Registers regs = _cpu.Registers;
 
             // TODO: should display shadow regs?
-            //string state = string.Format("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4}\n\tIX=${6:x4} IY=${7:x4}",
-            //                             regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL, regs.IX, regs.IY);
-            // ushort offset = 0;
-            // string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
-            // string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
-
-            // Dump one huge log
-            // Log.Debug(Category.Z80Inst, "{0}\n\t{1}+0x{2:x} : {3}", state, symbol, offset, source);
-
-            // For now just show the fucking regs and try not to crash Mono FFS
-            Log.Debug(Category.Z80Inst, "Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4} IX=${6:x4} IY=${7:x4}",
+            string state = string.Format("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4} IX=${6:x4} IY=${7:x4}",
                                          regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL, regs.IX, regs.IY);
+            ushort offset = 0;
+            string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
+            string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
+
+            // Log the state
+            Log.Debug(Category.Z80Inst, "{0}", state);
+
+            // Write the whole thing
+            Console.WriteLine("{0}\n\t{1}+0x{2:x} : {3}", state, symbol, offset, source);
         }
 
         // debug

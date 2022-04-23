@@ -52,6 +52,7 @@ namespace PERQemu.Processor
                 _s.Value = 0;
                 _pc.Value = 0;
                 _victim.Value = 0xffff;           // all 1s means unset
+                _extendedOp = false;
                 _callStack.Reset();
 
                 Log.Debug(Category.Sequencer, "Reset");
@@ -98,6 +99,15 @@ namespace PERQemu.Processor
             {
                 get { return (ushort)_victim.Value; }
                 set { _victim.Value = value; }
+            }
+
+            /// <summary>
+            /// Support decoding of two-byte opcodes.
+            /// </summary>
+            public bool ExtendedOp
+            {
+                get { return _extendedOp; }
+                set { _extendedOp = value; }
             }
 
             /// <summary>
@@ -225,7 +235,7 @@ namespace PERQemu.Processor
                             }
 
                             Log.Debug(Category.Sequencer, "PC restored from victim ({0:x4})", Victim);
-                           
+
                             _pc.Value = Victim;     // Restore
                             Victim = 0xffff;        // Clear the latch
                         }
@@ -306,7 +316,7 @@ namespace PERQemu.Processor
                     case JumpOperation.Repeat:
                         if (_s.Lo != 0)
                         {
-                            Log.Debug(Category.Sequencer, "Repeat S={0:x4}", _s.Lo);
+                            Log.Detail(Category.Sequencer, "Repeat S={0:x4}", _s.Lo);
                             _pc.Lo = uOp.NextAddress;
                             _s.Lo--;
                         }
@@ -408,19 +418,36 @@ namespace PERQemu.Processor
             /// <summary>
             /// Increment the BPC and update the program counter.
             /// </summary>
+            /// <remarks>
+            /// Handle debugging output of two-byte opcodes when NextInst() is
+            /// used to dispatch the second byte.  (NextOp might also be used,
+            /// so that case is handled elsewhere.)
+            /// </remarks>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private void DoNextInst(Instruction uOp)
             {
+                QCode q;
                 byte next = _cpu._opFile[_cpu.BPC];
 
-                if (Log.ToConsole || Log.ToFile)
+                if (_extendedOp)
                 {
-                    Log.Categories &= (~Category.Instruction);
-                    Log.Debug(Category.QCode, "NextInst is {0:x2}-{1} at BPC {2:x1}", next,
-                              QCodeHelper.GetQCodeFromOpCode(next).Mnemonic, _cpu.BPC);
+                    // Add 2nd byte and look up the extended op
+                    _cpu._lastOpcode = (ushort)((_cpu._lastOpcode << 8) | next);
+
+                    q = QCodeHelper.GetExtendedOpCode(_cpu._lastOpcode);
+                    _extendedOp = false;
+                }
+                else
+                {
+                    q = QCodeHelper.GetQCodeFromOpCode(next);
+                    _extendedOp = q.IsPrefix;
                 }
 
+                Log.Debug(Category.QCode, "NextInst is {0:x2}{1}{2} at BPC {3}", next,
+                          (_extendedOp ? "+" : "-"), q.Mnemonic, _cpu.BPC);   // Subtle :-)
+
                 _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
+                _cpu._lastOpcode = next;
                 _cpu._incrementBPC = true;
 
                 Log.Debug(Category.Sequencer, "NextInst Branch to {0:x4} ", _pc.Value);
@@ -449,6 +476,9 @@ namespace PERQemu.Processor
 
             // 2910 call stack
             private CallStack _callStack;
+
+            // Support decoding two-byte ops
+            private bool _extendedOp;
         }
     }
 }
