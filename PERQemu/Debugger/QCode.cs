@@ -102,6 +102,9 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Clears and reloads the QCode table and the extended ops dictionary.
         /// </summary>
+        /// <remarks>
+        /// This gets a bit silly.
+        /// </remarks>
         public static void LoadQCodeSet(QCodeSets which)
         {
             switch (which)
@@ -109,6 +112,7 @@ namespace PERQemu.Debugger
                 case QCodeSets.POSV4:
                     Clear();
                     AddToTable(_qCodesCommon);
+                    AddToTable(_qCodesCommonV4);
                     AddToTable(_qCodesPOSV4);
                     AddToDictionary(250, _qCodesPOSV4rops);
                     AddToDictionary(252, _qCodesPOSV4lops);
@@ -117,8 +121,13 @@ namespace PERQemu.Debugger
                 case QCodeSets.AccentV4:
                     Clear();
                     AddToTable(_qCodesCommon);
+                    AddToTable(_qCodesCommonV4);
                     AddToTable(_qCodesAccentV4);
-                    // AddToDictionary(_qCodesAccentV4kops);
+                    AddToDictionary(150, _qCodesAccentV4exops);
+                    AddToDictionary(250, _qCodesPOSV4rops);
+                    AddToDictionary(252, _qCodesPOSV4lops);
+                    AddToDictionary(252, _qCodesAccentV4lops);
+                    AddToDictionary(253, _qCodesAccentV4kops);
                     break;
 
                 case QCodeSets.AccentV5:
@@ -126,6 +135,7 @@ namespace PERQemu.Debugger
                     AddToTable(_qCodesCommon);
                     AddToTable(_qCodesAccentV5);
                     AddToDictionary(63, _qCodesAccentV5exops);
+                    AddToDictionary(252, _qCodesAccentV4kops);
                     AddToDictionary(252, _qCodesAccentV5kops);
                     break;
 
@@ -187,6 +197,23 @@ namespace PERQemu.Debugger
             }
         }
 
+        // debug
+        public static void DumpContents()
+        {
+            Console.WriteLine("Current Qcodes:");
+            for (var i = 0; i < 256; i++)
+            {
+                Console.WriteLine("{0:x2} ({1})\t{2}", i, i, GetQCodeFromOpCode((byte)i).Mnemonic);
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("Extended Qcodes:");
+            foreach (var e in _qCodesExtended.Keys)
+            {
+                Console.WriteLine("{0:x2} {1:x2} ({2})\t{3}", (e >> 8), (e & 0xff), (byte)e, GetExtendedOpCode(e).Mnemonic);
+            }
+        }
+
         /// <summary>
         /// Ordered table of QCodes, computed at runtime.
         /// </summary>
@@ -195,7 +222,7 @@ namespace PERQemu.Debugger
         private static QCodeSets _loaded;
 
         /// <summary>
-        /// QCodes common to POS and Accent (all versions).
+        /// QCodes common to POS and Accent (ALL versions).
         /// </summary>
         private static QCode[] _qCodesCommon =
         {
@@ -223,13 +250,10 @@ namespace PERQemu.Debugger
         };
 
         /// <summary>
-        /// Unordered Table of QCodes for POS, based on the older QCode V4 (or
-        /// earlier?).  These don't _need_ to be in order, but they happen to be
-        /// except for invalid opcodes which are skipped.
+        /// V4 QCodes common to POS and Accent.
         /// </summary>
-        private static QCode[] _qCodesPOSV4 =
+        private static QCode[] _qCodesCommonV4 =
         {
-            // 0..18 in common
             new QCode(19, "LSA"),
             new QCode(20, "ROTSHI"),
             new QCode(21, "STIND"),
@@ -256,7 +280,6 @@ namespace PERQemu.Debugger
             new QCode(42, "LESI"),
             new QCode(43, "GEQI"),
             new QCode(44, "GTRI"),
-            // 45..50 undefined
             new QCode(51, "EQUStr"),
             new QCode(52, "NEQStr"),
             new QCode(53, "LEQStr"),
@@ -273,7 +296,7 @@ namespace PERQemu.Debugger
             new QCode(64, "NEQPowr"),
             new QCode(65, "LEQPowr"),
             new QCode(66, "SGS"),
-            new QCode(67, "GEQPower"),
+            new QCode(67, "GEQPowr"),
             new QCode(68, "SRS"),
             new QCode(69, "EQUWord"),
             new QCode(70, "NEQWord"),
@@ -285,26 +308,20 @@ namespace PERQemu.Debugger
             new QCode(76, "DVI"),
             new QCode(77, "MODI"),
             new QCode(78, "CHK"),
-            // 79..87 undefined
             new QCode(88, "INN"),
             new QCode(89, "UNI"),
             new QCode(90, "QINT"),
             new QCode(91, "DIF"),
-            new QCode(92, "EXIT"),
+            new QCode(92, "EXIT"),          // aka EXITT
             new QCode(93, "NOOP"),
             new QCode(94, "REPL"),
             new QCode(95, "REPL2"),
             new QCode(96, "MMS"),
             new QCode(97, "MES"),
             new QCode(98, "LVRD"),
-            new QCode(99, "LSSN"),
             new QCode(100, "XJP"),
-            new QCode(101, "PSW"),          // new?
             new QCode(102, "RASTEROP"),
             new QCode(103, "STARTIO"),
-            new QCode(104, "PBLK"),         // new?
-            new QCode(105, "INTOFF"),
-            new QCode(106, "INTON"),
             new QCode(107, "LDLB"),
             new QCode(108, "LDLW"),
             new QCode(109, "LDL0"),
@@ -337,34 +354,10 @@ namespace PERQemu.Debugger
             new QCode(136, "STL7"),
             new QCode(137, "LDOB"),
             new QCode(138, "LDOW"),
-            new QCode(139, "LDO0"),
-            new QCode(140, "LDO1"),
-            new QCode(141, "LDO2"),
-            new QCode(142, "LDO3"),
-            new QCode(143, "LDO4"),
-            new QCode(144, "LDO5"),
-            new QCode(145, "LDO6"),
-            new QCode(146, "LDO7"),
-            new QCode(147, "LDO8"),
-            new QCode(148, "LDO9"),
-            new QCode(149, "LDO10"),
-            new QCode(150, "LDO11"),
-            new QCode(151, "LDO12"),
-            new QCode(152, "LDO13"),
-            new QCode(153, "LDO14"),
-            new QCode(154, "LDO15"),
             new QCode(155, "LOAB"),
             new QCode(156, "LOAW"),
             new QCode(157, "STOB"),
             new QCode(158, "STOW"),
-            new QCode(159, "STO0"),
-            new QCode(160, "STO1"),
-            new QCode(161, "STO2"),
-            new QCode(162, "STO3"),
-            new QCode(163, "STO4"),
-            new QCode(164, "STO5"),
-            new QCode(165, "STO6"),
-            new QCode(166, "STO7"),
             new QCode(167, "MVBB"),
             new QCode(168, "MVBW"),
             new QCode(169, "MOVB"),
@@ -384,7 +377,7 @@ namespace PERQemu.Debugger
             new QCode(183, "STDW"),
             new QCode(184, "SAS"),
             new QCode(185, "ADJ"),
-            new QCode(186, "CALL"),
+            new QCode(186, "CALL"),         // aka CALLL
             new QCode(187, "CALLV"),
             new QCode(188, "ATPB"),
             new QCode(189, "ATPW"),
@@ -396,8 +389,7 @@ namespace PERQemu.Debugger
             new QCode(195, "LGAW"),
             new QCode(196, "STGB"),
             new QCode(197, "STGW"),
-            // 198..199 undefined
-            new QCode(200, "RETURN"),
+            new QCode(200, "RETURN"),       // aka RET
             new QCode(201, "MMS2"),
             new QCode(202, "MES2"),
             new QCode(203, "LDTP"),
@@ -424,9 +416,6 @@ namespace PERQemu.Debugger
             new QCode(224, "IXA2"),
             new QCode(225, "IXA3"),
             new QCode(226, "IXA4"),
-            new QCode(227, "TLATE0"),       // TLATE1
-            new QCode(228, "TLATE1"),       // TLATE2
-            new QCode(229, "TLATE2"),       // TLATE3
             new QCode(230, "EXCH"),
             new QCode(231, "EXCH2"),
             new QCode(232, "INCB"),
@@ -437,7 +426,6 @@ namespace PERQemu.Debugger
             new QCode(237, "LDDC"),
             new QCode(238, "LDMW"),
             new QCode(239, "LDDW"),
-            new QCode(240, "STLATE"),
             new QCode(241, "LINE"),
             new QCode(242, "ENABLE"),
             new QCode(243, "QRAISE"),
@@ -445,8 +433,58 @@ namespace PERQemu.Debugger
             new QCode(250, "ROPS", true),   // Real Ops
             new QCode(251, "INCDDS"),
             new QCode(252, "LOPS", true),   // Long Ops
-            new QCode(253, "KOPS", true)    // Spice Kernel Ops (unused by POS)
-            // 254..255 in common
+            new QCode(253, "KOPS", true)    // Spice Kernel Ops
+        };
+
+        /// <summary>
+        /// Unordered Table of version 4 Qcodes for POS.
+        /// </summary>
+        /// <remarks>
+        /// In the "all common" set:    0..18, 254, 255
+        /// Undefined:                  45..50, 79..87, 198..199
+        /// Common to Accent version 4: 19..44, 51..78, 88..92, 100, 107..138,
+        ///                             155..158, 167..197, 200..226, 230..239,
+        ///                             241..244, 250..253
+        ///                             LOPS, ROPS and KOPS extended codes
+        /// 
+        /// Note that POS doesn't use the KOPS code, but they are defined in
+        /// Perq.Qcodes.Dfs so I leave them in for completeness.
+        /// </remarks>
+        private static QCode[] _qCodesPOSV4 =
+        {
+            new QCode(99, "LSSN"),
+            new QCode(101, "PSW"),          // MPOS?
+            new QCode(104, "PBLK"),         // MPOS?
+            new QCode(105, "INTOFF"),
+            new QCode(106, "INTON"),
+            new QCode(139, "LDO0"),
+            new QCode(140, "LDO1"),
+            new QCode(141, "LDO2"),
+            new QCode(142, "LDO3"),
+            new QCode(143, "LDO4"),
+            new QCode(144, "LDO5"),
+            new QCode(145, "LDO6"),
+            new QCode(146, "LDO7"),
+            new QCode(147, "LDO8"),
+            new QCode(148, "LDO9"),
+            new QCode(149, "LDO10"),
+            new QCode(150, "LDO11"),
+            new QCode(151, "LDO12"),
+            new QCode(152, "LDO13"),
+            new QCode(153, "LDO14"),
+            new QCode(154, "LDO15"),
+            new QCode(159, "STO0"),
+            new QCode(160, "STO1"),
+            new QCode(161, "STO2"),
+            new QCode(162, "STO3"),
+            new QCode(163, "STO4"),
+            new QCode(164, "STO5"),
+            new QCode(165, "STO6"),
+            new QCode(166, "STO7"),
+            new QCode(227, "TLATE0"),       // TLATE1
+            new QCode(228, "TLATE1"),       // TLATE2
+            new QCode(229, "TLATE2"),       // TLATE3
+            new QCode(240, "STLATE")
         };
 
         /// <summary>
@@ -492,77 +530,28 @@ namespace PERQemu.Debugger
             new QCode(12, "LESLong"),
             new QCode(13, "GEQLong"),
             new QCode(14, "GTRLong"),
-            new QCode(15, "LUNUSED")
+            new QCode(15, "LBITS")      // LUNUSED for POS, actually
         };
 
         /// <summary>
-        /// Unordered Table of QCodes for Accent S4 (and possibly later versions).
-        /// These don't _need_ to be in order, but they happen to be except for
-        /// invalid opcodes which are skipped.
+        /// Unordered Table of QCodes for Accent S4.  This set shares most of
+        /// the POS version 4 codes, but with many additions.
         /// </summary>
+        /// <remarks>
+        /// In the "all common" set:    0..18, 254, 255
+        /// Common with POS version 4:  19..44, 51..78, 88..92, 100, 107..138,
+        ///                             155..158, 167..197, 200..226, 230..239,
+        ///                             241..244, 250..253
+        ///                             LOPS, ROPS and KOPS extended codes
+        /// </remarks>
         private static QCode[] _qCodesAccentV4 =
         {
-            // 0..18 in common
-            new QCode(19, "LSA"),
-            new QCode(20, "ROTSHI"),
-            new QCode(21, "STIND"),
-            new QCode(22, "LDCN"),
-            new QCode(23, "LDB"),
-            new QCode(24, "STB"),
-            new QCode(25, "LDCH"),
-            new QCode(26, "LDP"),
-            new QCode(27, "STP"),
-            new QCode(28, "STCH"),
-            new QCode(29, "EXGO"),
-            new QCode(30, "LAND"),
-            new QCode(31, "LOR"),
-            new QCode(32, "LNOT"),
-            new QCode(33, "EQUBool"),
-            new QCode(34, "NEQBool"),
-            new QCode(35, "LEQBool"),
-            new QCode(36, "LESBool"),
-            new QCode(37, "GEQBool"),
-            new QCode(38, "GTRBool"),
-            new QCode(39, "EQUI"),
-            new QCode(40, "NEQI"),
-            new QCode(41, "LEQI"),
-            new QCode(42, "LESI"),
-            new QCode(43, "GEQI"),
-            new QCode(44, "GTRI"),
             new QCode(45, "EQUptr"),
             new QCode(46, "NEQPtr"),
             new QCode(47, "LLLB"),
             new QCode(48, "LLLW"),
             new QCode(49, "LILB"),
             new QCode(50, "LILW"),
-            new QCode(51, "EQUStr"),
-            new QCode(52, "NEQStr"),
-            new QCode(53, "LEQStr"),
-            new QCode(54, "LESStr"),
-            new QCode(55, "GEQStr"),
-            new QCode(56, "GTRStr"),
-            new QCode(57, "EQUByt"),
-            new QCode(58, "NEQByt"),
-            new QCode(59, "LEQByt"),
-            new QCode(60, "LESByt"),
-            new QCode(61, "GEQByt"),
-            new QCode(62, "GTRByt"),
-            new QCode(63, "EQUPowr"),
-            new QCode(64, "NEQPowr"),
-            new QCode(65, "LEQPower"),
-            new QCode(66, "SGS"),
-            new QCode(67, "GEQPower"),
-            new QCode(68, "SRS"),
-            new QCode(69, "EQUWord"),
-            new QCode(70, "NEQWord"),
-            new QCode(71, "ABI"),
-            new QCode(72, "ADI"),
-            new QCode(73, "NGI"),
-            new QCode(74, "SBI"),
-            new QCode(75, "MPI"),
-            new QCode(76, "DVI"),
-            new QCode(77, "MODI"),
-            new QCode(78, "CHK"),
             new QCode(79, "LOLB"),
             new QCode(80, "LOLW"),
             new QCode(81, "SLLB"),
@@ -572,57 +561,13 @@ namespace PERQemu.Debugger
             new QCode(85, "SOLB"),
             new QCode(86, "SOLW"),
             new QCode(87, "GOTOOVL"),
-            new QCode(88, "INN"),
-            new QCode(89, "UNI"),
-            new QCode(90, "QINT"),
-            new QCode(91, "DIF"),
-            new QCode(92, "EXITT"),
-            new QCode(93, "NOOP"),
-            new QCode(94, "REPL"),
-            new QCode(95, "REPL2"),
-            new QCode(96, "MMS"),
-            new QCode(97, "MES"),
-            new QCode(98, "LVRD"),
             new QCode(99, "LDRET1"),
-            new QCode(100, "XJP"),
             new QCode(101, "LDRET2"),
             new QCode(102, "RASTEROP"),
             new QCode(103, "STARTIO"),
             new QCode(104, "STRROP"),
             new QCode(105, "LDBIND"),
             new QCode(106, "STBIND"),
-            new QCode(107, "LDLB"),
-            new QCode(108, "LDLW"),
-            new QCode(109, "LDL0"),
-            new QCode(110, "LDL1"),
-            new QCode(111, "LDL2"),
-            new QCode(112, "LDL3"),
-            new QCode(113, "LDL4"),
-            new QCode(114, "LDL5"),
-            new QCode(115, "LDL6"),
-            new QCode(116, "LDL7"),
-            new QCode(117, "LDL8"),
-            new QCode(118, "LDL9"),
-            new QCode(119, "LDL10"),
-            new QCode(120, "LDL11"),
-            new QCode(121, "LDL12"),
-            new QCode(122, "LDL13"),
-            new QCode(123, "LDL14"),
-            new QCode(124, "LDL15"),
-            new QCode(125, "LLAB"),
-            new QCode(126, "LLAW"),
-            new QCode(127, "STLB"),
-            new QCode(128, "STLW"),
-            new QCode(129, "STL0"),
-            new QCode(130, "STL1"),
-            new QCode(131, "STL2"),
-            new QCode(132, "STL3"),
-            new QCode(133, "STL4"),
-            new QCode(134, "STL5"),
-            new QCode(135, "STL6"),
-            new QCode(136, "STL7"),
-            new QCode(137, "LDOB"),
-            new QCode(138, "LDOW"),
             new QCode(139, "LDREG0"),
             new QCode(140, "LDREG1"),
             new QCode(141, "LDREG2"),
@@ -634,15 +579,11 @@ namespace PERQemu.Debugger
             new QCode(147, "LDLCB"),
             new QCode(148, "LDLIND"),
             new QCode(149, "UNDF149"),
-            new QCode(150, "EXOP"),
+            new QCode(150, "EXOP", true),
             new QCode(151, "LDLC1"),
             new QCode(152, "LDLCM1"),
             new QCode(153, "nCVTLI"),
             new QCode(154, "nCVTIL"),
-            new QCode(155, "LOAB"),
-            new QCode(156, "LOAW"),
-            new QCode(157, "STOB"),
-            new QCode(158, "STOW"),
             new QCode(159, "nADL"),
             new QCode(160, "nSBL"),
             new QCode(161, "nEQLONG"),
@@ -651,94 +592,75 @@ namespace PERQemu.Debugger
             new QCode(164, "nLESLONG"),
             new QCode(165, "nGEQLONG"),
             new QCode(166, "nGTRLONG"),
-            new QCode(167, "MVBB"),
-            new QCode(168, "MVBW"),
-            new QCode(169, "MOVB"),
-            new QCode(170, "MOVW"),
-            new QCode(171, "INDB"),
-            new QCode(172, "INDW"),
-            new QCode(173, "LDIND/IND0"),
-            new QCode(174, "IND1"),
-            new QCode(175, "IND2"),
-            new QCode(176, "IND3"),
-            new QCode(177, "IND4"),
-            new QCode(178, "IND5"),
-            new QCode(179, "IND6"),
-            new QCode(180, "NSD7"),
-            new QCode(181, "LGAWW"),
-            new QCode(182, "STMW"),
-            new QCode(183, "STDW"),
-            new QCode(184, "SAS"),
-            new QCode(185, "ADJ"),
-            new QCode(186, "CALLL"),
-            new QCode(187, "CALLV"),
-            new QCode(188, "ATPB"),
-            new QCode(189, "ATPW"),
-            new QCode(190, "WCS"),
-            new QCode(191, "JCS"),
-            new QCode(192, "LDGB"),
-            new QCode(193, "LDGW"),
-            new QCode(194, "LGAB"),
-            new QCode(195, "LGAW"),
-            new QCode(196, "STGB"),
-            new QCode(197, "STGW"),
             new QCode(198, "SGLB"),
             new QCode(199, "SGLW"),
-            new QCode(200, "RET"),
-            new QCode(201, "MMS2"),
-            new QCode(202, "MES2"),
-            new QCode(203, "LDTP"),
-            new QCode(204, "JMPB"),
-            new QCode(205, "JMPW"),
-            new QCode(206, "JFB"),
-            new QCode(207, "JFW"),
-            new QCode(208, "JTB"),
-            new QCode(209, "JTW"),
-            new QCode(210, "JEQB"),
-            new QCode(211, "JEQW"),
-            new QCode(212, "JNEB"),
-            new QCode(213, "JNEW"),
-            new QCode(214, "IXP"),
-            new QCode(215, "LDIB"),
-            new QCode(216, "LDIW"),
-            new QCode(217, "LIAB"),
-            new QCode(218, "LIAW"),
-            new QCode(219, "STIB"),
-            new QCode(220, "STIW"),
-            new QCode(221, "IXAB"),
-            new QCode(222, "IXAW"),
-            new QCode(223, "IXA1"),
-            new QCode(224, "IXA2"),
-            new QCode(225, "IXA3"),
-            new QCode(226, "IXA4"),
             new QCode(227, "CCALL"),
             new QCode(228, "CENTER"),
             new QCode(229, "CRET"),
-            new QCode(230, "EXCH"),
-            new QCode(231, "EXCH2"),
-            new QCode(232, "INCB"),
-            new QCode(233, "INCW"),
-            new QCode(234, "CALLXB"),
-            new QCode(235, "CALLXW"),
-            new QCode(236, "LDMC"),
-            new QCode(237, "LDDC"),
-            new QCode(238, "LDMW"),
-            new QCode(239, "LDDW"),
             new QCode(240, "SETEXC"),
-            new QCode(241, "LINE"),
-            new QCode(242, "ENABLE"),
-            new QCode(243, "QRAISE"),
-            new QCode(244, "LDAP"),
             new QCode(245, "LGLB"),
             new QCode(246, "LGLW"),
             new QCode(247, "ZEROMEM"),
             new QCode(248, "EQNIL"),
-            new QCode(249, "EVENT"),
-            new QCode(250, "ROPS"),
-            new QCode(251, "INCDDS"),
-            new QCode(252, "LOPS"),
-            new QCode(253, "KOPS")
-            // 254..255 in common
+            new QCode(249, "EVENT")
+        };
+
+        /// <summary>
+        /// Second byte of extended Accent V4 Long Ops.
+        /// </summary>
+        /// <remarks>
+        /// Accent V4 LOPS are in common with POS, though LUNUSED is renamed to
+        /// LBITS.  They did some seriously funky stuff with the first whack at
+        /// ROPS/LOPS for Accent, but cleaned it up/simplified it considerably
+        /// in the version 5 set by rolling them all into EXOP.
+        /// </remarks>
+        private static QCode[] _qCodesAccentV4lops =
+        {
+            new QCode(16, "LBNOT"),         // aka LLNOT
+            new QCode(17, "LBAND"),         //     LLAND
+            new QCode(18, "LBOR"),          //     LLOR
+            new QCode(19, "LBXOR")          //     LLXOR
+        };
+
+        /// <summary>
+        /// Second byte of the Accent V4 EXOP opcodes.
+        /// </summary>
+        private static QCode[] _qCodesAccentV4exops =
+        {
+            new QCode(246, "LOPSHI"),       // EXOP, not LOPS?
+            new QCode(247, "DECREG3"),
+            new QCode(248, "DECREG2"),
+            new QCode(249, "DECREG1"),
+            new QCode(250, "DECREG0"),
+            new QCode(251, "INCREG3"),
+            new QCode(252, "INCREG2"),
+            new QCode(253, "INCREG1"),
+            new QCode(254, "INCREG0"),
+            new QCode(255, "EXREFILLOP")
+        };
+
+        /// <summary>
+        /// Second byte of the Accent V4 KOPS Kernel opcodes.
+        /// </summary>
+        private static QCode[] _qCodesAccentV4kops =
+        {
+            new QCode(0, "KSVRETURN"),
+            new QCode(1, "KCURPROCESS"),
+            new QCode(2, "KHASH"),
+            new QCode(3, "KSETSOFT"),
+            new QCode(4, "KCLOCK"),
+            new QCode(5, "KGETCB"),
+            new QCode(6, "KSETVMTABLES"),
+            new QCode(9, "KSVCALL"),
+            new QCode(10, "KADDTOQUEUE"),
+            new QCode(11, "KREMOVEFROMQUEUE"),
+            new QCode(12, "KWAKEUP"),
+            new QCode(13, "KSLEEP"),
+            new QCode(14, "KUNBLOCK"),
+            new QCode(15, "KBLOCK"),
+            new QCode(16, "KLOCKSVC"),
+            new QCode(17, "KUNLOCKSVC"),
+            new QCode(18, "KSEARCH")
         };
 
         /// <summary>
@@ -1180,27 +1102,11 @@ namespace PERQemu.Debugger
         };
 
         /// <summary>
-        /// Second byte of the Accent V5 KOPS Kernel opcodes.
+        /// Second byte of the Accent V5 KOPS Kernel opcodes.  These are
+        /// in addition to the V4 KOPS codes!
         /// </summary>
         private static QCode[] _qCodesAccentV5kops =
         {
-            new QCode(0, "KSVRETURN"),
-            new QCode(1, "KCURPROCESS"),
-            new QCode(2, "KHASH"),
-            new QCode(3, "KSETSOFT"),
-            new QCode(4, "KCLOCK"),
-            new QCode(5, "KGETCB"),
-            new QCode(6, "KSETVMTABLES"),
-            new QCode(9, "KSVCALL"),
-            new QCode(10, "KADDTOQUEUE"),
-            new QCode(11, "KREMOVEFROMQUEUE"),
-            new QCode(12, "KWAKEUP"),
-            new QCode(13, "KSLEEP"),
-            new QCode(14, "KUNBLOCK"),
-            new QCode(15, "KBLOCK"),
-            new QCode(16, "KLOCKSVC"),
-            new QCode(17, "KUNLOCKSVC"),
-            new QCode(18, "KSEARCH"),
             new QCode(19, "KVPENTER"),
             new QCode(20, "KVPREMOVE"),
             new QCode(21, "KSEARCHADDR"),

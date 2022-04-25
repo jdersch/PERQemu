@@ -89,6 +89,16 @@ namespace PERQemu.Processor
             {
                 _processor.Execute();
                 _scheduler.Clock();
+
+                // If the Z80 is paused and wants a wakeup, do it
+                if (_scheduler.CurrentTimeNsec > _system.IOB.Z80System.Wakeup)
+                {
+                    if (_system.IOB.Z80System.IsRunning && !_system.IOB.Z80System.Throttle.IsSet)
+                    {
+                        _system.IOB.Z80System.Throttle.Set();
+                    }
+                }
+
                 clocks--;
             }
             while (clocks > 0);

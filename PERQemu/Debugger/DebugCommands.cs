@@ -607,12 +607,18 @@ namespace PERQemu
             HighResolutionTimer.DumpTimers();
         }
 
-        // debug
+        //[Conditional("DEBUG")]
         [Command("debug dump fifos")]
         private void DumpFifos()
         {
             PERQemu.Sys.IOB.Z80System.DumpFifos();
         }
 
+        //[Conditional("DEBUG")]
+        [Command("debug dump qcodes")]
+        private void DumpQcodes()
+        {
+            QCodeHelper.DumpContents();
+        }
     }
 }

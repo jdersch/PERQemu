@@ -56,6 +56,7 @@ namespace PERQemu.IO.Z80
             _cpu.ClockSynchronizer = null;      // We'll do our own rate limiting
 
             _sync = new ManualResetEventSlim();
+            _wakeup = long.MaxValue;
 
             // todo: assign ports/base addresses of each peripheral chip or latch
             // based on the configured IO Board type.
@@ -138,6 +139,8 @@ namespace PERQemu.IO.Z80
         public bool SupportsAsync => true;
         public bool IsRunning => _running;
         public ulong Clocks => _cpu.TStatesElapsedSinceReset;
+        public ulong Wakeup => (ulong)_wakeup;
+        public ManualResetEventSlim Throttle => _sync;
 
         public Z80Processor CPU => _cpu;
         public Z80MemoryBus Memory => _memory;
@@ -264,7 +267,10 @@ namespace PERQemu.IO.Z80
                     // Yes!  Run an instruction
                     var ticks = _cpu.ExecuteNextInstruction();
 
-                    // And a DMA cycle
+                    // Advance our wakeup time now so the CPU can chill a bit
+                    _wakeup = (long)(_scheduler.CurrentTimeNsec + ((ulong)ticks * IOBoard.Z80CycleTime));
+
+                    // Run a DMA cycle
                     _z80dma.Clock();
 
                     // Run the scheduler
@@ -273,27 +279,24 @@ namespace PERQemu.IO.Z80
                 else
                 {
                     // If we are less than one full microcycle ahead of the CPU,
-                    // just spin; otherwise, schedule a wakeup on the PERQ's
-                    // scheduler, then block (when we return to Run()).  This
-                    // lets the Z80 thread actually sleep while the CPU churns
-                    // through the ~9-55 cycles (1.6-9.3usec, on average) needed
-                    // to catch up.  A poor man's "nanosleep()"...
+                    // just spin; otherwise, block (when we return).  The PERQ
+                    // will automatically wake us when it catches up.  This lets
+                    // the Z80 thread actually sleep while the CPU churns through
+                    // the ~9-55 cycles (1.6-9.3usec, on average) needed to catch
+                    // up.  A poor man's "nanosleep()"...
                     diff = -diff;
 
                     if ((ulong)diff > _system.Scheduler.TimeStepNsec)
                     {
+                        // Pause the thread
                         _sync.Reset();
-
-                        _system.Scheduler.Schedule((ulong)diff, (skewNsec, context) =>
-                        {
-                            _sync.Set();
-                        });
                     }
                 }
             }
             else
             {
                 // Pause the thread until the Z80 is turned back on
+                _wakeup = long.MaxValue;
                 _sync.Reset();
             }
         }
@@ -507,6 +510,7 @@ namespace PERQemu.IO.Z80
         private PERQSystem _system;
 
         private ManualResetEventSlim _sync;
+        private long _wakeup;
 
         private Thread _asyncThread;
 
