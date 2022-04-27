@@ -204,6 +204,7 @@ namespace PERQemu.Debugger
 
         private void PrintVariable(DebuggerVariable v)
         {
+            // todo: consult the user settings for preferred output radix!
             Console.WriteLine(v.Property.GetValue(v.Instance, null));
         }
 

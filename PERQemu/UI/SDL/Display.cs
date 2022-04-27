@@ -73,7 +73,7 @@ namespace PERQemu.UI
                 return;
             }
 
-            Log.Debug(Category.Display, "[Initializing on {0}]", Thread.CurrentThread.ManagedThreadId);
+            Log.Debug(Category.Display, "Initializing");
 
             //
             // Create the display window
@@ -326,12 +326,12 @@ namespace PERQemu.UI
                 _sdlRenderer = IntPtr.Zero;
             }
 
+            // Tell the EventLoop we're going away
+            PERQemu.GUI.DetachDisplay();
+
             // And finally close down the window
             if (_sdlWindow != IntPtr.Zero)
             {
-                // Tell the EventLoop we're going away
-                PERQemu.GUI.DetachDisplay();
-
                 SDL.SDL_DestroyWindow(_sdlWindow);
                 _sdlWindow = IntPtr.Zero;
             }

@@ -20,7 +20,6 @@
 using SDL2;
 
 using System;
-using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -88,7 +87,7 @@ namespace PERQemu.UI
             _timerHandle = HighResolutionTimer.Register(50d, PERQemu.GUI.SDLMessageLoop);
             HighResolutionTimer.Enable(_timerHandle, true);
 
-            Log.Debug(Category.UI, "[Initialized SDL on {0}]", Thread.CurrentThread.ManagedThreadId);
+            Log.Debug(Category.UI, "Initialized SDL");
         }
 
         /// <summary>
@@ -294,7 +293,7 @@ namespace PERQemu.UI
         /// </summary>
         public void ShutdownSDL()
         {
-            Log.Info(Category.UI, "SDL Shutdown requested on {0}", Thread.CurrentThread.ManagedThreadId);
+            Log.Info(Category.UI, "SDL Shutdown requested");
 
             if (_sdlRunning)
             {

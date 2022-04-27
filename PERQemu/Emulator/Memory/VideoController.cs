@@ -210,12 +210,14 @@ namespace PERQemu.Memory
                     if ((_videoStatus & StatusRegister.EnableVSync) != 0)
                     {
                         _state = VideoState.VBlankScanline;
+                        Log.Debug(Category.Display, "Enable VSync");
                         RunStateMachine();
                     }
 
                     if ((_videoStatus & StatusRegister.EnableDisplay) != 0)
                     {
                         _state = VideoState.VisibleScanline;
+                        Log.Debug(Category.Display, "Enable Display");
                         RunStateMachine();
                     }
 
@@ -255,6 +257,7 @@ namespace PERQemu.Memory
         /// and microcode/software support would have to be rewritten and the
         /// full 16 bits used as the base address.
         /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int UnFrobAddress(int value)
         {
             // Early PERQ-1 256K memory board

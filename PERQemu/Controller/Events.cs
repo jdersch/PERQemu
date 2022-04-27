@@ -67,6 +67,7 @@ namespace PERQemu
     {
         Nothing = 0,
         DDSChanged,         // For UI update, boot key
+        HaltedInLoop,       // Microcode halted in loop
         BreakpointReached,  // triggers a run state change...
         PowerOffRequested,  // Perq 1 only
         UncaughtException,  // Kaboom

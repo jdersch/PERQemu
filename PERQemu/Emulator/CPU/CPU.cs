@@ -904,15 +904,15 @@ namespace PERQemu.Processor
             }
 
             // debug
-            if (_dds == 198)
-            {
-                Console.WriteLine("Enabling verbose logging!");
+            //if (_dds == 198)
+            //{
+            //    Console.WriteLine("Enabling verbose logging!");
 
-                // Crank up the logging so we can trace the S6 init code
-                Log.Categories = Log.Categories | Category.Instruction;
-                Log.FileLevel = Severity.Verbose;
-                Log.ToFile = true;
-            }
+            //    // Crank up the logging so we can trace the S6 init code
+            //    Log.Categories = Log.Categories | Category.Instruction;
+            //    Log.FileLevel = Severity.Verbose;
+            //    Log.ToFile = true;
+            //}
 
             // todo: Send the event (CLI can update the title line, GUI can update
             // the front panel display, boot key presser hook, breakpoint, etc.)
