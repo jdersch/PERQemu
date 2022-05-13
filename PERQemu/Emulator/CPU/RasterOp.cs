@@ -305,7 +305,7 @@ namespace PERQemu.Processor
             {
                 if (PERQemu.Sys.Config.Chassis == ChassisType.PERQ1)
                 {
-                    PERQemu.Controller.PowerOff();  // fixme.  this just ain't right yet
+                    PERQemu.Sys.MachineStateChange(WhatChanged.PowerDown);
                 }
             }
 

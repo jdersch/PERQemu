@@ -43,34 +43,24 @@ namespace PERQemu
     {
         public RunStateChangeEventArgs(RunState s)
         {
-            _state = s;
+            State = s;
         }
 
-        public RunState State => _state;
-
-        private RunState _state;
+        public RunState State;
     }
 
-    // Make Breakpoints an event of their own, don't nest or complicate further?
-    public enum BreakpointType
-    {
-        None = 0,
-        WatchedIOPort,      // IOA for PERQ, port for Z80
-        WatchedOpCode,      // Qcode for PERQ, opcode for Z80
-        WatchedAddress,     // microaddr for PERQ, Z80 RAM
-        WatchedMemoryLoc,   // main memory address for PERQ (or DMA)
-        WatchedInterrupt,   // break on interrupt raise (PERQ or Z80)
-        AndSoForth
-    }
-
+    /// <summary>
+    /// Enumerate the types of machine state changes we can provide.  Most of
+    /// these seem irrelevant unless/until a GUI is built... 
+    /// </summary>
     public enum WhatChanged
     {
         Nothing = 0,
         DDSChanged,         // For UI update, boot key
         HaltedInLoop,       // Microcode halted in loop
-        BreakpointReached,  // triggers a run state change...
-        PowerOffRequested,  // Perq 1 only
-        UncaughtException,  // Kaboom
+        HardDiskActivity,   // For blinkenlights
+        FloppyActivity,     // Sure, why not
+        PowerDown,          // PERQ 1 software power off
         Other
     }
 
@@ -78,7 +68,12 @@ namespace PERQemu
     {
         public MachineStateChangeEventArgs(WhatChanged w, params object[] args)
         {
+            Changed = w;
+            Args = args;
         }
+
+        public WhatChanged Changed;
+        public object[] Args;
     }
 
     public delegate void RunStateChangeEventHandler(RunStateChangeEventArgs a);

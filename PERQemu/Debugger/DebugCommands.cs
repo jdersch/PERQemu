@@ -264,6 +264,16 @@ namespace PERQemu
         }
 #endif
 
+        private bool CheckSys()
+        {
+            if (PERQemu.Sys == null)
+            {
+                Console.WriteLine("Cannot execute; the PERQ is not powered on.");
+                return false;
+            }
+            return true;
+        }
+
         //
         // Registers and Stacks
         //
@@ -271,30 +281,32 @@ namespace PERQemu
         [Command("debug show cpu registers", "Display the values of the CPU registers")]
         private void ShowCPURegs()
         {
-            PERQemu.Sys.CPU.ShowCPUState();
+            if (CheckSys()) PERQemu.Sys.CPU.ShowCPUState();
         }
 
         [Command("debug show opfile", "Display the contents of the opcode file")]
         private void ShowOpfile()
         {
-            PERQemu.Sys.CPU.ShowOpfile();
+            if (CheckSys()) PERQemu.Sys.CPU.ShowOpfile();
         }
 
         [Command("debug show estack", "Display the contents of the expression stack")]
         private void ShowEStack()
         {
-            PERQemu.Sys.CPU.ShowEStack();
+            if (CheckSys()) PERQemu.Sys.CPU.ShowEStack();
         }
 
         [Command("debug show cstack", "Display the contents of the 2910 call stack")]
         private void ShowCStack()
         {
-            PERQemu.Sys.CPU.ShowCStack();
+            if (CheckSys()) PERQemu.Sys.CPU.ShowCStack();
         }
 
         [Command("debug show xy register", "Display the values of the XY registers")]
         private void ShowRegister()
         {
+            if (!CheckSys()) return;
+
             var values = new string[256];
 
             for (var reg = 0; reg <= 255; reg++)
@@ -310,6 +322,8 @@ namespace PERQemu
         [Command("debug show xy register", "Display the value of an XY register")]
         private void ShowRegister(byte reg)
         {
+            if (!CheckSys()) return;
+
             Console.WriteLine("XY[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
 
@@ -317,6 +331,8 @@ namespace PERQemu
         [Command("debug set xy register", "Change the value of an XY register")]
         private void SetRegister(byte reg, uint val)
         {
+            if (!CheckSys()) return;
+
             PERQemu.Sys.CPU.WriteRegister(reg, (int)val);   // Clips to 20-24 bits
             Console.WriteLine("XY[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
@@ -328,6 +344,8 @@ namespace PERQemu
         [Command("debug show memory", "Dump the PERQ's memory")]
         private void ShowMemory(uint startAddr, uint words = 64)
         {
+            if (!CheckSys()) return;
+
             if (startAddr > PERQemu.Sys.Memory.MemSize - 1)
             {
                 Console.WriteLine("Start address must be in range 0..{0}", PERQemu.Sys.Memory.MemSize - 1);
@@ -370,6 +388,8 @@ namespace PERQemu
         [Command("debug find memory", "Find a specific value in the PERQ's memory [@start, val]")]
         private void FindMemory(uint startAddress, ushort val)
         {
+            if (!CheckSys()) return;
+
             if (startAddress >= PERQemu.Sys.Memory.MemSize)
             {
                 Console.WriteLine("Start address must be in range 0..{0}", PERQemu.Sys.Memory.MemSize - 1);
@@ -387,6 +407,8 @@ namespace PERQemu
         [Command("debug set memory", "Write a specific value in the PERQ's memory")]
         private void SetMemory(uint address, ushort val)
         {
+            if (!CheckSys()) return;
+
             if (address >= PERQemu.Sys.Memory.MemSize)
             {
                 Console.WriteLine("Address must be in range 0..{0}", PERQemu.Sys.Memory.MemSize - 1);
@@ -399,7 +421,7 @@ namespace PERQemu
         [Command("debug show memstate", "Dump the memory controller state")]
         private void ShowMemQueues()
         {
-            PERQemu.Sys.Memory.DumpQueues();
+            if (CheckSys()) PERQemu.Sys.Memory.DumpQueues();
         }
 
         // todo: most of the really detailed rasterop debugging stuff is no longer
@@ -415,25 +437,25 @@ namespace PERQemu
         [Command("debug clear rasterop debug", "Disable extended RasterOp debugging")]
         private void ClearRopDebug()
         {
-            PERQemu.Sys.CPU.RasterOp.Debug = false;
+            if (CheckSys()) PERQemu.Sys.CPU.RasterOp.Debug = false;
         }
 
         [Command("debug show rasterop state", "Display current RasterOp unit status")]
         private void ShowRopState()
         {
-            PERQemu.Sys.CPU.RasterOp.ShowState();
+            if (CheckSys()) PERQemu.Sys.CPU.RasterOp.ShowState();
         }
 
         [Command("debug show rasterop fifos", "Display current RasterOp source & destination FIFOs")]
         private void ShowRopFifos()
         {
-            PERQemu.Sys.CPU.RasterOp.ShowFifos();
+            if (CheckSys()) PERQemu.Sys.CPU.RasterOp.ShowFifos();
         }
 
         [Command("debug show rasterop registers", "Display current RasterOp register contents")]
         private void ShowRopRegs()
         {
-            PERQemu.Sys.CPU.RasterOp.ShowRegs();
+            if (CheckSys()) PERQemu.Sys.CPU.RasterOp.ShowRegs();
         }
 #endif
 
@@ -444,23 +466,35 @@ namespace PERQemu
         [Command("debug raise interrupt", "Assert a specific CPU interrupt")]
         public void RaiseInterrupt(InterruptSource irq)
         {
-            PERQemu.Sys.CPU.RaiseInterrupt(irq);
+            if (CheckSys()) PERQemu.Sys.CPU.RaiseInterrupt(irq);
         }
 
         [Command("debug clear interrupt", "Clear a specific CPU interrupt")]
         public void ClearInterrupt(InterruptSource irq)
         {
-            PERQemu.Sys.CPU.ClearInterrupt(irq);
+            if (CheckSys()) PERQemu.Sys.CPU.ClearInterrupt(irq);
         }
 
+#if DEBUG
         //
-        // Breakpoints (not yet implemented)
+        // Breakpoints (not fully implemented)
         //
 
         [Command("debug set breakpoint", "Set a breakpoint at microaddress [addr]")]
         public void SetBreakpoint(ushort addr)
         {
-            Console.WriteLine("Setting a breakpoint at " + addr);
+            if (!CheckSys()) return;
+
+            if (PERQemu.Sys.Debugger.WatchedAddress(addr))
+            {
+                Console.WriteLine($"Already watching microaddress {addr:x4}");
+                return;
+            }
+
+            var action = new DebuggerAction(true);
+            PERQemu.Sys.Debugger.WatchAddress(addr, action);
+
+            Console.WriteLine($"Breakpoint set at microaddress {addr:x4}");
         }
 
         [Command("debug set breakpoint at dds", "Set a breakpoint when the DDS reaches [val]")]
@@ -500,6 +534,26 @@ namespace PERQemu
         }
 
         //
+        // Breakpoint handlers
+        //
+
+        private void OnInstAddr(BreakpointEventArgs a)
+        {
+            var upc = (ushort)a.Args[0];
+            Console.WriteLine($"microinstruction at {upc:x4} executed!");
+            // halt here, run a script, dump some values, who knows what?
+        }
+
+        private void OnInterrupt(BreakpointEventArgs a)
+        {
+            var irq = (InterruptSource)a.Args[0];
+            var status = (int)a.Args[1];
+
+            Console.WriteLine($"interrupt {irq} now {status}");
+        }
+#endif
+
+        //
         // Microcode
         //
 
@@ -531,9 +585,9 @@ namespace PERQemu
         [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
         private void DisassembleMicrocode(ushort startAddress, ushort length)
         {
-            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
+            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length - 1);
 
-            if (startAddress >= PERQemu.Sys.CPU.Microcode.Length || endAddr >= PERQemu.Sys.CPU.Microcode.Length)
+            if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
             {
                 Console.WriteLine("Address out of range 0..{0}", PERQemu.Sys.CPU.Microcode.Length - 1);
                 return;
@@ -550,9 +604,10 @@ namespace PERQemu
         [Command("debug jump", "Start or resume execution at a given microaddress")]
         private void JumpTo(ushort nextPC)
         {
-            if (nextPC >= PERQemu.Sys.CPU.Microcode.Length)
+            if (nextPC > PERQemu.Sys.CPU.Microcode.Length - 1)
             {
-                Console.WriteLine("Address outside of range 0..{0}; PC not modified.", PERQemu.Sys.CPU.Microcode.Length - 1);
+                Console.WriteLine("Address out of range 0..{0}; PC not modified.",
+                                  PERQemu.Sys.CPU.Microcode.Length - 1);
             }
             else
             {
@@ -614,7 +669,7 @@ namespace PERQemu
             PERQemu.Sys.IOB.Z80System.DumpFifos();
         }
 
-        //[Conditional("DEBUG")]
+        [Conditional("DEBUG")]
         [Command("debug dump qcodes")]
         private void DumpQcodes()
         {

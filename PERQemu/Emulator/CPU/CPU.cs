@@ -102,12 +102,22 @@ namespace PERQemu.Processor
         /// Runs the PERQ microengine for one microcycle.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Execute()
+        public bool Execute()
         {
             _clocks++;
+            _break = false;
 
             // Decode the next instruction
             Instruction uOp = _ustore.GetInstruction(_usequencer.PC);
+
+#if DEBUG
+            // Breakpoint set at this address?
+            if (_system.Debugger.WatchedAddress(_usequencer.PC))
+            {
+                _break = _system.Debugger.GetActionForAddress(_usequencer.PC).PauseEmulation;
+                _system.Debugger.BreakpointReached(BreakpointType.WatchedAddress, _usequencer.PC);
+            }
+#endif
 
             // Clock the memory state machine and set up any pending fetches
             _memory.Tick(uOp.MemoryRequest);
@@ -148,7 +158,7 @@ namespace PERQemu.Processor
                 // last op wrote the WCS, clear the hold flag to continue
                 _ustore.Hold = false;
 
-                return;
+                return _break;
             }
 
 #if DEBUG
@@ -163,7 +173,7 @@ namespace PERQemu.Processor
                 uOp.CND == Condition.True &&
                 uOp.JMP == JumpOperation.Goto)
             {
-                throw new UnimplementedInstructionException($"CPU has halted in a loop at {PC:x4}");
+                _system.MachineStateChange(WhatChanged.HaltedInLoop, PC);
             }
 #endif
 
@@ -234,6 +244,8 @@ namespace PERQemu.Processor
 
             // Jump to where we need to go...
             _usequencer.DispatchJump(uOp);
+
+            return _break;
         }
 
 
@@ -248,8 +260,8 @@ namespace PERQemu.Processor
         public static int WCSMask => _wcsMask;
         public static ulong MicroCycleTime => _cycleTime;
         public static bool Is4K => (_wcsSize == 4096);
-      
-        public bool OpFileEmpty =>  (BPC & 0x8) != 0;
+
+        public bool OpFileEmpty => (BPC & 0x8) != 0;
         public bool IncrementBPC => _incrementBPC;
         public ulong Clocks => _clocks;
         public ulong[] Microcode => _ustore.Microcode;
@@ -369,7 +381,7 @@ namespace PERQemu.Processor
         [Debuggable("pc", "Microcode program counter")]
         public ushort PC
         {
-            get { return (ushort)_usequencer.PC; }
+            get { return _usequencer.PC; }
             set { _usequencer.PC = value; }
         }
 
@@ -390,9 +402,17 @@ namespace PERQemu.Processor
             // Log it if it wasn't already set
             if (_interrupt.Raise(i) == 0)
             {
+#if DEBUG
                 // Cut down on the spewage for debugging
                 if (i != InterruptSource.LineCounter)
                     Log.Debug(Category.Interrupt, "{0} raised, active now {1}", i, _interrupt.Flag);
+
+                // Check for, fire if breakpoint set
+                if (_system.Debugger.WatchedIRQ(i))
+                {
+                    _system.Debugger.BreakpointReached(BreakpointType.WatchedInterrupt, i, true);
+                }
+#endif
             }
         }
 
@@ -404,9 +424,17 @@ namespace PERQemu.Processor
             // Log it if it wasn't already clear
             if (_interrupt.Clear(i) != 0)
             {
+#if DEBUG
                 // Cut down on the spewage for debugging
                 if (i != InterruptSource.LineCounter)
                     Log.Debug(Category.Interrupt, "{0} cleared, active now {1}", i, _interrupt.Flag);
+
+                // Check for, fire if breakpoint set
+                if (_system.Debugger.WatchedIRQ(i))
+                {
+                    _system.Debugger.BreakpointReached(BreakpointType.WatchedInterrupt, i, false);
+                }                
+#endif
             }
         }
 
@@ -745,7 +773,7 @@ namespace PERQemu.Processor
                                     Log.Debug(Category.Sequencer, "Read from Victim latch {0:x4}", _usequencer.Victim);
 
                                     // ReadVictim clears the latch, does not set PC
-                                    _usequencer.Victim = 0xffff;
+                                    _usequencer.Victim = (ushort)_wcsMask;
                                     break;
 
                                 case 0x1:   // Multiply / DivideStep
@@ -894,32 +922,7 @@ namespace PERQemu.Processor
         {
             _dds++;
             Log.Debug(Category.DDS, "Set to {0:d3}", _dds % 1000);
-
-            // This is a little hacky, but since just about every PERQ
-            // ever made used standard boot ROMs and the standard SYSB
-            // microcode, having this hook here isn't too terrible...
-            if (_dds == 149)
-            {
-                _system.PressBootKey();
-            }
-
-            // debug
-            //if (_dds == 198)
-            //{
-            //    Console.WriteLine("Enabling verbose logging!");
-
-            //    // Crank up the logging so we can trace the S6 init code
-            //    Log.Categories = Log.Categories | Category.Instruction;
-            //    Log.FileLevel = Severity.Verbose;
-            //    Log.ToFile = true;
-            //}
-
-            // todo: Send the event (CLI can update the title line, GUI can update
-            // the front panel display, boot key presser hook, breakpoint, etc.)
-            // _system.MachineStateChange(DDSChanged, _dds);
-
-            // For now...
-            Console.Title = string.Format("DDS {0:d3}", _dds % 1000);
+            _system.MachineStateChange(WhatChanged.DDSChanged, _dds);
         }
 
         #endregion CPU Helper Functions
@@ -1048,6 +1051,7 @@ namespace PERQemu.Processor
         // Housekeeping
         //
         protected ulong _clocks;
+        protected bool _break;
 
         // Diagnostic counter
         private int _dds;

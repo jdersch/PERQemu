@@ -114,7 +114,7 @@ namespace PERQemu.IO.DiskDevices
         public virtual Sector GetSector(ushort sector)
         {
             // We'll ignore rotational delays... for now.
-            return Sectors[_cyl, _head, sector];
+            return Read(_cyl, _head, sector);
         }
 
         /// <summary>
@@ -122,7 +122,7 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         public virtual Sector GetSector(ushort cylinder, byte head, ushort sector)
         {
-            return Sectors[cylinder, head, sector];
+            return Read(cylinder, head, sector);
         }
 
         /// <summary>
@@ -130,7 +130,7 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         public virtual void SetSector(Sector sec)
         {
-            Sectors[sec.CylinderID, sec.HeadID, sec.SectorID] = sec;
+            Write(sec);
         }
 
         /// <summary>

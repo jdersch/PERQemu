@@ -734,6 +734,7 @@ namespace PERQemu.Config
         {
             // fixme debugging
             Console.WriteLine($"* Updating storage from {conf.IOBoard} to {newType}");
+            conf.Reason = string.Empty;
 
             for (var unit = 0; unit < conf.Drives.Length; unit++)
             {
@@ -827,17 +828,12 @@ namespace PERQemu.Config
 
                 if (keepMedia && !string.IsNullOrEmpty(d.MediaPath))
                 {
-                    if (!AssignMediaTo(unit, d.MediaPath))
-                    {
-                        Console.WriteLine($"--> media file for unit {unit} wrong type");
-                        keepMedia = false;
-                    }
+                    keepMedia = AssignMediaTo(unit, d.MediaPath);
                 }
 
                 if (!keepMedia)
                 {
-                    // fixme debugging
-                    Console.WriteLine($"--> media for unit {unit} unloaded");
+                    conf.Reason = $"Incompatible media for unit {unit} unloaded";
                     conf.SetMediaPath(unit, string.Empty);
                 }
             }

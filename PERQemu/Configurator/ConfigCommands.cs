@@ -237,7 +237,7 @@ namespace PERQemu.UI
                 // Save it to our prefabs too, so 'list' will included it
                 PERQemu.Config.AddPrefab(PERQemu.Config.Current);
                 PERQemu.Config.Changed = false;
-                Console.WriteLine("Configuration saved to '{0}'.", PERQemu.Config.Current.Filename);
+                Console.WriteLine($"Configuration saved to '{PERQemu.Config.Current.Filename}'.");
             }
         }
 
@@ -283,6 +283,8 @@ namespace PERQemu.UI
 
                     // Check the storage configuration here too...
                     PERQemu.Config.UpdateStorage(PERQemu.Config.Current.IOBoard);
+                    if (!string.IsNullOrEmpty(PERQemu.Config.Current.Reason))
+                        Console.WriteLine(PERQemu.Config.Current.Reason);
                 }
             }
         }
@@ -451,6 +453,7 @@ namespace PERQemu.UI
             }
         }
 
+        // todo: this is a little awkward; make it "option add foo", "option remove foo"?
         [Command("configure option", "Configure extra features of the IO Option board")]
         public void SetIOOption(IOOptionType opt)
         {
@@ -591,7 +594,7 @@ namespace PERQemu.UI
                 bool changed = EnableOrDisableSerial(port, true);
 
                 if (changed && !PERQemu.Config.Quietly)
-                    Console.WriteLine($"RS-232 port {Char.ToUpper(port)} enabled.");
+                    Console.WriteLine($"RS-232 port {char.ToUpper(port)} enabled.");
             }
         }
 
@@ -603,7 +606,7 @@ namespace PERQemu.UI
                 bool changed = EnableOrDisableSerial(port, false);
 
                 if (changed && !PERQemu.Config.Quietly)
-                    Console.WriteLine($"RS-232 port {Char.ToUpper(port)} disabled.");
+                    Console.WriteLine($"RS-232 port {char.ToUpper(port)} disabled.");
             }
         }
 
@@ -662,6 +665,33 @@ namespace PERQemu.UI
         {
             PERQemu.Config.AssignMediaTo(unit, file);
             Console.WriteLine(PERQemu.Config.Current.Reason);
+        }
+
+        /// <summary>
+        /// Unassign a media file.
+        /// </summary>
+        [Command("configure unassign", "Unassign an assigned media file")]
+        public void ConfigUnassign(string file)
+        {
+            foreach (var d in PERQemu.Config.Current.Drives)
+            {
+                if (d.MediaPath == file)
+                {
+                    ConfigUnassignUnit((byte)d.Unit);
+                    return;
+                }
+            }
+            Console.WriteLine($"File '{file}' not assigned.");
+        }
+
+        /// <summary>
+        /// Unassign the media file for a specific unit #.
+        /// </summary>
+        [Command("configure unassign unit", "Unassign the media file for unit #")]
+        public void ConfigUnassignUnit(byte unit)
+        {
+            PERQemu.Config.Current.SetMediaPath(unit, string.Empty);
+            Console.WriteLine($"Drive {unit} unassigned.");
         }
 
         /// <summary>

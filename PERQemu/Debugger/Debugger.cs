@@ -25,7 +25,10 @@ using PERQemu.UI;
 
 namespace PERQemu.Debugger
 {
-
+    /// <summary>
+    /// Allows the emulator to expose properties as Debugger variables that can
+    /// be manipulated by the CLI.
+    /// </summary>
     public class DebuggerVariable
     {
         public DebuggerVariable(string name, string description, PropertyInfo property, object instance)
@@ -43,16 +46,40 @@ namespace PERQemu.Debugger
     }
 
     /// <summary>
-    /// Provides debugging facilities for the PERQ emulator.
-    /// It's neato keen!
+    /// Describes the actions the Debugger should take when a breakpoint fires
+    /// or certain machine state changes occur.
     /// </summary>
-    public class PERQDebugger
+    public class DebuggerAction
+    {
+        /// <summary>
+        /// Default action: pause emulation, fire more than once, no script.
+        /// </summary>
+        public DebuggerAction(bool pause = true, bool once = false, string script = "")
+        {
+            Count = 0;
+            Enabled = true;
+            PauseEmulation = pause;
+            Retriggerable = once;
+            Script = script;
+        }
+
+        public bool Enabled;
+        public bool PauseEmulation;
+        public bool Retriggerable;
+        public string Script;
+        public int Count;
+    }
+
+
+    /// <summary>
+    /// Provides debugging facilities for the PERQ emulator.  It's neato keen!
+    /// </summary>
+    public partial class PERQDebugger
     {
         public PERQDebugger(List<object> debugObjects)
         {
             BuildVariableList(debugObjects);
-            // todo: breakpoints!
-            // todo: additional array types (byte, ushort, others?)
+            InitBreakpoints();
         }
 
         /// <summary>

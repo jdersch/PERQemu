@@ -236,8 +236,8 @@ namespace PERQemu.Processor
 
                             Log.Debug(Category.Sequencer, "PC restored from victim ({0:x4})", Victim);
 
-                            _pc.Value = Victim;     // Restore
-                            Victim = 0xffff;        // Clear the latch
+                            _pc.Value = Victim;         // Restore
+                            Victim = (ushort)_wcsMask;  // Clear the latch
                         }
                         break;
 

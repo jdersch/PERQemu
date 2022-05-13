@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Threading;
 using System.Collections.Generic;
 
 using SDL2;
@@ -182,6 +183,8 @@ namespace PERQemu
 
         public PERQDebugger Debugger => _debugger;
 
+        public event MachineStateChangeEventHandler DDSChanged;
+
 
         /// <summary>
         /// Set the user's preferred run mode.  We assume async mode if the
@@ -340,26 +343,6 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Provide a hook to catch errors and halt execution.
-        /// </summary>
-        public void Halt(Exception e)
-        {
-            // The emulation has hit a serious error.  Return to the CLI.
-            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}", e.Message);
-            Log.Error(Category.All, "System state may be inconsistent.\n");
-#if DEBUG
-            Log.Write(Environment.StackTrace);
-#endif
-            PERQemu.Controller.Halt();
-        }
-
-        public void Shutdown()
-        {
-            // Detach
-            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
-        }
-
-        /// <summary>
         /// Executes the specified emulation delegate inside a try/catch block that
         /// properly handles PowerDown and other exceptions to return to debug state.
         /// </summary>
@@ -373,6 +356,28 @@ namespace PERQemu
             {
                 Halt(e);
             }
+        }
+
+        /// <summary>
+        /// Provide a hook to catch errors and halt execution.
+        /// </summary>
+        public void Halt(Exception e)
+        {
+            // The emulation has hit a serious error.  Return to the CLI.
+            Log.Error(Category.All, "\nBreak due to internal emulation error: {0}", e.Message);
+            Log.Error(Category.All, "System state may be inconsistent.\n");
+#if DEBUG
+            // Dubious usefulness...
+            Log.Write(Environment.StackTrace);
+#endif
+            // Make sure both threads stop
+            PERQemu.Controller.Halt();
+        }
+
+        public void Shutdown()
+        {
+            // Detach
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
         }
 
         /// <summary>
@@ -402,6 +407,8 @@ namespace PERQemu
             }
         }
 
+
+        #region The white zone is for media loading and unloading only
 
         /// <summary>
         /// Initial call to load all of the defined media files from the Config.
@@ -628,7 +635,7 @@ namespace PERQemu
             var mbData = new SDL.SDL_MessageBoxData();
             mbData.flags = SDL.SDL_MessageBoxFlags.SDL_MESSAGEBOX_INFORMATION;
             mbData.title = "Save modified media";
-            mbData.message = $"Drive {unit} ({dev.Info.Type}) is modified.\n" +
+            mbData.message = $"Drive {unit} ({dev.Info.Name}) is modified.\n" +
                              $"Save the file '{dev.Filename}' before unloading?";
 
             mbData.numbuttons = 2;
@@ -696,17 +703,51 @@ namespace PERQemu
             }
         }
 
+        #endregion
+
+        public void MachineStateChange(WhatChanged w, params object[] args)
+        {
+            MachineStateChangeEventHandler handler = null;
+
+            switch (w)
+            {
+                case WhatChanged.DDSChanged:
+                    handler = DDSChanged;
+                    break;
+
+                case WhatChanged.HaltedInLoop:
+                    // We don't actually fire an event; just call Halt()
+                    Log.Write("The CPU has halted in a loop at PC {0:x4}", (int)args[0]);
+                    PERQemu.Controller.Halt();
+                    return;
+
+                case WhatChanged.PowerDown:
+                    Log.Write("The PERQ has powered itself off.");
+                    PERQemu.Controller.PowerOff();
+                    return;
+
+                default:
+                    // unhandled, ignore it?
+                    Log.Debug(Category.Emulator, "Unhandled MachineStateChange type {0}", w);
+                    return;
+            }
+
+            Log.Debug(Category.Emulator, "MachineStateChange {0} firing", w);
+            handler?.Invoke(new MachineStateChangeEventArgs(w, args));
+        }
+
         /// <summary>
         /// If the user has specified an alternate boot character, kick off
         /// a workitem to automagically press it (up until the point in the
         /// standard boot microcode where the key is read).
         /// </summary>
-        public void PressBootKey()
+        public void PressBootKey(MachineStateChangeEventArgs a)
         {
-            if (PERQemu.Controller.BootChar != 0)
+            var dds = (int)a.Args[0];
+
+            if (dds == 149 && PERQemu.Controller.BootChar != 0)
             {
                 Log.Write("Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
-                //Log.Info(Category.Emulator, "Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
                 var count = 16;
                 BootCharCallback(0, count);
             }

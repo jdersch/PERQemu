@@ -119,6 +119,9 @@ namespace PERQemu
             var consoleTimerHandle = HighResolutionTimer.Register(50d, null);
             HighResolutionTimer.Enable(consoleTimerHandle, true);
 
+            // Sign up for controller events
+            PERQemu.Controller.RunStateChanged += OnRunStateChange;
+
             // Here we go!
             _running = true;
 
@@ -142,6 +145,8 @@ namespace PERQemu
                 }
             }
 
+            // Close up shop
+            PERQemu.Controller.RunStateChanged -= OnRunStateChange;
             HighResolutionTimer.Unregister(consoleTimerHandle);
         }
 
@@ -165,6 +170,40 @@ namespace PERQemu
             }
 
             return Console.ReadKey(true);
+        }
+
+        /// <summary>
+        /// Update the console title when the DDS changes.
+        /// </summary>
+        private void OnDDSChange(MachineStateChangeEventArgs a)
+        {
+            var dds = (int)a.Args[0] % 1000;
+            Console.Title = $"DDS {dds:d3}";
+        }
+
+        /// <summary>
+        /// Catch changes in the machine state to update the CLI.
+        /// </summary>
+        private void OnRunStateChange(RunStateChangeEventArgs a)
+        {
+            var state = a.State;
+
+            Console.WriteLine($"CLI: transition to {state}");
+
+            // Reset our title if the machine is off; add or remove the DDS
+            // change hook when the machine is powered up or down
+            if (state <= RunState.Off)
+            {
+                Console.Title = "PERQemu";
+            }
+            else if (state == RunState.WarmingUp)
+            {
+                PERQemu.Sys.DDSChanged += OnDDSChange;
+            }
+            else if (state == RunState.ShuttingDown)
+            {
+                PERQemu.Sys.DDSChanged -= OnDDSChange;
+            }
         }
 
         #region CLI Utility Routines
