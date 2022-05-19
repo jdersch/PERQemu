@@ -107,11 +107,11 @@ namespace PERQemu.UI
                 }
             }
 
-            // todo: setting the renderer's "logical size" may help with the scaling
+            // Setting the renderer's "logical size" may help with the scaling
             // issue on displays too short to hold the entire screen?
-            // SDL.SDL_RenderSetLogicalSize(_sdlRenderer, w, h);
+            SDL.SDL_RenderSetLogicalSize(_sdlRenderer, _displayWidth, _displayHeight);
 
-            // todo: initialize in our slightly greenish/grayish background color :-)
+            // Initialize in our slightly greenish/grayish background color :-)
             // during "warmup" we'll fade in to full brightness.  because why not.
             SDL.SDL_SetRenderDrawColor(_sdlRenderer, 0x0f, 0xf4, 0x0f, 0xff);
 
@@ -132,6 +132,7 @@ namespace PERQemu.UI
             }
 
             SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
+            SDL.SDL_RenderClear(_sdlRenderer);
 
             // Set up our custom SDL render event, if not already done
             if (_customEventType == 0)
@@ -162,7 +163,7 @@ namespace PERQemu.UI
             if (_fpsTimerId < 0)
             {
                 _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
-                _fpsTimerId = HighResolutionTimer.Register(3000d, _fpsTimerCallback);
+                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
                 HighResolutionTimer.Enable(_fpsTimerId, true);
             }
 
@@ -178,11 +179,11 @@ namespace PERQemu.UI
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DrawScanline(int scanline, byte[] scanlineData)
         {
-            int rgbIndex = (_displayWidth / 8) * scanline;
+            int byteIndex = (_displayWidth / 8) * scanline;
 
             for (int i = 0; i < scanlineData.Length; i++)
             {
-                _8bppDisplayBuffer[rgbIndex++] = _bitToPixel[scanlineData[i]];
+                _8bppDisplayBuffer[byteIndex++] = _bitToPixel[scanlineData[i]];
             }
         }
 

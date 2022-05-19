@@ -218,7 +218,27 @@ namespace PERQemu
                     break;
 
                 case RunState.Running:
-                    Run();  // todo: just inline this if our simplified approach works out
+                    // Get the current run mode from the Controller
+                    SetMode();
+
+                    if (_mode == ExecutionMode.Asynchronous)
+                    {
+                        // Start up the background threads
+                        _cpu.RunAsync();
+                        _iob.RunAsync();
+                    }
+                    else
+                    {
+                        // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
+                        RunGuarded(() =>
+                            {
+                                while (_state == RunState.Running)
+                                {
+                                    _cpu.Run();
+                                    _iob.Run();
+                                }
+                            });
+                    }
                     break;
 
                 case RunState.SingleStep:
@@ -279,7 +299,9 @@ namespace PERQemu
                     break;
 
                 case RunState.Reset:
-                    Reset();
+                    _cpu.Reset();
+                    _mem.Reset();
+                    _ioBus.Reset();
                     _state = RunState.Paused;
                     break;
 
@@ -296,50 +318,6 @@ namespace PERQemu
                     break;
             }
             Log.Debug(Category.Emulator, "PERQSystem transitioned to {0}", _state);
-        }
-
-        /// <summary>
-        /// Run the machine until the state changes.
-        /// </summary>
-        public void Run()
-        {
-            // Get the current run mode from the Controller
-            SetMode();
-
-            if (_mode == ExecutionMode.Asynchronous)
-            {
-                // Start up the background threads
-                _cpu.RunAsync();
-                _iob.RunAsync();
-            }
-            else
-            {
-                // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
-                RunGuarded(() =>
-                    {
-                        while (_state == RunState.Running)
-                        {
-                            _cpu.Run();
-                            _iob.Run();
-                        }
-                    });
-            }
-        }
-
-        /// <summary>
-        /// Reset the virtual machine.
-        /// </summary>
-        /// <remarks>
-        /// This method is transitioned to by the state machine, not called
-        /// asynchronously or directly.
-        /// </remarks>
-        private void Reset()
-        {
-            Log.Info(Category.Emulator, "PERQSystem Reset called");
-
-            _cpu.Reset();
-            _mem.Reset();
-            _ioBus.Reset();
         }
 
         /// <summary>
@@ -656,18 +634,25 @@ namespace PERQemu
         {
             var dev = _volumes[unit];
             bool doit = false;
+            bool running = (_state == RunState.Running);
 
             switch (dev.Info.Type)
             {
                 case DeviceType.Floppy:
                     if (Settings.SaveFloppyOnEject == Ask.Maybe)
                     {
+                        // Pause emulation so SDL display events don't stack up
+                        if (running) PERQemu.Controller.Break();
+
                         int btn = 0;
                         var mbData = MakeMessageBox(dev, unit);
                         var ret = SDL.SDL_ShowMessageBox(ref mbData, out btn);
 
                         // Assume a failure to mean don't save...
                         doit = (ret == 0 && btn == 0);
+
+                        // Resume the emulator
+                        if (running) PERQemu.Controller.TransitionTo(RunState.Running);
                     }
                     else
                     {
@@ -681,11 +666,15 @@ namespace PERQemu
                 case DeviceType.DiskSMD:
                     if (Settings.SaveDiskOnShutdown == Ask.Maybe)
                     {
+                        if (running) PERQemu.Controller.Break();
+
                         int btn = 0;
                         var mbData = MakeMessageBox(dev, unit);
                         var ret = SDL.SDL_ShowMessageBox(ref mbData, out btn);
 
                         doit = (ret == 0 && btn == 0);
+
+                        if (running) PERQemu.Controller.TransitionTo(RunState.Running);
                     }
                     else
                     {
@@ -728,7 +717,7 @@ namespace PERQemu
 
                 default:
                     // unhandled, ignore it?
-                    Log.Debug(Category.Emulator, "Unhandled MachineStateChange type {0}", w);
+                    Log.Warn(Category.Emulator, "Unhandled MachineStateChange type {0}", w);
                     return;
             }
 

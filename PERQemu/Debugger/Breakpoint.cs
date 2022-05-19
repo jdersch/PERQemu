@@ -24,185 +24,260 @@ using PERQemu.Processor;
 
 namespace PERQemu.Debugger
 {
-    // Make Breakpoints an event of their own, don't nest or complicate further?
+    /// <summary>
+    /// General types of breakpoints that both the PERQ and Z80 debuggers may
+    /// implement.  (The Z80dotNet hooks aren't really useful to us and that
+    /// whole thing may be replaced.)
+    /// </summary>
     public enum BreakpointType
     {
         None = 0,
-        WatchedIOPort,      // IOA for PERQ, port for Z80
-        WatchedOpCode,      // Qcode for PERQ, opcode for Z80
-        WatchedAddress,     // microaddr for PERQ, Z80 RAM
-        WatchedMemoryLoc,   // main memory address for PERQ (or DMA)
-        WatchedInterrupt,   // break on interrupt raise (PERQ or Z80)
-        AndSoForth
+        IOPort,         // IOA for PERQ, port for Z80
+        OpCode,         // Qcode for PERQ, opcode for Z80
+        uAddress,       // Microaddr for PERQ, Z80 RAM
+        MemoryLoc,      // Main memory address for PERQ (or DMA)
+        Interrupt,      // Break on interrupt (PERQ or Z80)
+        All             // For CLI convenience
     }
 
+    /// <summary>
+    /// Breakpoint events always include a type and the value that triggered it;
+    /// other optional args may convey additional state.
+    /// </summary>
     public class BreakpointEventArgs : EventArgs
     {
-        public BreakpointEventArgs(BreakpointType bp, params object[] args)
+        public BreakpointEventArgs(BreakpointType bp, int val, params object[] args)
         {
             Type = bp;
+            Value = val;
             Args = args;
         }
 
         public BreakpointType Type;
+        public int Value;
         public object[] Args;
     }
 
-    public delegate void BreakpointEventHandler(BreakpointEventArgs a);
+    public delegate void BreakpointEventCallback(BreakpointEventArgs a);
+
+    /// <summary>
+    /// Manage a list of breakpoints of a particular type and associated debugger
+    /// actions when they fire.  Also provides a "master switch" that lets them
+    /// be enabled or disabled all at once.
+    /// </summary>
+    /// <remarks>
+    /// Rather than use generics (which are cool, but in this case are overkill
+    /// and needlessly add complexity) just pass in a limit to let the debugger
+    /// do basic range checking.  Note that the limit isn't enforced here; the
+    /// command parser should handle that, but if a breakpoint is set on a value
+    /// that's never reached it just won't ever fire.
+    /// </remarks>  
+    public class BreakpointList
+    {
+        public BreakpointList(BreakpointType type, string name, int limit)
+        {
+            _type = type;
+            _name = name;
+            _limit = limit;
+            _list = new Dictionary<int, BreakpointAction>();
+
+            Log.Debug(Category.Debugger, "Initialized {0} breakpoints (lim {1})", name, limit);
+        }
+
+        public BreakpointType Type => _type;
+        public string Name => _name;
+        public int Range => _limit;
+        public int Count => _list.Count;
+
+        public bool IsWatched(int val)
+        {
+            return _list.ContainsKey(val);
+        }
+
+        public BreakpointAction GetActionFor(int val)
+        {
+            if (_list.ContainsKey(val))
+                return _list[val];
+
+            // Better than returning null?  Meh.
+            return new BreakpointAction();
+        }
+
+        public void Watch(int val, BreakpointAction action)
+        {
+            if (_list.ContainsKey(val))
+                _list[val] = action;
+            else
+                _list.Add(val, action);
+        }
+
+        public void Unwatch(int val)
+        {
+            if (_list.ContainsKey(val))
+                _list.Remove(val);
+        }
+
+        /// <summary>
+        /// Process a breakpoint according to the defined actions specified by
+        /// the user.  NB: Only tracks invocations and fires the events; does
+        /// not pause the emulator or run scripts -- that's up to whomever is
+        /// catching the events!
+        /// </summary>
+        /// <remarks>
+        /// val is always the watched address/port that we triggered on; other
+        /// parameters are optional.
+        /// </remarks>
+        public bool BreakpointReached(int val, params object[] args)
+        {
+            if (!PERQemu.Sys.Debugger.BreakpointsEnabled) return false;
+
+            BreakpointAction action;
+
+            if (!_list.ContainsKey(val))
+            {
+                Log.Warn(Category.Debugger, "No action for breakpoint {0}, value {1}", _type, val);
+                return false;
+            }
+
+            action = _list[val];
+
+            // Should we fire?
+            if (action.Enabled && (action.Count == 0 || action.Retriggerable))
+            {
+                action.Count++;
+                Log.Detail(Category.Debugger, "Fired action count now {0}", action.Count);
+
+                // Ugh!  We don't actually want to fire this yet; if pausing the
+                // emulator we need to complete the current cycle, change run state,
+                // fire the handler, then (if a script is defined) let that execute.
+                // The Debugger should queue up "pending" breakpoints and provide a
+                // callback to invoke them?
+                if (action.Callback != null)
+                {
+                    action.Callback(new BreakpointEventArgs(_type, val, args));
+                }
+
+                return action.PauseEmulation;
+            }
+
+            // If we didn't fire, don't pause...
+            return false;
+        }
+
+        public string FmtVal(int val)
+        {
+            // I'll have mine with extra cheese
+            if (_type == BreakpointType.Interrupt)
+            {
+                return string.Format("{0} ({1})", val, (InterruptSource)val);
+            }
+
+            return string.Format("0x{0:x} ({1})", val, val);
+        }
+
+        public void ShowActions()
+        {
+            if (_list.Count == 0) return;
+
+            Console.WriteLine("  Watched value    Enabled  Pause  OneShot  Count         Script");
+            //               ("12345678901234567  1234567  12345  1234567  123456789012  ...");
+
+            foreach (var key in _list.Keys)
+            {
+                Console.WriteLine("{0,-17}  {1,-7}  {2,-5}  {3,-7}  {4,-12}  {5}", FmtVal(key),
+                                  _list[key].Enabled,
+                                  _list[key].PauseEmulation,
+                                  _list[key].Retriggerable,
+                                  $"{_list[key].Count} times",
+                                  string.IsNullOrEmpty(_list[key].Script) ? "<none>" : _list[key].Script);
+            }
+        }
+
+        private BreakpointType _type;
+        private string _name;
+        private int _limit;
+        private Dictionary<int, BreakpointAction> _list;
+    }
+
+    /// <summary>
+    /// Describes the actions the Debugger should take when a breakpoint fires
+    /// or certain machine state changes occur.  May include a callback or not;
+    /// if none provided the default is to simply log that the breakpoint was
+    /// triggered.
+    /// </summary>
+    public class BreakpointAction
+    {
+        /// <summary>
+        /// Default action: don't pause emulation, retrigger, no script, no callback.
+        /// </summary>
+        public BreakpointAction()
+        {
+            Count = 0;
+            Enabled = true;
+            PauseEmulation = false;
+            Retriggerable = true;
+            Script = string.Empty;
+            Callback = null;
+        }
+
+        public BreakpointAction(bool pause = true, bool once = false, string script = "") : this()
+        {
+            PauseEmulation = pause;
+            Retriggerable = once;
+            Script = script;
+        }
+
+        public BreakpointAction(BreakpointEventCallback cb) : this()
+        {
+            Callback = cb;
+        }
+
+        public BreakpointEventCallback Callback;
+        public bool Enabled;
+        public bool PauseEmulation;
+        public bool Retriggerable;
+        public string Script;
+        public int Count;
+    }
 
 
+    //
+    // Breakpoint support
+    //
     public partial class PERQDebugger
     {
-        //
-        // Breakpoint support
-        //
-
         /// <summary>
-        /// Fired when an IO Address is referenced (system bus).
+        /// Set up separate watch lists for breakpoints.  This lets clients subscribe
+        /// to just the ones they want.
         /// </summary>
-        public event BreakpointEventHandler IOPortBreakpoint;
-
-        /// <summary>
-        /// Fired when a microinstruction address is referenced.
-        /// </summary>
-        public event BreakpointEventHandler InstAddrBreakpoint;
-
-        /// <summary>
-        /// Fired when a microinstruction address is referenced.
-        /// </summary>
-        public event BreakpointEventHandler MemAddrBreakpoint;
-
-        /// <summary>
-        /// Fired when a system interrupt is raised or cleared.
-        /// </summary>
-        public event BreakpointEventHandler IRQBreakpoint;
-
-
         public void InitBreakpoints()
         {
-            _ioWatchList = new Dictionary<byte, DebuggerAction>();
-            _irqWatchList = new Dictionary<int, DebuggerAction>(); //bool[(int)InterruptSource.Parity + 1];
-            _memWatchList = new Dictionary<uint, DebuggerAction>();
-            _uinstWatchList = new Dictionary<ushort, DebuggerAction>();
+            _ioWatchList = new BreakpointList(BreakpointType.IOPort, "IO Port", 255);
+            _irqWatchList = new BreakpointList(BreakpointType.Interrupt, "CPU Interrupt", (int)InterruptSource.Parity);
+            _memWatchList = new BreakpointList(BreakpointType.MemoryLoc, "Memory Address", PERQemu.Config.Current.MemorySizeInBytes / 2);
+            _uinstWatchList = new BreakpointList(BreakpointType.uAddress, "Microaddress", CPU.WCSSize);
         }
 
-
-        public bool WatchedIRQ(InterruptSource i)
+        public void EnableBreakpoints(bool enab)
         {
-            return _irqWatchList.ContainsKey((int)i);
+            _masterEnable = enab;
+
+            Console.WriteLine("Breakpoints {0}.", enab ? "enabled" : "disabled");
         }
 
-        public DebuggerAction GetActionForAddress(ushort addr)
-        {
-            return _uinstWatchList[addr];
-        }
+        public bool BreakpointsEnabled => _masterEnable;
 
-        public bool WatchedAddress(ushort addr)
-        {
-            return _uinstWatchList.ContainsKey(addr);
-        }
-
-        public void WatchAddress(ushort addr, DebuggerAction action)
-        {
-            _uinstWatchList[addr] = action;
-        }
-
-        public void UnwatchAddress(ushort addr)
-        {
-            if (_uinstWatchList.ContainsKey(addr))
-            {
-                _uinstWatchList.Remove(addr);
-            }
-        }
+        public BreakpointList WatchedInterrupts => _irqWatchList;
+        public BreakpointList WatchedIOPorts => _ioWatchList;
+        public BreakpointList WatchedMemoryAddress => _memWatchList;
+        public BreakpointList WatchedMicroaddress => _uinstWatchList;
 
 
-        public void BreakpointReached(BreakpointType bp, params object[] args)
-        {
-            BreakpointEventHandler handler = null;
+        private bool _masterEnable;
 
-            switch (bp)
-            {
-                case BreakpointType.WatchedInterrupt:
-                    handler = IRQBreakpoint;
-                    break;
-
-                case BreakpointType.WatchedAddress:
-                    handler = InstAddrBreakpoint;
-                    break;
-
-                default:
-                    Log.Debug(Category.Emulator, "Breakpoint type {0} not yet implemented", bp);
-                    return;
-            }
-
-            handler?.Invoke(new BreakpointEventArgs(bp, args));
-        }
-
-
-        private Dictionary<int, DebuggerAction> _irqWatchList;
-        private Dictionary<byte, DebuggerAction> _ioWatchList;
-        private Dictionary<uint, DebuggerAction> _memWatchList;
-        private Dictionary<ushort, DebuggerAction> _uinstWatchList;
+        private BreakpointList _irqWatchList;
+        private BreakpointList _ioWatchList;
+        private BreakpointList _memWatchList;
+        private BreakpointList _uinstWatchList;
     }
 }
-
-/*
-    Notes:
-
-    This is way harder than it seems.  Breakpoints can't fuck up the normal
-    execution flow; there has to be a way to trigger one then precisely resume
-    the current instruction without blowing up the internal state.  Enabling a
-    breakpoint may have to force synchronous execution?  And the "event" may
-    not actually fire, but really just dispatch and return like a subroutine
-    call?
-
-    Would be nice to have a "fire once" vs. "fire every time", which would be
-    very handy in the "press the boot key" scenario given how the DDS jumps
-    all over the place (loops around) during the POS G boot (ugh).
-
-    debugcommands:
-        ui for setting up the list of requests:
-            adds/removes/modifies breakpoints
-            enables/disables them individually/en masse
-
-    debugger:
-        breakpoints actually execute here
-        coordinates with controller to shift execution into/out of synch mode?
-        
-    cpu/z80/devices:
-        watches for and triggers breakpoints
-        queries the debugger for trigger info (fire = askDebugger(someVal))
-        can't interrupt cycle; takes back breakpointaction.pause boolean?
-        returns it from Execute() to set state
-        minimizes disruption to flow since the instruction completes?
-        
-    perqsystem/z80system:
-        if cpu.execute() signals a breakpoint has fired, set state to paused;
-        the z80 will automatically pause regardless of mode (setstate will catch
-        the cpu n cycles later when z80 breakpoints implemented?)
-        
-        move _back_ to the dedicated loop/idle mode; power on actually starts
-        up the async thread, ALL messages dispatched through events, only
-        exits on power off...
-
-        async mode we run the execution loops directly; sync mode we have the
-        main thread schedule both?
-
-    SET UP THE BLOODY PC SO YOU CAN TEST THIS ON WINDOWS AND LINUX, YA BOOB.
-
-
-
-    cpu/z80 have to be able to quickly check against a list of enabled triggers
-        if (_debugger.QuicklyCheckCondition(thing))
-            stopOrNot = _debugger.TriggerCondition(type, thing)
-
-    so the fast method needs to be specific to what we're checking
-    firing the actual trigger is slower, obviously... 
-
-    checking the condition has to match the particular thing (irq #, uinst addr,
-    mem loc, etc) against the debugger action?  don't trigger if not enabled,
-    or if set to fire once and already has fired...
-
-    checkIRQ = _irqlist.containskey(thing)
-    
-*/

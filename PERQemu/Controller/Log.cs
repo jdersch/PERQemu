@@ -57,7 +57,7 @@ namespace PERQemu
         None        = 0x0,
         Emulator    = 0x1,
         Controller  = 0x2,
-        Timer       = 0x4,
+        Debugger    = 0x4,
         Scheduler   = 0x8,
         CPU         = 0x10,
         Sequencer   = 0x20,
@@ -101,6 +101,7 @@ namespace PERQemu
         SMD         = 0x80000000000,
         MediaLoader = 0x100000000000000,
         UI          = 0x1000000000000000,
+        Timer       = 0x2000000000000000,
         All         = 0xffffffffffffffff
     }
 
@@ -532,6 +533,7 @@ namespace PERQemu
             _colors.Add(Category.Emulator, ConsoleColor.White);
             _colors.Add(Category.MediaLoader, ConsoleColor.DarkYellow);
             _colors.Add(Category.Controller, ConsoleColor.Yellow);
+            _colors.Add(Category.Debugger, ConsoleColor.DarkYellow);
             _colors.Add(Category.Scheduler, ConsoleColor.Green);
             _colors.Add(Category.Timer, ConsoleColor.Green);
             _colors.Add(Category.DDS, ConsoleColor.Yellow);

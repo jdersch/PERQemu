@@ -20,6 +20,7 @@
 using System;
 using System.Text;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 using PERQemu.Debugger;
 using PERQemu.Processor;
@@ -78,6 +79,11 @@ namespace PERQemu
             Console.WriteLine("--------------------------");
 
             Console.WriteLine("Loaded Q-code set: {0}", QCodeHelper.Loaded);
+
+            if (PERQemu.Sys != null)
+            {
+                Console.WriteLine("Breakpoints are {0}", PERQemu.Sys.Debugger.BreakpointsEnabled ? "enabled" : "disabled");
+            }
 
             if (Log.ToConsole)
             {
@@ -431,7 +437,7 @@ namespace PERQemu
         [Command("debug set rasterop debug", "Enable extended RasterOp debugging")]
         private void SetRopDebug()
         {
-            PERQemu.Sys.CPU.RasterOp.Debug = true;
+            if (CheckSys()) PERQemu.Sys.CPU.RasterOp.Debug = true;
         }
 
         [Command("debug clear rasterop debug", "Disable extended RasterOp debugging")]
@@ -479,58 +485,282 @@ namespace PERQemu
         //
         // Breakpoints (not fully implemented)
         //
-
-        [Command("debug set breakpoint", "Set a breakpoint at microaddress [addr]")]
-        public void SetBreakpoint(ushort addr)
+        // ARGH!  This would be SO much easier in a GUI!  Sigh.
+        //
+        [Command("debug set breakpoint", "Set a breakpoint")]
+        public void SetBreakpoint(BreakpointType type, int watch) // action (string)  ARGH
         {
             if (!CheckSys()) return;
 
-            if (PERQemu.Sys.Debugger.WatchedAddress(addr))
+            if (GetBreakpoints(type).Count != 1)
             {
-                Console.WriteLine($"Already watching microaddress {addr:x4}");
+                Console.WriteLine($"Can't set breakpoint of type {type}.");
                 return;
             }
 
-            var action = new DebuggerAction(true);
-            PERQemu.Sys.Debugger.WatchAddress(addr, action);
+            var list = GetBreakpoints(type)[0];
 
-            Console.WriteLine($"Breakpoint set at microaddress {addr:x4}");
+            if (watch < 0 || watch > list.Range)
+            {
+                Console.WriteLine($"{watch} is out of range 0..{list.Range}");
+                return;
+            }
+
+            var action = new BreakpointAction();
+            list.Watch(watch, action);
+
+            Console.WriteLine($"Breakpoint set for {list.Name} {watch}");
         }
 
-        [Command("debug set breakpoint at dds", "Set a breakpoint when the DDS reaches [val]")]
-        public void SetDDSBreakpoint(ushort dds)
+        [Command("debug clear breakpoint", "Clear a breakpoint")]
+        public void ClearBreakpoint(BreakpointType type, int watch)
         {
-            Console.WriteLine("Setting a breakpoint at DDS " + dds);
-        }
+            if (!CheckSys()) return;
 
-        [Command("debug set breakpoint io port", "Set a breakpoint on access to I/O port [port]")]
-        public void SetIOBreakpoint(byte port)
-        {
-            Console.WriteLine("Setting a breakpoint on I/O port " + port);
-        }
+            if (GetBreakpoints(type).Count != 1)
+            {
+                Console.WriteLine($"Can't clear a breakpoint of type {type}.");
+                return;
+            }
 
-        [Command("debug clear breakpoint", "Clear a breakpoint at microaddress [addr]")]
-        public void ClearBreakpoint(ushort addr)
-        {
-            Console.WriteLine("Clearing a breakpoint at " + addr);
-        }
+            var list = GetBreakpoints(type)[0];
 
-        [Command("debug clear all breakpoints", "Clear all breakpoints")]
-        public void ClearBreakpoints()
-        {
-            Console.WriteLine("Clearing all breakpoints");
+            if (!list.IsWatched(watch))
+            {
+                Console.WriteLine($"No {type} breakpoint at {watch}.");
+                return;
+            }
+
+            list.Unwatch(watch);
+
+            Console.WriteLine($"{type} breakpoint at {watch} cleared.");
         }
 
         [Command("debug enable breakpoints", "Enable breakpoints")]
         public void EnableBreakpoints()
         {
-            Console.WriteLine("Enabling breakpoints");
+            if (CheckSys()) PERQemu.Sys.Debugger.EnableBreakpoints(true);
         }
 
         [Command("debug disable breakpoints", "Disable breakpoints")]
         public void DisableBreakpoints()
         {
-            Console.WriteLine("Disabling breakpoints");
+            if (CheckSys()) PERQemu.Sys.Debugger.EnableBreakpoints(false);
+        }
+
+        [Command("debug edit breakpoint", "Change or reset a breakpoint", Prefix = true)]
+        public void EditBreakpoint(BreakpointType type, int watch)
+        {
+            if (!CheckSys()) return;
+
+            if (GetBreakpoints(type).Count != 1)
+            {
+                Console.WriteLine($"Can't edit breakpoints of type {type}.");
+                return;
+            }
+
+            var list = GetBreakpoints(type)[0];
+
+            if (!list.IsWatched(watch))
+            {
+                Console.WriteLine($"No {type} breakpoint at {watch}.");
+                return;
+            }
+
+            // Make a copy of the breakpoint for editing
+            var orig = list.GetActionFor(watch);
+
+            _bp = new BreakpointEventArgs(type, watch, orig);     // CHEESE!
+            _bpAction = new BreakpointAction();
+
+            // Uh, isn't there some built-in way to do this?
+            _bpAction.Count = orig.Count;
+            _bpAction.Enabled = orig.Enabled;
+            _bpAction.PauseEmulation = orig.PauseEmulation;
+            _bpAction.Retriggerable = orig.Retriggerable;
+            _bpAction.Script = orig.Script;
+            _bpAction.Callback = orig.Callback;
+
+            PERQemu.CLI.SetPrefix("debug edit breakpoint");
+        }
+
+        [Command("debug edit breakpoint commands", "Show breakpoint edit commands")]
+        public void ShowEditCommands()
+        {
+            PERQemu.CLI.ShowCommands($"debug edit breakpoint");
+        }
+
+        /*
+            edit breakpoint:  enter the subsystem!
+                name [string]           -- name it for re-use!  save in a list!
+                enabled [bool]
+                pause emulation [bool]
+                retriggerable [bool]
+                script [string]
+                reset count
+         */
+
+        [Command("debug edit breakpoint enable", "Enable or disable the breakpoint")]
+        public void EditEnable(bool enabled)
+        {
+            if (_bpAction.Enabled != enabled)
+            {
+                _bpAction.Enabled = enabled;
+                Console.WriteLine($"Enabled changed to {enabled}.");
+            }
+        }
+
+        [Command("debug edit breakpoint pause emulation", "Set/clear flag to pause emulation when triggered")]
+        public void EditPause(bool pause)
+        {
+            if (_bpAction.PauseEmulation != pause)
+            {
+                _bpAction.PauseEmulation = pause;
+                Console.WriteLine($"Pause Emulation changed to {pause}.");
+            }
+        }
+
+        [Command("debug edit breakpoint retriggerable", "Set the breakpoint as one-shot or retriggerable")]
+        public void EditRetrigger(bool oneshot)
+        {
+            if (_bpAction.Retriggerable != oneshot)
+            {
+                _bpAction.Retriggerable = oneshot;
+                Console.WriteLine($"Retriggerable changed to {oneshot}.");
+            }
+        }
+
+        [Command("debug edit breakpoint reset count", "Reset the breakpoint counter")]
+        public void EditCount()
+        {
+            if (_bpAction.Count > 0)
+            {
+                _bpAction.Count = 0;
+                Console.WriteLine("Count reset.");
+            }
+        }
+
+        [Command("debug edit breakpoint script", "Run a script when the breakpoint triggers")]
+        public void EditScript(string script)
+        {
+            // todo: validate/mangle the path, look it up using the Scripts/ dir, .scr suffix?
+            if (_bpAction.Script != script)
+            {
+                _bpAction.Script = script;
+                Console.WriteLine("Script '{0}' will be run.", Paths.Canonicalize(script));
+            }
+        }
+
+        [Command("debug edit breakpoint no script", "Do not run a script when triggered")]
+        public void EditNoScript()
+        {
+            if (_bpAction.Script != "")
+            {
+                _bpAction.Script = "";
+                Console.WriteLine("No script will be run.");
+            }
+        }
+
+        [Command("debug edit breakpoint show", "Show the current breakpoint")]
+        public void EditShow()
+        {
+            const string fmt = "{0,10}  {1,-20} {2,-20}";
+
+            // I am not proud of this
+            var orig = _bp.Args[0] as BreakpointAction;
+
+            Console.WriteLine("Breakpoint: {0} @ {1:x} ({2})", _bp.Type, _bp.Value, _bp.Value);
+
+            Console.WriteLine(fmt, " ", "Original", "Edited");
+            Console.WriteLine(fmt, "Enabled:", orig.Enabled, _bpAction.Enabled);
+            Console.WriteLine(fmt, "PauseEmu:", orig.PauseEmulation, _bpAction.PauseEmulation);
+            Console.WriteLine(fmt, "OneShot:", orig.Retriggerable, _bpAction.Retriggerable);
+            Console.WriteLine(fmt, "Count:", $"{orig.Count} times", $"{_bpAction.Count} times");
+            Console.WriteLine(fmt, "Script:",
+                              (string.IsNullOrEmpty(orig.Script) ? "<none>" : orig.Script),
+                              (string.IsNullOrEmpty(_bpAction.Script) ? "<none>" : _bpAction.Script));
+        }
+
+        [Command("debug edit breakpoint cancel", "Cancel and return to previous level")]
+        public void EditCancel()
+        {
+            Console.WriteLine("Canceled.");
+            SetDebugPrefix();
+        }
+
+        [Command("debug edit breakpoint done", "Save changes and return to previous level")]
+        public void EditDone()
+        {
+            // Save/apply the current temporary action
+            var list = GetBreakpoints(_bp.Type)[0];
+            list.Watch(_bp.Value, _bpAction);
+
+            Console.WriteLine("Saved.");
+            SetDebugPrefix();
+        }
+
+        [Command("debug show breakpoints", "Show the status of defined breakpoints")]
+        public void ShowBreakpoints(BreakpointType type)
+        {
+            if (!CheckSys()) return;
+
+            if (type == BreakpointType.None)
+            {
+                Console.WriteLine("Don't be silly.");
+                return;
+            };
+
+            int total = 0;
+            var breakpoints = GetBreakpoints(type);
+
+            foreach (var list in breakpoints)
+            {
+                if (list.Count > 0)
+                {
+                    total += list.Count;
+                    Console.WriteLine();
+                    Console.WriteLine("{0} watch list:", list.Name);
+                    list.ShowActions();
+                }
+            }
+
+            if (total == 0)
+            {
+                Console.WriteLine("No breakpoints currently defined.");
+            }
+        }
+
+        private List<BreakpointList> GetBreakpoints(BreakpointType bp)
+        {
+            var selected = new List<BreakpointList>();
+
+            switch (bp)
+            {
+                case BreakpointType.IOPort:
+                    selected.Add(PERQemu.Sys.Debugger.WatchedIOPorts);
+                    break;
+
+                case BreakpointType.Interrupt:
+                    selected.Add(PERQemu.Sys.Debugger.WatchedInterrupts);
+                    break;
+
+                case BreakpointType.uAddress:
+                    selected.Add(PERQemu.Sys.Debugger.WatchedMicroaddress);
+                    break;
+
+                case BreakpointType.MemoryLoc:
+                    selected.Add(PERQemu.Sys.Debugger.WatchedMemoryAddress);
+                    break;
+
+                case BreakpointType.All:
+                    selected.Add(PERQemu.Sys.Debugger.WatchedInterrupts);
+                    selected.Add(PERQemu.Sys.Debugger.WatchedMicroaddress);
+                    selected.Add(PERQemu.Sys.Debugger.WatchedIOPorts);
+                    selected.Add(PERQemu.Sys.Debugger.WatchedMemoryAddress);
+                    break;
+            }
+
+            return selected;
         }
 
         //
@@ -539,17 +769,17 @@ namespace PERQemu
 
         private void OnInstAddr(BreakpointEventArgs a)
         {
-            var upc = (ushort)a.Args[0];
-            Console.WriteLine($"microinstruction at {upc:x4} executed!");
-            // halt here, run a script, dump some values, who knows what?
+            var upc = (ushort)a.Value;
+
+            Console.WriteLine($"Microinstruction at {upc:x4} executed!");
         }
 
         private void OnInterrupt(BreakpointEventArgs a)
         {
-            var irq = (InterruptSource)a.Args[0];
-            var status = (int)a.Args[1];
+            var irq = (InterruptSource)a.Value;
+            var status = (int)a.Args[0];
 
-            Console.WriteLine($"interrupt {irq} now {status}");
+            Console.WriteLine($"CPU Interrupt {irq} now {status}");
         }
 #endif
 
@@ -560,8 +790,11 @@ namespace PERQemu
         [Command("debug load microcode", "Load a microcode binary into the control store")]
         private void LoadMicrocode([PathExpand] string binfile)
         {
+            if (!CheckSys()) return;
+
             try
             {
+                // todo: um, should probably not do this IF THE MACHINE IS RUNNING
                 PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(binfile));
             }
             catch (Exception e)
@@ -585,6 +818,8 @@ namespace PERQemu
         [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
         private void DisassembleMicrocode(ushort startAddress, ushort length)
         {
+            if (!CheckSys()) return;
+
             var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length - 1);
 
             if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
@@ -604,6 +839,8 @@ namespace PERQemu
         [Command("debug jump", "Start or resume execution at a given microaddress")]
         private void JumpTo(ushort nextPC)
         {
+            if (!CheckSys()) return;
+
             if (nextPC > PERQemu.Sys.CPU.Microcode.Length - 1)
             {
                 Console.WriteLine("Address out of range 0..{0}; PC not modified.",
@@ -648,21 +885,21 @@ namespace PERQemu
         // Miscellany and temporary/debugging hacks
         //
 
-        //[Conditional("DEBUG")]
+        [Conditional("DEBUG")]
         [Command("debug dump scheduler queue")]
         private void DumpScheduler()
         {
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
         }
 
-        //[Conditional("DEBUG")]
+        [Conditional("DEBUG")]
         [Command("debug dump timers")]
         private void DumpTimers()
         {
             HighResolutionTimer.DumpTimers();
         }
 
-        //[Conditional("DEBUG")]
+        [Conditional("DEBUG")]
         [Command("debug dump fifos")]
         private void DumpFifos()
         {
@@ -675,5 +912,10 @@ namespace PERQemu
         {
             QCodeHelper.DumpContents();
         }
+
+
+        // A temporary working copy for editing breakpoints
+        private BreakpointEventArgs _bp;
+        private BreakpointAction _bpAction;
     }
 }

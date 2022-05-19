@@ -467,7 +467,7 @@ namespace PERQemu.Config
                     conf.Reason = "24-bit CPU shipped with minimum of 4MB memory.";
                     return false;
                 }
-                else if (conf.MemorySizeInBytes > FOUR_MEG)
+                if (conf.MemorySizeInBytes > FOUR_MEG)
                 {
                     conf.Reason = "OS may not support more than 4MB of memory.";
                     // Just a warning
@@ -939,9 +939,10 @@ namespace PERQemu.Config
         public const int ONE_MEG = 1024 * 1024;
         public const int TWO_MEG = 1024 * 1024 * 2;
         public const int FOUR_MEG = 1024 * 1024 * 4;
+        public const int MAX_MEMORY = 1024 * 1024 * 8;
 
         // For preloading, discreetly
-        private static bool _quietly;
+        private bool _quietly;
 
         private Hashtable _prefabs;
         private Hashtable _geometries;

@@ -87,7 +87,15 @@ namespace PERQemu.Processor
         {
             do
             {
-                _processor.Execute();
+                if (_processor.Execute())
+                {
+                    // Processor encountered a breakpoint that requested a
+                    // pause in emulation; stop the run loop and bail out
+                    clocks = 0;
+                    _stopAsyncThread = true;
+                    break;
+                }
+
                 _scheduler.Clock();
 
                 // If the Z80 is paused and wants a wakeup, do it
@@ -205,8 +213,7 @@ namespace PERQemu.Processor
             }
             catch
             {
-                Log.Error(Category.CPU, "Could not load boot ROM from {0}!",
-                          Paths.Canonicalize(file));
+                Log.Error(Category.CPU, "Could not load boot ROM from {0}!", Paths.Canonicalize(file));
                 throw;
             }
         }

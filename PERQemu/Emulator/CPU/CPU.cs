@@ -112,10 +112,9 @@ namespace PERQemu.Processor
 
 #if DEBUG
             // Breakpoint set at this address?
-            if (_system.Debugger.WatchedAddress(_usequencer.PC))
+            if (_system.Debugger.WatchedMicroaddress.IsWatched(_usequencer.PC))
             {
-                _break = _system.Debugger.GetActionForAddress(_usequencer.PC).PauseEmulation;
-                _system.Debugger.BreakpointReached(BreakpointType.WatchedAddress, _usequencer.PC);
+                _break = _system.Debugger.WatchedMicroaddress.BreakpointReached(_usequencer.PC);
             }
 #endif
 
@@ -408,9 +407,9 @@ namespace PERQemu.Processor
                     Log.Debug(Category.Interrupt, "{0} raised, active now {1}", i, _interrupt.Flag);
 
                 // Check for, fire if breakpoint set
-                if (_system.Debugger.WatchedIRQ(i))
+                if (_system.Debugger.WatchedInterrupts.IsWatched((int)i))
                 {
-                    _system.Debugger.BreakpointReached(BreakpointType.WatchedInterrupt, i, true);
+                    _break = _system.Debugger.WatchedInterrupts.BreakpointReached((int)i, true);
                 }
 #endif
             }
@@ -430,9 +429,9 @@ namespace PERQemu.Processor
                     Log.Debug(Category.Interrupt, "{0} cleared, active now {1}", i, _interrupt.Flag);
 
                 // Check for, fire if breakpoint set
-                if (_system.Debugger.WatchedIRQ(i))
+                if (_system.Debugger.WatchedInterrupts.IsWatched((int)i))
                 {
-                    _system.Debugger.BreakpointReached(BreakpointType.WatchedInterrupt, i, false);
+                    _break = _system.Debugger.WatchedInterrupts.BreakpointReached((int)i, false);
                 }                
 #endif
             }

@@ -120,7 +120,6 @@ namespace PERQmedia
         /// <summary>
         /// Read a track's worth of sectors.
         /// </summary>
-        /// <returns><c>true</c>, if track was read, <c>false</c> if EOF.</returns>
         public void ReadTrack(Stream fs, StorageDevice dev)
         {
             // Get the track info
@@ -181,7 +180,7 @@ namespace PERQmedia
             //
             if (bCylMap)
             {
-                Log.Debug(Category.MediaLoader, "IMD Cylinder mas not supported (ignored).");
+                Log.Debug(Category.MediaLoader, "IMD Cylinder map not supported (ignored).");
                 fs.Seek(count, SeekOrigin.Current);
             }
 
@@ -202,8 +201,7 @@ namespace PERQmedia
 
             if ((_sectorSize > 0 && _sectorSize != size) || size > 256)
             {
-                Log.Debug(Category.MediaLoader, 
-                          "WARNING: sector size changed from {0} to {1}", _sectorSize, size);
+                Log.Debug(Category.MediaLoader, "WARNING: sector size changed from {0} to {1}", _sectorSize, size);
             }
 
             //
@@ -301,9 +299,11 @@ namespace PERQmedia
             // will write out the blank track 0 to avoid this warning.
             //
             if (_sectors.Count != dev.Geometry.TotalBlocks)
+            {
                 Log.Debug(Category.MediaLoader,
                           "Sector count from image {0} doesn't match expected {1}!",
                           _sectors.Count, dev.Geometry.TotalBlocks);
+            }
 
             Log.Detail(Category.MediaLoader, "Copying {0} sectors", _sectors.Count);
 
