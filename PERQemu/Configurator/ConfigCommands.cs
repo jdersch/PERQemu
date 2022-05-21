@@ -453,13 +453,12 @@ namespace PERQemu.UI
             }
         }
 
-        // todo: this is a little awkward; make it "option add foo", "option remove foo"?
-        [Command("configure option", "Configure extra features of the IO Option board")]
+        [Command("configure option add", "Configure extra features of the IO Option board")]
         public void SetIOOption(IOOptionType opt)
         {
             if (PERQemu.Config.Quietly)
             {
-                PERQemu.Config.Current.IOOptions = opt;
+                PERQemu.Config.Current.IOOptions |= opt;
                 return;
             }
 
@@ -536,6 +535,31 @@ namespace PERQemu.UI
                 if (!PERQemu.Config.CheckOptions())
                 {
                     Console.WriteLine(PERQemu.Config.Current.Reason);
+                }
+            }
+        }
+
+        [Command("configure option remove", "Remove or disable extra features of the IO Option board")]
+        public void RemoveIOOption(IOOptionType opt)
+        {
+            if (PERQemu.Config.Quietly)
+            {
+                PERQemu.Config.Current.IOOptions &= ~opt;
+                return;
+            }
+
+            if (OKtoReconfig())
+            {
+                if (PERQemu.Config.Current.IOOptions.HasFlag(opt))
+                {
+                    PERQemu.Config.Current.IOOptions &= ~opt;
+                    PERQemu.Config.Changed = true;
+                    Console.WriteLine($"IO Option '{opt}' deselected.");
+
+                    if (!PERQemu.Config.CheckOptions())
+                    {
+                        Console.WriteLine(PERQemu.Config.Current.Reason);
+                    }
                 }
             }
         }

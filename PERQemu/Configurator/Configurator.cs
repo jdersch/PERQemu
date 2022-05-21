@@ -310,7 +310,7 @@ namespace PERQemu.Config
                         foreach (IOOptionType opt in Enum.GetValues(typeof(IOOptionType)))
                         {
                             if (_current.IOOptions.HasFlag(opt))
-                                sw.WriteLine("option " + opt);
+                                sw.WriteLine("option add " + opt);
                         }
                     }
 
@@ -406,12 +406,14 @@ namespace PERQemu.Config
                         conf.Reason = "PERQ2: 16K CPU requires minimum of 512KB of memory.";
                         return false;
                     }
-                    else if (conf.Chassis == ChassisType.PERQ2T2 && conf.MemorySizeInBytes < ONE_MEG)
+
+                    if (conf.Chassis == ChassisType.PERQ2T2 && conf.MemorySizeInBytes < ONE_MEG)
                     {
                         conf.Reason = "PERQ2-T2: 16K CPU requires minimum of 1MB of memory.";
                         return false;
                     }
-                    else if (conf.MemorySizeInBytes > TWO_MEG)
+
+                    if (conf.MemorySizeInBytes > TWO_MEG)
                     {
                         conf.Reason = "PERQ1A (16K) CPU supports a maximum of 2MB of memory.";
                         return false;
@@ -427,6 +429,10 @@ namespace PERQemu.Config
                         return false;
                     }
                     break;
+
+                case CPUType.PERQ24A:
+                    conf.Reason = "Sadly, the 24-bit 64K CPU doesn't exist.";
+                    return false;
             }
 
             // Must be okay then.
@@ -531,7 +537,6 @@ namespace PERQemu.Config
         ///     - Can't have two Ethernets in a system, unfortunately.  So an
         ///       EIO precludes adding an OIO with Ethernet, though the other
         ///       combinations are valid.
-        ///     - Ether3 (when implemented) will be a PERQ-1 option only.
         ///     - MLO (when implemented) will be a PERQ-2 option only.
         ///     - Both Link and Streamer options are "universal" (but aren't
         ///       implemented yet).
@@ -554,13 +559,6 @@ namespace PERQemu.Config
                     {
                         conf.Reason = $"Bug? IO Option {conf.IOOptionBoard} but extra IO Options selected: {conf.IOOptions}";
                         conf.IOOptions = IOOptionType.None;         // force it
-                    }
-
-                    if (conf.Chassis != ChassisType.PERQ1)
-                    {
-                        // Not sure about this, but lets go with it
-                        conf.Reason = $"3Mbit Ethernet board not supported in {conf.Chassis}.";
-                        return false;
                     }
                     break;
 
@@ -592,13 +590,11 @@ namespace PERQemu.Config
                         conf.Reason = $"Multibus/Laser option not supported in {conf.Chassis}.";
                         return false;
                     }
-                    else
-                    {
-                        // Someday.  Will have to check other option combos.
-                        conf.Reason = "Sorry, the MLO board is not yet supported.";
-                        conf.IOOptionBoard = OptionBoardType.None;
-                        return false;
-                    }
+
+                    // Someday.  Will have to check other option combos.
+                    conf.Reason = "Sorry, the MLO board is not yet supported.";
+                    conf.IOOptionBoard = OptionBoardType.None;
+                    return false;
             }
 
             return true;
@@ -611,7 +607,7 @@ namespace PERQemu.Config
         /// <remarks>
         /// For now, traditional configuration rules apply:
         ///     PERQ-1 only has 1 floppy, 1 Shugart 14" disk.
-        ///     PERQ-2 only has 1 floppy, 1 or 2 Micropolis 8" disks.
+        ///     PERQ-2 only has 1 floppy, 1 or 2 (T1) Micropolis 8" disks.
         ///     PERQT2 only has 1 floppy, 1 or 2 5.25" disks.
         /// At the moment, SMD Disks are not supported (requires the as-yet-
         /// unimplemented MLO option board).
