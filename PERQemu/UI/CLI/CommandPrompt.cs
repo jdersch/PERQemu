@@ -34,7 +34,7 @@ namespace PERQemu.UI
         {
             _commandTreeRoot = root;
             _commandTree = root;
-            _commandHistory = new List<string>(64);
+            _commandHistory = new List<string>(99);
             _historyIndex = 0;
             _prompt = "";
         }
@@ -405,6 +405,16 @@ namespace PERQemu.UI
             }
         }
 
+        public void ShowHistory()
+        {
+            // debug
+            Console.WriteLine("Command history:");
+
+            for (var i = 0; i < _commandHistory.Count; i++)
+            {
+                Console.WriteLine($"{i,4} {_commandHistory[i]}");
+            }
+        }
 
         public struct CompletionList
         {

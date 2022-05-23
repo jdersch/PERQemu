@@ -359,6 +359,22 @@ namespace PERQemu
             _exec.ShowCommands(prefix);
         }
 
+        [Command("history", "Show command history")]
+        public void ShowHistory()
+        {
+            _editor.ShowHistory();
+            // probably should just expose the list (readonly) and loop it here?
+        }
+
+        [Command("save history", "Save command history")]
+        public void SaveHistory()
+        {
+            Console.WriteLine("[Not yet implemented]");
+
+            // build path OutputDir/cmdhistory.txt
+            // open output stream and dump it
+        }
+
         [Command("gui", "Start the graphical interface")]
         private void LaunchGUI()
         {

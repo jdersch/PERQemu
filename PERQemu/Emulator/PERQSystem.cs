@@ -312,6 +312,11 @@ namespace PERQemu
                         _cpu.Stop();
                         _iob.Stop();
                     }
+#if DEBUG
+                    // Ah!  If we've paused on a breakpoint and there's a script
+                    // to run, do it now;  Otherwise this is a no-op.  Kewl.
+                    _debugger.RunDeferredActions();
+#endif
                     break;
 
                 case RunState.Off:

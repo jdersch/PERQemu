@@ -117,6 +117,7 @@ namespace PERQemu.Debugger
                 _list.Remove(val);
         }
 
+
         /// <summary>
         /// Process a breakpoint according to the defined actions specified by
         /// the user.  NB: Only tracks invocations and fires the events; does
@@ -147,14 +148,26 @@ namespace PERQemu.Debugger
                 action.Count++;
                 Log.Detail(Category.Debugger, "Fired action count now {0}", action.Count);
 
-                // Ugh!  We don't actually want to fire this yet; if pausing the
-                // emulator we need to complete the current cycle, change run state,
-                // fire the handler, then (if a script is defined) let that execute.
-                // The Debugger should queue up "pending" breakpoints and provide a
-                // callback to invoke them?
+                // The callback will fire mid-cycle, so it should probably limit
+                // itself to do inquiry/logging but not change state... as these
+                // are compiled in (while scripts are not) it's less likely that
+                // a "rogue" callback function will blow everything up :-)
                 if (action.Callback != null)
                 {
                     action.Callback(new BreakpointEventArgs(_type, val, args));
+                }
+
+                // If there's a script to run, push this action onto the deferred
+                // queue and wait for the emulator to pause.  It seems "iffy" to
+                // run a script mid-cycle, since we don't want to potentially
+                // disrupt the execution cycle or destroy state we're trying to
+                // investigate... if a script is defined, should we quietly force
+                // a pause?  The script may resume execution with a "start" if it
+                // needs to...
+                if (!string.IsNullOrEmpty(action.Script))
+                {
+                    PERQemu.Sys.Debugger.Defer(action);
+                    return true;
                 }
 
                 return action.PauseEmulation;
@@ -179,12 +192,12 @@ namespace PERQemu.Debugger
         {
             if (_list.Count == 0) return;
 
-            Console.WriteLine("  Watched value    Enabled  Pause  OneShot  Count         Script");
-            //               ("12345678901234567  1234567  12345  1234567  123456789012  ...");
+            Console.WriteLine("  Watched value    Enabled  Pause  ReTrig  Count         Script");
+            //               ("12345678901234567  1234567  12345  123456  123456789012  ...");
 
             foreach (var key in _list.Keys)
             {
-                Console.WriteLine("{0,-17}  {1,-7}  {2,-5}  {3,-7}  {4,-12}  {5}", FmtVal(key),
+                Console.WriteLine("{0,-17}  {1,-7}  {2,-5}  {3,-6}  {4,-12}  {5}", FmtVal(key),
                                   _list[key].Enabled,
                                   _list[key].PauseEmulation,
                                   _list[key].Retriggerable,
@@ -256,13 +269,8 @@ namespace PERQemu.Debugger
             _irqWatchList = new BreakpointList(BreakpointType.Interrupt, "CPU Interrupt", (int)InterruptSource.Parity);
             _memWatchList = new BreakpointList(BreakpointType.MemoryLoc, "Memory Address", PERQemu.Config.Current.MemorySizeInBytes / 2);
             _uinstWatchList = new BreakpointList(BreakpointType.uAddress, "Microaddress", CPU.WCSSize);
-        }
 
-        public void EnableBreakpoints(bool enab)
-        {
-            _masterEnable = enab;
-
-            Console.WriteLine("Breakpoints {0}.", enab ? "enabled" : "disabled");
+            _deferred = new List<BreakpointAction>();
         }
 
         public bool BreakpointsEnabled => _masterEnable;
@@ -273,11 +281,51 @@ namespace PERQemu.Debugger
         public BreakpointList WatchedMicroaddress => _uinstWatchList;
 
 
+        public void EnableBreakpoints(bool enab)
+        {
+            _masterEnable = enab;
+
+            Console.WriteLine("Breakpoints {0}.", enab ? "enabled" : "disabled");
+        }
+
+        /// <summary>
+        /// Defer the execution of a script for a specified action.  These should
+        /// be fired in sequence at the end of the current instruction cycle,
+        /// after the emulator has paused.
+        /// </summary>
+        public void Defer(BreakpointAction action)
+        {
+            _deferred.Add(action);
+        }
+
+        /// <summary>
+        /// Run any deferred scripts and clear the list.
+        /// </summary>
+        public void RunDeferredActions()
+        {
+            Log.Debug(Category.Debugger, "Running deferred breakpoint actions:");
+
+            foreach (var a in _deferred)
+            {
+                Log.Debug(Category.Debugger, "Reading from '{0}'...", a.Script);
+
+                // Hand it off to the CLI, assuming that the stored script
+                // has a valid path (vetted by DebugCommands) and that the
+                // emulator is paused
+                PERQemu.CLI.ReadScript(a.Script);
+            }
+
+            // Now clear 'em out (so we don't screw up the iterator)
+            _deferred.Clear();
+        }
+
         private bool _masterEnable;
 
         private BreakpointList _irqWatchList;
         private BreakpointList _ioWatchList;
         private BreakpointList _memWatchList;
         private BreakpointList _uinstWatchList;
+
+        private List<BreakpointAction> _deferred;
     }
 }

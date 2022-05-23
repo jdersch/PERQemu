@@ -38,19 +38,20 @@ namespace PERQemu
     /// our attributes attached to methods in a class that's instantiated once,
     /// so we don't have to track down instance objects at runtime.  (This was
     /// written before the changes to the Debugger that did away with the
-    /// MethodInvokeInfo class and added the GetInstanceFrom*() approach.)
-    /// The idea was that with a fully graphical interface AND a command-line
-    /// we'd want a common API for getting data out of the CPU and its various
-    /// component parts, and pull all of those Console.WriteLines OUT of there.
-    /// Anyway, it's a work in progress.
+    /// MethodInvokeInfo class and added the GetInstanceFrom*() approach.)  The
+    /// idea was that with a fully graphical interface AND a command-line we'd
+    /// want a common API for getting data out of the CPU and its various parts,
+    /// and pull all of those Console.WriteLines OUT of there.  Anyway, it's a
+    /// work in progress.
+    /// 
+    /// NB: nearly all the debug commands require that the PERQ is instantiated
+    /// in order to observe/manipulate state; the CheckSys() method provides a
+    /// (hackish) common way to make sure the PERQ is defined.  It's also up to
+    /// the individual methods to consider the impact of poking at the machine
+    /// while it's running; some may require a pause/resume to operate reliably.
     /// </remarks>
     public partial class DebugCommands
     {
-        /*
-         * TODO: nearly all the debug commands require that the PERQ is
-         * instantiated in order to observe/manipulate state; many of them
-         * could require a pause/resume to operate reliably
-         */
 
         [Command("debug", "Enter the debugging subsystem", Prefix = true)]
         public void SetDebugPrefix()
@@ -107,7 +108,12 @@ namespace PERQemu
             Console.WriteLine("Logging categories:");
             PERQemu.CLI.Columnify(Log.Categories.ToString().Split(' '));
 
-            // radix, step mode, whatever
+            // todo: may just bite the bullet and have separate console logging
+            // categories too, not just split severity levels... being able to
+            // just spit the important stuff on the console while logging more
+            // detailed traces to files would be nice...
+
+            // todo: show default output radix, anything else?
         }
 
         [Command("debug show variables", "Show debugger variables and their descriptions")]
@@ -506,7 +512,7 @@ namespace PERQemu
                 return;
             }
 
-            var action = new BreakpointAction();
+            var action = GetDefaultActionFor(type);
             list.Watch(watch, action);
 
             Console.WriteLine($"Breakpoint set for {list.Name} {watch}");
@@ -587,7 +593,7 @@ namespace PERQemu
         [Command("debug edit breakpoint commands", "Show breakpoint edit commands")]
         public void ShowEditCommands()
         {
-            PERQemu.CLI.ShowCommands($"debug edit breakpoint");
+            PERQemu.CLI.ShowCommands("debug edit breakpoint");
         }
 
         /*
@@ -673,8 +679,8 @@ namespace PERQemu
 
             Console.WriteLine(fmt, " ", "Original", "Edited");
             Console.WriteLine(fmt, "Enabled:", orig.Enabled, _bpAction.Enabled);
-            Console.WriteLine(fmt, "PauseEmu:", orig.PauseEmulation, _bpAction.PauseEmulation);
-            Console.WriteLine(fmt, "OneShot:", orig.Retriggerable, _bpAction.Retriggerable);
+            Console.WriteLine(fmt, "Pause Emu:", orig.PauseEmulation, _bpAction.PauseEmulation);
+            Console.WriteLine(fmt, "ReTrigger:", orig.Retriggerable, _bpAction.Retriggerable);
             Console.WriteLine(fmt, "Count:", $"{orig.Count} times", $"{_bpAction.Count} times");
             Console.WriteLine(fmt, "Script:",
                               (string.IsNullOrEmpty(orig.Script) ? "<none>" : orig.Script),
@@ -763,9 +769,38 @@ namespace PERQemu
             return selected;
         }
 
+        private BreakpointAction GetDefaultActionFor(BreakpointType bp)
+        {
+            var action = new BreakpointAction();
+
+            switch (bp)
+            {
+                case BreakpointType.uAddress:
+                    action.Callback = OnInstAddr;
+                    break;
+
+                case BreakpointType.Interrupt:
+                    action.Callback = OnInterrupt;
+                    break;
+
+                case BreakpointType.IOPort:
+                case BreakpointType.MemoryLoc:
+                    action.Callback = OnBreakpoint;
+                    break;
+            }
+
+            return action;
+        }
+
         //
         // Breakpoint handlers
         //
+
+        private void OnBreakpoint(BreakpointEventArgs a)
+        {
+            // Default action
+            Console.WriteLine($"Breakpoint {a.Type} at {a.Value}");
+        }
 
         private void OnInstAddr(BreakpointEventArgs a)
         {
@@ -777,7 +812,7 @@ namespace PERQemu
         private void OnInterrupt(BreakpointEventArgs a)
         {
             var irq = (InterruptSource)a.Value;
-            var status = (int)a.Args[0];
+            var status = (bool)a.Args[0];
 
             Console.WriteLine($"CPU Interrupt {irq} now {status}");
         }
