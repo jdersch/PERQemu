@@ -312,6 +312,15 @@ May, 2022:
     POS G hard disk image (with Accent S6 loaded) that runs on "CIO" included!
     Draft of the user's guide is coming along as well.
 
+    2. Improving breakpoint support. The point is to supplement the logging with
+    the ability to pause emulation, run a script, and more accurately pinpoint
+    specific conditions helpful to debugging the reeeeally esoteric bugs.  Also
+    adding commands to print and save command history, to aid in creating debug
+    scripts that can be executed when a breakpoint fires.  The best example is
+    to leave tracing turned off during the initial boot/Vfy/SysB steps, then
+    automatically pause emulation and enable highly detailed logging only when
+    a specific microinstruction is executed.  The issue with Accent not booting
+    on CIO will likely be headslappingly obvious once it's found...
 
 ---
-Last update: skeezics    Wed May 11 18:37:59 PDT 2022
+Last update: skeezics    Mon May 23 16:53:05 PDT 2022

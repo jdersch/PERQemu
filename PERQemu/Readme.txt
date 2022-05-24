@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-4/23/2022 - skeezicsb - v0.4.6 (experimental)
+5/23/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -152,6 +152,12 @@ There are several subdirectories:
             number of games, demos, and applications.  This was created
             from floppy images on Bitsavers.
 
+        g7.prqm:
+            The first PERQmedia-formatted Shugart image for use with the
+            "CIO" board.  Contains a POS G.7 installation (binary only)
+            and an Accent S6 that doesn't (yet) boot.  This image includes
+            some fun new demos not previously available on PERQemu!
+
        Additional "stock" hard drive or floppy images may be included as
        well.  Any custom disk images you create or import are loaded from
        and saved in the Disks/ directory by default.  Please consult the
@@ -245,6 +251,7 @@ As of v0.4.6, these PERQ operating systems also boot:
 
   - POS version G.6 (last official 3RCC release);
   - POS version G.7 (released by Accent Systems, 1986?);
+  - Accent S6 (not yet booting from hard disk);
   - PNX 2 (beta; runs from floppy but not yet booting from hard disk).
 
 NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
@@ -404,6 +411,7 @@ v0.5 - TBD
   - Unified PERQ media storage architecture and file format
   - Dynamic runtime configuration of all PERQ models and features
   - Enhanced command line interface with more prompts, in-line help
+  - Expanded logging and enhanced debugging support
   - Persistent user preference settings
 
 v0.4.6 - Current "experimental" branch
