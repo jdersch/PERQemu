@@ -34,8 +34,8 @@ namespace PERQemu.Debugger
         None = 0,
         IOPort,         // IOA for PERQ, port for Z80
         OpCode,         // Qcode for PERQ, opcode for Z80
-        uAddress,       // Microaddr for PERQ, Z80 RAM
-        MemoryLoc,      // Main memory address for PERQ (or DMA)
+        uAddress,       // Microstore address for PERQ
+        MemoryLoc,      // Memory address (PERQ or Z80)
         Interrupt,      // Break on interrupt (PERQ or Z80)
         All             // For CLI convenience
     }
@@ -161,9 +161,9 @@ namespace PERQemu.Debugger
                 // queue and wait for the emulator to pause.  It seems "iffy" to
                 // run a script mid-cycle, since we don't want to potentially
                 // disrupt the execution cycle or destroy state we're trying to
-                // investigate... if a script is defined, should we quietly force
-                // a pause?  The script may resume execution with a "start" if it
-                // needs to...
+                // investigate... if a script is defined, we force a pause to run
+                // it at the end of the current cycle.  The script may resume
+                // execution with a "start" if it needs to...
                 if (!string.IsNullOrEmpty(action.Script))
                 {
                     PERQemu.Sys.Debugger.Defer(action);
@@ -303,6 +303,8 @@ namespace PERQemu.Debugger
         /// </summary>
         public void RunDeferredActions()
         {
+            if (_deferred.Count == 0) return;
+
             Log.Debug(Category.Debugger, "Running deferred breakpoint actions:");
 
             foreach (var a in _deferred)

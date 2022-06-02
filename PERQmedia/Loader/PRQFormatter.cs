@@ -91,7 +91,7 @@ namespace PERQmedia
 
                 _helper.ReadDirectory(fs);
 #if DEBUG
-                Log.Debug(Category.MediaLoader, "Directory check:");
+                Log.Detail(Category.MediaLoader, "Directory check:");
                 _helper.PrintDirectory();
 
                 Log.Detail(Category.MediaLoader, "Read header, file pos=" + fs.Position);
@@ -227,7 +227,7 @@ namespace PERQmedia
 
                 if (_helper.Data.Length != total)
                 {
-                    Log.Debug(Category.MediaLoader, 
+                    Log.Warn(Category.MediaLoader, 
                               "Data size mismatch: computed {0} != actual {1}",
                               total, _helper.Data.Length);
                     // Probably screwed at this point?
@@ -281,7 +281,7 @@ namespace PERQmedia
             _helper.InitFromDev(dev);
 
 #if DEBUG 
-            Log.Debug(Category.MediaLoader, "Before compression:");
+            Log.Detail(Category.MediaLoader, "Before compression:");
             _helper.PrintDirectory();
             var sizeBefore = (double)_helper.DataSize;
 #endif 
@@ -289,7 +289,7 @@ namespace PERQmedia
             _helper.Compress(dev);
 
 #if DEBUG 
-            Log.Debug(Category.MediaLoader, "After compression:");
+            Log.Detail(Category.MediaLoader, "After compression:");
             _helper.PrintDirectory();
             var sizeAfter = (double)_helper.DataSize;
 
@@ -301,7 +301,7 @@ namespace PERQmedia
             _helper.WriteDirectory(fs);
 
 #if DEBUG
-            Log.Debug(Category.MediaLoader, "Wrote header, file pos=" + fs.Position);
+            Log.Detail(Category.MediaLoader, "Wrote header, file pos=" + fs.Position);
             _helper.PrintDirectory();
 #endif 
             // Text label

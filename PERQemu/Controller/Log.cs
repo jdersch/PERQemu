@@ -293,7 +293,11 @@ namespace PERQemu
         private static void WriteInternal(Severity s, Category c, string fmt, params object[] args)
         {
             // Apply filters before we do the work to format the output
+#if DEBUG
+            if ((s >= Severity.Warning) || ((s >= _minLevel) && ((c & _categories) != 0)))
+#else
             if ((s >= _minLevel) && ((c & _categories) != 0))
+#endif
             {
                 var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
 

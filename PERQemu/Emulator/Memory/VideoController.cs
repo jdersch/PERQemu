@@ -151,9 +151,8 @@ namespace PERQemu.Memory
 
                     // Line count register counts horizontal scan lines and generates
                     // an interrupt after N lines are scanned.
-                    //   bit    description
-                    //  15:8    high byte is the "video control port", below
-                    //     7    "start over" bit
+                    //  15:8    High byte is the "video control port", below
+                    //     7    StartOver bit
                     //   6:0    2's complement of N
                     _lineCounterInit = 128 - (value & 0x7f);
                     _lineCounter = _lineCounterInit;
@@ -173,8 +172,8 @@ namespace PERQemu.Memory
 
                 case 0xe1:  // Load display address register
 
-                    // Display Addr (341 W) Address of first pixel on display. Must be a
-                    // multiple of 256 words.
+                    // Display Addr (341 W) Address of first pixel on display.
+                    // Must be a multiple of 256 words.
                     _displayAddress = UnFrobAddress(value);
 
                     Log.Debug(Category.Display, "Display Address Register set to {0:x6}", _displayAddress);
@@ -190,13 +189,26 @@ namespace PERQemu.Memory
 
                 case 0xe3:  // Video control port
 
-                    // Video Ctrl (343 W) Mode control bits
+                    // ** ACCENT S6 HACK **
+                    // The S6 microcode doesn't properly initialize VidNext for
+                    // "normal" display and passes in a bogus value instead; POS
+                    // does it correctly.  Argh.  If I can get it to boot at all
+                    // then we can see if the Pascal driver sets things properly
+                    // and figure out if there's a way to detect/patch/workaround
+                    // this more elegantly...
+                    if ((value & 0xff00) == 0xff00)
+                    {
+                        // Force just EnableDisplay, no cursor, map normal.
+                        value = 0x8400;
+                    }
+
+                    // Video Ctrl (343 W) Mode control bits (see IOVideo.pas)
                     //  15:13   Cursor map function
                     //     12   Force bad parity (for hardware test)
-                    //     11   Disable parity interrupt
-                    //     10   Enable display (off during vertical blanking)
-                    //      9   Enable Vertical Sync
-                    //      8   Enable cursor
+                    //     11   Disable micro interrupt
+                    //     10   Show screen (off during vertical blanking)
+                    //      9   Vertical retrace
+                    //      8   Show cursor
                     //    7:0   Low byte is the Line Count, above
                     _cursorFunc = (CursorFunction)((value & 0xe000) >> 13);
                     _videoStatus = (StatusRegister)(value & 0x1f00);
@@ -364,7 +376,7 @@ namespace PERQemu.Memory
             // Trigger an interrupt if the line counter is set and has reached 0
             if (_lineCounter == 0 && _lineCounterInit > 0)
             {
-                if (ParityInterruptsEnabled && !_lineCountOverflow)     // Just trigger it once...
+                if (MicroInterruptEnabled && !_lineCountOverflow)     // Just trigger it once...
                 {
                     Log.Debug(Category.Display, "Line counter overflow @ scanline {0}", _scanLine);
                     _system.CPU.RaiseInterrupt(InterruptSource.LineCounter);
@@ -397,17 +409,17 @@ namespace PERQemu.Memory
             get { return (_videoStatus & StatusRegister.EnableDisplay) == StatusRegister.EnableDisplay; }
         }
 
-        private bool ParityInterruptsEnabled
+        private bool MicroInterruptEnabled
         {
-            get { return (_videoStatus & StatusRegister.EnableParityInterrupts) != StatusRegister.EnableParityInterrupts; }
+            get { return (_videoStatus & StatusRegister.DisableMicroInterrupt) != StatusRegister.DisableMicroInterrupt; }
         }
 
         // debug
         public void Status()
         {
-            Console.WriteLine("_lineCounterInit={0}, count={1} overflow={2}",
-                              _lineCounterInit, _lineCounter, _lineCountOverflow);
-            Console.WriteLine("_scanline={0}, _state={1}, crt={2}",
+            Console.WriteLine("counterInit={0}, count={1}, overflow={2}, intrEnabled={3}",
+                              _lineCounterInit, _lineCounter, _lineCountOverflow, MicroInterruptEnabled);
+            Console.WriteLine("scanline={0}, state={1}, crt={2}",
                               _scanLine, _state, _crtSignals);
         }
 
@@ -560,7 +572,7 @@ namespace PERQemu.Memory
             EnableCursor = 0x100,
             EnableVSync = 0x200,
             EnableDisplay = 0x400,
-            EnableParityInterrupts = 0x800,
+            DisableMicroInterrupt = 0x800,
             WriteBadParity = 0x1000
         }
 

@@ -711,13 +711,13 @@ namespace PERQemu
 
                 case WhatChanged.HaltedInLoop:
                     // We don't actually fire an event; just call Halt()
-                    Log.Write("The CPU has halted in a loop at PC {0:x4}", (int)args[0]);
+                    Log.Write("The CPU has halted in a loop at PC {0:x4}", (ushort)args[0]);
                     PERQemu.Controller.Halt();
                     return;
 
                 case WhatChanged.PowerDown:
                     Log.Write("The PERQ has powered itself off.");
-                    PERQemu.Controller.PowerOff();
+                    PERQemu.Controller.TransitionTo(RunState.Off);
                     return;
 
                 default:

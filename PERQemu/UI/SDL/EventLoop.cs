@@ -228,7 +228,7 @@ namespace PERQemu.UI
                 PERQemu.Controller.PowerOff();
 
                 // todo: so if we have more than one window, does SDL fire a
-                // quit message when any of them closes?
+                // quit message when any of them closes or only the last one?
             }
 #if DEBUG
             else

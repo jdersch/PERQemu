@@ -260,7 +260,7 @@ namespace PERQemu.Processor
         public static ulong MicroCycleTime => _cycleTime;
         public static bool Is4K => (_wcsSize == 4096);
 
-        public bool OpFileEmpty => (BPC & 0x8) != 0;
+        public bool OpFileEmpty => (BPC > 7);
         public bool IncrementBPC => _incrementBPC;
         public ulong Clocks => _clocks;
         public ulong[] Microcode => _ustore.Microcode;
@@ -398,10 +398,10 @@ namespace PERQemu.Processor
         /// </summary>
         public void RaiseInterrupt(InterruptSource i)
         {
+#if DEBUG
             // Log it if it wasn't already set
             if (_interrupt.Raise(i) == 0)
             {
-#if DEBUG
                 // Cut down on the spewage for debugging
                 if (i != InterruptSource.LineCounter)
                     Log.Debug(Category.Interrupt, "{0} raised, active now {1}", i, _interrupt.Flag);
@@ -411,8 +411,10 @@ namespace PERQemu.Processor
                 {
                     _break = _system.Debugger.WatchedInterrupts.BreakpointReached((int)i, true);
                 }
-#endif
             }
+#else
+            _interrupt.Raise(i);
+#endif
         }
 
         /// <summary>
@@ -420,10 +422,10 @@ namespace PERQemu.Processor
         /// </summary>
         public void ClearInterrupt(InterruptSource i)
         {
+#if DEBUG
             // Log it if it wasn't already clear
             if (_interrupt.Clear(i) != 0)
             {
-#if DEBUG
                 // Cut down on the spewage for debugging
                 if (i != InterruptSource.LineCounter)
                     Log.Debug(Category.Interrupt, "{0} cleared, active now {1}", i, _interrupt.Flag);
@@ -432,9 +434,11 @@ namespace PERQemu.Processor
                 if (_system.Debugger.WatchedInterrupts.IsWatched((int)i))
                 {
                     _break = _system.Debugger.WatchedInterrupts.BreakpointReached((int)i, false);
-                }                
-#endif
+                }
             }
+#else
+            _interrupt.Clear(i);
+#endif
         }
 
         /// <summary>
@@ -478,7 +482,7 @@ namespace PERQemu.Processor
         #region CPU Helper functions
 
         /// <summary>
-        /// Selects the proper AMUX input for the specified instruction
+        /// Selects the proper AMUX input for the specified instruction.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetAmuxInput(Instruction uOp)
@@ -489,33 +493,46 @@ namespace PERQemu.Processor
             switch (uOp.A)
             {
                 case AField.Shifter:
-                    _shifter.Shift(_alu.OldR.Lo);       // Shifter takes 16 bits of R
+                    _shifter.Shift(_alu.OldR.Lo);    // Shifter takes 16 bits of R
                     amux = _shifter.ShifterOutput;
                     break;
 
                 case AField.NextOp:
                     if (OpFileEmpty)
                     {
-                        // Only latch if Victim is empty (all ones indicates an unset Victim...)
+                        // Only latch if Victim is empty (all ones indicates an unset Victim)
                         if (_usequencer.Victim == _wcsMask)
                         {
-                            _usequencer.Victim = _usequencer.PC;    // 12 or 14 bits
+                            _usequencer.Victim = _usequencer.PC;
 
                             Log.Debug(Category.Sequencer, "Victim register is now {0:x4}", _usequencer.Victim);
                         }
                     }
-
-                    amux = _opFile[BPC];
-                    _incrementBPC = true;               // Increment BPC at start of next cycle
-
-                    if (_usequencer.ExtendedOp)
+                    else
                     {
-                        // Extend to save the prefix byte and add in the current
-                        _lastOpcode = (ushort)((_lastOpcode << 8) | _opFile[BPC]);
-                        _usequencer.ExtendedOp = false;
+                        if (_usequencer.ExtendedOp)
+                        {
+                            // Extend to save the prefix byte and add in the current
+                            // (but ONLY if we haven't overflowed BPC, or it'll be wrong!)
+                            _lastOpcode = (ushort)((_lastOpcode << 8) | _opFile[BPC]);
+                            _usequencer.ExtendedOp = false;
 
-                        Log.Debug(Category.QCode, "NextOp extended opcode now {0:x4}", _lastOpcode);
+                            Log.Debug(Category.QCode, "NextOp extended opcode now {0:x4}", _lastOpcode);
+                        }
                     }
+
+                    // Note: There are two subtle hazards here, but this is how the
+                    // hardware does it.  If BPC has overflowed the hardware returns
+                    // all ones to force a jump to Refill; because we initialize the
+                    // op bytes to 0xff any execution of NextOp with BPC<3> set achieves
+                    // the same result (cheeky!) without an explicit assignment, saving
+                    // precious picoseconds.  The counter also increments even if BPC
+                    // has already overflowed!  So if you force enough NextOps and hack
+                    // a Refill routine that does NOT reset BPC, it will eventually
+                    // loop back to zero and the processor will execute whatever was
+                    // in the op file when the overflow occurred.
+                    amux = _opFile[BPC];
+                    _incrementBPC = true;           // Increment BPC at start of next cycle
 
                     Log.Debug(Category.OpFile, "NextOp read from BPC[{0:x1}]={1:x2}", BPC, amux);
                     break;
@@ -526,10 +543,24 @@ namespace PERQemu.Processor
 
                 case AField.MDI:
                     amux = _memory.MDI;
+#if DEBUG
+                    // Watched address?
+                    if (_system.Debugger.WatchedMemoryAddress.IsWatched(_memory.MADR))
+                    {
+                        _system.Debugger.WatchedMemoryAddress.BreakpointReached(_memory.MADR, amux);
+                    }
+#endif
                     break;
 
                 case AField.MDX:
                     amux = (_memory.MDI & (_bits == 24 ? 0x00ff : 0x000f)) << 16;
+#if DEBUG
+                    // Watched address?
+                    if (_system.Debugger.WatchedMemoryAddress.IsWatched(_memory.MADR))
+                    {
+                        _system.Debugger.WatchedMemoryAddress.BreakpointReached(_memory.MADR, amux);
+                    }
+#endif
                     break;
 
                 case AField.UState:
@@ -715,6 +746,13 @@ namespace PERQemu.Processor
                         case 0xf:   // IOB function
                             if (uOp.F == 0x0)
                             {
+#if DEBUG
+                                // Check for breakpoint on this port
+                                if (_system.Debugger.WatchedIOPorts.IsWatched(uOp.IOPort))
+                                {
+                                    _break = _system.Debugger.WatchedIOPorts.BreakpointReached(uOp.IOPort);
+                                }
+#endif
                                 // Input if the msb of Z is unset, Output otherwise
                                 if (uOp.IsIOInput)
                                 {
@@ -943,7 +981,7 @@ namespace PERQemu.Processor
 
         public void LoadMicrocode(string ucodeFile)
         {
-        	_ustore.LoadMicrocode(ucodeFile);
+            _ustore.LoadMicrocode(ucodeFile);
         }
 
         /// <summary>

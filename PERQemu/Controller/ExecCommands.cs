@@ -19,8 +19,6 @@
 
 using System;
 
-using PERQemu.IO.SerialDevices;
-
 namespace PERQemu
 {
     /// <summary>
@@ -56,6 +54,7 @@ namespace PERQemu
                 return;
             }
 
+            Console.WriteLine("Power on requested.");
             PERQemu.Controller.PowerOn();
         }
 
@@ -68,6 +67,7 @@ namespace PERQemu
                 return;
             }
 
+            Console.WriteLine("Power off requested.");
             PERQemu.Controller.TransitionTo(RunState.Off);
         }
 
@@ -85,7 +85,7 @@ namespace PERQemu
             // Implicitly power on (shortcut) if not already done
             if (PERQemu.Controller.State == RunState.Unavailable)
             {
-                PERQemu.Controller.PowerOn();
+                PowerOn();
             }
 
             Start();

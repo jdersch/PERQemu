@@ -322,5 +322,19 @@ May, 2022:
     a specific microinstruction is executed.  The issue with Accent not booting
     on CIO will likely be headslappingly obvious once it's found...
 
+    3. Stumped.  Either Accent is relying on some correct, expected hardware
+    behavior that we don't properly emulate, or it's relying on a quirk or bug
+    that ISN'T there because we are emulating the hardware as documented.  POS
+    G.7 runs beautifully, so the boot ROM, Vfy/SysB microcode, and the new Z80
+    ROM and subsystem is all working well enough to run the native OS correctly.
+    So that points to a bug in the Accent microcode?  At startup it appears that
+    the kernel initializes, jumps to the Pascal interpreter, starts executing
+    QCodes then ends up looping in the microscheduler -- is it failing to swap
+    in a code segment (hard disk or Z80 issue?) or is there a more subtle glitch
+    that is special to Accent and not POS?  MulDiv?  Video interrupt behavior?
+    (Anyone suggesting Mercury in retrograde will be slapped about the head and
+    neck.  But right now, actually, that seems as valid a reason as any.  Sigh.)
+    
+
 ---
 Last update: skeezics    Mon May 23 16:53:05 PDT 2022

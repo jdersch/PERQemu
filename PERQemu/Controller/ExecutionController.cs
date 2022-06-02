@@ -103,6 +103,14 @@ namespace PERQemu
         /// </summary>
         public bool Initialize(Configuration conf)
         {
+            // Quick sanity check
+            if (!PERQemu.Config.Current.IsValid)
+            {
+                Console.WriteLine("The system as configured is invalid and cannot start.");
+                Console.WriteLine("Please check the configuration and try again.");
+                return false;
+            }
+
             try
             {
                 _system = new PERQSystem(conf);
@@ -130,16 +138,7 @@ namespace PERQemu
         /// </summary>
         public void PowerOn()
         {
-            Console.WriteLine("Power on requested.");
-
-            if (!PERQemu.Config.Current.IsValid)
-            {
-                Console.WriteLine("The system as configured is invalid and cannot start.");
-                Console.WriteLine("Please check the configuration and try again.");
-                return;
-            }
-
-            // Just always blow it away now.  Bloody hell I have to straighten out this mess
+            // Out with the old
             if (_system != null || PERQemu.Config.Changed)
             {
                 // Out with the old
@@ -165,7 +164,7 @@ namespace PERQemu
                 return;
             }
 
-            // (Re-)Start the machine
+            // Set the initial state
             SetState(RunState.WarmingUp);
         }
 
@@ -223,8 +222,6 @@ namespace PERQemu
         public void PowerOff(bool save = true)
         {
             if (State <= RunState.Off) return;
-
-            Console.WriteLine("Power off requested.");
 
             // Force the machine to pause if in any other state
             Break();

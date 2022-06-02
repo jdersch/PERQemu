@@ -76,6 +76,7 @@ namespace PERQemu
 
             // Since we use reflection to build up our CLI and GUI, let the
             // user know this might take a while.  It's the polite thing to do.
+            Console.Title = "PERQemu";
             Console.WriteLine("Initializing, please wait...");
             Console.Out.Flush();
 

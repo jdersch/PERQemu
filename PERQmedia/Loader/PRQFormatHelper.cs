@@ -191,10 +191,10 @@ namespace PERQmedia
         [Conditional("DEBUG")]
         public void PrintDirectory()
         {
-            Log.Write("Section\tStart\tSize");
+            Log.Detail(Category.MediaLoader, "Section\tStart\tSize");
             for (int i = 0; i < PM_DIR_ENTRIES; i++)
             {
-                Log.Write("  {0}\t{1}\t{2}", i, _directory[i * 2], _directory[i * 2 + 1]);
+                Log.Detail(Category.MediaLoader, "  {0}\t{1}\t{2}", i, _directory[i * 2], _directory[i * 2 + 1]);
             }
         }
 

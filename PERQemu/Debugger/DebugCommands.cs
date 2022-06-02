@@ -516,6 +516,10 @@ namespace PERQemu
             list.Watch(watch, action);
 
             Console.WriteLine($"Breakpoint set for {list.Name} {watch}");
+
+            // For now, breakpoints must be explicitly enabled, because reasons.
+            if (!PERQemu.Sys.Debugger.BreakpointsEnabled)
+                Console.WriteLine("NOTE: breakpoints are not currently enabled.");
         }
 
         [Command("debug clear breakpoint", "Clear a breakpoint")]
@@ -705,7 +709,13 @@ namespace PERQemu
             SetDebugPrefix();
         }
 
-        [Command("debug show breakpoints", "Show the status of defined breakpoints")]
+        [Command("debug show breakpoints", "Show the status of all breakpoints")]
+        public void ShowBreakpoints()
+        {
+            ShowBreakpoints(BreakpointType.All);
+        }
+
+        [Command("debug show breakpoints", "Show the status of breakpoints")]
         public void ShowBreakpoints(BreakpointType type)
         {
             if (!CheckSys()) return;
@@ -829,7 +839,7 @@ namespace PERQemu
 
             try
             {
-                // todo: um, should probably not do this IF THE MACHINE IS RUNNING
+                // todo: whoops, should probably not do this IF THE MACHINE IS RUNNING
                 PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(binfile));
             }
             catch (Exception e)

@@ -91,7 +91,6 @@ namespace PERQemu.Processor
                 {
                     // Processor encountered a breakpoint that requested a
                     // pause in emulation; stop the run loop and bail out
-                    clocks = 0;
                     _stopAsyncThread = true;
                     break;
                 }
@@ -109,7 +108,7 @@ namespace PERQemu.Processor
 
                 clocks--;
             }
-            while (clocks > 0);
+            while (clocks > 0 && !_stopAsyncThread);
         }
 
         /// <summary>

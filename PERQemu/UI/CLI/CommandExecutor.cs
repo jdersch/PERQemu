@@ -87,6 +87,12 @@ namespace PERQemu.UI
 
         public void ExecuteLine(string line)
         {
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#", StringComparison.CurrentCulture))
+            {
+                // Comments start with "#", just ignore them; blank/empty lines too
+                return;
+            }
+
             // todo: add "." for repeat command processing?
             //      keep a register that contains the last repeatable command
             //      things like 'step' or 'inst' repeat with just <CR>, but
@@ -95,10 +101,11 @@ namespace PERQemu.UI
             //      '.cmd' executes cmd and sets the register
             //      commands that don't repeat just clear it quietly
             //      just make "repeatable" an attribute! off by default
+            // todo: add "!" for shell-like history processing?
 
-            // Expressions start with ":"
             if (line.StartsWith(":", StringComparison.CurrentCulture))
             {
+                // Expressions start with ":", but require that Sys is instantiated
                 if (PERQemu.Sys != null)
                 {
                     PERQemu.Sys.Debugger.EvaluateExpression(line.Substring(1));
@@ -107,10 +114,6 @@ namespace PERQemu.UI
                 {
                     Console.WriteLine("No PERQ defined; can't evaluate variable expression.");
                 }
-            }
-            else if (line.StartsWith("#", StringComparison.CurrentCulture))
-            {
-                // Comments start with "#", just ignore them
             }
             else if (line.StartsWith("@", StringComparison.CurrentCulture))
             {
@@ -126,7 +129,11 @@ namespace PERQemu.UI
 
                 if (command == null)
                 {
+#if DEBUG
+                    Console.WriteLine($"Invalid command: '{line}'");
+#else
                     Console.WriteLine("Invalid command.");
+#endif
                 }
                 else
                 {
@@ -135,7 +142,13 @@ namespace PERQemu.UI
             }
         }
 
-
+        /// <summary>
+        /// Pretty print the list of commands for a given starting point (key)
+        /// in the command tree.  In debug mode, print the arg types too (more
+        /// informative but less aesthetically pleasing).  Could do more here
+        /// to coalesce duplicate entries, or introduce a "pager" for long lists
+        /// and OMG I've lost my mind
+        /// </summary>
         public void ShowCommands(string key)
         {
             if (_commandsAtNode.ContainsKey(key))
