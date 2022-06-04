@@ -61,11 +61,6 @@ namespace PERQemu.Processor
                                      UCode, X, Y, A, B, W, H, ALU, F, SF, Z, CND, JMP);
             }
 
-            public static int ZOpFill(int z)
-            {
-                return (z & 0x3) | ((z & 0xc0) << 4);
-            }
-
             /// <summary>
             /// Compute static data associated with this opcode that doesn't need to
             /// be computed on every execution.
@@ -82,41 +77,58 @@ namespace PERQemu.Processor
                 IsIOInput = ((Z & 0x80) == 0);                  // MSB is the R/W flag
                 IOPort = (byte)((Z & 0x80) | (NotZ & 0x7f));    // Low 7 bits (inverted!) are the port address
 
-                // Base of dispatch address
-                VectorDispatchAddress = (ushort)(ZOpFill(NotZ) | ((NotZ & 0x3c) << 4));
+                // ...and special hardware jumps!  Here we copy the Z bits into a
+                // template for Dispatch, Vector or NextInst jumps, leaving a hole
+                // in the middle where the appropriate shifter, interrupt vector
+                // or opcode bits can be or'ed in at runtime!
+                ZFillAddress = (ushort)(((NotZ & 0xfc) << 4) | (NotZ & 0x3));
+                //Console.Write($"Cached @ {PC:x4}:  ZFill={ZFillAddress:x4}, SF={SF:x}, ");
 
-                // Next address
+                // Calculate next address:  Provide all 14 bits, since the hardware
+                // quietly provides the upper two-bit "bank register" on most jumps;
+                // on a 4K CPU the top two bits are ignored regardless of type.
+                var bank = (PC & 0x3000);
+
                 switch (F)
                 {
                     case 0:     // Short jump
-                        NextAddress = (ushort)((PC & 0xf00) | NotZ);
+                        NextAddress = (ushort)(bank | ((PC & 0xf00) | NotZ));
+                        //Console.Write("short (F=0), ");
                         break;
 
-                    case 1:     // Short jump -- or Leap jump on 16K
-                        NextAddress = (ushort)((PC & 0xf00) | NotZ);
+                    case 1:     // Short or Leap jump
+                        NextAddress = (ushort)(bank | ((PC & 0xf00) | NotZ));
 
                         if (SF == 0x7)
                         {
                             if (!Is4K)
                             {
-                                NextAddress = (ushort)((NotZ | ((0xff & (~Y)) << 8)) & _wcsMask);
+                                // Leap (14 bits) on 16K
+                                NextAddress = (ushort)(((Y << 8) | NotZ) & _wcsMask);
+                                //Console.Write("leap, ");
                             }
                             else
                             {
                                 Log.Warn(Category.Instruction,
                                         "Leap not implemented on the 4K CPU.  Jump to {0:x4} instead, not {1:x4}",
-                                         NextAddress, (NotZ | ((0xff & (~Y)) << 8)) & _wcsMask);
+                                         NextAddress, (((Y << 8) | NotZ) & _wcsMask));
+                                //Console.Write("short (F=1), ");
                             }
                         }
                         break;
 
                     case 3:     // Long jump
-                        NextAddress = (ushort)(0xfff & (~(Z | (SF << 8))));
+                        NextAddress = (ushort)(bank | (~((SF << 8) | Z) & 0xfff));
+                        //Console.Write("long, ");
                         break;
 
                     default:
+                        //Console.Write("unset (F=2), ");
                         break;
                 }
+
+                //Console.WriteLine($"NIA={NextAddress:x4}");
+                //if (NextAddress > 0xfff) Console.WriteLine("--> Out of bank jump!!");
 
                 IsSpecialFunction = (F == 0 || F == 2);
 
@@ -173,7 +185,7 @@ namespace PERQemu.Processor
             public int BMuxInput;
             public int LongConstant;
             public ushort NextAddress;
-            public ushort VectorDispatchAddress;
+            public ushort ZFillAddress;
             public byte IOPort;
             public bool WantMDI;
             public bool IsIOInput;

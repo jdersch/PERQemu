@@ -51,7 +51,7 @@ namespace PERQemu.Processor
             {
                 _s.Value = 0;
                 _pc.Value = 0;
-                _victim.Value = 0xffff;           // all 1s means unset
+                _victim.Value = 0;
                 _extendedOp = false;
                 _callStack.Reset();
 
@@ -204,9 +204,24 @@ namespace PERQemu.Processor
                 // Dispatch jump action
                 switch (uOp.JMP)
                 {
+                    //
+                    // Jumps that can modify the 16K CPU extended stack (14 bits):
+                    //
+
                     case JumpOperation.JumpZero:
                         _pc.Value = 0;
                         _callStack.Reset();
+                        break;
+
+                    case JumpOperation.Goto:
+                        if (conditionSatisfied)
+                        {
+                            _pc.Value = uOp.NextAddress;
+                        }
+                        else
+                        {
+                            _pc.Lo++;
+                        }
                         break;
 
                     case JumpOperation.Call:
@@ -221,46 +236,74 @@ namespace PERQemu.Processor
                         }
                         break;
 
-                    case JumpOperation.NextInstReviveVictim:
-                        if (uOp.H == 0)
-                        {
-                            DoNextInst(uOp);
-                        }
-                        else
-                        {
-                            // Revive the victim; all 1s means unset victim latch
-                            if (Victim == _wcsMask)
-                            {
-                                throw new InvalidOperationException("Revive from unset victim latch!");
-                            }
+                    case JumpOperation.CallS:
+                        _callStack.PushFull((ushort)(_pc.Value + 1));
 
-                            Log.Debug(Category.Sequencer, "PC restored from victim ({0:x4})", Victim);
-
-                            _pc.Value = Victim;         // Restore
-                            Victim = (ushort)_wcsMask;  // Clear the latch
-                        }
-                        break;
-
-                    case JumpOperation.Goto:
                         if (conditionSatisfied)
                         {
                             _pc.Value = uOp.NextAddress;
                         }
                         else
                         {
+                            _pc.Lo = _s.Lo;
+                        }
+                        break;
+
+                    case JumpOperation.GotoS:
+                        if (conditionSatisfied)
+                        {
+                            _pc.Value = uOp.NextAddress;
+                        }
+                        else
+                        {
+                            _pc.Lo = _s.Lo;
+                        }
+                        break;
+
+                    case JumpOperation.Return:
+                        if (conditionSatisfied)
+                        {
+                            _pc.Value = _callStack.PopFull();   // 14 bits (16K)
+                        }
+                        else
+                        {
                             _pc.Lo++;
                         }
                         break;
 
-                    case JumpOperation.PushLoad:
-                        Log.Debug(Category.Sequencer, "PushLoad: cond={0} S={1:x4}",
-                                  conditionSatisfied, uOp.NextAddress);
+                    case JumpOperation.JumpPop:
+                        if (conditionSatisfied)
+                        {
+                            if (uOp.H == 0)
+                            {
+                                _callStack.PopLo();             // JumpPop
+                                _pc.Lo = uOp.NextAddress;
+                            }
+                            else
+                            {
+                                _callStack.PopFull();           // LeapPop (16K)
+                                _pc.Value = uOp.NextAddress;
+                            }
+                        }
+                        else
+                        {
+                            _pc.Lo++;
+                        }
+                        break;
 
+                    //
+                    // Jumps that operate on 12-bit addresses only:
+                    //
+
+                    case JumpOperation.PushLoad:
                         if (conditionSatisfied)
                         {
                             _s.Value = uOp.NextAddress;
                             _pc.Lo++;
                             _callStack.PushLo(_pc.Lo);
+
+                            Log.Debug(Category.Sequencer, "PushLoad: cond={0} S={1:x4}",
+                                      conditionSatisfied, _s.Value);
                         }
                         else
                         {
@@ -269,45 +312,23 @@ namespace PERQemu.Processor
                         }
                         break;
 
-                    case JumpOperation.CallS:
-                        _callStack.PushFull((ushort)(_pc.Value + 1));
-                        _pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
-                        break;
+                    case JumpOperation.LoadS:
+                        _s.Value = uOp.NextAddress;
+                        _pc.Lo++;
 
-                    case JumpOperation.VectorDispatch:
-                        if (conditionSatisfied)
-                        {
-                            if (uOp.H == 0)
-                            {
-                                // Vector
-                                _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (_cpu._interrupt.Priority << 2));
-                            }
-                            else
-                            {
-                                // Dispatch
-                                _cpu._shifter.Shift(_cpu._alu.OldR.Lo);
-                                _pc.Lo = (ushort)((uOp.VectorDispatchAddress & 0xffc3) | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
-                            }
-                            Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Lo);
-                        }
-                        else
-                        {
-                            _pc.Lo++;
-                        }
-                        break;
-
-                    case JumpOperation.GotoS:
-                        _pc.Value = conditionSatisfied ? uOp.NextAddress : _s.Value;
+                        Log.Debug(Category.Sequencer, "Load S={0:x4}", _s.Value);
                         break;
 
                     case JumpOperation.RepeatLoop:
                         if (_s.Lo != 0)
                         {
+                            Log.Detail(Category.Sequencer, "RepeatLoop S={0:x4}", _s.Lo);
                             _pc.Lo = _callStack.TopLo();
                             _s.Lo--;
                         }
                         else
                         {
+                            Log.Debug(Category.Sequencer, "RepeatLoop done");
                             _pc.Lo++;
                             _callStack.PopLo();
                         }
@@ -325,43 +346,6 @@ namespace PERQemu.Processor
                             Log.Debug(Category.Sequencer, "Repeat done");
                             _pc.Lo++;
                         }
-                        break;
-
-                    case JumpOperation.Return:
-                        if (conditionSatisfied)
-                        {
-                            _pc.Value = _callStack.PopFull();   // 16K only?
-                        }
-                        else
-                        {
-                            _pc.Lo++;
-                        }
-                        break;
-
-                    case JumpOperation.JumpPop:
-                        if (conditionSatisfied)
-                        {
-                            if (uOp.H != 0)
-                            {
-                                _callStack.PopFull();           // LeapPop (16K only?)
-                            }
-                            else
-                            {
-                                _callStack.PopLo();
-                            }
-                            _pc.Value = uOp.NextAddress;
-                        }
-                        else
-                        {
-                            _pc.Lo++;
-                        }
-                        break;
-
-                    case JumpOperation.LoadS:
-                        _s.Value = uOp.NextAddress;
-                        _pc.Lo++;
-
-                        Log.Debug(Category.Sequencer, "Load S={0:x4}", _s.Value);
                         break;
 
                     case JumpOperation.Loop:
@@ -404,9 +388,55 @@ namespace PERQemu.Processor
                             }
                             else
                             {
-                                _pc.Value = uOp.NextAddress;
+                                _pc.Lo = uOp.NextAddress;
                                 _callStack.PopLo();
                             }
+                        }
+                        break;
+
+                    //
+                    // Special jumps
+                    //
+
+                    case JumpOperation.NextInstReviveVictim:
+                        if (uOp.H == 0)
+                        {
+                            DoNextInst(uOp);
+                        }
+                        else
+                        {
+                            // Is the victim latch set?
+                            if (Victim == 0)
+                            {
+                                throw new InvalidOperationException("Revive from unset victim latch!");
+                            }
+
+                            Log.Debug(Category.Sequencer, "PC restored from victim ({0:x4})", Victim);
+
+                            _pc.Value = Victim;     // Revive
+                            Victim = 0;             // Clear the latch
+                        }
+                        break;
+
+                    case JumpOperation.VectorDispatch:
+                        if (conditionSatisfied)
+                        {
+                            if (uOp.H == 0)
+                            {
+                                // Vector
+                                _pc.Lo = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0xf) << 2));
+                            }
+                            else
+                            {
+                                // Dispatch
+                                _cpu._shifter.Shift(_cpu._alu.OldR.Lo);
+                                _pc.Lo = (ushort)(uOp.ZFillAddress | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
+                            }
+                            Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Lo);
+                        }
+                        else
+                        {
+                            _pc.Lo++;
                         }
                         break;
 
@@ -446,7 +476,12 @@ namespace PERQemu.Processor
                 Log.Debug(Category.QCode, "NextInst is {0:x2}{1}{2} at BPC {3}", next,
                           (_extendedOp ? "+" : "-"), q.Mnemonic, _cpu.BPC);   // Subtle :-)
 
-                _pc.Value = (ushort)(Instruction.ZOpFill(uOp.NotZ) | ((~next & 0xff) << 2));
+                // NextInst address generation requires a little extra care: use
+                // the ZFill'ed address but mask off the four extra bits that are
+                // to be filled in by the Op byte.  And we have to preserve the
+                // "bank" (high 2 bits on 16K) bits so high-bank two byte ops work!
+                _pc.Lo = (ushort)((uOp.ZFillAddress & 0xc03) | ((~next & 0xff) << 2));
+
                 _cpu._lastOpcode = next;
                 _cpu._incrementBPC = true;
 

@@ -35,8 +35,6 @@ namespace PERQemu.Debugger
         /// </summary>
         public static string Disassemble(ushort address, CPU.Instruction op)
         {
-            _pc = address;
-
             StringBuilder sb = new StringBuilder();
 
             // Append the address and raw opcode
@@ -522,16 +520,12 @@ namespace PERQemu.Debugger
                     if (uOp.H == 0)
                     {
                         // Vector
-                        int next = ZOpFill(~uOp.Z);
-                        next = next | ((~uOp.Z & 0x3c) << 4);
-                        type = $"Vector {next:x4}";
+                        type = $"Vector {uOp.ZFillAddress:x4}";
                     }
                     else
                     {
                         // Dispatch
-                        int next = ZOpFill(~uOp.Z);
-                        next = next | ((~uOp.Z & 0x3c) << 4);
-                        type = $"Dispatch {next:x4}";
+                        type = $"Dispatch {uOp.ZFillAddress:x4}";
                     }
                     break;
 
@@ -581,7 +575,7 @@ namespace PERQemu.Debugger
                 case JumpOperation.NextInstReviveVictim:
                     if (uOp.H == 0)
                     {
-                        type = string.Format("NextInst {0:x4}", DisassembleNextInst(uOp));
+                        type = string.Format("NextInst {0:x4}", (uOp.ZFillAddress & 0x3c03));
                     }
                     else
                     {
@@ -608,20 +602,6 @@ namespace PERQemu.Debugger
                     return "<ERROR: F does not specify a jump>";
             }
         }
-
-
-        private static int ZOpFill(int z)
-        {
-            return (z & 0x3) | ((z & 0xc0) << 4);
-        }
-
-
-        private static int DisassembleNextInst(CPU.Instruction uOp)
-        {
-            return (ushort)ZOpFill(~uOp.Z);
-        }
-
-        private static ushort _pc;
     }
 }
 

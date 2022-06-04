@@ -334,7 +334,26 @@ May, 2022:
     that is special to Accent and not POS?  MulDiv?  Video interrupt behavior?
     (Anyone suggesting Mercury in retrograde will be slapped about the head and
     neck.  But right now, actually, that seems as valid a reason as any.  Sigh.)
-    
+
+
+June, 2022: 
+
+    1. AHA!  Found the needle, now just have to extricate myself from this huge
+    haystack... full of needles, red herring, blind alleys, McGuffins, wild geese
+    and all manner of cliches.  Ugh.  [TIME PASSES]  So Accent now boots and
+    two-byte extended ops work correctly now; fixed a very obscure bug in micro-
+    address generation that's been there forever.  Now, however, we're back to
+    Z80 initialization issues; Accent completes its memory sizing loop and sets
+    up a bunch of memory management structures, then hangs waiting for the Z80
+    to initialize.  Problem with self-modifying code?  SIO/IRQ issue causing the
+    Z80 startup to loop/fail?  Yay.  Another fun one.
+
+    In other news; PNX 2 still can't poke at the hard disk, so clearly the CIO
+    Z80 still needs some lovin'.  But POS G.7 runs fine.  And I've patched the
+    boot ROM file to correct what I consider a microcode bug that causes CIO
+    boots to hang at DDS 010.  The "debug clear interrupt z80datain" workaround
+    is no longer necessary.
+
 
 ---
-Last update: skeezics    Mon May 23 16:53:05 PDT 2022
+Last update: skeezics    Fri Jun  3 20:25:45 PDT 2022

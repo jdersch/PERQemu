@@ -802,6 +802,71 @@ namespace PERQemu
             return action;
         }
 
+#if DEBUG
+        [Command("debug accent boot")]
+        private void DebugAccent()
+        {
+            if (!CheckSys()) return;
+
+            PERQemu.Sys.DDSChanged += OnDDSChange;
+            Console.WriteLine("Accent boot debugging hook registered.");
+        }
+
+        private void OnDDSChange(MachineStateChangeEventArgs a)
+        {
+            var dds = (int)a.Args[0];
+
+            // When DDS hits 198 start logging a ton of crap
+            if (dds == 198)
+            {
+                PERQemu.Controller.Break();
+                Log.Write("\n-- Setting up for Accent boot logging --\n");
+
+                SetConsoleSeverity(Severity.Info);
+                SetLogging(Category.Instruction);
+                SetLogging(Category.Interrupt);
+                SetLogging(Category.Registers);
+                SetLogging(Category.Sequencer);
+                SetLogging(Category.OpFile);
+                SetLogging(Category.EStack);
+                SetLogging(Category.QCode);
+                SetLogging(Category.DDS);
+
+                SetFileSeverity(Severity.Debug);
+                EnableFileLogging();
+
+                // PERQemu.Controller.TransitionTo(RunState.RunInst);
+                return;
+            }
+
+            // When it gets to 201 turn it all back off
+            if (dds == 201)
+            {
+                PERQemu.Controller.Break();
+                Log.Write("\n-- Stimpy!  We made it! --\n");
+
+                SetConsoleSeverity(Severity.Normal);
+                ClearLogging(Category.Instruction);
+                ClearLogging(Category.Interrupt);
+                ClearLogging(Category.Registers);
+                ClearLogging(Category.Sequencer);
+                ClearLogging(Category.OpFile);
+                ClearLogging(Category.EStack);
+                ClearLogging(Category.QCode);
+                ClearLogging(Category.DDS);
+
+                SetFileSeverity(Severity.Normal);
+                DisableFileLogging();
+
+                // Unregister from further dds updates
+                PERQemu.Sys.DDSChanged -= OnDDSChange;
+
+                // PERQemu.Controller.TransitionTo(RunState.Running);
+            }
+        }
+
+#endif
+
         //
         // Breakpoint handlers
         //

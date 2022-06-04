@@ -66,14 +66,14 @@ namespace PERQemu.Processor
 
         public ushort Hi
         {
-            get { return _hi; }     // NB: high half is returned right justified
+            get { return (ushort)(_hi << _loBits); }
             set { _hi = (ushort)((value >> _loBits) & _hiMask); }
         }
 
         public override string ToString()
         {
 #if DEBUG
-            return $"[ExtendedRegister: Value={Value}, Lo={Lo}, Hi={Hi}]";
+            return $"[ExtendedRegister: Value={Value}, Lo={_lo}, Hi={_hi}]";
 #else
             return Value.ToString();
 #endif

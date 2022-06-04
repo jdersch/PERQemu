@@ -500,8 +500,8 @@ namespace PERQemu.Processor
                 case AField.NextOp:
                     if (OpFileEmpty)
                     {
-                        // Only latch if Victim is empty (all ones indicates an unset Victim)
-                        if (_usequencer.Victim == _wcsMask)
+                        // Only latch if Victim is empty
+                        if (_usequencer.Victim == 0)
                         {
                             _usequencer.Victim = _usequencer.PC;
 
@@ -516,21 +516,20 @@ namespace PERQemu.Processor
                             // (but ONLY if we haven't overflowed BPC, or it'll be wrong!)
                             _lastOpcode = (ushort)((_lastOpcode << 8) | _opFile[BPC]);
                             _usequencer.ExtendedOp = false;
-
-                            Log.Debug(Category.QCode, "NextOp extended opcode now {0:x4}", _lastOpcode);
+#if DEBUG
+                            // This is a fairly expensive log, so only call it if we have to
+                            if (Log.Categories.HasFlag(Category.QCode))
+                            { 
+                                var q = QCodeHelper.GetExtendedOpCode(_lastOpcode);
+                                Log.Debug(Category.QCode, "NextOp extended opcode is {0:x4}-{1} at BPC {2}",
+                                          _lastOpcode, q.Mnemonic, BPC);
+                            }
+#endif
                         }
                     }
 
                     // Note: There are two subtle hazards here, but this is how the
-                    // hardware does it.  If BPC has overflowed the hardware returns
-                    // all ones to force a jump to Refill; because we initialize the
-                    // op bytes to 0xff any execution of NextOp with BPC<3> set achieves
-                    // the same result (cheeky!) without an explicit assignment, saving
-                    // precious picoseconds.  The counter also increments even if BPC
-                    // has already overflowed!  So if you force enough NextOps and hack
-                    // a Refill routine that does NOT reset BPC, it will eventually
-                    // loop back to zero and the processor will execute whatever was
-                    // in the op file when the overflow occurred.
+                    // hardware does it.
                     amux = _opFile[BPC];
                     _incrementBPC = true;           // Increment BPC at start of next cycle
 
@@ -810,7 +809,7 @@ namespace PERQemu.Processor
                                     Log.Debug(Category.Sequencer, "Read from Victim latch {0:x4}", _usequencer.Victim);
 
                                     // ReadVictim clears the latch, does not set PC
-                                    _usequencer.Victim = (ushort)_wcsMask;
+                                    _usequencer.Victim = 0;
                                     break;
 
                                 case 0x1:   // Multiply / DivideStep
@@ -901,7 +900,7 @@ namespace PERQemu.Processor
                                     // value is never normally used for this type of instruction.  The
                                     // shifter provides 12- or 14-bits of address depending on CPU type.
                                     //
-                                    uOp.NextAddress = _shifter.ShifterOutput;
+                                    uOp.NextAddress = (ushort)(_shifter.ShifterOutput & _wcsMask);
                                     break;
 
                                 case 0x7:   // Leap address generation
