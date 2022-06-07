@@ -67,6 +67,11 @@ namespace PERQemu.Processor
             /// </summary>
             private void ComputeCachedData()
             {
+                // During address generation provide all 14 bits, since the hardware
+                // quietly provides the upper two-bit "bank register" on most jumps;
+                // on a 4K CPU the top two bits are ignored regardless of type.
+                var bank = (PC & 0x3000);
+
                 // Long constant
                 LongConstant = (Z << 8) | (Y);
 
@@ -81,19 +86,13 @@ namespace PERQemu.Processor
                 // template for Dispatch, Vector or NextInst jumps, leaving a hole
                 // in the middle where the appropriate shifter, interrupt vector
                 // or opcode bits can be or'ed in at runtime!
-                ZFillAddress = (ushort)(((NotZ & 0xfc) << 4) | (NotZ & 0x3));
-                //Console.Write($"Cached @ {PC:x4}:  ZFill={ZFillAddress:x4}, SF={SF:x}, ");
+                ZFillAddress = (ushort)(bank | ((NotZ & 0xfc) << 4) | (NotZ & 0x3));
 
-                // Calculate next address:  Provide all 14 bits, since the hardware
-                // quietly provides the upper two-bit "bank register" on most jumps;
-                // on a 4K CPU the top two bits are ignored regardless of type.
-                var bank = (PC & 0x3000);
-
+                // Calculate next address
                 switch (F)
                 {
                     case 0:     // Short jump
                         NextAddress = (ushort)(bank | ((PC & 0xf00) | NotZ));
-                        //Console.Write("short (F=0), ");
                         break;
 
                     case 1:     // Short or Leap jump
@@ -105,30 +104,23 @@ namespace PERQemu.Processor
                             {
                                 // Leap (14 bits) on 16K
                                 NextAddress = (ushort)(((Y << 8) | NotZ) & _wcsMask);
-                                //Console.Write("leap, ");
                             }
                             else
                             {
                                 Log.Warn(Category.Instruction,
                                         "Leap not implemented on the 4K CPU.  Jump to {0:x4} instead, not {1:x4}",
                                          NextAddress, (((Y << 8) | NotZ) & _wcsMask));
-                                //Console.Write("short (F=1), ");
                             }
                         }
                         break;
 
                     case 3:     // Long jump
-                        NextAddress = (ushort)(bank | (~((SF << 8) | Z) & 0xfff));
-                        //Console.Write("long, ");
+                        NextAddress = (ushort)(bank | ((~SF & 0xf) << 8) | NotZ);
                         break;
 
                     default:
-                        //Console.Write("unset (F=2), ");
                         break;
                 }
-
-                //Console.WriteLine($"NIA={NextAddress:x4}");
-                //if (NextAddress > 0xfff) Console.WriteLine("--> Out of bank jump!!");
 
                 IsSpecialFunction = (F == 0 || F == 2);
 

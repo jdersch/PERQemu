@@ -105,7 +105,6 @@ namespace PERQemu.Processor
                 }
             }
 
-
             /// <summary>
             /// Reads the instruction from the microcode RAM (or ROM, if enabled)
             /// at the given address, clipped to the address range for this CPU.
@@ -120,16 +119,9 @@ namespace PERQemu.Processor
                 {
                     ulong word;
 
-                    if (_romEnabled)
+                    if (_romEnabled && (addr < _romSize))
                     {
-                        if (addr < _romSize)
-                        {
-                            word = _rom[addr];
-                        }
-                        else
-                        {
-                            word = _microcode[addr];
-                        }
+                        word = _rom[addr];
                     }
                     else
                     {

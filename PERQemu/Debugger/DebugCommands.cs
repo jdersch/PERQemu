@@ -489,7 +489,7 @@ namespace PERQemu
 
 #if DEBUG
         //
-        // Breakpoints (not fully implemented)
+        // Breakpoints
         //
         // ARGH!  This would be SO much easier in a GUI!  Sigh.
         //
@@ -546,6 +546,21 @@ namespace PERQemu
             Console.WriteLine($"{type} breakpoint at {watch} cleared.");
         }
 
+        [Command("debug reset breakpoints", "Reset breakpoint counters")]
+        public void ResetBreakpoints(BreakpointType type)
+        {
+            if (!CheckSys()) return;
+
+            if (GetBreakpoints(type).Count > 0)
+            {
+                foreach (var list in GetBreakpoints(type))
+                {
+                    list.ResetCounts();
+                }
+                Console.WriteLine($"{type} breakpoint counters reset.");
+            }
+        }
+
         [Command("debug enable breakpoints", "Enable breakpoints")]
         public void EnableBreakpoints()
         {
@@ -599,16 +614,6 @@ namespace PERQemu
         {
             PERQemu.CLI.ShowCommands("debug edit breakpoint");
         }
-
-        /*
-            edit breakpoint:  enter the subsystem!
-                name [string]           -- name it for re-use!  save in a list!
-                enabled [bool]
-                pause emulation [bool]
-                retriggerable [bool]
-                script [string]
-                reset count
-         */
 
         [Command("debug edit breakpoint enable", "Enable or disable the breakpoint")]
         public void EditEnable(bool enabled)
@@ -817,16 +822,21 @@ namespace PERQemu
             var dds = (int)a.Args[0];
 
             // When DDS hits 198 start logging a ton of crap
-            if (dds == 198)
+            if (dds == 299)
             {
                 PERQemu.Controller.Break();
+
                 Log.Write("\n-- Setting up for Accent boot logging --\n");
+
+                ShowBreakpoints();
+                ResetBreakpoints(BreakpointType.All);
 
                 SetConsoleSeverity(Severity.Info);
                 SetLogging(Category.Instruction);
                 SetLogging(Category.Interrupt);
                 SetLogging(Category.Registers);
                 SetLogging(Category.Sequencer);
+                SetLogging(Category.MulDiv);
                 SetLogging(Category.OpFile);
                 SetLogging(Category.EStack);
                 SetLogging(Category.QCode);
@@ -840,7 +850,7 @@ namespace PERQemu
             }
 
             // When it gets to 201 turn it all back off
-            if (dds == 201)
+            if (dds == 301)
             {
                 PERQemu.Controller.Break();
                 Log.Write("\n-- Stimpy!  We made it! --\n");
@@ -930,7 +940,7 @@ namespace PERQemu
         {
             if (!CheckSys()) return;
 
-            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length - 1);
+            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
 
             if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
             {

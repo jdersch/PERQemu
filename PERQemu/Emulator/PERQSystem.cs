@@ -213,6 +213,7 @@ namespace PERQemu
             switch (_state)
             {
                 case RunState.WarmingUp:
+                    DDSChanged += PressBootKey;
                     _display.Initialize();
                     _inputs.Initialize();
                     break;
@@ -293,6 +294,7 @@ namespace PERQemu
                     break;
 
                 case RunState.ShuttingDown:
+                    DDSChanged -= PressBootKey;
                     _inputs.Shutdown();
                     _display.Shutdown();
                     _state = RunState.Off;
@@ -707,6 +709,10 @@ namespace PERQemu
             {
                 case WhatChanged.DDSChanged:
                     handler = DDSChanged;
+                    break;
+
+                case WhatChanged.Z80RunState:
+                    Log.Write(Category.Emulator, "Z80 power state changed: running={0}", (bool)args[0]);
                     break;
 
                 case WhatChanged.HaltedInLoop:

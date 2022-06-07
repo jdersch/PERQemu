@@ -291,10 +291,6 @@ namespace PERQemu.Processor
                         }
                         break;
 
-                    //
-                    // Jumps that operate on 12-bit addresses only:
-                    //
-
                     case JumpOperation.PushLoad:
                         if (conditionSatisfied)
                         {
@@ -311,6 +307,10 @@ namespace PERQemu.Processor
                             _callStack.PushLo(_pc.Lo);
                         }
                         break;
+
+                    //
+                    // Jumps that operate on 12-bit addresses only:
+                    //
 
                     case JumpOperation.LoadS:
                         _s.Value = uOp.NextAddress;
@@ -424,15 +424,15 @@ namespace PERQemu.Processor
                             if (uOp.H == 0)
                             {
                                 // Vector
-                                _pc.Lo = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0xf) << 2));
+                                _pc.Value = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0xf) << 2));
                             }
                             else
                             {
                                 // Dispatch
                                 _cpu._shifter.Shift(_cpu._alu.OldR.Lo);
-                                _pc.Lo = (ushort)(uOp.ZFillAddress | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
+                                _pc.Value = (ushort)(uOp.ZFillAddress | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
                             }
-                            Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Lo);
+                            Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Value);
                         }
                         else
                         {
@@ -461,17 +461,31 @@ namespace PERQemu.Processor
 
                 if (_extendedOp)
                 {
-                    // Add 2nd byte and look up the extended op
-                    _cpu._lastOpcode = (ushort)((_cpu._lastOpcode << 8) | next);
-
-                    q = QCodeHelper.GetExtendedOpCode(_cpu._lastOpcode);
-                    _extendedOp = false;
+                    // Add 2nd byte and look up the extended op...
+                    if (next != 0xff)
+                    {
+                        _cpu._lastOpcode = (ushort)((_cpu._lastOpcode << 8) | next);
+                        q = QCodeHelper.GetExtendedOpCode(_cpu._lastOpcode);
+                        _extendedOp = false;
+                    }
+                    else
+                    {
+                        // ...unless it's a REFILL, in which case we preserve
+                        // _lastOpcode and do NOT reset _extendedOp and instead
+                        // wait for the _next_ byte.  Note that this doesn't
+                        // actually affect execution, but it reduces confusion
+                        // when debugging... Oh, the things we do for love.
+                        q = QCodeHelper.GetExtendedOpCode((ushort)((_cpu._lastOpcode << 8) | next));
+                    }
                 }
                 else
                 {
+                    _cpu._lastOpcode = next;
                     q = QCodeHelper.GetQCodeFromOpCode(next);
                     _extendedOp = q.IsPrefix;
                 }
+
+                _cpu._incrementBPC = true;
 
                 Log.Debug(Category.QCode, "NextInst is {0:x2}{1}{2} at BPC {3}", next,
                           (_extendedOp ? "+" : "-"), q.Mnemonic, _cpu.BPC);   // Subtle :-)
@@ -480,10 +494,7 @@ namespace PERQemu.Processor
                 // the ZFill'ed address but mask off the four extra bits that are
                 // to be filled in by the Op byte.  And we have to preserve the
                 // "bank" (high 2 bits on 16K) bits so high-bank two byte ops work!
-                _pc.Lo = (ushort)((uOp.ZFillAddress & 0xc03) | ((~next & 0xff) << 2));
-
-                _cpu._lastOpcode = next;
-                _cpu._incrementBPC = true;
+                _pc.Value = (ushort)((uOp.ZFillAddress & 0x3c03) | ((~next & 0xff) << 2));
 
                 Log.Debug(Category.Sequencer, "NextInst Branch to {0:x4} ", _pc.Value);
             }

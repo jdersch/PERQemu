@@ -19,6 +19,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace PERQemu.Debugger
 {
@@ -77,6 +78,7 @@ namespace PERQemu.Debugger
 
         public static QCodeSets Loaded => _loaded;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static QCode GetQCodeFromOpCode(byte opCode)
         {
             QCode q = _qCodesOrdered[opCode];
@@ -89,6 +91,7 @@ namespace PERQemu.Debugger
             return q;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static QCode GetExtendedOpCode(ushort extOpCode)
         {
             if (_qCodesExtended.ContainsKey(extOpCode))

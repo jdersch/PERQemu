@@ -493,7 +493,7 @@ namespace PERQemu.Debugger
         {
             string type = "<invalid>";
 
-            // Do action if condition is satisfied.
+            // Do action if condition is satisfied
             switch (uOp.JMP)
             {
                 case JumpOperation.JumpZero:

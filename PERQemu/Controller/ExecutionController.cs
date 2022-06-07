@@ -200,12 +200,6 @@ namespace PERQemu
                 // Break out of the Running state
                 SetState(RunState.Paused);
             }
-
-#if DEBUG
-            HighResolutionTimer.DumpTimers();
-            PERQemu.Sys.Scheduler.DumpEvents("CPU");
-            PERQemu.Sys.IOB.Z80System.Scheduler.DumpEvents("Z80");
-#endif
         }
 
         // sigh.

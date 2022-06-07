@@ -58,6 +58,7 @@ namespace PERQemu
         Nothing = 0,
         DDSChanged,         // For UI update, boot key
         HaltedInLoop,       // Microcode halted in loop
+        Z80RunState,        // Z80 turned on or off
         HardDiskActivity,   // For blinkenlights
         FloppyActivity,     // Sure, why not
         PowerDown,          // PERQ 1 software power off

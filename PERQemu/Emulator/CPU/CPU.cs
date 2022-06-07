@@ -900,7 +900,7 @@ namespace PERQemu.Processor
                                     // value is never normally used for this type of instruction.  The
                                     // shifter provides 12- or 14-bits of address depending on CPU type.
                                     //
-                                    uOp.NextAddress = (ushort)(_shifter.ShifterOutput & _wcsMask);
+                                    uOp.NextAddress = _shifter.ShifterOutput;
                                     break;
 
                                 case 0x7:   // Leap address generation

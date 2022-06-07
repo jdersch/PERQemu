@@ -209,8 +209,8 @@ namespace PERQemu.IO.Z80
         /// until it catches up/exceeds the main CPU, then pauses/no-ops until
         /// it falls behind again.  In this way the Z80 always stays within a
         /// few microseconds (ahead or behind) and the crude/chunky "heartbeat"
-        /// timer is eliminated.  This should better regulate the exchange of
-        /// data through the FIFOs and resolve some annoying timing difficulties.
+        /// timer is eliminated.  This helps regulate the exchange of data
+        /// through the FIFOs and resolves some annoying timing difficulties.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Run()
@@ -432,6 +432,8 @@ namespace PERQemu.IO.Z80
         /// </summary>
         public void WriteStatus(int status)
         {
+            bool prevState = _running;
+
             if (status == 0x80 && _running)
             {
                 Log.Debug(Category.Z80, "Shut down by write to Status register");
@@ -441,6 +443,11 @@ namespace PERQemu.IO.Z80
             {
                 Log.Debug(Category.Z80, "Started by write to Status register");
                 Reset(true);
+            }
+
+            if (_running != prevState)
+            {
+                _system.MachineStateChange(WhatChanged.Z80RunState, _running);
             }
         }
 

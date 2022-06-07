@@ -36,8 +36,9 @@ namespace PERQemu
                 return;
             }
 
-            Console.WriteLine("Current configuration is " + PERQemu.Sys.Config.Name);
-            Console.WriteLine("Current run state is " + PERQemu.Sys.State);
+            Console.WriteLine($"Current configuration is {PERQemu.Sys.Config.Name}");
+            Console.WriteLine($"Current run state is {PERQemu.Sys.State}");
+            Console.WriteLine("The Z80 {0} running", PERQemu.Sys.IOB.Z80System.IsRunning ? "is" : "is not");
 
             // DEBUG
             PERQemu.Sys.Display.Status();

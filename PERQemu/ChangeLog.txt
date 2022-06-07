@@ -354,6 +354,19 @@ June, 2022:
     boots to hang at DDS 010.  The "debug clear interrupt z80datain" workaround
     is no longer necessary.
 
+    2. Awwww, man, I am >this< close... there is clearly something extremely
+    specific to the CIO and/or 16K CPU that Accent S5/S6 relies on behaving a
+    little bit differently than POS G does, and it's driving me nuts.  With 256K
+    of memory configured, S6 seems to successfully start up the Z80 and even
+    appears to be running a few RasterOps (so, starting to clear the screen and
+    paint characters) but it never properly kicks off the video display list to
+    make it visible.  With 512K-2MB of memory, it loops forever running the
+    initialization routines and never gets to the Z80 startup.  Though I have
+    verified that we are able to jump into high banks to run extended two-byte
+    opcodes and properly return to bank 0, I'm guessing there's still some tiny
+    little glitch in the sequencer (best guess) or extended call stack (two bit
+    kluge) that might explain the behavior... The bleary-eyed search continues.
+
 
 ---
-Last update: skeezics    Fri Jun  3 20:25:45 PDT 2022
+Last update: skeezics    Tue Jun  7 02:24:29 PDT 2022

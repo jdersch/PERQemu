@@ -206,6 +206,14 @@ namespace PERQemu.Debugger
             }
         }
 
+        public void ResetCounts()
+        {
+            foreach (var key in _list.Keys)
+            {
+                _list[key].Count = 0;
+            }
+        }
+
         private BreakpointType _type;
         private string _name;
         private int _limit;
