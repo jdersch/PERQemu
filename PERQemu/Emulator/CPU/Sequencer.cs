@@ -224,6 +224,17 @@ namespace PERQemu.Processor
                         }
                         break;
 
+                    case JumpOperation.GotoS:
+                        if (conditionSatisfied)
+                        {
+                            _pc.Value = uOp.NextAddress;
+                        }
+                        else
+                        {
+                            _pc.Lo = _s.Lo;
+                        }
+                        break;
+
                     case JumpOperation.Call:
                         if (conditionSatisfied)
                         {
@@ -249,21 +260,10 @@ namespace PERQemu.Processor
                         }
                         break;
 
-                    case JumpOperation.GotoS:
-                        if (conditionSatisfied)
-                        {
-                            _pc.Value = uOp.NextAddress;
-                        }
-                        else
-                        {
-                            _pc.Lo = _s.Lo;
-                        }
-                        break;
-
                     case JumpOperation.Return:
                         if (conditionSatisfied)
                         {
-                            _pc.Value = _callStack.PopFull();   // 14 bits (16K)
+                            _pc.Value = _callStack.PopFull();
                         }
                         else
                         {
@@ -292,32 +292,26 @@ namespace PERQemu.Processor
                         break;
 
                     case JumpOperation.PushLoad:
+                        _pc.Lo++;
+                        _callStack.PushLo(_pc.Lo);
+
                         if (conditionSatisfied)
                         {
                             _s.Value = uOp.NextAddress;
-                            _pc.Lo++;
-                            _callStack.PushLo(_pc.Lo);
+                            Log.Debug(Category.Sequencer, "PushLoad: S={0:x4}", _s.Value);
+                        }
+                        break;
 
-                            Log.Debug(Category.Sequencer, "PushLoad: cond={0} S={1:x4}",
-                                      conditionSatisfied, _s.Value);
-                        }
-                        else
-                        {
-                            _pc.Lo++;
-                            _callStack.PushLo(_pc.Lo);
-                        }
+                    case JumpOperation.LoadS:
+                        _pc.Lo++;
+                        _s.Value = uOp.NextAddress;
+
+                        Log.Debug(Category.Sequencer, "Load S={0:x4}", _s.Value);
                         break;
 
                     //
                     // Jumps that operate on 12-bit addresses only:
                     //
-
-                    case JumpOperation.LoadS:
-                        _s.Value = uOp.NextAddress;
-                        _pc.Lo++;
-
-                        Log.Debug(Category.Sequencer, "Load S={0:x4}", _s.Value);
-                        break;
 
                     case JumpOperation.RepeatLoop:
                         if (_s.Lo != 0)
@@ -424,15 +418,16 @@ namespace PERQemu.Processor
                             if (uOp.H == 0)
                             {
                                 // Vector
-                                _pc.Value = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0xf) << 2));
+                                _pc.Value = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0x7) << 2));
+                                Log.Debug(Category.Sequencer, "Vector to {0:x4} (priority={1})", _pc.Value, _cpu._interrupt.Priority);
                             }
                             else
                             {
                                 // Dispatch
                                 _cpu._shifter.Shift(_cpu._alu.OldR.Lo);
                                 _pc.Value = (ushort)(uOp.ZFillAddress | (((~_cpu._shifter.ShifterOutput) & 0xf) << 2));
+                                Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Value);
                             }
-                            Log.Debug(Category.Sequencer, "Dispatch to {0:x4}", _pc.Value);
                         }
                         else
                         {

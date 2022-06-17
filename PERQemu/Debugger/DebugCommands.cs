@@ -822,7 +822,7 @@ namespace PERQemu
             var dds = (int)a.Args[0];
 
             // When DDS hits 198 start logging a ton of crap
-            if (dds == 299)
+            if (dds == 450)
             {
                 PERQemu.Controller.Break();
 
@@ -832,13 +832,14 @@ namespace PERQemu
                 ResetBreakpoints(BreakpointType.All);
 
                 SetConsoleSeverity(Severity.Info);
-                SetLogging(Category.Instruction);
-                SetLogging(Category.Interrupt);
-                SetLogging(Category.Registers);
+                //SetLogging(Category.Instruction);
+                //SetLogging(Category.Interrupt);
+                //SetLogging(Category.Registers);
                 SetLogging(Category.Sequencer);
+                SetLogging(Category.Display);
                 SetLogging(Category.MulDiv);
                 SetLogging(Category.OpFile);
-                SetLogging(Category.EStack);
+                //SetLogging(Category.EStack);
                 SetLogging(Category.QCode);
                 SetLogging(Category.DDS);
 
@@ -850,7 +851,7 @@ namespace PERQemu
             }
 
             // When it gets to 201 turn it all back off
-            if (dds == 301)
+            if (dds == 451)
             {
                 PERQemu.Controller.Break();
                 Log.Write("\n-- Stimpy!  We made it! --\n");

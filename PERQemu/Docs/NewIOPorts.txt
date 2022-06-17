@@ -31,6 +31,7 @@ Perq-1 IO board (IOB), or "new Z80" (CIO)
 oct     hex     Name            Function                            Source
 100     40      DskStat         (Dstat) disk status register        [oc]ioallsysb, ciodisk
 106     46      CioZ80In        Read Z80 input                      [oc]ioallsysb, [oc]ioz80, iopas.dfs
+300     C0/40   --              Old touchpad interface (unused)     schematics
 301     C1/41   CioZ80Start     (Dseek, dskCntl) Z80 control        [oc]ioallsysb, [oc]ioz80, ciodisk, iopas.dfs
 302     C2/42   DskHead         (Dhead) Shugart head register       [oc]ioallsysb, ciodisk
 307     C7/47   CioZ80Out       Load Z80 output                     [oc]ioallsysb, [oc]ioz80, iopas.dfs
@@ -212,6 +213,20 @@ that exist do not appear to have the 2910-based disk state machine hardware, thi
 speculation, confusion and intrigue.  It's entirely possible that these ports were only used to develop
 and debug the SA4000->DIB (Micropolis/MFM) controller without interfering with the IOB's Shugart ports,
 and were never included on the MLO?
+
+------
+
+PERQ-2 backplane
+
+  Address
+oct     hex     Name            Function                            Source
+70      38      SNByte0         Serial number low                   Frank
+71      39      SNByte1         Serial number high                  Frank
+72      3A      SNByte2         Third term (returns zero)           Frank
+73      3B      SNByte3         Fourth term (returns 134 octal)     Frank
+
+A PAL16L8 responds to IOA 70:77 and encodes the system serial number.  The formula for computing
+the four terms is documented in Kmas.PAL.
 
 ------
 

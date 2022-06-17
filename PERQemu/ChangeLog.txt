@@ -296,8 +296,8 @@ April, 2022:
 
     5. To aid debugging, can now switch Qcode sets in the debugger, and decode/
     display 2-byte opcode sequences.  The older POS/Accent "V4" set is still the
-    default; Accent "V5" codes now available for Accent S5(?) and beyond.  Will
-    add PNX C-codes if/when any kind of source or description of them is found.
+    default; Accent "V5" codes now available for Accent S6 and beyond.  Will add
+    PNX C-codes if/when any kind of source or description of them is found.
 
 
 May, 2022:
@@ -324,16 +324,14 @@ May, 2022:
 
     3. Stumped.  Either Accent is relying on some correct, expected hardware
     behavior that we don't properly emulate, or it's relying on a quirk or bug
-    that ISN'T there because we are emulating the hardware as documented.  POS
-    G.7 runs beautifully, so the boot ROM, Vfy/SysB microcode, and the new Z80
-    ROM and subsystem is all working well enough to run the native OS correctly.
-    So that points to a bug in the Accent microcode?  At startup it appears that
-    the kernel initializes, jumps to the Pascal interpreter, starts executing
-    QCodes then ends up looping in the microscheduler -- is it failing to swap
-    in a code segment (hard disk or Z80 issue?) or is there a more subtle glitch
-    that is special to Accent and not POS?  MulDiv?  Video interrupt behavior?
-    (Anyone suggesting Mercury in retrograde will be slapped about the head and
-    neck.  But right now, actually, that seems as valid a reason as any.  Sigh.)
+    that ISN'T there because we are emulating the hardware as documented.  At
+    startup it appears that the kernel initializes, jumps to the Pascal QCode
+    interpreter, starts executing then ends up looping in the microscheduler --
+    is it failing to swap in a code segment (hard disk or Z80 issue?) or is
+    there a more subtle glitch that is special to Accent and not POS?  MulDiv?
+    Video interrupt behavior?  (Anyone suggesting Mercury in retrograde will be
+    slapped about the head and neck.  But right now, actually, that seems as
+    valid a reason as any.  Sigh.)
 
 
 June, 2022: 
@@ -349,10 +347,9 @@ June, 2022:
     Z80 startup to loop/fail?  Yay.  Another fun one.
 
     In other news; PNX 2 still can't poke at the hard disk, so clearly the CIO
-    Z80 still needs some lovin'.  But POS G.7 runs fine.  And I've patched the
-    boot ROM file to correct what I consider a microcode bug that causes CIO
-    boots to hang at DDS 010.  The "debug clear interrupt z80datain" workaround
-    is no longer necessary.
+    Z80 still needs some lovin'.  I've patched the boot ROM file to correct what
+    I consider a microcode bug that causes CIO boots to hang at DDS 010.  The
+    "debug clear interrupt z80datain" workaround is no longer necessary.
 
     2. Awwww, man, I am >this< close... there is clearly something extremely
     specific to the CIO and/or 16K CPU that Accent S5/S6 relies on behaving a
@@ -367,6 +364,24 @@ June, 2022:
     little glitch in the sequencer (best guess) or extended call stack (two bit
     kluge) that might explain the behavior... The bleary-eyed search continues.
 
+    3. Second Accent boot bug resolved: the multiply/divide unit was giving back
+    bogus results.  Many of the 16K CPU's features weren't incorporated into POS
+    directly, but Accent S6 uses them (since support for the 4K CPU was dropped
+    after S4?).  Now the boot completes and Accent starts the window manager,
+    tracks the mouse, then hard hangs during Process Manager initialization in
+    what's likely an I/O or Z80-related issue (execution continues in a tight
+    loop and Accent hard hangs, but the emulator doesn't crash).  Funny how my
+    idle speculations in previous entries pointed right at the problem but I
+    didn't actually see it until I stepped on it like a cartoon rake to the face.
+
+    4.  Found and corrected an extremely subtle issue with how BPC assignment
+    affects incrementing the counter, but it seems like it doesn't affect normal
+    operations.  That's pretty subtle, I guess.  Also found an actual bug in the
+    PNX 2.0 16K boot floppy version of VFY, which is not easily fixed or worked
+    around.  Still hoping to get a PNX 2 hard disk install using the 4K CPU, but
+    the primary focus is digging through 2.9GB of traces (51M lines in 295 log
+    files) looking for the reason Accent hangs as it brings up Process Manager.
+
 
 ---
-Last update: skeezics    Tue Jun  7 02:24:29 PDT 2022
+Last update: skeezics    Fri Jun 17 08:38:27 PDT 2022

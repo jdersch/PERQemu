@@ -236,6 +236,8 @@ namespace PERQemu.Debugger
                     {
                         case 0x0:       // LongConstant
                             // Taken care of when the BMUX is selected
+                            // (minor aesthetic correction :-)
+                            function = function.TrimEnd(' ', ',');
                             break;
 
                         case 0x1:       // ShiftOnR
@@ -306,6 +308,7 @@ namespace PERQemu.Debugger
                 case 0x1:       // Store / Extended functions
                     switch (uOp.SF)
                     {
+                        // fixme: technically SF 0..7 are 16K only
                         case 0x0:   // (R) := Victim Latch
                             function += "(R) := Victim";
                             break;
@@ -505,7 +508,7 @@ namespace PERQemu.Debugger
                     break;
 
                 case JumpOperation.CallS:
-                    type = "Call S";
+                    type = "CallS";
                     break;
 
                 case JumpOperation.Goto:
@@ -590,13 +593,25 @@ namespace PERQemu.Debugger
 
         private static string CalcAddress(CPU.Instruction uOp)
         {
+            // Always clip, to remove any ambiguity?
+            var addr = uOp.NextAddress & CPU.WCSMask;
+
+            if (addr != uOp.NextAddress)
+                throw new UnimplementedInstructionException($"addr={addr:x4} != uop={uOp.NextAddress:x4}");
+
             switch (uOp.F)
             {
                 case 0:     // Short jump
-                case 1:     // Short (or Leap on 16K)
-                case 3:     // Long Jump
-                    return $"{uOp.NextAddress:x4}";
+                case 3:     // Long jump
+                    return $"{addr:x4}";
 
+                case 1:     // Short (or Leap on 16K)
+                    // of Shift as addr source (16K)
+                    if (!CPU.Is4K && uOp.SF == 6)
+                        return "Shift";
+                    else
+                        return $"{addr:x4}";
+                    
                 default:
                     //throw new UnimplementedInstructionException("Error: F value does not specify a jump");
                     return "<ERROR: F does not specify a jump>";
