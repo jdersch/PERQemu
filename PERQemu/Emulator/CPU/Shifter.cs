@@ -17,6 +17,8 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System.Runtime.CompilerServices;
+
 namespace PERQemu.Processor
 {
     public partial class CPU
@@ -34,8 +36,7 @@ namespace PERQemu.Processor
         /// Implements the PERQ's 32-bit barrel shifter, which can do left and
         /// right shifts, rotates, or bitfield extractions every cycle.  Though
         /// the hardware only has one shared shifter datapath, we cheat a little
-        /// for efficiency and allow the MQ/MulDiv unit to have its own, and the
-        /// RasterOp unit to have one too.
+        /// for efficiency and allow the RasterOp unit to have its own.
         /// </summary>
         public sealed class Shifter
         {
@@ -77,6 +78,7 @@ namespace PERQemu.Processor
             /// <summary>
             /// Applies shifter logic to the given input word.
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Shift(int input)
             {
                 Shift(input, input);
@@ -88,6 +90,7 @@ namespace PERQemu.Processor
             /// specify two separate input words is used by RasterOp's "half word
             /// pipeline."
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Shift(int low, int high)
             {
                 uint d;

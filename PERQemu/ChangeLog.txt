@@ -382,6 +382,15 @@ June, 2022:
     the primary focus is digging through 2.9GB of traces (51M lines in 295 log
     files) looking for the reason Accent hangs as it brings up Process Manager.
 
+    5.  Accent has regressed; the Mul/Div unit fix was just a happy accident
+    that allowed the boot to progress!  Fixing it to produce the correct result
+    has set us back.  Color me confused.  I have tested the landscape display
+    option, however, and the "g7.prqm" disk image now contains an "l" boot to
+    try it out.  Configure a PERQ-1A with landscape and CIO, then assign the
+    "g7" disk and bootchar l (lower case L).  Looks amazing on a Cinema (or
+    1080p) display.  Use the default "a" boot with the portrait.  Accent S6 is
+    "z" boot, or will be once the bug preventing initialization is fixed!
+
 
 ---
-Last update: skeezics    Fri Jun 17 08:38:27 PDT 2022
+Last update: skeezics    Wed Jun 22 22:01:49 PDT 2022

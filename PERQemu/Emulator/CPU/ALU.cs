@@ -107,7 +107,7 @@ namespace PERQemu.Processor
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Execute(ALUOperation op, int amux, int bmux)
             {
-                Log.Detail(Category.ALU, "In: Amux={0:x6} Bmux={1:x6}", amux, bmux);
+                Log.Detail(Category.ALU, "In: Amux={0} Bmux={1}", amux, bmux);
 
                 // Reset carry flag (arithmetic ops will set it as necessary)
                 // but save the original value for use in addition/subtraction w/carry
@@ -241,11 +241,11 @@ namespace PERQemu.Processor
             /// Modifies the Amux and ALU op inputs as needed and runs the ALU; later the
             /// special function select updates the MQ register appropriately.
             /// </summary>
-            public void Execute(ALUOperation curOp, int amux, int bmux, MulDivCommand inst, int mq)
+            public void Execute(ALUOperation curOp, int amux, int bmux, MulDivCommand inst, ushort mq)
             {
                 ALUOperation modOp = curOp;
 
-                Log.Detail(Category.MulDiv, "IN  op={0} amux={1:x6} mq={2:x4}", curOp, amux, mq);
+                Log.Detail(Category.MulDiv, "IN  op={0} amux={1} bmux={2} mq={3}", curOp, amux, bmux, mq);
 
                 if (curOp == ALUOperation.AplusB || curOp == ALUOperation.AminusB)
                 {
@@ -253,7 +253,7 @@ namespace PERQemu.Processor
                     {
                         case MulDivCommand.Off:
                             // Should never happen!
-                            throw new InvalidOperationException("ALU MulDiv Op called with MulDivInst=OFF!?");
+                            throw new InvalidOperationException("ALU MulDiv Op called with MulDivInst=OFF");
 
                         case MulDivCommand.UnsignedDivide:
                             //
@@ -263,8 +263,7 @@ namespace PERQemu.Processor
                             // select).  Later DispatchFunction() will shift the
                             // quotient in MQ and apply the computed Q0 bit.
                             //
-                            int bit = (mq & 0x8000) >> 15;
-                            amux = ((amux & (_mask - 1)) | bit);
+                            amux = (amux & ~(1)) | ((mq & 0x8000) >> 15);
 
                             //
                             // Next, examine the sign bit from the PREVIOUS cycle's
@@ -273,7 +272,7 @@ namespace PERQemu.Processor
                             // do this if the current op is add/sub (first use of
                             // DivideStep is a shift).
                             //
-                            modOp = ((_oldR.Value & 0x8000) != 0) ? ALUOperation.AplusB : ALUOperation.AminusB;
+                            modOp = ((_oldR.Lo & 0x8000) != 0) ? ALUOperation.AplusB : ALUOperation.AminusB;
                             break;
 
                         case MulDivCommand.UnsignedMultiply:
@@ -288,7 +287,7 @@ namespace PERQemu.Processor
                     }
                 }
 
-                Log.Detail(Category.MulDiv, "OUT op={0} amux={1:x6}", modOp, amux);
+                Log.Detail(Category.MulDiv, "OUT op={0} amux={1}", modOp, amux);
 
                 Execute(modOp, amux, bmux);
             }
@@ -346,17 +345,17 @@ namespace PERQemu.Processor
                                         int index = r15 | (la15 << 1) | (lb15 << 2) | (lAeqB << 3) | (arithX << 4) | (arithY << 5);
 
                                         // This is ugly (but it only runs once)
-                                        bool bR15 = r15 == 0 ? false : true;
-                                        bool bLa15 = la15 == 0 ? false : true;
-                                        bool bLb15 = lb15 == 0 ? false : true;
-                                        bool bLAeqB = lAeqB == 0 ? false : true;
-                                        bool bArithX = arithX == 0 ? false : true;
-                                        bool bArithY = arithY == 0 ? false : true;
+                                        bool bR15 = (r15 != 0);
+                                        bool bLa15 = (la15 != 0);
+                                        bool bLb15 = (lb15 != 0);
+                                        bool bLAeqB = (lAeqB != 0);
+                                        bool bArithX = (arithX != 0);
+                                        bool bArithY = (arithY != 0);
 
                                         // Set flags based on the PAL equations
                                         _palFlags[index].Ovf =
                                             !((bR15 & !bLa15) |
-                                            //(arithX & arithY & r15) |
+                                            //(bArithX & bArithY & bR15) |
                                             (!bArithX & bR15 & !bLb15) |
                                             (!bArithY & bR15 & bLb15) |
                                             (!bR15 & bLa15) |
@@ -368,7 +367,7 @@ namespace PERQemu.Processor
                                             !((bArithX & !bArithY & !bR15 & bLAeqB & bLb15 & !bLa15) |
                                             (!bArithX & bArithY & !bR15 & bLAeqB & !bLb15 & !bLa15) |
                                             (bR15 & bLAeqB & !bLa15) |
-                                            //(arithX & arithY & r15 & LAeqB) |
+                                            //(bArithX & bArithY & bR15 & bLAeqB) |
                                             (!bArithX & bR15 & bLAeqB & !bLb15) |
                                             (!bArithY & bR15 & bLAeqB & bLb15));
 
@@ -376,7 +375,7 @@ namespace PERQemu.Processor
                                             !((bArithX & !bArithY & !bR15 & bLb15 & !bLa15) |
                                             (!bArithX & bArithY & !bR15 & !bLb15 & !bLa15) |
                                             (bR15 & !bLa15) |
-                                            //(arithX & arithY & r15) |
+                                            //(bArithX & bArithY & bR15) |
                                             (!bArithX & bR15 & !bLb15) |
                                             (!bArithY & bR15 & bLb15));
 

@@ -160,6 +160,7 @@ namespace PERQemu
             // Okay!  We have a PERQ!  Now listen for state change events
             // from the Controller (or Debugger)
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
+            DDSChanged += PressBootKey;
         }
 
         public Configuration Config => _conf;
@@ -213,7 +214,6 @@ namespace PERQemu
             switch (_state)
             {
                 case RunState.WarmingUp:
-                    DDSChanged += PressBootKey;
                     _display.Initialize();
                     _inputs.Initialize();
                     break;
@@ -294,7 +294,6 @@ namespace PERQemu
                     break;
 
                 case RunState.ShuttingDown:
-                    DDSChanged -= PressBootKey;
                     _inputs.Shutdown();
                     _display.Shutdown();
                     _state = RunState.Off;
@@ -305,6 +304,7 @@ namespace PERQemu
                     _mem.Reset();
                     _ioBus.Reset();
                     _state = RunState.Paused;
+                    _bootKeyArmed = true;
                     break;
 
                 case RunState.Paused:
@@ -361,8 +361,9 @@ namespace PERQemu
 
         public void Shutdown()
         {
-            // Detach
+            // Detach events
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
+            DDSChanged -= PressBootKey;
         }
 
         /// <summary>
@@ -745,12 +746,16 @@ namespace PERQemu
         {
             var dds = (int)a.Args[0];
 
-            if (dds == 149 && PERQemu.Controller.BootChar != 0)
+            if (dds == 149 && PERQemu.Controller.BootChar != 0 && _bootKeyArmed)
             {
                 Log.Write("Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
-                var count = 16;
+                var count = 20;
                 BootCharCallback(0, count);
             }
+
+            // Disarm until next reset; POS G loops the DDS around so we don't
+            // want to send extraneous keystrokes!  Oy.
+            _bootKeyArmed = false;
         }
 
         /// <summary>
@@ -802,6 +807,7 @@ namespace PERQemu
         // User interface hooks (SDL)
         private Display _display;
         private InputDevices _inputs;
+        private bool _bootKeyArmed;
 
         // Debugger
         private PERQDebugger _debugger;

@@ -673,27 +673,15 @@ namespace PERQemu.Processor
                                 // which ALU and Dispatch ops are done, we set an enable flag here
                                 // to minimize ugly interactions between ALU, CPU and RasterOp.
                                 //
-                                // Enabling the MulDiv unit sets the shifter control word.
-                                //
-                                switch (_rasterOp.MulDivInst)
+                                if (_rasterOp.MulDivInst == MulDivCommand.Off)
                                 {
-                                    case MulDivCommand.Off:
-                                        if (_mqEnabled) Log.Debug(Category.MulDiv, "Unit disabled");
-                                        _mqEnabled = false;
-                                        break;
-
-                                    case MulDivCommand.UnsignedDivide:
-                                        Log.Debug(Category.MulDiv, "Enabled: Divide");
-                                        _shifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
-                                        _mqEnabled = true;
-                                        break;
-
-                                    case MulDivCommand.UnsignedMultiply:
-                                    case MulDivCommand.SignedMultiply:
-                                        Log.Debug(Category.MulDiv, "Enabled: {0}", _rasterOp.MulDivInst);
-                                        _shifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
-                                        _mqEnabled = true;
-                                        break;
+                                    if (_mqEnabled) Log.Debug(Category.MulDiv, "Unit disabled\n");  // DEBUG
+                                    _mqEnabled = false;
+                                }
+                                else
+                                {
+                                    Log.Debug(Category.MulDiv, "Enabled: {0}", _rasterOp.MulDivInst);
+                                    _mqEnabled = true;
                                 }
                             }
                             break;
@@ -728,7 +716,7 @@ namespace PERQemu.Processor
                             _bpc = _alu.R.Lo & 0xf;     // bottom 4 bits of R
                             _incrementBPC = false;      // the 74S163 is a synchronous counter
                                                         // and LOAD overrides counting!  Subtle!
-                            Log.Debug(Category.OpFile, "BPC set to {0:x1}", BPC);
+                            Log.Debug(Category.OpFile, "BPC set to {0:x1}", _bpc);
                             break;
 
                         case 0xc:   // WCSL
@@ -805,8 +793,11 @@ namespace PERQemu.Processor
                             {
                                 case 0x0:   // (R) := Victim Latch
                                     _alu.SetResult(_usequencer.Victim);
-                                    _xy.WriteRegister(uOp.X, _alu.R.Value);
 
+                                    if (uOp.W == 1)
+                                    {
+                                        _xy.WriteRegister(uOp.X, _alu.R.Value);
+                                    }
                                     Log.Debug(Category.Sequencer, "Read from Victim latch {0:x4}", _usequencer.Victim);
 
                                     // ReadVictim clears the latch, does not set PC
@@ -814,8 +805,8 @@ namespace PERQemu.Processor
                                     break;
 
                                 case 0x1:   // Multiply / DivideStep
-                                    Log.Detail(Category.MulDiv, "Step: MQ in ={0:x4} R={1:x6} R<15>={2}",
-                                                               _mq, _alu.R.Lo, ((_alu.R.Lo & 0x8000) >> 15));
+                                    Log.Detail(Category.MulDiv, "Step: MQ in ={0} R={1} R<15>={2}",
+                                                               _mq, _alu.R.Lo, ((_alu.R.Lo >> 15) & 0x1));
                                     //
                                     // For the hardware assisted Multiply/Divide steps, we've already done
                                     // the ALU op on the high word of the product or quotient during the ALU
@@ -842,8 +833,7 @@ namespace PERQemu.Processor
                                             //
                                             if ((uOp.ALU == ALUOperation.AplusB) || (uOp.ALU == ALUOperation.AminusB))
                                             {
-                                                _shifter.Shift(_mq);
-                                                _mq = _shifter.ShifterOutput | (~((_alu.R.Lo & 0x8000) >> 15) & 0x1);
+                                                _mq = (ushort)((_mq << 1) | (~(_alu.R.Lo >> 15) & 0x1));
                                             }
 #if DEBUG
                                             else
@@ -860,16 +850,15 @@ namespace PERQemu.Processor
                                             //  1. Shift MQ right one bit;
                                             //  2. Save the LSB from the current R into the MSB of MQ.
                                             //
-                                            _shifter.Shift(_mq);
-                                            _mq = _shifter.ShifterOutput | ((_alu.R.Lo & 0x1) << 15);
+                                            _mq = (ushort)((_alu.R.Lo << 15) | (_mq >> 1));
                                             break;
                                     }
-                                    Log.Detail(Category.MulDiv, "Step: MQ out={0:x4} MQ<0>={1}", _mq, (_mq & 0x1));
+                                    Log.Detail(Category.MulDiv, "Step: MQ out={0} MQ<0>={1}", _mq, (_mq & 0x1));
                                     break;
 
                                 case 0x2:   // Load multiplier / dividend
-                                    _mq = _alu.R.Lo;        // MQ reg is 16 bits wide
-                                    Log.Debug(Category.MulDiv, "Load: MQ={0:x4}", _mq);
+                                    _mq = _alu.R.Lo;
+                                    Log.Debug(Category.MulDiv, "Load: MQ={0}", _mq);
                                     break;
 
                                 case 0x3:   // Load base register (not R)
@@ -877,9 +866,13 @@ namespace PERQemu.Processor
                                     break;
 
                                 case 0x4:   // (R) := product or quotient
-                                    _alu.SetResult(_mq & 0xffff);
-                                    _xy.WriteRegister(uOp.X, _alu.R.Value);
-                                    Log.Debug(Category.MulDiv, "Read: MQ={0:x4}", _mq);
+                                    _alu.SetResult(_mq);
+
+                                    if (uOp.W == 1)
+                                    {
+                                        _xy.WriteRegister(uOp.X, _alu.R.Value);
+                                    }
+                                    Log.Debug(Category.MulDiv, "Read: MQ={0}", _mq);
                                     break;
 
                                 case 0x5:   // Push long constant
@@ -902,7 +895,7 @@ namespace PERQemu.Processor
                                     // shifter provides 12- or 14-bits of address depending on CPU type.
                                     //
                                     uOp.NextAddress = _shifter.ShifterOutput;
-                                    Log.Write(Category.Sequencer, "NIA set to {0:x4} (Shift)", uOp.NextAddress);
+                                    Log.Debug(Category.Sequencer, "NIA set to {0:x4} (Shift)", uOp.NextAddress);
                                     break;
 
                                 case 0x7:   // Leap address generation
@@ -1068,7 +1061,7 @@ namespace PERQemu.Processor
         // but some microcode (VFY 2.x, e.g.) tries to write/read from MQ to test
         // for WCS size on the fly.  So we define MQ for all CPU types, but treat
         // it as read-only in the 4K variant.
-        private int _mq;
+        private ushort _mq;
         private bool _mqEnabled;
 
         // Note that the Op file is only 8 bytes, but BPC is a 4-bit counter...
