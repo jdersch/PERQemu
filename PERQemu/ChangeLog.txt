@@ -391,6 +391,11 @@ June, 2022:
     1080p) display.  Use the default "a" boot with the portrait.  Accent S6 is
     "z" boot, or will be once the bug preventing initialization is fixed!
 
+    6.  Added Unix/Emacs-style control characters to the command line editor,
+    so I can finally just type ^U instead of hitting ESC to erase the line.
+    More little tweaks/fixes/debugging but still the insanely picayune detail
+    that is preventing Accent boot eludes me.
+    
 
 ---
 Last update: skeezics    Wed Jun 22 22:01:49 PDT 2022

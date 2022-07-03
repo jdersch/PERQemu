@@ -319,11 +319,12 @@ namespace PERQemu
         /// <summary>
         /// Initiate a state change in the current PERQsystem.
         /// </summary>
-        private void SetState(RunState a)
+        private void SetState(RunState s)
         {
-            Log.Debug(Category.Controller, "SetState on {0} to call {1}", Thread.CurrentThread.ManagedThreadId, a);
             RunStateChangeEventHandler handler = RunStateChanged;
-            handler?.Invoke(new RunStateChangeEventArgs(a));
+
+            Log.Debug(Category.Controller, "SetState to {0} on {1}", s, Thread.CurrentThread.ManagedThreadId);
+            handler?.Invoke(new RunStateChangeEventArgs(s));
         }
 
         /// <summary>

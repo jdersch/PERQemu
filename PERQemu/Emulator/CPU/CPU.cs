@@ -163,7 +163,7 @@ namespace PERQemu.Processor
             // This is a very expensive log, so only call it if we have to
             if (Log.Categories.HasFlag(Category.Instruction))
             {
-                Log.Debug(Category.Instruction, "uPC={0:x4}: {1}", PC, Disassembler.Disassemble(PC, uOp));
+                Log.Debug(Category.Instruction, "uPC={0}", Disassembler.Disassemble(PC, uOp));
             }
 
             // Catch cases where the CPU is looping forever
@@ -863,6 +863,7 @@ namespace PERQemu.Processor
 
                                 case 0x3:   // Load base register (not R)
                                     _xy.RegisterBase = (byte)(~_alu.R.Lo);
+                                    Log.Debug(Category.Registers, "RBase={0:x2}", _xy.RegisterBase);
                                     break;
 
                                 case 0x4:   // (R) := product or quotient
@@ -940,10 +941,7 @@ namespace PERQemu.Processor
             Log.Debug(Category.OpFile, "Loaded {0:x2} into Op[{1:x}] from {2:x6}", _opFile[opAddr], opAddr, _memory.MADR);
             Log.Debug(Category.OpFile, "Loaded {0:x2} into Op[{1:x}] from {2:x6}", _opFile[opAddr + 1], opAddr + 1, _memory.MADR);
 
-            if (_memory.MIndex == 3)
-            {
-                _refillOp = false;
-            }
+            _refillOp = (_memory.MIndex != 3);
         }
 
         /// <summary>
@@ -951,8 +949,8 @@ namespace PERQemu.Processor
         /// </summary>
         public void IncrementDDS()
         {
-            _dds++;
-            Log.Debug(Category.DDS, "Set to {0:d3}", _dds % 1000);
+            _dds = (_dds + 1) % 1000;
+            Log.Debug(Category.DDS, "Set to {0:d3}", _dds);
             _system.MachineStateChange(WhatChanged.DDSChanged, _dds);
         }
 

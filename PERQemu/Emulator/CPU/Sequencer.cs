@@ -201,6 +201,8 @@ namespace PERQemu.Processor
                         throw new UnimplementedInstructionException($"Unimplemented Condition {uOp.CND}");
                 }
 
+                // var curPC = _pc.Value;       // for debugging cross-bank jumps
+
                 // Dispatch jump action
                 switch (uOp.JMP)
                 {
@@ -231,7 +233,7 @@ namespace PERQemu.Processor
                         }
                         else
                         {
-                            _pc.Lo = _s.Lo;
+                            _pc.Value = _s.Value;
                         }
                         break;
 
@@ -256,7 +258,7 @@ namespace PERQemu.Processor
                         }
                         else
                         {
-                            _pc.Lo = _s.Lo;
+                            _pc.Value = _s.Value;
                         }
                         break;
 
@@ -277,7 +279,7 @@ namespace PERQemu.Processor
                             if (uOp.H == 0)
                             {
                                 _callStack.PopLo();             // JumpPop
-                                _pc.Lo = uOp.NextAddress;
+                                _pc.Value = uOp.NextAddress;
                             }
                             else
                             {
@@ -418,7 +420,7 @@ namespace PERQemu.Processor
                             if (uOp.H == 0)
                             {
                                 // Vector
-                                _pc.Value = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0x7) << 2));
+                                _pc.Value = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0xf) << 2));
                                 Log.Debug(Category.Sequencer, "Vector to {0:x4} (priority={1})", _pc.Value, _cpu._interrupt.Priority);
                             }
                             else
@@ -438,6 +440,9 @@ namespace PERQemu.Processor
                     default:
                         throw new UnimplementedInstructionException($"Unhandled Jump type {uOp.JMP}");
                 }
+
+                //if ((_pc.Value & 0x3000) != (curPC & 0x3000))
+                //    Console.WriteLine($"Cross bank jump from {curPC:x4} to {_pc.Value:x4}");
             }
 
             /// <summary>

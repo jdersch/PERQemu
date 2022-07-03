@@ -65,7 +65,7 @@ namespace PERQemu.IO.Z80
         {
             // TODO: this is bogus
             get { return (byte)(0x40 + (_channels[0].InterruptLatched ? _channels[0].InterruptOffset : _channels[1].InterruptOffset)); }
-        }      
+        }
 
         public event EventHandler NmiInterruptPulse;
 
@@ -74,7 +74,7 @@ namespace PERQemu.IO.Z80
         public bool WriteDataReady => true;
 
         public void DMATerminate()
-        {            
+        {
         }
 
         public void AttachDevice(int channel, ISIODevice device)
@@ -153,7 +153,7 @@ namespace PERQemu.IO.Z80
 
                 for (var i = 0; i < _readRegs.Length; i++)
                     _readRegs[i] = 0;
-                
+
                 _rxFifo.Clear();
                 _txFifo.Clear();
 
@@ -193,12 +193,10 @@ namespace PERQemu.IO.Z80
                                             _channelNumber, value, _selectedRegister);
                     return value;
                 }
-                else
-                {
-                    Log.Debug(Category.SIO, "Channel {0} read from invalid register {2}",
-                                            _channelNumber, _selectedRegister);
-                    return 0;
-                }
+
+                Log.Debug(Category.SIO, "Channel {0} read from invalid register {2}",
+                                        _channelNumber, _selectedRegister);
+                return 0;
             }
 
             public byte ReadData()
@@ -221,6 +219,7 @@ namespace PERQemu.IO.Z80
                 Log.Debug(Category.SIO, "Channel {0} data write: 0x{1:x2}",
                                         _channelNumber, value);
                 // Nothing right now
+                Console.WriteLine($"SIO write {value}, not implemented");
             }
 
             public void WriteRegister(byte value)
@@ -302,7 +301,7 @@ namespace PERQemu.IO.Z80
                         {
                             if (data == _writeRegs[7])  // 8-bit sync value
                             {
-                                 Log.Debug(Category.SIO, "Channel {0} sync word matched", _channelNumber);
+                                Log.Debug(Category.SIO, "Channel {0} sync word matched", _channelNumber);
                                 _huntMode = false;      // Exit hunt mode
                             }
                         }
@@ -339,7 +338,10 @@ namespace PERQemu.IO.Z80
                 else
                 {
                     _rxInterruptLatched = false;
+                    _interruptVector = 0;               // ???
                 }
+
+                // Set TX flags!?
             }
 
             private bool RxEnabled => (_writeRegs[3] & (byte)WReg3.RxEnable) != 0;
@@ -358,7 +360,7 @@ namespace PERQemu.IO.Z80
             private bool _txInterruptLatched;
             private bool _rxIntOnNextCharacter;
             private int _interruptVector;
-            
+
             private bool _huntMode;
 
             private byte[] _writeRegs;
@@ -467,7 +469,7 @@ namespace PERQemu.IO.Z80
         }
 
         private enum WReg5TxBits
-        { 
+        {
             Tx5Bits = 0,
             Tx7Bits = 1,
             Tx6Bits = 2,

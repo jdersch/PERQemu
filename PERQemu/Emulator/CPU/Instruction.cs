@@ -117,9 +117,6 @@ namespace PERQemu.Processor
                     case 3:     // Long jump
                         NextAddress = (ushort)(bank | ((~SF & 0xf) << 8) | NotZ);
                         break;
-
-                    default:
-                        break;
                 }
 
                 IsSpecialFunction = (F == 0 || F == 2);

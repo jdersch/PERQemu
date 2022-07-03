@@ -37,6 +37,8 @@ namespace PERQemu.UI
             _commandHistory = new List<string>(99);
             _historyIndex = 0;
             _prompt = "";
+
+            InitEditKeyMap();
         }
 
         /// <summary>
@@ -94,13 +96,18 @@ namespace PERQemu.UI
             {
                 UpdateDisplay();
 
-                // Read one keystroke from the console...
+                // Read one keystroke from the console
                 ConsoleKeyInfo key = PERQemu.CLI.GetKeyEventually();
+                ConsoleKey cmd = key.Key;
 
-                // TODO: allow the classic emacs-like control chars too!
+                // Map the basic EMACS-like control keys
+                if (key.Modifiers == ConsoleModifiers.Control && _editKeyMap.ContainsKey(key.Key))
+                {
+                    cmd = _editKeyMap[key.Key];
+                }
 
-                // Parse special chars...
-                switch (key.Key)
+                // Edit or add to the command line
+                switch (cmd)
                 {
                     case ConsoleKey.Escape:         // Clear input 
                         ClearInput();
@@ -171,7 +178,7 @@ namespace PERQemu.UI
                         break;
 
                     default:
-                        // Not a special key, just insert it if it's deemed printable.
+                        // Not a special key, just insert it if it's deemed printable
                         if (char.IsLetterOrDigit(key.KeyChar) ||
                             char.IsPunctuation(key.KeyChar) ||
                             char.IsSymbol(key.KeyChar) ||
@@ -684,6 +691,29 @@ namespace PERQemu.UI
             return a[0].Substring(0, i);
         }
 
+        /// <summary>
+        /// Map the classic EMACS control keys to the DOS-style line editor commands.
+        /// </summary>
+        private void InitEditKeyMap()
+        {
+            _editKeyMap = new Dictionary<ConsoleKey, ConsoleKey>();
+
+            // Checking for the Control modifier happens in GetLine; we don't
+            // need to map ^H, ^I or ^M since those match their default action
+            _editKeyMap.Add(ConsoleKey.U, ConsoleKey.Escape);
+            _editKeyMap.Add(ConsoleKey.D, ConsoleKey.Delete);
+            _editKeyMap.Add(ConsoleKey.B, ConsoleKey.LeftArrow);
+            _editKeyMap.Add(ConsoleKey.F, ConsoleKey.RightArrow);
+            _editKeyMap.Add(ConsoleKey.P, ConsoleKey.UpArrow);
+            _editKeyMap.Add(ConsoleKey.N, ConsoleKey.DownArrow);
+            _editKeyMap.Add(ConsoleKey.A, ConsoleKey.Home);
+            _editKeyMap.Add(ConsoleKey.E, ConsoleKey.End);
+
+            // todo: Add the little details, like ^W to delete the previous
+            // word, ^T to "twiddle" characters, maybe Ctrl-Shift- modifiers
+            // to delete/move a "word" at a time (very PERQ appropriate!)
+            // ^K and ^Y to "kill" and "yank" might be nice someday too :-)
+        }
 
         private CommandNode _commandTree;
         private CommandNode _commandTreeRoot;
@@ -698,5 +728,7 @@ namespace PERQemu.UI
 
         private List<string> _commandHistory;
         private int _historyIndex;
+
+        private Dictionary<ConsoleKey, ConsoleKey> _editKeyMap;
     }
 }

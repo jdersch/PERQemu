@@ -263,7 +263,8 @@ namespace PERQemu.Processor
                             // select).  Later DispatchFunction() will shift the
                             // quotient in MQ and apply the computed Q0 bit.
                             //
-                            amux = (amux & ~(1)) | ((mq & 0x8000) >> 15);
+                            amux = ((amux & ~(1)) | ((mq & 0x8000) >> 15)) & 0xffff;
+                            bmux &= 0xffff;
 
                             //
                             // Next, examine the sign bit from the PREVIOUS cycle's

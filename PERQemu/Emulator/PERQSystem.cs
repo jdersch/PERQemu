@@ -714,7 +714,7 @@ namespace PERQemu
 
                 case WhatChanged.Z80RunState:
                     Log.Write(Category.Emulator, "Z80 power state changed: running={0}", (bool)args[0]);
-                    break;
+                    return;
 
                 case WhatChanged.HaltedInLoop:
                     // We don't actually fire an event; just call Halt()
@@ -733,8 +733,11 @@ namespace PERQemu
                     return;
             }
 
-            Log.Debug(Category.Emulator, "MachineStateChange {0} firing", w);
-            handler?.Invoke(new MachineStateChangeEventArgs(w, args));
+            if (handler != null)
+            {
+                Log.Debug(Category.Emulator, "MachineStateChange {0} firing", w);
+                handler(new MachineStateChangeEventArgs(w, args));
+            }
         }
 
         /// <summary>
@@ -749,13 +752,9 @@ namespace PERQemu
             if (dds == 149 && PERQemu.Controller.BootChar != 0 && _bootKeyArmed)
             {
                 Log.Write("Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
-                var count = 20;
+                var count = 25;
                 BootCharCallback(0, count);
             }
-
-            // Disarm until next reset; POS G loops the DDS around so we don't
-            // want to send extraneous keystrokes!  Oy.
-            _bootKeyArmed = false;
         }
 
         /// <summary>
@@ -786,9 +785,15 @@ namespace PERQemu
                 _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
 
                 // And do it again
-                Scheduler.Schedule(5 * Conversion.MsecToNsec, BootCharCallback, count);
+                Scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback, count);
 
-                Log.Detail(Category.Keyboard, "Pressing the bootchar again in 5msec, retry {0}", count);
+                Log.Detail(Category.Keyboard, "Pressing the bootchar again in 10msec, retry {0}", count);
+            }
+            else
+            {
+                // Disarm until next reset; POS G loops the DDS around so we
+                // don't want to send extraneous keystrokes!  Oy.
+                _bootKeyArmed = false;
             }
         }
 

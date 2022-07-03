@@ -501,7 +501,8 @@ namespace PERQemu
             _log.Close();
             _log.Dispose();
 
-            _log = File.AppendText(_currentFile);
+            // On rotate, overwrite rather than append
+            _log = File.CreateText(_currentFile);
             Stream.Synchronized(_log.BaseStream);
         }
 #endif

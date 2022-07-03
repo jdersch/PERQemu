@@ -808,21 +808,28 @@ namespace PERQemu
         }
 
 #if DEBUG
+        private int when;
+
         [Command("debug accent boot")]
         private void DebugAccent()
         {
             if (!CheckSys()) return;
 
             PERQemu.Sys.DDSChanged += OnDDSChange;
-            Console.WriteLine("Accent boot debugging hook registered.");
+
+            // HACK: Compute when to break in based on memory size
+            var mem = ((PERQemu.Config.Current.MemorySizeInBytes & 0xfc0000) >> 18);
+            when = 300;
+            while ((mem & 0x1) == 0) { when += 50; mem >>= 1; }
+            Console.WriteLine($"Accent boot debugging hook registered (@ DDS {when}).");
         }
 
         private void OnDDSChange(MachineStateChangeEventArgs a)
         {
             var dds = (int)a.Args[0];
 
-            // When DDS hits 198 start logging a ton of crap
-            if (dds == 450)
+            // Start logging a ton of crap after the memory sizing loop
+            if (dds == when)
             {
                 PERQemu.Controller.Break();
 
@@ -832,16 +839,19 @@ namespace PERQemu
                 ResetBreakpoints(BreakpointType.All);
 
                 SetConsoleSeverity(Severity.Info);
-                //SetLogging(Category.Instruction);
-                //SetLogging(Category.Interrupt);
-                //SetLogging(Category.Registers);
+                SetLogging(Category.Instruction);
+                SetLogging(Category.Interrupt);
+                SetLogging(Category.Registers);
                 SetLogging(Category.Sequencer);
                 SetLogging(Category.Display);
+                SetLogging(Category.Z80IRQ);
                 SetLogging(Category.MulDiv);
                 SetLogging(Category.OpFile);
-                //SetLogging(Category.EStack);
+                SetLogging(Category.EStack);
                 SetLogging(Category.QCode);
+                SetLogging(Category.FIFO);
                 SetLogging(Category.DDS);
+                SetLogging(Category.CPU);
 
                 SetFileSeverity(Severity.Debug);
                 EnableFileLogging();
@@ -850,7 +860,7 @@ namespace PERQemu
                 return;
             }
 
-            // When it gets to 201 turn it all back off
+            // Turn it all back off
             if (dds == 451)
             {
                 PERQemu.Controller.Break();
@@ -861,9 +871,13 @@ namespace PERQemu
                 ClearLogging(Category.Interrupt);
                 ClearLogging(Category.Registers);
                 ClearLogging(Category.Sequencer);
+                ClearLogging(Category.Display);
+				ClearLogging(Category.Z80IRQ);
+				ClearLogging(Category.MulDiv);
                 ClearLogging(Category.OpFile);
                 ClearLogging(Category.EStack);
                 ClearLogging(Category.QCode);
+                ClearLogging(Category.FIFO);
                 ClearLogging(Category.DDS);
 
                 SetFileSeverity(Severity.Normal);

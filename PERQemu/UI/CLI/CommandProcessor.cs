@@ -177,7 +177,7 @@ namespace PERQemu
         /// </summary>
         private void OnDDSChange(MachineStateChangeEventArgs a)
         {
-            var dds = (int)a.Args[0] % 1000;
+            var dds = (int)a.Args[0];
             Console.Title = $"DDS {dds:d3}";
         }
 
@@ -187,8 +187,6 @@ namespace PERQemu
         private void OnRunStateChange(RunStateChangeEventArgs a)
         {
             var state = a.State;
-
-            Console.WriteLine($"CLI: transition to {state}");
 
             // Reset our title if the machine is off; add or remove the DDS
             // change hook when the machine is powered up or down
