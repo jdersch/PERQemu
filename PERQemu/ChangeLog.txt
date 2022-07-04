@@ -395,7 +395,12 @@ June, 2022:
     so I can finally just type ^U instead of hitting ESC to erase the line.
     More little tweaks/fixes/debugging but still the insanely picayune detail
     that is preventing Accent boot eludes me.
-    
+
+
+July, 2022:
+
+    1.  Accent S6 runs now.
+
 
 ---
-Last update: skeezics    Wed Jun 22 22:01:49 PDT 2022
+Last update: skeezics    Mon Jul  4 11:06:17 PDT 2022

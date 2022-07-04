@@ -843,6 +843,7 @@ namespace PERQemu
                 SetLogging(Category.Interrupt);
                 SetLogging(Category.Registers);
                 SetLogging(Category.Sequencer);
+                SetLogging(Category.Shifter);
                 SetLogging(Category.Display);
                 SetLogging(Category.Z80IRQ);
                 SetLogging(Category.MulDiv);

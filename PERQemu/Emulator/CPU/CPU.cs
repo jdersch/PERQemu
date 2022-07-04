@@ -681,6 +681,14 @@ namespace PERQemu.Processor
                                 else
                                 {
                                     Log.Debug(Category.MulDiv, "Enabled: {0}", _rasterOp.MulDivInst);
+
+                                    // THIS IS TOTALLY WRONG  THE MICROCODE SETS THE SHIFTER COMMAND
+                                    // TO ROTATE LEFT OR RIGHT AND OVERRIDING IT HERE IS BOGUS  but it works
+                                    if (_rasterOp.MulDivInst == MulDivCommand.UnsignedDivide)
+                                        _shifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
+                                    else
+                                        _shifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
+                                    
                                     _mqEnabled = true;
                                 }
                             }
