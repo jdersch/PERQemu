@@ -46,6 +46,7 @@ namespace PERQemu.IO.GPIB
             _talking = false;
             _listening = false;
             _scheduler.Cancel(_sampleEvent);
+            _sampleEvent = null;
 
             Log.Debug(Category.GPIB, "BitPadOne reset (address={0})", DeviceID);
         }

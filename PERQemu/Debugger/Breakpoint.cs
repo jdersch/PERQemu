@@ -274,7 +274,7 @@ namespace PERQemu.Debugger
         public void InitBreakpoints()
         {
             _ioWatchList = new BreakpointList(BreakpointType.IOPort, "IO Port", 255);
-            _irqWatchList = new BreakpointList(BreakpointType.Interrupt, "CPU Interrupt", (int)InterruptSource.Parity);
+            _irqWatchList = new BreakpointList(BreakpointType.Interrupt, "CPU Interrupt", 8);
             _memWatchList = new BreakpointList(BreakpointType.MemoryLoc, "Memory Address", PERQemu.Config.Current.MemorySizeInBytes / 2);
             _uinstWatchList = new BreakpointList(BreakpointType.uAddress, "Microaddress", CPU.WCSSize);
 

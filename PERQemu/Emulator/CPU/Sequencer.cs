@@ -420,7 +420,7 @@ namespace PERQemu.Processor
                             if (uOp.H == 0)
                             {
                                 // Vector
-                                _pc.Value = (ushort)(uOp.ZFillAddress | ((_cpu._interrupt.Priority & 0xf) << 2));
+                                _pc.Value = (ushort)(uOp.ZFillAddress | (((~_cpu._interrupt.Priority) & 0x7) << 2));
                                 Log.Debug(Category.Sequencer, "Vector to {0:x4} (priority={1})", _pc.Value, _cpu._interrupt.Priority);
                             }
                             else

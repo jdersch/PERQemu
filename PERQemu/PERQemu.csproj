@@ -668,6 +668,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Docs\PERQ_Chart.png" />
+    <Content Include="UserGuide.pdf" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="PERQemu.ico" />

@@ -28,14 +28,15 @@ namespace PERQemu.Processor
     /// </summary>
     public enum InterruptSource
     {
-    	Z80DataOut = 0,
-    	Y = 1,
-    	HardDisk = 2,
-    	Network = 3,
-    	Z80DataIn = 4,
-    	LineCounter = 5,
-    	X = 6,
-    	Parity = 7
+        // How they're wired into the priority encoder
+        Parity = 0,
+        X = 1,
+        LineCounter = 2,
+        Z80DataIn = 3,
+        Network = 4,
+        HardDisk = 5,
+        Y = 6,
+        Z80DataOut = 7
     }
 
     /// <summary>
@@ -44,6 +45,7 @@ namespace PERQemu.Processor
     [Flags]
     public enum InterruptFlag
     {
+        // How they're wired into the buffer @U250
         None = 0x00,
         Z80DataOutReady = 0x01,
         Y = 0x02,
@@ -73,14 +75,14 @@ namespace PERQemu.Processor
     {
         public InterruptEncoder()
         {
-            _intr = new long[(int)InterruptSource.Parity + 1];
+            _intr = new long[8];
         }
 
         public void Reset()
         {
             for (var i = 0; i < _intr.Length; i++)
                 _intr[i] = 0;
-            
+
             Log.Debug(Category.Interrupt, "Priority encoder reset");
         }
 
@@ -98,18 +100,24 @@ namespace PERQemu.Processor
         /// Returns the integer vector of the highest priority interrupt
         /// currently signaled.
         /// </summary>
+        /// <remarks>
+        /// We had these backwards.  The hardware buffers the incoming interrupt
+        /// lines in the order given by Flag (below), but inverts them into the
+        /// 'LS148 priority encoder, and then they're reinverted when the Vector
+        /// jump address is calculated.  Wheeee!
+        /// </remarks>
         public int Priority
         {
             get
-            {
-                return ((_intr[(int)InterruptSource.Parity] > 0) ? 7 :
-                        (_intr[(int)InterruptSource.X] > 0) ? 6 :
-                        (_intr[(int)InterruptSource.LineCounter] > 0) ? 5 :
-                        (_intr[(int)InterruptSource.Z80DataIn] > 0) ? 4 :
-                        (_intr[(int)InterruptSource.Network] > 0) ? 3 :
-                        (_intr[(int)InterruptSource.HardDisk] > 0) ? 2 :
-                        (_intr[(int)InterruptSource.Y] > 0) ? 1 :
-                        0);
+            {   // Marginally faster than the stacked trinary block?
+                if (_intr[(int)InterruptSource.Z80DataOut] > 0) return 7;
+                if (_intr[(int)InterruptSource.Y] > 0) return 6;
+                if (_intr[(int)InterruptSource.HardDisk] > 0) return 5;
+                if (_intr[(int)InterruptSource.Network] > 0) return 4;
+                if (_intr[(int)InterruptSource.Z80DataIn] > 0) return 3;
+                if (_intr[(int)InterruptSource.LineCounter] > 0) return 2;
+                if (_intr[(int)InterruptSource.X] > 0) return 1;
+                return 0;   // InterruptSource.Parity
             }
         }
 
