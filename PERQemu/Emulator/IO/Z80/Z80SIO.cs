@@ -63,8 +63,37 @@ namespace PERQemu.IO.Z80
 
         public byte? ValueOnDataBus
         {
-            // TODO: this is bogus
-            get { return (byte)(0x40 + (_channels[0].InterruptLatched ? _channels[0].InterruptOffset : _channels[1].InterruptOffset)); }
+            get { return ComputeVector(); }
+        }
+
+        /// <summary>
+        /// Compute the SIO's interrupt vector based on the chip's arcane rules.
+        /// </summary>
+        /// <remarks>
+        /// The SIO's interrupt vector is only programmed into channel B's WR2
+        /// register.  When read back from RR2 (or put on the bus when the IRQ
+        /// is serviced) it is supposed to return the current vector based on
+        /// the highest priority from _both_ channels.  Because channel A has
+        /// higher priority, we have to get both offsets and compute the V3..V1
+        /// bits from A or B but using the base vector from B, and only if the
+        /// "Status Affects Vector" bit is set (only in B's WR1).  Oof.
+        /// </remarks>
+        public byte ComputeVector()
+        {
+            byte vector = _channels[1].InterruptBase;
+
+            if (_channels[1].StatusAffectsVector)
+            {
+                // If an interrupt is pending on A, use it's offset; otherwise
+                // assume that B is interrupting...
+                var priority = (_channels[0].InterruptLatched ? _channels[0].InterruptOffset : _channels[1].InterruptOffset);
+
+                // Now hack the offset into vector<3:1>
+                vector = (byte)((vector & 0xf1) | ((priority & 0x07) << 1));
+                Log.Debug(Category.SIO, "Status Affected Vector is {0} (prio={2})", vector, priority);
+            }
+
+            return vector;
         }
 
         public event EventHandler NmiInterruptPulse;
@@ -133,6 +162,10 @@ namespace PERQemu.IO.Z80
             }
         }
 
+        /// <summary>
+        /// One SIO Channel.  Though they're not _quite_ identical.  Channel B
+        /// holds the interrupt vector in its WR2/RR2 registers!
+        /// </summary>
         private class Channel
         {
             public Channel(int channelNumber)
@@ -175,7 +208,10 @@ namespace PERQemu.IO.Z80
             }
 
             public bool InterruptLatched => _rxInterruptLatched || _txInterruptLatched;
-            public int InterruptOffset => _interruptVector;
+            public bool StatusAffectsVector => (_writeRegs[1] & (byte)WReg1.StatusAffectsVector) != 0;
+            public byte InterruptBase => _readRegs[2];      // Channel B only...
+            public int InterruptOffset => _interruptOffset;
+
 
             public void AttachDevice(ISIODevice device)
             {
@@ -183,6 +219,7 @@ namespace PERQemu.IO.Z80
 
                 _device.RegisterReceiveDelegate(ReceiveData);
             }
+
 
             public byte ReadRegister()
             {
@@ -199,6 +236,7 @@ namespace PERQemu.IO.Z80
                 return 0;
             }
 
+
             public byte ReadData()
             {
                 byte data = 0;
@@ -214,13 +252,6 @@ namespace PERQemu.IO.Z80
                 return data;
             }
 
-            public void WriteData(byte value)
-            {
-                Log.Debug(Category.SIO, "Channel {0} data write: 0x{1:x2}",
-                                        _channelNumber, value);
-                // Nothing right now
-                Console.WriteLine($"SIO write {value}, not implemented");
-            }
 
             public void WriteRegister(byte value)
             {
@@ -267,16 +298,21 @@ namespace PERQemu.IO.Z80
                     // Handle special cases for bits which trigger actions when set:
                     switch (_selectedRegister)
                     {
+                        case 2:
+                            if (_channelNumber == 1)
+                            {
+                                // Copy interrupt vector into RR2 (Channel B only!)
+                                _readRegs[2] = _writeRegs[2];
+                            }
+                            break;
+
                         case 3:
                             if ((_writeRegs[3] & (byte)WReg3.EnterHuntPhase) != 0)
                             {
                                 // re-enter HUNT mode
                                 _huntMode = true;
+                                Log.Detail(Category.SIO, "Entering hunt mode");
                             }
-                            break;
-
-                        case 4:
-                            // ?
                             break;
                     }
                     // Write to other register, next access is to reg 0
@@ -285,6 +321,15 @@ namespace PERQemu.IO.Z80
 
                 Log.Debug(Category.SIO, "Channel {0} register pointer now {1}",
                                         _channelNumber, _selectedRegister);
+            }
+
+
+            public void WriteData(byte value)
+            {
+                Log.Debug(Category.SIO, "Channel {0} data write: 0x{1:x2}",
+                                        _channelNumber, value);
+                // Nothing right now
+                Console.WriteLine($"SIO write {value}, not implemented");
             }
 
             /// <summary>
@@ -320,29 +365,52 @@ namespace PERQemu.IO.Z80
                 }
             }
 
+
+            // todo: TransmitData()
+
+
             private void UpdateFlags()
             {
+                // Channel A (0) has priorities 4..7, Channel B (1) is 0..3. :-|
+                var offset = (_channelNumber ^ 0x1) * 4;
+
                 // Set RX-related flags and raise interrupts as necessary
                 _readRegs[0] = (byte)(
                     (_huntMode ? 0x0 : 0x10) |          // SYNC/HUNT
-                    0x04 |                              // tx buffer empty
-                    (_rxFifo.Count > 0 ? 0x01 : 0x00)   // rx character available
+                    (_txFifo.Count == 0 ? 0x04 : 0x0) | // tx buffer empty
+                    (_rxFifo.Count > 0 ? 0x01 : 0x0)    // rx character available
                     );
+
+                // If no interrupts pending, the Z80 returns V3..V1 = 011.  So
+                // regardless of whichever channel we are, set up the default...
+                _interruptOffset = 3;
+
+                // Now update the offset and interrupts bits in lowest-to-highest
+                // priority order, and account for the channel # (A > B).  First,
+                // did the tx buffer just become empty?
+                if (_txFifo.Count == 0 && _txInterruptLatched)
+                {
+                    _interruptOffset = offset;
+                }
+
+                // todo: If one of the modem control pins changed state (RTS or
+                // DTR, maybe DCD?) then set _interruptOffset = offset + 1;
 
                 if (_rxFifo.Count > 0 && RxInterruptEnabled)
                 {
                     _rxIntOnNextCharacter = false;
                     _rxInterruptLatched = true;
-                    _interruptVector = 4;
+                    _interruptOffset = offset + 2;
                 }
                 else
                 {
                     _rxInterruptLatched = false;
-                    _interruptVector = 0;               // ???
                 }
 
-                // Set TX flags!?
+                // todo: If an error occurred ("special receive conditions")
+                // that we care about, set _interruptOffset offset + 3;
             }
+
 
             private bool RxEnabled => (_writeRegs[3] & (byte)WReg3.RxEnable) != 0;
             private WReg4Bits Bits => (WReg4Bits)((_writeRegs[4] & 0xc) >> 2);
@@ -359,7 +427,7 @@ namespace PERQemu.IO.Z80
             private bool _rxInterruptLatched;
             private bool _txInterruptLatched;
             private bool _rxIntOnNextCharacter;
-            private int _interruptVector;
+            private int _interruptOffset;
 
             private bool _huntMode;
 
@@ -380,6 +448,7 @@ namespace PERQemu.IO.Z80
 
             private ISIODevice _device;
         }
+
 
         private enum WReg0Cmd
         {

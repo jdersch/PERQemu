@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-7/04/2022 - skeezicsb - v0.4.6 (experimental)
+7/08/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -155,8 +155,9 @@ There are several subdirectories:
         g7.prqm:
             The first PERQmedia-formatted Shugart image for use with the
             "CIO" board.  Contains a POS G.7 installation (binary only)
-            and an Accent S6 that doesn't (yet) boot.  This image includes
-            some fun new demos not previously available on PERQemu!
+            with a few extras, and a basic Accent S6 installation without
+            any extra apps (yet).  This image includes some fun new demos
+            not previously available on PERQemu!
 
        Additional "stock" hard drive or floppy images may be included as
        well.  Any custom disk images you create or import are loaded from
@@ -251,8 +252,10 @@ As of v0.4.6, these PERQ operating systems also boot:
 
   - POS version G.6 (last official 3RCC release);
   - POS version G.7 (released by Accent Systems, 1986?);
-  - Accent S6 (not yet booting from hard disk);
-  - PNX 2 (beta; runs from floppy but not yet booting from hard disk).
+  - Accent S6 (Release II from PERQ Systems Corporation, 1985).
+
+In addition, PNX 2 is able to run but the installer has bugs; we have not yet
+been able to create a working hard disk image.
 
 NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
 2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
@@ -304,10 +307,9 @@ The following hardware has been implemented in the emulator:
 
   Displays:
     - The standard 768 x 1024 portrait display is available for all models;
-    - The 1280 x 1024 landscape display is not yet supported by any OS that
-      runs now (with the old Z80 ROMs);  Landscape will be tested as soon as
-      the "new" Z80 ROM code / PERQ-2 models are available and versions of
-      POS, PNX and Accent which support it are running;
+    - The 1280 x 1024 landscape display is supported and tested with POS G.7
+      and Accent S6!  Although PERQ-1 landscape configurations were very rare,
+      the emulator runs 'em just fine!
     - Now rendered by SDL2, so 32-bit WinForms is finally retired.
 
   Z80 I/O Processor:

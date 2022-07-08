@@ -374,7 +374,7 @@ June, 2022:
     idle speculations in previous entries pointed right at the problem but I
     didn't actually see it until I stepped on it like a cartoon rake to the face.
 
-    4.  Found and corrected an extremely subtle issue with how BPC assignment
+    4. Found and corrected an extremely subtle issue with how BPC assignment
     affects incrementing the counter, but it seems like it doesn't affect normal
     operations.  That's pretty subtle, I guess.  Also found an actual bug in the
     PNX 2.0 16K boot floppy version of VFY, which is not easily fixed or worked
@@ -382,7 +382,7 @@ June, 2022:
     the primary focus is digging through 2.9GB of traces (51M lines in 295 log
     files) looking for the reason Accent hangs as it brings up Process Manager.
 
-    5.  Accent has regressed; the Mul/Div unit fix was just a happy accident
+    5. Accent has regressed; the Mul/Div unit fix was just a happy accident
     that allowed the boot to progress!  Fixing it to produce the correct result
     has set us back.  Color me confused.  I have tested the landscape display
     option, however, and the "g7.prqm" disk image now contains an "l" boot to
@@ -391,7 +391,7 @@ June, 2022:
     1080p) display.  Use the default "a" boot with the portrait.  Accent S6 is
     "z" boot, or will be once the bug preventing initialization is fixed!
 
-    6.  Added Unix/Emacs-style control characters to the command line editor,
+    6. Added Unix/Emacs-style control characters to the command line editor,
     so I can finally just type ^U instead of hitting ESC to erase the line.
     More little tweaks/fixes/debugging but still the insanely picayune detail
     that is preventing Accent boot eludes me.
@@ -399,8 +399,20 @@ June, 2022:
 
 July, 2022:
 
-    1.  Accent S6 runs now.
+    1. Accent S6 runs now.  Available when 'z' boot is selected from the POS G.7
+    disk image.  As with the Accent S4 disk, the S6 Net/Msg servers are disabled
+    due to lack of Ethernet hardware emulation.  The cursor is a little glitchy.
+
+    2. Corrected a problem with the BitPad not resetting properly which caused
+    it to disconnect when the PERQ is reset.  Fixed the interrupt priority
+    encoding and Vector jump, so the patched CIO boot ROM has been reverted to
+    its original form.  Uploaded a DRAFT of the User Guide in PDF format.
+
+    3. Fixed a small SIO bug that stopped the Kriz tablet from working properly.
+    Turns out the IOB and CIO Z80 firmware uses different interrupt vectors for
+    the SIO chip, and programs the registers just a little differently.  Full
+    serial support not yet restored, but it's a step in the right direction.
 
 
 ---
-Last update: skeezics    Mon Jul  4 11:06:17 PDT 2022
+Last update: skeezics    Fri Jul  8 00:07:27 PDT 2022
