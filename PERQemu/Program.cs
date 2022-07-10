@@ -165,45 +165,16 @@ namespace PERQemu
         public static string Copyright = "Copyright (c) 2006-2022, J. Dersch (derschjo@gmail.com)\n" +
                                          "Feebly assisted by S. Boondoggle (skeezicsb@gmail.com)";
 
-        public static string Version
-        {
-            get { return _version; }
-        }
+        public static string Version => _version;
+        public static string BaseDir => _baseDir;
+        public static bool HostIsUnix => _hostIsUnix;
 
-        public static string BaseDir
-        {
-            get { return _baseDir; }
-        }
+        public static EventLoop GUI => _gui;
+        public static CommandProcessor CLI => _cli;
+        public static Configurator Config => _config;
+        public static ExecutionController Controller => _controller;
+        public static PERQSystem Sys => _controller.System;
 
-        public static bool HostIsUnix
-        {
-            get { return _hostIsUnix; }
-        }
-
-        public static EventLoop GUI
-        {
-            get { return _gui; }
-        }
-
-        public static CommandProcessor CLI
-        {
-            get { return _cli; }
-        }
-
-        public static Configurator Config
-        {
-        	get { return _config; }
-        }
-
-        public static ExecutionController Controller
-        {
-        	get { return _controller; }
-        }
-
-        public static PERQSystem Sys
-        {
-            get { return _controller.System; }
-        }
 
         /// <summary>
         /// Quick and dirty command line parsing.

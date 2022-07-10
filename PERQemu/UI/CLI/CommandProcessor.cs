@@ -254,6 +254,11 @@ namespace PERQemu
                     char.IsPunctuation(c));
         }
 
+        public void UpdateKeywordMatchHelpers(string key, string[] values)
+        {
+            _exec.UpdateKeywordMatchHelpers(key, values);
+        }
+
         #endregion
 
         //

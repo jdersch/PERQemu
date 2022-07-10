@@ -648,18 +648,25 @@ namespace PERQemu.UI
 
                 // Start down the chain!
                 match.SearchRoot = argNode;
-
-                // todo: hook in string KeywordMatch check here
+                                    
                 if (argNode.Param.ParameterType.IsEnum ||
-                    argNode.Param.ParameterType == typeof(bool))
+                    argNode.Param.ParameterType == typeof(bool) ||
+                    argNode.DoKeywordMatch)
                 {
-                    // Matched an enum, get the list of one or more values;
-                    // expand 'true' or 'false' so booleans match properly
                     match.Completions.AddRange(
                         argNode.Helpers.FindAll(
                             x => x.StartsWith(word, StringComparison.InvariantCultureIgnoreCase)));
 
                     match.Match = LongestCommonPrefix(match.Completions.ToArray());
+
+                    // String args tagged with [KeywordMatch] aren't strictly enforced;
+                    // if the user is freestylin' just let 'em go with it; fall back and
+                    // treat it like a generic string argument
+                    if (match.Completions.Count == 0 && argNode.DoKeywordMatch)
+                    {
+                        match.Match = word;
+                        match.SearchRoot = null;
+                    }
                 }
                 else
                 {

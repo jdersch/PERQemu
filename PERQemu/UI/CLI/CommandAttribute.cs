@@ -102,16 +102,6 @@ namespace PERQemu
     }
 
     [AttributeUsage(AttributeTargets.Parameter)]
-    public class KeywordMatchAttribute : Attribute
-    {
-        public KeywordMatchAttribute()
-        {
-            // If present, tells the CommandProcessor to match a string
-            // argument against the Helpers like an enumeration!
-        }
-    }
-
-    [AttributeUsage(AttributeTargets.Parameter)]
     public class PathExpandAttribute : Attribute
     {
         public PathExpandAttribute()
@@ -120,6 +110,28 @@ namespace PERQemu
             // is a file/path name and to do expansions against the filesystem 
             // which would/will be extremely cool
         }
+    }
+
+    /// <summary>
+    /// Keyword match attribute tells the CommandProcessor to match a string
+    /// argument against the Helpers list like an enumeration!
+    /// </summary>
+    /// <remarks>
+    /// Problem is, we can't set the delegate that populates the list in the
+    /// attribute directly, which is a drag.  One cheesy way to deal with this
+    /// is to come along after the fact and manually assign the delegate...
+    /// </remarks>
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public class KeywordMatchAttribute : Attribute
+    {
+        public KeywordMatchAttribute(string match)
+        {
+            _match = match;
+        }
+
+        public string Keyword => _match;
+
+        private string _match;
     }
 
 }

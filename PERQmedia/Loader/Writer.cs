@@ -82,8 +82,7 @@ namespace PERQmedia
                         break;
 
                     default:
-                        Log.Info(Category.MediaLoader, "Unknown or unimplemented file formatter!");
-                        Log.Info(Category.MediaLoader, "Using default PERQmedia format...");
+                        Log.Info(Category.MediaLoader, "Unknown or unimplemented file formatter! Using default PERQmedia format.");
                         formatter = new PRQFormatter();
                         break;
                 }

@@ -296,7 +296,7 @@ namespace PERQemu
 #if DEBUG
             if ((s >= Severity.Warning) || ((s >= _minLevel) && ((c & _categories) != 0)))
 #else
-            if ((s >= _minLevel) && ((c & _categories) != 0))
+            if ((s >= _minLevel) && ((c & _categories) != 0) || (c == Category.All))
 #endif
             {
                 var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);

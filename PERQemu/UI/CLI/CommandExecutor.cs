@@ -565,6 +565,14 @@ namespace PERQemu.UI
             return result;
         }
 
+        public void UpdateKeywordMatchHelpers(string key, string[] values)
+        {
+            foreach (var node in _matchDict[key])
+            {
+                node.SetHelperStrings(values);
+            }
+        }
+
         /// <summary>
         /// Builds the CLI command tree.
         /// </summary>
@@ -587,6 +595,9 @@ namespace PERQemu.UI
 
             // Build a list to hold "commands" help 
             var helpers = new List<CommandHelp>();
+
+            // Temporary list to hold tagged parameters as we discover them
+            var setters = new List<ArgumentNode>();
 
             // Now go discover our CommandAttributes!
             foreach (object commandObject in commandObjects)
@@ -651,6 +662,9 @@ namespace PERQemu.UI
                             // Attach it to our command node
                             cmdNode.Arguments = argNode;
 
+                            // Save if Keyword matching
+                            if (argNode.DoKeywordMatch) setters.Add(argNode);
+
                             // And add that to the root
                             _commandRoot.AddSubNode(tokens, cmdNode);
                         }
@@ -685,6 +699,9 @@ namespace PERQemu.UI
                                 // Build a new parameter node
                                 var argNode = new ArgumentNode(args[i].Name, "", args[i]);
 
+                                // Save if Keyword matching
+                                if (argNode.DoKeywordMatch) setters.Add(argNode);
+
                                 // Attach the method here?
                                 if ((i == nextToLastArg) || (i < nextToLastArg && args[i + 1].IsOptional))
                                 {
@@ -715,62 +732,51 @@ namespace PERQemu.UI
                 }
             }
 
+            // Sort out the KeywordMatch-tagged parameter nodes
+            BuildMatchDictionary(setters);
+
             // Organize the commands help
             BuildCommandsHelp(helpers);
         }
 
-        [Conditional("DEBUG")]
-        public void DumpCommandTree(CommandNode node, int _indent)
+        /// <summary>
+        /// Builds a dictionary that maps a particular keyword to match to a set
+        /// of argument nodes that reference it.  This allows for dynamic updates
+        /// at runtime such as when new configurations or drive types are added.
+        /// </summary>
+        /// <remarks>
+        /// Parameters tagged with the [KeywordMatch] attribute must specify a
+        /// string that identifies what values the parameter should supply, i.e.
+        ///     DoFoo([KeywordMatch("fooTypes") string aFooThing)
+        /// means the routine that manages the list of "fooTypes" can look up
+        /// which nodes have to have their Helpers updated when something changes.
+        /// If we could embed a delegate in the attribute this flimsy string match
+        /// wouldn't be necessary... or I'll figure out something else a little
+        /// more elegant eventually.  Let's see if this works for now. :-)
+        /// </remarks>
+        private void BuildMatchDictionary(List<ArgumentNode> list)
         {
-            Console.Write("".PadLeft(_indent));
-            Console.WriteLine("Node: {0} - {1} (subnodes={2} hidden={3} prefix={4} repeat={5})",
-                              node.Name,
-                              node.Description,
-                              node.SubNodes.Count,
-                              node.Hidden,
-                              node.Prefix,
-                              node.Repeats
-                             );
+            // Set up the dictionary for KeywordMatch-tagged nodes
+            _matchDict = new Dictionary<string, ArgumentNode[]>();
 
-            if (node.Method != null)
+            // A temp to hold all the nodes of a given match
+            var temp = new List<ArgumentNode>();
+
+            while (list.Count > 0)
             {
-                Console.Write("".PadLeft(_indent + 2));
-                Console.WriteLine("Method: {0}", node.Method.Method.Name);
-            }
+                var match = list[0].Keyword;
 
-            if (node.Arguments != null)
-            {
-                ArgumentNode argNode = node.Arguments;
+                // Extract all them matching nodes into temp...
+                temp.AddRange(list.FindAll((obj) => obj.Keyword == match));
 
-                Console.Write("".PadLeft(_indent + 2));
-                Console.WriteLine("Parameter: {0} Pos: {1} {2}{3}{4} Helpers: {5}",
-                                  argNode.Name,
-                                  argNode.Param.Position,
-                                  argNode.Param.IsOptional ? "(Optional)" : "",
-                                  argNode.Param.HasDefaultValue ? "(HasDefault) " : "",
-                                  argNode.Param.ParameterType.IsEnum ? "(IsEnum) " : "",
-                                  string.Join(" ", argNode.Helpers.ToArray()));
+                // Create the dictionary mapping...
+                _matchDict[match] = temp.ToArray();
 
-                // Chase down the list
-                if (argNode.Arguments != null)
-                {
-                    _indent += 2;
-                    DumpCommandTree(argNode, _indent);
-                    _indent -= 2;
-                }
-            }
-
-            if (node.SubNodes.Count > 0)
-            {
-                foreach (CommandNode sub in node.SubNodes)
-                {
-                    _indent += 2;
-                    DumpCommandTree(sub, _indent);
-                    _indent -= 2;
-                }
+                // ...then extract those items and whack the temp list!
+                list.RemoveAll(x => temp.Contains(x));
+                temp.Clear();
             }
         }
-
 
         /// <summary>
         /// Precompute a dictionary of nicely formatted lists of commands and
@@ -840,7 +846,7 @@ namespace PERQemu.UI
                 {
                     if (cmdArray[i].Cmd.StartsWith(match, StringComparison.InvariantCultureIgnoreCase))
                         cmdArray[i].Cmd = cmdArray[i].Cmd.Substring(match.Length);
-                    
+
                     widest = Math.Max(widest, cmdArray[i].Cmd.Length);
                 }
 
@@ -858,6 +864,58 @@ namespace PERQemu.UI
 
                 // Finally stash 'em in the dictionary
                 _commandsAtNode[k] = cmdArray;
+            }
+        }
+
+        [Conditional("DEBUG")]
+        public void DumpCommandTree(CommandNode node, int _indent)
+        {
+            Console.Write("".PadLeft(_indent));
+            Console.WriteLine("Node: {0} - {1} (subnodes={2} hidden={3} prefix={4} repeat={5})",
+                              node.Name,
+                              node.Description,
+                              node.SubNodes.Count,
+                              node.Hidden,
+                              node.Prefix,
+                              node.Repeats
+                             );
+
+            if (node.Method != null)
+            {
+                Console.Write("".PadLeft(_indent + 2));
+                Console.WriteLine("Method: {0}", node.Method.Method.Name);
+            }
+
+            if (node.Arguments != null)
+            {
+                ArgumentNode argNode = node.Arguments;
+
+                Console.Write("".PadLeft(_indent + 2));
+                Console.WriteLine("Parameter: {0} Pos: {1} {2}{3}{4} Helpers: {5}",
+                                  argNode.Name,
+                                  argNode.Param.Position,
+                                  argNode.Param.IsOptional ? "(Optional)" : "",
+                                  argNode.Param.HasDefaultValue ? "(HasDefault) " : "",
+                                  argNode.Param.ParameterType.IsEnum ? "(IsEnum) " : "",
+                                  string.Join(" ", argNode.Helpers.ToArray()));
+
+                // Chase down the list
+                if (argNode.Arguments != null)
+                {
+                    _indent += 2;
+                    DumpCommandTree(argNode, _indent);
+                    _indent -= 2;
+                }
+            }
+
+            if (node.SubNodes.Count > 0)
+            {
+                foreach (CommandNode sub in node.SubNodes)
+                {
+                    _indent += 2;
+                    DumpCommandTree(sub, _indent);
+                    _indent -= 2;
+                }
             }
         }
 
@@ -893,5 +951,7 @@ namespace PERQemu.UI
         private CommandNode _currentRoot;
 
         private Dictionary<string, CommandHelp[]> _commandsAtNode;
+        private Dictionary<string, ArgumentNode[]> _matchDict;
+
     }
 }

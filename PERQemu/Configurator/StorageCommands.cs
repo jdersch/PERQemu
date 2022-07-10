@@ -280,18 +280,7 @@ namespace PERQemu.UI
             // If the machine is defined, check the drive and unload it
             if (PERQemu.Controller.State != RunState.Unavailable)
             {
-                //var drive = PERQemu.Sys.Volumes[unit];
-
-                //if (drive.IsModified && SaveRequested(drive, unit))
-                //{
-                //    // Tell the PERQ to save the device
-                //    if (PERQemu.Sys.SaveMedia(unit))
-                //    {
-                //        Console.WriteLine($"Drive {unit} saved to '{drive.Filename}'.");
-                //    }
-                //}
-
-                // Tell the PERQ to unload it
+                // Tell the PERQ to save/unload it
                 PERQemu.Sys.UnloadMedia(unit);
             }
 
@@ -404,7 +393,7 @@ namespace PERQemu.UI
         /// For now, all new drives are created in PRQM format by default. :-)
         /// </summary>
         [Command("storage create", "Creates a new blank, formatted floppy, disk or tape image")]
-        private void CreateMedia([KeywordMatch] string driveType,
+        private void CreateMedia([KeywordMatch("DriveTypes")] string driveType,
                                  [PathExpand] string filename,
                                  bool overwrite = false)
         {
@@ -450,7 +439,7 @@ namespace PERQemu.UI
             newDrive.Format();
             Console.WriteLine("done!");
 
-            Console.Write("Saving the image... ");
+            Console.WriteLine("Saving the image... ");
             newDrive.Save();
 
             // The formatter will announce success.  All done!
@@ -482,7 +471,7 @@ namespace PERQemu.UI
         /// Shows the detailed specs for a particular drive.
         /// </summary>
         [Command("storage show", "Show device specifications")]
-        private void ShowDeviceSpecs([KeywordMatch] string driveType)
+        private void ShowDeviceSpecs([KeywordMatch("DriveTypes")] string driveType)
         {
             var drive = PERQemu.Config.GetKnownDeviceByName(driveType);
             if (drive == null)

@@ -55,8 +55,34 @@ namespace PERQemu.UI
         {
             Param = p;
             Helpers = new List<string>();
+            DoPathExpand = false;
+            Keyword = string.Empty;
 
             SetHelperStrings();
+
+            if (p.GetCustomAttribute(typeof(PathExpandAttribute)) != null)
+            {
+                // Sanity check
+                if (p.ParameterType != typeof(string))
+                    throw new ArgumentException("Cannot tag non-string parameters with [PathExpand]");
+
+                // Just sets a flag to alter the command prompt's behavior
+                DoPathExpand = true;
+            }
+
+            var kma = p.GetCustomAttribute(typeof(KeywordMatchAttribute)) as KeywordMatchAttribute;
+            if (kma != null)
+            {
+                if (p.ParameterType != typeof(string))
+                    throw new ArgumentException("Cannot tag non-string parameters with [KeywordMatch]");
+
+                // Set a flag for quick test, save the keyword this node should
+                // match.  The setter for the helper strings finds the nodes to
+                // update by a string match/dictionary lookup.  Not great, but
+                // can't embed delegates in attributes directly, so... it'll do.
+                DoKeywordMatch = true;
+                Keyword = kma.Keyword;
+            }
         }
 
         public ArgumentNode(string name, string desc, ParameterInfo p, MethodInvokeInfo methodInvoke) : this(name, desc, p)
@@ -66,6 +92,11 @@ namespace PERQemu.UI
 
         public ParameterInfo Param;
         public List<string> Helpers;
+
+        public bool DoPathExpand;
+        public bool DoKeywordMatch;
+        public string Keyword;
+
 
         /// <summary>
         /// Match a string to this node's parameter.  If "fuzzy" then do a
@@ -87,6 +118,7 @@ namespace PERQemu.UI
                 if (Param == null)      // No arg?
                     return false;       // No match
 
+                // Check the enumerated types for text matches
                 if (Param.ParameterType.IsEnum || Param.ParameterType == typeof(bool))
                 {
                     if (fuzzy)
@@ -96,40 +128,31 @@ namespace PERQemu.UI
 
                     return Helpers.Exists(x => x.Equals(arg, StringComparison.InvariantCultureIgnoreCase));
                 }
-                else if (Param.ParameterType == typeof(char))
+
+                // Check the rest
+                if (Param.ParameterType == typeof(string))
+                {
+                    // Just check for null, with or without optional keyword matching
+                    return !string.IsNullOrEmpty(arg);
+                }
+
+                if (Param.ParameterType == typeof(char))
                 {
                     return arg.Length == 1;
                 }
-                else if (Param.ParameterType == typeof(string))
+
+                if (Param.ParameterType == typeof(int) ||
+                    Param.ParameterType == typeof(uint) ||
+                    Param.ParameterType == typeof(ushort) ||
+                    Param.ParameterType == typeof(byte))
                 {
-                    // todo: check [KeywordMatch] attribute here
-                    return !string.IsNullOrEmpty(arg);
-                }
-                else if (Param.ParameterType == typeof(int))
-                {
-                    //CommandExecutor.TryParseUint(arg);
+                    // skip the CommandExecutor.TryParseXXXX(arg) -- see above
                     return true;
                 }
-                else if (Param.ParameterType == typeof(uint))
-                {
-                    //CommandExecutor.TryParseUint(arg);
-                    return true;
-                }
-                else if (Param.ParameterType == typeof(ushort))
-                {
-                    //CommandExecutor.TryParseUshort(arg);
-                    return true;
-                }
-                else if (Param.ParameterType == typeof(byte))
-                {
-                    //CommandExecutor.TryParseByte(arg);
-                    return true;
-                }
-                else
-                {
-                    Console.WriteLine($"** Unhandled parameter type for param {Param.Name}");
-                    return false;
-                }
+
+                // Should never get here!
+                Console.WriteLine($"** Unhandled parameter type for param {Param.Name}");
+                return false;
             }
             catch
             {
@@ -189,12 +212,17 @@ namespace PERQemu.UI
             }
         }
 
-        // todo: for parameters with the [KeywordMatch] attribute this will be
-        // hook for adding to the helper strings used in matching/completion
-        private void SetHelperStrings(string[] words)
+
+        /// <summary>
+        /// For parameters with the [KeywordMatch] attribute, provide a hook to
+        /// set/update the strings used in matching/completion.
+        /// </summary>
+        public void SetHelperStrings(string[] words)
         {
+            Helpers.Clear();
+
             foreach (var w in words)
-                Helpers.Add(w.ToLower());
+                Helpers.Add(w);
         }
     }
 
@@ -311,7 +339,7 @@ namespace PERQemu.UI
 
                     if (subNode.Method == null && cmd.Method != null)
                     {
-                            subNode.Method = cmd.Method;
+                        subNode.Method = cmd.Method;
                     }
 
                     // Update flags, since we can't guarantee the order in which
@@ -350,4 +378,5 @@ namespace PERQemu.UI
             return null;
         }
     }
+
 }

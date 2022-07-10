@@ -134,6 +134,9 @@ namespace PERQemu.Config
                                             dev.Info.Name, dev.Info.Type);
 
             _knownDrives.Add(dev.Info.Name.ToLower(), dev);
+
+            // Update the "DriveTypes" keyword nodes!
+            PERQemu.CLI.UpdateKeywordMatchHelpers("DriveTypes", GetKnownDevices());
         }
 
         public StorageDevice GetKnownDeviceByName(string key)
@@ -160,8 +163,10 @@ namespace PERQemu.Config
             }
 
             Log.Detail(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
-
             _prefabs.Add(conf.Key, conf);
+
+            // Now go update the "Configs" keyword nodes
+            PERQemu.CLI.UpdateKeywordMatchHelpers("Configs", GetPrefabs());
             return true;
         }
 

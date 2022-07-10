@@ -135,7 +135,7 @@ namespace PERQemu.UI
         }
 
         [Command("configure show", "Show a pre-defined machine configuration")]
-        public void ShowConfiguration(string name)
+        public void ShowConfiguration([KeywordMatch("Configs")] string name)
         {
             Configuration conf = PERQemu.Config.GetConfigByName(name);
 
@@ -177,7 +177,7 @@ namespace PERQemu.UI
         /// back to search the directory.
         /// </summary>
         [Command("configure load", "Load a saved configuration")]
-        public void LoadConfig(string name)
+        public void LoadConfig([KeywordMatch("Configs")] string name)
         {
             if (OKtoReconfig())
             {
