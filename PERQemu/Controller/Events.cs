@@ -26,8 +26,7 @@ namespace PERQemu
     /// </summary>
     public enum RunState
     {
-        Unavailable = -1,   // No PERQ is configured
-        Off = 0,            // Machine defined; power is off
+        Off = 0,            // No PERQ is configured; power is off
         WarmingUp = 1,      // Power is on and the GUI is warming up :-)
         Reset,              // Transitional reset state
         Paused,             // User- or program-requested Pause

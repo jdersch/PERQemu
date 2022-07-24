@@ -17,11 +17,11 @@ states from startup to shutdown:
     RunState        Meaning
     -----------     ----------------------------------------------------------
 
-    Unavailable     No PERQ is defined, meaning the Controller has not
-                    instantiated a PERQSystem object.  The user interacts with
-                    the Configurator to load or modify their configuration of
-                    choice, and then must issue the "power on" command to start
-                    the virtual machine.
+    Off             No PERQ is defined; the Controller has not instantiated a
+                    PERQSystem object (or tried to and failed).  The user
+                    interacts with the Configurator to load or modify their
+                    configuration of choice, and then must issue the "power on"
+                    command to start the virtual machine.
 
     WarmingUp       The "power on" command has been issued (or the GUI power
                     button pressed) and the system is attempting to start up.
@@ -63,13 +63,11 @@ states from startup to shutdown:
                     in one of two modes:
 
                     In Asynchronous mode, the CPU and Z80 each run on their
-                    own thread, regulated to their defined clock rates by
-                    independent "heartbeat" timers.  This offers the highest
-                    performance but requires a host with at least a quad-core
-                    processor (application thread, CPU thread, Z80 thread, and
-                    at least one free thread for the system to run the console
-                    and its own UI events).  Yep, kinda steep.
-
+                    own thread.  The main CPU is regulated to its defined clock
+                    rate by a "heartbeat" timer [subject to user preference]
+                    while the Z80 automatically regulates itself to maintain
+                    the correct execution ratio.
+                    
                     In Synchronous mode, the CPU and Z80 are run on one thread.
                     While this may have some benefits when debugging, it's
                     generally much slower as the single thread has to run the
@@ -77,22 +75,19 @@ states from startup to shutdown:
                     not clear that this will be easy, useful or possible under
                     the new CLI event loop.  "Mode" may just be removed, TBD]
 
-    SingleStep      This mode runs the CPU for one microinstruction.  It also
-                    runs the Z80 for one instruction step, which isn't very
-                    accurate (given the disparity in clock rates and that the
-                    Z80 doesn't execute individual clock cycles like the PERQ
-                    emulation does).  This is useful for microcode debugging.
+    SingleStep      This mode runs the CPU for one microinstruction.  The Z80
+                    may or may not run a step depending on the difference in
+                    processor clocks.  This is useful for microcode debugging.
                     The SingleStep mode always returns to the Paused state.
 
     RunInst,        These modes run the CPU or Z80 for one opcode/instruction.
-    RunZ80Inst      For the PERQ this means run as many microinstructions as
-                    required until a NextOp or NextInst function is executed;
-                    for the Z80 it means one instruction.  Due to instruction
-                    timings this isn't terribly accurate but it allows for
-                    fairly detailed debugging of one processor or the other
-                    (though some interesting transactions where the two must
-                    communicate present challenges).  Both of these stepping
-                    modes return to the Paused state.
+    RunZ80Inst      For the PERQ this means running microinstructions until a
+                    NextOp or NextInst function is executed, while the Z80 may
+                    or may not execute based on how many microcycles elapse.
+                    For the Z80 it means executing exactly one instruction,
+                    while the PERQ runs however many microcycles are necessary
+                    for the time elapsed.  Both of these stepping modes return
+                    to the Paused state.
 
     Halted          This is the common error state.  Any uncaught exception
                     thrown by the emulator will trap to this state, where the
@@ -110,37 +105,24 @@ states from startup to shutdown:
                     modified disks or floppies based on the Autosave preference
                     settings.  ShuttingDown always transitions to Off.
 
-    Off             In this mode the PERQSystem object is still configured and
-                    may be interrogated by the Debuggers, a new boot character
-                    set, or removable media unloaded or loaded.  The existing
-                    image may then be reset and restarted.  HOWEVER, any change
-                    in configuration that requires re-initialization will cause
-                    the machine to essentially "power cycle" itself, and any
-                    unsaved disk data will be lost.  [IF this is too convoluted
-                    or confusing the "power off" command will simply delete the
-                    PERQSystem and set the state to Unavailable, forcing a
-                    reload.  TBD]
 
 Events
 ------
 
-A work in progress.
+[A work in progress.]
 
-    RunStateChanged events are generated by the PERQSystem in response to
-    updates from the ExecutionController.  The CPU and Z80 subscribe when
-    they are instantiated.  The GUI (if present and active) can also
-    subscribe so that it can respond to changes in the machine's state --
-    regardless of which GUI toolkit is in use...  even the CLI could, in
-    theory, capture events; for example, the PERQ-1 "soft" power off
-    exception can be replaced with a RunStateChange event with PoweringDown
-    as the argument.
+RunStateChanged events are generated by the PERQSystem in response to updates
+from the ExecutionController as it shifts through the states described above.
+Any subscriber (CPU, Z80, GUI, etc) can track state changes directly.
 
-    MachineStateChanged events would be mostly used by the Debuggers (when
-    active).  Things like the DDS incrementing would provide a hook that
-    the ExecutionController could use to simulate pressing the boot key,
-    while the GUI would update the graphical DDS on the front panel.  The
-    CLI could catch the DDS event and upate the Console.Title, taking one
-    more Console.Writeline() out of CPU.cs!
+MachineStateChanged events are primarily useful for debugging, but also allow
+the user interface (CLI and/or GUI) to receive updates from the virtual machine.
+For example, the CLI tracks the DDS as it increments to simulate pressing the
+boot key at the right time.  It also updates the DDS on the console window's
+title bar, while a GUI could/will update a graphical rendering of the DDS on
+a front panel display.  A number of other "hooks" for things like disk or
+network activity, floppy loading or unloading, or the PERQ-1 "soft" power off
+exception may be handled more gracefully.
 
 Whether running in asynch or synch mode, the execution loop is pretty much the
 same: loop until an "off" message tells the thread to exit.
@@ -168,8 +150,17 @@ ol' Winforms without having to basically write three separate F*!#*$)ING
 platform-specific front ends.  I have not yet achieved the perfect fugue state
 of "dejected resignation" required to process this gobsmacking reality.  This
 is sliding naked down the dull rusty razor of software development hell into
-a vat of rubbing alcohol.  My dark vision of what should happen to 99.9% of
-all professional software developers these days would make Genghis Khan blush.
+a vat of rubbing alcohol.
+
+    [Enter... "MAUI"?  It appears that M$ has heard my anguished plea and
+    warmed over Xamarin.Forms into some newish XAML-based thing that looks
+    suspiciously like WinForms but makes all the right noises about being
+    an out-of-the-box, fully-supported cross-platform GUI with "designer"
+    support, native widgets, yadda yadda yadda.  OF COURSE it requires ONLY
+    the latest OS versions and leaves behind 98% of the client machines we
+    mere mortals and starving artists still use, and I'm sure that by the
+    time I have a machine that can run it they'll have deprecated it and
+    moved on to some other buzzword-compliant "solution."  Ugh.]
 
 So for now this version of PERQemu has a kooky but strangely featureful CLI
 driven by a uniquely kluged event loop that I've hacked together from baling
@@ -228,7 +219,9 @@ to read and clear them.  The workaround is to simply snoop the ValueOnDataBus
 getter, which lets our IZ80Device know that the CPU is about to service it, so
 we can (if necessary) drop our interrupt request.  The CTC timer, for example,
 uses this trick so that the hard disk seek timing can count timer interrupts
-that otherwise are raised and never cleared.
+that otherwise are raised and never cleared.  Ain't no way no how our simulated
+Z80 peripheral controllers are going to snoop the instruction stream to pick
+out RETI instructions, c'mon now.
 
 
 State Machine
@@ -257,4 +250,4 @@ Bottom line:
 
 
 --
-Last update: skeezics    Tue Mar 22 18:01:31 PDT 2022
+Last update: skeezics    Mon Jul 18 16:40:14 PDT 2022

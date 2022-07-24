@@ -304,7 +304,7 @@ namespace PERQemu.UI
         /// </summary>
         public void Shutdown()
         {
-            Log.Debug(Category.Display, "Shutdown requested");
+            Log.Write(Category.Display, "Shutdown requested");
 
             // Disable and stop our timer
             if (_fpsTimerId >= 0)
@@ -320,6 +320,9 @@ namespace PERQemu.UI
             PERQemu.GUI.ReleaseDelegate(_renderEvent.type);
             PERQemu.GUI.ReleaseDelegate(_fpsUpdateEvent.type);
 
+            // Tell the EventLoop we're going away
+            PERQemu.GUI.DetachDisplay();
+
             // Clear the renderer
             if (_sdlRenderer != IntPtr.Zero)
             {
@@ -327,14 +330,12 @@ namespace PERQemu.UI
                 _sdlRenderer = IntPtr.Zero;
             }
 
-            // Tell the EventLoop we're going away
-            PERQemu.GUI.DetachDisplay();
-
             // And finally close down the window
             if (_sdlWindow != IntPtr.Zero)
             {
                 SDL.SDL_DestroyWindow(_sdlWindow);
                 _sdlWindow = IntPtr.Zero;
+                Console.WriteLine("[DestroyWindow called]");
             }
         }
 

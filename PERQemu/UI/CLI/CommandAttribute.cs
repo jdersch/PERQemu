@@ -101,14 +101,16 @@ namespace PERQemu
         private bool _prefix;
     }
 
+    /// <summary>
+    /// If present, tells the CommandPrompt editor that this string argument is
+    /// a file/path name and to do tab-completions against the filesystem.  The
+    /// attribute can be set now, but completion isn't yet implemented.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Parameter)]
     public class PathExpandAttribute : Attribute
     {
         public PathExpandAttribute()
         {
-            // If present, tells the CommandProcessor that this string argument
-            // is a file/path name and to do expansions against the filesystem 
-            // which would/will be extremely cool
         }
     }
 
@@ -117,9 +119,14 @@ namespace PERQemu
     /// argument against the Helpers list like an enumeration!
     /// </summary>
     /// <remarks>
-    /// Problem is, we can't set the delegate that populates the list in the
-    /// attribute directly, which is a drag.  One cheesy way to deal with this
-    /// is to come along after the fact and manually assign the delegate...
+    /// Parameters tagged with the [KeywordMatch] attribute must specify a
+    /// string that identifies what values the parameter should supply, i.e.
+    ///     DoFoo([KeywordMatch("fooTypes")] string aFooThing)
+    /// means the routine that manages the list of "fooTypes" can look up
+    /// which nodes have to have their Helpers updated when something changes.
+    /// If we could embed a delegate in the attribute this flimsy string match
+    /// wouldn't be necessary... This works for now, and we can always figure
+    /// out a way to do it more elegantly, eventually.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Parameter)]
     public class KeywordMatchAttribute : Attribute
@@ -131,7 +138,7 @@ namespace PERQemu
 
         public string Keyword => _match;
 
-        private string _match;
+        private readonly string _match;
     }
 
 }

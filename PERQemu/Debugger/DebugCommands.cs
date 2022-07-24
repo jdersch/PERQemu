@@ -133,14 +133,14 @@ namespace PERQemu
         [Command("debug step", "Run one microinstruction", Repeatable = true)]
         public void DebugStep()
         {
-            if (PERQemu.Controller.State <= RunState.Off)
-            {
-                Console.WriteLine("The PERQ is currently turned off.");
-            }
-            else
+            if (PERQemu.Controller.State > RunState.Off)
             {
                 PERQemu.Controller.TransitionTo(RunState.SingleStep);
                 PERQemu.Sys.PrintStatus();
+            }
+            else
+            {
+                Console.WriteLine("The PERQ is currently turned off.");
             }
         }
 
@@ -148,14 +148,14 @@ namespace PERQemu
         [Command("debug inst", "Run one Q-code", Repeatable = true)]
         public void DebugInst()
         {
-            if (PERQemu.Controller.State <= RunState.Off)
-            {
-                Console.WriteLine("The PERQ is currently turned off.");
-            }
-            else
+            if (PERQemu.Controller.State > RunState.Off)
             {
                 PERQemu.Controller.TransitionTo(RunState.RunInst);
                 PERQemu.Sys.PrintStatus();
+            }
+            else
+            {
+                Console.WriteLine("The PERQ is currently turned off.");
             }
         }
 
@@ -806,92 +806,6 @@ namespace PERQemu
 
             return action;
         }
-
-#if DEBUG
-        private int when;
-
-        [Command("debug accent boot")]
-        private void DebugAccent()
-        {
-            if (!CheckSys()) return;
-
-            PERQemu.Sys.DDSChanged += OnDDSChange;
-
-            // HACK: Compute when to break in based on memory size
-            var mem = ((PERQemu.Config.Current.MemorySizeInBytes & 0xfc0000) >> 18);
-            when = 300;
-            while ((mem & 0x1) == 0) { when += 50; mem >>= 1; }
-            Console.WriteLine($"Accent boot debugging hook registered (@ DDS {when}).");
-        }
-
-        private void OnDDSChange(MachineStateChangeEventArgs a)
-        {
-            var dds = (int)a.Args[0];
-
-            // Start logging a ton of crap after the memory sizing loop
-            if (dds == when)
-            {
-                PERQemu.Controller.Break();
-
-                Log.Write("\n-- Setting up for Accent boot logging --\n");
-
-                ShowBreakpoints();
-                ResetBreakpoints(BreakpointType.All);
-
-                SetConsoleSeverity(Severity.Info);
-                SetLogging(Category.Instruction);
-                SetLogging(Category.Interrupt);
-                SetLogging(Category.Registers);
-                SetLogging(Category.Sequencer);
-                SetLogging(Category.Shifter);
-                SetLogging(Category.Display);
-                SetLogging(Category.Z80IRQ);
-                SetLogging(Category.MulDiv);
-                SetLogging(Category.OpFile);
-                SetLogging(Category.EStack);
-                SetLogging(Category.QCode);
-                SetLogging(Category.FIFO);
-                SetLogging(Category.DDS);
-                SetLogging(Category.CPU);
-
-                SetFileSeverity(Severity.Debug);
-                EnableFileLogging();
-
-                // PERQemu.Controller.TransitionTo(RunState.RunInst);
-                return;
-            }
-
-            // Turn it all back off
-            if (dds == 451)
-            {
-                PERQemu.Controller.Break();
-                Log.Write("\n-- Stimpy!  We made it! --\n");
-
-                SetConsoleSeverity(Severity.Normal);
-                ClearLogging(Category.Instruction);
-                ClearLogging(Category.Interrupt);
-                ClearLogging(Category.Registers);
-                ClearLogging(Category.Sequencer);
-                ClearLogging(Category.Display);
-				ClearLogging(Category.Z80IRQ);
-				ClearLogging(Category.MulDiv);
-                ClearLogging(Category.OpFile);
-                ClearLogging(Category.EStack);
-                ClearLogging(Category.QCode);
-                ClearLogging(Category.FIFO);
-                ClearLogging(Category.DDS);
-
-                SetFileSeverity(Severity.Normal);
-                DisableFileLogging();
-
-                // Unregister from further dds updates
-                PERQemu.Sys.DDSChanged -= OnDDSChange;
-
-                // PERQemu.Controller.TransitionTo(RunState.Running);
-            }
-        }
-
-#endif
 
         //
         // Breakpoint handlers

@@ -87,7 +87,7 @@ namespace PERQemu
 
         public RunState State
         {
-            get { return (_system == null ? RunState.Unavailable : _system.State); }
+            get { return (_system == null ? RunState.Off : _system.State); }
         }
 
         public byte BootChar
@@ -139,12 +139,15 @@ namespace PERQemu
         public void PowerOn()
         {
             // Out with the old
-            if (_system != null || PERQemu.Config.Changed)
+            if (_system != null)
             {
-                // Out with the old
-                _system?.Shutdown();
-                _system = null;
+                throw new InvalidOperationException("Power on when system already exists?");
             }
+
+            Console.WriteLine("Power on requested.");
+
+            // Restart the SDL machinery
+            PERQemu.GUI.InitializeSDL();
 
             // In with the new?
             if (!Initialize(PERQemu.Config.Current))
@@ -160,7 +163,7 @@ namespace PERQemu
             {
                 Console.WriteLine("Storage initialization failed.");
                 // Give an opportunity to try again
-                Halt();
+                SetState(RunState.Halted);
                 return;
             }
 
@@ -182,6 +185,7 @@ namespace PERQemu
             if (State > RunState.Off)
             {
                 TransitionTo(RunState.Reset);
+                Console.WriteLine("PERQ system reset.");
 
                 if (State == RunState.Paused && !Settings.PauseOnReset)
                 {
@@ -195,17 +199,11 @@ namespace PERQemu
         /// </summary>
         public void Break()
         {
-            if (State > RunState.Off && State != RunState.Halted)
+            if (State > RunState.WarmingUp && State < RunState.Halted)
             {
                 // Break out of the Running state
-                SetState(RunState.Paused);
+                TransitionTo(RunState.Paused);
             }
-        }
-
-        // sigh.
-        public void Halt()
-        {
-            SetState(RunState.Halted);
         }
 
         /// <summary>
@@ -215,7 +213,9 @@ namespace PERQemu
         /// </summary>
         public void PowerOff(bool save = true)
         {
-            if (State <= RunState.Off) return;
+            if (State == RunState.Off) return;
+
+            Console.WriteLine("Power off requested.");
 
             // Force the machine to pause if in any other state
             Break();
@@ -226,8 +226,11 @@ namespace PERQemu
                 _system.SaveAllMedia();
             }
 
-            // Now clobber the Display and close down
-            SetState(RunState.ShuttingDown);
+            // Now clobber the system and close down
+            TransitionTo(RunState.Off);
+
+            // The only way to actually release resources? :-/
+            PERQemu.GUI.ShutdownSDL();
 
             // Farewell, sweet PERQ
             _system = null;
@@ -244,7 +247,7 @@ namespace PERQemu
         {
             var current = State;
 
-            if (current == RunState.Unavailable)
+            if (current == RunState.Off)
             {
                 Console.WriteLine("No PERQ defined; must 'power on' first.");
                 return;
@@ -279,7 +282,7 @@ namespace PERQemu
                             // which case we halt) then continue to the next step
                             if ((current == step.ExpectedResult) ||
                                 (current == RunState.Halted) ||
-                                (current == RunState.Unavailable))
+                                (current == RunState.Off))
                             {
                                 break;
                             }
@@ -294,7 +297,7 @@ namespace PERQemu
                         } while (step.WaitForIt);
 
                         // Abandon the rest of our steps
-                        if (current == RunState.Unavailable || current == RunState.Halted)
+                        if (current == RunState.Off || current == RunState.Halted)
                         {
                             break;
                         }
@@ -335,15 +338,8 @@ namespace PERQemu
         {
             _SMDict = new Dictionary<SMKey, List<Transition>>() {
                 {
-                    new SMKey(RunState.Off, RunState.Paused), new List<Transition>() {
-                        new Transition(() => { PowerOn(); }, RunState.WarmingUp),
+                    new SMKey(RunState.WarmingUp, RunState.Reset), new List<Transition>() {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
-                },
-                {
-                    new SMKey(RunState.Off, RunState.Running), new List<Transition>() {
-                        new Transition(() => { PowerOn(); }, RunState.WarmingUp),
-                        new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
-                        new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
                 },
                 {
                     new SMKey(RunState.WarmingUp, RunState.Paused), new List<Transition>() {
@@ -365,17 +361,17 @@ namespace PERQemu
                         new Transition(() => { SetState(RunState.SingleStep); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.Off), new List<Transition>() {
-                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
-                },
-                {
                     new SMKey(RunState.WarmingUp, RunState.Running), new List<Transition>() {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.Off), new List<Transition>() {
-                        new Transition(() => { PowerOff(); }, RunState.Off) }
+                    new SMKey(RunState.WarmingUp, RunState.Halted), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.Halted); }, RunState.Halted) }
+                },
+                {
+                    new SMKey(RunState.WarmingUp, RunState.Off), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
                     new SMKey(RunState.Paused, RunState.Reset), new List<Transition>() {
@@ -396,6 +392,10 @@ namespace PERQemu
                 {
                     new SMKey(RunState.Paused, RunState.Running), new List<Transition>() {
                         new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
+                },
+                {
+                    new SMKey(RunState.Paused, RunState.Off), new List<Transition>() {
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
                     new SMKey(RunState.Running, RunState.Paused), new List<Transition>() {
@@ -423,7 +423,7 @@ namespace PERQemu
                 },
                 {
                     new SMKey(RunState.Running, RunState.Off), new List<Transition>() {
-                        new Transition(() => { PowerOff(); }, RunState.Off) }
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
                     new SMKey(RunState.Halted, RunState.Reset), new List<Transition>() {
@@ -431,7 +431,7 @@ namespace PERQemu
                 },
                 {
                     new SMKey(RunState.Halted, RunState.Off), new List<Transition>() {
-                        new Transition(() => { PowerOff(); }, RunState.Off) }
+                        new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 }
             };
         }

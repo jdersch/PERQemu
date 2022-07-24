@@ -30,7 +30,7 @@ namespace PERQemu
         [Command("debug status", "Show current status of the PERQ")]
         public void Status()
         {
-            if (PERQemu.Controller.State == RunState.Unavailable)
+            if (PERQemu.Controller.State == RunState.Off)
             {
                 Console.WriteLine("The PERQ is not powered on; no status available.");
                 return;
@@ -55,21 +55,19 @@ namespace PERQemu
                 return;
             }
 
-            Console.WriteLine("Power on requested.");
             PERQemu.Controller.PowerOn();
         }
 
         [Command("power off", "Turn off the running PERQ")]
         public void PowerOff()
         {
-            if (PERQemu.Controller.State <= RunState.Off)
+            if (PERQemu.Controller.State == RunState.Off)
             {
                 Console.WriteLine("The PERQ is already powered off.");
                 return;
             }
 
-            Console.WriteLine("Power off requested.");
-            PERQemu.Controller.TransitionTo(RunState.Off);
+            PERQemu.Controller.PowerOff();
         }
 
         [Command("reset", "Reset the PERQ")]
@@ -77,19 +75,6 @@ namespace PERQemu
         public void Reset()
         {
             PERQemu.Controller.Reset();
-        }
-
-        [Command("go", "Power on and start the PERQ")]
-        [Command("debug go", "Power on and start the PERQ")]
-        public void Go()
-        {
-            // Implicitly power on (shortcut) if not already done
-            if (PERQemu.Controller.State == RunState.Unavailable)
-            {
-                PowerOn();
-            }
-
-            Start();
         }
 
         [Command("start", "Run the PERQ")]
@@ -108,6 +93,23 @@ namespace PERQemu
             {
                 PERQemu.Controller.TransitionTo(RunState.Paused);
                 PERQemu.Sys.PrintStatus();
+            }
+        }
+
+        [Command("go", "Power on and start the PERQ")]
+        [Command("debug go", "Power on and start the PERQ")]
+        public void Go()
+        {
+            // Implicitly power on (shortcut) if not already done
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                PowerOn();
+            }
+
+            // If powered on, start (or resume); otherwise don't bother
+            if (PERQemu.Controller.State > RunState.Off)
+            {
+                Start();
             }
         }
 

@@ -297,6 +297,7 @@ namespace PERQemu
                     _inputs.Shutdown();
                     _display.Shutdown();
                     _state = RunState.Off;
+                    Shutdown();
                     break;
 
                 case RunState.Reset:
@@ -319,9 +320,6 @@ namespace PERQemu
                     // to run, do it now;  Otherwise this is a no-op.  Kewl.
                     _debugger.RunDeferredActions();
 #endif
-                    break;
-
-                case RunState.Off:
                     break;
             }
             Log.Debug(Category.Emulator, "PERQSystem transitioned to {0}", _state);
@@ -356,14 +354,24 @@ namespace PERQemu
             Log.Write(Environment.StackTrace);
 #endif
             // Make sure both threads stop
-            PERQemu.Controller.Halt();
+            PERQemu.Controller.TransitionTo(RunState.Halted);
         }
 
+        /// <summary>
+        /// Completely shut down this instance.
+        /// </summary>
         public void Shutdown()
         {
             // Detach events
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
             DDSChanged -= PressBootKey;
+
+            // Go away or I shall taunt you some more
+            _cpu.Shutdown();
+            _iob.Shutdown();
+            _oio.Shutdown();
+            _ioBus = null;
+            Console.WriteLine("PERQSystem shutdown.");
         }
 
         /// <summary>
@@ -719,12 +727,12 @@ namespace PERQemu
                 case WhatChanged.HaltedInLoop:
                     // We don't actually fire an event; just call Halt()
                     Log.Write("The CPU has halted in a loop at PC {0:x4}", (ushort)args[0]);
-                    PERQemu.Controller.Halt();
+                    PERQemu.Controller.TransitionTo(RunState.Halted);
                     return;
 
                 case WhatChanged.PowerDown:
                     Log.Write("The PERQ has powered itself off.");
-                    PERQemu.Controller.TransitionTo(RunState.Off);
+                    PERQemu.Controller.PowerOff();
                     return;
 
                 default:

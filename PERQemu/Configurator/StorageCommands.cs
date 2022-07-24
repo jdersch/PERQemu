@@ -65,7 +65,7 @@ namespace PERQemu.UI
         [Command("storage status", "Show status of loaded storage devices")]
         private void StorageStatus()
         {
-            if (PERQemu.Controller.State == RunState.Unavailable)
+            if (PERQemu.Controller.State == RunState.Off)
             {
                 Console.WriteLine("The PERQ is powered off.");
                 return;
@@ -221,7 +221,7 @@ namespace PERQemu.UI
         private bool LoadInternal(int unit, string filename)
         {
             // If the machine is defined, see if the drive is loaded
-            if (PERQemu.Controller.State > RunState.Unavailable && PERQemu.Sys.Volumes[unit].IsLoaded)
+            if (PERQemu.Controller.State > RunState.Off && PERQemu.Sys.Volumes[unit].IsLoaded)
             {
                 // Is the drive modified?
                 if (PERQemu.Sys.Volumes[unit].IsModified)
@@ -246,7 +246,7 @@ namespace PERQemu.UI
 
             // If we successfully updated the Configuration, see if the
             // machine is in a state where we should update it too.
-            if (ok && (PERQemu.Controller.State > RunState.Unavailable))
+            if (ok && (PERQemu.Controller.State > RunState.Off))
             {
                 // LoadMedia will load or reload the drive as appropriate
                 ok = PERQemu.Sys.LoadMedia(PERQemu.Config.Current.Drives[unit]);
@@ -278,7 +278,7 @@ namespace PERQemu.UI
         private void UnloadInternal(int unit)
         {
             // If the machine is defined, check the drive and unload it
-            if (PERQemu.Controller.State != RunState.Unavailable)
+            if (PERQemu.Controller.State != RunState.Off)
             {
                 // Tell the PERQ to save/unload it
                 PERQemu.Sys.UnloadMedia(unit);
@@ -322,7 +322,7 @@ namespace PERQemu.UI
         public bool SaveInternal(int unit, string filename /* todo: format */)
         {
             // Save should be okay any time the machine is defined
-            if (PERQemu.Controller.State == RunState.Unavailable)
+            if (PERQemu.Controller.State == RunState.Off)
             {
                 Console.WriteLine($"No PERQ!  Can't save drive {unit}.");
                 return false;

@@ -369,6 +369,7 @@ could/will produce:
         - would support DeviceType.Tape9Track images
         - software support exists but there's weirdly no specifics
           about what 9-track drives or controllers were used
+          [update: seems the Ciprico Tapemaster is supported]
         - cool as it is to consider emulating a reel-to-reel tape drive
           this one is wildly implausible, even for a fanatic like me
 
@@ -396,13 +397,12 @@ are available as well.  Several serial-connected printers are supported by
 POS as well, but it would be a stretch to find an actual Xerox Diablo or TI
 Paper Tiger and do any real testing.  Volunteers?
 
-The GPIB interface is being rewritten to support the new Z80, primarily to
-support the Summagraphics BitPad One graphics tablet.  Older versions of POS
-and Accent won't see the Kriz Tablet, so making the GPIB work is a gating
-factor for the next release.  Three Rivers did support (informally) a few
-GPIB-connected devices, and there are all kinds of interesting possibilities
-for enhancing the emulator to do more with it, but the to-do list is so long
-that JWST can't see the end of it.  Sigh.
+The GPIB interface now supports the IOB and CIO (both Z80 versions), primarily
+to attach the Summagraphics BitPad One graphics tablet.  Older versions of POS
+and Accent won't see the Kriz Tablet.  Three Rivers did support (informally) a
+few GPIB-connected devices, and there are many interesting possibilities for
+enhancing the emulator to do more with it, but the to-do list is so long that
+JWST can't see the end of it.  Sigh.
 
 
 Ethernet is the #1 desired extra "peripheral" to support -- allowing the
@@ -426,5 +426,6 @@ let's not get carried away.)
 
 Wow.  If you read all that, give yourself a cookie!
 
+
 --
-Last update: skeezics    Fri May 13 14:25:04 PDT 2022
+Last update: skeezics    Mon Jul 18 14:48:04 PDT 2022

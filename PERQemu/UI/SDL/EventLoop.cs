@@ -99,10 +99,11 @@ namespace PERQemu.UI
         {
             if (_displayWindow != IntPtr.Zero)
             {
-                throw new InvalidOperationException("Attach Display when already assigned");
+                //throw new InvalidOperationException("Attach Display when already assigned");
+                Console.WriteLine("AttachDisplay when _displayWindow not null?");
             }
 
-            Log.Info(Category.UI, "Attaching the display");
+            Log.Write(Category.UI, "Attaching the display");
             _displayWindow = window;
 
             // Adjust the timer for running the message loop.  It should be no
@@ -117,7 +118,7 @@ namespace PERQemu.UI
         /// </summary>
         public void DetachDisplay()
         {
-            Log.Info(Category.UI, "Detaching the display");
+            Log.Write(Category.UI, "Detaching the display");
             _displayWindow = IntPtr.Zero;
 
             // Pump the brakes
@@ -188,7 +189,6 @@ namespace PERQemu.UI
             // Dispatch on Window events if a delegate is registered
             if (e.type == SDL.SDL_EventType.SDL_WINDOWEVENT && _displayWindow != IntPtr.Zero)
             {
-                
                 // If we ever have more than one window, ship event as a param
                 var winEvent = e.window.windowEvent;
 
@@ -206,9 +206,11 @@ namespace PERQemu.UI
                         return;
 
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_HIDDEN:
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_MINIMIZED:
                         HideOrMinimize();
                         return;
 
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SHOWN:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESTORED:
                         UnhideOrRestore();
                         return;
@@ -216,7 +218,7 @@ namespace PERQemu.UI
                     // also: max/minimize for someday laying out a fullscreen mode?
 
                     default:
-                        Log.Detail(Category.UI, "Unhandled window event {0}", winEvent);
+                        Log.Write(Category.UI, "Unhandled window event {0}", winEvent);
                         break;
                 }
             }
@@ -246,18 +248,34 @@ namespace PERQemu.UI
         {
             if (Settings.PauseWhenMinimized)
             {
-                Console.WriteLine("[Hey, I'm tiny!  I should pause to think about this.]");
+                _emuState = PERQemu.Controller.State;
+
+                if (_emuState == RunState.Running)
+                {
+                    PERQemu.Controller.TransitionTo(RunState.Paused);
+                    Console.WriteLine("[Pausing execution...]");
+                }
             }
         }
 
         /// <summary>
         /// If we're embiggened, unpause if paused.
         /// </summary>
+        /// <remarks>
+        /// Okay, SDL, why don't you map the Mac restore event when reinflating
+        /// a minimized window?  We get "shown" and "exposed" events (both) and
+        /// never see a "restored" message.  Great.
+        /// </remarks>
         private void UnhideOrRestore()
         {
             if (Settings.PauseWhenMinimized)
             {
-                Console.WriteLine("[I'm BIG again!  Rawr!]");
+                Console.WriteLine("[Window restored event]");
+                if (_emuState == RunState.Running)
+                {
+                    PERQemu.Controller.TransitionTo(_emuState);
+                    Console.WriteLine("[Resuming execution]");
+                }
             }
         }
 
@@ -323,6 +341,8 @@ namespace PERQemu.UI
 
         private bool _sdlRunning;
         private int _timerHandle;
+
+        private RunState _emuState;
 
         private IntPtr _displayWindow;
         private IntPtr _defaultCursor;

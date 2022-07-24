@@ -328,8 +328,6 @@ namespace PERQemu.IO.Z80
             {
                 Log.Debug(Category.SIO, "Channel {0} data write: 0x{1:x2}",
                                         _channelNumber, value);
-                // Nothing right now
-                Console.WriteLine($"SIO write {value}, not implemented");
             }
 
             /// <summary>
@@ -546,10 +544,6 @@ namespace PERQemu.IO.Z80
         }
 
         private Channel[] _channels;
-
-        private bool _interruptActive;
-        private byte _interruptVector;
-
         private Scheduler _scheduler;
         private byte _baseAddress;
         private byte[] _ports;

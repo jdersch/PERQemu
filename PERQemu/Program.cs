@@ -91,7 +91,6 @@ namespace PERQemu
 
             //_gui = new FormsManager();
             _gui = new EventLoop();
-            _gui.InitializeSDL();
 
             // Create main objects
             _controller = new ExecutionController();
@@ -105,6 +104,9 @@ namespace PERQemu
 
             // Start 'er up!
             Run();
+
+            // Close up shop
+            HighResolutionTimer.Shutdown();
 
             // Save the settings if they've changed
             Settings.Save();
@@ -131,10 +133,6 @@ namespace PERQemu
 
             // Run the CLI
             _cli.Run();
-
-            // Close up shop
-            _gui.ShutdownSDL();
-            HighResolutionTimer.Shutdown();
         }
 
         public static void PrintBanner()

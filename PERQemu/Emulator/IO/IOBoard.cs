@@ -103,6 +103,22 @@ namespace PERQemu.IO
             _z80System.Stop();
         }
 
+        /// <summary>
+        /// Completely shuts down this instance.
+        /// </summary>
+        public virtual void Shutdown()
+        {
+            _z80System.Shutdown();
+
+            _z80System = null;
+            _hardDiskController = null;
+
+            for (var p = 1; p < _portsHandled.Length; p++)
+                _portsHandled[p] = false;
+            
+            Console.WriteLine("IOBoard shutdown.");
+        }
+
         //
         // IO Bus connection
         //

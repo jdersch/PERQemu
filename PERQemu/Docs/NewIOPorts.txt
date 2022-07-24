@@ -1,7 +1,9 @@
 
 Comprehensive list of PERQ IO ports
+===================================
+
 Date compiled: 10-Nov-2016
-Last updated:  28-Mar-2022
+Last updated:  18-Jul-2022
 
 ------
 
@@ -58,8 +60,8 @@ More mysteries!  A disassembly of "cioboot.bin" (not sure where this came from!!
 to six completely undocumented IOB addresses:  315..317 (0xCD..0xCF) and 350..352 (0xE8..0xEA).  These must
 pre-date the EIO board, since 315..317 overlap with the EIO's "load multicast group" registers?  But this is in
 the boot ROM code, not in SysB!  And the 350..352 ports are in the range that 3RCC documented as available for
-user options.  So is this from a development system used for some early version of Ethernet, or netbooting?  We
-may never know.
+user options.  Photographic evidence confirms an ICL-labeled "production" version of the IOB/CIO board, but no
+definitive documentation about the changes and possible software modifications required has been found.  Yet.
 
 ------
 

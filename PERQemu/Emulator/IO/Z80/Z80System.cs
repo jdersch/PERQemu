@@ -381,6 +381,21 @@ namespace PERQemu.IO.Z80
             }
         }
 
+        public void Shutdown()
+        {
+            // Just in case
+            Stop();
+
+            _bus = null;
+            _memory = null;
+            _cpu = null;
+
+            _scheduler = null;
+            _sync.Dispose();
+
+            Console.WriteLine("Z80System shutdown.");
+        }
+
         private void OnRunStateChange(RunStateChangeEventArgs s)
         {
             Log.Debug(Category.Controller, "[Z80 state change event -> {0}]", s.State);

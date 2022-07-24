@@ -48,13 +48,13 @@ namespace PERQemu.UI
         /// </summary>
         private bool OKtoReconfig()
         {
-            if (PERQemu.Controller.State <= RunState.Off)
+            if (PERQemu.Controller.State > RunState.Off)
             {
-                return true;
+                Console.WriteLine("Cannot reconfigure while the PERQ is running; please power down and try again.");
+                return false;
             }
 
-            Console.WriteLine("Cannot reconfigure while the PERQ is running; please power down and try again.");
-            return false;
+            return true;
         }
 
         [Command("configure", "Enter the configuration subsystem", Prefix = true)]

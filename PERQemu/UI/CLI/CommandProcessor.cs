@@ -27,8 +27,8 @@ using PERQemu.UI;
 namespace PERQemu
 {
     /// <summary>
-    /// CommandProcessor is the top-level console command interpreter.  It
-    /// wraps the CommandExecutor which does the dirty work.
+    /// CommandProcessor is the top-level console command interpreter.
+    /// It wraps the CommandExecutor which does the dirty work.
     /// </summary>
     public class CommandProcessor
     {
@@ -190,7 +190,7 @@ namespace PERQemu
 
             // Reset our title if the machine is off; add or remove the DDS
             // change hook when the machine is powered up or down
-            if (state <= RunState.Off)
+            if (state == RunState.Off)
             {
                 Console.Title = "PERQemu";
             }
@@ -270,6 +270,65 @@ namespace PERQemu
         {
             PERQemu.PrintBanner();
         }
+
+        [Command("commands", "Show console commands and their descriptions")]
+        public void ShowCommands()
+        {
+            _exec.ShowCommands("root");
+        }
+
+        public void ShowCommands(string prefix)
+        {
+            _exec.ShowCommands(prefix);
+        }
+
+        [Command("history", "Show command history")]
+        public void ShowHistory()
+        {
+            _editor.ShowHistory();
+            // probably should just expose the list (readonly) and loop it here?
+        }
+
+        [Command("save history", "Save command history")]
+        public void SaveHistory()
+        {
+            Console.WriteLine("[Not yet implemented]");
+
+            // build path OutputDir/cmdhistory.txt
+            // open output stream and dump it
+        }
+
+        [Command("gui", "Start the graphical interface")]
+        private void LaunchGUI()
+        {
+            // I'm looking at YOU, 64-bit Cocoa WinForms port that was promised
+            // over three YEARS ago.  Sigh.
+            Console.WriteLine("Nope.  No cross-platform GUI available yet.");
+        }
+
+        [Command("done", Discreet = true)]
+        private void Done()
+        {
+            Console.WriteLine("Already at top-level.");
+        }
+
+        [Command("exit")]
+        [Command("quit", "Quit PERQemu")]
+        private void Quit()
+        {
+            PERQemu.Controller.PowerOff();
+            _running = false;
+        }
+
+        [Command("quit without save", "Quit PERQemu without committing changes")]
+        private void QuitNow()
+        {
+            PERQemu.Controller.PowerOff(false);     // Stop the machine, if running
+            Settings.Changed = false;               // Force the "without save" part
+            _running = false;
+        }
+
+        #region CLI Help (for now)
 
         // todo:  a nice help system, either built-in (for offline operation) or
         // web-based.  for now, dump out some basic help (in 80 columns).  don't
@@ -351,62 +410,8 @@ namespace PERQemu
                               "available output.  Logging commands are available in the 'debug' subsystem.");
         }
 
-        [Command("commands", "Show console commands and their descriptions")]
-        public void ShowCommands()
-        {
-            _exec.ShowCommands("root");
-        }
+        #endregion
 
-        public void ShowCommands(string prefix)
-        {
-            _exec.ShowCommands(prefix);
-        }
-
-        [Command("history", "Show command history")]
-        public void ShowHistory()
-        {
-            _editor.ShowHistory();
-            // probably should just expose the list (readonly) and loop it here?
-        }
-
-        [Command("save history", "Save command history")]
-        public void SaveHistory()
-        {
-            Console.WriteLine("[Not yet implemented]");
-
-            // build path OutputDir/cmdhistory.txt
-            // open output stream and dump it
-        }
-
-        [Command("gui", "Start the graphical interface")]
-        private void LaunchGUI()
-        {
-            // I'm looking at YOU, 64-bit Cocoa WinForms port that was promised
-            // over three YEARS ago.  Sigh.
-            Console.WriteLine("Nope.  No cross-platform GUI available yet.");
-        }
-
-        [Command("done", Discreet = true)]
-        private void Done()
-        {
-            Console.WriteLine("Already at top-level.");
-        }
-
-        [Command("exit")]
-        [Command("quit", "Quit PERQemu")]
-        private void Quit()
-        {
-            PERQemu.Controller.PowerOff();
-            _running = false;
-        }
-
-        [Command("quit without save", "Quit PERQemu without committing changes")]
-        private void QuitNow()
-        {
-            PERQemu.Controller.PowerOff(false);     // Stop the machine, if running
-            Settings.Changed = false;               // Force the "without save" part
-            _running = false;
-        }
 
         [Conditional("DEBUG")]
         [Command("debug dump command tree")]

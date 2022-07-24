@@ -17,6 +17,8 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System;
+
 namespace PERQemu.IO
 {
     /// <summary>
@@ -76,6 +78,14 @@ namespace PERQemu.IO
 
         public virtual void SaveTape()
         {
+        }
+
+        public virtual void Shutdown()
+        {
+            for (var p = 1; p < _portsHandled.Length; p++)
+                _portsHandled[p] = false;
+
+            Console.WriteLine("OptionBoard shutdown.");
         }
 
         /// <summary>

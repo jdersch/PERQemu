@@ -195,6 +195,16 @@ namespace PERQemu.Processor
             }
         }
 
+        public void Shutdown()
+        {
+            Stop();
+
+            _processor = null;
+            _heartbeat = null;
+            _scheduler = null;
+            Console.WriteLine("CPUBoard shutdown.");
+        }
+
         private void OnRunStateChange(RunStateChangeEventArgs s)
         {
             Log.Debug(Category.Controller, "[CPU state change event -> {0}]", s.State);

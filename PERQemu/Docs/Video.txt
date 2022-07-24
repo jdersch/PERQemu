@@ -37,6 +37,11 @@ Visible field = 1280 bit times * 9.1ns / 18.5 = ~70 pixel clocks
 Horizontal retrace = 422 bit times * 9.1ns / 18.5 = ~22 pixel clocks
 
 
+The astute reader may note that these timings are very close to VGA rates for
+the common 1024 x 768 (65Mhz) and 1280 x 1024 (108Mhz) modes.  Future PERQ-on-
+FPGA implementors take note. :-)
+
+
 How It Works
 ------------
 
@@ -51,7 +56,7 @@ values for the next band of the display; maximum latency is ~80 microinstruction
 to avoid the risk of the display glitching or breaking up.
 
 Vertical retrace is accounted for by the microcode setting up two bands
-totalling 43 lines.  The second of these sets a bit which indicates the end of
+totaling 43 lines.  The second of these sets a bit which indicates the end of
 the current display list (which, conveniently, is used to reset the scanline
 counter).
 
@@ -183,6 +188,14 @@ stupid but it yields around 10-12fps in performance and after trying 147,635
 other approaches I'm tired of screwing around with it.  Good enough.  Moving on.
 
 
+[Update:  Will "MAUI" finally make a _supported_ cross-platform GUI environment
+available?  I won't know for quite some time as I don't have any development box
+anywhere near current enough to run it, and adopting MAUI would impose the same
+requirements on client machines.  Preliminary reading of the spec makes it seem
+unlikely that the PERQ video display could be implemented directly as a MAUI
+object so SDL might always be required for rendering?]
+
+
 Video Controller State Machine
 ------------------------------
 
@@ -253,11 +266,9 @@ isn't terribly useful.  I can't remember the last time I tried
 to see what happens on the real hardware.  Rip in the fabric of spacetime?
 
 
-Landscape is now implemented but won't be fully tested until we have the rest
-of the PERQ-2/EIO completed.  I don't think any OS we can boot on the current
-PERQ-1 emulation has any support for the landscape option, and although there
-were a handful of extremely rare PERQ-1 systems that had them, they almost
-certainly required the CIO/"new" Z80 firmware.
+Landscape works!  Though there were only around a dozen PERQ-1s ever made with
+special 1MB landscape memory boards, POS G and Accent S6 both can detect and
+use the landscape display when the CIO Z80 is selected.
 
 
 Note that the "CRT signals" register bit for LandscapeDisplay is inverted
@@ -265,4 +276,4 @@ Note that the "CRT signals" register bit for LandscapeDisplay is inverted
 
 
 ---
-Last update: skeezics    Wed Dec  8 11:56:35 PST 2021
+Last update: skeezics    Mon Jul 18 15:35:56 PDT 2022

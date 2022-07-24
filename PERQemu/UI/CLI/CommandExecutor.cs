@@ -579,8 +579,8 @@ namespace PERQemu.UI
         /// <remarks>
         /// Adds "noise words" or "glue" nodes as SubNodes, but expands method
         /// parameters into an Arguments list (which acts as a singly-linked list
-        /// that lead to the Method node).  This allows us to do completions on
-        /// enums or booleans, which is fun.
+        /// that leads to the Method node).  This allows us to do completions on
+        /// enums, booleans or "keyword" strings, which is fun.
         /// 
         /// Also now allows multiple attributes to be set on a method so that
         /// "aliases" can be easily created (such as allowing "exit" or "quit"),
@@ -740,20 +740,9 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Builds a dictionary that maps a particular keyword to match to a set
-        /// of argument nodes that reference it.  This allows for dynamic updates
-        /// at runtime such as when new configurations or drive types are added.
+        /// Builds a dictionary that maps a particular keyword to a set of
+        /// argument nodes that reference it.
         /// </summary>
-        /// <remarks>
-        /// Parameters tagged with the [KeywordMatch] attribute must specify a
-        /// string that identifies what values the parameter should supply, i.e.
-        ///     DoFoo([KeywordMatch("fooTypes") string aFooThing)
-        /// means the routine that manages the list of "fooTypes" can look up
-        /// which nodes have to have their Helpers updated when something changes.
-        /// If we could embed a delegate in the attribute this flimsy string match
-        /// wouldn't be necessary... or I'll figure out something else a little
-        /// more elegant eventually.  Let's see if this works for now. :-)
-        /// </remarks>
         private void BuildMatchDictionary(List<ArgumentNode> list)
         {
             // Set up the dictionary for KeywordMatch-tagged nodes

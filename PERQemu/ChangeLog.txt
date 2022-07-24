@@ -413,6 +413,15 @@ July, 2022:
     the SIO chip, and programs the registers just a little differently.  Full
     serial support not yet restored, but it's a step in the right direction.
 
+    4. Enhanced the CLI to do tab completion on more stuff, like configuration
+    names or drive types (and more to come).
+
+    5. Apply enough brute force to actually free up the virtual machine so it
+    can properly reinitialize.  This means completely blowing up SDL2 and re-
+    initializing from scratch every time we "power on" because there's no other
+    way to make the old Display go away.  This makes less and less sense the
+    deeper down the rabbit hole I go...
+    
 
 ---
-Last update: skeezics    Fri Jul  8 00:07:27 PDT 2022
+Last update: skeezics    Fri Jul 22 20:47:45 PDT 2022

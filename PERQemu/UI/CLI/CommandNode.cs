@@ -78,8 +78,7 @@ namespace PERQemu.UI
 
                 // Set a flag for quick test, save the keyword this node should
                 // match.  The setter for the helper strings finds the nodes to
-                // update by a string match/dictionary lookup.  Not great, but
-                // can't embed delegates in attributes directly, so... it'll do.
+                // update by a string match/dictionary lookup.
                 DoKeywordMatch = true;
                 Keyword = kma.Keyword;
             }
@@ -225,6 +224,7 @@ namespace PERQemu.UI
                 Helpers.Add(w);
         }
     }
+
 
     /// <summary>
     /// Defines a node in the CLI command tree.
