@@ -35,6 +35,7 @@ namespace PERQemu.UI
             _sdlRunning = false;
             _displayWindow = IntPtr.Zero;
             _timerHandle = -1;
+            _resumeOnRestore = false;
             _uiEventDispatch = new Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate>();
         }
 
@@ -99,11 +100,10 @@ namespace PERQemu.UI
         {
             if (_displayWindow != IntPtr.Zero)
             {
-                //throw new InvalidOperationException("Attach Display when already assigned");
-                Console.WriteLine("AttachDisplay when _displayWindow not null?");
+                throw new InvalidOperationException("AttachDisplay when already assigned");
             }
 
-            Log.Write(Category.UI, "Attaching the display");
+            Log.Debug(Category.UI, "Attaching the display");
             _displayWindow = window;
 
             // Adjust the timer for running the message loop.  It should be no
@@ -118,7 +118,7 @@ namespace PERQemu.UI
         /// </summary>
         public void DetachDisplay()
         {
-            Log.Write(Category.UI, "Detaching the display");
+            Log.Debug(Category.UI, "Detaching the display");
             _displayWindow = IntPtr.Zero;
 
             // Pump the brakes
@@ -210,7 +210,7 @@ namespace PERQemu.UI
                         HideOrMinimize();
                         return;
 
-                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SHOWN:
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESTORED:
                         UnhideOrRestore();
                         return;
@@ -218,7 +218,7 @@ namespace PERQemu.UI
                     // also: max/minimize for someday laying out a fullscreen mode?
 
                     default:
-                        Log.Write(Category.UI, "Unhandled window event {0}", winEvent);
+                        Log.Debug(Category.UI, "Unhandled window event {0}", winEvent);
                         break;
                 }
             }
@@ -246,15 +246,16 @@ namespace PERQemu.UI
         /// </summary>
         private void HideOrMinimize()
         {
-            if (Settings.PauseWhenMinimized)
-            {
-                _emuState = PERQemu.Controller.State;
+            // This is redundant if the user presses the minimize/hide button
+            // but allows for calls from the CLI for debugging
+            SDL.SDL_HideWindow(_displayWindow);
 
-                if (_emuState == RunState.Running)
-                {
-                    PERQemu.Controller.TransitionTo(RunState.Paused);
-                    Console.WriteLine("[Pausing execution...]");
-                }
+            if (Settings.PauseWhenMinimized && (PERQemu.Controller.State == RunState.Running))
+            {
+                _resumeOnRestore = true;
+
+                Log.Info(Category.Controller, "[Pausing execution]");
+                PERQemu.Controller.TransitionTo(RunState.Paused);
             }
         }
 
@@ -268,14 +269,18 @@ namespace PERQemu.UI
         /// </remarks>
         private void UnhideOrRestore()
         {
-            if (Settings.PauseWhenMinimized)
+            var flags = SDL.SDL_GetWindowFlags(_displayWindow);
+
+            if (((SDL.SDL_WindowFlags)flags & SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN) == 0)
             {
-                Console.WriteLine("[Window restored event]");
-                if (_emuState == RunState.Running)
-                {
-                    PERQemu.Controller.TransitionTo(_emuState);
-                    Console.WriteLine("[Resuming execution]");
-                }
+                SDL.SDL_ShowWindow(_displayWindow);
+            }
+
+            if (_resumeOnRestore)
+            {
+                Log.Info(Category.Controller, "[Resuming execution]");
+                PERQemu.Controller.TransitionTo(RunState.Running);
+                _resumeOnRestore = false;
             }
         }
 
@@ -311,7 +316,7 @@ namespace PERQemu.UI
         /// </summary>
         public void ShutdownSDL()
         {
-            Log.Info(Category.UI, "SDL Shutdown requested");
+            Log.Debug(Category.UI, "SDL Shutdown requested");
 
             if (_sdlRunning)
             {
@@ -339,10 +344,9 @@ namespace PERQemu.UI
         }
 
 
-        private bool _sdlRunning;
         private int _timerHandle;
-
-        private RunState _emuState;
+        private bool _sdlRunning;
+        private bool _resumeOnRestore;
 
         private IntPtr _displayWindow;
         private IntPtr _defaultCursor;

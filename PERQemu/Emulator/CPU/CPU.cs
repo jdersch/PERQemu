@@ -20,6 +20,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
+using PERQemu.Config;
 using PERQemu.Memory;
 using PERQemu.Debugger;
 
@@ -171,6 +172,7 @@ namespace PERQemu.Processor
                 uOp.CND == Condition.True &&
                 uOp.JMP == JumpOperation.Goto)
             {
+                _break = true;
                 _system.MachineStateChange(WhatChanged.HaltedInLoop, PC);
             }
 #endif
@@ -545,7 +547,7 @@ namespace PERQemu.Processor
                     // Watched address?
                     if (_system.Debugger.WatchedMemoryAddress.IsWatched(_memory.MADR))
                     {
-                        _system.Debugger.WatchedMemoryAddress.BreakpointReached(_memory.MADR, amux);
+                        _break = _system.Debugger.WatchedMemoryAddress.BreakpointReached(_memory.MADR, amux);
                     }
 #endif
                     break;
@@ -556,7 +558,7 @@ namespace PERQemu.Processor
                     // Watched address?
                     if (_system.Debugger.WatchedMemoryAddress.IsWatched(_memory.MADR))
                     {
-                        _system.Debugger.WatchedMemoryAddress.BreakpointReached(_memory.MADR, amux);
+                        _break = _system.Debugger.WatchedMemoryAddress.BreakpointReached(_memory.MADR, amux);
                     }
 #endif
                     break;
@@ -656,6 +658,13 @@ namespace PERQemu.Processor
 
                         case 0x7:   // SrcRasterOp := (R)
                             _rasterOp.SrcRasterOp(_alu.R.Lo);
+
+                            // Check for poweroff bit and stop emulation if we're a PERQ-1.
+                            if ((_alu.R.Lo & 0x80) == 0 && _system.Config.Chassis == ChassisType.PERQ1)
+                            {
+                                _break = true;
+                                PERQemu.Sys.MachineStateChange(WhatChanged.PowerDown);
+                            }
                             break;
 
                         case 0x8:   // DstRasterOp := (R)
@@ -688,7 +697,7 @@ namespace PERQemu.Processor
                                         _shifter.SetShifterCommand(ShifterCommand.LeftShift, 1, 0);
                                     else
                                         _shifter.SetShifterCommand(ShifterCommand.RightShift, 1, 0);
-                                    
+
                                     _mqEnabled = true;
                                 }
                             }

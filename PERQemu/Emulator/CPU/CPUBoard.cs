@@ -197,12 +197,10 @@ namespace PERQemu.Processor
 
         public void Shutdown()
         {
-            Stop();
-
             _processor = null;
             _heartbeat = null;
             _scheduler = null;
-            Console.WriteLine("CPUBoard shutdown.");
+            Log.Detail(Category.Emulator, "CPUBoard shutdown.");
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)

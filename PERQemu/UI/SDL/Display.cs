@@ -206,6 +206,30 @@ namespace PERQemu.UI
         }
 
         /// <summary>
+        /// Queue an event to hide the display window (for debugging).
+        /// </summary>
+        public void Hide()
+        {
+            var e = new SDL.SDL_Event();
+            e.type = SDL.SDL_EventType.SDL_WINDOWEVENT;
+            e.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_HIDDEN;
+
+            SDL.SDL_PushEvent(ref e);
+        }
+
+        /// <summary>
+        /// Queue an event to restore the display if minimized/hidden.
+        /// </summary>
+        public void Restore()
+        {
+            var e = new SDL.SDL_Event();
+            e.type = SDL.SDL_EventType.SDL_WINDOWEVENT;
+            e.window.windowEvent = SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESTORED;
+
+            SDL.SDL_PushEvent(ref e);
+        }
+
+        /// <summary>
         /// Paint the completed frame on the screen.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -335,7 +359,7 @@ namespace PERQemu.UI
             {
                 SDL.SDL_DestroyWindow(_sdlWindow);
                 _sdlWindow = IntPtr.Zero;
-                Console.WriteLine("[DestroyWindow called]");
+                Log.Detail(Category.UI, "[DestroyWindow called]");
             }
         }
 
@@ -374,6 +398,9 @@ namespace PERQemu.UI
         {
             Console.WriteLine("renderEvent={0}, fpsUpdateEvent={1}, frames={2}",
                               _renderEvent.type, _fpsUpdateEvent.type, _frames);
+
+            var flags = SDL.SDL_GetWindowFlags(_sdlWindow);
+            Console.WriteLine("flags={0}", (SDL.SDL_WindowFlags)flags);
         }
 
         /// <summary>

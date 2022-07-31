@@ -116,7 +116,7 @@ namespace PERQemu.IO
             for (var p = 1; p < _portsHandled.Length; p++)
                 _portsHandled[p] = false;
             
-            Console.WriteLine("IOBoard shutdown.");
+            Log.Detail(Category.Emulator, "IOBoard shutdown.");
         }
 
         //

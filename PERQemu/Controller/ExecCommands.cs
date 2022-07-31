@@ -156,5 +156,22 @@ namespace PERQemu
             }
         }
 
+#if DEBUG
+        // debugging
+        [Command("hide", "Hide the PERQ display", Discreet = true)]
+        private void HideDisplay()
+        {
+            PERQemu.Sys.Display.Hide();
+            Console.WriteLine("Sent window hide event.");
+        }
+
+        [Command("unhide", "Restore the PERQ display", Discreet = true)]
+        private void ShowDisplay()
+        {
+            PERQemu.Sys.Display.Restore();
+            Console.WriteLine("Sent window restore event.");
+        }
+#endif
+
     }
 }

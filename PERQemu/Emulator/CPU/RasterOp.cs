@@ -22,7 +22,6 @@ using System.IO;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-using PERQemu.Config;
 using PERQemu.Memory;
 
 namespace PERQemu.Processor
@@ -285,7 +284,7 @@ namespace PERQemu.Processor
             // builds an instruction that does a dummy assignment to this register,
             // which means a massive amount of spurious log spewage.
 
-             Log.Debug(Category.RasterOp, "Dst:  Func={0} WordPos={1} BitOffset={2}",
+            Log.Debug(Category.RasterOp, "Dst:  Func={0} WordPos={1} BitOffset={2}",
                                          _function, _destWordPosition, _destBitOffset);
         }
 
@@ -299,15 +298,6 @@ namespace PERQemu.Processor
             _function = (Function)(((int)_function & 0x3) | (((~value) & 0x40) >> 4));
             _srcWordPosition = (value & 0x30) >> 4;
             _srcBitOffset = (value & 0xf);
-
-            // Check for poweroff bit and stop emulation if we're a PERQ-1.
-            if ((value & 0x80) == 0)
-            {
-                if (PERQemu.Sys.Config.Chassis == ChassisType.PERQ1)
-                {
-                    PERQemu.Sys.MachineStateChange(WhatChanged.PowerDown);
-                }
-            }
 
             Log.Debug(Category.RasterOp, "Src:  Func={0} WordPos={1} BitOffset={2}",
                                         _function, _srcWordPosition, _srcBitOffset);

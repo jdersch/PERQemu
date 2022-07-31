@@ -69,6 +69,7 @@ namespace PERQemu
         {
             _system = null;
             _bootChar = 0;
+            _bootKeyArmed = true;
             _mode = Settings.RunMode;
 
             InitStateMachine();
@@ -158,6 +159,10 @@ namespace PERQemu
                 return;
             }
 
+            // We have a system!  Listen for events
+            PERQemu.Sys.DDSChanged += PressBootKey;
+            PERQemu.Sys.PowerDownRequested += SoftPowerOff;
+
             // Load the configured storage devices
             if (!_system.LoadAllMedia())
             {
@@ -186,6 +191,8 @@ namespace PERQemu
             {
                 TransitionTo(RunState.Reset);
                 Console.WriteLine("PERQ system reset.");
+
+                _bootKeyArmed = true;
 
                 if (State == RunState.Paused && !Settings.PauseOnReset)
                 {
@@ -226,7 +233,10 @@ namespace PERQemu
                 _system.SaveAllMedia();
             }
 
-            // Now clobber the system and close down
+            // Now unhook and close down
+            PERQemu.Sys.DDSChanged -= PressBootKey;
+            PERQemu.Sys.PowerDownRequested -= SoftPowerOff;
+
             TransitionTo(RunState.Off);
 
             // The only way to actually release resources? :-/
@@ -235,6 +245,73 @@ namespace PERQemu
             // Farewell, sweet PERQ
             _system = null;
         }
+
+        /// <summary>
+        /// Catch PERQ-1 "soft" power down events.
+        /// </summary>
+        public void SoftPowerOff(MachineStateChangeEventArgs a)
+        {
+            Log.Info(Category.Emulator, "The PERQ has powered itself off.");
+            PowerOff();
+        }
+
+        /// <summary>
+        /// If the user has specified an alternate boot character, kick off
+        /// a workitem to automagically press it (up until the point in the
+        /// standard boot microcode where the key is read).
+        /// </summary>
+        public void PressBootKey(MachineStateChangeEventArgs a)
+        {
+            var dds = (int)a.Args[0];
+
+            if (dds == 149 && _bootChar != 0 && _bootKeyArmed)
+            {
+                Log.Write("Selecting '{0}' boot...", (char)_bootChar);
+                var count = 25;
+                BootCharCallback(0, count);
+            }
+        }
+
+        /// <summary>
+        /// Simulate holding down a key if the user has selected an alternate
+        /// boot char.  To be effective, only sends the character from the start
+        /// of SYSB (when the DDS reaches 150) to when the Z80 reads and returns
+        /// it to the microcode (by DDS 151).  Deschedules itself after that.
+        /// </summary>
+        /// <remarks>
+        /// SYSB starts by immediately turning off the Z80, restarting it,
+        /// enabling the keyboard to read the boot character, then turning the
+        /// Z80 off again while it continues the bootstrap.  The microcode waits
+        /// up to 4.2M cycles (around .7 seconds) to get a key from the keyboard
+        /// before defaulting to 'a' boot.  The Z80 startup sequence always does
+        /// at least one dummy read to clear the keyboard register so we really
+        /// only need to jam the key in there 2-3 times... but the timing _must_
+        /// be such that a keyboard interrupt is generated within the window so
+        /// that the keystroke is actually sent to the PERQ in a message -- it
+        /// isn't enough to just have the boot character in the keyboard buffer!
+        /// </remarks>
+        private void BootCharCallback(ulong skewNsec, object context)
+        {
+            var count = (int)context - 1;
+
+            if (PERQemu.Sys.CPU.DDS < 152 && count > 0)
+            {
+                // Send the key:
+                PERQemu.Sys.IOB.Z80System.Keyboard.QueueInput(_bootChar);
+
+                // And do it again
+                PERQemu.Sys.Scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback, count);
+
+                Log.Detail(Category.Emulator, "Pressing the bootchar again in 10msec, retry {0}", count);
+            }
+            else
+            {
+                // Disarm until next reset; POS G loops the DDS around so we
+                // don't want to send extraneous keystrokes!  Oy.
+                _bootKeyArmed = false;
+            }
+        }
+
 
         /// <summary>
         /// Change the state of the virtual machine.  For now, will block on all
@@ -440,7 +517,10 @@ namespace PERQemu
         private Dictionary<SMKey, List<Transition>> _SMDict;
 
         private ExecutionMode _mode;
+
         private static byte _bootChar;
+        private bool _bootKeyArmed;
+
         private PERQSystem _system;
     }
 }

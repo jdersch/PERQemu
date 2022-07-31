@@ -352,14 +352,15 @@ namespace PERQemu.UI
                     // Shortcut: assume they mean megabytes
                     size = RoundToPowerOf2(size) * 1024;
                 }
-                else if (size == 256 || size == 512)
+                else if (size > 128 && size < 1024)
                 {
                     // 256 and 512 are valid for quarter & half-meg boards
+                    size = RoundToPowerOf2(size);
                 }
                 else if (size >= 1024 && size <= 8192)
                 {
                     // Round to the nearest supported capacity
-                    size = RoundToPowerOf2(size / 1024) * 1024;
+                    size = RoundToPowerOf2((size + 1023) / 1024) * 1024;
                 }
                 else
                 {
@@ -609,6 +610,13 @@ namespace PERQemu.UI
             }
         }
 
+        // todo: one default parameter (char port = 'a') should work, to avoid
+        // these redundant methods... 
+        [Command("configure enable rs232", "Enable use of serial port A")]
+        public void EnableRS232()
+        {
+            EnableRS232('a');
+        }
 
         [Command("configure enable rs232", "Enable use of a serial port")]
         public void EnableRS232(char port)
@@ -620,6 +628,12 @@ namespace PERQemu.UI
                 if (changed && !PERQemu.Config.Quietly)
                     Console.WriteLine($"RS-232 port {char.ToUpper(port)} enabled.");
             }
+        }
+
+        [Command("configure disable rs232", "Disable use of serial port A")]
+        public void DisableRS232()
+        {
+            DisableRS232('a');
         }
 
         [Command("configure disable rs232", "Disable use of a serial port")]

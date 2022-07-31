@@ -393,7 +393,7 @@ namespace PERQemu.IO.Z80
             _scheduler = null;
             _sync.Dispose();
 
-            Console.WriteLine("Z80System shutdown.");
+            Log.Detail(Category.Emulator, "Z80System shutdown.");
         }
 
         private void OnRunStateChange(RunStateChangeEventArgs s)

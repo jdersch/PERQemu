@@ -85,7 +85,7 @@ namespace PERQemu.IO
             for (var p = 1; p < _portsHandled.Length; p++)
                 _portsHandled[p] = false;
 
-            Console.WriteLine("OptionBoard shutdown.");
+            Log.Detail(Category.Emulator, "OptionBoard shutdown.");
         }
 
         /// <summary>

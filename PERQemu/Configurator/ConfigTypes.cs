@@ -29,7 +29,7 @@ namespace PERQemu.Config
     {
         PERQ1 = 1,
         PERQ2,
-        PERQ2T2
+        PERQ2Tx
     }
 
     public enum CPUType

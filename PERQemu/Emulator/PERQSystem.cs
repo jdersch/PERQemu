@@ -160,7 +160,6 @@ namespace PERQemu
             // Okay!  We have a PERQ!  Now listen for state change events
             // from the Controller (or Debugger)
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
-            DDSChanged += PressBootKey;
         }
 
         public Configuration Config => _conf;
@@ -185,6 +184,7 @@ namespace PERQemu
         public PERQDebugger Debugger => _debugger;
 
         public event MachineStateChangeEventHandler DDSChanged;
+        public event MachineStateChangeEventHandler PowerDownRequested;
 
 
         /// <summary>
@@ -221,6 +221,9 @@ namespace PERQemu
                 case RunState.Running:
                     // Get the current run mode from the Controller
                     SetMode();
+
+                    // Bring up the window if it's minimized
+                    _display.Restore();
 
                     if (_mode == ExecutionMode.Asynchronous)
                     {
@@ -305,7 +308,6 @@ namespace PERQemu
                     _mem.Reset();
                     _ioBus.Reset();
                     _state = RunState.Paused;
-                    _bootKeyArmed = true;
                     break;
 
                 case RunState.Paused:
@@ -364,14 +366,13 @@ namespace PERQemu
         {
             // Detach events
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
-            DDSChanged -= PressBootKey;
 
             // Go away or I shall taunt you some more
-            _cpu.Shutdown();
-            _iob.Shutdown();
             _oio.Shutdown();
+            _iob.Shutdown();
+            _cpu.Shutdown();
             _ioBus = null;
-            Console.WriteLine("PERQSystem shutdown.");
+            Log.Detail(Category.Emulator, "PERQSystem shutdown.");
         }
 
         /// <summary>
@@ -657,9 +658,17 @@ namespace PERQemu
                 case DeviceType.Floppy:
                     if (Settings.SaveFloppyOnEject == Ask.Maybe)
                     {
-                        // Pause emulation so SDL display events don't stack up
-                        if (running) PERQemu.Controller.Break();
+                        if (running)
+                        {
+                            // Pause emulation so SDL display events don't stack up
+                            PERQemu.Controller.Break();
 
+                            // Refresh the FPS to show we're paused!
+                            _display.RefreshFPS(new HRTimerElapsedEventArgs(1d));
+                            Thread.Sleep(15);
+                        }
+
+                        // Put up the modal dialog box
                         int btn = 0;
                         var mbData = MakeMessageBox(dev, unit);
                         var ret = SDL.SDL_ShowMessageBox(ref mbData, out btn);
@@ -668,7 +677,10 @@ namespace PERQemu
                         doit = (ret == 0 && btn == 0);
 
                         // Resume the emulator
-                        if (running) PERQemu.Controller.TransitionTo(RunState.Running);
+                        if (running)
+                        {
+                            PERQemu.Controller.TransitionTo(RunState.Running);
+                        }
                     }
                     else
                     {
@@ -682,7 +694,12 @@ namespace PERQemu
                 case DeviceType.DiskSMD:
                     if (Settings.SaveDiskOnShutdown == Ask.Maybe)
                     {
-                        if (running) PERQemu.Controller.Break();
+                        if (running)
+                        {
+                            PERQemu.Controller.Break();
+                            _display.RefreshFPS(new HRTimerElapsedEventArgs(1d));
+                            Thread.Sleep(15);
+                        }
 
                         int btn = 0;
                         var mbData = MakeMessageBox(dev, unit);
@@ -690,7 +707,10 @@ namespace PERQemu
 
                         doit = (ret == 0 && btn == 0);
 
-                        if (running) PERQemu.Controller.TransitionTo(RunState.Running);
+                        if (running)
+                        {
+                            PERQemu.Controller.TransitionTo(RunState.Running);
+                        }
                     }
                     else
                     {
@@ -710,6 +730,11 @@ namespace PERQemu
 
         #endregion
 
+        /// <summary>
+        /// Deal with MachineStateChange events.  For now (with no GUI, especially
+        /// not a full-blown debugger) there aren't handlers/subscribers for some
+        /// events, so they're dealt with locally.  This is kind of terrible.
+        /// </summary>
         public void MachineStateChange(WhatChanged w, params object[] args)
         {
             MachineStateChangeEventHandler handler = null;
@@ -731,9 +756,8 @@ namespace PERQemu
                     return;
 
                 case WhatChanged.PowerDown:
-                    Log.Write("The PERQ has powered itself off.");
-                    PERQemu.Controller.PowerOff();
-                    return;
+                    handler = PowerDownRequested;
+                    break;
 
                 default:
                     // unhandled, ignore it?
@@ -745,63 +769,6 @@ namespace PERQemu
             {
                 Log.Debug(Category.Emulator, "MachineStateChange {0} firing", w);
                 handler(new MachineStateChangeEventArgs(w, args));
-            }
-        }
-
-        /// <summary>
-        /// If the user has specified an alternate boot character, kick off
-        /// a workitem to automagically press it (up until the point in the
-        /// standard boot microcode where the key is read).
-        /// </summary>
-        public void PressBootKey(MachineStateChangeEventArgs a)
-        {
-            var dds = (int)a.Args[0];
-
-            if (dds == 149 && PERQemu.Controller.BootChar != 0 && _bootKeyArmed)
-            {
-                Log.Write("Selecting '{0}' boot...", (char)PERQemu.Controller.BootChar);
-                var count = 25;
-                BootCharCallback(0, count);
-            }
-        }
-
-        /// <summary>
-        /// Simulate holding down a key if the user has selected an alternate
-        /// boot char.  To be effective, only sends the character from the start
-        /// of SYSB (when the DDS reaches 150) to when the Z80 reads and returns
-        /// it to the microcode (by DDS 151).  Deschedules itself after that.
-        /// </summary>
-        /// <remarks>
-        /// SYSB starts by immediately turning off the Z80, restarting it,
-        /// enabling the keyboard to read the boot character, then turning the
-        /// Z80 off again while it continues the bootstrap.  The microcode waits
-        /// up to 4.2M cycles (around .7 seconds) to get a key from the keyboard
-        /// before defaulting to 'a' boot.  The Z80 startup sequence always does
-        /// at least one dummy read to clear the keyboard register so we really
-        /// only need to jam the key in there 2-3 times... but the timing _must_
-        /// be such that a keyboard interrupt is generated within the window so
-        /// that the keystroke is actually sent to the PERQ in a message -- it
-        /// isn't enough to just have the boot character in the keyboard buffer!
-        /// </remarks>
-        private void BootCharCallback(ulong skewNsec, object context)
-        {
-            var count = (int)context - 1;
-
-            if (CPU.DDS < 152 && count > 0)
-            {
-                // Send the key:
-                _iob.Z80System.Keyboard.QueueInput(PERQemu.Controller.BootChar);
-
-                // And do it again
-                Scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback, count);
-
-                Log.Detail(Category.Keyboard, "Pressing the bootchar again in 10msec, retry {0}", count);
-            }
-            else
-            {
-                // Disarm until next reset; POS G loops the DDS around so we
-                // don't want to send extraneous keystrokes!  Oy.
-                _bootKeyArmed = false;
             }
         }
 
@@ -820,7 +787,6 @@ namespace PERQemu
         // User interface hooks (SDL)
         private Display _display;
         private InputDevices _inputs;
-        private bool _bootKeyArmed;
 
         // Debugger
         private PERQDebugger _debugger;

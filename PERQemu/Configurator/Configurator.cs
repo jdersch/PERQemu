@@ -390,9 +390,9 @@ namespace PERQemu.Config
                 // 4K CPU only available in PERQ-1 or PERQ-2, not the later T1,
                 // T2 or T4 models; 20-bits only, 2MB memory max.
                 case CPUType.PERQ1:
-                    if (conf.Chassis == ChassisType.PERQ2T2)
+                    if (conf.Chassis == ChassisType.PERQ2Tx)
                     {
-                        conf.Reason = "PERQ1 (4K) CPU not compatible with PERQ-2/T2 or 2/T4.";
+                        conf.Reason = "PERQ1 (4K) CPU not compatible with PERQ2-Tx models.";
                         return false;
                     }
 
@@ -412,9 +412,9 @@ namespace PERQemu.Config
                         return false;
                     }
 
-                    if (conf.Chassis == ChassisType.PERQ2T2 && conf.MemorySizeInBytes < ONE_MEG)
+                    if (conf.Chassis == ChassisType.PERQ2Tx && conf.MemorySizeInBytes < ONE_MEG)
                     {
-                        conf.Reason = "PERQ2-T2: 16K CPU requires minimum of 1MB of memory.";
+                        conf.Reason = "PERQ2-Tx: 16K CPU requires minimum of 1MB of memory.";
                         return false;
                     }
 
@@ -428,9 +428,9 @@ namespace PERQemu.Config
                 // 24-bit, 16K CPU only supported in the PERQ-2/T2 chassis,
                 // which coupled with a 24-bit EIO made it a "T4".
                 case CPUType.PERQ24:
-                    if (conf.Chassis != ChassisType.PERQ2T2)
+                    if (conf.Chassis != ChassisType.PERQ2Tx)
                     {
-                        conf.Reason = "24-bit CPU requires PERQ-2/T2 type chassis.";
+                        conf.Reason = "24-bit CPU requires the PERQ2-Tx type chassis.";
                         return false;
                     }
                     break;
@@ -612,12 +612,13 @@ namespace PERQemu.Config
         /// <remarks>
         /// For now, traditional configuration rules apply:
         ///     PERQ-1 only has 1 floppy, 1 Shugart 14" disk.
-        ///     PERQ-2 only has 1 floppy, 1 or 2 (T1) Micropolis 8" disks.
-        ///     PERQT2 only has 1 floppy, 1 or 2 5.25" disks.
+        ///     PERQ-2 only has 1 floppy, 1 Micropolis 8" disks.
+        ///     PERQTx only has 1 floppy, 1 or 2 Micropolis 8" or 5.25" disks.
         /// At the moment, SMD Disks are not supported (requires the as-yet-
-        /// unimplemented MLO option board).
-        /// If any genuine 8" Micropolis images can be found that came from a
-        /// PERQ-1, we'll allow that configuration (with a CIO board) as well.
+        /// unimplemented MLO option board).  We now have photographic proof of
+        /// an ICL-labeled "CIO" that in theory supports a Micropolis 8" drive
+        /// in a PERQ-1 chassis!  We just have to obtain/create a disk image in
+        /// order to test it...
         /// </remarks>
         public bool CheckStorage()
         {
@@ -653,43 +654,49 @@ namespace PERQemu.Config
                         break;
 
                     case DeviceType.Disk14Inch:
+                        if ((conf.IOBoard == IOBoardType.EIO) || (conf.IOBoard == IOBoardType.NIO))
+                        {
+                            conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
+                            return false;
+                        }
+
+                        driveCount++;
+                        if (driveCount > 1)
+                        {
+                            conf.Reason = $"IO board type '{conf.IOBoard}' only supports one hard disk.";
+                            return false;
+                        }
+                        break;
+
                     case DeviceType.Disk8Inch:
                     case DeviceType.Disk5Inch:
-                        switch (conf.IOBoard)
+                        if ((conf.IOBoard == IOBoardType.IOB) ||
+                            (conf.IOBoard == IOBoardType.CIO && drive.Type == DeviceType.Disk5Inch))
                         {
-                            case IOBoardType.IOB:
-                            case IOBoardType.CIO:
-                                if (!(drive.Type == DeviceType.Disk14Inch ||
-                                     (drive.Type == DeviceType.Disk8Inch && conf.IOBoard == IOBoardType.CIO)))
-                                {
-                                    conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
-                                    return false;
-                                }
+                            conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
+                            return false;
+                        }
 
-                                driveCount++;
-                                if (driveCount > 1)
-                                {
-                                    conf.Reason = $"IO board type '{conf.IOBoard}' only supports one hard disk.";
-                                    return false;
-                                }
-                                break;
+                        driveCount++;
+                        if (driveCount > 1)
+                        {
+                            if (conf.IOBoard == IOBoardType.CIO)
+                            {
+                                conf.Reason = $"IO board type '{conf.IOBoard}' only supports one hard disk.";
+                                return false;
+                            }
 
-                            case IOBoardType.EIO:
-                            case IOBoardType.NIO:
-                                if ((conf.Chassis == ChassisType.PERQ2 && drive.Type != DeviceType.Disk8Inch) ||
-                                    (conf.Chassis == ChassisType.PERQ2T2 && drive.Type != DeviceType.Disk5Inch))
-                                {
-                                    conf.Reason = $"IO board type '{conf.IOBoard}' does not support disks of type '{drive.Type}'.";
-                                    return false;
-                                }
+                            if (conf.Chassis == ChassisType.PERQ2)
+                            {
+                                conf.Reason = $"The {conf.Chassis} chassis only supports one hard disk.";
+                                return false;
+                            }
+                        }
 
-                                driveCount++;
-                                if (driveCount > 2)
-                                {
-                                    conf.Reason = $"IO board type '{conf.IOBoard}' supports a maximum of 2 hard disks.";
-                                    return false;
-                                }
-                                break;
+                        if (driveCount > 2)
+                        {
+                            conf.Reason = $"IO board type '{conf.IOBoard}' supports a maximum of 2 hard disks.";
+                            return false;
                         }
                         break;
 
@@ -772,7 +779,7 @@ namespace PERQemu.Config
                                 // Nope, change it
                                 if (conf.Chassis == ChassisType.PERQ2)
                                     conf.SetDeviceType(unit, DeviceType.Disk8Inch);
-                                else if (conf.Chassis == ChassisType.PERQ2T2)
+                                else if (conf.Chassis == ChassisType.PERQ2Tx)
                                     conf.SetDeviceType(unit, DeviceType.Disk5Inch);
                                 break;
                         }
@@ -781,7 +788,7 @@ namespace PERQemu.Config
                     case DeviceType.Disk8Inch:
                         // Micropolis 8" drives are valid in PERQ1 on CIO (rare
                         // but allowed) or PERQ2 on EIO/NIO.  Change to Shugart 14"
-                        // if switching to IOB, or MFM 5.25" for EIO/NIO (PERQ2T2)
+                        // if switching to IOB, or MFM 5.25" for EIO/NIO (PERQ2Tx)
                         switch (newType)
                         {
                             case IOBoardType.IOB:
@@ -807,7 +814,7 @@ namespace PERQemu.Config
                         break;
 
                     case DeviceType.Disk5Inch:
-                        // 5.25" MFM drives only valid on EIO/NIO in the PERQ2T2-type
+                        // 5.25" MFM drives only valid on EIO/NIO in the PERQ2Tx-type
                         // chassis; remapped to 8" in PERQ2 or 14" on PERQ1 IOB/CIO.
                         switch (newType)
                         {
@@ -818,7 +825,7 @@ namespace PERQemu.Config
 
                             case IOBoardType.EIO:
                             case IOBoardType.NIO:
-                                if (conf.Chassis == ChassisType.PERQ2T2)
+                                if (conf.Chassis == ChassisType.PERQ2Tx)
                                     keepMedia = true;
                                 else
                                     conf.SetDeviceType(unit, DeviceType.Disk8Inch);

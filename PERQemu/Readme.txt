@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-7/22/2022 - skeezicsb - v0.4.6 (experimental)
+7/30/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -164,13 +164,13 @@ There are several subdirectories:
        and saved in the Disks/ directory by default.  Please consult the
        UserGuide for information about working with PERQemu media files.
 
-    PROM/
-        Contains dumps of PERQ ROMs necessary for operation.
-
     Output/
         When logging debug output to disk is enabled, those files go here by
         default.  When screenshots and printing are implemented, that output
         will land here too.  (Output directory will be a settable preference.)
+
+    PROM/
+        Contains dumps of PERQ ROMs necessary for operation.
 
 
 To start the emulator, just run PERQemu.exe:
@@ -261,10 +261,10 @@ NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
 2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
 trouble with a full megaword of memory.
 
-Accent S4 mouse tracking takes a little getting used to since it runs in
-relative mode.  To simulate mouse "swipes" you have to use the Alt key (Command
-key on Mac) to tell PERQemu the mouse is "off tablet", reposition, then release
-the key to start tracking again.  It's a little clumsy at first.
+Accent mouse tracking takes a little getting used to since it runs in relative
+mode.  To simulate mouse "swipes" you have to use the Alt key (Option key on
+Mac) to tell PERQemu the mouse is "off tablet", reposition, then release the
+key to start tracking again.  It's a little clumsy at first.
 
 PERQ FLEX is an exceedingly rare OS produced in the UK by the Royal Signals &
 Radar Establishment.  Based on a custom instruction set optimized for Algol-68,
@@ -303,7 +303,8 @@ The following hardware has been implemented in the emulator:
     - Rewritten to work with the new Z80 and floppy disk controller (FDC);
     - Supports dynamic loading and unloading of all media types (single- and
       double-sided diskettes, in single- and double-density);
-    - There are still a few bugs; testing and debugging is ongoing.
+    - Operation is reliable for booting and data transfer, though testing and
+      debugging is ongoing.
 
   Displays:
     - The standard 768 x 1024 portrait display is available for all models;
