@@ -28,13 +28,13 @@ that dictates the timescale for our video timings, so:
 
 Portrait:
 Pixel clock = 64.78824 MHz = 15.44ns -> ~11:1 clock ratio = 92 cpu clocks/line
-Visible field = 768 bit times * 15.44ns / 11 = ~70 pixel clocks
-Horizontal retrace = 244 bit times * 15.44ns / 11 = ~22 pixel clocks
+Visible field = 768 bit times * 15.44ns / 11 = ~70 cpu clocks
+Horizontal retrace = 244 bit times * 15.44ns / 11 = ~22 cpu clocks
 
 Landscape:
 Pixel clock = 108.962 MHz = 9.1ns -> ~18.5:1 clock ratio = 92 cpu clocks/line!
-Visible field = 1280 bit times * 9.1ns / 18.5 = ~70 pixel clocks
-Horizontal retrace = 422 bit times * 9.1ns / 18.5 = ~22 pixel clocks
+Visible field = 1280 bit times * 9.1ns / 18.5 = ~70 cpu clocks
+Horizontal retrace = 422 bit times * 9.1ns / 18.5 = ~22 cpu clocks
 
 
 The astute reader may note that these timings are very close to VGA rates for
@@ -276,4 +276,4 @@ Note that the "CRT signals" register bit for LandscapeDisplay is inverted
 
 
 ---
-Last update: skeezics    Mon Jul 18 15:35:56 PDT 2022
+Last update: skeezics    Sat Jul 30 19:43:46 PDT 2022

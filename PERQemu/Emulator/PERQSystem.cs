@@ -503,6 +503,8 @@ namespace PERQemu
             if (_volumes[unit] == null)
                 throw new InvalidOperationException($"Drive {unit} is not loaded");
 
+            if (!_volumes[unit].IsLoaded) return;
+            
             // We get ONE shot at this...
             if (_volumes[unit].IsModified && SaveRequested(unit))
             {

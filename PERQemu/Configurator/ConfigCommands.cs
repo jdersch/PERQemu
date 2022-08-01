@@ -711,9 +711,13 @@ namespace PERQemu.UI
         [Command("configure unassign", "Unassign an assigned media file")]
         public void ConfigUnassign(string file)
         {
+            // Assume they "assign"ed the file and qualified the path...
+            var path = Paths.FindFileInPath(file, Paths.DiskDir, FileUtilities.KnownExtensions);
+
+            // Now look for what was given (or its qualified version)
             foreach (var d in PERQemu.Config.Current.Drives)
             {
-                if (d.MediaPath == file)
+                if (d.MediaPath == file || d.MediaPath == path)
                 {
                     ConfigUnassignUnit((byte)d.Unit);
                     return;

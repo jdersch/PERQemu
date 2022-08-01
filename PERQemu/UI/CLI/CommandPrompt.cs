@@ -190,6 +190,9 @@ namespace PERQemu.UI
                 }
             }
 
+            // todo: add "!" for shell-like history processing?  probably best
+            // to do that here since we have access to the history buffer
+
             // Done.  Add to history if input is non-empty
             if (_input != string.Empty)
             {
@@ -556,7 +559,10 @@ namespace PERQemu.UI
                         {
                             foreach (CommandNode c in root.SubNodes)
                             {
-                                result.Completions.Add(c.ToString());
+#if !DEBUG
+                                if (!c.Hidden)
+#endif
+                                    result.Completions.Add(c.ToString());
                             }
                         }
 

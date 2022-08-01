@@ -176,15 +176,15 @@ namespace PERQmedia
             _directory[1] = _textLabelSize;
 
             // Image label
-            _directory[2] = _directory[0] + _directory[1];
+            _directory[2] = TextLabelStart + TextLabelSize;
             _directory[3] = _imageLabelSize;
 
             // Info section
-            _directory[4] = _directory[2] + _directory[3];
+            _directory[4] = ImageLabelStart + ImageLabelSize;
             _directory[5] = _infoSize + _fixedInfoBytes;
 
             // Data section
-            _directory[6] = _directory[4] + _directory[5];
+            _directory[6] = InfoStart + InfoSize;
             _directory[7] = (_data == null) ? _dataSize : _data.Length;
         }
 

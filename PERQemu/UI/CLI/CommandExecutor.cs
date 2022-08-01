@@ -87,9 +87,9 @@ namespace PERQemu.UI
 
         public void ExecuteLine(string line)
         {
+            // Comments start with "#", just ignore them; blank/empty lines too
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#", StringComparison.CurrentCulture))
             {
-                // Comments start with "#", just ignore them; blank/empty lines too
                 return;
             }
 
@@ -101,11 +101,10 @@ namespace PERQemu.UI
             //      '.cmd' executes cmd and sets the register
             //      commands that don't repeat just clear it quietly
             //      just make "repeatable" an attribute! off by default
-            // todo: add "!" for shell-like history processing?
 
+            // Expressions start with ":", but require that Sys is instantiated
             if (line.StartsWith(":", StringComparison.CurrentCulture))
             {
-                // Expressions start with ":", but require that Sys is instantiated
                 if (PERQemu.Sys != null)
                 {
                     PERQemu.Sys.Debugger.EvaluateExpression(line.Substring(1));
@@ -114,32 +113,28 @@ namespace PERQemu.UI
                 {
                     Console.WriteLine("No PERQ defined; can't evaluate variable expression.");
                 }
+                return;
             }
-            else if (line.StartsWith("@", StringComparison.CurrentCulture))
+
+            // A line beginning with an "@" indicates a script to execute
+            if (line.StartsWith("@", StringComparison.CurrentCulture))
             {
-                // A line beginning with an "@" indicates a script to execute
                 string scriptFile = line.Substring(1);
 
                 ExecuteScript(scriptFile, true);
+                return;
             }
-            else
-            {
-                string[] args = null;
-                CommandNode command = GetCommandFromString(line, out args);
 
-                if (command == null)
-                {
-#if DEBUG
-                    Console.WriteLine($"Invalid command: '{line}'");
-#else
-                    Console.WriteLine("Invalid command.");
-#endif
-                }
-                else
-                {
-                    InvokeConsoleMethod(command, args);
-                }
+            string[] args = null;
+            CommandNode command = GetCommandFromString(line, out args);
+
+            if (command == null)
+            {
+                Console.WriteLine("Invalid command.");
+                return;
             }
+
+            InvokeConsoleMethod(command, args);
         }
 
         /// <summary>
@@ -941,6 +936,5 @@ namespace PERQemu.UI
 
         private Dictionary<string, CommandHelp[]> _commandsAtNode;
         private Dictionary<string, ArgumentNode[]> _matchDict;
-
     }
 }

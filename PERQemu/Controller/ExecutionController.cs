@@ -174,6 +174,12 @@ namespace PERQemu
 
             // Set the initial state
             SetState(RunState.WarmingUp);
+
+            // Save as the default config for next time we launch
+            if (PERQemu.Config.Current.Name != "default")
+            {
+                Settings.Changed = true;
+            }
         }
 
         /// <summary>
@@ -403,8 +409,11 @@ namespace PERQemu
         {
             RunStateChangeEventHandler handler = RunStateChanged;
 
-            Log.Debug(Category.Controller, "SetState to {0} on {1}", s, Thread.CurrentThread.ManagedThreadId);
-            handler?.Invoke(new RunStateChangeEventArgs(s));
+            if (handler != null)
+            {
+                Log.Debug(Category.Controller, "SetState to {0} on {1}", s, Thread.CurrentThread.ManagedThreadId);
+                handler(new RunStateChangeEventArgs(s));
+            }
         }
 
         /// <summary>

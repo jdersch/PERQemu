@@ -336,7 +336,13 @@ namespace PERQemu.UI
             // What's our current (loaded) filename?
             var pathname = PERQemu.Sys.Volumes[unit].Filename;
 
-            // Is it read-only?  Then saving in place is verboten
+            // Drive exists but no current filename == empty drive
+            if (string.IsNullOrEmpty(pathname))
+            {
+                throw new InvalidOperationException($"Drive {unit} is not loaded");
+            }
+
+            // Trying to save over a read-only file is verboten
             if (string.IsNullOrEmpty(filename) && !PERQemu.Sys.Volumes[unit].Info.IsWritable)
             {
                 var cmd = PERQemu.Sys.Volumes[unit].Info.Type == DeviceType.Floppy ? "floppy" : "harddisk";
@@ -347,8 +353,7 @@ namespace PERQemu.UI
             }
 
             // If given a new name, clean it up and nudge it into the Disks/
-            // directory, with a proper extension if needed.  No check here is
-            // done to see if the new name will overwrite an existing one...
+            // directory, with a proper extension if needed.
             if (!string.IsNullOrEmpty(filename))
             {
                 var fmt = PERQemu.Sys.Volumes[unit].FileInfo.Format;

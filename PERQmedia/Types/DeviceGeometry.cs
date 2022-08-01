@@ -54,7 +54,7 @@ namespace PERQmedia
 
         public override string ToString()
         {
-            return string.Format($"[Cylinders {Cylinders}, Heads {Heads}, Sectors {Sectors} @ {SectorSize} + {HeaderSize} bytes]");
+            return $"[Cylinders {Cylinders}, Heads {Heads}, Sectors {Sectors} @ {SectorSize} + {HeaderSize} bytes]";
         }
 
         //
