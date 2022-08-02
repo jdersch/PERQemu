@@ -610,8 +610,8 @@ namespace PERQemu.UI
             }
         }
 
-        // todo: one default parameter (char port = 'a') should work, to avoid
-        // these redundant methods... 
+        // todo: fix the dang command tree so that one default parameter (here,
+        // char port = 'a') works, to avoid these redundant methods... 
         [Command("configure enable rs232", "Enable use of serial port A")]
         public void EnableRS232()
         {

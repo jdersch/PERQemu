@@ -28,21 +28,10 @@ namespace PERQemu.UI
 {
     /// <summary>
     /// Commands for configuring storage devices (floppy, tape and hard drives),
-    /// including top-level shortcuts for loading and unloading media files.
+    /// including top-level commands for loading, unloading and saving media files.
     /// </summary>
     public class StorageCommands
     {
-        // The storage subsystem provides the raw tools for manipulating devices:
-        //
-        //  storage define              -- create geometries, specs, devices
-        //  storage list                -- show what types are available
-        //  storage create <type> <file> -- creates and formats a blank file on disk
-        //  storage load <file>         -- assigns it to next appropriate unit
-        //  storage load <n> <file>     -- load unit <n> from <file>
-        //  storage unload <n>          -- unload unit <n> (if removable)
-        //  storage save <n>            -- save unit <n> (if loaded)
-        //  storage save <n> <file>     -- save unit <n> as <file> (if loaded)
-        //  storage save <n> <file> <fmt> -- saveaswithformat()
 
         [Command("storage", "Enter the storage configuration subsystem", Prefix = true)]
         public void SetStoragePrefix()
@@ -71,8 +60,100 @@ namespace PERQemu.UI
                 return;
             }
 
-            PERQemu.Sys.CheckMedia();
+            // Summary
+            for (var unit = 0; unit < PERQemu.Sys.Volumes.Length; unit++)
+            {
+                var dev = PERQemu.Sys.Volumes[unit];
+
+                if (dev != null)
+                {
+                    Console.Write($"Drive {unit} ({dev.Info.Type}) is online, ");
+                    if (dev.Info.IsRemovable) Console.Write("removable, ");
+
+                    if (dev.IsLoaded)
+                    {
+                        Console.Write($"loaded ({dev.Filename})");
+                        if (dev.Info.IsBootable) Console.Write(", bootable");
+                        if (dev.Info.IsWritable) Console.Write(", writable");
+                        if (dev.IsModified) Console.Write(", modified");
+                    }
+                    else
+                    {
+                        Console.Write("no media loaded");
+                    }
+                    Console.WriteLine();
+                }
+            }
         }
+
+        [Command("storage status", "Show detailed status of a loaded storage device")]
+        private void StorageStatus(int unit)
+        {
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The PERQ is powered off.");
+                return;
+            }
+
+            if (unit < 0 || unit > PERQemu.Sys.Volumes.Length)
+            {
+                Console.WriteLine("Bad unit number.");
+                return;
+            }
+
+            var dev = PERQemu.Sys.Volumes[unit];
+
+            if (dev == null)
+            {
+                Console.WriteLine($"Unit #{unit} is not loaded.");
+                return;
+            }
+
+            // Detailed status
+            Console.Write($"Drive {unit} ({dev.Info.Type}) is online");
+
+            if (!dev.IsLoaded)
+            {
+                Console.WriteLine(", no media loaded.");
+                return;
+            }
+            Console.WriteLine($", type {dev.Info.Name}");
+
+            Console.WriteLine($"Filename: {dev.Filename} ({dev.FileInfo.Format})");
+
+            Console.Write("Flags:    Loaded");
+            if (dev.Info.IsRemovable) Console.Write(", removable");
+            if (dev.Info.IsBootable) Console.Write(", bootable");
+            if (dev.Info.IsWritable) Console.Write(", writable");
+            if (dev.IsModified) Console.Write(", modified");
+            Console.WriteLine(".");
+
+            if (dev.Info.Type == DeviceType.Floppy)
+            {
+                Console.WriteLine($"FS hint:  {dev.FileInfo.FSType}");
+            }
+
+            if (dev.FileInfo.TextLabel != null)
+            {
+                var label = dev.FileInfo.DecodeTextLabel();
+
+                if (label.Split('\n').Length > 1)
+                {
+                    Console.WriteLine("Label:\n------");
+                    Console.WriteLine(label);
+                    Console.WriteLine("------");
+                }
+                else
+                {
+                    Console.WriteLine($"Label:    {label}");
+                }
+            }
+
+            // Other info?  (don't duplicate "storage show" drive type details)
+        }
+
+
+        #region Floppy commands
 
         //
         // Floppy Commands
@@ -123,6 +204,29 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("save floppy as", "Save the loaded floppy disk with a new name and format")]
+        private void SaveFloppyAs(string filename, Formatters format)
+        {
+            if (format == Formatters.Unknown)
+            {
+                Console.WriteLine("Sorry, I'm not a mind reader.  Please choose a valid format.");
+                return;
+            }
+
+            try
+            {
+                SaveInternal(0, filename, format);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to save floppy: {e.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Hard disk commands
+
         //
         // Hard Disk Commands
         //
@@ -143,7 +247,7 @@ namespace PERQemu.UI
         }
 
         [Command("load harddisk", "Load a hard disk image")]
-        private void LoadHardDisk(string filename)
+        private void LoadHardDisk(string filename)  // todo: int unit = 1
         {
             if (!OKtoLoad()) return;
 
@@ -164,7 +268,7 @@ namespace PERQemu.UI
         }
 
         [Command("unload harddisk", "Unload a hard disk [unit #]")]
-        private void UnloadHardDisk(int unit)   // "int unit = 1" here doesn't work
+        private void UnloadHardDisk(int unit)       // todo: unit = 1 should work here
         {
             if (!OKtoLoad()) return;
 
@@ -197,6 +301,28 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("save harddisk as", "Save the hard disk with a new name and format")]
+        private void SaveHardDiskWith(string filename, Formatters format)
+        {
+            if (format == Formatters.Unknown)
+            {
+                Console.WriteLine("That doesn't make sense.  Please choose a valid format.");
+                return;
+            }
+
+            try
+            {
+                SaveInternal(1, filename, format);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to save hard disk: {e.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Internal load, unload and save
 
         //
         // Common Routines
@@ -297,9 +423,6 @@ namespace PERQemu.UI
         ///     If they give us a new filename, then we "save as" (and update
         ///     the config to show the new pathname)
         /// 
-        ///     If they give us a new format, we change the extension and do a
-        ///     SaveAsWithFormat, updating the info properties to reflect the change
-        /// 
         ///     Any device can be saved in any machine state when defined;
         ///     should we automatically pause emulation to take a stable snapshot?
         /// 
@@ -316,31 +439,13 @@ namespace PERQemu.UI
         ///         if the filename is NOT changed:  .Save()
         ///         if the file IS changed: .SaveAs()
         ///         if the format IS changed: .SaveAsWithFormat()
-        ///
-        ///     SaveMedia might need extra hooks to accommodate the format switch
         /// </remarks>
-        public bool SaveInternal(int unit, string filename /* todo: format */)
+        public bool SaveInternal(int unit, string filename)
         {
-            // Save should be okay any time the machine is defined
-            if (PERQemu.Controller.State == RunState.Off)
-            {
-                Console.WriteLine($"No PERQ!  Can't save drive {unit}.");
-                return false;
-            }
+            // Make sure the unit is valid
+            CheckSave(unit);
 
-            if (PERQemu.Sys.Volumes[unit] == null)
-            {
-                throw new InvalidOperationException($"Drive {unit} is not loaded");
-            }
-
-            // What's our current (loaded) filename?
             var pathname = PERQemu.Sys.Volumes[unit].Filename;
-
-            // Drive exists but no current filename == empty drive
-            if (string.IsNullOrEmpty(pathname))
-            {
-                throw new InvalidOperationException($"Drive {unit} is not loaded");
-            }
 
             // Trying to save over a read-only file is verboten
             if (string.IsNullOrEmpty(filename) && !PERQemu.Sys.Volumes[unit].Info.IsWritable)
@@ -388,6 +493,57 @@ namespace PERQemu.UI
             return ok;
         }
 
+        /// <summary>
+        /// Save with a specific format.
+        /// </summary>
+        /// <remarks>
+        /// To minimize duplication of code, just check that the given format is
+        /// compatible with the device and if so update it.  Then the normal save
+        /// automatically picks up the new file extension and writes it in the
+        /// new format.  This could probably be further streamlined, but it's ok
+        /// for now...
+        /// </remarks>
+        public bool SaveInternal(int unit, string filename, Formatters format)
+        {
+            // Validate the unit
+            CheckSave(unit);
+
+            // Is the desired format compatible with this device?
+            if (!PERQemu.Sys.Volumes[unit].CanSaveWithFormat(format))
+            {
+                throw new InvalidOperationException($"{format} incompatible with this device type");
+            }
+
+            // Set it and do the normal save
+            PERQemu.Sys.Volumes[unit].FileInfo.Format = format;
+
+            return SaveInternal(unit, filename);
+        }
+
+        private void CheckSave(int unit)
+        {
+            // Save should be okay any time the machine is defined
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                throw new InvalidOperationException($"No PERQ!");
+            }
+
+            // Weed out bad unit #s
+            if (PERQemu.Sys.Volumes[unit] == null)
+            {
+                throw new InvalidOperationException($"Drive {unit} is not loaded");
+            }
+
+            // Drive exists but no current filename == empty drive
+            if (string.IsNullOrEmpty(PERQemu.Sys.Volumes[unit].Filename))
+            {
+                throw new InvalidOperationException($"Drive {unit} is not loaded");
+            }
+        }
+
+        #endregion
+
+        #region Create, list and show
 
         //
         // Create new media files
@@ -459,15 +615,15 @@ namespace PERQemu.UI
             string[] drives = PERQemu.Config.GetKnownDevices();
             Array.Sort(drives);
 
-            Console.WriteLine("Drive Class    Drive Type    Description");
-            Console.WriteLine("-----------    ----------    -----------------------------------------------");
+            Console.WriteLine("Drive Type    Drive Class    Description");
+            Console.WriteLine("----------    -----------    -----------------------------------------------");
 
             foreach (var d in drives)
             {
                 var drive = PERQemu.Config.GetKnownDeviceByName(d);
                 Console.WriteLine("{0}{1}{2}",
-                                  drive.Info.Type.ToString().PadRight(15),
                                   drive.Info.Name.PadRight(14),
+                                  drive.Info.Type.ToString().PadRight(15),
                                   drive.Info.Description);
             }
         }
@@ -497,6 +653,10 @@ namespace PERQemu.UI
             Console.WriteLine($"Removable:    {drive.Info.IsRemovable}");
         }
 
+        #endregion
+
+        #region Define new types
+
         //
         // Defining Storage Types
         //
@@ -525,7 +685,7 @@ namespace PERQemu.UI
         [Command("storage define commands", "Show the sooper sekrit incantations")]
         private void ShowDefineCommands()
         {
-            PERQemu.CLI.ShowCommands("storage define");            
+            PERQemu.CLI.ShowCommands("storage define");
         }
 
         [Command("storage define description", "Describe the drive's make and model")]
@@ -583,6 +743,8 @@ namespace PERQemu.UI
             }
             SetStoragePrefix();
         }
+
+        #endregion
 
         private static StorageDevice _dev;
     }

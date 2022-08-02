@@ -525,36 +525,6 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Report the status of loaded storage devices.  Basic info for now.
-        /// </summary>
-        public void CheckMedia()
-        {
-            for (var unit = 0; unit < _volumes.Length; unit++)
-            {
-                var dev = _volumes[unit];
-
-                if (dev != null)
-                {
-                    Console.Write($"Drive {unit} ({dev.Info.Type}) is online, ");
-                    if (dev.Info.IsRemovable) Console.Write("removable, ");
-
-                    if (dev.IsLoaded)
-                    {
-                        Console.Write($"loaded ({dev.Filename})");
-                        if (dev.Info.IsBootable) Console.Write(", bootable");
-                        if (dev.Info.IsWritable) Console.Write(", writable");
-                        if (dev.IsModified) Console.Write(", modified");
-                    }
-                    else
-                    {
-                        Console.Write("no media loaded");
-                    }
-                    Console.WriteLine();
-                }
-            }
-        }
-
-        /// <summary>
         /// Called at shutdown, tells all the loaded storage devices to unload
         /// themselves.
         /// </summary>

@@ -429,5 +429,13 @@ July, 2022:
     to the User Guide (draft, in PDF; text version TBD).
 
 
+August, 2022:
+
+    1. Some enhancements/fixes to the storage commands: now the "save as" for
+    floppy and hard disk allow a format specifier so you can transcribe media
+    files.  The "storage status" command produces a summary or detailed output
+    (including media label) for a particular unit.
+       
+
 ---
-Last update: skeezics    Sat Jul 30 16:05:19 PDT 2022
+Last update: skeezics    Mon Aug  1 17:57:54 PDT 2022

@@ -31,6 +31,38 @@ namespace PERQmedia
     /// </summary>
     public static class Writer
     {
+        public static bool CanSaveWithFormat(this StorageDevice dev, Formatters fmt)
+        {
+            // Catch the obvious ones:
+            if (fmt == Formatters.Unknown) return false;
+            if (fmt == Formatters.PRQFormat) return true;
+
+            // Now the specifics:
+            switch (dev.Info.Type)
+            {
+                case DeviceType.DCIOShugart:
+                case DeviceType.Disk14Inch:
+                    return (fmt == Formatters.PHDFormat);
+
+                case DeviceType.Floppy:
+                    return (fmt == Formatters.IMDFormat || fmt == Formatters.RawFormat);
+
+                /*
+                    Handled above:
+                    case DeviceType.DCIOMicrop:
+                    case DeviceType.Disk8Inch:
+                    case DeviceType.Disk5Inch:
+                    case DeviceType.DiskSMD:
+                    return (fmt == Formatters.PRQFormat);
+                */
+
+                case DeviceType.TapeQIC:
+                    return (fmt == Formatters.TAPFormat);
+            }
+
+            return false;
+        }
+
         public static void Save(this StorageDevice dev)
         {
             SaveAsWithFormat(dev, dev.Filename, dev.FileInfo.Format);
@@ -54,7 +86,6 @@ namespace PERQmedia
                 fmt = Formatters.PRQFormat;
             }
 
-            // TODO: we have to map DeviceTypes to Formatters!!
             // TODO: return a bool for success/fail or throw?
             //       errors: bad pathnames, readonly, incompatible format?
 
@@ -90,6 +121,8 @@ namespace PERQmedia
                 // Invoke the formatter to write out the image
                 formatter.Write(fs, dev);
 
+                // Save the (possibly new) format type and indicate success
+                dev.FileInfo.Format = fmt;
                 dev.IsModified = false;
 
                 Log.Write("Saved {0}.", pathname);
