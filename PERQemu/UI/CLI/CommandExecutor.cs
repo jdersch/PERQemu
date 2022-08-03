@@ -204,8 +204,6 @@ namespace PERQemu.UI
             int argLength = (args != null) ? args.Length : 0;
             int argIndex = 0;
 
-            Console.WriteLine($"node {command.Name} args[{argLength}] paramInfo[{paramLength}]");
-
             // Copy and validate 'em, or fill in the default ones
             for (int paramIndex = 0; paramIndex < paramLength; paramIndex++)
             {

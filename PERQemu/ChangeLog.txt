@@ -436,6 +436,11 @@ August, 2022:
     files.  The "storage status" command produces a summary or detailed output
     (including media label) for a particular unit.
        
+    2. Small CLI fix so methods with one optional parameter can run properly.
+    Fixed the parsing of some settings and storage commands.  The PDF version
+    of the UserGuide now covers nearly everything as implemented in what should
+    become the v0.5.0 release!
+    
 
 ---
 Last update: skeezics    Mon Aug  1 17:57:54 PDT 2022
