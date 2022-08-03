@@ -261,14 +261,8 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("unload harddisk", "Unload the primary hard disk [unit 1]")]
-        private void UnloadHardDisk()
-        {
-            UnloadHardDisk(1);
-        }
-
         [Command("unload harddisk", "Unload a hard disk [unit #]")]
-        private void UnloadHardDisk(int unit)       // todo: unit = 1 should work here
+        private void UnloadHardDisk(int unit = 1)
         {
             if (!OKtoLoad()) return;
 

@@ -227,9 +227,9 @@ namespace PERQemu.UI
                         Settings.RSBDevice = dev;
                     
                     Settings.Changed = true;
-                    Console.WriteLine($"Device '{dev}' assigned to serial port {port}.");
                 }
 
+                Console.WriteLine($"Device '{dev}' assigned to serial port {port}.");
                 return;
             }
 
@@ -237,7 +237,7 @@ namespace PERQemu.UI
         }
 
         [Command("settings unassign rs232 device", "Unmap a device from a PERQ serial port")]
-        private void UnSetRS232Device(char port)
+        private void UnSetRS232Device(char port = 'a')
         {
             var curDev = string.Empty;
 
@@ -268,8 +268,9 @@ namespace PERQemu.UI
                     Settings.RSBDevice = string.Empty;
                 
                 Settings.Changed = true;
-                Console.WriteLine($"Serial port {port} unassigned.");
             }
+
+            Console.WriteLine($"Serial port {port} unassigned.");
         }
 
         /// <summary>

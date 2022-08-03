@@ -610,16 +610,8 @@ namespace PERQemu.UI
             }
         }
 
-        // todo: fix the dang command tree so that one default parameter (here,
-        // char port = 'a') works, to avoid these redundant methods... 
-        [Command("configure enable rs232", "Enable use of serial port A")]
-        public void EnableRS232()
-        {
-            EnableRS232('a');
-        }
-
         [Command("configure enable rs232", "Enable use of a serial port")]
-        public void EnableRS232(char port)
+        public void EnableRS232(char port = 'a')
         {
             if (OKtoReconfig())
             {
@@ -630,14 +622,8 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("configure disable rs232", "Disable use of serial port A")]
-        public void DisableRS232()
-        {
-            DisableRS232('a');
-        }
-
         [Command("configure disable rs232", "Disable use of a serial port")]
-        public void DisableRS232(char port)
+        public void DisableRS232(char port = 'a')
         {
             if (OKtoReconfig())
             {
@@ -654,7 +640,7 @@ namespace PERQemu.UI
             {
                 case 'a':
                 case 'A':
-                    if (!PERQemu.Config.Current.RSAEnable)
+                    if (PERQemu.Config.Current.RSAEnable != flag)
                     {
                         PERQemu.Config.Current.RSAEnable = flag;
                         PERQemu.Config.Changed = true;
@@ -667,7 +653,7 @@ namespace PERQemu.UI
                     if (PERQemu.Config.Current.IOBoard == IOBoardType.EIO ||
                         PERQemu.Config.Current.IOBoard == IOBoardType.NIO)
                     {
-                        if (!PERQemu.Config.Current.RSBEnable)
+                        if (PERQemu.Config.Current.RSBEnable != flag)
                         {
                             PERQemu.Config.Current.RSBEnable = flag;
                             PERQemu.Config.Changed = true;
@@ -732,6 +718,12 @@ namespace PERQemu.UI
         [Command("configure unassign unit", "Unassign the media file for unit #")]
         public void ConfigUnassignUnit(byte unit)
         {
+            if (unit < 0 || unit > PERQemu.Config.Current.MaxUnitNum)
+            {
+                Console.WriteLine($"Unit {unit} is out of range.");
+                return;
+            }
+
             PERQemu.Config.Current.SetMediaPath(unit, string.Empty);
             Console.WriteLine($"Drive {unit} unassigned.");
         }

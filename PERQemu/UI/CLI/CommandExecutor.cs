@@ -187,24 +187,31 @@ namespace PERQemu.UI
                 throw new ArgumentException("Invalid (null) command");
             }
 
-            ParameterInfo[] parameterInfo = command.Method.Method.GetParameters();
-            object[] invokeParams;
+            // Destination for parameters copied from args[] (if supplied)
+            // or filled in from defaults (for optional parameters)
+            object[] invokeParams = null;
 
-            if (args == null)
+            // Go see if parameters exist, and if so extend invokeParams[]
+            ParameterInfo[] paramInfo = command.Method.Method.GetParameters();
+            int paramLength = (paramInfo != null) ? paramInfo.Length : 0;
+
+            if (paramLength > 0)
             {
-                invokeParams = null;
-            }
-            else
-            {
-                invokeParams = new object[parameterInfo.Length];
+                invokeParams = new object[paramLength];
             }
 
+            // Prepare to loop over args[] -- but make sure it isn't null
+            int argLength = (args != null) ? args.Length : 0;
             int argIndex = 0;
-            for (int paramIndex = 0; paramIndex < parameterInfo.Length; paramIndex++)
-            {
-                ParameterInfo p = parameterInfo[paramIndex];
 
-                if (p.IsOptional && argIndex >= args.Length)
+            Console.WriteLine($"node {command.Name} args[{argLength}] paramInfo[{paramLength}]");
+
+            // Copy and validate 'em, or fill in the default ones
+            for (int paramIndex = 0; paramIndex < paramLength; paramIndex++)
+            {
+                ParameterInfo p = paramInfo[paramIndex];
+
+                if (p.IsOptional && argIndex >= argLength)
                 {
                     // Run out of supplied arguments, try the default value
                     invokeParams[paramIndex] = p.DefaultValue;
@@ -645,7 +652,7 @@ namespace PERQemu.UI
                             // Add to the root
                             _commandRoot.AddSubNode(tokens, cmdNode);
                         }
-                        else if (args.Length == 1)
+                        else if (args.Length == 1 && !args[0].IsOptional)
                         {
                             // Create a new "arguments" node
                             var argNode = new ArgumentNode(args[0].Name, "", args[0],
@@ -665,10 +672,11 @@ namespace PERQemu.UI
                         }
                         else
                         {
-                            // With multiple parameters, we create a new generic
-                            // "glue" node from the command given (without method
-                            // info) and add a chain of "argument nodes" that will
-                            // eventually lead to the method we'll invoke.
+                            // With multiple parameters (or with only one optional
+                            // parameter) we create a new generic "glue" node from
+                            // the command given (without method info) and add a
+                            // chain of "argument nodes" that will eventually lead
+                            // to the method we'll invoke.
 
                             // Add the generic/glue node to the root
                             _commandRoot.AddSubNode(tokens, cmdNode);
