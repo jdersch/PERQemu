@@ -223,7 +223,7 @@ namespace PERQemu.IO.Z80
                         _rdRegisters[(int)ReadRegister.IntStatus0] &= (byte)~(InterruptStatus0.BI | InterruptStatus0.END);
                     }
 
-                    Log.Debug(Category.GPIB, "DataIn read 0x{0:x2} ({1} bytes remaining)", retval, _busFifo.Count);
+                    Log.Detail(Category.GPIB, "DataIn read 0x{0:x2} ({1} bytes remaining)", retval, _busFifo.Count);
                     AssertInterrupt();
                     return retval;
 
@@ -275,6 +275,8 @@ namespace PERQemu.IO.Z80
                             flags |= BusStatus.EOI;
                             _sendNextEOI = false;
                         }
+
+                        Log.Detail(Category.GPIB, "DataOut wrote 0x{0:x2} to device {1}", value, DeviceID);
                         _bus.BusWrite(DeviceID, value, flags);
                     }
                     else

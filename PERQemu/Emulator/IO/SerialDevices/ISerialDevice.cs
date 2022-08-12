@@ -19,30 +19,71 @@
 
 using System.IO.Ports;
 
+using PERQemu.IO.Z80;
+
 namespace PERQemu.IO.SerialDevices
 {
     /// <summary>
-    /// Defines the interface between the PERQ's serial port implementation and
-    /// some manner of real or imaginary device (for example, a real serial port
-    /// or a file, or a network connection...)
+    /// For "real" devices, this extended delegate allows hardware status changes
+    /// to be sent to the SIO with a recieved character, or asynchronously.
     /// </summary>
-    public interface ISerialDevice
+    public delegate void ReceiveStatusDelegate(byte rxValue, CharStatus rxStatus);
+
+    /// <summary>
+    /// Defines the interface between a "real" programmable serial port on the
+    /// host (or an imaginary device that behaves like one, e.g., RSX:) and the
+    /// PERQ's byte oriented serial port implementation.  The "hooks" here allow
+    /// setting the parameters for the physical data transfer -- data bits, stop
+    /// bits, parity, etc. -- by the SIO device.  Must implement ISIODevice to
+    /// move data in or out of the virtual machine.
+    /// </summary>
+    public interface ISerialDevice : ISIODevice
     {
-        void Reset();
-
-        void Write(byte[] data, int index, int length);
-        byte ReadByte();
-        int ByteCount { get; }
-
+        /// <summary>
+        /// Basic file ops.
+        /// </summary>
         void Open();
         void Close();
 
+        // Debugging
+        void Status();
+
+        /// <summary>
+        /// Tell the device that the timer (baud rate clock) has changed.
+        /// For PERQ-1 IOB/CIO, the Z80 CTC provides the baud clock (x16).
+        /// For PERQ-2 EIO, the i8254 chip does it [not yet implemented].
+        /// </summary>
+        void NotifyRateChange(int newRate);
+
+        /// <summary>
+        /// Registers the extended status delegate.
+        /// </summary>
+        void RegisterStatusDelegate(ReceiveStatusDelegate rxDelegate);
+
+        //
+        // Properties
+        //
         bool IsOpen { get; }
+        int ByteCount { get; }
+        int BaudRate { get; }
 
         string Port { get; set; }
-        int BaudRate { get; set; }
         int DataBits { get; set; }
-        StopBits StopBits { get; set; }
         Parity Parity { get; set; }
+        StopBits StopBits { get; set; }
+
+        //
+        // Modem control pins
+        //
+        bool DTR { get; set; }
+        bool RTS { get; set; }
+
+        bool DCD { get; }
+        bool CTS { get; }
+        bool DSR { get; }
+
+        // todo: handshaking?  errors?  shit.  SIO "knows" how to program
+        // the pins so that has to be exposed here too...  or do we quietly
+        // ignore that?
     }
 }

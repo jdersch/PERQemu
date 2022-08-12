@@ -17,8 +17,24 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System;
+
 namespace PERQemu.IO.Z80
 {
+    [Flags]
+    public enum CharStatus : byte
+    {
+        None = 0x0,
+        InvalidChar = 0x1,
+        PinChange = 0x2,
+        ParityError = 0x4,
+        FramingError = 0x8,
+        Overrun = 0x10,
+        Underrun = 0x20,
+        BreakDetected = 0x40,
+        DeviceError = 0x80
+    }
+
     public delegate void ReceiveDelegate(byte rxValue);
 
     /// <summary>
@@ -45,13 +61,13 @@ namespace PERQemu.IO.Z80
         void Transmit(byte value);
 
         /// <summary>
-        /// Sends an SDLC Abort to the device.
-        /// </summary>
-        void TransmitAbort();
-
-        /// <summary>
         /// Sends an RS232 Break to the device.
         /// </summary>
         void TransmitBreak();
+
+        /// <summary>
+        /// Sends an SDLC Abort to the device.
+        /// </summary>
+        void TransmitAbort();
     }
 }

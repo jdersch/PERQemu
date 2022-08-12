@@ -963,6 +963,11 @@ namespace PERQemu
             QCodeHelper.DumpContents();
         }
 
+        [Command("debug dump rs232a")]
+        private void ShowRS232Status()
+        {
+            PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
+        }
 
         // A temporary working copy for editing breakpoints
         private BreakpointEventArgs _bp;

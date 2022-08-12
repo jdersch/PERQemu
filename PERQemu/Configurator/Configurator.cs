@@ -327,6 +327,10 @@ namespace PERQemu.Config
                         sw.WriteLine("drive {0} {1} {2}", unit, dev.Type, dev.MediaPath);
                     }
 
+                    // Save serial ports, if enabled
+                    if (_current.RSAEnable) sw.WriteLine("enable rs232 a");
+                    if (_current.RSBEnable) sw.WriteLine("enable rs232 b");
+
                     sw.WriteLine("done");
                     sw.Close();
                 }

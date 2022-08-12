@@ -61,7 +61,7 @@ namespace PERQemu.UI
             Console.WriteLine("Pause when window minimized:    " + Settings.PauseWhenMinimized);
             Console.WriteLine("Cursor in PERQ display window:  " + Settings.CursorPreference);
             Console.WriteLine();
-            Console.WriteLine("Performance options: " + Settings.Performance);
+            Console.WriteLine("Rate limiting options: " + Settings.Performance);
             Console.WriteLine();
             Console.WriteLine("Default radix for CPU debugger: " + Settings.DebugRadix);
             Console.WriteLine("Default radix for Z80 debugger: " + Settings.Z80Radix);
@@ -157,20 +157,30 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("settings performance option", "Set performance option flags")]
+        [Command("settings performance option", "", Discreet = true)]   // Obsoleted
+        [Command("settings rate limit", "Set rate limit option flags")]
         public void SetPerformance(RateLimit opt)
         {
-            // Ha this doesn't work as expected.  Duh.  Rethink this.
-            if (Settings.Performance.HasFlag(opt))
+            // "None" clears all the options; otherwise, they toggle
+            if (opt == RateLimit.None)
             {
-                Settings.Performance &= ~opt;
+                Settings.Changed = (Settings.Performance != RateLimit.None);
+                Settings.Performance = opt;
             }
             else
             {
-                Settings.Performance |= opt;
+                if (Settings.Performance.HasFlag(opt))
+                {
+                    Settings.Performance &= ~opt;
+                }
+                else
+                {
+                    Settings.Performance |= opt;
+                }
+                Settings.Changed = true;
             }
-            Settings.Changed = true;
-            Console.WriteLine("Performance options set to {0}", Settings.Performance);
+
+            Console.WriteLine("Rate limit options set to {0}", Settings.Performance);
         }
 
         [Command("settings output directory", "Set directory for saving printer output and screenshots")]
@@ -296,6 +306,7 @@ namespace PERQemu.UI
             }
 
             // If Windows, expect 'COMn:' form; append the ':' if not present
+            // (it'll enumerate the available devs for us, but only on Windows?)
             if (dev.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
             {
                 dev = dev.ToUpper();

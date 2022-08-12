@@ -126,8 +126,8 @@ namespace PERQemu.IO.GPIB
                 return;
             }
 
-            Log.Debug(Category.GPIB, "Bus write ({0} 0x{1:x2}) from talker {2} to listener {3}",
-                                     flags, value, _talkerId, _listenerId);
+            Log.Detail(Category.GPIB, "Bus write ({0} 0x{1:x2}) from talker {2} to listener {3}",
+                                      flags, value, _talkerId, _listenerId);
 
             // Do the BusRead on the listener!  Should we send our talker id so
             // the listener knows where it came from?  Mayyyybe.  We can add that.

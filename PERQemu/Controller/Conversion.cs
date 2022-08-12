@@ -45,5 +45,70 @@ namespace PERQemu
         /// Conversion from seconds to milliseconds
         /// </summary>
         public static readonly double MsecToSec = 0.001;
+
+        /// <summary>
+        /// Convert a timer count to a standard baud rate.  Returns 0 if TC does
+        /// not map to a standard rate (from 110 to 9600).
+        /// </summary>
+        /// <remarks>
+        /// For now, this is based on the PERQ-1/IOB Z80's calculations based on
+        /// counts from a Zilog CTC chip.  For PERQ-2/EIO, compute for the i8254
+        /// based on the 4Mhz timing, up to 19200.
+        /// </remarks>
+        public static int TimerCountToBaudRate(int rate)
+        {
+            //
+            // The CTC is programmed to fire the RS232A Tx/Rx clock at 16x the
+            // chosen baud rate; this corresponds to the TC value written into
+            // the timer's count register, and the "x16 mode" selected in the
+            // SIO channel setup.  For rate limiting, TC is multiplied by the
+            // Z80's clock tick length (2.4576Mhz or 407ns) to get the interval
+            // in nanoseconds between byte transmissions!  (10 bit times/byte)
+            //
+            var baseRate = rate / 16;
+            int baud = 0;
+
+            switch (baseRate)
+            {
+                // Standard rates from 9600 down to 150 baud
+                case 1:
+                case 2:
+                case 4:
+                case 8:
+                case 16:
+                case 32:
+                case 64:
+                    baud = 9600 / baseRate;
+                    break;
+
+                // Check for the only outlier, in case there's an ASR-33 attached
+                case 87:
+                    baud = 110;
+                    break;
+
+                default:
+                    Log.Error(Category.RS232, "Could not decode baud rate from CTC value {0}", rate);
+                    break;
+            }
+
+            return baud;
+        }
+
+        /// <summary>
+        /// Convert a baud rate to the number of nanoseconds between characters
+        /// transmitted/received on a serial data stream, suitable for scheduling
+        /// Scheduler events.
+        /// </summary>
+        /// <remarks>
+        /// This calculation doesn't account for the granularity of the actual
+        /// clock period used by the hardware, but it doesn't have to be that
+        /// accurate.  We just want to "pace" data from the virtual machine so
+        /// that the Z80/PERQ see realistic interrupt rates for serial transfers.
+        /// Assume 10 bits per character (8-N-1).
+        /// </remarks>
+        public static ulong BaudRateToNsec(int baud)
+        {
+            return (ulong)(1000000000 / (baud / 10));
+        }
     }
 }

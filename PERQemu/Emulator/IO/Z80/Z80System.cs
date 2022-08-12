@@ -39,6 +39,11 @@ namespace PERQemu.IO.Z80
     /// kind of subclassing, he said, blissfully ignorant of the world of pain
     /// he was about to enter.
     /// </summary>
+    /// <remarks>
+    /// Yeah.  There's no way in hell I'm gonna cram the EIO in here given how
+    /// many things are different.  Will require yet another big refactoring to
+    /// make that work.
+    /// </remarks>
     public class Z80System
     {
         public Z80System(PERQSystem system)
@@ -105,20 +110,22 @@ namespace PERQemu.IO.Z80
                 _z80sio.AttachDevice(1, tablet);
             }
 
-            // todo: RSXFilePort and PhysicalPort have to be converted to ISIODevice
-            //if (system.Config.RSAEnable && Settings.RSADevice != string.Empty)
-            //{
-            //    if (Settings.RSADevice == "RSX:")
-            //    {
-            //        var rsx = new RSXFilePort();
-            //        _z80sio.AttachDevice(0, rsx);
-            //    }
-            //    else
-            //    {
-            //        var rsa = new PhysicalPort(Settings.RSADevice);
-            //        _z80sio.AttachDevice(0, rsa);
-            //    }
-            //}
+            // If enabled and configured, attach device to RS232
+            if (system.Config.RSAEnable && Settings.RSADevice != string.Empty)
+            {
+                if (Settings.RSADevice == "RSX:")
+                {
+                    var rsx = new RSXFilePort(this);
+                    _z80sio.AttachPortDevice(0, rsx);
+                    _z80ctc.AttachDevice(0, rsx);
+                }
+                else
+                {
+                    var rsa = new PhysicalPort(this, Settings.RSADevice);
+                    _z80sio.AttachPortDevice(0, rsa);
+                    _z80ctc.AttachDevice(0, rsa);
+                }
+            }
 
             // Attach our debugger
             switch (system.Config.IOBoard)
@@ -386,6 +393,9 @@ namespace PERQemu.IO.Z80
             // Just in case
             Stop();
 
+            // If a serial device is attached, close it properly
+            _z80sio.DetachDevice(0);    // RS232-A
+
             _bus = null;
             _memory = null;
             _cpu = null;
@@ -427,9 +437,10 @@ namespace PERQemu.IO.Z80
         /// Corresponds to IOB port 0xc1 (octal 301).
         /// The PERQ1 microcode uses port c1 to control both the hard drive and
         /// the Z80.  The lower 7 bits are hard disk control flags.
-        ///
+        /// </summary>
+        /// <remarks>
         /// From sysb.mic:
-        /// !
+        /// 
         /// ! Turn Z80 Off
         /// Z80Off: 200, IOB(301), loc(7500);         ! shut off disk and Z80
         ///         0, IOB(307), loc(7501);           ! shut off Z80 output interrupts
@@ -444,7 +455,7 @@ namespace PERQemu.IO.Z80
         /// starts it up, and if it is "on" then writing 0x80 to it turns it off again.  NOTE in
         /// particular the order of those instructions: we still have to look at the on/off flag
         /// even if the Z80 isn't "running"!
-        /// </summary>
+        /// </remarks>
         public void WriteStatus(int status)
         {
             bool prevState = _running;

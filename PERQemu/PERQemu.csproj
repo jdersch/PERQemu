@@ -228,6 +228,7 @@
     <Compile Include="Emulator\IO\DiskDevices\MicropolisDiskController.cs" />
     <Compile Include="PROM\Unscrambler.cs" />
     <Compile Include="Debugger\Breakpoint.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80SIOChannel.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

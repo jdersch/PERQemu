@@ -441,6 +441,12 @@ August, 2022:
     of the UserGuide now covers nearly everything as implemented in what should
     become the v0.5.0 release!
     
+    3. Rewrote RSXFilePort to work with the new Z80 and SIO.  Now RSX: (in POS)
+    can again be used to transfer (text) files to and from the host.  RealPort
+    driver for serial port access underway.  Some changes/updates to clarify the
+    rate limiting options, remove a dependency that prevents startup on Linux.
+    User Guide updates continuing.
+    
 
 ---
-Last update: skeezics    Mon Aug  1 17:57:54 PDT 2022
+Last update: skeezics    Thu Aug 11 20:19:33 PDT 2022

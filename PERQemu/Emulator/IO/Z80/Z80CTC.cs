@@ -19,6 +19,8 @@
 
 using System;
 
+using PERQemu.IO.SerialDevices;
+
 namespace PERQemu.IO.Z80
 {
     /// <summary>
@@ -69,6 +71,12 @@ namespace PERQemu.IO.Z80
 
         public event EventHandler NmiInterruptPulse;
 
+
+        public void AttachDevice(int channel, ISerialDevice dev)
+        {
+            _channels[channel].TimerClient = dev;
+        }
+
         public byte Read(byte portAddress)
         {
             throw new NotImplementedException("Z80 CTC read");
@@ -83,7 +91,7 @@ namespace PERQemu.IO.Z80
                 Log.Detail(Category.CTC, "Channel {0} loading TC {1}", ch, value);
 
                 // TimeConstant bit was set in the last control byte,
-                // so this byte sets the time constant for this channel.
+                // so this byte sets the time constant for this channel
                 _channels[ch].TimeConstant = (value == 0) ? 256 : value;
 
                 // Reset the counter w/new time constant
@@ -181,10 +189,10 @@ namespace PERQemu.IO.Z80
 #if DEBUG
             // Sanity checks
             if (_interruptVector == null)
-                Console.WriteLine("Z80 asked for vector and we haven't set one!?");
+                Log.Warn(Category.CTC, "Z80 asked for vector and we haven't set one!?");
 
             if (ch < 0 || ch > 3)
-                Console.WriteLine("Vector {0} out of range on acknowledge", ch);
+                Log.Error(Category.CTC, "Vector {0} out of range on acknowledge", ch);
 #endif
 
             _channels[ch].InterruptRequested = false;
@@ -227,6 +235,7 @@ namespace PERQemu.IO.Z80
             {
                 _ctc = parent;
                 Number = num;
+                TimerClient = null;
 
                 Log.Debug(Category.CTC, "Channel {0} initialized", Number);
             }
@@ -242,7 +251,7 @@ namespace PERQemu.IO.Z80
                 Trigger = null;
 
                 Log.Debug(Category.CTC, "Channel {0} reset", Number);
-           }
+            }
 
             public ControlFlags Control;
             public int Number;
@@ -251,8 +260,11 @@ namespace PERQemu.IO.Z80
             public bool Running;
             public bool InterruptRequested;
 
+            public ISerialDevice TimerClient;
+
             private SchedulerEvent Trigger;
             private Z80CTC _ctc;
+
 
             /// <summary>
             /// Enable this channel as appropriate for the programmed mode.
@@ -370,7 +382,8 @@ namespace PERQemu.IO.Z80
                 //              possibly unused?  (Old touch tablet interface)
                 // Thus, the min/max timer values at 2.4576Mhz are ~6.5uS to 26.6ms.
                 // At 9600 baud, the CTC runs at its maximum rate to produce the SIO/0
-                // clock (on channel 0).
+                // clock (on channel 0), which is programmed in x16 mode.  Thus, the
+                // SIO bit rate is 104.192usec @ 9600baud, or 1.042ms per char.
                 //
                 var interval = _ctc._scheduler.TimeStepNsec * (ulong)Counter;
 
@@ -408,6 +421,14 @@ namespace PERQemu.IO.Z80
                     Trigger = null;
                     InterruptRequested = false;
                     Log.Debug(Category.CTC, "[Channel {0} timer not renewed]", context);
+
+                    // HOWEVER, for baud rate generation we DO want to inform the "real"
+                    // device (if registered) that the timer's rate has changed/been enabled
+                    // so that it can compute and set a baud rate for the external device...
+                    if (TimerClient != null)
+                    {
+                        TimerClient.NotifyRateChange(Counter);
+                    }
                 }
 
                 // Rescan if status changed
@@ -417,4 +438,3 @@ namespace PERQemu.IO.Z80
         }
     }
 }
-

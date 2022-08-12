@@ -153,6 +153,13 @@ namespace PERQemu.IO.DiskDevices
         /// Initiates or continues a Seek by pulsing the Disk Step line.
         /// Direction is >0 for positive steps, or 0 or a negative steps.
         /// </summary>
+        /// <remarks>
+        /// Note: we ignore the RateLimit.DiskSpeed option here for Shugart 14"
+        /// hard disks, because the timing of those steps is built into the Z80
+        /// firmware.  For additional drive types (as they are implemented) we
+        /// can optionally clip the seek timings to make the system run faster,
+        /// sacrificing emulation accuracy for speed.
+        /// </remarks>
         public virtual void SeekStep(int direction)
         {
             // Compute and check our new cylinder
@@ -227,7 +234,7 @@ namespace PERQemu.IO.DiskDevices
                 // If faithfully emulating the slow ass disk drives of the mid-
                 // 1980s, then add the head settling time to cap off our seek
                 // odyssey.  Otherwise a default 1us delay is reasonable.
-                if (Settings.Performance.HasFlag(RateLimit.AccurateDiskSpeedEmulation) && Specs.HeadSettling > 0)
+                if ((Settings.Performance & RateLimit.DiskSpeed) != 0 && Specs.HeadSettling > 0)
                 {
                     settle = (ulong)Specs.HeadSettling * Conversion.MsecToNsec;
                 }
@@ -281,7 +288,7 @@ namespace PERQemu.IO.DiskDevices
         {
             ulong delay = 100;
 
-            if (Settings.Performance.HasFlag(RateLimit.AccurateStartupDelays))
+            if ((Settings.Performance & RateLimit.DiskStartupDelays) != 0)
             {
                 // This makes sense if we do the whole "watch the screen warm up
                 // and play audio of the fans & disks whirring" for the total

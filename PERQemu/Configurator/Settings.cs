@@ -19,7 +19,6 @@
 
 using System;
 using System.IO;
-using System.Drawing.Imaging;
 
 namespace PERQemu
 {
@@ -45,15 +44,24 @@ namespace PERQemu
         Hidden
     }
 
+    // Temporary:  remove dependency on System.Drawing since that's not
+    // present on Linux (Mint, anyway) mono by default?
+    public enum ImageFormat
+    {
+        None = 0,
+        Jpeg,
+        Png,
+        Tiff
+    }
+
     [Flags]
     public enum RateLimit
     {
-        Fast = 0,                               // 110% on the reactor
-        AccurateCPUSpeedEmulation = 0x1,        // strive for accuracy
-        AccurateDiskSpeedEmulation = 0x2,       // feel the pain
-        AccurateStartupDelays = 0x04,           // for the truly hardcore
-        Accurate = 0x03,                        // shortcut (leave some room)
-        AllowFrameSkipping = 0x10               // sigh
+        None = 0,                           // 110% on the reactor
+        CPUSpeed  = 0x1,                    // strive for accuracy
+        DiskSpeed = 0x2,                    // feel the pain
+        DiskStartupDelays = 0x10,           // for the truly hardcore
+        AllowFrameSkipping = 0x20           // not implemented
     }
 
     public static class Settings
@@ -72,7 +80,7 @@ namespace PERQemu
             PauseWhenMinimized = true;
             CursorPreference = Cursor.DefaultArrow;
 
-            Performance = RateLimit.Accurate;
+            Performance = RateLimit.CPUSpeed | RateLimit.DiskSpeed;
             RunMode = ExecutionMode.Asynchronous;
 
             DebugRadix = Radix.Decimal;
@@ -190,23 +198,43 @@ namespace PERQemu
                     sw.WriteLine("default");
                     sw.WriteLine("autosave harddisk " + SaveDiskOnShutdown);
                     sw.WriteLine("autosave floppy " + SaveFloppyOnEject);
+                    sw.WriteLine("display cursor " + CursorPreference);
                     sw.WriteLine("pause on reset " + PauseOnReset);
                     sw.WriteLine("pause when minimized " + PauseWhenMinimized);
-                    sw.WriteLine("display cursor " + CursorPreference);
-                    sw.WriteLine("## These options are not yet implemented:");
-                    sw.WriteLine("# debug radix " + DebugRadix);
-                    sw.WriteLine("# z80 debug radix " + Z80Radix);
-                    sw.WriteLine("# screenshot format " + ScreenshotFormat);
-                    sw.WriteLine("# canon format " + CanonFormat);
 
-                    if (!string.IsNullOrEmpty(OutputDirectory))
-                        sw.WriteLine("output directory \"" + OutputDirectory + "\"");
+                    // Enumerate any rate limit options
+                    if (Performance == RateLimit.None)
+                    {
+                        sw.WriteLine("rate limit none");
+                    }
+                    else
+                    {
+                        foreach (RateLimit opt in Enum.GetValues(typeof(RateLimit)))
+                        {
+                            if (Performance.HasFlag(opt))
+                                sw.WriteLine("rate limit " + opt);
+                        }
+                    }
 
+                    // Device mappings
                     if (!string.IsNullOrEmpty(RSADevice))
                         sw.WriteLine("assign rs232 device a " + RSADevice);
 
                     if (!string.IsNullOrEmpty(RSBDevice))
                         sw.WriteLine("assign rs232 device b " + RSBDevice);
+
+                    // todo: audio, Ethernet
+
+                    if (!string.IsNullOrEmpty(OutputDirectory))
+                        sw.WriteLine("output directory \"" + OutputDirectory + "\"");
+
+                    sw.WriteLine("#");
+                    sw.WriteLine("# These options are not yet implemented:");
+                    sw.WriteLine("# debug radix " + DebugRadix);
+                    sw.WriteLine("# z80 debug radix " + Z80Radix);
+                    sw.WriteLine("# screenshot format " + ScreenshotFormat);
+                    sw.WriteLine("# canon format " + CanonFormat);
+                    sw.WriteLine("#");
 
                     sw.WriteLine("done");
 

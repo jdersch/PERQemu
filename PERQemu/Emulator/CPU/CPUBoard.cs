@@ -147,7 +147,7 @@ namespace PERQemu.Processor
                     if (_stopAsyncThread) break;
 
                     // Do rate limiting if configured (and we haven't left run mode)
-                    if (Settings.Performance.HasFlag(RateLimit.AccurateCPUSpeedEmulation))
+                    if ((Settings.Performance & RateLimit.CPUSpeed) != 0)
                     {
                         _heartbeat.WaitForHeartbeat();
                     }
