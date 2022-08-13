@@ -162,7 +162,6 @@
     <Compile Include="Emulator\IO\IOBus.cs" />
     <Compile Include="Emulator\IO\OIO.cs" />
     <Compile Include="Emulator\IO\PERQLink.cs" />
-    <Compile Include="Emulator\IO\SerialDevices\ISerialDevice.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RealPort.cs" />
     <Compile Include="Emulator\IO\SerialDevices\RSXFilePort.cs" />
     <Compile Include="Emulator\Memory\MemoryBoard.cs" />
@@ -229,6 +228,9 @@
     <Compile Include="PROM\Unscrambler.cs" />
     <Compile Include="Debugger\Breakpoint.cs" />
     <Compile Include="Emulator\IO\Z80\Z80SIOChannel.cs" />
+    <Compile Include="Emulator\IO\SerialDevices\SerialDevice.cs" />
+    <Compile Include="Emulator\IO\Z80\ICTCDevice.cs" />
+    <Compile Include="Emulator\IO\SerialDevices\NullPort.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

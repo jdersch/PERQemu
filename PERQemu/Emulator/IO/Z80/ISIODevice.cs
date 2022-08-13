@@ -21,19 +21,6 @@ using System;
 
 namespace PERQemu.IO.Z80
 {
-    [Flags]
-    public enum CharStatus : byte
-    {
-        None = 0x0,
-        InvalidChar = 0x1,
-        PinChange = 0x2,
-        ParityError = 0x4,
-        FramingError = 0x8,
-        Overrun = 0x10,
-        Underrun = 0x20,
-        BreakDetected = 0x40,
-        DeviceError = 0x80
-    }
 
     public delegate void ReceiveDelegate(byte rxValue);
 

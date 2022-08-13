@@ -84,7 +84,7 @@ namespace PERQemu.IO.Z80
             public int InterruptOffset => _interruptOffset;
 
             // Debugging
-            public ISerialDevice Port => _port;
+            public SerialDevice Port => _port;
 
             private bool RxEnabled => (_writeRegs[3] & (byte)WReg3.RxEnable) != 0;
             private bool TxEnabled => (_writeRegs[5] & (byte)WReg5.TxEnable) != 0;
@@ -116,7 +116,7 @@ namespace PERQemu.IO.Z80
                 _device = null;
             }
 
-            public void OpenPort(ISerialDevice port)
+            public void OpenPort(SerialDevice port)
             {
                 _port = port;
                 _port.Open();
@@ -124,10 +124,7 @@ namespace PERQemu.IO.Z80
 
             public void ClosePort()
             {
-                if (_port != null)
-                {
-                    _port.Close();
-                }
+                _port?.Close();
             }
 
             public byte ReadRegister()
@@ -238,6 +235,7 @@ namespace PERQemu.IO.Z80
                         case 1:
                             // Bits D4..D0 (various irq enables) referenced elsewhere;
                             // The WAIT/READY functons may affect DMA operation?
+                            Log.Detail(Category.SIO, "Channel {0} WR1 now {1}", _channelNumber, (WReg1)_writeRegs[1]);
                             break;
 
                         case 2:
@@ -257,6 +255,7 @@ namespace PERQemu.IO.Z80
                             }
 
                             UpdateBitsPerChar((_writeRegs[3] & (byte)WReg3.RxBitsPerChar) >> 6);
+                            Log.Detail(Category.SIO, "Channel {0} WR3 now {1}", _channelNumber, (WReg3)_writeRegs[3]);
                             break;
 
                         case 4:
@@ -272,8 +271,9 @@ namespace PERQemu.IO.Z80
 
                             if ((_writeRegs[5] & (byte)WReg5.SendBreak) != 0)
                             {
-                                _device.TransmitBreak();
+                                _device?.TransmitBreak();
                             }
+                            Log.Detail(Category.SIO, "Channel {0} WR5 now {1}", _channelNumber, (WReg5)_writeRegs[5]);
                             break;
                     }
                     // Write to other register, next access is to reg 0
@@ -313,7 +313,7 @@ namespace PERQemu.IO.Z80
                 {
                     var b = _txFifo.Dequeue();
 
-                    _device.Transmit(b);
+                    _device?.Transmit(b);
 
                     Log.Detail(Category.SIO, "Channel {0} Tx data: 0x{1:x2}, queue depth {2}",
                                              _channelNumber, b, _txFifo.Count);
@@ -634,7 +634,7 @@ namespace PERQemu.IO.Z80
             private Scheduler _scheduler;
 
             private ISIODevice _device;
-            private ISerialDevice _port;
+            private SerialDevice _port;
         }
 
         //

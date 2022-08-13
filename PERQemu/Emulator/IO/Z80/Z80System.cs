@@ -126,6 +126,11 @@ namespace PERQemu.IO.Z80
                     _z80ctc.AttachDevice(0, rsa);
                 }
             }
+            else
+            {
+                // Otherwise direct it to the bit bucket
+                _z80sio.AttachPortDevice(0, new NullPort(this));
+            }
 
             // Attach our debugger
             switch (system.Config.IOBoard)

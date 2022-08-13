@@ -123,7 +123,7 @@ namespace PERQemu.IO.Z80
             _channels[channel].AttachDevice(device);
         }
 
-        public void AttachPortDevice(int channel, ISerialDevice device)
+        public void AttachPortDevice(int channel, SerialDevice device)
         {
             AttachDevice(channel, device);
             _channels[channel].OpenPort(device);

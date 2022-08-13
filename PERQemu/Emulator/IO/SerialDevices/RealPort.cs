@@ -37,9 +37,9 @@ namespace PERQemu.IO.SerialDevices
     /// queueing of incoming bytes so the PERQ sees realistic timing of an (up to)
     /// 9600 baud data stream.
     /// </remarks>
-    public class PhysicalPort : ISerialDevice, ISIODevice
+    public class PhysicalPort : SerialDevice
     {
-        public PhysicalPort(Z80System sys, string portName)
+        public PhysicalPort(Z80System sys, string portName) : base(sys, portName)
         {
             _system = sys;
             _portName = portName;
@@ -47,7 +47,7 @@ namespace PERQemu.IO.SerialDevices
             _sendEvent = null;
         }
 
-        public void Reset()
+        public override void Reset()
         {
             if (_sendEvent != null)
             {
@@ -55,11 +55,9 @@ namespace PERQemu.IO.SerialDevices
                 _sendEvent = null;
             }
 
-            // Apparently these don't work:
             if (IsOpen)
             {
-                _physicalPort.DiscardInBuffer();
-                _physicalPort.DiscardOutBuffer();
+                Close();
             }
 
             // Reset to PERQ defaults
@@ -78,7 +76,7 @@ namespace PERQemu.IO.SerialDevices
         // ISerialDevice implementation
         //
 
-        public void Open()
+        public override void Open()
         {
             _physicalPort.PortName = _portName;
             _physicalPort.Open();
@@ -87,34 +85,31 @@ namespace PERQemu.IO.SerialDevices
             // todo: sign up for errors, pin changes
         }
 
-        public void Close()
+        public override void Close()
         {
+            //_physicalPort.DiscardInBuffer();
+            //_physicalPort.DiscardOutBuffer();
             _physicalPort.DataReceived -= OnDataReceived;
             _physicalPort.Close();
         }
 
-        public string Port
-        {
-            get { return _portName; }
-            set { _portName = value; }
-        }
 
-        public bool IsOpen
+        public override bool IsOpen
         {
             get { return _physicalPort.IsOpen; }
         }
 
-        public int BaudRate
+        public override int BaudRate
         {
             get { return _physicalPort.BaudRate; }
         }
 
-        public int ByteCount
+        public override int ByteCount
         {
             get { return _physicalPort.BytesToRead; }
         }
 
-        public int DataBits
+        public override int DataBits
         {
             get { return _physicalPort.DataBits; }
             set
@@ -124,7 +119,7 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        public Parity Parity
+        public override Parity Parity
         {
             get { return _physicalPort.Parity; }
             set
@@ -134,7 +129,7 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        public StopBits StopBits
+        public override StopBits StopBits
         {
             get { return _physicalPort.StopBits; }
             set
@@ -144,28 +139,28 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        public bool DTR
+        public override bool DTR
         {
             get { return _physicalPort.DtrEnable; }
             set { _physicalPort.DtrEnable = value; }
         }
 
-        public bool RTS
+        public override bool RTS
         {
             get { return _physicalPort.RtsEnable; }
             set { _physicalPort.RtsEnable = value; }
         }
 
-        public bool DCD => _physicalPort.CDHolding;
-        public bool DSR => _physicalPort.DsrHolding;
-        public bool CTS => _physicalPort.CtsHolding;
+        public override bool DCD => _physicalPort.CDHolding;
+        public override bool DSR => _physicalPort.DsrHolding;
+        public override bool CTS => _physicalPort.CtsHolding;
 
 
         /// <summary>
         /// Compute new baud rate from the timer tick rate provided by the CTC.
         /// See notes below for detailed information about baud calculation.
         /// </summary>
-        public void NotifyRateChange(int newRate)
+        public override void NotifyRateChange(int newRate)
         {
             try
             {
@@ -234,19 +229,6 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        public void RegisterStatusDelegate(ReceiveStatusDelegate rxDelegate)
-        {
-            _rxErrDelegate = rxDelegate;
-        }
-
-        //
-        // ISIODevice implementation
-        //
-
-        public void RegisterReceiveDelegate(ReceiveDelegate rxDelegate)
-        {
-            _rxDelegate = rxDelegate;
-        }
 
         /// <summary>
         /// Write a byte from the PERQ to the physical port.
@@ -259,25 +241,21 @@ namespace PERQemu.IO.SerialDevices
         ///     which should rarely/never happen;
         /// 3.  This is all wrong and System.IO.SerialPort is hopelessly busted.
         /// </remarks>
-        public void Transmit(byte value)
+        public override void Transmit(byte value)
         {
             _physicalPort.Write($"{value}");    // Ugh.
             Log.Detail(Category.RS232, "Wrote byte {0:x2} ({1} in output queue)", value, _physicalPort.BytesToWrite);
         }
 
-        public void TransmitBreak()
+        public override void TransmitBreak()
         {
             // _physicalPort.BreakState = value;        // I bet this is just held and must be set manually...
             Log.Debug(Category.RS232, "TransmitBreak called!");
         }
 
-        public void TransmitAbort()
-        {
-            throw new NotImplementedException();
-        }
 
         // Debugging
-        public void Status()
+        public override void Status()
         {
             Console.WriteLine($"Serial port A device is '{_portName}', IsOpen={IsOpen}");
             Console.WriteLine($"Handshake: {_physicalPort.Handshake}  Break state: {_physicalPort.BreakState}");
@@ -292,16 +270,13 @@ namespace PERQemu.IO.SerialDevices
                               $"CTS={_physicalPort.CtsHolding}");
         }
 
-        private string _portName;
+
         private int _baudRate;
         private ulong _charRateInNsec;
 
-        private Z80System _system;
         private SerialPort _physicalPort;
 
         private SchedulerEvent _sendEvent;
-        private ReceiveDelegate _rxDelegate;
-        private ReceiveStatusDelegate _rxErrDelegate;
     }
 }
 

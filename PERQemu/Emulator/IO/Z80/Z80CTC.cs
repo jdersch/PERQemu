@@ -72,7 +72,7 @@ namespace PERQemu.IO.Z80
         public event EventHandler NmiInterruptPulse;
 
 
-        public void AttachDevice(int channel, ISerialDevice dev)
+        public void AttachDevice(int channel, ICTCDevice dev)
         {
             _channels[channel].TimerClient = dev;
         }
@@ -260,7 +260,7 @@ namespace PERQemu.IO.Z80
             public bool Running;
             public bool InterruptRequested;
 
-            public ISerialDevice TimerClient;
+            public ICTCDevice TimerClient;
 
             private SchedulerEvent Trigger;
             private Z80CTC _ctc;

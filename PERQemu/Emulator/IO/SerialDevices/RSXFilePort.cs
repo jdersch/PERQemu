@@ -82,9 +82,9 @@ namespace PERQemu.IO.SerialDevices
     /// very much a hack, but it is fairly useful to have (makes uploading source
     /// written on the host a lot easier).
     /// </remarks>
-    public class RSXFilePort : ISerialDevice, ISIODevice
+    public sealed class RSXFilePort : SerialDevice
     {
-        public RSXFilePort(Z80System sys)
+        public RSXFilePort(Z80System sys) : base(sys)
         {
             _system = sys;
             _inputQueue = new Queue<byte>(128);
@@ -92,7 +92,7 @@ namespace PERQemu.IO.SerialDevices
             _sendEvent = null;
         }
 
-        public void Reset()
+        public override void Reset()
         {
             if (_sendEvent != null)
             {
@@ -121,61 +121,35 @@ namespace PERQemu.IO.SerialDevices
         // ISerialDevice implementation
         //
 
-        public string Port
+        public override string Name => "RSX port";
+
+        public override string Port
         {
             get { return "RSX:"; }
             set { throw new InvalidOperationException("Cannot specify the port on RSX:"); }
         }
 
-        public int BaudRate => 9600;
-
-        public int DataBits
-        {
-            get { return 8; }
-            set { Log.Detail(Category.RS232, "RSX: ignoring data bits set to {0}", value); }
-        }
-
-        public Parity Parity
-        {
-            get { return Parity.None; }
-            set { Log.Detail(Category.RS232, "RSX: ignoring parity set to {0}", value); }
-        }
-
-        public StopBits StopBits
-        {
-            get { return StopBits.One; }
-            set { Log.Detail(Category.RS232, "RSX: ignoring stop bits set to {0}", value); }
-        }
-
-        public bool DTR
+        public override bool DTR
         {
             get { return true; }
             set { Log.Detail(Category.RS232, "RSX: ignoring DTR pin set to {0}", value); }
         }
 
-        public bool RTS
+        public override bool RTS
         {
             get { return true; }
             set { Log.Detail(Category.RS232, "RSX: ignoring RTS pin set to {0}", value); }
         }
 
-        public bool DCD => true;
-        public bool CTS => true;
-        public bool DSR => true;
+        public override bool DCD => true;
+        public override bool CTS => true;
+        public override bool DSR => true;
 
-        public bool IsOpen => _isOpen;
-        public bool Paused => _isPaused;
+        public override int ByteCount => _inputQueue.Count;
 
-        public int ByteCount => _inputQueue.Count;
-
-        public void Open()
+        public override void Transmit(byte value)
         {
-            _isOpen = true;
-        }
-
-        public void Close()
-        {
-            _isOpen = false;
+            SendData(value);
         }
 
         private void ResetState()
@@ -193,10 +167,9 @@ namespace PERQemu.IO.SerialDevices
         {
             if (_inputQueue.Count > 0)
             {
-                if (!Paused)
+                if (!_isPaused)
                 {
                     byte b = _inputQueue.Dequeue();
-                    Log.Debug(Category.RS232, "[RecvData char=0x{0:x2} '{1}']", b, (b > 0x20) ? (char)b : ' ');
 
                     _rxDelegate(b);
 
@@ -205,9 +178,6 @@ namespace PERQemu.IO.SerialDevices
                 }
                 else
                 {
-                    // Deschedule while we wait for ^Q to resume
-                    Log.Debug(Category.RS232, "[RecvData paused]");
-
                     // Clear it so the ^Q in SendData restarts the receiver
                     _sendEvent = null;
                 }
@@ -311,8 +281,7 @@ namespace PERQemu.IO.SerialDevices
                                 // bits on the floor.  Reads return an empty file.
                                 _errorString = e.Message;
 
-                                Log.Write("Error: Could not open '{0}' on host: {1}",
-                                          _fileName, _errorString);
+                                Log.Write("Error: Could not open '{0}' on host: {1}", _fileName, _errorString);
                             }
 
                             // For reads, wait for the ^S that POS sends before
@@ -508,11 +477,11 @@ namespace PERQemu.IO.SerialDevices
         }
 
         // Debugging
-        public void Status()
+        public override void Status()
         {
             Console.WriteLine($"RSX device:  open {_isOpen}, transfer state {_transferState}");
             Console.WriteLine($"Line state:  {BaudRate} baud, {DataBits}-{Parity}-{StopBits}");
-            if (Paused) Console.WriteLine($"[Paused ({ByteCount} bytes in output buffer)]");
+            if (_isPaused) Console.WriteLine($"[Paused ({ByteCount} bytes in output buffer)]");
 
             if (IsOpen)
             {
@@ -543,42 +512,6 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        public void NotifyRateChange(int newRate)
-        {
-            Log.Detail(Category.RS232, "RSX: ignoring baud rate change to {0}", newRate);
-        }
-
-        public void RegisterStatusDelegate(ReceiveStatusDelegate rxDelegate)
-        {
-            _errDelegate = rxDelegate;
-        }
-
-        //
-        // ISIODevice implementation
-        //
-
-        public void RegisterReceiveDelegate(ReceiveDelegate rxDelegate)
-        {
-            _rxDelegate = rxDelegate;
-        }
-
-        public void Transmit(byte value)
-        {
-            SendData(value);
-        }
-
-        public void TransmitBreak()
-        {
-            // Should never happen
-            throw new NotImplementedException();
-        }
-
-        public void TransmitAbort()
-        {
-            // Should never happen
-            throw new NotImplementedException();
-        }
-
 
         private enum TransferState
         {
@@ -588,23 +521,19 @@ namespace PERQemu.IO.SerialDevices
             Transferring
         }
 
-        private Z80System _system;
-        private SchedulerEvent _sendEvent;
-        private ReceiveDelegate _rxDelegate;
-        private ReceiveStatusDelegate _errDelegate;
 
         private Queue<byte> _inputQueue;
+        private SchedulerEvent _sendEvent;
 
         private string _fileName;
         private FileMode _fileMode;
         private FileAccess _fileAccess;
         private FileStream _fileStream;
-        private bool _isOpen;
-        private bool _isPaused;
 
         private TransferState _transferState;
         private string _rsxCommand;
         private string _errorString;
+        private bool _isPaused;
 
         private ulong _charRateInNsec = Conversion.BaudRateToNsec(9600);
 
