@@ -19,6 +19,8 @@
 
 using System;
 using System.IO;
+using System.IO.Ports;
+using System.Collections.Generic;
 
 namespace PERQemu
 {
@@ -58,10 +60,31 @@ namespace PERQemu
     public enum RateLimit
     {
         None = 0,                           // 110% on the reactor
-        CPUSpeed  = 0x1,                    // strive for accuracy
+        CPUSpeed = 0x1,                     // strive for accuracy
         DiskSpeed = 0x2,                    // feel the pain
         DiskStartupDelays = 0x10,           // for the truly hardcore
         AllowFrameSkipping = 0x20           // not implemented
+    }
+
+    public struct SerialSettings
+    {
+        public SerialSettings(int baud, int data, Parity parity, StopBits stop)
+        {
+            BaudRate = baud;
+            DataBits = data;
+            Parity = parity;
+            StopBits = stop;
+        }
+
+        public override string ToString()
+        {
+            return $"{BaudRate} {DataBits} {Parity} {StopBits}";
+        }
+
+        public int BaudRate;
+        public int DataBits;
+        public Parity Parity;
+        public StopBits StopBits;
     }
 
     public static class Settings
@@ -94,6 +117,9 @@ namespace PERQemu
 
             RSADevice = string.Empty;
             RSBDevice = string.Empty;
+
+            RSASettings = new SerialSettings(9600, 8, Parity.None, StopBits.One);
+            RSBSettings = new SerialSettings(9600, 8, Parity.None, StopBits.One);
 
             Reason = "Settings reset to defaults.";
             Changed = false;
@@ -131,6 +157,10 @@ namespace PERQemu
         // Host Devices
         public static string RSADevice;
         public static string RSBDevice;
+
+        public static SerialSettings RSASettings;
+        public static SerialSettings RSBSettings;
+
         //public static string AudioDevice;
         //public static string EtherDevice;
         //public static EtherEncapsulationType EtherEncapsulation;
@@ -147,6 +177,9 @@ namespace PERQemu
         /// </summary>
         public static void Load()
         {
+            // Set the list of COM ports for the "assign rs232 device" command
+            PERQemu.CLI.UpdateKeywordMatchHelpers("ComPorts", GetHostSerialPorts());
+
             try
             {
                 if (!File.Exists(Paths.SettingsPath))
@@ -218,10 +251,14 @@ namespace PERQemu
 
                     // Device mappings
                     if (!string.IsNullOrEmpty(RSADevice))
-                        sw.WriteLine("assign rs232 device a " + RSADevice);
+                    {
+                        sw.WriteLine($"assign rs232 device a {RSADevice} {RSASettings}");
+                    }
 
                     if (!string.IsNullOrEmpty(RSBDevice))
-                        sw.WriteLine("assign rs232 device b " + RSBDevice);
+                    {
+                        sw.WriteLine($"assign rs232 device b {RSBDevice} {RSBSettings}");
+                    }
 
                     // todo: audio, Ethernet
 
@@ -260,6 +297,41 @@ namespace PERQemu
                 Reason = $"Could not save settings: {e.Message}";
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Find the serial ports on a host according to slightly better heuristics
+        /// (on Unix) than the built-in SerialPort.GetPortNames() call.
+        /// </summary>
+        public static string[] GetHostSerialPorts()
+        {
+            var ports = new List<string>();
+
+            // Always available, as a fallback...
+            ports.Add("RSX:");
+
+            if (PERQemu.HostIsUnix)
+            {
+                // Ha ha ha, this doesn't actually work.  I'm just now finding this out.
+                // if (Environment.OSVersion.Platform == PlatformID.MacOSX)
+
+                // Okay, try looking for the MacOS X-style names first...
+                ports.AddRange(Directory.GetFiles("/dev", "cu.*usb*"));
+                ports.AddRange(Directory.GetFiles("/dev", "tty.*usb*"));
+
+                if (ports.Count == 1)
+                {
+                    // Nothin'?  Well, just add whatever Mono gives us
+                    ports.AddRange(SerialPort.GetPortNames());
+                }
+            }
+            else
+            {
+                // Assume Windows finds the appropriate COMn-style names
+                ports.AddRange(SerialPort.GetPortNames());
+            }
+
+            return ports.ToArray();
         }
     }
 }

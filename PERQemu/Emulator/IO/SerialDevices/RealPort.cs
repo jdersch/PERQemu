@@ -21,6 +21,7 @@ using System;
 using System.IO.Ports;
 using System.Collections.Generic;
 
+using PERQemu;
 using PERQemu.IO.Z80;
 
 namespace PERQemu.IO.SerialDevices
@@ -36,14 +37,22 @@ namespace PERQemu.IO.SerialDevices
     /// CTC chip providing timing.  Figures out the baud rate setting to schedule
     /// queueing of incoming bytes so the PERQ sees realistic timing of an (up to)
     /// 9600 baud data stream.
+    /// 
+    /// NB:  To work around limitations of the SerialPort implementation, all of
+    /// the configurable port settings are shadowed in local variables.  Many of
+    /// the settings can only be applied prior to calling Open(), and will either
+    /// be ignored or throw exceptions otherwise.  Extensive testing needs to be
+    /// done to see if System.IO.Ports.SerialPort is as horrible as reported and
+    /// if so, find adequate workarounds...
     /// </remarks>
     public class PhysicalPort : SerialDevice
     {
-        public PhysicalPort(Z80System sys, string portName) : base(sys, portName)
+        public PhysicalPort(Z80System sys, string portName, SerialSettings portSet, string id) : base(sys, portName)
         {
-            _system = sys;
-            _portName = portName;
-            _physicalPort = new SerialPort();
+            _name = id;                     // Distinguish RS232 "A" and "B"
+            _host = portSet;                // The user's host-side configuration
+            _perq = new SerialSettings();   // The PERQ's view (mostly ignored)
+            _port = new SerialPort();
             _sendEvent = null;
         }
 
@@ -57,103 +66,137 @@ namespace PERQemu.IO.SerialDevices
 
             if (IsOpen)
             {
-                Close();
+                // Flush data (this may not actually work)
+                _port.DiscardInBuffer();
+                _port.DiscardOutBuffer();
             }
 
             // Reset to PERQ defaults
-            // Apparently these ONLY work if the port is closed?
-            _physicalPort.BaudRate = _baudRate = 4800;      // 9600 in POS G?
-            _physicalPort.Handshake = Handshake.RequestToSend;
-            _physicalPort.DtrEnable = true;
-            _physicalPort.RtsEnable = true;
+            _perq.BaudRate = 9600;
+            _perq.DataBits = 8;
+            _perq.Parity = Parity.None;
+            _perq.StopBits = StopBits.One;
+            _dtr = true;
+            _rts = true;
+            _portChanged = false;
 
-            _charRateInNsec = Conversion.BaudRateToNsec(_baudRate);
+            // Adjust the pacing rate for scheduling characters to the PERQ
+            _charRateInNsec = Conversion.BaudRateToNsec(_perq.BaudRate);
 
-            Log.Debug(Category.RS232, "Physical port reset");
+            Log.Info(Category.RS232, "Port {0} physical device reset", _name);
         }
 
         //
         // ISerialDevice implementation
         //
 
+        /// <summary>
+        /// Open the host device and apply the user-configured settings.  This
+        /// runs at any rate they configure, while the PERQ side emulates/limits
+        /// the data flow to the PERQ's restricted range of speeds.
+        /// </summary>
         public override void Open()
         {
-            _physicalPort.PortName = _portName;
-            _physicalPort.Open();
-            _physicalPort.DataReceived += OnDataReceived;
+            // Most of the port's characteristics only take effect before calling
+            // Open();  If _portChanged is set the user wants to force a change
+            // so do a close and reopen to apply new settings.
+            if (!_isOpen || _portChanged)
+            {
+                try
+                {
+                    if (_isOpen) Close();
 
-            // todo: sign up for errors, pin changes
+                    _port.PortName = _portName;
+                    _port.BaudRate = _host.BaudRate;
+                    _port.DataBits = _host.DataBits;
+                    _port.Parity = _host.Parity;
+                    _port.StopBits = _host.StopBits;
+                    _port.Handshake = Handshake.XOnXOff;
+                    _port.DtrEnable = _dtr;
+                    _port.RtsEnable = _rts;
+
+                    _port.DataReceived += OnDataReceived;
+                    _port.PinChanged += OnPinChange;
+                    _port.ErrorReceived += OnError;
+
+                    _port.Open();
+                    _portChanged = false;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(Category.RS232, "Could not open physical port: {0}", e.Message);
+                }
+            }
+
+            _isOpen = _port.IsOpen;
+            Log.Info(Category.RS232, "Port {0} is {1}", _name, _isOpen ? "now open" : "still closed!");
         }
 
         public override void Close()
         {
-            //_physicalPort.DiscardInBuffer();
-            //_physicalPort.DiscardOutBuffer();
-            _physicalPort.DataReceived -= OnDataReceived;
-            _physicalPort.Close();
+            // So apparently it's quite common to catch exceptions when trying
+            // to close the port; catch (and ignore) 'em just in case
+            try
+            {
+                _port.ErrorReceived -= OnError;
+                _port.PinChanged -= OnPinChange;
+                _port.DataReceived -= OnDataReceived;
+
+                _port.Close();
+            }
+            catch (Exception e)
+            {
+                Log.Error(Category.RS232, "Exception on close: {0}", e.Message);
+            }
+
+            _isOpen = _port.IsOpen;
+            Log.Info(Category.RS232, "Port {0} is {1}", _name, _isOpen ? "still open!" : "now closed");
         }
 
-
-        public override bool IsOpen
-        {
-            get { return _physicalPort.IsOpen; }
-        }
 
         public override int BaudRate
         {
-            get { return _physicalPort.BaudRate; }
+            get { return _perq.BaudRate; }
         }
 
         public override int ByteCount
         {
-            get { return _physicalPort.BytesToRead; }
+            get { return (_isOpen ? _port.BytesToRead : 0); }
         }
 
         public override int DataBits
         {
-            get { return _physicalPort.DataBits; }
-            set
-            {
-                try { _physicalPort.DataBits = value; }
-                catch { Log.Error(Category.RS232, "Failed to set data bits '{0}'", value); }
-            }
+            get { return _perq.DataBits; }
+            set { _perq.DataBits = value; }
         }
 
         public override Parity Parity
         {
-            get { return _physicalPort.Parity; }
-            set
-            {
-                try { _physicalPort.Parity = value; }
-                catch { Log.Error(Category.RS232, "Failed to set parity '{0}'", value); }
-            }
+            get { return _perq.Parity; }
+            set { _perq.Parity = value; }
         }
 
         public override StopBits StopBits
         {
-            get { return _physicalPort.StopBits; }
-            set
-            {
-                try { _physicalPort.StopBits = value; }
-                catch { Log.Error(Category.RS232, "Failed to set stop bits '{0}'", value); }
-            }
+            get { return _perq.StopBits; }
+            set { _perq.StopBits = value; }
         }
 
         public override bool DTR
         {
-            get { return _physicalPort.DtrEnable; }
-            set { _physicalPort.DtrEnable = value; }
+            get { return (IsOpen ? _port.DtrEnable : _dtr); }
+            set { _dtr = value; _portChanged |= (_isOpen && _port.DtrEnable != _dtr); }
         }
 
         public override bool RTS
         {
-            get { return _physicalPort.RtsEnable; }
-            set { _physicalPort.RtsEnable = value; }
+            get { return (IsOpen ? _port.RtsEnable : _rts); }
+            set { _rts = value; _portChanged |= (_isOpen && _port.RtsEnable != _rts); }
         }
 
-        public override bool DCD => _physicalPort.CDHolding;
-        public override bool DSR => _physicalPort.DsrHolding;
-        public override bool CTS => _physicalPort.CtsHolding;
+        public override bool DCD => (_isOpen ? _port.CDHolding : false);
+        public override bool DSR => (_isOpen ? _port.DsrHolding : false);
+        public override bool CTS => (_isOpen ? _port.CtsHolding : false);
 
 
         /// <summary>
@@ -162,23 +205,15 @@ namespace PERQemu.IO.SerialDevices
         /// </summary>
         public override void NotifyRateChange(int newRate)
         {
-            try
+            if ((_perq.BaudRate = Conversion.TimerCountToBaudRate(newRate)) > 0)
             {
-                if ((_baudRate = Conversion.TimerCountToBaudRate(newRate)) > 0)
-                {
-                    // Try setting up the hardware to see if it's valid
-                    // fixme: SerialPort requires that the device be closed when changing this!?
-                    _physicalPort.BaudRate = _baudRate;
+                _charRateInNsec = Conversion.BaudRateToNsec(_perq.BaudRate);
 
-                    // Adjust the pacing rate for scheduling characters to the PERQ
-                    _charRateInNsec = Conversion.BaudRateToNsec(_baudRate);
-
-                    Log.Debug(Category.RS232, "Baud rate changed to {0}", _baudRate);
-                }
+                Log.Info(Category.RS232, "Port {0} baud rate (emulated) changed to {1}", _name, _perq.BaudRate);
             }
-            catch (Exception e)
+            else
             {
-                Log.Error(Category.RS232, "Failed to change baud rate: {0}", e.Message);
+                Log.Warn(Category.RS232, "Port {0} bad baud rate {1} from the PERQ!", _name, newRate);
             }
         }
 
@@ -206,29 +241,33 @@ namespace PERQemu.IO.SerialDevices
             if (ByteCount > 0)
             {
                 // Fetch a byte from the physical device...
-                var data = _physicalPort.ReadByte();
-
-                Log.Detail(Category.RS232, "Read byte {0:x2} ({1} in input queue)", data, ByteCount);
+                var data = _port.ReadByte();
 
                 // ...and send it to the PERQ
                 _rxDelegate((byte)data);
-                Console.WriteLine($"Byte '{data}' received and forwarded");
-            }
 
-            // More to send?
-            if (ByteCount > 0)
-            {
-                // Schedule it according to current baud rate (~1ms @ 9600 baud)
+                Log.Info(Category.RS232, "Read byte {0:x2} ({1} in input queue)", data, ByteCount);
+
+                // Schedule the next byte according to current baud rate
                 _sendEvent = _system.Scheduler.Schedule(_charRateInNsec, ReceiveByte, null);
-                Console.WriteLine("More chars to send, rescheduling");
             }
             else
             {
                 _sendEvent = null;
-                Console.WriteLine("Input queue drained");
             }
         }
 
+        private void OnPinChange(object sender, SerialPinChangedEventArgs e)
+        {
+            Log.Info(Category.RS232, "Pin changed! {0}", e.EventType);
+            // Send it via _errDelegate
+        }
+
+        private void OnError(object sender, SerialErrorReceivedEventArgs e)
+        {
+            Log.Info(Category.RS232, "Serial port error! {0}", e.EventType);
+            // Send it via _errDelegate
+        }
 
         /// <summary>
         /// Write a byte from the PERQ to the physical port.
@@ -240,43 +279,58 @@ namespace PERQemu.IO.SerialDevices
         /// 2.  Writes to the port won't block unless/until the queue is full,
         ///     which should rarely/never happen;
         /// 3.  This is all wrong and System.IO.SerialPort is hopelessly busted.
+        ///     But we'll give it a go and see if it works at all...
         /// </remarks>
         public override void Transmit(byte value)
         {
-            _physicalPort.Write($"{value}");    // Ugh.
-            Log.Detail(Category.RS232, "Wrote byte {0:x2} ({1} in output queue)", value, _physicalPort.BytesToWrite);
+            if (_isOpen)
+            {
+                var seriously = new byte[] { value };
+                _port.Write(seriously, 0, 1);
+                Log.Info(Category.RS232, "Wrote byte {0:x2} ({1} in output queue)", value, _port.BytesToWrite);
+
+                // Poke the receiver.  This is a gross HACK, but less gross than
+                // dedicating yet another thread to polling the $)#$&! serial port
+                if (_sendEvent == null) ReceiveByte(0, null);
+            }
+            else
+            {
+                Log.Warn(Category.RS232, "Port {0} write ({1:x2}) failed, device not open!", _name, value);
+            }
         }
 
-        public override void TransmitBreak()
-        {
-            // _physicalPort.BreakState = value;        // I bet this is just held and must be set manually...
-            Log.Debug(Category.RS232, "TransmitBreak called!");
-        }
-
+        // todo:  if the PERQ actually wants to send Breaks, add an override for TransmitBreak()
 
         // Debugging
         public override void Status()
         {
-            Console.WriteLine($"Serial port A device is '{_portName}', IsOpen={IsOpen}");
-            Console.WriteLine($"Handshake: {_physicalPort.Handshake}  Break state: {_physicalPort.BreakState}");
-            Console.WriteLine($"Baud rate: {_baudRate} ({BaudRate})  Bits: {DataBits}  Parity: {Parity}  StopBits: {StopBits}");
-            Console.WriteLine($"Rx buffer: {ByteCount}/{_physicalPort.ReadBufferSize}  " +
-                              $"Tx buffer: {_physicalPort.BytesToWrite}/{_physicalPort.WriteBufferSize}, " +
-                              $"pacing {_charRateInNsec}ns");
-            Console.WriteLine($"Pins:  DCD={_physicalPort.CDHolding} " +
-                              $"DTR={_physicalPort.DtrEnable} " +
-                              $"DSR={_physicalPort.DsrHolding} " +
-                              $"RTS={_physicalPort.RtsEnable} " +
-                              $"CTS={_physicalPort.CtsHolding}");
+            Console.WriteLine($"Serial port {Name}:  device is '{Port}', IsOpen={IsOpen}");
+            Console.WriteLine($"Host settings: {_host}");
+            Console.WriteLine($"PERQ settings: {_perq}");
+
+            //if (IsOpen)
+            //{
+                Console.WriteLine($"Handshake: {_port.Handshake}  Break state: {_port.BreakState}");
+                Console.WriteLine($"Rx buffer: {ByteCount}/{_port.ReadBufferSize}  " +
+                                  $"Tx buffer: {_port.BytesToWrite}/{_port.WriteBufferSize}, " +
+                                  $"pacing {_charRateInNsec * Conversion.NsecToMsec}ms");
+            //}
+            Console.WriteLine($"Pins:  DCD={DCD} DTR={DTR} DSR={DSR} RTS={RTS} CTS={CTS}");
         }
 
 
-        private int _baudRate;
-        private ulong _charRateInNsec;
+        // Host side
+        private SerialPort _port;
+        private SerialSettings _host;
 
-        private SerialPort _physicalPort;
+        // PERQ side
+        private SerialSettings _perq;
+        private bool _dtr;
+        private bool _rts;
 
         private SchedulerEvent _sendEvent;
+        private ulong _charRateInNsec;
+        private bool _portChanged;
     }
 }
 

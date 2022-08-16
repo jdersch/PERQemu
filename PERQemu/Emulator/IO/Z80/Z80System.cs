@@ -121,7 +121,7 @@ namespace PERQemu.IO.Z80
                 }
                 else
                 {
-                    var rsa = new PhysicalPort(this, Settings.RSADevice);
+                    var rsa = new PhysicalPort(this, Settings.RSADevice, Settings.RSASettings, "A");
                     _z80sio.AttachPortDevice(0, rsa);
                     _z80ctc.AttachDevice(0, rsa);
                 }

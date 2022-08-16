@@ -128,8 +128,7 @@ it is reasonably functional and stable (though there may still be issues):
 - Display - Complete.  The emulator trusts the microcode to set the correct
   video register values to account for horizontal and vertical refresh timing,
   and it appears to be accurate for POS, Accent and PNX.  The portrait display
-  (768 x 1024) is complete, and support for the landscape display (1280 x 1024)
-  has been added [but not yet tested].  This is configurable at runtime.
+  (768 x 1024) or landscape display (1280 x 1024) may be configured at runtime.
 
   Code that drives the graphics display is in two parts:
 
@@ -139,19 +138,18 @@ it is reasonably functional and stable (though there may still be issues):
     The platform-independent display driver, now using SDL2 for rendering,
     is in UI/SDL/Display.
 
-- Z80 Subsystem - In progress!  Josh incorporated a "real" Z80 emulation to
-  replace the simulation of the "old Z80" protocol as implemented on the
-  original PERQ-1 IOB.  The new Z80 actually executes the PERQ's firmware
-  directly, so all of the peripherals and controllers that are managed by the
-  Z80 are being rewritten to mimic the real hardware at the register level.
-  The huge benefit of this work is that the PERQ-2 "EIO" board can now be
-  emulated, allowing PERQemu to run a ton more software and all the newer
-  versions of POS, Accent and PNX that used the "new Z80" protocols.
+- Z80 Subsystem - In progress!  A Z80 emulation has replaced a simulation of
+  the "old Z80" protocol as implemented on the original PERQ-1 IOB.  The new
+  Z80 actually executes the PERQ's firmware directly, so all of the peripherals
+  and controllers that are managed by the Z80 are being rewritten to mimic the
+  real hardware at the register level.  Currently the PERQ-1 IOB (and the "CIO"
+  variant) are emulated, allowing PERQemu to run a ton more software and all the
+  newer versions of POS, Accent and PNX that used the "new Z80" protocols.  The
+  PERQ-2 EIO board is under development.
   
-    This is implemented by a huge wad of code under Emulator/IO/Z80 and is
-    in a state of rapid development.  At the moment, the original v8.7 code
-    and the PERQ-1 IOB configuration is supported, but all of this is being
-    refactored to support the CIO, EIO and NIO boards.  [11-29-21]
+    This is implemented by a huge wad of code under Emulator/IO/Z80.  The
+    Z80 ROM images and (partially) annotated source listings are included
+    in the PROM directory.
 
   This will be updated as the new IO and Z80 code is more stable.
 
@@ -170,8 +168,6 @@ PERQ-2 features to be completed for the next major release:
   to the user interface to allow selection of different disk types and the
   assignment of media files for multiple-drive systems.
 
-- Landscape display.  [Added; not yet tested]
-
 - PERQ-2 "VT100-style" keyboard map.  [Added; not yet tested]
 
 
@@ -182,11 +178,6 @@ PERQ-2 features to be completed for the next major release:
   challenge, though POS doesn't make much use of it aside from basic file
   transfer stuff (FTP) or network printing (CPrint).  Accent does, however...
   including a basic TCP/IPv4 stack!
-
-  [Update: Accent S4 will boot, but hangs while attempting to start up the
-  network servers; in the d6.phd disk image they are disabled as a workaround
-  to get past this.  The much better solution will be to adopt the Ethernet
-  emulation code developed for ContrAlto into PERQemu!]
 
 - PERQLink.  I started working on this but didn't spend much time on it.  Would
   be cute to have.  [And very, very useful to do microcode debugging with
@@ -412,8 +403,12 @@ at the following:
 
 All devices hung off of the Z80 subsystem implement the IZ80Device interface.
 
-RS-232 ports are kinda broken right now.  Lots of work to do with integrating
-them into the Configurator/Settings and new Z80 stuff.
+RS-232 ports are being integrated into the new Z80.  A NullPort implementation
+provides a basic sink for unconfigured serial ports; the RSXFilePort is now
+available to enable text file transfers to and from the host.  The RealPort is
+an interface to a physical serial port on the host [debugging in progress].
+
+    Serial stuff lives in Emulator/IO/SerialDevices.
 
 
 3.4 PROMs
@@ -443,10 +438,8 @@ files are loaded from the Emulator/PROM directory at startup:
     - Z80:  pz80.bin and pz80.lst are the new files used by the "real" Z80.
       The .bin file is loaded into the Z80's memory map, while the .lst file
       is a source code listing enhanced to allow the Z80 debugger to map ROM
-      addresses to the actual source.  Slick!
-
-      HOWEVER, we now have to come up with the v10.017 ("new" Z80) ROMs for
-      the CIO/EIO/NIO...
+      addresses to the actual source.  Slick!  The CIO versions are included
+      now as well.
 
 
 3.5 Storage
@@ -473,8 +466,8 @@ name of the media file is remembered so that any "save" is written back to
 the original file; an [equivalent] "save as" is provided to easily make copies
 of any floppy, hard disk [or tape] image without disturbing the original.
 
-PERQemu [should/will] treat files set to "read only" by filesystem permissions
-as read-only media; this makes sense for floppy and tape images which have the
+PERQemu treats files that aren't writable (according to the host filesystem) as
+read-only media; this makes sense for floppy and tape images which have the
 analogous physical means to make them unwritable.  If possible, the "default"
 configuration should always be available and unmodified, while user created
 media and config files can be changed all willy nilly...
@@ -494,24 +487,6 @@ class (under /IO/HardDisk/ShugartController) for the hard disk, and
 All modifications to disk contents are in-memory only (they are not directly
 backed by files on the disk).  If changes to the disk are to be saved, they
 must be flushed manually.
-
-
-3.5.1 Floppy Notes
-------------------
-
-The PERQ supports two different and incompatible floppy formats: POS filesystem
-floppies (which can be bootable, and mounted/used just like the hard disk) and
-RT-11 compatible data floppies.  By default, all floppies are formatted as
-double-sided, single-density (DSSD), giving around .5MB of storage capacity.
-
-PNX uses a third floppy format, based on the V7/System III-era Unix filesystem.
-These are incompatible with POS, but POS-compatible RT-11 floppies are
-potentially usable for file exchange.
-
-The PERQ hardware supports double-density floppies but PERQemu does not -- yet.
-You can sometimes read double-density RT-11 floppies, but writing tends to blow
-things up (usually hanging, or crashing, the emulator).  [This will be fixed as
-part of the ongoing PERQ-2 changes.]
 
 
 3.6 The Display

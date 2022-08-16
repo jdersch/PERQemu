@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-7/30/2022 - skeezicsb - v0.4.6 (experimental)
+8/16/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -16,6 +16,12 @@
     Mac and Mono.  During the summer of 2021, Josh began the work to add a
     "real Z80" to the I/O board to allow for PERQ-2 emulation, and made big
     changes to switch from WinForms to SDL2 for the display.  AWESOME!
+
+    There are currently some platform-specific bugs to correct; "experiments"
+    functionality is most complete on MacOS, with Windows and Linux testing
+    (finally) starting to be done regularly.  Right now the Linux SDL2 display
+    is a strobe light and is unusuably broken, because of course it behaves
+    completely differently than the other two platforms.  <sigh>
 
     A log of the changes I have made here has been moved to ChangeLog.txt,
     which may (or may not) be included going forward as a running commentary
@@ -102,8 +108,8 @@ features and peripherals are incorporated.  Please check back often for updates!
 1.3 System Requirements
 -----------------------
 
-You will need a Windows machine with the .NET Framework 4.8 installed, or
-a Linux/UNIX/Mac OS machine with the Mono v6.12.0.x runtime installed.
+You will need a Windows machine with the .NET Framework 4.8 installed, or a
+Linux/UNIX/Mac OS machine with the Mono v6.12.0.x runtime installed.
 
 PERQemu is a nearly cycle-accurate, register-level emulation of a complex 
 microcoded processor AND a Z80 subsystem -- essentially two emulations running
@@ -266,12 +272,6 @@ mode.  To simulate mouse "swipes" you have to use the Alt key (Option key on
 Mac) to tell PERQemu the mouse is "off tablet", reposition, then release the
 key to start tracking again.  It's a little clumsy at first.
 
-PERQ FLEX is an exceedingly rare OS produced in the UK by the Royal Signals &
-Radar Establishment.  Based on a custom instruction set optimized for Algol-68,
-efforts are underway to recover several disk images and preserve what promises
-to be a unique bit of computing history.  If successful this will provide the
-first real 8" Micropolis hard disk image to test with once PERQ-2 emulation
-features are complete.
 
 If anyone has any other software that ran on the PERQ-1 and does not run
 successfully under PERQemu, send us a copy and we'll find out why!
@@ -332,12 +332,10 @@ The following hardware has been implemented in the emulator:
 
   RS-232:
     - The Z80 SIO chip is implemented to work with the new Z80 emulator;
-    - Software running under emulation should/will be able to control a real
-      physical serial port on the host, but this has not yet been rewritten to
-      work with the new Z80 code.  Settings and Configurator support to assign
-      the host device path and enable the port is in place, however;
-    - The nifty RSX: pseudo-device for transferring text files from the host to
-      POS will be reinstated too.
+    - Software running under emulation can control a real physical serial port
+      on the host; [testing underway]
+    - The RSX: pseudo-device for transferring text files from the host to POS
+      has been reinstated.
 
   GPIB:
     - The TMS9914 controller chip is implemented to work with the new Z80, but
@@ -410,7 +408,7 @@ v0.5 - TBD
   - True Z80 emulation
   - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
   - Runs on 64-bit Mono/MacOS (no 32-bit WinForms limitation)
-  - SDL2 for improved display performance, in theory :-|
+  - SDL2 for improved display performance
   - Unified PERQ media storage architecture and file format
   - Dynamic runtime configuration of all PERQ models and features
   - Enhanced command line interface with more prompts, in-line help

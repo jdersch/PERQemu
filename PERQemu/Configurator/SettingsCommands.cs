@@ -19,6 +19,7 @@
 
 using System;
 using System.IO;
+using System.IO.Ports;
 
 namespace PERQemu.UI
 {
@@ -71,9 +72,9 @@ namespace PERQemu.UI
             Console.WriteLine("Canon output file format:   " + Settings.CanonFormat);
             Console.WriteLine();
             Console.Write("Host serial port A device:  ");
-            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" : Settings.RSADevice);
+            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" : $"{Settings.RSADevice} {Settings.RSASettings}");
             Console.Write("Host serial port B device:  ");
-            Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" : Settings.RSBDevice);
+            Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" : $"{Settings.RSBDevice} {Settings.RSBSettings}");
            
             if (Settings.Changed)
             {
@@ -203,22 +204,27 @@ namespace PERQemu.UI
 
 
         [Command("settings assign rs232 device", "Map a host device to a PERQ serial port")]
-        public void SetRS232Device(char port, string hostDevice)
+        public void SetRS232Device(char port, [KeywordMatch("ComPorts")] string hostDevice,
+                                  int baud = 9600, int data = 8, Parity par = Parity.None, StopBits stop = StopBits.One)
         {
             var dev = hostDevice;
+            var devSettings = new SerialSettings(baud, data, par, stop);
             var curDev = string.Empty;
+            SerialSettings curSettings;
 
             switch (port)
             {
                 case 'a':
                 case 'A':
                     curDev = Settings.RSADevice;
+                    curSettings = Settings.RSASettings;
                     port = 'A';
                     break;
 
                 case 'b':
                 case 'B':
                     curDev = Settings.RSBDevice;
+                    curSettings = Settings.RSBSettings;
                     port = 'B';
                     break;
 
@@ -232,14 +238,35 @@ namespace PERQemu.UI
                 if (dev != curDev)
                 {
                     if (port == 'A')
+                    {
                         Settings.RSADevice = dev;
+                        Settings.RSASettings = devSettings;
+                    }
                     else
+                    {
                         Settings.RSBDevice = dev;
-                    
+                        Settings.RSBSettings = devSettings;
+                    }
+
                     Settings.Changed = true;
+                    Console.WriteLine($"Device '{dev}' assigned to serial port {port}.");
+                    return;
                 }
 
-                Console.WriteLine($"Device '{dev}' assigned to serial port {port}.");
+                if (!devSettings.Equals(curSettings))
+                {
+                    if (port == 'A')
+                    {
+                        Settings.RSASettings = devSettings;
+                    }
+                    else
+                    {
+                        Settings.RSBSettings = devSettings;
+                    }
+
+                    Settings.Changed = true;
+                    Console.WriteLine($"Serial port {port} settings changed.");
+                }
                 return;
             }
 
@@ -286,7 +313,6 @@ namespace PERQemu.UI
         /// <summary>
         /// Checks a host serial device specification.
         /// </summary>
-        // todo: generalize this when Ethernet, audio devices are added
         private bool CheckDevice(ref string dev)
         {
             // Any host:  allow "rsx" or "rsx:", upcase it
@@ -305,16 +331,13 @@ namespace PERQemu.UI
                 return File.Exists(dev);
             }
 
-            // If Windows, expect 'COMn:' form; append the ':' if not present
-            // (it'll enumerate the available devs for us, but only on Windows?)
+            // If Windows, expect 'COMn' form; the names should have been pre-
+            // qualified by the KeywordMatch setter. ;-)
             if (dev.StartsWith("com", StringComparison.InvariantCultureIgnoreCase))
             {
                 dev = dev.ToUpper();
 
-                if (!dev.EndsWith(":", StringComparison.InvariantCulture))
-                    dev = dev + ":";
-
-                return File.Exists(dev);
+                return true;    // Would have to do a serial .Open() to verify...
             }
 
             return false;

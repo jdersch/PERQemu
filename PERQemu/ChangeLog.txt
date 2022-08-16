@@ -446,7 +446,13 @@ August, 2022:
     driver for serial port access underway.  Some changes/updates to clarify the
     rate limiting options, remove a dependency that prevents startup on Linux.
     User Guide updates continuing.
-    
+
+    4. Rewrite RealPort RS232 driver to work with the new Z80, SIO and CTC.  The
+    virtual machine can now attach to a "real" serial port to exchange data with
+    the outside world.  To simplify integration (and work around an ANNOYING bug
+    with a crappy USB cable) the host side is fixed at the speed you configure,
+    while the emulator limits data transfers to and from the virtual PERQ at the
+    rate it programs into the CTC/SIO.  Tested on Windows, Mac; Linux TBD.
 
 ---
-Last update: skeezics    Thu Aug 11 20:19:33 PDT 2022
+Last update: skeezics    Tue Aug 16 14:14:09 PDT 2022

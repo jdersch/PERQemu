@@ -54,6 +54,7 @@ namespace PERQemu.IO.SerialDevices
         protected SerialDevice(Z80System sys)
         {
             _system = sys;
+            _name = "Generic serial device";
             _portName = string.Empty;
             _rxDelegate = null;
             _errDelegate = null;
@@ -79,7 +80,11 @@ namespace PERQemu.IO.SerialDevices
             _isOpen = false;
         }
 
-        public virtual string Name => "Generic serial device";
+        public virtual string Name
+        {
+            get { return _name; }
+            protected set { _name = value; }
+        }
 
         public virtual string Port
         {
@@ -175,6 +180,7 @@ namespace PERQemu.IO.SerialDevices
         protected ReceiveStatusDelegate _errDelegate;
 
         protected bool _isOpen;
+        protected string _name;
         protected string _portName;
     }
 }
