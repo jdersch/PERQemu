@@ -454,5 +454,9 @@ August, 2022:
     while the emulator limits data transfers to and from the virtual PERQ at the
     rate it programs into the CTC/SIO.  Tested on Windows, Mac; Linux TBD.
 
+    5. Fixed SDL2 window handling on Windows and Linux (which was completely
+    broken).  Other small usability updates.
+
+
 ---
-Last update: skeezics    Tue Aug 16 14:14:09 PDT 2022
+Last update: skeezics    Wed Aug 24 12:52:01 PDT 2022

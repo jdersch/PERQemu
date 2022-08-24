@@ -89,11 +89,7 @@ namespace PERQemu
         public void Stop()
         {
             // A quiet no-op if the machine isn't on...
-            if (PERQemu.Controller.State > RunState.Off)
-            {
-                PERQemu.Controller.TransitionTo(RunState.Paused);
-                PERQemu.Sys.PrintStatus();
-            }
+            PERQemu.Controller.Break();
         }
 
         [Command("go", "Power on and start the PERQ")]

@@ -633,7 +633,7 @@ namespace PERQemu
                         if (running)
                         {
                             // Pause emulation so SDL display events don't stack up
-                            PERQemu.Controller.Break();
+                            PERQemu.Controller.TransitionTo(RunState.Paused);
 
                             // Refresh the FPS to show we're paused!
                             _display.RefreshFPS(new HRTimerElapsedEventArgs(1d));
@@ -668,7 +668,7 @@ namespace PERQemu
                     {
                         if (running)
                         {
-                            PERQemu.Controller.Break();
+                            PERQemu.Controller.TransitionTo(RunState.Paused);
                             _display.RefreshFPS(new HRTimerElapsedEventArgs(1d));
                             Thread.Sleep(15);
                         }

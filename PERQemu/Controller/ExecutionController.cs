@@ -216,6 +216,7 @@ namespace PERQemu
             {
                 // Break out of the Running state
                 TransitionTo(RunState.Paused);
+                _system.PrintStatus();
             }
         }
 
@@ -231,7 +232,10 @@ namespace PERQemu
             Console.WriteLine("Power off requested.");
 
             // Force the machine to pause if in any other state
-            Break();
+            if (State > RunState.WarmingUp && State < RunState.Halted)
+            {
+                TransitionTo(RunState.Paused);
+            }
 
             // Give opportunity to save disks
             if (save)

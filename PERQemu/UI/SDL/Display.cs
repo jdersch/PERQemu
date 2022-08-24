@@ -322,7 +322,6 @@ namespace PERQemu.UI
             }
         }
 
-
         /// <summary>
         /// Close down the display and free SDL resources.
         /// </summary>
@@ -363,37 +362,17 @@ namespace PERQemu.UI
             }
         }
 
-        //
-        //  Screenshots
-        //
-
+        /// <summary>
+        /// Save a screenshot.  Not yet implemented.
+        /// </summary>
         public void SaveScreenshot(string path)
         {
-            // TODO: have to rewrite for SDL2, which can only save as BMP!?
-            // maybe we can fake up a WinForms-style bitmap directly from our
-            // local copy of the perq's frame buffer and render that using the
-            // jpg, png or other encoders...
-
-            //EncoderParameters p = new EncoderParameters(1);
-            //p.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
-            //_buffer.Save(path, GetEncoderForFormat(ImageForm, p);
+            // TODO: have to rewrite for SDL2
         }
 
-        //private ImageCodecInfo GetEncoderForFormat(ImageFormat format)
-        //{
-        //    ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
-
-        //    foreach (ImageCodecInfo codec in codecs)
-        //    {
-        //        if (codec.FormatID == format.Guid)
-        //        {
-        //            return codec;
-        //        }
-        //    }
-        //    return null;
-        //}
-
-        // debugging, no longer very useful, to be removed
+        /// <summary>
+        /// Debugging output.  Should be cleaned up and/or limited to DEBUG builds?
+        /// </summary>
         public void Status()
         {
             Console.WriteLine("renderEvent={0}, fpsUpdateEvent={1}, frames={2}",

@@ -35,8 +35,11 @@ namespace PERQemu.UI
             _sdlRunning = false;
             _displayWindow = IntPtr.Zero;
             _timerHandle = -1;
-            _resumeOnRestore = false;
             _uiEventDispatch = new Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate>();
+
+            _winFlags = 0;
+            _winStateChanged = false;
+            _resumeOnRestore = false;
         }
 
         public delegate void SDLMessageHandlerDelegate(SDL.SDL_Event e);
@@ -105,6 +108,8 @@ namespace PERQemu.UI
 
             Log.Debug(Category.UI, "Attaching the display");
             _displayWindow = window;
+            _winFlags = SDL.SDL_GetWindowFlags(_displayWindow);
+            _winStateChanged = true;
 
             // Adjust the timer for running the message loop.  It should be no
             // longer than 16.667ms if we're to maintain 60fps on the Display
@@ -120,6 +125,8 @@ namespace PERQemu.UI
         {
             Log.Debug(Category.UI, "Detaching the display");
             _displayWindow = IntPtr.Zero;
+            _winFlags = 0;
+            _winStateChanged = false;
 
             // Pump the brakes
             HighResolutionTimer.Enable(_timerHandle, false);
@@ -170,6 +177,11 @@ namespace PERQemu.UI
                 {
                     SDLMessageHandler(e);
                 }
+
+                if (_winStateChanged)
+                {
+                    UpdateWindowState();
+                }
             }
         }
 
@@ -194,31 +206,28 @@ namespace PERQemu.UI
 
                 switch (winEvent)
                 {
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_ENTER:
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_GAINED:
+                        FocusCursor();
+                        return;
+
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_LEAVE:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_CLOSE:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_LOST:
                         ReleaseCursor();
                         return;
 
-                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_ENTER:
-                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_GAINED:
-                        FocusCursor();
-                        return;
-
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SHOWN:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_HIDDEN:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_MINIMIZED:
-                        HideOrMinimize();
-                        return;
-
-                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED:
+                    case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_MAXIMIZED:
                     case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESTORED:
-                        UnhideOrRestore();
+                        // Accumulate and defer changes...
+                        _winStateChanged = true;
                         return;
-
-                    // also: max/minimize for someday laying out a fullscreen mode?
 
                     default:
-                        Log.Debug(Category.UI, "Unhandled window event {0}", winEvent);
+                        Log.Detail(Category.UI, "Unhandled window event {0}", winEvent);
                         break;
                 }
             }
@@ -241,16 +250,41 @@ namespace PERQemu.UI
         }
 
         /// <summary>
+        /// Updates the state of the window based on the current flags.  Used to
+        /// coalesce multiple updates when the events come in a flurry; resets the
+        /// changed flag.
+        /// </summary>
+        private void UpdateWindowState()
+        {
+            var flags = SDL.SDL_GetWindowFlags(_displayWindow);
+            Log.Detail(Category.UI, "Update: Window flags {0}", flags);
+
+            if (flags != _winFlags)
+            {
+                if (((SDL.SDL_WindowFlags)flags & SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN) == 0)
+                {
+                    HideOrMinimize((SDL.SDL_WindowFlags)flags);
+                }
+                else
+                {
+                    UnhideOrRestore((SDL.SDL_WindowFlags)flags);
+                }
+
+                _winFlags = flags;
+            }
+
+            _winStateChanged = false;
+        }
+
+        /// <summary>
         /// Called when the Display window is minimized or hidden; if the
         /// PauseWhenMinimized setting is true, pause the emulator.
         /// </summary>
-        private void HideOrMinimize()
+        private void HideOrMinimize(SDL.SDL_WindowFlags flags)
         {
-            // This is redundant if the user presses the minimize/hide button
-            // but allows for calls from the CLI for debugging
-            SDL.SDL_HideWindow(_displayWindow);
-
-            if (Settings.PauseWhenMinimized && (PERQemu.Controller.State == RunState.Running))
+            // Pause only if minimized or "iconified", not just hidden?  Splitting hairs?
+            if (((flags & SDL.SDL_WindowFlags.SDL_WINDOW_MINIMIZED) != 0) &&
+                (Settings.PauseWhenMinimized && (PERQemu.Controller.State == RunState.Running)))
             {
                 _resumeOnRestore = true;
 
@@ -262,18 +296,16 @@ namespace PERQemu.UI
         /// <summary>
         /// If we're embiggened, unpause if paused.
         /// </summary>
-        /// <remarks>
-        /// Okay, SDL, why don't you map the Mac restore event when reinflating
-        /// a minimized window?  We get "shown" and "exposed" events (both) and
-        /// never see a "restored" message.  Great.
-        /// </remarks>
-        private void UnhideOrRestore()
+        private void UnhideOrRestore(SDL.SDL_WindowFlags flags)
         {
-            var flags = SDL.SDL_GetWindowFlags(_displayWindow);
-
-            if (((SDL.SDL_WindowFlags)flags & SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN) == 0)
+            // SDL2 on Windows will set *both* SHOWN and MINIMIZED at the same time
+            // because THAT makes sense... if the "auto hide task bar" Windows setting
+            // is enabled, the window will not restore unless you force it with CTRL-
+            // SHIFT-right click.  Just shoot me now.  This hack may or may not help:
+            if (((SDL.SDL_WindowFlags)_winFlags & SDL.SDL_WindowFlags.SDL_WINDOW_MINIMIZED) != 0 &&
+                (flags & SDL.SDL_WindowFlags.SDL_WINDOW_MINIMIZED) == 0)
             {
-                SDL.SDL_ShowWindow(_displayWindow);
+                SDL.SDL_RestoreWindow(_displayWindow);
             }
 
             if (_resumeOnRestore)
@@ -347,6 +379,8 @@ namespace PERQemu.UI
         private int _timerHandle;
         private bool _sdlRunning;
         private bool _resumeOnRestore;
+        private bool _winStateChanged;
+        private uint _winFlags;
 
         private IntPtr _displayWindow;
         private IntPtr _defaultCursor;
@@ -355,3 +389,40 @@ namespace PERQemu.UI
         private Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate> _uiEventDispatch;
     }
 }
+
+/*
+    SDL Notes:
+        EXPOSED events are ignored; because we update at (ideally) 60fps, the entire
+        screen is refreshed often enough to ignore partial redraws (and these can come
+        fast and furious in some situations).
+        MOVED events are irrelevant and are ignored.
+        Newer versions (Linux) also send "event 15" (window focus?) that are ignored.
+        
+    On MacOS X:
+        Create window on power up sends SHOWN and RESTORED, with SHOWN flag set
+        Hiding the app sends Hide event, sets HIDDEN
+        Minimize button sends Hide event, sets HIDDEN and MINIMIZED
+        Unhiding the app w/cmd-tab sends SHOWN event if HIDDEN;
+            ALSO sends RESTORED event if MINIMIZED
+        Clicking the icon in dock when minimized sends SHOWN, RESTORED events
+
+    Windows:
+        Create window on power up sends SHOWN, with SHOWN (and focus) flags set
+        Hiding the app sends Hide event, with SHOWN *and* MINIMIZED flags?  WTF?
+        *Can't get it back on-screen no matter what if "auto hide taskbar" is enabled*
+
+    Linux:
+        Create window sends Shown, Hide, Shown followed by Moved, Exposed, "event 15"
+        Clicking minimize sends Hide event, with HIDDEN and MINIMIZED flags
+        Restoring the window from the "dock" (Ubuntu) sends a Shown event with
+            SHOWN and focus flags (+ event 15)
+
+    Todo:
+        Find a way to associate a program icon so that "mono-sgen" process has
+            SOME way to visually identify the minimized application window (Unix)
+        Put back mouse wheel or PGUP/DN support for scrolling the display on
+            short screens (or when obscured by the dock/taskbar)
+        Test on high-DPI screens, multiple monitors
+        Would be nice to allow full-screen/maximize option (full GUI so that DDS,
+            floppy, pause/play/reset controls, etc could be integrated on screen)
+*/

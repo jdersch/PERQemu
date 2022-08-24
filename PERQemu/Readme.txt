@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-8/16/2022 - skeezicsb - v0.4.6 (experimental)
+8/24/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -19,9 +19,7 @@
 
     There are currently some platform-specific bugs to correct; "experiments"
     functionality is most complete on MacOS, with Windows and Linux testing
-    (finally) starting to be done regularly.  Right now the Linux SDL2 display
-    is a strobe light and is unusuably broken, because of course it behaves
-    completely differently than the other two platforms.  <sigh>
+    (finally) starting to be done regularly.
 
     A log of the changes I have made here has been moved to ChangeLog.txt,
     which may (or may not) be included going forward as a running commentary

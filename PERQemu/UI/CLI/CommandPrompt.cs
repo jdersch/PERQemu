@@ -56,7 +56,7 @@ namespace PERQemu.UI
 
                 if (newRoot == null)
                 {
-                    Log.Error(Category.Emulator, "Bad call to SetPrefix: couldn't set root to {0}", subsys);
+                    Log.Error(Category.Emulator, "SetPrefix couldn't set root to '{0}'", subsys);
                     return _commandTree;
                 }
             }
@@ -86,9 +86,8 @@ namespace PERQemu.UI
         /// </summary>
         public string GetLine()
         {
-            DisplayPrompt();
             ClearInput();
-            UpdateOrigin();
+            DisplayPrompt();
 
             bool entryDone = false;
 
@@ -214,9 +213,11 @@ namespace PERQemu.UI
             // do it, it'd be sweet to have the editor do this automatically. :-)
             if ((_commandTree.Name == "configure" && PERQemu.Config.Changed) ||
                 (_commandTree.Name == "settings" && Settings.Changed))
-                Console.Write(_prompt + "*> ");
+                Console.Write("\r" + _prompt + "*> ");
             else
-                Console.Write(_prompt + "> ");
+                Console.Write("\r" + _prompt + "> ");
+
+            UpdateOrigin();
         }
 
 
@@ -230,13 +231,7 @@ namespace PERQemu.UI
 
             if (_input.Length < _lastInputLength)
             {
-                StringBuilder sb = new StringBuilder(_lastInputLength - _input.Length);
-                for (int i = 0; i < _lastInputLength - _input.Length; i++)
-                {
-                    sb.Append(' ');
-                }
-
-                clear = sb.ToString();
+                clear = " ".PadRight(_lastInputLength - _input.Length);
             }
 
             // If running under the profiler or on the IDE's console, avoid a
@@ -475,7 +470,6 @@ namespace PERQemu.UI
             if (!silent && oldRow != Console.CursorTop)
             {
                 DisplayPrompt();
-                UpdateOrigin();
             }
 
             return changed;
@@ -654,7 +648,7 @@ namespace PERQemu.UI
 
                 // Start down the chain!
                 match.SearchRoot = argNode;
-                                    
+
                 if (argNode.Param.ParameterType.IsEnum ||
                     argNode.Param.ParameterType == typeof(bool) ||
                     argNode.DoKeywordMatch)
