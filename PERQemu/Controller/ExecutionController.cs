@@ -21,6 +21,8 @@ using System;
 using System.Threading;
 using System.Collections.Generic;
 
+using SDL2;
+
 using PERQemu.Config;
 
 namespace PERQemu
@@ -105,7 +107,7 @@ namespace PERQemu
         public bool Initialize(Configuration conf)
         {
             // Quick sanity check
-            if (!PERQemu.Config.Current.IsValid)
+            if (!PERQemu.Config.Validate())
             {
                 Console.WriteLine("The system as configured is invalid and cannot start.");
                 Console.WriteLine("Please check the configuration and try again.");
@@ -257,12 +259,19 @@ namespace PERQemu
         }
 
         /// <summary>
-        /// Catch PERQ-1 "soft" power down events.
+        /// Catch PERQ-1 "soft" power down events.  Queues up an SDL "quit"
+        /// event so that the current instruction can finish and the processor
+        /// transition to idle before initiating the PowerOff sequence -- else
+        /// the PERQsystem object gets clobbered and we throw an exception and
+        /// blow up.  This is just... a convoluted way of avoiding a catch {}.
         /// </summary>
         public void SoftPowerOff(MachineStateChangeEventArgs a)
         {
             Log.Info(Category.Emulator, "The PERQ has powered itself off.");
-            PowerOff();
+
+            var e = new SDL.SDL_Event();
+            e.type = SDL.SDL_EventType.SDL_QUIT;
+            SDL.SDL_PushEvent(ref e);
         }
 
         /// <summary>

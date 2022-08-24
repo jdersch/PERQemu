@@ -718,6 +718,7 @@ namespace PERQemu
                     break;
 
                 case WhatChanged.Z80RunState:
+                    // For now, just a debug message; in future, Z80 debugger/GUI update
                     Log.Write(Category.Emulator, "Z80 power state changed: running={0}", (bool)args[0]);
                     return;
 
@@ -728,11 +729,12 @@ namespace PERQemu
                     return;
 
                 case WhatChanged.PowerDown:
+                    // Could probably just deal with this here, firing an SDL_QUIT directly...
                     handler = PowerDownRequested;
                     break;
 
                 default:
-                    // unhandled, ignore it?
+                    // This can't/shouldn't happen
                     Log.Warn(Category.Emulator, "Unhandled MachineStateChange type {0}", w);
                     return;
             }

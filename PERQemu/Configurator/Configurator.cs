@@ -307,6 +307,11 @@ namespace PERQemu.Config
                     sw.WriteLine("io board " + _current.IOBoard);
                     sw.WriteLine("display " + _current.Display);
                     sw.WriteLine("tablet " + _current.Tablet);
+
+                    // Save serial ports, if enabled
+                    if (_current.RSAEnable) sw.WriteLine("enable rs232 a");
+                    if (_current.RSBEnable) sw.WriteLine("enable rs232 b");
+
                     sw.WriteLine("option board " + _current.IOOptionBoard);
 
                     // Enumerate the IO options, if any
@@ -326,10 +331,6 @@ namespace PERQemu.Config
 
                         sw.WriteLine("drive {0} {1} {2}", unit, dev.Type, dev.MediaPath);
                     }
-
-                    // Save serial ports, if enabled
-                    if (_current.RSAEnable) sw.WriteLine("enable rs232 a");
-                    if (_current.RSBEnable) sw.WriteLine("enable rs232 b");
 
                     sw.WriteLine("done");
                     sw.Close();
@@ -632,7 +633,7 @@ namespace PERQemu.Config
         public bool CheckStorage(Configuration conf)
         {
             bool gotFloppy = false;
-            bool gotMedia = false;
+            bool gotHard = false;
             int driveCount = 0;
 
             for (var unit = 0; unit < conf.Drives.Length; unit++)
@@ -670,6 +671,8 @@ namespace PERQemu.Config
                             conf.Reason = $"IO board type '{conf.IOBoard}' only supports one hard disk.";
                             return false;
                         }
+
+                        gotHard |= (drive.MediaPath != string.Empty);
                         break;
 
                     case DeviceType.Disk8Inch:
@@ -702,6 +705,8 @@ namespace PERQemu.Config
                             conf.Reason = $"IO board type '{conf.IOBoard}' supports a maximum of 2 hard disks.";
                             return false;
                         }
+
+                        gotHard |= (drive.MediaPath != string.Empty);
                         break;
 
                     //
@@ -713,16 +718,14 @@ namespace PERQemu.Config
                         conf.Reason = $"Sorry, {drive.Type} devices are not yet supported.";
                         return false;
                 }
-
-                // Check to see if there's a media path defined; if no drives
-                // are actually loaded, at least issue a warning (the PERQ won't
-                // boot without a hard or floppy disk present)
-                if (drive.MediaPath != string.Empty) gotMedia = true;
             }
 
-            if (!gotMedia)
+            // Currently the hard disk controller can't cope if there's no media loaded;
+            // not sure how realistic it is to run the actual hardware with no disk attached...
+            if (!gotHard)
             {
-                conf.Reason = "The PERQ won't boot without a hard or floppy disk present.";
+                conf.Reason = "The PERQ won't boot without a hard disk present.";
+                return false;
             }
 
             // Must be good then...
