@@ -458,5 +458,23 @@ August, 2022:
     broken).  Other small usability updates.
 
 
+September, 2022:
+
+    1. Ongoing documentation cleanup, testing, trying to get in some hours on
+    this while "life" has other plans.  Windows and Linux testing to identify
+    any show-stopping, platform-specific bugs; good news is that all three OS
+    platforms are roughly at bug parity! :-)  May have cleaned up enough of the
+    blue language to publish the actual to-do/status list?  Also: performance
+    on a more modern PC is around 58-62fps (portrait) and 55ish fps (landscape)
+    and is reasonably stable on Win10; Linux on a VM is substantially slower,
+    as the hypervisor (in this case, VirtualBox) dramatically slows memory
+    performance.  This jibes with the throughput limitations of my older Mac
+    (with 800Mhz memory), so finally we can characterize the requirements for
+    getting full performance of the emulator: a 6th-gen Intel CPU at around
+    3Ghz with RAM at 2133Mhz (minimum) is the floor for full speed emulation.
+    That's probably "ancient" to most folks nowadays, who don't live in a cave
+    full of pre-Y2K retrocomputers like yours truly. :-)
+
+
 ---
-Last update: skeezics    Wed Aug 24 12:52:01 PDT 2022
+Last update: skeezics    Sat Sep 10 14:40:25 PDT 2022
