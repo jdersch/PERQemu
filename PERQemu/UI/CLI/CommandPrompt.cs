@@ -224,7 +224,7 @@ namespace PERQemu.UI
         private void UpdateDisplay()
         {
             // If the current input string is shorter than the last, then we
-            // need to erase a few chars at the end.
+            // need to erase character(s) at the end
             string clear = string.Empty;
 
             int row, column;
@@ -259,14 +259,13 @@ namespace PERQemu.UI
                 Console.CursorTop = _originRow;
                 Console.Write(_input + clear);
 
-                // Move cursor to text position to draw cursor
+                // Move cursor to text position to place cursor
                 Console.CursorLeft = column;
                 Console.CursorTop = row;
                 Console.CursorVisible = true;
             }
             catch
             {
-                //Console.WriteLine($"Cursor @{_originRow},{_originColumn} out of bounds ({row},{column})");
                 _originRow = Math.Max(0, _originRow);
                 _originRow = Math.Min(Console.BufferHeight, _originRow);
                 row = _originRow;

@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-8/24/2022 - skeezicsb - v0.4.6 (experimental)
+9/10/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -107,7 +107,7 @@ features and peripherals are incorporated.  Please check back often for updates!
 -----------------------
 
 You will need a Windows machine with the .NET Framework 4.8 installed, or a
-Linux/UNIX/Mac OS machine with the Mono v6.12.0.x runtime installed.
+Linux/UNIX/Mac OS machine with the Mono 6.x runtime installed.
 
 PERQemu is a nearly cycle-accurate, register-level emulation of a complex 
 microcoded processor AND a Z80 subsystem -- essentially two emulations running
@@ -128,9 +128,10 @@ Performance tuning is an ongoing concern.
 ===================
 
 This is a very basic "quick start" guide.  For more information about running
-the emulator, please consult the UserGuide.txt included in this distribution.
+the emulator, please consult the User's Guide included in this distribution.
+Two forms are provided: a synopsis in UserGuide.txt, and the comprehensive
+UserGuide.pdf which includes a complete command reference.
 
-    [On-line help and/or a nicely formatted PDF will be forthcoming.]
 
 If you've gotten this far you've unpacked the Zip archive and you have a 
 directory containing the emulator executable, PERQemu.exe.
@@ -298,7 +299,7 @@ The following hardware has been implemented in the emulator:
       as PERQ-2 support is introduced.
       
   Floppy disk:
-    - Rewritten to work with the new Z80 and floppy disk controller (FDC);
+    - Rewritten to work with the new Z80 and floppy disk controller;
     - Supports dynamic loading and unloading of all media types (single- and
       double-sided diskettes, in single- and double-density);
     - Operation is reliable for booting and data transfer, though testing and
@@ -331,7 +332,7 @@ The following hardware has been implemented in the emulator:
   RS-232:
     - The Z80 SIO chip is implemented to work with the new Z80 emulator;
     - Software running under emulation can control a real physical serial port
-      on the host; [testing underway]
+      on the host;
     - The RSX: pseudo-device for transferring text files from the host to POS
       has been reinstated.
 
