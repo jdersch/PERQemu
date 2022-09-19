@@ -1,6 +1,6 @@
 PERQemu Source - Readme
 
-v1.7 - 9/10/2022 - skeezics
+v1.7 - 9/19/2022 - skeezics
 v1.6 - 11/29/2021 - skeezics
 V1.5 - 6/20/2018 - skeezics
 V1.4 - 5/15/2018 - skeezics
@@ -10,8 +10,8 @@ V1.1 - 9/21/2014 - skeezics
 V1.0 - 6/01/2013 - jdersch
 
 
-1.0 Introduction (Author)
-=========================
+1.0  Introduction (Author)
+==========================
 
 Well, I finally released the source to this thing after years of procrastination.
 The purpose of this document is to give a basic overview to what's what and
@@ -31,8 +31,8 @@ fanatics out there.
 -- Josh
 
 
-1.1 Introduction (This Branch)
-------------------------------
+1.1  Introduction (This Branch)
+-------------------------------
 
 This "experiments" branch is developing rapidly and undergoing fairly major
 restructuring.  I aim to make it possible to merge back into Josh's master
@@ -52,8 +52,8 @@ I mostly use the same QA approach that 3RCC used, for better or worse: if it
 runs the POS "burn in" code (i.e. the SIGGRAPH demos) it's good to go!
 
 
-1.2 Version History
--------------------
+1.2  Version History
+--------------------
 
 The next release will incorporate major changes and expanded functionality.
 It is currently in development on the "experiments" branch as PERQemu 0.4.6
@@ -68,8 +68,8 @@ The second corresponded to PERQemu version 0.4.0.
 The first corresponded to PERQemu version 0.3.x.
 
 
-2.0 New Code Organization
-=========================
+2.0  New Code Organization
+==========================
 
 [This section describes a pretty radical refactoring in the skeezicsb/PERQemu
 fork, under the "experiments" branch.  At some point all of these changes
@@ -162,8 +162,8 @@ excellent emulation projects, Contralto and Darkstar.
             may be entered while the PERQ is running!
 
 
-2.1 The CPU
------------
+2.1  The CPU
+------------
 
 Under the Emulator/CPU directory you'll find the implementation of the main
 PERQ microengine.  If you are not familiar with it I seriously suggest reading
@@ -237,24 +237,25 @@ currently available makes use of that much RAM).
 PERQemu can support dynamic memory configuration up to the full utilization of
 the 24-bit address space, but has only been fully tested with the 20-bit CPU.
 
-    - The "Memory" class (Emulator/Memory/MemoryBoard.cs) implements the
-      PERQ's memory store and memory state machine.
-    - The "MemoryController" class (Emulator/Memory/MemoryController.cs)
-      provides separate memory input and output queues to support the
-      overlapped Fetch/Store required by RasterOp.
+The memory/video board is implemented by the code in Emulator/Memory:
+
+    - The "Memory" class (MemoryBoard.cs) implements the PERQ's memory store
+      and memory state machine.
+    - The "MemoryController" class provides separate memory input and output
+      queues to support the overlapped Fetch/Store required by RasterOp.
     - "VideoController" lives here now, as it's integral to the memory board;
       this is described in the Display section below.
 
 Note that currently PERQemu does not implement the PERQ's DMA hardware; this is
 used for high-volume data transfers by the hard disk controller, Ethernet or
 I/O Option devices.  The only practical implication is that the emulated PERQ
-may run a little faster than the real hardware -- essentially the CPU never has
-to surrender memory cycles for DMA transfers. (This may be addressed in a future
-release, possibly as an optional RateLimit setting.)
+may run a little faster than the real hardware, as essentially the CPU never
+has to surrender memory cycles for DMA transfers. (This may be addressed in a
+future release, possibly as an optional RateLimit setting.)
 
 
-2.3 I/O
--------
+2.3  I/O
+--------
 
 All I/O related code lives under the Emulator/IO directory.  The IOBus class
 acts as the hub (or "bus," if you will) and essentially delegates I/O reads and
@@ -305,60 +306,60 @@ pretty straightforward.
 
 There are a bunch of Z80 devices:
 
-    - The "DMARouter" class (DMARouter.cs) enumerates the DMA-capable
-      devices that may be selected through "IOREG3".
-    - In the PERQ-1, the "HardDiskSeekControl" class (HardDiskSeekControl.cs)
-      provides glue logic for the seek pulse generator used to move Shugart
-      hard disk heads; this complicated dance uses the Z80's CTC and custom
-      hardware to issue pulses to the (emulated) hard disk.
-    - The "IOReg3" device (IOReg3.cs) implements an addressible latch that
-      sits on the Z80's I/O bus for managing DMA channel selection and
-      several device interrupt enable flags.
-    - The "Keyboard" class (Keyboard.cs) provides an interface to the 8-bit
-      parallel latch for incoming PERQ-1 keyboard characters.
-    - The "NECuPD765A" class (NECuPD765A.cs) is a register-level emulation
-      of the eponymous floppy disk controller chip.  It is a DMA-capable Z80
-      device that can support up to 4 floppy drives; the PERQ only has the
-      physical wiring to accommodate two drives (and only software support
-      for a single drive, currently).
+    - The "DMARouter" class enumerates the DMA-capable devices that may be
+      selected through "IOREG3".
+    - In the PERQ-1, the "HardDiskSeekControl" class provides glue logic for
+      the seek pulse generator used to move Shugart hard disk heads; this
+      complicated dance uses the Z80's CTC and custom hardware to issue pulses
+      to the (emulated) hard disk.
+    - The "IOReg3" device implements an addressible latch that sits on the
+      Z80's I/O bus for managing DMA channel selection and several device
+      interrupt enable flags.
+    - The "Keyboard" class provides an interface to the 8-bit parallel latch
+      for incoming PERQ-1 keyboard characters.
+    - The "NECuPD765A" class is a register-level emulation of the eponymous
+      floppy disk controller chip.  It is a DMA-capable Z80 device that can
+      support up to 4 floppy drives; the PERQ only has the physical wiring to
+      accommodate two drives (but only software support for a single drive).
     - The PERQ<->Z80 FIFOs are a hardware channel used to send messages
       between the main CPU and the Z80.  In the PERQ-1, these are simply
       latches; in the PERQ-2 these are actual FIFOs.  Currently two classes
       (PERQtoZ80Fifo.cs and Z80toPERQFifo.cs) implement the unidirectional
       channels and their control registers.  Here thar be dragons.
-    - The "TMS9914A" class (TMS9914A.cs) emulates the TI GPIB controller
-      chip and its interface to the Z80 I/O bus.  See below for more.
-    - The "Z80CTC" class (Z80CTC.cs) is an emulation of the Zilog CTC chip
-      used for timing and baud rate generation on the PERQ-1 IOB.
-    - The "Z80DMA" class (Z80DMA.cs) emulates the Zilog DMA controller,
-      a single channel device that provides byte-wide DMA transfers between
-      several devices and the Z80's local RAM.
-    - The "Z80SIO" class (Z80SIO.cs) emulates the Zilog SIO/2 chip used
-      for RS-232, "speech", and the Kriz tablet.  The PERQ-1 has one SIO
-      chip; the PERQ-2/EIO will have two.  It uses the "Z80SIOChannel"
-      class to do the heavy lifting.
+    - The "TMS9914A" class emulates the TI GPIB controller chip and its
+      interface to the Z80 I/O bus.  See below for more.
+    - The "Z80CTC" class is an emulation of the Zilog CTC chip used for timing
+      and baud rate generation on the PERQ-1 IOB.
+    - The "Z80DMA" class emulates the Zilog DMA controller, a single channel
+      device that provides byte-wide DMA transfers between several devices and
+      the Z80's local RAM.
+    - The "Z80SIO" class emulates the Zilog SIO/2 chip used for RS-232,
+      "speech", and the Kriz tablet.  The PERQ-1 has one SIO chip; the PERQ-2
+      EIO will have two.  The "Z80SIOChannel" class does the heavy lifting.
     
 
 2.3.2  Serial Devices
 ---------------------
 
 Several serial devices are used in the PERQ.  The PERQemu implementation groups
-these into the IO/SerialDevices folder.
+these into the Emulator/IO/SerialDevices folder.
 
-    - The base "SerialDevice" class (SerialDevice.cs) provides the base for
-      RS-232 ports.  RealPort.cs uses the System.IO.Ports.SerialPort class to
-      access a "real" serial device, while NullPort.cs provides a data sink
-      when the user hasn't configured one.
+    - The base "SerialDevice" class provides the base for RS-232 ports:
+      "RealPort" uses the System.IO.Ports.SerialPort class to access a host
+      serial device (including USB-to-serial adapters on modern PCs that lack
+      actual, physical COM ports), while "NullPort" provides a data sink when
+      the user hasn't configured one.
     - The POS "RSX:" pseudo device enables text file transfers to and from the
-      host.  It's implemented in RSXFilePort.cs.
-    - The Kriz tablets use the SIO chip to transmit mouse coordinates.  It's
-      implemented in KrizTablet.cs.
-    - SerialKeyboard.cs will contain the driver for the PERQ-2's "VT100-style"
+      host.  It's implemented as the "RSXFilePort" class.
+    - The "KrizTablet" class emulates the Three Rivers custom "Kriz tablets",
+      which use the SIO chip to transmit mouse coordinates.
+    - "SerialKeyboard" will contain the driver for the PERQ-2's "VT100-style"
       keyboard, attached to the EIO board.  [Not yet implemented]
     - The "Speech" class will emulate the PERQ's CVSD chip to provide "telephone
-      quality" (8Khz, mono) audio output.  Speech.cs will provide the glue to
+      quality" (8Khz, mono) audio output.  This class will provide the glue to
       stream data from the SIO to the SDL audio routines.  [Not yet implemented]
-      
+
+            
 2.3.3  GPIB
 -----------
 
@@ -367,18 +368,19 @@ The emulator currently only supports the Summagraphics BitPadOne tablet, though
 code exists to drive a number of now fairly obscure printers and possibly other
 GPIB tape drives and other peripherals.  As of v0.5.0, the code is sufficiently
 robust to interface with the BitPad, but has not been exhaustively tested and
-likely needs additional work.  The code is in the IO/GPIB directory:
+likely needs additional work.  The code is in the Emulator/IO/GPIB directory:
 
     - The "GPIBBus" class provides the actual bus abstraction, allowing the
       controller (TMS9914A, in the Z80 folder) to set talker and listener
       addresses and exchange data with them.  All peripherals that attach to
-      the bus implement the IGPIBDevice interface (IGPIBDevice.cs).
-    - The "BitPadOne" class (BitPadOne.cs) emulates the classic Summagraphics
-      tablet used (primarily) with the PERQ-1.
+      the bus implement the IGPIBDevice interface.
+    - The "BitPadOne" class emulates the classic Summagraphics tablet used
+      (primarily) with the PERQ-1.
+    - Additional peripherals may be added in a future release.
 
 
-2.3.4 Storage Devices
----------------------
+2.3.4  Storage Devices
+----------------------
 
 In the refactoring for v0.5.0, the storage architecture was heavily revamped.
 All of the reading and writing of media files on the host is now managed by the
@@ -390,16 +392,15 @@ All PERQs shipped with an internal hard disk, and most (or nearly all?) PERQs
 included the "optional" floppy drive.  The code to implement disk storage is in
 Emulator/IO/DiskDevices:
 
-    - The "FloppyDisk" class (FloppyDisk.cs) is a wrapper around the PERQmedia
-      StorageDevice class.  It works with the Z80 floppy disk controller (FDC)
-      to emulate the Shugart SA851 8" floppy drive.
-    - The "HardDisk" class (HardDisk.cs) is a "generic" hard disk.  It wraps
-      the PERQmedia StorageDevice class to provide the mechanical operations
-      such as seeks, sector operations, an index pulse, and so on.
-    - The "ShugartDiskController" class (ShugartController.cs) implements the
-      Shugart SA4000 interface (the "Disk14Inch" class of drives) common to all
-      PERQ-1 configurations.  It works with the Z80's HardDiskSeek device to
-      manage stepping the heads.
+    - The "FloppyDisk" class is a wrapper around the PERQmedia StorageDevice
+      class.  It works with the Z80 floppy disk controller (FDC) to emulate
+      the Shugart SA851 8" floppy drive.
+    - The "HardDisk" class is a "generic" hard disk.  It wraps the PERQmedia
+      StorageDevice class to provide the mechanical operations such as seeks,
+      sector operations, an index pulse, and so on.
+    - The "ShugartDiskController" class implements the Shugart SA4000 interface
+      (the "Disk14Inch" class of drives) common to all PERQ-1 configurations.
+      It works with the Z80's HardDiskSeek device to manage stepping the heads.
     - The "MicropolisDiskController" class is in development.  This will
       support the Micropolis 1200-series 8" hard disks that were originally
       introduced with the PERQ-2 and PERQ-2/T1.  This will allow configuration
@@ -420,8 +421,8 @@ backed by files on the disk).  If changes to the disk are to be saved, they
 must be flushed manually.
 
 
-2.3.5 PROMs
------------
+2.3.5  PROMs
+------------
 
 The PERQ hardware made fairly extensive use of ROM, PROM and other PLDs (early
 1980s PALs and GALs).  Some of the code executed by the PERQ microengine is
@@ -450,13 +451,13 @@ files are loaded from the PROM directory at startup:
       now as well.
 
 
-2.3.6 Display and UI
---------------------
+2.3.6  Display and UI
+---------------------
 
 The VideoController class (now in Emulator/Memory/VideoController.cs) implements
 the hardware that controls the display and is responsible for dealing with video
 timing, cursor positioning, and rendering scanlines of video from main memory
-(/Memory/MemoryBoard.cs) to the host display's framebuffer.
+to the host display's framebuffer.
 
 The framebuffer is supplied by the Display class (UI/SDL/Display.cs).  This uses
 the SDL2 library to create a window and render the bitmap data streamed to it by
@@ -481,8 +482,31 @@ condition (for relative-mode mouse tracking) has been restored but has not
 been exhaustively tested.
 
 
-2.3.7 The Debugger / Console interface
---------------------------------------
+2.3.7  Scheduler
+----------------
+
+The Scheduler class is used to fire events within the "virtual time" domain of
+the emulation environment.  The PERQ and Z80 each use their own Schedulers,
+one running on each thread and at the respective CPU frequencies (so a PERQ
+scheduling "tick" is 170ns, while the Z80's is dependent on the I/O board type
+loaded).  The Schedulers are used to maintain the proper execution ratio
+between the main CPU and the Z80.
+
+The SystemTimer provides a "heartbeat" used to regulate the execution speed of
+the emulated PERQ in the real time domain.  It uses the HighResolutionTimer to
+try to limit the emulation to exactly 60fps (170ns CPU cycle) on fast hardware
+when the "CPUSpeed" RateLimit option setting is enabled.
+
+
+2.4  The Debugger / Console interface
+-------------------------------------
+
+[All of the Debugger/CLI stuff has been split up; the complete command-line
+interface now lives in UI/CLI and provides the "Command" attribute that lets
+all of the various subsystems hook into the command tree.  All of the support
+for debugging will remain here, such as the disassembler, Qcodes, Z80 source
+debugger, etc.  Big rewrite required here.]
+
 
 All Debugger code lives under the top-level Debugger folder.  The DebugAttribute
 class defines attributes for functions and properties that can be applied to
@@ -499,15 +523,62 @@ command completion.
 I had grand plans for this but I never quite finished them.  It should be
 fairly easy to extend at this point, but there are some rough edges.
 
-[All of the Debugger/CLI stuff has been split up; the complete command-line
-interface now lives in UI/CLI and provides the "Command" attribute that lets
-all of the various subsystems hook into the command tree.  All of the support
-for debugging will remain here, such as the disassembler, Qcodes, Z80 source
-debugger, etc.  Big rewrite required here.]
+
+2.5  The Configurator
+---------------------
+
+A great (as in "large," not necessarily a reflection of _quality_...) wad of
+code in the Configurator directory provides the interface to a Configuration
+object, which now stores all of the metadata required to build a virtual PERQ.
+Configuration.cs contains the class which holds all of the data, with support
+from ConfigTypes.cs for enumerating various options.  Configurator.cs contains
+the rules for modifying and checking that a Configuration is valid; it has no
+direct UI and instead hooks to the GUI (removed) and CLI (ConfigCommands.cs).
+Future work to replace WinForms with a cross-platform SDL2- or MAUI-based GUI
+will allow more natural, direct graphical manipulation of Configurations.
+
+StorageCommands.cs provides supplemental CLI commands for managing the creation
+and assignment of hard disk and floppy media.
+
+User preferences are configured by the Settings class, also kept here with its
+CLI interface (SettingsCommands.cs).  This is another obvious candidate for a
+GUI implementation.  Settings aren't yet fully fleshed out, nor are they well
+documented in the UserGuide (yet).
 
 
-3. PERQmedia
-------------
+2.6  Execution Controller
+-------------------------
+
+The Controller directory accumulates a number of utility classes alongside the
+ExecutionController class.  Like the Configurator, this is the UI-neutral class
+used to manage the creation and startup of the virtual PERQ, run commands (like
+pausing, single stepping, etc.) and shutdown of the machine.  It was designed
+to be wired to a GUI (old WinForms code removed) and the CLI (ExecCommands.cs).
+The ExecutionController takes a Configuration and uses it to instantiate a
+PERQSystem object, which is the nexus for the entire virtual machine.  While
+the "power on" command seems extraneous in the CLI, the GUI provided an actual
+power button modeled on the PERQ-2/Tx front panel... 
+
+Commands typed at the CLI or controls clicked in the GUI trigger changes in the
+virtual machine's run state; the Controller provides the state machine and
+"plumbing" required to manage these transitions.  At "power off" the entire
+PERQSystem is torn down and disposed so that the user may change or restart
+another configured PERQ.
+
+Conversion, Events and Paths provide some useful utility routines.  The logging
+class in Log.cs is a homegrown logging system that provides highly configurable
+output options for debugging and tracing to the console and/or files.
+
+Finally, a HighResolutionTimer class provides a platform-independent way to do
+very high resolution timing, although it has been rolled up into the SDL/CLI
+event loop and runs on the main application thread, rather than running on a
+dedicated background thread; accuracy suffers but it simplifies firing timer
+callbacks without cross-thread invokes and only the SystemTimer client really
+needs the high resolution (when RateLimit options are engaged).  Sigh.
+
+
+3.  PERQmedia
+=============
 
 The PERQmedia subproject is included in the PERQemu Visual Studio solution and
 encapsulates all of the code relating to loading and saving PERQ disk images.
@@ -527,15 +598,18 @@ sources may be added here, as Bitsavers doesn't provide permalinks and may be
 reorganized from time to time.
 
 
-4. Miscellany
--------------
+4.  Miscellany
+==============
 
 A lot of interesting documentation can be found under Docs.  Microcode and
 Pascal sources extracted from the disks on Bitsavers, a few disassemblies I
 started, and a few random odds and ends.  These can be very useful for reverse-
-engineering the behavior of hardware.  Some work to reorganize and expand/refine
-the documentation has begun; additional web resources are being developed.  See
-the UserGuide.pdf for a list of links.
+engineering the behavior of hardware.
+
+Work to reorganize and expand/refine the documentation has begun; additional
+web resources are being developed.  See the UserGuide.pdf for a list of links.
+(Currently the UserGuide is edited in Google Docs and the exported PDF copied
+into the PERQemu tree; this isn't ideal, as source ought to be included...)
 
 ChangeLog.txt is a loose / verbose record of development effort over the course
 of this "experiments" branch.

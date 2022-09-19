@@ -60,19 +60,22 @@ namespace PERQemu.IO.SerialDevices
         public void TransmitAbort()
         {
             // Should never happen
-            throw new NotImplementedException();
+            throw new NotImplementedException("TransmitAbort on Kriz");
         }
 
         public void TransmitBreak()
         {
             // Should never happen
-            throw new NotImplementedException();
+            throw new NotImplementedException("TransmitBreak on Kriz");
         }
 
         public void Transmit(byte value)
         {
-            // Should never receive data
-            throw new NotImplementedException();
+            // Should never receive data... but it does!?  PERQdebugger (aka
+            // PERQman :-) in the POS G demo sends data to the tablet for some
+            // unknown reason.  Ignore it to avoid halting the emulator, for
+            // now; maybe figure out if it's supposed to be handled?
+            Log.Debug(Category.Tablet, "Kriz received byte 0x{0:x2} (ignored)", value);
         }
 
         private void SendData(ulong skewNsec, object context)

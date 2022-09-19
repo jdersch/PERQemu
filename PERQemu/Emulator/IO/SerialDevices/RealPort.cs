@@ -226,8 +226,6 @@ namespace PERQemu.IO.SerialDevices
         /// </summary>
         private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
         {
-            Console.WriteLine($"[Rx count: {ByteCount}]");
-
             // If a _sendEvent is not already in progress, kick one off.  I'm
             // sure this is just one giant nasty race condition but lalalalala
             if (_sendEvent == null)
@@ -310,10 +308,10 @@ namespace PERQemu.IO.SerialDevices
 
             //if (IsOpen)
             //{
-                Console.WriteLine($"Handshake: {_port.Handshake}  Break state: {_port.BreakState}");
-                Console.WriteLine($"Rx buffer: {ByteCount}/{_port.ReadBufferSize}  " +
-                                  $"Tx buffer: {_port.BytesToWrite}/{_port.WriteBufferSize}, " +
-                                  $"pacing {_charRateInNsec * Conversion.NsecToMsec}ms");
+            Console.WriteLine($"Handshake: {_port.Handshake}  Break state: {_port.BreakState}");
+            Console.WriteLine($"Rx buffer: {ByteCount}/{_port.ReadBufferSize}  " +
+                              $"Tx buffer: {_port.BytesToWrite}/{_port.WriteBufferSize}, " +
+                              $"pacing {_charRateInNsec * Conversion.NsecToMsec}ms");
             //}
             Console.WriteLine($"Pins:  DCD={DCD} DTR={DTR} DSR={DSR} RTS={RTS} CTS={CTS}");
         }
@@ -362,26 +360,27 @@ namespace PERQemu.IO.SerialDevices
  */
 
 /*
+    The "right way" to avoid the worst of the system SerialPort bugs is to
+    have yet another thread running to receive characters?  Oof.
 
-byte[] buffer = new byte[blockLimit];
-Action kickoffRead = null;
-kickoffRead = delegate {
-    port.BaseStream.BeginRead(buffer, 0, buffer.Length, delegate (IAsyncResult ar) {
-        try {
-            int actualLength = port.BaseStream.EndRead(ar);
-byte[] received = new byte[actualLength];
-Buffer.BlockCopy(buffer, 0, received, 0, actualLength);
+    byte[] buffer = new byte[blockLimit];
+    Action kickoffRead = null;
+    kickoffRead = delegate {
+        port.BaseStream.BeginRead(buffer, 0, buffer.Length, delegate (IAsyncResult ar) {
+            try {
+                int actualLength = port.BaseStream.EndRead(ar);
+                byte[] received = new byte[actualLength];
+                Buffer.BlockCopy(buffer, 0, received, 0, actualLength);
 
-            raiseAppSerialDataEvent(received);
-        }
-        catch (IOException exc) {
+                raiseAppSerialDataEvent(received);
+            }
+            catch (IOException exc) {
+                handleAppSerialError(exc);
+            }
 
-            handleAppSerialError(exc);
-        }
-
-        kickoffRead();
-    }, null);
-};
-kickoffRead();
+            kickoffRead();
+        }, null);
+    };
+    kickoffRead();
 
 */
