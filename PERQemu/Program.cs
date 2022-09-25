@@ -49,6 +49,8 @@ namespace PERQemu
             Version vers = Assembly.GetCallingAssembly().GetName().Version;
             _version = string.Format("PERQemu v{0}.{1}.{2} ('As the sparks fly upwards.')",
                                     vers.Major, vers.Minor, vers.Build);
+
+            _initialized = false;
         }
 
         [STAThread]
@@ -102,6 +104,8 @@ namespace PERQemu
             Settings.Load();
             Log.Info(Category.All, Settings.Reason);
 
+            _initialized = true;
+
             // Start 'er up!
             Run();
 
@@ -137,6 +141,7 @@ namespace PERQemu
 
         public static void PrintBanner()
         {
+            Console.WriteLine();
             Console.WriteLine(Version);
             Console.WriteLine(Copyright);
 #if DEBUG
@@ -166,6 +171,7 @@ namespace PERQemu
         public static string Version => _version;
         public static string BaseDir => _baseDir;
         public static bool HostIsUnix => _hostIsUnix;
+        public static bool Initialized => _initialized;
 
         public static EventLoop GUI => _gui;
         public static CommandProcessor CLI => _cli;
@@ -225,6 +231,7 @@ namespace PERQemu
         private static string _version;
         private static string _baseDir;
         private static bool _hostIsUnix;
+        private static bool _initialized;
 
         private static CmdLineArgs _switches;
         private static EventLoop _gui;

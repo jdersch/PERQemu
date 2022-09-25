@@ -62,8 +62,8 @@ namespace PERQemu
         None = 0,                           // 110% on the reactor
         CPUSpeed = 0x1,                     // strive for accuracy
         DiskSpeed = 0x2,                    // feel the pain
-        DiskStartupDelays = 0x10,           // for the truly hardcore
-        AllowFrameSkipping = 0x20           // not implemented
+        StartupDelay = 0x10,                // for the truly hardcore
+        FrameSkipping = 0x20                // not implemented
     }
 
     public struct SerialSettings
@@ -252,12 +252,14 @@ namespace PERQemu
                     // Device mappings
                     if (!string.IsNullOrEmpty(RSADevice))
                     {
-                        sw.WriteLine($"assign rs232 device a {RSADevice} {RSASettings}");
+                        sw.Write("assign rs232 device a ");
+                        sw.WriteLine(RSADevice == "RSX:" ? "RSX:" : $"{RSADevice} {RSASettings}");
                     }
 
                     if (!string.IsNullOrEmpty(RSBDevice))
                     {
-                        sw.WriteLine($"assign rs232 device b {RSBDevice} {RSBSettings}");
+                        sw.Write("assign rs232 device b ");
+                        sw.WriteLine(RSBDevice == "RSX:" ? "RSX:" : $"{RSBDevice} {RSBSettings}");
                     }
 
                     // todo: audio, Ethernet

@@ -72,10 +72,14 @@ namespace PERQemu.UI
             Console.WriteLine("Canon output file format:   " + Settings.CanonFormat);
             Console.WriteLine();
             Console.Write("Host serial port A device:  ");
-            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" : $"{Settings.RSADevice} {Settings.RSASettings}");
+            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" : 
+                              Settings.RSADevice == "RSX:" ? "RSX:" :
+                              $"{Settings.RSADevice} {Settings.RSASettings}");
             Console.Write("Host serial port B device:  ");
-            Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" : $"{Settings.RSBDevice} {Settings.RSBSettings}");
-           
+            Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" :
+                              Settings.RSBDevice == "RSX:" ? "RSX:" :
+                              $"{Settings.RSBDevice} {Settings.RSBSettings}");
+
             if (Settings.Changed)
             {
                 Console.WriteLine("\nModified settings have not been saved.");
@@ -86,7 +90,7 @@ namespace PERQemu.UI
         public void SetDefaults()
         {
             Settings.Reset();
-            Console.WriteLine(Settings.Reason);
+            QuietWrite(Settings.Reason);
         }
 
         [Command("settings load", "Reload saved settings")]
@@ -110,7 +114,8 @@ namespace PERQemu.UI
             {
                 Settings.SaveDiskOnShutdown = doit;
                 Settings.Changed = true;
-                Console.WriteLine("Autosave of hard disks is now {0}.", doit);
+
+                QuietWrite($"Autosave of hard disks is now {doit}.");
             }
         }
 
@@ -121,7 +126,8 @@ namespace PERQemu.UI
             {
                 Settings.SaveFloppyOnEject = doit;
                 Settings.Changed = true;
-                Console.WriteLine("Autosave of floppy disks is now {0}.", doit);
+
+                QuietWrite($"Autosave of floppy disks is now {doit}.");
             }
         }
 
@@ -132,7 +138,8 @@ namespace PERQemu.UI
             {
                 Settings.PauseOnReset = doit;
                 Settings.Changed = true;
-                Console.WriteLine("Pause on reset is now {0}.", doit);
+
+                QuietWrite($"Pause on reset is now {doit}.");
             }
         }
 
@@ -143,7 +150,8 @@ namespace PERQemu.UI
             {
                 Settings.PauseWhenMinimized = doit;
                 Settings.Changed = true;
-                Console.WriteLine("Pause when minimized is now {0}.", doit);
+
+                QuietWrite($"Pause when minimized is now {doit}.");
             }
         }
 
@@ -154,11 +162,11 @@ namespace PERQemu.UI
             {
                 Settings.CursorPreference = curs;
                 Settings.Changed = true;
-                Console.WriteLine("Cursor preference changed to {0}.", curs);
+
+                QuietWrite($"Cursor preference changed to {curs}.");
             }
         }
 
-        [Command("settings performance option", "", Discreet = true)]   // Obsoleted
         [Command("settings rate limit", "Set rate limit option flags")]
         public void SetPerformance(RateLimit opt)
         {
@@ -181,7 +189,7 @@ namespace PERQemu.UI
                 Settings.Changed = true;
             }
 
-            Console.WriteLine("Rate limit options set to {0}", Settings.Performance);
+            QuietWrite($"Rate limit options set to {Settings.Performance}");
         }
 
         [Command("settings output directory", "Set directory for saving printer output and screenshots")]
@@ -198,7 +206,8 @@ namespace PERQemu.UI
             {
                 Settings.OutputDirectory = dir;
                 Settings.Changed = true;
-                Console.WriteLine("Default output directory is now '{0}'.", dir);
+
+                QuietWrite($"Default output directory is now '{dir}'.");
             }
         }
 
@@ -249,7 +258,7 @@ namespace PERQemu.UI
                     }
 
                     Settings.Changed = true;
-                    Console.WriteLine($"Device '{dev}' assigned to serial port {port}.");
+                    QuietWrite($"Device '{dev}' assigned to serial port {port}.");
                     return;
                 }
 
@@ -265,7 +274,7 @@ namespace PERQemu.UI
                     }
 
                     Settings.Changed = true;
-                    Console.WriteLine($"Serial port {port} settings changed.");
+                    QuietWrite($"Serial port {port} settings changed.");
                 }
                 return;
             }
@@ -303,7 +312,7 @@ namespace PERQemu.UI
                     Settings.RSADevice = string.Empty;
                 else
                     Settings.RSBDevice = string.Empty;
-                
+
                 Settings.Changed = true;
             }
 
@@ -341,6 +350,12 @@ namespace PERQemu.UI
             }
 
             return false;
+        }
+
+        // Pure cheese.  Don't spew messages when reading on startup.
+        private void QuietWrite(string s)
+        {
+            if (PERQemu.Initialized) Console.WriteLine(s);
         }
 
         /*

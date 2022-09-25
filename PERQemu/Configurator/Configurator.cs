@@ -38,7 +38,7 @@ namespace PERQemu.Config
             _default = new Configuration();
             _current = _default;
 
-            _quietly = false;
+            _quietly = !PERQemu.Initialized;
 
             _prefabs = new Hashtable();
             _geometries = new Hashtable();
@@ -725,7 +725,7 @@ namespace PERQemu.Config
             if (!gotHard)
             {
                 conf.Reason = "The PERQ won't boot without a hard disk present.";
-                return false;
+                return _quietly;    // Cheeeeeeese
             }
 
             // Must be good then...

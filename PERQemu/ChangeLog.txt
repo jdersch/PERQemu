@@ -475,6 +475,10 @@ September, 2022:
     That's probably "ancient" to most folks nowadays, who don't live in a cave
     full of pre-Y2K retrocomputers like yours truly. :-)
 
+    2. Small bug fixes and documentation updates continue; have finally begun
+    to assemble an archive of PDFs at the PERQmedia Github repo.  See Appendix B
+    in UserGuide.pdf for links.
+    
 
 ---
-Last update: skeezics    Sat Sep 10 14:40:25 PDT 2022
+Last update: skeezics    Sun Sep 25 00:09:23 PDT 2022

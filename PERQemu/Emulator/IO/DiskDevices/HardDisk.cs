@@ -288,7 +288,7 @@ namespace PERQemu.IO.DiskDevices
         {
             ulong delay = 100;
 
-            if ((Settings.Performance & RateLimit.DiskStartupDelays) != 0)
+            if ((Settings.Performance & RateLimit.StartupDelay) != 0)
             {
                 // This makes sense if we do the whole "watch the screen warm up
                 // and play audio of the fans & disks whirring" for the total
