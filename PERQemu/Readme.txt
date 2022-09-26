@@ -19,15 +19,16 @@
 
     There are currently some platform-specific bugs to correct; "experiments"
     functionality is most complete on MacOS, with Windows and Linux testing
-    (finally) starting to be done regularly.
+    (finally) starting to be done regularly.  See section 4 below for a list
+    of the most outstanding bugs and misfeatures.
 
     A log of the changes I have made here has been moved to ChangeLog.txt,
     which may (or may not) be included going forward as a running commentary
     on major updates as they happen.
 
 
-Original Readme.txt follows.
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Updated Readme.txt follows.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 1.0 Introduction
@@ -37,7 +38,7 @@ PERQemu is an attempt to emulate the venerable Three Rivers Computer
 Corporation (3RCC) PERQ-1A system.
 
 Emulating this system has been an immense challenge, but so far it's been a lot
-of fun...  See section 4.0 to see what works and what doesn't.
+of fun...  See section 3.0 to see what works and what doesn't.
 
 PERQemu is written in C# under the .NET Framework 2.0.  The source code is now
 available on GitHub at https://github.com/jdersch/PERQemu/.  I've been working
@@ -128,9 +129,8 @@ Performance tuning is an ongoing concern.
 ===================
 
 This is a very basic "quick start" guide.  For more information about running
-the emulator, please consult the User's Guide included in this distribution.
-Two forms are provided: a synopsis in UserGuide.txt, and the comprehensive
-UserGuide.pdf which includes a complete command reference.
+the emulator, please consult the UserGuide.pdf included in this distribution.
+This comprehensive User's Guide includes a complete command reference.
 
 
 If you've gotten this far you've unpacked the Zip archive and you have a 
@@ -360,7 +360,7 @@ the source distribution.  See Readme-source.txt, or the copious notes in the
 Docs/ directory for way, way more information than you need.  Way more.
 
 
-4.1 What's Not
+3.1 What's Not
 --------------
  
 - Ethernet.  Unimplemented, but on the list!
@@ -377,9 +377,64 @@ Docs/ directory for way, way more information than you need.  Way more.
 
 - A proper GUI.  Sigh.
 
-- Some debugger commands are planned/in development but are not documented
-  or complete; support for breakpoints, logging to file (in addition to or
-  instead of the console), and several CLI enhancements are unfinished.
+Additionally, some debugger commands are planned/in development but are not
+documented or complete, and some CLI enhancements are unfinished.
+
+
+4.0 Quirks, Bugs, Misfeatures
+=============================
+
+The following known issues are present, with workarounds given where possible.
+Undoubtedly there are numerous other small bugs, glitches and aesthetic issues
+but the aim here is to document the most serious of them.  Feedback is welcome!
+
+
+1. Console sometimes loses track of the current input line.
+
+Symptoms:  This seems most prevalent on Windows 10, where the console output
+will wrap around to the top of the window and overwrite previous output, rather
+than scrolling, making it difficult to see the input prompt.
+
+Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
+seems to fix most of the glitches.  Mac and Linux terminal applications don't
+tend to misbehave as badly.
+
+
+2. Minimizing the Display window makes it disappear for good / very difficult
+to restore.
+
+Symptoms:  Pressing the window's minimize button sends it to never-never-land.
+
+Workaround:  On Windows, disable "autohide" for the task bar.  Otherwise you
+have to do some weird Ctrl-right-click-Restore gyrations to force the Display
+window back onto the screen.  On Linux (Ubuntu), the icon in the dock is
+transparent and hard to spot, but it does properly restore the window.  On Mac,
+the minimized window takes on a generic icon with "exec" in tiny print; this
+"mono-sgen64" process is the Display and will restore when clicked.
+
+
+3. Reading from the serial port is unreliable.
+
+Symptoms:  Windows and Mac serial devices seem to struggle less; on Linux, 
+reading data from a COM port (/dev/ttyS0) stalls unless output is sent to prod
+the receiver.  Flow control is unreliable and data may be garbled or lost.
+
+Workaround:  None, yet.  This is due to serious deficiencies in the C#/Mono
+System.IO.Ports.SerialPort implementation that will require a reworking of the
+emulator's port handling.
+
+
+4. Video glitches when running RasterOp-heavy programs.
+
+Symptoms:  Heavy use of RasterOp such as demonstrated by the SIGGRAPH demos can
+produce visible screen "tearing" or pauses where the frame count drops to 0.0.
+Typically the screen "snaps back" to normal frame rates within a few seconds.
+
+Workaround:  None, yet.  This is mostly manifested by older OSes that are based
+on older RasterOp microcode that does not properly meet the timing requirements
+of the LineCounter interrupt.  POS F.0 and F.1 exhibit serious issues; the same
+demo on F.15 (which incorporates newer RasterOp microcode) runs flawlessly.  I
+am investigating ways the emulator might detect or work around this.
 
 
 5.0 History and Roadmap

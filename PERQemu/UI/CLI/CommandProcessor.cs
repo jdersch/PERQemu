@@ -331,10 +331,9 @@ namespace PERQemu
         #region CLI Help (for now)
 
         // todo:  a nice help system, either built-in (for offline operation) or
-        // web-based.  for now, dump out some basic help (in 80 columns).  don't
-        // assume most people will download the source tree, so include at least
-        // the UserGuide.txt file in the binary package.  if this starts to get
-        // large, split off into a HelpCommands class and add to the list above.
+        // web-based.  for now, dump out some basic help (in 80 columns).  if this
+        // starts to get large, split off into a HelpCommands class and add to the
+        // list above.
 
         [Command("help", "Show PERQemu help")]
         private void Help()
