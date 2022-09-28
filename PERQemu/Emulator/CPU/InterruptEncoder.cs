@@ -45,7 +45,6 @@ namespace PERQemu.Processor
     [Flags]
     public enum InterruptFlag
     {
-        // How they're wired into the buffer @U250
         None = 0x00,
         Z80DataOutReady = 0x01,
         Y = 0x02,
@@ -100,12 +99,6 @@ namespace PERQemu.Processor
         /// Returns the integer vector of the highest priority interrupt
         /// currently signaled.
         /// </summary>
-        /// <remarks>
-        /// We had these backwards.  The hardware buffers the incoming interrupt
-        /// lines in the order given by Flag (below), but inverts them into the
-        /// 'LS148 priority encoder, and then they're reinverted when the Vector
-        /// jump address is calculated.  Wheeee!
-        /// </remarks>
         public int Priority
         {
             get

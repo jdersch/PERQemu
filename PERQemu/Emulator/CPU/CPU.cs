@@ -663,7 +663,7 @@ namespace PERQemu.Processor
                             if ((_alu.R.Lo & 0x80) == 0 && _system.Config.Chassis == ChassisType.PERQ1)
                             {
                                 _break = true;
-                                PERQemu.Sys.MachineStateChange(WhatChanged.PowerDown);
+                                _system.MachineStateChange(WhatChanged.PowerDown);
                             }
                             break;
 

@@ -479,6 +479,16 @@ September, 2022:
     to assemble an archive of PDFs at the PERQmedia Github repo.  See Appendix B
     in UserGuide.pdf for links.
     
+    3. A bit o' fun: added a floppy drive activity indicator.  On the hardware,
+    the Shugart SA851 has a red LED that shows when it's busy, but the loud,
+    distinctive KERCHUNK sounds it makes are the unmistakable sign that the
+    drive is working.  When booting from floppy in the emulator, there's no
+    obvious indication that the thing hasn't hung, so I've kluged something up.
+    With some additional work to update SDL2 the code should be streamlined in
+    the future, but for now this is fine.  Rate limiting locks in at 60fps more
+    reliably now.  More work to fix bugs, clean up loose ends, try to finally
+    get this thing ready for release.
+
 
 ---
-Last update: skeezics    Sun Sep 25 00:09:23 PDT 2022
+Last update: skeezics    Tue Sep 27 18:41:46 PDT 2022

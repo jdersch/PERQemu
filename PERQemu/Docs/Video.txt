@@ -275,5 +275,16 @@ Note that the "CRT signals" register bit for LandscapeDisplay is inverted
 (i.e., active low) so the code is a little twisted.  Just trust that it works.
 
 
+"Image Performance in CRT Displays" by Kenneth Compton, SPIE Press, 2003 has a
+wealth of technical information about the PC104 phosphor used in the original
+PERQ portrait monitor (based on a tube from Clinton Electronics).  However,
+there's no easy or obvious formula for calculating an RGB value for simulating
+the specific blueish/greenish tint of the actual "paper white" display.  If I
+were just slightly more insane, I'd incorporate phosphor aging and subtly adjust
+the white value over time.  While the just-slightly-not-fully-white color value
+chosen looks good on my Apple Cinema displays, it's much too violet/blue when
+rendered by Windows (on a Sun-branded 23" display using the same panel).  Sigh.
+
+
 ---
-Last update: skeezics    Sat Jul 30 19:43:46 PDT 2022
+Last update: skeezics    Mon Sep 26 21:09:58 PDT 2022

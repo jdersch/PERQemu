@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-9/25/2022 - skeezicsb - v0.4.6 (experimental)
+9/27/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -295,8 +295,8 @@ The following hardware has been implemented in the emulator:
       the addition of PERQ-2 emulation.  Currently only the original PERQ-1
       14" Shugart SA4000-series drives and controllers are tested to work with
       the new Z80 implementation;
-    - All of the suppoted 8" Micropolis and 5.25" MFM drives will be available 
-      as PERQ-2 support is introduced.
+    - All of the 8" Micropolis and 5.25" MFM drives will be available as PERQ-2
+      support is introduced.
       
   Floppy disk:
     - Rewritten to work with the new Z80 and floppy disk controller;

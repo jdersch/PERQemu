@@ -184,6 +184,7 @@ namespace PERQemu
         public PERQDebugger Debugger => _debugger;
 
         public event MachineStateChangeEventHandler DDSChanged;
+        public event MachineStateChangeEventHandler FloppyActivity;
         public event MachineStateChangeEventHandler PowerDownRequested;
 
 
@@ -715,6 +716,10 @@ namespace PERQemu
             {
                 case WhatChanged.DDSChanged:
                     handler = DDSChanged;
+                    break;
+
+                case WhatChanged.FloppyActivity:
+                    handler = FloppyActivity;
                     break;
 
                 case WhatChanged.Z80RunState:

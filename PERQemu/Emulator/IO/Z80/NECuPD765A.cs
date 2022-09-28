@@ -87,7 +87,7 @@ namespace PERQemu.IO.Z80
 
             for (var i = 0; i < _pcn.Length; i++)
                 _pcn[i] = 0;
-            
+
             _commandData.Clear();
             _statusData.Clear();
 
@@ -110,6 +110,9 @@ namespace PERQemu.IO.Z80
             _headSelect = 0;
             _seekEnd = false;
             _byteTimeNsec = FMByteTimeNsec;
+
+            // Turn off activity light
+            PERQemu.Sys.MachineStateChange(WhatChanged.FloppyActivity, false);
 
             Log.Debug(Category.FloppyDisk, "Controller reset");
         }
@@ -445,6 +448,8 @@ namespace PERQemu.IO.Z80
 
                 _pcn[_unitSelect] = cylinder;
                 SelectedUnit.SeekTo(cylinder, SeekCompleteCallback);
+
+                PERQemu.Sys.MachineStateChange(WhatChanged.FloppyActivity, true);
             }
             else
             {
@@ -467,6 +472,9 @@ namespace PERQemu.IO.Z80
 
             // Clear drive "Busy" bit
             _status &= ~((Status)(0x1 << _unitSelect));
+
+            // Turn off activity light
+            PERQemu.Sys.MachineStateChange(WhatChanged.FloppyActivity, false);
 
             Log.Debug(Category.FloppyDisk, "Unit {0} seek to cyl {1} completed", _unitSelect, _pcn[_unitSelect]);
             FinishCommand(true);
@@ -613,6 +621,7 @@ namespace PERQemu.IO.Z80
                 return false;
             }
 
+            PERQemu.Sys.MachineStateChange(WhatChanged.FloppyActivity, true);
             return true;
         }
 
@@ -860,7 +869,7 @@ namespace PERQemu.IO.Z80
                 _transfer.ST0 = SetErrorStatus(StatusRegister0.AbnormalTermination);
                 _transfer.ST0 |= StatusRegister0.EquipChk;  // Best guess
 
-				FinishTransfer(_transfer);
+                FinishTransfer(_transfer);
                 return false;
             }
 
@@ -904,6 +913,8 @@ namespace PERQemu.IO.Z80
 
                 case 3:
                     _transfer.Number = _writeByte;
+
+                    PERQemu.Sys.MachineStateChange(WhatChanged.FloppyActivity, true);
 
                     // Create a new sector
                     _transfer.SectorData = new Sector(_transfer.Cylinder,
@@ -983,6 +994,9 @@ namespace PERQemu.IO.Z80
                 _readDataReady = false;
                 _writeDataReady = false;
             }
+
+            // Turn off activity light
+            PERQemu.Sys.MachineStateChange(WhatChanged.FloppyActivity, false);
 
             // Apply the "ID Information at Result Phase" rules
             // todo: if anything uses MT, that subtly changes things at eot
