@@ -670,6 +670,7 @@
     <Content Include="UserGuide.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Include="PERQemu.icns" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="PERQemu.ico" />
