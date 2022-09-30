@@ -36,7 +36,11 @@ namespace PERQemu.UI
             _commandTree = root;
             _commandHistory = new List<string>(99);
             _historyIndex = 0;
+
             _prompt = "";
+
+            _lastWidth = Console.BufferWidth;
+            _lastHeight = Console.BufferHeight;
 
             InitEditKeyMap();
         }
@@ -176,6 +180,11 @@ namespace PERQemu.UI
                         entryDone = true;
                         break;
 
+                    case ConsoleKey.Clear:
+                        Console.Clear();
+                        DisplayPrompt();
+                        break;
+
                     default:
                         // Not a special key, just insert it if it's deemed printable
                         if (char.IsLetterOrDigit(key.KeyChar) ||
@@ -206,32 +215,52 @@ namespace PERQemu.UI
             return _input;
         }
 
-
+        /// <summary>
+        /// Displays the current prompt and sets the origin.
+        /// </summary>
         private void DisplayPrompt()
         {
-            // (Hack) This is soooooper cheesy but if there's a "cleaner" way to
-            // do it, it'd be sweet to have the editor do this automatically. :-)
+            // Grotesque.  Avoidable, if Write processed \r correctly... :-|
+            _lastColumn = 0;
+            _lastRow = Console.CursorTop;
+            UpdateCursor(ref _lastColumn, ref _lastRow);
+
+            // A "workmanlike" way to show if there are unsaved changes
             if ((_commandTree.Name == "configure" && PERQemu.Config.Changed) ||
                 (_commandTree.Name == "settings" && Settings.Changed))
-                Console.Write("\r" + _prompt + "*> ");
+            {
+                Console.Write($"{_prompt}*> ");
+            }
             else
-                Console.Write("\r" + _prompt + "> ");
+            {
+                Console.Write($"{_prompt}> ");
+            }
 
-            UpdateOrigin();
+            _lastRow = _originRow = Console.CursorTop;
+            _lastColumn = _originColumn = Console.CursorLeft;
         }
 
 
         private void UpdateDisplay()
         {
+            int row, column;
+
             // If the current input string is shorter than the last, then we
             // need to erase character(s) at the end
             string clear = string.Empty;
 
-            int row, column;
-
             if (_input.Length < _lastInputLength)
             {
                 clear = " ".PadRight(_lastInputLength - _input.Length);
+            }
+
+            Console.CursorVisible = false;
+
+            // Check to see if the console resized or if other output requires
+            // that we redraw the prompt and reprint the line...
+            if (UpdateCursor(ref _lastColumn, ref _lastRow))
+            {
+                DisplayPrompt();
             }
 
             // If running under the profiler or on the IDE's console, avoid a
@@ -239,40 +268,63 @@ namespace PERQemu.UI
             // the old Xamarin Studio/Profiler but maybe not on Visual Studio?
             if (Console.BufferWidth == 0)
             {
-                column = _textPosition + _originColumn;
                 row = _originRow;
+                column = _originColumn + _textPosition;
             }
             else
             {
-                column = ((_textPosition + _originColumn) % Console.BufferWidth);
                 row = ((_textPosition + _originColumn) / Console.BufferWidth) + _originRow;
+                column = ((_textPosition + _originColumn) % Console.BufferWidth);
             }
 
-            // ARGH. For all its nice features, MacOS X Terminal can screw up
-            // the Mono Console in unexpected ways.  Splitting the pane or even
-            // using the Find feature seems to blow up by changing the buffer
-            // height unexpectedly.  Catch, correct rather than infinitely loop.
-            try
-            {
-                // Move cursor to origin to draw string
-                Console.CursorLeft = _originColumn;
-                Console.CursorTop = _originRow;
-                Console.Write(_input + clear);
+            // Move cursor to origin to draw string
+            UpdateCursor(ref _originColumn, ref _originRow);
+            Console.Write(_input + clear);
 
-                // Move cursor to text position to place cursor
-                Console.CursorLeft = column;
-                Console.CursorTop = row;
-                Console.CursorVisible = true;
-            }
-            catch
-            {
-                _originRow = Math.Max(0, _originRow);
-                _originRow = Math.Min(Console.BufferHeight, _originRow);
-                row = _originRow;
-                Console.CursorTop = _originRow;
-            }
+            // Move cursor to text position for next input char
+            UpdateCursor(ref column, ref row);
+            Console.CursorVisible = true;
 
+            _lastRow = row;
+            _lastColumn = column;
             _lastInputLength = _input.Length;
+        }
+
+        /// <summary>
+        /// Updates the cursor safely, accounting for window resizing.  Clips
+        /// the coordinates so they're within range (to avoid an endless loop
+        /// of exceptions).
+        /// </summary>
+        private bool UpdateCursor(ref int x, ref int y)
+        {
+            var changed = false;
+            var offset = Console.BufferHeight - _lastHeight;
+
+            // If the window changed size, or
+            // logging/other output moved the cursor; always keep the row and
+            // column inside the buffer boundaries to prevent ugliness
+            if (Console.BufferHeight != _lastHeight || Console.BufferWidth != _lastWidth)
+            {
+                _lastWidth = Console.BufferWidth;
+                _lastHeight = Console.BufferHeight;
+
+                y += offset;
+                changed = true;
+            }
+
+            // Check if the cursor has moved or is out of range
+            if ((y < 0 || y > (Console.BufferHeight - 1) || y != Console.CursorTop) ||
+                (x < 0 || x > (Console.BufferWidth - 1) || x != Console.CursorLeft))
+            {
+                x = Math.Max(0, x);
+                x = Math.Min(Console.BufferWidth - 1, x);
+                y = Math.Max(0, y);
+                y = Math.Min(Console.BufferHeight - 1, y);
+                changed = true;
+            }
+
+            Console.SetCursorPosition(x, y);
+            return changed;
         }
 
 
@@ -380,12 +432,6 @@ namespace PERQemu.UI
             _input = string.Empty;
             HistoryIndex = _commandHistory.Count - 1;
             TextPosition = 0;
-        }
-
-        private void UpdateOrigin()
-        {
-            _originRow = Console.CursorTop;
-            _originColumn = Console.CursorLeft;
         }
 
         private int TextPosition
@@ -714,6 +760,7 @@ namespace PERQemu.UI
             _editKeyMap.Add(ConsoleKey.N, ConsoleKey.DownArrow);
             _editKeyMap.Add(ConsoleKey.A, ConsoleKey.Home);
             _editKeyMap.Add(ConsoleKey.E, ConsoleKey.End);
+            _editKeyMap.Add(ConsoleKey.L, ConsoleKey.Clear);
 
             // todo: Add the little details, like ^W to delete the previous
             // word, ^T to "twiddle" characters, maybe Ctrl-Shift- modifiers
@@ -724,12 +771,16 @@ namespace PERQemu.UI
         private CommandNode _commandTree;
         private CommandNode _commandTreeRoot;
 
-        private int _originRow;
-        private int _originColumn;
-
         private string _prompt;
         private string _input;
+
         private int _textPosition;
+        private int _originRow;
+        private int _originColumn;
+        private int _lastRow;
+        private int _lastColumn;
+        private int _lastWidth;
+        private int _lastHeight;
         private int _lastInputLength;
 
         private List<string> _commandHistory;

@@ -136,15 +136,17 @@ namespace PERQemu
             // Try the alternate extensions?
             if (extensions.Length > 0)
             {
+                var root = file;
+
                 // Remove the current one
                 if (Path.HasExtension(file))
                 {
-                    file = Path.GetFileNameWithoutExtension(file);
+                    root = Path.GetFileNameWithoutExtension(file);
                 }
 
                 foreach (var ext in extensions)
                 {
-                    var found = Path.ChangeExtension(file, ext);
+                    var found = Path.ChangeExtension(root, ext);
                     if (File.Exists(found))
                     {
                         return Canonicalize(found);
@@ -156,6 +158,15 @@ namespace PERQemu
                         return Canonicalize(found);
                     }
                 }
+            }
+
+            // Special case: if the file isn't found after all the transformations
+            // and we're on a Unix host, scan for the Windows directory separator.
+            // If something like Disks\g7.prqm slipped through, replace with '/'
+            // and try again...
+            if (PERQemu.HostIsUnix && (file.Contains("\\") || dir.Contains("\\")))
+            {
+                return FindFileInPath(file.Replace('\\', '/'), dir.Replace('\\', '/'), extensions);
             }
 
             return string.Empty;

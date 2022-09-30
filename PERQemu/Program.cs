@@ -151,6 +151,7 @@ namespace PERQemu
             Console.WriteLine("[Host is configured for {0} processor(s)]", Environment.ProcessorCount);
             Console.WriteLine("[High resolution timer {0} available]",
                               HighResolutionTimer.IsHighResolution ? "is" : "is not");
+            Console.WriteLine("[Console is {0}x{1}]", Console.BufferWidth, Console.BufferHeight);
 #endif
 #if TRACING_ENABLED
             Console.WriteLine("[Tracing is available]");

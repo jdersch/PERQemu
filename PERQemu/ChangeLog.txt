@@ -489,6 +489,11 @@ September, 2022:
     reliably now.  More work to fix bugs, clean up loose ends, try to finally
     get this thing ready for release.
 
+    4. More small fixes: on Unix hosts, deal with Windows '\' characters in
+    pathnames more gracefully.  Mitigate some annoying behavior on the console
+    when output (or window resizing) clobbers the prompt.  Update the program
+    icon so it's much sharper and looks better on modern OSes.
+
 
 ---
-Last update: skeezics    Tue Sep 27 18:41:46 PDT 2022
+Last update: skeezics    Thu Sep 29 21:29:52 PDT 2022
