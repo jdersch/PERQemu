@@ -46,14 +46,14 @@ namespace PERQemu.Processor
     public enum InterruptFlag
     {
         None = 0x00,
-        Z80DataOutReady = 0x01,
-        Y = 0x02,
-        HardDisk = 0x04,
-        Network = 0x08,
-        Z80DataInReady = 0x10,
-        LineCounter = 0x20,
-        X = 0x40,
-        Parity = 0x80
+        Parity = 0x01,
+        X = 0x02,
+        LineCounter = 0x04,
+        Z80DataInReady = 0x08,
+        Network = 0x10,
+        HardDisk = 0x20,
+        Y = 0x40,
+        Z80DataOutReady = 0x80
     }
 
     /// <summary>

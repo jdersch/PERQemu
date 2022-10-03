@@ -495,5 +495,19 @@ September, 2022:
     icon so it's much sharper and looks better on modern OSes.
 
 
+October, 2022:
+
+    1. Added Docs/Magic.txt, if you're a Unix nerd who wants to identify PERQ
+    media files from the shell with file(1).  [Hint: what should take 15 seconds
+    could be an odyssey of pain in the ``modern'' OS.  Full rant elided.]
+
+    2. Woo! Fixed a tricky little video problem that plagued older OSes running
+    older RasterOp microcode.  This has dramatically cleaned up the visible
+    artifacts (stutters or loss of frame rate, video tearing, strange cursor
+    jumping around in the Y axis).  Now I just need to address the pre-boot
+    state where the microcode isn't driving the video hardware at all, doing
+    something visually interesting rather than just leaving the screen blank...
+
+
 ---
-Last update: skeezics    Thu Sep 29 21:29:52 PDT 2022
+Last update: skeezics    Mon Oct  3 03:45:59 PDT 2022

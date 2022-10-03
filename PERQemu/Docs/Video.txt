@@ -228,10 +228,22 @@ sugar to sweeten the deal.
 Meanwhile, the Idle state transitions when the EnableVideo bit is set; at this
 point the first band should be programmed into the LineCount register and a
 CursorFunction set.  When the _lineCounter goes to zero we raise the interrupt
-and go back to Idle mode.  The CPU clears the interrupt by reprogramming the
-LineCounter, then sets the flags to display another visual field OR enables the
-transition to VBlank.  I think this is much less "creaky" and more faithful to
-the real hardware.
+(if enabled by the microcode) and go back to Idle mode.  The CPU clears the
+interrupt by reprogramming the LineCounter, then sets the flags to display
+another visual field OR enables the transition to VBlank.  Note that even in
+VBlank bands we let the HBlank state manage the line counter so that it's only
+done in ONE place.
+
+For a small measure of efficiency, the UpdateSignals() method is now called to
+update the current "CRT signals" when they're needed, rather than only on state
+transitions -- the caching effect screws up the video when large RasterOps are
+done by older versions of Accent and POS which use older microcode (RO.micro
+v0.7 or older).  Those poll the line counter interrupt status bit directly,
+rather than just rely on IntrPend to respond to the interrupt, so if the value
+isn't updated for several milliseconds the display list gets out of synch and
+the result is stuttering, tearing, or the cursor jumping around (in the Y axis).
+
+Overall I think this is less "creaky" and more faithful to the real hardware.
 
 
 The ScanLine Buffer
@@ -287,4 +299,4 @@ rendered by Windows (on a Sun-branded 23" display using the same panel).  Sigh.
 
 
 ---
-Last update: skeezics    Mon Sep 26 21:09:58 PDT 2022
+Last update: skeezics    Mon Oct  3 03:45:28 PDT 2022

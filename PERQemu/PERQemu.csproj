@@ -671,6 +671,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="PERQemu.icns" />
+    <None Include="Docs\Magic.txt" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="PERQemu.ico" />

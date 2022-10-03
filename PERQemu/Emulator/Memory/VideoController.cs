@@ -72,12 +72,10 @@ namespace PERQemu.Memory
 
             // Compute these once
             _displayQuads = _displayWidth / 64;
-            _displayWords = _displayWidth / 16;
             _displayBytes = _displayWidth / 8;
 
             // One scanline
-            _scanlineData = new ScanLineBuffer();
-            _scanlineData.Bytes = new byte[_displayBytes];
+            _scanlineData = new ScanLineBuffer { Bytes = new byte[_displayBytes] };
 
             // One quadword as 8 bytes
             _cursorData = new byte[8];
@@ -87,6 +85,7 @@ namespace PERQemu.Memory
         {
             _state = VideoState.Idle;
             _crtSignals = CRTSignals.None;
+            _videoStatus = StatusRegister.None;
             _scanLine = 0;
             _displayAddress = 0;
             _cursorAddress = 0;
@@ -96,8 +95,7 @@ namespace PERQemu.Memory
             _lineCounter = 0;
             _lineCounterInit = 0;
             _lineCountOverflow = false;
-
-            UpdateSignals();
+            _startOver = false;
 
             if (_currentEvent != null)
             {
@@ -111,6 +109,11 @@ namespace PERQemu.Memory
         public int DisplayWidth => _displayWidth;
         public int DisplayHeight => _displayHeight;
 
+        bool MicroInterruptEnabled => (_videoStatus & StatusRegister.DisableMicroInterrupt) == 0;
+        bool DisplayEnabled => (_videoStatus & StatusRegister.EnableDisplay) != 0;
+        bool CursorEnabled => (_videoStatus & StatusRegister.EnableCursor) != 0;
+        bool VSyncEnabled => (_videoStatus & StatusRegister.EnableVSync) != 0;
+
         public bool HandlesPort(byte ioPort)
         {
             // Lazy slow routine to indicate whether this device handles the given port
@@ -122,11 +125,13 @@ namespace PERQemu.Memory
             return false;
         }
 
+
         public int IORead(byte ioPort)
         {
             switch (ioPort)
             {
                 case 0x65:   // Read CRT signals
+                    UpdateSignals();
                     Log.Debug(Category.Display, "Read CRT signals, returned {0}", _crtSignals);
                     return (int)_crtSignals;
 
@@ -158,16 +163,14 @@ namespace PERQemu.Memory
                     _lineCounter = _lineCounterInit;
                     _lineCountOverflow = false;
 
-                    if ((value & (int)StatusRegister.StartOver) != 0)
-                    {
-                        _scanLine = 0;      // StartOver bit signals end of display list
-                    }
+                    // StartOver bit signals the end of the display list
+                    _startOver = (value & (int)StatusRegister.StartOver) != 0;
 
                     // Clear interrupt
                     _system.CPU.ClearInterrupt(InterruptSource.LineCounter);
 
-                    Log.Debug(Category.Display, "Line counter set to {0} scanlines. (write was {1:x4})",
-                                               _lineCounterInit, value);
+                    Log.Debug(Category.Display, "Line counter set to {0} scanlines (value {1:x4}, StartOver {2})",
+                                               _lineCounterInit, value, _startOver);
                     break;
 
                 case 0xe1:  // Load display address register
@@ -213,23 +216,21 @@ namespace PERQemu.Memory
                     _cursorFunc = (CursorFunction)((value & 0xe000) >> 13);
                     _videoStatus = (StatusRegister)(value & 0x1f00);
 
-                    if ((_videoStatus & StatusRegister.EnableCursor) != 0)
+                    if (CursorEnabled)
                     {
                         _cursorY = 0;
                         Log.Debug(Category.Display, "Cursor Y enabled at line {0}", _scanLine);
                     }
 
-                    if ((_videoStatus & StatusRegister.EnableVSync) != 0)
+                    // If either VSync or Display enables set, kick the state machine
+                    if (VSyncEnabled)
                     {
-                        _state = VideoState.VBlankScanline;
-                        Log.Debug(Category.Display, "Enable VSync");
+                        _state = VideoState.VBlank;
                         RunStateMachine();
                     }
-
-                    if ((_videoStatus & StatusRegister.EnableDisplay) != 0)
+                    else if (DisplayEnabled)
                     {
-                        _state = VideoState.VisibleScanline;
-                        Log.Debug(Category.Display, "Enable Display");
+                        _state = VideoState.Active;
                         RunStateMachine();
                     }
 
@@ -298,7 +299,7 @@ namespace PERQemu.Memory
                     // register(s) to set things in motion again.
                     break;
 
-                case VideoState.VisibleScanline:
+                case VideoState.Active:
                     _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
                         // We could range check.  Or just clip it.
@@ -312,67 +313,56 @@ namespace PERQemu.Memory
                 case VideoState.HBlank:
                     _currentEvent = _system.Scheduler.Schedule(_hBlankTimeNsec, (skew, context) =>
                     {
+                        //
+                        // Count scanlines:  When we fall off the end of the
+                        // visible field, tell Display to render the frame.
+                        //
                         _scanLine++;
 
                         if (_scanLine > _lastVisibleScanLine)
                         {
-                            // Off the end of the visible field; tell the Display
-                            // to go render the frame, but rate limit the refresh
-                            // in case the microcode is ignoring interrupts (so
-                            // the emulator doesn't go bonkers).
+                            // Rate limit refresh in case the microcode is ignoring
+                            // interrupts (so the emulator doesn't go bonkers)
                             if (_scanLine % DisplayHeight == 0)
+                            {
                                 _system.Display.Refresh();
+                            }
                         }
 
-                        // A bit of hackery: if the line count has gone to zero AND
-                        // it was non-zero to start with, return to Idle and wait
-                        // for the microcode to set up the next band (which should
-                        // be the first of the VBlank bands).  However, at boot-up
-                        // when things are running wild, just loop back to draw
-                        // another line (which RenderLine will clip to the visible
-                        // range).  This is all a bit cheesy.
+                        //
+                        // Line counter: count down this "band" until it hits zero.
+                        // If it was non-zero to start with, return to Idle and wait
+                        // for the microcode to set up the next one.  Otherwise,
+                        // return to Active or VBlank to do the next line.
+                        //
                         if (_lineCounter > 0) _lineCounter--;
 
-                        if (_lineCounter == 0 && _lineCounterInit > 0)
+                        if (_lineCounter == 0) //  && _lineCounterInit > 0)
                         {
                             _state = VideoState.Idle;
                         }
-                        else
+                        else if (VSyncEnabled)
                         {
-                            _state = VideoState.VisibleScanline;
+                            _state = VideoState.VBlank;
+                        }
+                        else if (DisplayEnabled)
+                        {
+                            _state = VideoState.Active;
                         }
                         RunStateMachine();
                     });
                     break;
 
-                case VideoState.VBlankScanline:
-                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec + _hBlankTimeNsec, (skew, context) =>
+                case VideoState.VBlank:
+                    _currentEvent = _system.Scheduler.Schedule(_scanLineTimeNsec, (skew, context) =>
                     {
-                        if (_lineCounter > 0) _lineCounter--;
-
-                        // If we're at the end of the vertical blanking interval,
-                        // UpdateSignals() will raise the line counter interrupt.
-                        // We just return to Idle and wait for the microcode to
-                        // enable the next band (2nd Vblank or back to Visible).
-                        if (_lineCounter == 0)
-                        {
-                            _state = VideoState.Idle;
-                        }
-                        else
-                        {
-                            _state = VideoState.VBlankScanline;
-                        }
+                        // Take one active scanline interval to do nothing :-)
+                        _state = VideoState.HBlank;
                         RunStateMachine();
                     });
                     break;
             }
 
-            UpdateSignals();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void UpdateSignals()
-        {
             // Trigger an interrupt if the line counter is set and has reached 0
             if (_lineCounter == 0 && _lineCounterInit > 0)
             {
@@ -384,8 +374,20 @@ namespace PERQemu.Memory
 
                 // Set our flag; this will be reset when _lineCounterInit is reloaded
                 _lineCountOverflow = true;
-            }
 
+                // Check the StartOver bit: at the end of the second vertical
+                // blanking band we're about to start a new frame, so reset the
+                // scan line counter before we return to idle.  The microcode
+                // should then reenable the display at line zero!
+                if (_startOver)
+                {
+                    _scanLine = 0;
+                }
+            }
+        }
+
+        private void UpdateSignals()
+        {
             //
             // The LineCounterOverflow status bit in the CRT Signals register should
             // mirror our interrupt status; don't just raise it for the one cycle when
@@ -395,32 +397,19 @@ namespace PERQemu.Memory
             _crtSignals =
                 (_isPortrait ? CRTSignals.LandscapeDisplay : CRTSignals.None) |     // Inverted!
                 (_lineCountOverflow ? CRTSignals.LineCounterOverflow : CRTSignals.None) |
-                (_state == VideoState.VBlankScanline ? CRTSignals.VerticalSync : CRTSignals.None) |
+                (_state == VideoState.VBlank ? CRTSignals.VerticalSync : CRTSignals.None) |
                 (_state == VideoState.HBlank ? CRTSignals.HorizontalSync : CRTSignals.None);
         }
 
-        private bool CursorEnabled
-        {
-            get { return (_videoStatus & StatusRegister.EnableCursor) == StatusRegister.EnableCursor; }
-        }
-
-        private bool DisplayEnabled
-        {
-            get { return (_videoStatus & StatusRegister.EnableDisplay) == StatusRegister.EnableDisplay; }
-        }
-
-        private bool MicroInterruptEnabled
-        {
-            get { return (_videoStatus & StatusRegister.DisableMicroInterrupt) != StatusRegister.DisableMicroInterrupt; }
-        }
-
-        // debug
+        // Debug
         public void Status()
         {
+            UpdateSignals();
+
             Console.WriteLine("counterInit={0}, count={1}, overflow={2}, intrEnabled={3}",
                               _lineCounterInit, _lineCounter, _lineCountOverflow, MicroInterruptEnabled);
-            Console.WriteLine("scanline={0}, state={1}, crt={2}",
-                              _scanLine, _state, _crtSignals);
+            Console.WriteLine("scanline={0}, startOver={1}, state={2}, crt={3}",
+                              _scanLine, _startOver, _state, _crtSignals);
         }
 
         /// <summary>
@@ -458,7 +447,7 @@ namespace PERQemu.Memory
                     if ((dispByte >= 0) && (dispByte < _scanlineData.Bytes.Length))
                     {
                         _scanlineData.Bytes[dispByte] = TransformCursorByte(_scanlineData.Bytes[dispByte],
-																			_cursorData[cursByte]);
+                                                                            _cursorData[cursByte]);
                     }
                     cursByte++;
                 }
@@ -484,7 +473,7 @@ namespace PERQemu.Memory
             for (int b = 0; b < 8; b++)
             {
                 _cursorData[b] = (byte)(quad & 0xff);
-                quad = quad >> 8;
+                quad >>= 8;
             }
         }
 
@@ -578,9 +567,9 @@ namespace PERQemu.Memory
 
         private enum VideoState
         {
-            VisibleScanline = 0,
+            Active = 0,
             HBlank,
-            VBlankScanline,
+            VBlank,
             Idle
         }
 
@@ -627,7 +616,6 @@ namespace PERQemu.Memory
 
         // Trade a little space for speed
         private int _displayQuads;
-        private int _displayWords;
         private int _displayBytes;
         private bool _isPortrait = true;
 
@@ -639,6 +627,7 @@ namespace PERQemu.Memory
         private int _scanLine;
         private int _lineCounterInit;
         private bool _lineCountOverflow;
+        private bool _startOver;
 
         // IO registers
         private int _lineCounter;

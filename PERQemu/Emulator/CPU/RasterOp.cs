@@ -280,12 +280,15 @@ namespace PERQemu.Processor
             _destWordPosition = (value & 0x30) >> 4;
             _destBitOffset = (value & 0xf);
 
-            // Ugh, since the PERQ doesn't really have a NOOP, the assembler
+            // Ugh, since the PERQ doesn't really have a NOOP, the assembler often
             // builds an instruction that does a dummy assignment to this register,
-            // which means a massive amount of spurious log spewage.
-
-            Log.Debug(Category.RasterOp, "Dst:  Func={0} WordPos={1} BitOffset={2}",
-                                         _function, _destWordPosition, _destBitOffset);
+            // which means a massive amount of spurious log spewage.  This should
+            // help, since the standard ucode does Wid, then Src, then Dst...
+            if (_setupDone)
+            {
+                Log.Debug(Category.RasterOp, "Dst:  Func={0} WordPos={1} BitOffset={2}",
+                                             _function, _destWordPosition, _destBitOffset);
+            }
         }
 
         /// <summary>

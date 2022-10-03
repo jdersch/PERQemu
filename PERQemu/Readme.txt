@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-9/29/2022 - skeezicsb - v0.4.6 (experimental)
+10/3/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -397,7 +397,7 @@ than scrolling, making it difficult to see the input prompt.
 
 Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
 seems to fix most of the glitches.  Mac and Linux terminal applications don't
-tend to misbehave as badly.  Recent changes mitigate this, somewhat.
+tend to misbehave as badly.  Recent changes mitigate this, a tiny bit.
 
 
 2. Minimizing the Display window makes it disappear for good / very difficult
@@ -422,20 +422,6 @@ the receiver.  Flow control is unreliable and data may be garbled or lost.
 Workaround:  None, yet.  This is due to serious deficiencies in the C#/Mono
 System.IO.Ports.SerialPort implementation that will require a reworking of the
 emulator's port handling.
-
-
-4. Video glitches when running RasterOp-heavy programs.
-
-Symptoms:  Heavy use of RasterOp such as demonstrated by the SIGGRAPH demos can
-produce visible screen "tearing" or pauses where the frame count drops to 0.0.
-Typically the screen "snaps back" to normal frame rates within a few seconds.
-
-Workaround:  None, yet.  This is mostly manifested by older OSes that are based
-on older RasterOp microcode that does not properly meet the timing requirements
-of the LineCounter interrupt.  POS F.0 and F.1 exhibit serious issues; the same
-demo on F.15 (which incorporates newer RasterOp microcode) runs flawlessly.  I
-am investigating ways the emulator might detect or work around this, assuming it
-isn't a very obscure bug in PERQemu itself...
 
 
 5.0 History and Roadmap
