@@ -337,7 +337,7 @@ namespace PERQemu.Memory
                         //
                         if (_lineCounter > 0) _lineCounter--;
 
-                        if (_lineCounter == 0) //  && _lineCounterInit > 0)
+                        if (_lineCounter == 0 && _lineCounterInit > 0)
                         {
                             _state = VideoState.Idle;
                         }
@@ -420,7 +420,7 @@ namespace PERQemu.Memory
         public void RenderScanline(int renderLine)
         {
             // Set the start of this scanline, offset from start of display (by quads)
-            int dispAddress = (_displayAddress / 4) + (renderLine * _displayQuads);
+            int dispAddress = (_displayAddress >> 2) + (renderLine * _displayQuads);
 
             // The "fast" loop gobbles up quad words
             for (int w = 0; w < _displayQuads; w++)
@@ -432,7 +432,7 @@ namespace PERQemu.Memory
             if (CursorEnabled)
             {
                 // Calc the starting address of this line of cursor data
-                int cursorAddress = (_cursorAddress / 4) + _cursorY++;
+                int cursorAddress = (_cursorAddress >> 2) + _cursorY++;
 
                 // Fetch the quad and break it into 8 bytes for easy mixin'!
                 GetCursorQuad(cursorAddress);

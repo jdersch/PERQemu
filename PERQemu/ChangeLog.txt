@@ -506,7 +506,12 @@ October, 2022:
     artifacts (stutters or loss of frame rate, video tearing, strange cursor
     jumping around in the Y axis).  Now I just need to address the pre-boot
     state where the microcode isn't driving the video hardware at all, doing
-    something visually interesting rather than just leaving the screen blank...
+    something visually interesting rather than just leaving the screen blank.
+
+    3. For Mac and Linux, added an icon for the display window which shows up
+    in the Dock (rather than the generic or blank "mono-sgen" icon).  May need
+    to mention that SDL2_image is an explicit dependency in case that's not the
+    case for the package manager on the host OS...
 
 
 ---

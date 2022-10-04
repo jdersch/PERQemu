@@ -83,6 +83,14 @@ namespace PERQemu.UI
                 throw new InvalidOperationException("SDL_CreateSystemCursor failed");
             }
 
+            retVal = SDL_image.IMG_Init(SDL_image.IMG_InitFlags.IMG_INIT_JPG |
+                                        SDL_image.IMG_InitFlags.IMG_INIT_PNG |
+                                        SDL_image.IMG_InitFlags.IMG_INIT_TIF);
+            if (retVal == 0)
+            {
+                throw new InvalidOperationException("Could not initialize SDL2 IMG library");
+            }
+
             // That's it; windows created by Display (and someday, a full GUI)
             _sdlRunning = true;
 
@@ -369,6 +377,7 @@ namespace PERQemu.UI
                 // Clear out our custom events.  No, Artoo, shut them all down!
                 SDL.SDL_FlushEvents(SDL.SDL_EventType.SDL_USEREVENT, SDL.SDL_EventType.SDL_LASTEVENT);
 
+                SDL_image.IMG_Quit();
                 SDL.SDL_Quit();
 
                 _sdlRunning = false;

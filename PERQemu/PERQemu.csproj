@@ -33,6 +33,7 @@
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <TargetFrameworkProfile />
     <StartupObject>PERQemu.PERQemu</StartupObject>
+    <ApplicationIcon>Resources\PERQemu.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -113,7 +114,7 @@
   <PropertyGroup />
   <PropertyGroup />
   <PropertyGroup>
-    <ApplicationIcon>PERQemu.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\PERQemu.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject>PERQemu.PERQemu</StartupObject>
@@ -670,11 +671,17 @@
     <Content Include="UserGuide.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <None Include="PERQemu.icns" />
     <None Include="Docs\Magic.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="PERQemu.ico" />
+    <None Include="Resources\floppy.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\aboutbox1.png" />
+    <None Include="Resources\aboutbox2.png" />
+    <None Include="Resources\PERQemu.icns" />
+    <Content Include="Resources\PERQemu.ico" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
@@ -707,6 +714,7 @@
     <Folder Include="Conf\" />
     <Folder Include="Emulator\IO\DiskDevices\" />
     <Folder Include="Docs\Hardware References\" />
+    <Folder Include="Resources\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

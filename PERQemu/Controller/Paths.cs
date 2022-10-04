@@ -29,6 +29,14 @@ namespace PERQemu
     public static class Paths
     {
         /// <summary>
+        /// Directory inside the app wrapper containing icons or UI resources.
+        /// </summary>
+        public static string ResourceDir
+        {
+            get { return Path.Combine(PERQemu.BaseDir, "Resources"); }
+        }
+
+        /// <summary>
         /// Directory inside the app wrapper containing PROM images.
         /// </summary>
         public static string PROMDir
@@ -87,6 +95,11 @@ namespace PERQemu
                                                   ? ".PERQemu_cfg"
                                                   : "PERQemu.cfg"));
             }
+        }
+
+        public static string BuildResourcePath(string file)
+        {
+            return Path.Combine(ResourceDir, file);
         }
 
         public static string BuildPROMPath(string file)

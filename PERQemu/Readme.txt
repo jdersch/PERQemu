@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-10/3/2022 - skeezicsb - v0.4.6 (experimental)
+10/4/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -407,10 +407,7 @@ Symptoms:  Pressing the window's minimize button sends it to never-never-land.
 
 Workaround:  On Windows, disable "autohide" for the task bar.  Otherwise you
 have to do some weird Ctrl-right-click-Restore gyrations to force the Display
-window back onto the screen.  On Linux (Ubuntu), the icon in the dock is
-transparent and hard to spot, but it does properly restore the window.  On Mac,
-the minimized window takes on a generic icon with "exec" in tiny print; this
-"mono-sgen64" process is the Display and will restore when clicked.
+window back onto the screen.
 
 
 3. Reading from the serial port is unreliable.
