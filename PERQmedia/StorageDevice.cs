@@ -80,9 +80,9 @@ namespace PERQmedia
             {
                 return Sectors[cyl, head, sec];
             }
-            catch
+            catch (IndexOutOfRangeException e)
             {
-                throw;
+                throw new IndexOutOfRangeException($"Read sector {cyl}/{head}/{sec} out of range", e);
             }
         }
 
@@ -102,9 +102,9 @@ namespace PERQmedia
                 Sectors[sec.CylinderID, sec.HeadID, sec.SectorID] = sec;
                 IsModified = true;
             }
-            catch
+            catch (IndexOutOfRangeException e)
             {
-                throw;
+                throw new IndexOutOfRangeException($"Write {sec} out of range", e);
             }
         }
 

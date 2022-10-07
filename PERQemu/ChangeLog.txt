@@ -511,8 +511,11 @@ October, 2022:
     3. For Mac and Linux, added an icon for the display window which shows up
     in the Dock (rather than the generic or blank "mono-sgen" icon).  May need
     to mention that SDL2_image is an explicit dependency in case that's not the
-    case for the package manager on the host OS...
+    default for the various package managers or common OS distros... updates to
+    the distributed Windows DLLs are now 64 bit(?).
+
+    4. The windows minimize/restore problem is back?  Sometimes?  Just shoot me.
 
 
 ---
-Last update: skeezics    Mon Oct  3 03:45:59 PDT 2022
+Last update: skeezics    Fri Oct  7 13:04:14 PDT 2022

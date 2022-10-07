@@ -88,11 +88,20 @@ namespace PERQmedia
                     Log.Debug(Category.MediaLoader, "Continuing...");
                 }
 
+                // I am SO tired of this failing because the headers aren't consistent AT ALL B-[
+                string[] formats = { "d/MM/yyyy H:mm:ss", "dd/MM/yyyy HH:mm:ss", "MM/dd/yyyy HH:mm:ss" };
+
                 // Save our archive date for posterity
-                dev.FileInfo.ArchiveDate = DateTime.ParseExact(match.Groups[3].Value,
-                                                               "d/MM/yyyy H:mm:ss",
-                                                               CultureInfo.InvariantCulture,
-                                                               DateTimeStyles.AllowInnerWhite);
+                if (!DateTime.TryParseExact(match.Groups[3].Value,
+                                            formats,
+                                            CultureInfo.InvariantCulture,
+                                            DateTimeStyles.AllowInnerWhite,
+                                            out dev.FileInfo.ArchiveDate))
+                {
+                    dev.FileInfo.ArchiveDate = DateTime.Now;
+                    Log.Debug(Category.MediaLoader, "Bad datestamp in IMD header, forcing it...");
+                }
+
                 // That was the easy part...
                 return true;
             }
@@ -309,6 +318,12 @@ namespace PERQmedia
 
             foreach (var sec in _sectors)
             {
+                if (!dev.WriteCheck(sec))
+                {
+                    Log.Warn(Category.MediaLoader, "Sector {0} out of range!", sec);
+                    continue;
+                }
+
                 dev.Write(sec);
             }
 
@@ -366,7 +381,7 @@ namespace PERQmedia
             // Sanity check
             if (sizeIndex > 1)
             {
-                Log.Warn(Category.MediaLoader, 
+                Log.Warn(Category.MediaLoader,
                          "SizeIndex {0} ({1} bytes) makes no sense",
                          sizeIndex, _sectorSizes[sizeIndex]);
             }
