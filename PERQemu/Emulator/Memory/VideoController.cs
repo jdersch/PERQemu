@@ -166,6 +166,22 @@ namespace PERQemu.Memory
                     // StartOver bit signals the end of the display list
                     _startOver = (value & (int)StatusRegister.StartOver) != 0;
 
+                    // ** PNX 1 HACK **
+                    // Apparently PNX 1 does video a little differently: it only
+                    // sets up one Vblank band instead of two, and counts off 40
+                    // lines instead of 43.  Could this be to compensate for the
+                    // difference between UK 50Hz and US 60Hz power grids?  Who
+                    // knows.  But they also never set the StartOver bit, though,
+                    // which is a real problem: the scanline count never resets
+                    // so the cursor's Y position isn't fixed properly.  Try to
+                    // Accommodate that here; assumes that the new VBlank state
+                    // has been set up *before* initializing line count.  Ugh.
+                    if (!_startOver && _state == VideoState.VBlank && _lineCounterInit == 40)
+                    {
+                        // We could check that DDS == 255 to be sure it's PNX :-)
+                        _startOver = true;
+                    }
+
                     // Clear interrupt
                     _system.CPU.ClearInterrupt(InterruptSource.LineCounter);
 
@@ -195,10 +211,7 @@ namespace PERQemu.Memory
                     // ** ACCENT S6 HACK **
                     // The S6 microcode doesn't properly initialize VidNext for
                     // "normal" display and passes in a bogus value instead; POS
-                    // does it correctly.  Argh.  If I can get it to boot at all
-                    // then we can see if the Pascal driver sets things properly
-                    // and figure out if there's a way to detect/patch/workaround
-                    // this more elegantly...
+                    // does it correctly.  Argh.  Crude workaround here...
                     if ((value & 0xff00) == 0xff00)
                     {
                         // Force just EnableDisplay, no cursor, map normal.

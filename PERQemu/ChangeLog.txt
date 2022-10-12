@@ -516,6 +516,13 @@ October, 2022:
 
     4. The windows minimize/restore problem is back?  Sometimes?  Just shoot me.
 
+    5. Small fix to video for PNX 1.  Now bundling two more disk images to play
+    with: PNX 1.3, and MPOS E.29 / POS F.0.  In addition, the conversion of the
+    original D.6 and F.1 images trims around 40MB off the download, not that
+    anyone worries about a few measly tens of megabytes these days...  Updates
+    to the UserGuide to include a few hints about how these interesting early
+    OSes work.  More to come!
+
 
 ---
-Last update: skeezics    Fri Oct  7 13:04:14 PDT 2022
+Last update: skeezics    Wed Oct 12 04:51:38 PDT 2022

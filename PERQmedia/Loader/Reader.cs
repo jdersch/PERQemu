@@ -104,6 +104,14 @@ namespace PERQmedia
                 // Check for writability and set flag
                 dev.Info.IsWritable = !(new FileInfo(pathname).IsReadOnly);
 
+                // For formats that don't store an archive date, use the file's
+                // creation date rather than "now"...
+                if (dev.FileInfo.Format != Formatters.PRQFormat &&
+                    dev.FileInfo.Format != Formatters.IMDFormat)
+                {
+                    dev.FileInfo.ArchiveDate = File.GetCreationTimeUtc(pathname);
+                }
+
                 // For grins, check the POS boot signature and set flag
                 if (dev.Info.Type == DeviceType.Floppy)
                 {

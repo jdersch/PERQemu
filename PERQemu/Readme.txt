@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-10/7/2022 - skeezicsb - v0.4.6 (experimental)
+10/12/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -148,8 +148,12 @@ There are several subdirectories:
         the distribution are:
 
         d6.phd:
-            A dump from my very own PERQ1's disk, which has POS D.61 and
-            Accent S4 installed.
+            (Josh) A dump from my very own PERQ1's disk, which has POS
+            D.61 and Accent S4 installed.
+
+        f0.prqm:
+            (Skeezics) A dump of my POS F.0 drive, which has a working
+            MPOS E.29 installation as well!
               
         f1.phd:
             A disk containing a pretty complete installation of POS F.1,
@@ -164,6 +168,10 @@ There are several subdirectories:
             any extra apps (yet).  This image includes some fun new demos
             not previously available on PERQemu!
 
+        pnx1.prqm:
+            A bundle of the basic PNX 1.3 installation from the PERQmedia
+            repository, but reformatted as a .prqm image.
+
        Additional "stock" hard drive or floppy images may be included as
        well.  Any custom disk images you create or import are loaded from
        and saved in the Disks/ directory by default.  Please consult the
@@ -172,10 +180,12 @@ There are several subdirectories:
     Output/
         When logging debug output to disk is enabled, those files go here by
         default.  When screenshots and printing are implemented, that output
-        will land here too.  (Output directory will be a settable preference.)
+        will land here too.  (Output directory is a settable preference.)
 
     PROM/
-        Contains dumps of PERQ ROMs necessary for operation.
+    Resources/
+        These directories contain dumps of PERQ ROMs and other files
+        necessary for operation.
 
 
 To start the emulator, just run PERQemu.exe:
@@ -397,7 +407,8 @@ than scrolling, making it difficult to see the input prompt.
 
 Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
 seems to fix most of the glitches.  Mac and Linux terminal applications don't
-tend to misbehave as badly.  Recent changes mitigate this, a tiny bit.
+tend to misbehave as badly.  Recent changes mitigate this, a tiny bit.  Hitting
+^L now clears and resets the window in case things are messy.
 
 
 2. Minimizing the Display window makes it disappear for good / very difficult
@@ -413,13 +424,14 @@ My absolute loathing and utter disdain for Windows increases daily.
 
 3. Reading from the serial port is unreliable.
 
-Symptoms:  Windows and Mac serial devices seem to struggle less; on Linux, 
-reading data from a COM port (/dev/ttyS0) stalls unless output is sent to prod
-the receiver.  Flow control is unreliable and data may be garbled or lost.
+Symptoms:  On Linux, reading data from a COM port (/dev/ttyS0) stalls unless
+output is transmitted (to prod the receiver).  Windows and Mac serial devices
+seem to struggle less, but this isn't exactly "production ready."  Flow control
+on all three plaltforms is unreliable and data may be garbled or lost.
 
-Workaround:  None, yet.  This is due to serious deficiencies in the C#/Mono
-System.IO.Ports.SerialPort implementation that will require a reworking of the
-emulator's port handling.
+Workaround:  None, yet.  This is largely due to serious deficiencies in the
+C#/Mono System.IO.Ports.SerialPort implementation that will require a reworking
+of the emulator's port handling.
 
 
 5.0 History and Roadmap
