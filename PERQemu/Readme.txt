@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-10/12/2022 - skeezicsb - v0.4.6 (experimental)
+10/14/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -13,18 +13,18 @@
     This "experiments" branch is a pretty major divergence from the PERQemu
     master.  The skeezicsb/master should track the original jdersch/master
     but will occasionally incorporate a few tweaks to make it work on the
-    Mac and Mono.  During the summer of 2021, Josh began the work to add a
-    "real Z80" to the I/O board to allow for PERQ-2 emulation, and made big
-    changes to switch from WinForms to SDL2 for the display.  AWESOME!
+    Mac and Mono.  A rough roadmap for future development is included at the
+    end of this document.
 
     There are currently some platform-specific bugs to correct; "experiments"
     functionality is most complete on MacOS, with Windows and Linux testing
     (finally) starting to be done regularly.  See section 4 below for a list
     of the most outstanding bugs and misfeatures.
 
-    A log of the changes I have made here has been moved to ChangeLog.txt,
-    which may (or may not) be included going forward as a running commentary
-    on major updates as they happen.
+    The pre-release v0.4.6 is still a work in progress but is stable enough
+    to finally drive a stake in the ground and put it out there for use and
+    testing.  Bug fixing and updates will continue on this branch, so please
+    check back often for updates.
 
 
 Updated Readme.txt follows.
@@ -437,14 +437,19 @@ of the emulator's port handling.
 5.0 History and Roadmap
 =======================
 
-v0.7 - TBD
+v1.0 - TBD
+  Sometime before the heat death of the universe:
+  - Feature complete, with a nice GUI, full screen mode, VR, scratch 'n sniff
+  - Massive software library organized, catalogued, available for use and study
+
+v0.9 - TBD
   Additional I/O Options once the baseline devices are complete:
   - Ethernet!
   - Canon laser printer
   - QIC streamer tape
   - Working audio output :-)
 
-v0.6 - TBD
+v0.7 - TBD
   Leverage the new architecture to roll out new models, new peripherals and
   open up the full range of available operating systems!
   - PERQ-2 EIO emulation support: expanded IO Board with faster Z80, second
@@ -458,7 +463,7 @@ v0.5 - TBD
   of the new features are reasonably stable:
   - True Z80 emulation
   - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
-  - Runs on 64-bit Mono/MacOS (no 32-bit WinForms limitation)
+  - 64-bit Mono/MacOS build (no 32-bit WinForms limitation)
   - SDL2 for improved display performance
   - Unified PERQ media storage architecture and file format
   - Dynamic runtime configuration of all PERQ models and features
@@ -470,8 +475,8 @@ v0.4.6 - Current "experimental" branch
   - This version, in progress
 
 v0.4.5beta - Unreleased
-  - This was a one-off build for VCF PNW with some experimental video hacks
-    to improve display performance.
+  - A one-off build for VCF PNW with some experimental video hacks to improve
+    display performance.
 
 v0.4.4 - Fourth major release
   - RasterOp streamlining and refinements allowed us to remove the

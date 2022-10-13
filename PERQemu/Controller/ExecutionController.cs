@@ -231,6 +231,7 @@ namespace PERQemu
         {
             if (State == RunState.Off) return;
 
+            Console.WriteLine();
             Console.WriteLine("Power off requested.");
 
             // Force the machine to pause if in any other state
