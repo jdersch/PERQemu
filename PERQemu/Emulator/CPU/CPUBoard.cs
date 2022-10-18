@@ -177,21 +177,21 @@ namespace PERQemu.Processor
                 return;
             }
 
-            Log.Debug(Category.Controller, "[Stop() called on CPU thread]");
+            Log.Detail(Category.Controller, "[Stop() called on CPU thread]");
             _stopAsyncThread = true;
             _heartbeat.Enable(false);
 
             if (!Thread.CurrentThread.Equals(_asyncThread))
             {
-                Log.Debug(Category.Controller, "[CPU thread join called...]");
+                Log.Detail(Category.Controller, "[CPU thread join called...]");
                 // Waaaaait for it
                 while (!_asyncThread.Join(10))
                 {
-                    Log.Debug(Category.Controller, "[Waiting for CPU thread to finish...]");
+                    Log.Detail(Category.Controller, "[Waiting for CPU thread to finish...]");
                     _heartbeat.Reset();
                 }
                 _asyncThread = null;
-                Log.Debug(Category.Controller, "[CPU thread exited]");
+                Log.Detail(Category.Controller, "[CPU thread exited]");
             }
         }
 

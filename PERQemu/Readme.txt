@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-10/14/2022 - skeezicsb - v0.4.6 (experimental)
+10/18/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -160,6 +160,10 @@ There are several subdirectories:
             including source, documentation, the Pascal compiler and a
             number of games, demos, and applications.  This was created
             from floppy images on Bitsavers.
+
+        f15dev.phd:
+            Updated Shugart image containing a full source installation
+            of the offshoot POS F.15 distribution.  Includes Amendment 1.
 
         g7.prqm:
             The first PERQmedia-formatted Shugart image for use with the

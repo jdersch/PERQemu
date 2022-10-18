@@ -377,19 +377,19 @@ namespace PERQemu.IO.Z80
                 return;
             }
 
-            Log.Debug(Category.Controller, "[Stop() called on Z80 thread]");
+            Log.Detail(Category.Controller, "[Stop() called on Z80 thread]");
             _stopAsyncThread = true;
             _sync.Set();
 
             if (!Thread.CurrentThread.Equals(_asyncThread))
             {
-                Log.Debug(Category.Controller, "[Z80 thread join called...]");
+                Log.Detail(Category.Controller, "[Z80 thread join called...]");
                 while (!_asyncThread.Join(10))
                 {
-                    Log.Debug(Category.Controller, "[Waiting for Z80 thread to finish...]");
+                    Log.Detail(Category.Controller, "[Waiting for Z80 thread to finish...]");
                 }
                 _asyncThread = null;
-                Log.Debug(Category.Controller, "[Z80 thread exited]");
+                Log.Detail(Category.Controller, "[Z80 thread exited]");
             }
         }
 

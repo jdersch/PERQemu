@@ -826,4 +826,39 @@ struct StateMachineStatus
 
     where's unit select?
 
+    from POS G io_unit.pas:
+    { hard status type information }
+
+      DskResult = packed record
+        case integer of
+          0  : ( Result : integer );
+          1 : ( CntlError : ( DskOK,
+                                  AddrsErr,            { address error }
+                                  PHCRC,               { Physical Header CRC }
+                                  LHSer,               { Logical Serial Wrong }
+                                  LHLB,                { Logical Block Wrong }
+                                  LHCRC,               { Logical Header CRC }
+                                  DaCRC,               { Data CRC }
+                                  Busy);
+                    Fill2     : boolean;
+                    TrackZero : boolean;
+                    WriteFault : boolean;
+                    SeekComplete : boolean;
+                    DriveReady : boolean);    
+          2 :  {for cio micropolis disks}
+               ( CioMCntlError: ( CioMDskOK,
+                                  CioMAddrsErr,            { address error }
+                                  CioMPHCRC,               { Physical Header CRC }
+                                  CioMLHSer,               { Logical Serial Wrong }
+                                  CioMLHLB,                { Logical Block Wrong }
+                                  CioMLHCRC,               { Logical Header CRC }
+                                  CioMDaCRC,               { Data CRC }
+                                  CioMBusy);
+                    CioMIndex     : boolean;
+                    CioMIllegalAddr : boolean;
+                    CioMFault : boolean;
+                    CioMSeekComplete : boolean;
+                    CioMDriveReady : boolean)    
+          end;                             
+
 */

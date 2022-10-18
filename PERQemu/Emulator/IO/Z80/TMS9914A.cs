@@ -394,7 +394,7 @@ namespace PERQemu.IO.Z80
         /// </summary>
         private void DispatchAuxiliaryCommand(AuxiliaryCommand cmd, bool cs)
         {
-            Log.Debug(Category.GPIB, "Auxiliary command is {0}, cs {1}", cmd, cs);
+            Log.Debug(Category.GPIB, "Auxiliary Command is {0}, cs {1}", cmd, cs);
 
             switch (cmd)
             {
@@ -467,7 +467,10 @@ namespace PERQemu.IO.Z80
                     _interruptsEnabled = cs;
                     break;
 
-                    // Just quietly ignore the rest for now
+                default:
+                    // Log this in case we missed something important...
+                    Log.Warn(Category.GPIB, "Unhandled Auxiliary Command is {0}, cs {1}", cmd, cs);
+                    break;
             }
 
             // Check if a change above affected our interrupt status

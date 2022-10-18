@@ -223,7 +223,7 @@ namespace PERQmedia
             }
 
             dev.Sectors[0, 0, 0].WriteByte(7, (byte)((dev.Geometry.SectorSize >> 1) | dev.Geometry.Heads));
-            dev.Sectors[0, 0, 0].WriteByte(8, (byte)dev.FileInfo.FSType);
+            dev.Sectors[0, 0, 0].WriteByte(8, FSHintToRaw(dev));
 
             // Now just copy the data all normal like
             for (ushort c = 0; c < dev.Geometry.Cylinders; c++)
@@ -239,6 +239,31 @@ namespace PERQmedia
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Oops.  The new set of codes don't match the old PFD header codes!
+        /// Map them back to the available ones so that older tools still read
+        /// the values they expect.
+        /// </summary>
+        private byte FSHintToRaw(StorageDevice dev)
+        {
+            switch (dev.FileInfo.FSType)
+            {
+                case FilesystemHint.RT11:
+                case FilesystemHint.RT11Ext:
+                    return 0x1;
+
+                case FilesystemHint.POS:
+                    return (byte)(dev.Info.IsBootable ? 0x82 : 0x02);
+
+                case FilesystemHint.PNX:
+                case FilesystemHint.PNXBoot:
+                    return (byte)(dev.Info.IsBootable ? 0x83 : 0x03);
+            }
+
+            // Unknown
+            return 0x0;
         }
 
         // The ill-conceived PFD cookie

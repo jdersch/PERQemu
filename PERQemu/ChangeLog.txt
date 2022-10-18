@@ -523,6 +523,15 @@ October, 2022:
     to the UserGuide to include a few hints about how these interesting early
     OSes work.  More to come!
 
+    6. Snapshot v0.4.6 and posted a download link on the Releases page!  After
+    a year of banging on it, it's in good enough shape to throw it out there...
+
+    7. Fixed two small bugs in POS F.15 and included a full source image in the
+    distribution.  Not sure why, but am now seeing 80+fps (portrait) and ~70fps
+    (landscape) with rate limiting turned off -- effectively overclocking the
+    PERQ up to 8Mhz!  I ain't complainin' when it makes massive compilations go
+    so much faster. :-)  Long overdue POS F.16 dev to resume?
+
 
 ---
-Last update: skeezics    Wed Oct 12 04:51:38 PDT 2022
+Last update: skeezics    Tue Oct 18 15:02:35 PDT 2022
