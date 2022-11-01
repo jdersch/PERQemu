@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-10/18/2022 - skeezicsb - v0.4.6 (experimental)
+11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
@@ -405,14 +405,14 @@ but the aim here is to document the most serious of them.  Feedback is welcome!
 
 1. Console sometimes loses track of the current input line.
 
-Symptoms:  This seems most prevalent on Windows 10, where the console output
-will wrap around to the top of the window and overwrite previous output, rather
-than scrolling, making it difficult to see the input prompt.
+Symptoms:  Sometimes the console output will wrap around to the top of the
+window and overwrite previous output, rather than scrolling, making it difficult
+to see the input prompt.  This seems most prevalent on Windows 10.
 
 Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
 seems to fix most of the glitches.  Mac and Linux terminal applications don't
-tend to misbehave as badly.  Recent changes mitigate this, a tiny bit.  Hitting
-^L now clears and resets the window in case things are messy.
+tend to misbehave as badly.  Hitting ^L now clears and resets the window in
+case things are messy.  Recent changes should fix the worst issues.
 
 
 2. Minimizing the Display window makes it disappear for good / very difficult

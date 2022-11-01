@@ -533,5 +533,10 @@ October, 2022:
     so much faster. :-)  Long overdue POS F.16 dev to resume?
 
 
+November, 2022:
+
+    1. Some fixes to the CLI editor to fix a few glitches and small bugs.
+
+
 ---
-Last update: skeezics    Tue Oct 18 15:02:35 PDT 2022
+Last update: skeezics    Tue Nov  1 16:36:35 PDT 2022
