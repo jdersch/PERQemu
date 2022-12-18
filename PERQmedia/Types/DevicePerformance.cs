@@ -74,8 +74,25 @@ namespace PERQmedia
         public static DevicePerformance SA4000 = new DevicePerformance(2964, 1100, 90000, 1, 140, 1, 888750);
 
         //
-        // Specifications for the 8", 5.25" and other drive types are
+        // Specifications for the 8", 5.25" and other hard disk types are
         // dynamically configured at runtime.
         //
+
+        //
+        // Archive 'Sidewinder' 3020I streaming tape drive
+        //
+        // For tape:
+        //      RPM => inches-per-second of tape travel at read/write speed
+        //      StartupDelay => mechanism start/stop time (in msec)
+        //      MinSeek => time to read one tape block at transfer speed (usec)
+        //      MaxSeek => time to read one entire track (linear BOT->EOT) (usec)
+        //      TransferRate => streaming data rate in bytes/sec
+        //
+        // The IndexPulse and HeadSettling times for tape are currently unused.
+        //
+        // NOTE: These numbers are completely made up, since mapping random-
+        // access disk specs to a linear tape mechanism isn't straightforward.
+        //
+        public static DevicePerformance Archive30IPS = new DevicePerformance(30, 0, 100, 17730, 181555200, 0, 28900);
     }
 }

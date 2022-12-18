@@ -537,6 +537,40 @@ November, 2022:
 
     1. Some fixes to the CLI editor to fix a few glitches and small bugs.
 
+    2. In related news, PERQdisk is now available for poking at archived media.
+    It lets you poke around inside a POS or RT-11 disk without firing up the
+    emulator, and will support ongoing efforts to curate a ton of additional
+    software for use with PERQemu!  https://github.com/skeezicsb/PERQdisk
+
+
+December, 2022:
+
+    1. A bunch of new tape images becoming available spurred development of the
+    QIC Tape driver and all of the related support - file formats, loading and
+    unloading (PERQmedia and Configurator) plus new Archive Sidewinder drive
+    emulation plus PERQ OIO board tape controller interface.  Since I'm still
+    not yet satisfied that enough of the "rough edges" have been smoothed off,
+    I'm bumping the version to v0.4.8 to differentiate this from the interim
+    release, rolling up a massive update for the new streamer functionality.
+
+    2. First snapshot with tape support, now that the first couple of commands
+    are implemented and seem to be proving out the concept.  Doesn't do any
+    tape reads or writes yet; tape motion and status reporting are working.
+    I hope to complete this and push out a v0.4.8 pre-release and possibly wrap
+    up v0.5.0 by the end of the year!
+
+    3. Tape writes are working; the ".tap" formatter now saves AND loads images
+    with custom markers to include all the same metadata as a ".prqm" archive.
+    While a .tap file only records the blocks actually written to the tape and
+    the .prqm file saves all the sectors (even the empty ones), the compression
+    feature means the PERQmedia format saves space.  In theory, though, tools
+    that can read or write .tap files to actual tape drives must exist, so it
+    would be cool to be able to produce tapes on a virtual PERQ and transport
+    them to a real one in 20MB chunks, rather than over a 9600-baud serial port!
+
+    Todo: new tape images prepared, tons of testing, Stut port/update to use
+    PERQmedia, updates to the User's Guide.
+
 
 ---
-Last update: skeezics    Tue Nov  1 16:36:35 PDT 2022
+Last update: skeezics    Sat Dec 17 23:22:34 PST 2022

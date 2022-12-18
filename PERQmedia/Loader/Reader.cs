@@ -33,7 +33,7 @@ namespace PERQmedia
 
         public static bool CanLoad(this StorageDevice dev)
         {
-        	return CanLoad(dev, dev.Filename);
+            return CanLoad(dev, dev.Filename);
         }
 
         public static bool CanLoad(this StorageDevice dev, string pathname)
@@ -51,6 +51,9 @@ namespace PERQmedia
                             // dev.Info.Type will be set
                             return true;
                         }
+
+                        // Rewind to try the next one
+                        fs.Seek(0, SeekOrigin.Begin);
                     }
                 }
             }
@@ -72,7 +75,7 @@ namespace PERQmedia
             {
                 return;
             }
-                
+
             var formatters = FileUtilities.GetFormattersForFile(pathname);
 
             using (var fs = new FileStream(pathname, FileMode.Open, FileAccess.Read))

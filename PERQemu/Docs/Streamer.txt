@@ -1,0 +1,234 @@
+﻿
+Streamer Notes
+==============
+
+These notes are an in-depth description of the QIC tape emulation added in
+PERQemu v0.4.8.  This supplements the technical documentation in the Hardware
+References folder (with more detailed documentation and specs from Archive
+Corporation available on Bitsavers).  The streamer is supported on the PERQ-1
+now, and will be available in PERQ-2 configurations when available.
+
+See the UserGuide.pdf for more information about using the PERQ's streamer
+utility to load and save tape images.
+
+
+An Emulation in Two Halves
+--------------------------
+
+Support for the Archive "Sidewinder" 3020I tape drive is broken into two parts:
+the PERQ controller is a very thin layer between the IO Option board (OIO) and
+the intelligent controller built into the external drive.  Initially it will
+support 20MB of storage per tape (equivalent to a DC-300XL 1/4" cartridge) and
+use the drive's rated 30 inches/second (IPS) speed and transfer rate.  There
+do not appear to be any limitations in the microcode or Pascal library that
+precludes emulation of the 9020I (90IPS, 20MB) or the 9045I (90IPS, 45-60MB)
+to provide more storage and higher transfer rates.  More on performance below.
+
+Two implementations of the PERQ interface are supported: the most common is the
+"wire-wrap version" which is optionally included on the OIO board.  Because the
+streamer does not use DMA it can be used in the CPU Option slot as well, so
+(like the PERQ Link) it is a "universal" option.  The second implementation is
+built into the Multibus/Laser Option (MLO) board.  No definitive schematics
+have been found for either version but there are a *lot* of drawings to search
+through...
+
+The PERQ side of the interface is Emulator/IO/TapeDevices/QICTapeController.cs.
+
+The implementation is based on TSIO.micro (OIO driver).  TMIO.micro (MLO driver)
+only differs by two addresses and the interpretation of two bits in the status
+register, which lets the microcode determine which interface board is present.
+The microcode drives all data transfer _and_ timing by directly manipulating
+the control lines, so for emulation this means the PERQ side is almost entirely
+a simple matter of translating register writes into "edges" that the emulated
+drive interprets to initiate commands; a single 8-bit bi-directional data latch
+is the "bus" between the two.
+
+The drive side of the interface is in Emulator/IO/TapeDevices/Sidewinder.cs.
+
+This contains all the code for the drive's controller AND mechanism; it handles
+the interface to PERQmedia by wrapping the StorageDevice class directly.  [This
+may be split into more than one file to make it more manageable.]  The physical
+drive is built to fit the same mechanical dimensions as the Shugart 8" floppy
+drives, and like the floppy the QIC-02 bus protocol and physical interface can
+attach from 1-4 drives in a string.  Like the floppy implementation, however,
+the PERQ only supports one drive at the default address (drive select 0).
+
+The command set is very simple, but the extremely low-level interface makes it
+cumbersome to implement.  There are seven commands issued by the controller.
+Because the PERQ only manipulates the signal lines, emulation of the hardware's
+"handshake" is in the drive, which has to provide responses that align with the
+expected time delays built into the protocol; the microcode looks for status
+lines to change state to signal acknowledgements.
+
+Three documents guide the hardware emulation strategy:
+    Archive_Sidewinder_TheoryOpn.pdf, Rev C 8/16/82 (a copy in Docs)
+    Archive_Sidewinder_ProdDescr.pdf, Rev E 10/7/82
+    Archive_Sidewinder_MaintMan.pdf, P/N 20109-001B, 1982
+
+The emulator strives to be accurate, but hews to the actual PERQ microcode's
+expectations in cases where ambiguities or discrepancies arise.  To make the
+drive more responsive to emulator users, some shortcuts are allowed where the
+timing of commands has some flexibility (i.e., the long Erase, Rewind or Re-
+tension commands); this is governed by the "TapeSpeed" rate limiting option.
+
+
+Shaky hands
+-----------
+
+The PERQ "controller" drives four output signals tied to bits in the control
+register:  RESET, REQUEST, ONLINE, and XFER.  It receives responses from the
+drive on three lines, passed to the microcode through the status register:
+READY, EXCEPTION, and ACK.  The 8-bit data bus allows one byte at a time to be
+passed back and forth; the DIRC signal is used internally to switch directions
+but it doesn't appear to be exposed to the software.
+
+Two sets of handshaking lines are used, implemented by state machines on the
+drive side.  Commands are always initiated by the host, and the REQUEST/READY
+signal pair mediates the exchange.  When a data transfer (read or write) is
+initiated, the XFER/ACK lines are used, as this distinguishes the transmission
+of data rather than command bytes.  ONLINE is used only during read or write
+commands, to signal when the host is finished with a given operation.
+
+RESET has its own protocol steps, but for simplicity the emulator "cheats" and
+makes this a direct, asynchronous event rather than follow another unique set
+of timings.  I think we can get away with this since the microcode "knows" to
+wait for the drive, and what's 13 microseconds between friends?
+
+The state machine Phase encodings capture the four "edges" of a command byte
+write from the host.  Each time the microcode toggles a control bit the drive's
+CheckSignals method advances through the state machine phases necessary to read
+the command byte and take the appropriate action.  Responses through the status
+lines are simply written to the register; the microcode handles the PERQ's half
+of the handshake so the QICTapeController doesn't have much work to do!  The
+overall state of the drive is represented by a DriveState:  Idle, Busy, etc.
+The drive accepts only one command at a time.  Unlike the floppy controller,
+the tape drive doesn't _require_ a status read after every command; the host is
+allowed to ask for status (to read error counters or flags if it wants to) but
+only a few exceptional conditions require it.
+
+The Read Status command follows most of the same handshaking steps as the other
+commands, but the EXCEPTION line is used to alert the host that it is required.
+During fault or exception conditions, no other command but Read Status is
+accepted by the controller.  To complicate things a bit, the READY signal is
+inverted for this exchange.  When selected, Read Status advances the Phase to a
+separate set of states used to regulate the transfer of a status buffer to the
+host.  Like the FDC or GPIB controllers, a tape status read returns six bytes
+with specific information:  two bytes of flags, two bytes of error count, and
+two bytes with underrun information.
+
+    Note about error handling:  Currently the VERY complex tape error/retry
+    handling is not implemented; virtual tapes are basically perfect and
+    never wear out.  We do track bad blocks read from the archive, however,
+    but it's not clear if error handling will be necessary at the emulator
+    since it operates at the block level and we could largely ignore those
+    blocks.  The "intelligent" controller in the Archive drive never exposes
+    the host to flux transitions, gaps, CRC bytes, or any of the actual low-
+    level information as it comes off the tape; a block is always 512 bytes
+    and is "good" or "bad".
+
+The XFER/ACK lines are used to pace the transfer of data bytes during the Read
+or Write commands; the RQST/RDY lines are still available to inject new commands
+during a WriteData/WriteFileMark or ReadData/ReadFileMark sequence.  These are
+complicated enough that each is explained separately, below.
+
+A single "protocol event" is used to schedule callbacks for signal changes from
+the controller.  The Streamer runs in the CPU thread so concurrency issues are
+ignored throughout, and yes my fingers are in my ears and I'm shouting "Lalala
+I can't hear you I can't hear you!"  The microcode drives transitions from the
+host (PERQ) side, calling the drive's CheckSignals() method when it writes to
+the control register.  We don't enforce timing restrictions in the Sidewinder
+implementation, assuming that if the microcode is violating protocol then it
+wouldn't work on the hardware and surely somebody would have noticed that, hmm?
+Thus, the drive catches signal changes, updates its state, then schedules the
+appropriate response to fire according to the state diagrams/documentation.
+The microcode polls the status and reacts accordingly, which is why we can't
+cheat on some signals (and can bend others to make the drive run faster when
+rate limiting is turned off).
+
+
+Mechanical emulation
+--------------------
+
+The basic 3020I drive is "baked-in" so that like the floppy drive, PERQemu has
+a baseline configuration for the empty drive when first starting up.  Like the
+floppy, it assigns DeviceGeometry.NoMedia to the empty drive when no cartridge
+is loaded.
+
+The OnLoad() hook sets up new media and resets the Geometry and performance
+Specs from the loaded file.  "Archive20" media is the default 20MB tape for the
+3020I (30IPS) drive.  Since the software doesn't seem to have any difficulty
+with the faster 9020I (90IPS) rate, turning off the TapeSpeed rate limit with
+the "settings rate limit" command uses the 90IPS specs.  Note that by definition
+the 30IPS uses 90IPS for positioning operations.
+
+The Archive45 and Archive60 formats are included in the device configuration
+database to simulate the 9045I drive.  This is a 90IPS Sidewinder model that
+uses 9 tracks instead of 4, yielding capacitiese of 45MB on a 450' DC-300XL or 
+60MB on a 600' DC-600A.  Preliminary testing shows that these work fine, but
+the 24MB limit of the Shugart hard drive / PERQ-1 configuration doesn't allow
+for testing the full capacities.
+
+Specs (the DevicePerformance record) are interpreted a little differently than
+for disk drives; these are documented in the source code, and the "storage show"
+command has been updated to display the tape drive info accurately. :-)
+
+A separate "motion event" in Sidewinder.cs is used to schedule tape start and
+stop operations (100-300ms, an eternity) as well as sector timing for streaming
+during transfers.  The built-in controller on the drive provides three fixed
+512-byte data buffers: for writes, this lets the host fill a buffer while the
+drive is writing the previous one to tape, and the read head is then verifying
+the data immediately after it is written.  For reads this allows the drive to
+read ahead while the host transfers data (polled on the PERQ, but designed to
+operate at DMA speeds).  At 90IPS, the complete sector timing is 5.91ms (which
+accounts for physical tape headers, which aren't exposed to the host in the
+hardware or in the emulator).  The 30IPS drive runs at a sedate 17.73ms/sector.
+
+
+Errors, Underruns and Faults
+----------------------------
+
+Exceptional conditions aren't really dealt with, yet.  Underruns are counted on
+writes and the tape stopped; when the next full buffer is available, Flush() is
+called to start up the capstan motor again and start the "write behind" action.
+It seems that Stut (in POS or Accent) doesn't really attempt to interleave the
+hard disk and tape accesses, even though the disk uses DMA and should be able
+to run concurrently with the polled I/O bus-connected streamer.  Stut will read
+a bunch of disk blocks into a memory pool, then tell the microcode to blast 'em
+all to the streamer.  Then the streamer pauses/spins down waiting for the next
+Write command while the PERQ refills the disk buffers.  The "washboard effect"
+in real life usage is annoying; at least under emulation (without any audio
+effects :-) you don't get the whirrrrrr-pause-whirrrrrr cycle and the virtual
+drive never suffers from mechanical wear, although I _have_ considered sneakily
+having the PRQM media format store a "power on hours" counter and start tossing
+out correctable errors occasionally to make the emulation more authentic... :-]
+
+So for now, the emulated streamer uses defect-free tapes that never wear out or
+produce data errors from head drift or oxide buildup on the heads, and the very
+complex read-after-write-to-verify-CRCs is unimplemented so blocks are never
+rewritten after write errors.  If the data written into the .tap file from a
+real tape contains error information I do attempt to preserve it, but that has
+not been an issue yet.  Obviously attention will be paid as the need arises.
+
+
+Performance
+-----------
+
+On paper, the Sidewinder 3020I streams data at an average speed of 28.9KB/sec.
+Yes, that's half the speed of the SA851 floppy drive's rated 62.5KB/sec.  The
+9020I and 9045I drives haul the mail at 86.7KB/sec which won't exactly break
+any Guinness Book records but it's at least tolerable.  While the initial goal
+of the emulation is 100% accuracy (to verify that all the PERQ software can use
+the drive as designed), already there are some benefits built-in to disabling
+the TapeSpeed rate limit option.  In addition, the tape controller's buffer
+count is a simple compile-time constant that I may turn into a tunable runtime
+parameter (or, after a bunch more testing, may tune according to the rate limit
+setting).  Tested with the "stock" 3 buffers, or increased to as many as 8, no
+real performance numbers are yet available; only when all the scaffolding in
+place for debugging is removed can a Release build be speed tested and some
+data collected.  Still, loading ONE tape is way more convenient than loading 20
+floppies one after the other, or it will be once I figure out how to prepare
+some OS load images and include 'em in the distribution...
+
+
+---
+Last update: skeezics    Sat Dec 17 23:22:34 PST 2022

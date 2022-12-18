@@ -60,6 +60,7 @@ namespace PERQemu
         Z80RunState,        // Z80 turned on or off
         HardDiskActivity,   // For blinkenlights
         FloppyActivity,     // Sure, why not
+        StreamerActivity,   // Definitely this
         PowerDown,          // PERQ 1 software power off
         Other
     }

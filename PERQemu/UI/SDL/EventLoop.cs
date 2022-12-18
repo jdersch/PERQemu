@@ -427,8 +427,6 @@ namespace PERQemu.UI
             SHOWN and focus flags (+ event 15)
 
     Todo:
-        Find a way to associate a program icon so that "mono-sgen" process has
-            SOME way to visually identify the minimized application window (Unix)
         Put back mouse wheel or PGUP/DN support for scrolling the display on
             short screens (or when obscured by the dock/taskbar)
         Test on high-DPI screens, multiple monitors

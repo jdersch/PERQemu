@@ -15,8 +15,21 @@ These clients can/will use the PERQmedia library and file format:
 
     PERQemu     - the PERQ emulator
     PERQdisk    - a program to browse and retrieve data from POS filesystems
-    PERQfloppy  - a program for reading and writing RT-11 format floppies
+                  or read and write RT-11 format floppies
     Stut        - a simple file extractor for PERQ Stut tape images
+
+
+PERQemu v0.4.6 and beyond incorporate the PERQmedia library for all I/O to the
+supported floppy and hard disk formats.  PERQemu v0.4.8 adds support for the
+streamer tape and TAP format.
+
+A beta release of PERQdisk (v0.9.0) was released which combines the POS and
+RT-11 (floppy) functionality into one program!
+
+With the addition of streaming tape support to PERQemu, an updated version of
+the standalone Stut utility (named for its counterpart in POS and Accent) will
+be updated to use the PERQmedia library, giving access to tape images saved in
+both TAP and PRQM formats!  [Release date TBD]
 
 
 File Format
@@ -60,11 +73,15 @@ Loader will try each Formatter in turn to try to properly identify the media:
         client programs that use it).
 
     TAPFormatter - ".tap"
-        TBD.  Have to read up on how Stut pulls data off these images (and I
-        have no idea what program is used to create them in the first place...
-        'dd if=/dev/nrst0 of=foo.tap'?)  This formatter will be added when we
-        get around to writing the Streamer support in PERQemu!
-
+        Reads and writes magtape images used by SIMH.  The TAP format is quite
+        minimalistic, with no metadata about the contents stored in the file in
+        the "standard" format.  However, PERQmedia takes advantage of "extended"
+        (class E) markers designated for the purpose of storing metadata to save
+        all of the same details, including labels, as the native PRQM format!
+        This formatter initially supports importing images with fixed 512-byte
+        blocks, which seems to be the only size used by the Archive Sidewinder
+        and the PERQ software.
+        
 
 The precise layout of a PERQmedia file is described in PRQM_Format.txt.
 
@@ -83,16 +100,16 @@ client usage is to subclass StorageDevice to provide struture to the data:
     This provides the basis for all of the peculiar address translations
     used by POS (and Accent) to view the raw device as Volumes, Partitions,
     and Directories.
+    
+    PERQfloppy (rolled into PERQdisk) allows reading and writing of RT-11
+    format floppies.  It maps the RT-11 directory structure to floppy
+    sectors while PERQmedia handles translation from PRQM, IMD and PFD/raw
+    formats.
 
     PERQemu provides a hardware-level emulation of actual disk, floppy and
     tape drives, interacting at the register/microcode level through device
     controllers.  PERQmedia pulls all of the grungy details of loading and
     saving media images out of the emulator.
-    
-    PERQfloppy (being ported to C# from Perl) allows reading and writing of
-    RT-11 format floppies.  It maps the RT-11 directory structure to floppy
-    sectors while PERQmedia handles translation from PRQM, IMD and PFD/raw
-    formats.
 
 And if you order in the next 30 minutes we'll double your order for free!!
 
@@ -165,18 +182,20 @@ All of the formatters can read and write their own images.
 All of the formats can be translated into PERQmedia format.
 Floppy formats are generally interchangeable with each other.
 
-                   Destination Format
+                       Destination Format
 
-            |  PRQ  |  PHD  |  IMD  |  Raw |
-        -------------------------------------
-        PRQ |  r/w  |  r/w  |  r/w  |  r/w  |
-        -------------------------------------
-Source  PHD |   w   |  r/w  |   -   |   -   |
-Format  -------------------------------------
-        IMD |   w   |   -   |  r/w  |   w   |
-        -------------------------------------
-        Raw |   w   |   -   |   w   |  r/w  |
-        -------------------------------------
+            |  PRQ  |  PHD  |  IMD  |  Raw  |  TAP  |
+        ---------------------------------------------
+        PRQ |  r/w  |  r/w  |  r/w  |  r/w  |  r/w  |
+        ---------------------------------------------
+        PHD |   w   |  r/w  |   -   |   -   |   -   |
+Source  ---------------------------------------------
+Format  IMD |   w   |   -   |  r/w  |   w   |   -   |
+        ---------------------------------------------
+        Raw |   w   |   -   |   w   |  r/w  |   -   |
+        ---------------------------------------------
+        TAP |   w   |   -   |   -   |   -   |  r/w  |
+        ---------------------------------------------
 
 
 Things You'll Never Need To Care About, Probably
@@ -207,7 +226,7 @@ implementation detail about the IMDFormatter, but here it is for posterity:
     that is a little hardcore (even for me).
 
 --
-Last update: skeezics   Thu Jan 26 01:00:41 PST 2022
+Last update: skeezics   Sat Dec 17 23:22:34 PST 2022
 
 
  

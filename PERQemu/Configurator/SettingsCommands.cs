@@ -58,6 +58,7 @@ namespace PERQemu.UI
             Console.WriteLine("-----------------");
             Console.WriteLine("Autosave harddisks on shutdown: " + Settings.SaveDiskOnShutdown);
             Console.WriteLine("Autosave floppies on eject:     " + Settings.SaveFloppyOnEject);
+            Console.WriteLine("Autosave tapes on unload:       " + Settings.SaveTapeOnUnload);
             Console.WriteLine("Pause execution after reset:    " + Settings.PauseOnReset);
             Console.WriteLine("Pause when window minimized:    " + Settings.PauseWhenMinimized);
             Console.WriteLine("Cursor in PERQ display window:  " + Settings.CursorPreference);
@@ -72,7 +73,7 @@ namespace PERQemu.UI
             Console.WriteLine("Canon output file format:   " + Settings.CanonFormat);
             Console.WriteLine();
             Console.Write("Host serial port A device:  ");
-            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" : 
+            Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" :
                               Settings.RSADevice == "RSX:" ? "RSX:" :
                               $"{Settings.RSADevice} {Settings.RSASettings}");
             Console.Write("Host serial port B device:  ");
@@ -131,6 +132,18 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("settings autosave tape", "Save modified streamer tapes on unload")]
+        public void SetAutosaveTape(Ask doit)
+        {
+            if (doit != Settings.SaveTapeOnUnload)
+            {
+                Settings.SaveTapeOnUnload = doit;
+                Settings.Changed = true;
+
+                QuietWrite($"Autosave of streamer tapes is now {doit}.");
+            }
+        }
+
         [Command("settings pause on reset", "Pause the emulator after a reset")]
         public void SetPauseOnReset(bool doit)
         {
@@ -167,6 +180,14 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("settings rate limit default", "Set default rate limits")]
+        public void SetPerfDefaults()
+        {
+            Settings.Performance = RateLimit.CPUSpeed | RateLimit.DiskSpeed | RateLimit.TapeSpeed;
+
+            QuietWrite("Rate limit options set to defaults.");
+        }
+
         [Command("settings rate limit", "Set rate limit option flags")]
         public void SetPerformance(RateLimit opt)
         {
@@ -189,7 +210,7 @@ namespace PERQemu.UI
                 Settings.Changed = true;
             }
 
-            QuietWrite($"Rate limit options set to {Settings.Performance}");
+            QuietWrite($"Rate limit options set to {Settings.Performance}.");
         }
 
         [Command("settings output directory", "Set directory for saving printer output and screenshots")]
@@ -357,37 +378,37 @@ namespace PERQemu.UI
         {
             if (PERQemu.Initialized) Console.WriteLine(s);
         }
-
-        /*
-            TODO:
-            settings::screenshot format [jpg, png, tiff, ?]
-            settings::screenshot template [str] -- really?  cmon...
-            settings::canon format [jpg, png, tiff, bmp, PDF!?]
-            settings::canon template [str]      -- same 
-            settings::logging directory         -- default: Output/
-            settings::logging template [str]    -- hmm.
-            settings::logging keep [n]          -- how many files
-            settings::logging filesize [n]      -- in mb?  kb?
-            -- oh hey, i know, let's use log4j instead of rolling our own... :-P
-
-            Host interface to the network, serial and audio output devices
-            is globally set for all virtual machines:
-            
-            settings::ethernet device [dev]         -- host interface to use
-            settings::ethernet encapsulation [raw, udp, 3to10bridge]
-            settings::ethernet use3rccPrefix        -- :-)
-            settings::audio device [dev]            -- audio output device?
-
-            When the PERQ Ethernet device is configured, we configure the
-            emulator-specific stuff with the particular Configuration:
-            
-            configure::ethernet device [eio, oio]   -- only one or the other (automatic?)
-            configure::ethernet address [n] [m]     -- last two octets only
-                                                    -- or just one for 3mbit!?
-
-            Can we use SDL2 for network access without requiring additional
-            libraries like Pcap?  Can we use the SDL2 audio without worrying
-            about extra configuration options?
-        */
     }
 }
+
+/*
+	TODO:
+	settings::screenshot format [jpg, png, tiff, ?]
+	settings::screenshot template [str] -- really?  cmon...
+	settings::canon format [jpg, png, tiff, bmp, PDF!?]
+	settings::canon template [str]      -- same 
+	settings::logging directory         -- default: Output/
+	settings::logging template [str]    -- hmm.
+	settings::logging keep [n]          -- how many files
+	settings::logging filesize [n]      -- in mb?  kb?
+	-- oh hey, i know, let's use log4j instead of rolling our own... :-P
+
+	Host interface to the network, serial and audio output devices
+	is globally set for all virtual machines:
+
+	settings::ethernet device [dev]         -- host interface to use
+	settings::ethernet encapsulation [raw, udp, 3to10bridge]
+	settings::ethernet use3rccPrefix        -- :-)
+	settings::audio device [dev]            -- audio output device?
+
+	When the PERQ Ethernet device is configured, we configure the
+	emulator-specific stuff with the particular Configuration:
+
+	configure::ethernet device [eio, oio]   -- only one or the other (automatic?)
+	configure::ethernet address [n] [m]     -- last two octets only
+											-- or just one for 3mbit!?
+
+	Can we use SDL2 for network access without requiring additional
+	libraries like Pcap?  Can we use the SDL2 audio without worrying
+	about extra configuration options?
+*/

@@ -1,5 +1,6 @@
 ﻿PERQemu Readme
 
+12/18/2022 - skeezicsb - v0.4.8 (experimental)
 11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
@@ -23,8 +24,12 @@
 
     The pre-release v0.4.6 is still a work in progress but is stable enough
     to finally drive a stake in the ground and put it out there for use and
-    testing.  Bug fixing and updates will continue on this branch, so please
-    check back often for updates.
+    testing.  The first of these updates incorporates emulation of the QIC
+    tape option; it's rough, but should be code complete very shortly and
+    will roll up the last features and bug fixes before the v0.5.0 release!
+
+    Bug fixing and updates will continue on this branch, so please check back
+    often for updates.
 
 
 Updated Readme.txt follows.
@@ -60,7 +65,7 @@ PDP-11 for some of its performance tricks, it was designed and demonstrated
 in 1979 but not released in production quantities until late 1980.  It is
 estimated that fewer than 5,000 PERQs were built, mostly sold to universities.
 
-The PERQ-1 hardware consisted of the following:
+The PERQ-1 hardware consists of the following:
 
     - A custom bit-slice, microcoded CPU with 48-bit microinstruction words
     - 4K (PERQ-1) or 16K (PERQ-1A) of writable control store
@@ -68,7 +73,7 @@ The PERQ-1 hardware consisted of the following:
     - A high resolution bitmapped display at 768x1024 pixels (1bpp)
     - Custom RasterOp hardware to accelerate bitmap operations
 
-The original PERQs featured a standard set of peripherals:
+The original PERQs feature a standard set of peripherals:
 
     - A 12 or 24mb Shugart 4000-series hard disk (14" platters)
     - A single 8" Shugart floppy drive
@@ -77,14 +82,14 @@ The original PERQs featured a standard set of peripherals:
     - One programmable RS232 port, up to 9600 baud
     - A CVSD chip for audio output
 
-Optional IO boards could be fitted, which provided:
+Optional IO boards can be fitted, which provide:
 
     - 3Mbit or 10Mbit Ethernet interfaces
     - Canon LBP-10 (and later Canon CX) laser printer interface
     - QIC streamer tape connection
 
-A later PERQ-2 series extended the original design in some significant ways
-and added a number of additional IO options.
+A later PERQ-2 series extends the original design in some significant ways
+and adds a number of additional IO options.
 
 
 1.2 Current Status
@@ -182,7 +187,7 @@ There are several subdirectories:
        UserGuide for information about working with PERQemu media files.
 
     Output/
-        When logging debug output to disk is enabled, those files go here by
+        When logging debug output to disk is enabled, log files go here by
         default.  When screenshots and printing are implemented, that output
         will land here too.  (Output directory is a settable preference.)
 
@@ -319,6 +324,11 @@ The following hardware has been implemented in the emulator:
     - Operation is reliable for booting and data transfer, though testing and
       debugging is ongoing.
 
+  Tape drive:
+    - The streaming tape drive is now available as the Tape option when the
+      OIO board is selected.  It emulates the Archive Sidewinder QIC tape
+      drive, providing 20MB of storage.  The UserGuide has more details!
+
   Displays:
     - The standard 768 x 1024 portrait display is available for all models;
     - The 1280 x 1024 landscape display is supported and tested with POS G.7
@@ -379,7 +389,7 @@ Docs/ directory for way, way more information than you need.  Way more.
  
 - Ethernet.  Unimplemented, but on the list!
 
-- Option boards:  Canon laser, streamer tape.  On the list.
+- Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
  
 - PERQLink.  Unimplemented other than a stub that tells the microcode that
   there's nothing connected to it.
@@ -450,7 +460,6 @@ v0.9 - TBD
   Additional I/O Options once the baseline devices are complete:
   - Ethernet!
   - Canon laser printer
-  - QIC streamer tape
   - Working audio output :-)
 
 v0.7 - TBD
@@ -475,8 +484,13 @@ v0.5 - TBD
   - Expanded logging and enhanced debugging support
   - Persistent user preference settings
 
-v0.4.6 - Current "experimental" branch
-  - This version, in progress
+v0.4.8 - Current "experimental" branch
+  - This version, in progress.
+  - Added streamer tape support!
+
+v0.4.6 - Experimental branch (v0.5.0 pre-release)
+  - All v0.5.0 features above, in a snapshot release prior to merge back into
+    master.
 
 v0.4.5beta - Unreleased
   - A one-off build for VCF PNW with some experimental video hacks to improve

@@ -969,8 +969,23 @@ namespace PERQemu
             PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
         }
 
+        [Command("debug dump streamer")]
+        private void ShowStreamerStatus()
+        {
+            if (PERQemu.Sys.OIO != null)
+            {
+                var hack = PERQemu.Sys.OIO as IO.OIO;
+                hack.DumpTapeStatus();
+                return;
+            }
+
+            Console.WriteLine("No streamer drive.");
+        }
+
+#if DEBUG
         // A temporary working copy for editing breakpoints
         private BreakpointEventArgs _bp;
         private BreakpointAction _bpAction;
+#endif
     }
 }

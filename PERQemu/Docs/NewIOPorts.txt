@@ -115,7 +115,7 @@ others seem to allow poking directly at the Ethernet state machine and/or scratc
 
 ------
 
-Option IO board (Canon, Ethernet, EthCan, or EthCanTape)
+Option IO board (Canon, Ethernet, Tape, EthCan, or EthCanTape)
 
   Address
 oct     hex     Name            Function                            Source
@@ -160,11 +160,11 @@ oct     hex     Name            Function                            Source
 Canon microcode supports every flavor of IOB/CIO/EIO/NIO, built (using PasMac) for each CPU type
 and IO board combination.  Uses DMA setup regs 300,324:327 (new) or 324:325,334:335 (old).
 
-Accent doesn't support the streaming QIC tape at all?  No mention of it anywhere!?  Only MLO tape?
-But POS G sources Josh included make no mention either.  Hmm.  Found 'em in the F.0 STUT sources.
+Accent S7 seems to support both TMIO (Multibus) and TSIO (Streamer) tape microcode, loading
+the appropriate "flavor" at runtime.  Initial streamer support seems to start around POS F.0.
 
 * Note overlap with the Canon LineCount register -- can't print while the tape is streaming?
-Microcode would need some kind of interlock, like the E3/disk thing.  Sigh.
+Microcode would need some kind of interlock, like the E3/disk thing?  Sigh.
 
 ------
 
@@ -195,12 +195,16 @@ oct     hex     Name            Function                            Source
 012     0A      Stat            Read status register                mbus
 013     0B      Rdata           Read data                           mbus
 014     0C      DskStat*        Read SMD disk status??              ndt (diagnostic)
+015     0D      StrStat         Read streamer state                 tsio
+016     0E      StrDataRcv      Read streamer data                  tsio
 200     80/00   Cntl            Multibus control register           mbus
 201     81/01   Wdata           Load data                           mbus
 202     82/02   Haddr           High 8-bit address register         mbus
 203     83/03   Laddr           Low 16-bit address register         mbus
 206     86/06   MbIntMask       Interrupt mask register             mbus
 207     87/07   DMABase         Load dma address register           mbus
+222     92/12   StrControl      Load streamer control               tsio
+223     93/13   StrDataSnd      Load streamer data                  tsio
 230     98/18   SmCtl*          Load SMD state control?             ndt (diagnostic)
 233     9B/1B   DskCtl*         Load SMD disk control?              ndt (diagnostic)
 
@@ -208,6 +212,11 @@ Multibus development appears to have begun much earlier than previously known, w
 the test code running on a PERQ-1 under POS F.2 (later released as the first POS G).  When the MLO was
 finally released it appears that the microcode only supported the EIO (and thus PERQ-2); it uses the
 EIO's DMA setup registers 300, 324:327.
+
+New information and source shows that the "production" version of the MLO could (or did?) contain a
+streamer interface!  This version relocates the transmit port to avoid the conflict with the Canon line
+count register, but re-uses OIO Ethernet ports.  This is fine, though, since there's only one IO Option
+slot and the PERQ-2 with MLO would use its EIO Ethernet anyway.
 
 * These three registers seem to imply that the MLO contained an SMD hard disk controller similar to the
 EIO's 8"/5.25" implementation.  Since no schematics of the MLO seem to have survived, and the few boards

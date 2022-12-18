@@ -19,6 +19,9 @@
 
 using System;
 
+using PERQmedia;
+using PERQemu.Config;
+
 namespace PERQemu.IO
 {
     /// <summary>
@@ -68,8 +71,9 @@ namespace PERQemu.IO
         {
         }
 
-        public virtual void LoadTape()
+        public virtual StorageDevice LoadTape(Drive drive)
         {
+            return null;
         }
 
         public virtual void SaveDisk()
@@ -97,7 +101,7 @@ namespace PERQemu.IO
             {
                 if (_portsHandled[p])
                 {
-                    Log.Warn(Category.IO, "Port {0:x} already registered!", p);
+                    Log.Warn(Category.IO, "Port {0:x2} already registered!", p);
                 }
 
                 _portsHandled[p] = true;

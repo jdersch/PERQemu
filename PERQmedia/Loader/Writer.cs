@@ -47,6 +47,9 @@ namespace PERQmedia
                 case DeviceType.Floppy:
                     return (fmt == Formatters.IMDFormat || fmt == Formatters.RawFormat);
 
+                case DeviceType.TapeQIC:
+                    return (fmt == Formatters.TAPFormat);
+
                 /*
                     Handled above:
                     case DeviceType.DCIOMicrop:
@@ -55,9 +58,6 @@ namespace PERQmedia
                     case DeviceType.DiskSMD:
                     return (fmt == Formatters.PRQFormat);
                 */
-
-                case DeviceType.TapeQIC:
-                    return (fmt == Formatters.TAPFormat);
             }
 
             return false;
@@ -110,6 +110,10 @@ namespace PERQmedia
 
                     case Formatters.IMDFormat:
                         formatter = new IMDFormatter();
+                        break;
+
+                    case Formatters.TAPFormat:
+                        formatter = new TAPFormatter();
                         break;
 
                     default:

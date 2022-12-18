@@ -59,11 +59,13 @@ namespace PERQemu.Config
             AddGeometry("DSSD", DeviceGeometry.DSSD);
             AddGeometry("SSDD", DeviceGeometry.SSDD);
             AddGeometry("DSDD", DeviceGeometry.DSDD);
+            AddGeometry("QIC20", DeviceGeometry.QIC20);
             AddGeometry("Shugart12", DeviceGeometry.Shugart12);
             AddGeometry("Shugart24", DeviceGeometry.Shugart24);
 
             AddDriveSpecs("SA851", DevicePerformance.SA851);
             AddDriveSpecs("SA4000", DevicePerformance.SA4000);
+            AddDriveSpecs("Archive30IPS", DevicePerformance.Archive30IPS);
 
             try
             {
@@ -549,7 +551,7 @@ namespace PERQemu.Config
         ///       combinations are valid.
         ///     - MLO (when implemented) will be a PERQ-2 option only.
         ///     - Both Link and Streamer options are "universal" (but aren't
-        ///       implemented yet).
+        ///       fully implemented yet).
         /// </remarks>
         public bool CheckOptions()
         {
@@ -619,6 +621,13 @@ namespace PERQemu.Config
         ///     PERQ-1 only has 1 floppy, 1 Shugart 14" disk.
         ///     PERQ-2 only has 1 floppy, 1 Micropolis 8" disks.
         ///     PERQTx only has 1 floppy, 1 or 2 Micropolis 8" or 5.25" disks.
+        /// With the addition of the QIC Tape streamer (OIO only, currently) any
+        /// configuration may attach a single drive as unit 3 iff the controller
+        /// is available.  (Rather than throw an error, if OIO or MLO is selected
+        /// and the Tape option is missing, we just add it.  If a different type
+        /// of Option board is present, that is an error; the user should choose
+        /// to remove the drive or fix the option board selection.)
+        /// 
         /// At the moment, SMD Disks are not supported (requires the as-yet-
         /// unimplemented MLO option board).  We now have photographic proof of
         /// an ICL-labeled "CIO" that in theory supports a Micropolis 8" drive
@@ -709,12 +718,29 @@ namespace PERQemu.Config
                         gotHard |= (drive.MediaPath != string.Empty);
                         break;
 
+                    case DeviceType.TapeQIC:
+                        if (conf.IOOptionBoard != OptionBoardType.OIO &&
+                            conf.IOOptionBoard != OptionBoardType.MLO)
+                        {
+                            conf.Reason = $"IO Option board type '{conf.IOOptionBoard} doesn't support QIC Tape.";
+                            return false;
+                        }
+
+                        // Have a drive slot defined but no controller?  Add it...
+                        // This probably shouldn't come up, but this whole thing
+                        // is a little bit janky.  Hmm.
+                        if (!conf.IOOptions.HasFlag(IOOptionType.Tape))
+                        {
+                            conf.Reason = "QIC Tape unit defined but controller not configured (adding it).";
+                            conf.IOOptions |= IOOptionType.Tape;
+                        }
+                        break;
+
                     //
                     // Not yet implemented
                     //
                     case DeviceType.DiskSMD:
                     case DeviceType.Tape9Track:
-                    case DeviceType.TapeQIC:
                         conf.Reason = $"Sorry, {drive.Type} devices are not yet supported.";
                         return false;
                 }
@@ -765,9 +791,10 @@ namespace PERQemu.Config
                         break;
 
                     case DeviceType.DiskSMD:
-                    case DeviceType.TapeQIC:
                     case DeviceType.Tape9Track:
-                        // Not implemented - ignore?  throw?
+                    case DeviceType.TapeQIC:
+                        // Not relevant, since these are attached to option boards!
+                        keepMedia = true;
                         break;
 
                     case DeviceType.Disk14Inch:

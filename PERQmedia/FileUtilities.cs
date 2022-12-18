@@ -81,7 +81,9 @@ namespace PERQmedia
                         formatters.Add(new RawFormatter());
                         break;
 
-                    //  tape - prqm, tap - none yet implemented
+                    case ".tap":
+                        formatters.Add(new TAPFormatter());
+                        break;
 
                     default:
                         // Hell, try 'em all?
@@ -89,6 +91,7 @@ namespace PERQmedia
                         formatters.Add(new PHDFormatter());
                         formatters.Add(new IMDFormatter());
                         formatters.Add(new RawFormatter());
+                        formatters.Add(new TAPFormatter());
                         break;
                 }
             }
@@ -123,6 +126,6 @@ namespace PERQmedia
             }
         }
 
-        public static readonly string[] KnownExtensions = { ".prqm", ".phd", ".imd", ".IMD", ".pfd", ".raw" };
+        public static readonly string[] KnownExtensions = { ".prqm", ".phd", ".imd", ".IMD", ".pfd", ".raw", ".tap" };
     }
 }

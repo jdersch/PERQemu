@@ -190,13 +190,43 @@ geometry Eagle689 842 20 69 512 16
 performance M2361A 3600 1627 40000 5 35 1 2458000
 done
             
-# Standard streamer tape (not yet supported)
- 
-define TapeQIC Archive20
-description "Archive Sidewinder 3020I (20MB) QIC tape"
-geometry QIC20 1 4 10207 512 17
-performance Arch30IPS 30 0 10000 0 0 0 200000
+# Standard streamer tape
+
+# The default geometry for the Archive 3020I is built-in
+# The default drive performance specs are built-in
+
+# This tiny test tape is for dev/debug only
+define TapeQIC TestTape
+description "Archive 3020I Test cartridge (2MB)"
+geometry QICtest 1 4 1024 512 4
+performance Archive30IPS
 removable true
 done
 
-# End of PERQemu 0.4.6 standard definitions
+# Standard drive: 4 tracks, 450' cartridge
+# Turn off rate limiting for 90IPS operation :-)
+
+define TapeQIC Archive20
+description "Archive 3020I DC-300XL (20MB) QIC tape"
+geometry QIC20
+performance Archive30IPS
+removable true
+done
+
+# Enhanced drive: 9 tracks, 450' cartridge
+define TapeQIC Archive45
+description "Archive 9045I DC-300XL (45MB) QIC tape"
+geometry QIC45 1 9 10240 512 4
+performance Archive90IPS 90 0 300 5910 60518400 0 86700
+removable true
+done
+
+# 9045I with a 600' cartridge
+define TapeQIC Archive60
+description "Archive 9045I DC-600A (60MB) QIC tape"
+geometry QIC60 1 9 13650 512 4
+performance Archive90Ext 90 0 300 5910 80671500 0 86700
+removable true
+done
+
+# End of PERQemu 0.4.8 standard definitions

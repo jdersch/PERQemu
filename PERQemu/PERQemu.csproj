@@ -231,6 +231,8 @@
     <Compile Include="Emulator\IO\SerialDevices\SerialDevice.cs" />
     <Compile Include="Emulator\IO\Z80\ICTCDevice.cs" />
     <Compile Include="Emulator\IO\SerialDevices\NullPort.cs" />
+    <Compile Include="Emulator\IO\TapeDevices\QICTapeController.cs" />
+    <Compile Include="Emulator\IO\TapeDevices\Sidewinder.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -698,6 +700,10 @@
     <None Include="Disks\f15dev.prqm">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Resources\qictape.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Docs\Streamer.txt" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
@@ -731,6 +737,7 @@
     <Folder Include="Emulator\IO\DiskDevices\" />
     <Folder Include="Docs\Hardware References\" />
     <Folder Include="Resources\" />
+    <Folder Include="Emulator\IO\TapeDevices\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

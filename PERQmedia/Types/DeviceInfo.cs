@@ -33,6 +33,7 @@ namespace PERQmedia
     /// module, though 8..15 are left as "reserved."  I've added the Streamer
     /// and MLO 9-track tape for PERQemu use, while leaving open more fanciful
     /// options such as GPIB or SCSI disk/tape and other blue-sky possibilities.
+    /// [Note: GPIB tape code has been found, so not so blue sky after all?]
     /// </remarks>
     public enum DeviceType
     {
@@ -42,13 +43,13 @@ namespace PERQmedia
         Disk8Inch = 3,          // Micropolis 8" -- CIO or EIO
         DiskSMD = 4,            // SMD -- MLO board
         Floppy = 5,             // Shugart floppy drive -- All IO boards
-        DCIOShugart = 6,        // The CIO board was an IOB with updated
-        DCIOMicrop = 7,         // Z80 ROMs; also required a hardware mod?
+        DCIOShugart = 6,        // For the ICL CIO board
+        DCIOMicrop = 7,         // For PERQemu, equivalent to Disk8Inch
         Reserved7 = 8,
         Reserved6 = 9,
         Reserved5 = 10,
-        TapeQIC = 11,           // QIC Streamer - OIO board
-        Tape9Track = 12,        // 9-Track - MLO board (someday!?)
+        TapeQIC = 11,           // QIC Streamer - OIO or MLO board
+        Tape9Track = 12,        // 9-Track - MLO board (or GPIB!?)
         Reserved2 = 13,
         Reserved1 = 14,
         Reserved0 = 15
@@ -80,6 +81,13 @@ namespace PERQmedia
         public bool IsRemovable;
 
         // Define a basic (empty) floppy drive
-        public static DeviceInfo SA851 = new DeviceInfo(DeviceType.Floppy, "SA851", "Shugart SA851 8\" Floppy drive", canRemove: true);
+        public static DeviceInfo SA851 = new DeviceInfo(DeviceType.Floppy, "SA851",
+                                                        "Shugart SA851 8\" Floppy drive",
+                                                        canRemove: true);
+
+        // Define the bare (empty) streaming tape drive
+        public static DeviceInfo A3020 = new DeviceInfo(DeviceType.TapeQIC, "A3020",
+                                                        "Archive 'Sidewinder' 3020I QIC tape drive",
+                                                        canRemove: true);
     }
 }

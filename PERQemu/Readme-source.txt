@@ -1,5 +1,6 @@
 PERQemu Source - Readme
 
+v1.8 - 12/18/2022 - skeezics
 v1.7 - 9/19/2022 - skeezics
 v1.6 - 11/29/2021 - skeezics
 V1.5 - 6/20/2018 - skeezics
@@ -59,6 +60,8 @@ The next release will incorporate major changes and expanded functionality.
 It is currently in development on the "experiments" branch as PERQemu 0.4.6
 but should warrant a bump to 0.5 given the scope of the changes.
 
+The experimental branch is being bumped to v0.4.8 (streamer added).
+PERQemu 0.4.6 was a pre-release snapshot to preview v0.5.0 changes.
 PERQemu 0.4.5beta was an experimental/interim release for VCF PNW.
 The sixth snapshot was the first Github-tagged release, PERQemu 0.4.4.
 The fifth update fixed a single comma, corresponding to PERQemu 0.4.3.
@@ -410,7 +413,15 @@ Emulator/IO/DiskDevices:
 
 Several tape drives will also be supported, but PERQemu does not yet emulate
 the controllers for these.  Tape media will be accessed through the PERQmedia
-library just like disk devices.
+library just like disk devices.  The first of these is now in development, with
+the code in Emulator/IO/TapeDevices:
+
+    - QICTapeController is the thin PERQ interface to the QIC-02 "bus" that
+      attaches one streaming tape drive.  It can be configured as the Tape
+      option when the OIO board is selected.
+    - Sidewinder.cs contains all of the drive's mechanical and controller
+      logic, emulating the Archive Sidewinder 3020I drive.  A ton of extra
+      information is included in Docs/Streamer.txt.
 
 All disk (and tape) controllers implement the IStorageController interface as
 defined in Emulator/IO/IStorageController.cs.  This provides a common point of
@@ -527,15 +538,15 @@ fairly easy to extend at this point, but there are some rough edges.
 2.5  The Configurator
 ---------------------
 
-A great (as in "large," not necessarily a reflection of _quality_...) wad of
-code in the Configurator directory provides the interface to a Configuration
-object, which now stores all of the metadata required to build a virtual PERQ.
-Configuration.cs contains the class which holds all of the data, with support
-from ConfigTypes.cs for enumerating various options.  Configurator.cs contains
-the rules for modifying and checking that a Configuration is valid; it has no
-direct UI and instead hooks to the GUI (removed) and CLI (ConfigCommands.cs).
-Future work to replace WinForms with a cross-platform SDL2- or MAUI-based GUI
-will allow more natural, direct graphical manipulation of Configurations.
+A great (as in "large," not as a reflection of _quality_) wad of code in the
+Configurator directory provides the interface to a Configuration object, which
+stores all of the metadata required to build a virtual PERQ.  Configuration.cs
+contains the class which holds all of the data, with support from ConfigTypes.cs
+for enumerating various options.  Configurator contains the rules for modifying
+and checking that a Configuration is valid; it has no direct UI and instead
+hooks to the GUI (removed) and CLI (ConfigCommands.cs).  Future work to replace
+WinForms with a cross-platform SDL2- or MAUI-based GUI will allow more natural,
+direct graphical manipulation of Configurations.
 
 StorageCommands.cs provides supplemental CLI commands for managing the creation
 and assignment of hard disk and floppy media.
@@ -589,13 +600,12 @@ and ready to use with PERQemu.  Currently this includes PNX 1.3 and POS F.15.
 
 The repository may be renamed to make it less confusing... or the "PERQmedia"
 subproject will be somehow made more standalone (Nuget package?) and moved out
-of the PERQemu project so that it can be used with the other planned projects
-(standalone disk and floppy tools, including a format conversion utility).  For
-now, the hope is to expand the archive with more of the _hundreds_ of floppy,
-disk and tape images that have been recovered and archived so far.  In addition,
-permanent links to copies of documentation culled from Bitsavers and other local
-sources may be added here, as Bitsavers doesn't provide permalinks and may be
-reorganized from time to time.
+of the PERQemu project so that it can be better integrated with the other tools
+(like PERQdisk, and soon Stut).  The goal is to expand the archive with more of
+the _hundreds_ of floppy, disk and tape images that have been recovered and
+archived so far.  In addition, permanent links to copies of documentation culled
+from Bitsavers and other local sources may be added here, as Bitsavers doesn't
+provide permalinks and may be reorganized from time to time.
 
 
 4.  Miscellany

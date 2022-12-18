@@ -185,6 +185,7 @@ namespace PERQemu
 
         public event MachineStateChangeEventHandler DDSChanged;
         public event MachineStateChangeEventHandler FloppyActivity;
+        public event MachineStateChangeEventHandler StreamerActivity;
         public event MachineStateChangeEventHandler PowerDownRequested;
 
 
@@ -422,7 +423,10 @@ namespace PERQemu
             {
                 var drive = _conf.Drives[unit];
 
-                if (!string.IsNullOrEmpty(drive.MediaPath) || drive.Type == DeviceType.Floppy)
+                // If we have a path OR the drive is a removable type, load it
+                if (!string.IsNullOrEmpty(drive.MediaPath) ||
+                    drive.Type == DeviceType.Floppy ||
+                    drive.Type == DeviceType.TapeQIC)
                 {
                     if (!LoadMedia(drive))
                     {
@@ -483,11 +487,20 @@ namespace PERQemu
                     // Fail if the file given couldn't be loaded
                     return (!string.IsNullOrEmpty(drive.MediaPath) && _volumes[drive.Unit].IsLoaded);
 
-                // case DriveType.DiskSMD:
-                //  _oio.LoadDisk();
+                case DeviceType.TapeQIC:
+                    // Add the drive?
+                    if (_volumes[drive.Unit] == null)
+                    {
+                        _volumes[drive.Unit] = _oio.LoadTape(drive);
 
-                // case DriveType.Tape*:
-                //  _oio.LoadTape();
+                        return _volumes[drive.Unit] != null;
+                    }
+
+                    // Mount a cartridge in the drive
+                    _volumes[drive.Unit].LoadFrom(drive.MediaPath);
+
+                    // Return true only if the volume successfully loaded
+                    return (!string.IsNullOrEmpty(drive.MediaPath) && _volumes[drive.Unit].IsLoaded);
 
                 default:
                     throw new UnimplementedHardwareException($"Drive type {drive.Type}");
@@ -505,7 +518,7 @@ namespace PERQemu
                 throw new InvalidOperationException($"Drive {unit} is not loaded");
 
             if (!_volumes[unit].IsLoaded) return;
-            
+
             // We get ONE shot at this...
             if (_volumes[unit].IsModified && SaveRequested(unit))
             {
@@ -527,7 +540,7 @@ namespace PERQemu
 
         /// <summary>
         /// Called at shutdown, tells all the loaded storage devices to unload
-        /// themselves.
+        /// and (optionally) save themselves.
         /// </summary>
         public void SaveAllMedia()
         {
@@ -629,7 +642,12 @@ namespace PERQemu
             switch (dev.Info.Type)
             {
                 case DeviceType.Floppy:
-                    if (Settings.SaveFloppyOnEject == Ask.Maybe)
+                case DeviceType.TapeQIC:
+                    //
+                    // The code is basically the same for ejectable media:
+                    //
+                    if ((dev.Info.Type == DeviceType.Floppy && Settings.SaveFloppyOnEject == Ask.Maybe) ||
+                        (dev.Info.Type == DeviceType.TapeQIC && Settings.SaveTapeOnUnload == Ask.Maybe))
                     {
                         if (running)
                         {
@@ -657,14 +675,16 @@ namespace PERQemu
                     }
                     else
                     {
-                        doit = (Settings.SaveFloppyOnEject == Ask.Yes);
+                        if (dev.Info.Type == DeviceType.Floppy)
+                            doit = (Settings.SaveFloppyOnEject == Ask.Yes);
+                        else
+                            doit = (Settings.SaveTapeOnUnload == Ask.Yes);
                     }
                     return doit;
 
                 case DeviceType.Disk14Inch:
                 case DeviceType.Disk8Inch:
                 case DeviceType.Disk5Inch:
-                case DeviceType.DiskSMD:
                     if (Settings.SaveDiskOnShutdown == Ask.Maybe)
                     {
                         if (running)
@@ -691,7 +711,7 @@ namespace PERQemu
                     }
                     return doit;
 
-                case DeviceType.TapeQIC:
+                case DeviceType.DiskSMD:
                 case DeviceType.Tape9Track:
                     // Not supported yet
                     return false;
@@ -720,6 +740,10 @@ namespace PERQemu
 
                 case WhatChanged.FloppyActivity:
                     handler = FloppyActivity;
+                    break;
+
+                case WhatChanged.StreamerActivity:
+                    handler = StreamerActivity;
                     break;
 
                 case WhatChanged.Z80RunState:

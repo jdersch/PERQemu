@@ -533,6 +533,39 @@ namespace PERQemu.UI
                         break;
                 }
 
+                //
+                // Streamer support: if we've added the board/option combo that
+                // provides a QIC controller, make sure unit 3 (fixed, currently)
+                // is configured to accept QIC tapes.  Otherwise, revert it to
+                // "unused" so we don't bomb trying to load a non-existent drive
+                //
+                if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
+                    PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
+                {
+                    if (PERQemu.Config.Current.IOOptions.HasFlag(IOOptionType.Tape))
+                    {
+                        // WITH tape option, make sure unit 3 accepts the media
+                        if (PERQemu.Config.Current.Drives[3].Type == DeviceType.Unused)
+                        {
+                            PERQemu.Config.Current.SetDeviceType(3, DeviceType.TapeQIC);
+                            Console.WriteLine("* Drive unit 3 now accepts QIC tapes.");
+                        }
+                    }
+                    else
+                    {
+                        // WITHOUT the tape option, reset unit 3 (losing any assigned file?)
+                        if (PERQemu.Config.Current.Drives[3].Type == DeviceType.TapeQIC)
+                        {
+                            // Zap the file, or leave it defined?  Hmm...
+                            PERQemu.Config.Current.SetDeviceType(3, DeviceType.Unused);
+                            Console.WriteLine("* Drive unit 3 is now unassigned.");
+                        }
+                    }
+                }
+
+                // CheckOptions should catch the case where Tape is defined but
+                // the board type doesn't support the controller...
+
                 if (!PERQemu.Config.CheckOptions())
                 {
                     Console.WriteLine(PERQemu.Config.Current.Reason);

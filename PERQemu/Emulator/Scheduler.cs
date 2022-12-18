@@ -300,8 +300,8 @@ namespace PERQemu
 
                 if (timeToFire < e.TimestampNsec)
                 {
-                    // Aw, crap
-                    Console.WriteLine($"False alarm: list head time {e.TimestampNsec} moved back to {_next}");
+                    // This hasn't ever actually happened, so maybe remove it to Debug mode?
+                    Log.Warn(Category.Scheduler, "List head time {0} moved back to {1}", e.TimestampNsec, _next);
                     return false;
                 }
 

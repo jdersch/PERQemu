@@ -22,7 +22,6 @@ using System.IO;
 using System.Diagnostics;
 
 using PERQmedia;
-using PERQemu.Config;
 
 namespace PERQemu.UI
 {
@@ -316,6 +315,78 @@ namespace PERQemu.UI
 
         #endregion
 
+        #region Tape commands
+
+        //
+        // Streamer Commands
+        //
+
+        [Command("load tape", "Load a tape cartridge")]
+        private void LoadTape(string filename)
+        {
+            try
+            {
+                LoadInternal(3, filename);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to load {filename}: {e.Message}");
+            }
+        }
+
+        [Command("save tape", "Save the loaded cartridge tape")]
+        private void SaveTape()
+        {
+            SaveTapeAs("");       // Lazy...
+        }
+
+        [Command("save tape as", "Save the loaded tape with a new name")]
+        private void SaveTapeAs(string filename)
+        {
+            try
+            {
+                SaveInternal(3, filename);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to save tape: {e.Message}");
+            }
+        }
+
+        [Command("save tape as", "Save the loaded tape with a new name and format")]
+        private void SaveTapeAs(string filename, Formatters format)
+        {
+            if (format == Formatters.Unknown)
+            {
+                Console.WriteLine("Sorry, what now?  Please choose a valid format.");
+                return;
+            }
+
+            try
+            {
+                SaveInternal(3, filename, format);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to save floppy: {e.Message}");
+            }
+        }
+
+        [Command("unload tape", "Unload the tape cartridge")]
+        private void UnloadTape()
+        {
+            try
+            {
+                UnloadInternal(3);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to unload tape: {e.Message}");
+            }
+        }
+
+        #endregion
+
         #region Internal load, unload and save
 
         //
@@ -444,7 +515,8 @@ namespace PERQemu.UI
             // Trying to save over a read-only file is verboten
             if (string.IsNullOrEmpty(filename) && !PERQemu.Sys.Volumes[unit].Info.IsWritable)
             {
-                var cmd = PERQemu.Sys.Volumes[unit].Info.Type == DeviceType.Floppy ? "floppy" : "harddisk";
+                var t = PERQemu.Sys.Volumes[unit].Info.Type;
+                var cmd = (t == DeviceType.Floppy ? "floppy" : (t == DeviceType.TapeQIC ? "tape" : "harddisk"));
 
                 Console.WriteLine($"The image '{pathname}' is read-only; cannot overwrite.");
                 Console.WriteLine($"Please use 'save {cmd} as' to save a copy with a different name.");
@@ -635,12 +707,28 @@ namespace PERQemu.UI
                 return;
             }
 
-            var capacity = drive.Geometry.TotalBytes / 1000000;     // "MB", not "MiB"
+            // Take out sector headers to compute total usable space; show in
+            // both MB and MiB because $)!#$& disk drive marketing
+            var capacity = (drive.Geometry.TotalBlocks * drive.Geometry.SectorSize) / 1000000;
+            var mib = (drive.Geometry.TotalBlocks * drive.Geometry.SectorSize) / 1048576.0;
             var specs = drive.Specs.ToString().Split('\n');
+
+            if (drive.Info.Type == DeviceType.TapeQIC)
+            {
+                // Tapes use the spec fields a little differently than disks.
+                // (Rely on specs.ToString including a newline.  Truly horrible.)
+                specs[0] = string.Format("[IPS {0}, Start/Stop delay {1}ms, Rate {2:n}KB/sec]",
+                                         drive.Specs.RPM,
+                                         drive.Specs.StartupDelay,
+                                         (drive.Specs.TransferRate / 1000.0));
+                specs[1] = string.Format("[Min seek {0:n}ms, Max seek {1:n}ms]",
+                                         (drive.Specs.MinimumSeek / 1000.0),
+                                         (drive.Specs.MaximumSeek / 1000.0));
+            }
 
             Console.WriteLine($"Device type:  {drive.Info.Name} (class {drive.Info.Type})");
             Console.WriteLine($"Description:  {drive.Info.Description}");
-            Console.WriteLine($"Capacity:     {capacity}MB (formatted)");
+            Console.WriteLine($"Capacity:     {capacity}MB ({mib:n2}MiB), formatted");
             Console.WriteLine($"Geometry:     {drive.Geometry}");
             Console.WriteLine($"Performance:  {specs[0]}");
             Console.WriteLine($"              {specs[1]}");

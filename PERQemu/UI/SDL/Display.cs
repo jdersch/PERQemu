@@ -50,6 +50,7 @@ namespace PERQemu.UI
             _prevClock = 0;
             _prevZ80Clock = 0;
             _floppyActive = false;
+            _streamerActive = false;
 
             // Keep a local copy
             _displayWidth = _system.VideoController.DisplayWidth;
@@ -156,7 +157,17 @@ namespace PERQemu.UI
             _floppyRect.x = _displayWidth - 36;
             _floppyRect.y = _displayHeight - 36;
 
-            // Init the texture
+            // Create a texture for our streamer tape activity "light"
+            _streamerTexture = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("qictape.png"));
+
+            // Put the tape icon just to the left of the floppy
+            _streamerRect = new SDL.SDL_Rect();
+            _streamerRect.h = 32;
+            _streamerRect.w = 32;
+            _streamerRect.x = _floppyRect.x - 36;
+            _streamerRect.y = _floppyRect.y;
+
+            // Init the display texture
             SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
             SDL.SDL_RenderClear(_sdlRenderer);
 
@@ -183,6 +194,7 @@ namespace PERQemu.UI
             PERQemu.GUI.RegisterDelegate(_fpsUpdateEvent.type, UpdateFPS);
 
             _system.FloppyActivity += OnFloppyActivity;
+            _system.StreamerActivity += OnStreamerActivity;
 
             // Tell the SDL EventLoop we're here
             PERQemu.GUI.AttachDisplay(_sdlWindow);
@@ -302,6 +314,12 @@ namespace PERQemu.UI
                 SDL.SDL_RenderCopy(_sdlRenderer, _floppyTexture, IntPtr.Zero, ref _floppyRect);
             }
 
+            // And the streamer, too!
+            if (_streamerActive)
+            {
+                SDL.SDL_RenderCopy(_sdlRenderer, _streamerTexture, IntPtr.Zero, ref _streamerRect);
+            }
+
             // And show it to us
             SDL.SDL_RenderPresent(_sdlRenderer);
 
@@ -365,6 +383,14 @@ namespace PERQemu.UI
         }
 
         /// <summary>
+        /// Catch signals from the QIC tape controller to update our activity light.
+        /// </summary>
+        private void OnStreamerActivity(MachineStateChangeEventArgs a)
+        {
+            _streamerActive = (bool)a.Args[0];
+        }
+
+        /// <summary>
         /// Close down the display and free SDL resources.
         /// </summary>
         public void Shutdown()
@@ -386,6 +412,7 @@ namespace PERQemu.UI
             PERQemu.GUI.ReleaseDelegate(_fpsUpdateEvent.type);
 
             _system.FloppyActivity -= OnFloppyActivity;
+            _system.StreamerActivity -= OnStreamerActivity;
 
             // Tell the EventLoop we're going away
             PERQemu.GUI.DetachDisplay();
@@ -497,6 +524,11 @@ namespace PERQemu.UI
         private static IntPtr _floppyTexture = IntPtr.Zero;
         private SDL.SDL_Rect _floppyRect;
         private bool _floppyActive;
+
+        // Tape streamer activity light!
+        private static IntPtr _streamerTexture = IntPtr.Zero;
+        private SDL.SDL_Rect _streamerRect;
+        private bool _streamerActive;
 
         // Parent
         private PERQSystem _system;

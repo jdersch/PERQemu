@@ -66,7 +66,7 @@ namespace PERQemu.Config
             // That way there's something to actually run, by default
             _drives = new Drive[MAX_DRIVES];
             _drives[0] = new Drive(0, DeviceType.Floppy);
-            _drives[1] = new Drive(1, DeviceType.Disk14Inch, "Disks/f1.prqm");
+            _drives[1] = new Drive(1, DeviceType.Disk14Inch, Paths.BuildDiskPath("f1.prqm"));
             _drives[2] = new Drive(2, DeviceType.Unused);
             _drives[3] = new Drive(3, DeviceType.Unused);
 

@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)StorageDevice.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Loader\IMDFormatHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)FileUtilities.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Loader\TAPFormatter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)Loader\" />

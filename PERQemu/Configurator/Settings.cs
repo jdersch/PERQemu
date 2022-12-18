@@ -62,6 +62,7 @@ namespace PERQemu
         None = 0,                           // 110% on the reactor
         CPUSpeed = 0x1,                     // strive for accuracy
         DiskSpeed = 0x2,                    // feel the pain
+        TapeSpeed = 0x4,                    // is this a trick question?
         StartupDelay = 0x10,                // for the truly hardcore
         FrameSkipping = 0x20                // not implemented
     }
@@ -97,13 +98,14 @@ namespace PERQemu
         public static void Reset()
         {
             // Set to defaults
-            SaveFloppyOnEject = Ask.Maybe;
             SaveDiskOnShutdown = Ask.Maybe;
+            SaveFloppyOnEject = Ask.Maybe;
+            SaveTapeOnUnload = Ask.Maybe;
             PauseOnReset = true;
             PauseWhenMinimized = true;
             CursorPreference = Cursor.DefaultArrow;
 
-            Performance = RateLimit.CPUSpeed | RateLimit.DiskSpeed;
+            Performance = RateLimit.CPUSpeed | RateLimit.DiskSpeed | RateLimit.TapeSpeed;
             RunMode = ExecutionMode.Asynchronous;
 
             DebugRadix = Radix.Decimal;
@@ -128,6 +130,7 @@ namespace PERQemu
         // General
         public static Ask SaveDiskOnShutdown;
         public static Ask SaveFloppyOnEject;
+        public static Ask SaveTapeOnUnload;
         public static bool PauseOnReset;
 
         public static bool PauseWhenMinimized;
@@ -231,6 +234,7 @@ namespace PERQemu
                     sw.WriteLine("default");
                     sw.WriteLine("autosave harddisk " + SaveDiskOnShutdown);
                     sw.WriteLine("autosave floppy " + SaveFloppyOnEject);
+                    sw.WriteLine("autosave tape " + SaveTapeOnUnload);
                     sw.WriteLine("display cursor " + CursorPreference);
                     sw.WriteLine("pause on reset " + PauseOnReset);
                     sw.WriteLine("pause when minimized " + PauseWhenMinimized);
