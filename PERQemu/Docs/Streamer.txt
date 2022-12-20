@@ -230,5 +230,17 @@ floppies one after the other, or it will be once I figure out how to prepare
 some OS load images and include 'em in the distribution...
 
 
+Schematics
+----------
+
+Found some old photocopies of the "Streamer Packet" that describes how to build
+the wire wrapped version of the interface.  Included were "old streamer board"
+and "new streamer board" partial schematics.  The "new" version seems to most
+closely resemble the microcode's view of things.  Of note, however, is a signal
+that would indicate an interrupt (using the "X" vector) could be enabled when
+the drive raises either the Ready or Exception lines!  However, there is zero
+evidence that this was ever supported in software.  Strange.
+
+
 ---
 Last update: skeezics    Sat Dec 17 23:22:34 PST 2022

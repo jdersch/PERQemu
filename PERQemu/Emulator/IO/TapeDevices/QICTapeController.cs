@@ -118,7 +118,7 @@ namespace PERQemu.IO.TapeDevices
 
             if (address == _dataPort)
             {
-                Log.Debug(Category.Streamer, "Write 0x{0:x2} to data register 0x{1:x2}", value, address);
+                Log.Detail(Category.Streamer, "Write 0x{0:x2} to data register 0x{1:x2}", value, address);
                 _drive.Data = (byte)value;
                 return;
             }
@@ -142,7 +142,7 @@ namespace PERQemu.IO.TapeDevices
                           (_drive.Exception ? Status.Exception : 0);
             }
 
-            Log.Debug(Category.Streamer, "Read status 0x{0:x2}", (int)status);
+            Log.Detail(Category.Streamer, "Read status 0x{0:x2}", (int)status);
             return (int)status;
         }
 
@@ -161,7 +161,7 @@ namespace PERQemu.IO.TapeDevices
             }
 
             var data = _drive.Data;
-            Log.Debug(Category.Streamer, "Read data 0x{0:x2}", data);
+            Log.Detail(Category.Streamer, "Read data 0x{0:x2}", data);
             return data;
         }
 
@@ -188,8 +188,7 @@ namespace PERQemu.IO.TapeDevices
 
     /// <summary>
     /// The controller buffers these control signals to the streamer and allows
-    /// the microcode to set them directly.  (Would be nice to have a schematic
-    /// to verify this.)
+    /// the microcode to set them directly.
     /// </summary>
     [Flags]
     internal enum Control

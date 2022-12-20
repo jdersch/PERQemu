@@ -233,6 +233,7 @@
     <Compile Include="Emulator\IO\SerialDevices\NullPort.cs" />
     <Compile Include="Emulator\IO\TapeDevices\QICTapeController.cs" />
     <Compile Include="Emulator\IO\TapeDevices\Sidewinder.cs" />
+    <Compile Include="Emulator\IO\TapeDevices\BlockBuffer.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

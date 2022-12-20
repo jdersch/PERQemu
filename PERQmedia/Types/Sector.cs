@@ -41,8 +41,17 @@ namespace PERQmedia
             _rawHeader = new byte[hdrSize];
         }
 
-        public ushort CylinderID => _cylinderID;
-        public byte HeadID => _headID;
+        public ushort CylinderID
+        {
+            get { return _cylinderID; }
+            set { _cylinderID = value; }
+        }
+
+        public byte HeadID
+        {
+            get { return _headID; }
+            set { _headID = value; }
+        }
 
         public ushort SectorID
         {

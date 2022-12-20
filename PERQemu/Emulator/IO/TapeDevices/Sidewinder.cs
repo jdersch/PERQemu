@@ -34,7 +34,7 @@ namespace PERQemu.IO.TapeDevices
     /// DC300XL cartridge.  In practice, it also can emulate the Sidewinder 9020I
     /// and 9045I 9-track drives, which are faster and offer higher capacities!
     /// </remarks>
-    public class Sidewinder : StorageDevice
+    public partial class Sidewinder : StorageDevice
     {
         public Sidewinder(Scheduler sched, string filename) : base(filename)
         {
@@ -45,13 +45,13 @@ namespace PERQemu.IO.TapeDevices
             // If instantiated without a cartridge loaded!
             if (string.IsNullOrEmpty(filename))
             {
+                // Basic device profile
+                Info = DeviceInfo.A3020;
                 Geometry = DeviceGeometry.NoMedia;
+                Specs = DevicePerformance.Archive30IPS;
             }
 
-            // Only one supported device profile
-            Info = DeviceInfo.A3020;
-
-            _buffers = new BlockBuffer[5];      // for testing
+            _buffers = new BlockBuffer[5];      // For testing; make tunable?
             _status = new DriveStatus();
 
             _commandSequence = new Stack<SchedulerEventCallback>();
@@ -98,7 +98,7 @@ namespace PERQemu.IO.TapeDevices
         private bool AtBeginningOfTape => _position == 0;
         private bool AtEndOfTape => _position == Geometry.Sectors - 1;
         private bool AtEndOfMedia => _position == _lastBlock;
-        private bool AtFileMark => _buffers[_tapeBuffer].Type == BlockType.FileMark;    // FIXME method needed
+        private bool AtFileMark => _atFileMark;
 
         /// <summary>
         /// Reset the drive and controller.
@@ -121,10 +121,10 @@ namespace PERQemu.IO.TapeDevices
 
             _command = Command.None;
             _commandSequence.Clear();
-            _handshake = Phase.Ready;
 
             _position = 0;
             _tapeInMotion = false;
+            _atFileMark = false;
 
             // Set our outgoing signals according to the spec
             _ready = false;
@@ -134,6 +134,7 @@ namespace PERQemu.IO.TapeDevices
 
             if (_activityLight) ShowIcon(false);
 
+            _phase = Phase.Ready;
             _state = State.Reset;
             Log.Info(Category.Streamer, "Drive reset");
         }
@@ -147,15 +148,7 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         public void CheckSignals()
         {
-            // Okay, THIS is insane but it makes the signals pop in logs
-            Log.Detail(Category.Streamer, "Signals: {0} {1} {2} | {3} {4} {5} {6}",
-                       _online ? "ONLINE" : "online",
-                       _request ? "RQST" : "rqst",
-                       _xfer ? "XFER" : "xfer",
-                       _exception ? "EXCPT" : "excpt",
-                       _ready ? "RDY" : "rdy",
-                       _acknowledge ? "ACK" : "ack",
-                       _fromHost ? "drive < HOST" : "DRIVE > host");
+            ENTER("CkSig");
 
             var nextState = _state;
 
@@ -231,7 +224,7 @@ namespace PERQemu.IO.TapeDevices
                                 break;
 
                             default:
-                                Console.WriteLine($"Signal change for {_command} in Busy state, not yet handled");
+                                Console.WriteLine($"Unhandled signal change for {_command} in Busy state");
                                 break;
                         }
                         break;
@@ -242,6 +235,7 @@ namespace PERQemu.IO.TapeDevices
             }
 
             _state = nextState;
+            EXIT("ChkSig");
         }
 
         /// <summary>
@@ -252,18 +246,18 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private bool GetCommandByte()
         {
-            if (_handshake >= Phase.Accepted) return true;
+            if (_phase >= Phase.Accepted) return true;
 
-            ENTER("GetCmdByte");
+            ENTER("CmdByte");
 
-            switch (_handshake)
+            switch (_phase)
             {
                 case Phase.Ready:
                     if (_request)
                     {
                         // Save the command byte from the bus latch
                         _command = (Command)_data;
-                        Log.Write(Category.Streamer, "--> Read command byte: {0}", _command);   // debug
+                        Log.Info(Category.Streamer, "--> Read command byte: {0}", _command);   // debug
 
                         // If the request is for a read/write command, ONLINE
                         // has to be true; if not, that's an exception
@@ -294,7 +288,7 @@ namespace PERQemu.IO.TapeDevices
                         }
 
                         // Advance the state and pulse the ready line
-                        _handshake = Phase.Request;
+                        _phase = Phase.Request;
 
                         // Set the delay so the microcode can catch the transition
                         var delay = (_command == Command.Select) ? 50 : 20;
@@ -311,15 +305,11 @@ namespace PERQemu.IO.TapeDevices
                             _ready = false;
                         }
 
-                        Log.Detail(Category.Streamer, "Phase now {0}, ready {1}; next change in {2}us",
-                                   _handshake, _ready, delay);
-
                         // Schedule the transition
                         _protocolEvent = _scheduler.Schedule((ulong)delay * Conversion.UsecToNsec, (skewNsec, context) =>
                         {
                             _ready = !_ready;       // Toggle it (ReadStatus is wackbirds)
-                            _handshake = Phase.Response;
-                            Log.Detail(Category.Streamer, "Phase now {0}, ready now {1}", _handshake, _ready);
+                            _phase = Phase.Response;
                         });
                     }
                     break;
@@ -328,17 +318,14 @@ namespace PERQemu.IO.TapeDevices
                     if (!_request)
                     {
                         // Request line dropped, so now we have the ball
-                        _handshake = Phase.RequestAck;
-                        Log.Detail(Category.Streamer, "Phase now {0}, next change in 20us", _handshake);
+                        _phase = Phase.RequestAck;
 
                         // Minimum turnaround of 20usec before completing the handshake
                         _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, (skewNsec, context) =>
                         {
-                            _ready = !_ready;               // Toggle it again!
-                            _handshake = Phase.Accepted;    // Final stage of grief
-                            Log.Detail(Category.Streamer, "Phase now {0}, ready now {1}", _handshake, _ready);
-
-                            CheckSignals();                 // Cheeky!
+                            _ready = !_ready;           // Toggle it again!
+                            _phase = Phase.Accepted;    // Final stage of grief
+                            CheckSignals();             // Cheeky!
                         });
                     }
                     break;
@@ -346,21 +333,21 @@ namespace PERQemu.IO.TapeDevices
                 case Phase.Request:
                 case Phase.RequestAck:
                     // Shouldn't get anything from the host during these phases!
-                    Log.Warn(Category.Streamer, "Unexpected status change in {0} phase", _handshake);
+                    Log.Warn(Category.Streamer, "Unexpected status change in {0} phase", _phase);
                     break;
 
                 default:
-                    Log.Warn(Category.Streamer, "Bad transition in handshake phase {0}", _handshake);
+                    Log.Warn(Category.Streamer, "Bad transition in handshake phase {0}", _phase);
                     // So, uh, just reset and try again!?
                     _ready = false;
                     _exception = true;
                     _state = State.Fault;
-                    _handshake = Phase.Ready;
+                    _phase = Phase.Ready;
                     break;
             }
 
-            EXIT("GetCmdByte");
-            return _handshake >= Phase.Accepted;
+            EXIT("CmdByte");
+            return _phase >= Phase.Accepted;
         }
 
         #endregion
@@ -388,7 +375,7 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private State DoReadStatus()
         {
-            ENTER("ReadStatus");
+            ENTER("RdStat");
 
             // If coming out of Reset drop the ACK line and snapshot status
             if (_state == State.Reset)
@@ -397,34 +384,42 @@ namespace PERQemu.IO.TapeDevices
                 UpdateStatus();
             }
 
-            switch (_handshake)
+            switch (_phase)
             {
                 case Phase.Accepted:
                     // Set up for transfer: change direction signal
                     _fromHost = false;
-                    _handshake = Phase.StatusReady;
-                    Log.Detail(Category.Streamer, "ReadStatus: dir change, sending first byte in 20us");
+                    _phase = Phase.StatusReady;
 
                     // Schedule the next transition in 20usec
-                    _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SendStatusByte);
+                    _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, (skewNsec, context) =>
+                    {
+                        // Do it this way so we can be called during a Write
+                        // or Read sequence without falling into FinishCommand
+                        // if the host wishes to continue; "elegantly clunky"?
+                        _commandSequence.Push(SendStatusByte);
+                        RunSequence();
+                    });
+
+                    Log.Detail(Category.Streamer, "ReadStatus: dir change, sending first byte in 20us");
                     return State.Busy;
 
                 case Phase.StatusReady:
                 case Phase.StatusAccepted:
                     // Shouldn't get any response from the microcode here?
-                    Log.Debug(Category.Streamer, "ReadStatus: unexpected response in phase {0}", _handshake);
+                    Log.Debug(Category.Streamer, "ReadStatus: unexpected response in phase {0}", _phase);
                     return State.Busy;
 
                 case Phase.StatusSent:
                     // They've taken the byte so we just drop ready.  Not worth
                     // scheduling a 250ns delay here!
                     _ready = false;
-                    _handshake = Phase.StatusAck;
+                    _phase = Phase.StatusAck;
                     return State.Busy;
 
                 case Phase.StatusAck:
                     // Complete the handshake for the byte!
-                    _handshake = Phase.StatusAccepted;
+                    _phase = Phase.StatusAccepted;
 
                     // Any more to send?
                     if (!_status.ReadComplete)
@@ -437,16 +432,17 @@ namespace PERQemu.IO.TapeDevices
                     // Nope!  All done - schedule our final transition
                     _protocolEvent = _scheduler.Schedule(10 * Conversion.UsecToNsec, (skewNsec, context) =>
                     {
-                        _status.Clear();    // Reset
-                        _fromHost = true;   // Turn around the bus 
-                        _ready = true;      // Ready for new command
+                        _status.Clear();        // Reset
+                        _fromHost = true;       // Turn around the bus 
+                        _ready = true;          // Ready for new command
+                        _phase = Phase.Ready;   // Fixme: this probably isn't right
                     });
 
                     // Fall through to finish the command
                     break;
 
                 default:
-                    Log.Error(Category.Streamer, "ReadStatus: impossible? Phase={0}", _handshake);
+                    Log.Error(Category.Streamer, "ReadStatus: impossible? Phase={0}", _phase);
                     // Shouldn't ever happen; fall out to clean up if it does...
                     break;
             }
@@ -455,7 +451,7 @@ namespace PERQemu.IO.TapeDevices
             _status.Clear();
             Log.Debug(Category.Streamer, "ReadStatus complete");
 
-            return FinishCommand();
+            return RunSequence();
         }
 
         private void SendStatusByte(ulong skewNsec, object context)
@@ -463,7 +459,7 @@ namespace PERQemu.IO.TapeDevices
             // Put the next byte on the bus
             _data = _status.GetNextByte();
             _ready = true;
-            _handshake = Phase.StatusSent;
+            _phase = Phase.StatusSent;
         }
 
         /// <summary>
@@ -482,7 +478,6 @@ namespace PERQemu.IO.TapeDevices
 
                 case Command.Erase:
                 case Command.Retension:
-                    // Add 'em in backwards
                     _commandSequence.Push(Rewind);
                     _commandSequence.Push(Wind);
 
@@ -512,27 +507,19 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private State StartWriting()
         {
-            ENTER("StartWriting");
+            ENTER("StartWr");
 
             //
             // Initialize a new Write sequence
             //
             // These conditions are checked in GetCommandByte:
             //    ONLINE is true; tape IS loaded and is NOT write protected
-            //    The motor should NOT be running...
             //
-            // We don't know how many Write* commands will follow, but ALL write
-            // sequences end with a final file mark and a rewind (the "End write
-            // data" sequence).  Each of the Write* commands assumes that they
-            // can exit when Online drops to complete the sequence.
-            //
-            _commandSequence.Push(Rewind);
-            _commandSequence.Push(WriteFileMark);
 
-            if (_command == Command.WriteData)
-            {
+            if (_command == Command.WriteFileMark)
+                _commandSequence.Push(WriteFileMark);
+            else
                 _commandSequence.Push(WriteData);
-            }
 
             // If the host didn't do this explicitly before calling Write, the
             // drive automatically selects unit 0 and rewinds
@@ -561,11 +548,11 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private State ContinueWriting()
         {
-            ENTER("ContinueWriting");
+            ENTER("ContWr");
 
             var nextState = _state;
 
-            switch (_handshake)
+            switch (_phase)
             {
                 case Phase.Accepted:
                     //
@@ -584,28 +571,39 @@ namespace PERQemu.IO.TapeDevices
                 //
                 // Otherwise, run the Xfer/Ack state machine
                 //
-                case Phase.DataReady:
+                case Phase.DataPaused:
                     //
-                    // T11 / T23 - At the beginning of a new block
+                    // Here when we need to allocate a new buffer to accept the
+                    // next block, either at T8-T9 or T22-T23.  At this point the
+                    // host can decide to end or modify the sequence!
                     //
                     if (!_online)
                     {
                         Log.Info(Category.Streamer, "Online dropped, terminating write sequence");
 
-                        // Don't stop the tape; set up conditions to start next
-                        // command and exit through the gift shop
-                        _handshake = Phase.Ready;
+                        // Put us back in command mode
+                        _phase = Phase.Ready;
 
-                        // This will retire the current WriteData and allow for
-                        // the host to inject another Write or WriteFileMark (or
-                        // maybe even ReadStatus!?  Then continue the writing...
+                        // If Online drops at this point, the drive automatically
+                        // writes a file mark and rewinds.  The PERQ microcode may
+                        // instead explicitly issue these commands rather than rely
+                        // on the controller's default behavior, so in that case
+                        // this will generally only occur if the controller times
+                        // out and drops online (or Resets) to recover?
+                        _commandSequence.Push(Rewind);
+
+                        // "If the last command was a WFM command, the controller
+                        // will not write another file mark."
+                        if (_command != Command.WriteFileMark)
+                            _commandSequence.Push(WriteFileMark);
+
                         nextState = RunSequence();
                         break;
                     }
 
                     if (_request)
                     {
-                        Log.Debug(Category.Streamer, "Request raised, jumping out to receive new command!");
+                        Log.Info(Category.Streamer, "Request raised, jumping out to receive new command!");
 
                         // Host wants to issue a new command.  At this point the
                         // byte is already on the bus, so we reset to the command
@@ -618,49 +616,87 @@ namespace PERQemu.IO.TapeDevices
                         // Don't leak that buffer!
                         if (_buffers[_hostBuffer].Empty)
                         {
-                            Log.Debug(Category.Streamer, "Releasing {0} buffer {1}",
-                                       _buffers[_hostBuffer].Type, _hostBuffer);
+                            Log.Info(Category.Streamer, "Releasing {0} buffer {1}", _buffers[_hostBuffer].Type, _hostBuffer);
 
-                            // This is annoying, because the microcode does NOT
-                            // have to issue a new WriteData command for every damn
+                            // This is sort of annoying, because the microcode does
+                            // NOT have to issue a new WriteData command for every
                             // block -- it can just drop Xfer and continue!  Argh.
                             _buffers[_hostBuffer].SetType(BlockType.Empty);
                         }
 
-                        _handshake = Phase.Ready;
-                        GetCommandByte();
-                    }
-                    else if (_xfer)
-                    {
-                        // Start (or continue) receiving a data block!  The data
-                        // byte is already latched; fire the Ack in .56 - 4.47 usec
-                        // (let's round to 1 and see how that performs)
+                        _phase = Phase.Ready;
+                        UpdateStatus();
 
-                        _handshake = Phase.DataAck;
+                        CheckSignals();
+                        break;
+                    }
+
+                    if (_xfer)
+                    {
+                        // If all the buffers are currently busy, pause until the
+                        // mechanism catches up and frees one.  The minimum gap is
+                        // 100usec (T22-T23 time shown in the spec), but I don't
+                        // think that'll be an issue...  Note that only Write Data
+                        // commands use the Xfer/Ack sequence; Write File Mark is
+                        // synthesized by the controller and is handled elsewhere.
+
+                        if (GetEmptyBuffer(ref _hostBuffer))
+                        {
+                            // Got one!
+                            Log.Info(Category.Streamer, "Next host write buffer is {0}", _hostBuffer);
+
+                            // Set up the buffer for the incoming block
+                            _buffers[_hostBuffer].SetType(BlockType.Data);
+                            _buffers[_hostBuffer].Clear();
+
+                            // The first byte is already on the bus, so jump
+                            // directly back into the data transfer loop
+                            _phase = Phase.DataReady;
+
+                            // Sigh.  Can't just fall through the case here, so... 
+                            ContinueWriting();
+                        }
+                        else
+                        {
+                            WaitForBuffer();
+                        }
+                    }
+                    break;
+
+                case Phase.DataReady:
+                    //
+                    // Start or continue a sector transfer; the inter-sector gap
+                    // is covered by DataPaused...
+                    //
+                    if (_xfer)
+                    {
+                        // Receiving a data block:  capture the current data byte
+                        // from the bus; fire the Ack in .56 - 4.47 usec (for now,
+                        // round to 4usec and see how that performs, may tune it)
+                        _buffers[_hostBuffer].PutByte(_data);
+
+                        _phase = Phase.DataAck;
                         _ready = false;
 
-                        _protocolEvent = _scheduler.Schedule(Conversion.UsecToNsec, (skewNsec, context) =>
+                        _protocolEvent = _scheduler.Schedule(4 * Conversion.UsecToNsec, (skewNsec, context) =>
                          {
                              _acknowledge = true;
-                             _handshake = Phase.DataAccepted;
+                             _phase = Phase.DataAccepted;
                          });
                     }
                     else
                     {
-                        Log.Error(Category.Streamer, "Fell through in {0}, unknown signal change!?", _handshake);
+                        Log.Info(Category.Streamer, "Caught a stray signal change in DataReady");
                     }
                     break;
 
                 case Phase.DataAccepted:
                     //
-                    // T14-T16 - Byte received
+                    // T14-T16 - Byte acknowledged
                     //
-                    // Save the byte to the current buffer and see where we're at...
                     // If the current block is full (512 bytes recieved) then we
                     // call Flush to make sure the mechanism is running (started
                     // after the first buffer fills, or restarted after underrun).
-                    // 
-                    _buffers[_hostBuffer].PutByte(_data);
 
                     if (_buffers[_hostBuffer].Full)
                     {
@@ -669,20 +705,19 @@ namespace PERQemu.IO.TapeDevices
                         Flush();
 
                         // Need a new buffer
-                        _handshake = Phase.DataPaused;
+                        _phase = Phase.DataPaused;
 
-                        // Reset Ack and ContinueWriting!  There's no response from
-                        // the host after byte 512 so we force the next transition.  Hmm.
-                        _protocolEvent = _scheduler.Schedule(Conversion.UsecToNsec, (skewNsec, context) =>
-                            {
-                                _acknowledge = false;
-                                CheckSignals();
-                            });
+                        // Reset Ack to indicate normal reception of the last byte;
+                        // There's no response from the host after byte 512, but
+                        // the transition to Ready will move us into the next phase.
+                        // Spec says T22-T23 is >100usec!
+                        _acknowledge = false;
+                        _protocolEvent = _scheduler.Schedule(100 * Conversion.UsecToNsec, SetReady);
                     }
                     else
                     {
                         // Continue filling the current one
-                        _handshake = Phase.DataReady;
+                        _phase = Phase.DataReady;
 
                         // Reset Ack (T14-T16 > .56us, < 1.12us); Xfer will reinitiate
                         _protocolEvent = _scheduler.Schedule(Conversion.UsecToNsec, (skewNsec, context) =>
@@ -692,170 +727,147 @@ namespace PERQemu.IO.TapeDevices
                     }
                     break;
 
-                case Phase.DataPaused:
-                    //
-                    // Here when we need to allocate a new buffer to accept the
-                    // next block, either at T8-T9 or T22-T23.  If all three
-                    // buffers are currently busy, we have to pause until the
-                    // mechanism catches up and frees one.  The minimum gap is
-                    // 100usec (T22-T23 time shown in the spec).  We'll loop
-                    // every 100usec to see if the write-behind completed a block
-                    // commit so we can tell the host to continue.  We can adjust
-                    // the inter-byte ack response time to pace the dataflow if
-                    // we consistently overrun to prevent the Slinky effect. :-)
-                    //
-                    if (GetNextBuffer(ref _hostBuffer))
-                    {
-                        // Got one!
-                        Log.Info(Category.Streamer, "Next host write buffer is {0}", _hostBuffer);
-
-                        // Let the command which was paused know they can proceed
-                        if (_command == Command.WriteFileMark)
-                            WriteFileMark(0, null);
-                        else
-                            WriteData(0, null);
-                    }
-                    else
-                    {
-                        // Wait one sector time to see if that's reasonable
-                        var retry = Settings.Performance.HasFlag(RateLimit.TapeSpeed) ?
-                                            ((ulong)Specs.MinimumSeek * Conversion.UsecToNsec) :
-                                            SecTime90IPS;
-
-                        Log.Debug(Category.Streamer, "Waiting for free buffer; retry in {0}ms...",
-                                  retry * Conversion.NsecToMsec);
-
-                        // Debug
-                        if (!_tapeInMotion && _motionEvent == null) Flush();    // Kick the drive
-
-                        // Come around, idiot, come around
-                        _protocolEvent = _scheduler.Schedule(retry, (skewNsec, context) =>
-                        {
-                            CheckSignals();
-                        });
-                    }
-                    break;
-
                 default:
-                    Console.WriteLine("wut");
+                    Console.WriteLine($"Continue in wut now?  phase={_phase} state={_state}");
                     break;
             }
 
+            EXIT("ContWr");
             return nextState;
+        }
+
+
+        private void WaitForBuffer()
+        {
+            // Wait one sector time for the writer to catch up
+            var retry = Settings.Performance.HasFlag(RateLimit.TapeSpeed) ?
+                                ((ulong)Specs.MinimumSeek * Conversion.UsecToNsec) :
+                                SecTime90IPS;
+
+            Log.Info(Category.Streamer, "Waiting for free buffer; retry in {0}ms...",
+                                          retry * Conversion.NsecToMsec);
+
+            if (!_tapeInMotion) Flush();    // Kick the drive again?
+
+            // Come around, idiot, come around
+            _protocolEvent = _scheduler.Schedule(retry, (skewNsec, context) =>
+                {
+                    CheckSignals();
+                });
         }
 
 
         private void WriteData(ulong skewNsec, object context)
         {
-            ENTER("WriteData");
+            ENTER("WrData");
 
-            if (_handshake == Phase.Accepted)
+            if (_phase == Phase.Accepted)
             {
                 // 
-                // Starting or continuing a write:  jump to the "paused" state
-                // to allocate a new buffer.  That'll come back here when one is
-                // available (handling any pauses if the mechanism is behind).
+                // T8-T9: Starting or continuing a write.  Raise the Ready line
+                // and jump to the "paused" state to allocate a new write buffer.
                 // 
                 _ready = false;
                 _state = State.Busy;
-                _handshake = Phase.DataPaused;
-                CheckSignals();
-            }
-            else if (_handshake == Phase.DataPaused)
-            {
-                //
-                // We got a buffer!  Set it up for data and jump into the data
-                // transfer loop.
-                //
-                _buffers[_hostBuffer].SetType(BlockType.Data);
-                _buffers[_hostBuffer].Clear();
-
-                // First block (T8->T9 transition) is 20 usec; if there were
-                // delays acquiring the buffer it may have taken longer (that's ok)
-                _handshake = Phase.DataReady;
+                _phase = Phase.DataPaused;
                 _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SetReady);
             }
             else
             {
-                Log.Error(Category.Streamer, "WriteData entered in phase {0}?", _handshake);
+                // ContinueWriting() handles the guts
+                Log.Error(Category.Streamer, "WriteData entered in phase {0}?", _phase);
             }
 
-            EXIT("WriteData");
+            EXIT("WrData");
         }
 
         private void WriteFileMark(ulong skewNsec, object context)
         {
             ENTER("WriteFM");
-
-            if (_handshake == Phase.Accepted)
+            switch (_phase)
             {
-                //
-                // Just like WriteData, first entry requires a new buffer.  The
-                // hardware might just fake it, but for simplicity I require it
-                // so the blocks are serialized in order.  Drop the Ready line
-                // to show we're busy then jump to DataPaused to get a block.
-                //
-                _ready = false;
-                _state = State.Busy;
-                _handshake = Phase.DataPaused;
-                CheckSignals();
-            }
-            else if (_handshake == Phase.DataPaused)
-            {
-                //
-                // Got our buffer!  File marks are "special" blocks synthesized
-                // by the controller; we don't get any data from the host.
-                //
-                _buffers[_hostBuffer].SetType(BlockType.FileMark);
-                _buffers[_hostBuffer].Clear();
+                case Phase.Accepted:
+                    //
+                    // Just like WriteData, first entry requires a new buffer.  The
+                    // hardware might just fake it, but for simplicity I require it
+                    // so the blocks are serialized in order.  Drop the Ready line
+                    // to show we're busy then loop if necessary to get a block.
+                    //
+                    _ready = false;
+                    _state = State.Busy;
 
-                while (!_buffers[_hostBuffer].Full)
-                {
-                    // Write the unique 5-bit code for a file mark :-)
-                    _buffers[_hostBuffer].PutByte(0x1c);
-                }
+                    if (GetEmptyBuffer(ref _hostBuffer))
+                    {
+                        //
+                        // Got our buffer!  File marks are "special" blocks synthesized
+                        // by the controller; we don't get any data from the host.
+                        //
+                        _buffers[_hostBuffer].SetType(BlockType.FileMark);
+                        _buffers[_hostBuffer].Clear();
 
-                // Commit that puppy
-                Flush();
+                        while (!_buffers[_hostBuffer].Full)
+                        {
+                            // Write the unique 5-bit code for a file mark :-)
+                            _buffers[_hostBuffer].PutByte(0x1c);
+                        }
 
-                // The logic at ContinueWriting will handle our exit/continuation.
-                // This is kinda janky, but the interface is kind of nutty.
-                _handshake = Phase.DataReady;
-                _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SetReady);
-            }
-            else
-            {
-                Log.Error(Category.Streamer, "WriteFileMark entered in phase {0}?", _handshake);
+                        // We use the DataSent phase during a Write sequence to wait for
+                        // the WriteBehind to sync the file mark to tape.  That phase is
+                        // only used for Reads so it does double duty here.  Lazy.  Yes.
+                        _phase = Phase.DataSent;
+
+                        // Commit that puppy
+                        Flush();
+                    }
+                    else
+                    {
+                        WaitForBuffer();
+                    }
+                    break;
+
+                case Phase.DataSent:
+                    //
+                    // WriteBehind calls us when the tape has stopped.  This ensures
+                    // that the final file mark is flushed before rewinding!  At least
+                    // one sector time has already elapsed, so we finally set Ready and
+                    // terminate the write sequence.
+                    //
+                    _ready = true;
+                    _phase = Phase.Ready;
+                    RunSequence();
+                    break;
+
+                default:
+                    Log.Error(Category.Streamer, "WriteFileMark entered in phase {0}?", _phase);
+                    break;
             }
 
             EXIT("WriteFM");
         }
 
+
         private void SetReady(ulong skewNsec, object context)
         {
-            _ready = true;              // Signal the host we're ready to go!
+            _ready = true;
         }
 
 
         private void Flush()
         {
             // We have a buffer to write, and we're not already in motion, fire it up
-            if (DirtyBuffers() > 0 && !_tapeInMotion && _motionEvent == null)
+            if (DirtyBuffers() > 0 && !_tapeInMotion)
             {
-                Log.Info(Category.Streamer, "Cain't flush if the dang thing ain't runnin'");
                 StartStop(WriteBehind);
             }
         }
 
+
         private void WriteBehind(ulong skewNsec, object context)
         {
-            ENTER("FEEDME");
-
             // Get the next dirty, dirty buffer
-            if (!GetDirtyBuffer(ref _tapeBuffer))
+            if (!GetFullBuffer(ref _tapeBuffer))
             {
-                Log.Info(Category.Streamer, "Underrun at time {0}, no buffer ready for writing",
-                          _scheduler.CurrentTimeNsec);
+                Log.Info(Category.Streamer, "Underrun! No buffer ready for writing");
 
                 _status.Underruns++;
 
@@ -870,7 +882,10 @@ namespace PERQemu.IO.TapeDevices
                 // Commit the block!
                 WriteBuffer(_tapeBuffer, _position);
 
-                // Clear it
+                // Was it a file mark?  Save for status...
+                _atFileMark = (_buffers[_tapeBuffer].Type == BlockType.FileMark);
+
+                // Clear the buffer now
                 _buffers[_tapeBuffer].SetType(BlockType.Empty);
                 _buffers[_tapeBuffer].Clear();
 
@@ -886,23 +901,52 @@ namespace PERQemu.IO.TapeDevices
                 // Advance position and check if we've hit the end of the media
                 _position++;
 
+                if (AtFileMark)
+                {
+                    // If we just wrote a file mark, spin down the tape with a
+                    // call back to WriteFileMark to let it know.  It's not 100%
+                    // clear from the spec if the tape _always_ stops when a WFM
+                    // is issued while a "write sequence" is in progress, but on
+                    // Reads it seems that file marks always raise an exception
+                    // that requires a ReadStatus in response.  Let's assume that
+                    // here as well.  Worst case is we just blow 200ms spinning
+                    // the virtual tape down and back up for no reason!
+                    Log.Info(Category.Streamer, "Wrote a file mark!");
+
+                    UpdateStatus();
+                    StartStop(WriteFileMark);
+                    return;
+                }
+
                 if (AtEndOfMedia)
                 {
-                    // Here we have to jam on the brakes and halt the whole write op
-                    Console.WriteLine("\nAt EOM!  Stop the world, we have to get off!\n");
+                    // At the warning track; stop tape, set exception, require
+                    // a Read Status to continue.  Jump back to DataReady for
+                    // the last Write/WriteFM/offline processing
+                    Log.Warn(Category.Streamer, "Reached the warning track, tape is almost full.");
+
                     StartStop(null);
-                    _commandSequence.Clear();
                     _exception = true;
-                    _handshake = Phase.Ready;       // ????
-                    FinishCommand();                // !!!!
+                    return;
+                }
+
+                if (AtEndOfTape)
+                {
+                    // Here we have to jam on the brakes and halt the whole write op
+                    Log.Error(Category.Streamer, "Reached end of media, tape is full.  Hard stop.");
+
+                    StartStop(null);
+                    _exception = true;
+                    FinishCommand();
                     return;
                 }
 
                 // If Online drops, stop motion?
                 if (!Online)
                 {
-                    Log.Write(Category.Streamer, "Controller reports offline, spinning down tape?");
+                    Log.Write(Category.Streamer, "Controller reports offline, stopping tape.");
                     StartStop(null);
+
                     return;
                 }
 
@@ -924,8 +968,6 @@ namespace PERQemu.IO.TapeDevices
                     Log.Info(Category.Streamer, "Next tape block in {0}ms", delay * Conversion.NsecToMsec);
                 }
             }
-
-            EXIT("FEEDME");
         }
 
         #endregion
@@ -934,7 +976,7 @@ namespace PERQemu.IO.TapeDevices
 
         private State StartReading()
         {
-            ENTER("StartReading");
+            ENTER("StartRd");
 
             // READ command:
             //  Host asserts ONLINE and the READ command;
@@ -965,13 +1007,13 @@ namespace PERQemu.IO.TapeDevices
 
         private State ContinueReading()
         {
-            ENTER("ContinueReading");
+            ENTER("ContRd");
             return State.Busy;
         }
 
         private void ReadData(ulong skewNsec, object context)
         {
-            ENTER("ReadData");
+            ENTER("RdData");
         }
 
         private void ReadFileMark(ulong skewNsec, object context)
@@ -991,149 +1033,12 @@ namespace PERQemu.IO.TapeDevices
 
         private void ReadAhead(ulong skewNsec, object context)
         {
-            ENTER("ReadAhead");
+            ENTER("RdAhead");
 
             // Preloads data buffers as long as we're in a read sequence
             // goes until it hits a FM and raises an exception, leaves the
             // tape where it's at (motor stopped)
             // opposite of FEEDME
-        }
-
-        #endregion
-
-        #region Buffer management
-
-        private void InitBuffers()
-        {
-            // Zero them out, reset the pointer(s)
-            for (var b = 0; b < _buffers.Length; b++)
-            {
-                _buffers[b] = new BlockBuffer(BlockType.Empty);
-            }
-            _hostBuffer = 0;
-            _tapeBuffer = 0;
-
-            Log.Info(Category.Streamer, "Buffers initialized");
-        }
-
-        private void ResetBuffers()
-        {
-            foreach (var b in _buffers)
-            {
-                b.Clear();
-                b.SetType(BlockType.Empty);
-            }
-            _hostBuffer = 0;
-            _tapeBuffer = 0;
-
-            Log.Info(Category.Streamer, "Buffers reset");
-        }
-
-        /// <summary>
-        /// Get the next empty buffer.  Return false if none currently available.
-        /// </summary>
-        private bool GetNextBuffer(ref int which)
-        {
-            for (var i = which; i < which + _buffers.Length; i++)
-            {
-                var nextBuf = i % _buffers.Length;
-
-                // Be pedantic, make sure the buffer is properly reset (byte counter too)
-                if (_buffers[nextBuf].Type == BlockType.Empty && _buffers[nextBuf].Empty)
-                {
-                    Log.Debug(Category.Streamer, "GetNextBuf: Buffer {0} is empty", nextBuf);
-                    which = nextBuf;
-                    return true;
-                }
-            }
-
-            Log.Info(Category.Streamer, "GetNextBuf: No free buffers!");
-            return false;
-        }
-
-        /// <summary>
-        /// Update the index and return true if any unwritten buffers remain.
-        /// </summary>
-        private bool GetDirtyBuffer(ref int which)
-        {
-            for (var i = which; i < which + _buffers.Length; i++)
-            {
-                var nextBuf = i % _buffers.Length;
-
-                // Don't snag any partially written ones!
-                if (_buffers[nextBuf].Type != BlockType.Empty && _buffers[nextBuf].Full)
-                {
-                    Log.Debug(Category.Streamer, "GetDirty: Buffer {0} is fully dirty :-]", nextBuf);
-                    which = nextBuf;
-                    return true;
-                }
-            }
-
-            Log.Info(Category.Streamer, "GetDirty: No dirty buffers remaining");
-            return false;
-        }
-
-        /// <summary>
-        /// Just return the count of uncommitted buffers.
-        /// </summary>
-        private int DirtyBuffers()
-        {
-            var count = 0;
-
-            foreach (var b in _buffers)
-            {
-                if (b.Type != BlockType.Empty && b.Full) count++;
-            }
-
-            return count;
-        }
-
-        /// <summary>
-        /// Commit a buffer to the underlying media, translating the linear tape
-        /// position to C/H/S.  Sets the sector header from the BlockType.
-        /// </summary>
-        private void WriteBuffer(int index, int pos)
-        {
-            var hd = (byte)(pos / Geometry.Sectors);
-            var sec = (ushort)(pos % Geometry.Sectors);
-            var bad = _buffers[index].Type == BlockType.BadData;
-
-            Log.Info(Category.Streamer, "WriteBuf: Writing {0} buffer {1} @ {2} to sector 0/{3}/{4}",
-                      _buffers[index].Type, index, pos, hd, sec);
-
-            // This seems like the long way 'round but, build up a new sector,
-            // copy in the data, set the header bytes, and flush it out.  Not
-            // exactly world beating efficiency here.  Clean it up "someday" :-)
-            var sector = new Sector(0, hd, sec, Geometry.SectorSize, Geometry.HeaderSize, bad);
-            _buffers[index].Data.CopyTo(sector.Data, 0);
-            SetBlockType(sector, _buffers[index].Type);
-            Write(sector);
-        }
-
-        private void SetBlockType(Sector sec, BlockType type)
-        {
-            var val = (uint)type;
-
-            sec.WriteHeaderByte(0, (byte)(val >> 24));
-            sec.WriteHeaderByte(1, (byte)(val >> 16));
-            sec.WriteHeaderByte(2, (byte)(val >> 8));
-            sec.WriteHeaderByte(3, (byte)val);
-
-            Log.Debug(Category.Streamer, "Wrote header mark {0} to sector 0/{1}/{2}",
-                       type, sec.HeadID, sec.SectorID);
-        }
-
-        private BlockType GetBlockType(Sector sec)
-        {
-            var type = (uint)((sec.ReadHeaderByte(0) << 24) |
-                              (sec.ReadHeaderByte(1) << 16) |
-                              (sec.ReadHeaderByte(2) << 8) |
-                              (sec.ReadHeaderByte(3)));
-
-            Log.Debug(Category.Streamer, "Read header mark {0} from sector {1}/{2}/{3}",
-                       (BlockType)type, sec.CylinderID, sec.HeadID, sec.SectorID);
-
-            return (BlockType)type;
         }
 
         #endregion
@@ -1165,16 +1070,13 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private State FinishCommand()
         {
-            Log.Info(Category.Streamer, "FinishCommand: {0} left in queue, state is {1}",    // debug
-                       _commandSequence.Count, _state);
-
-            _commandSequence.Clear();
+            ENTER("Finish");
             UpdateStatus();
 
             if (_activityLight) ShowIcon(false);
 
             // Reset state machine to accept next command
-            _handshake = Phase.Ready;
+            _phase = Phase.Ready;
 
             // Return to idle, but check for abnormal conditions...
             State final;
@@ -1182,23 +1084,27 @@ namespace PERQemu.IO.TapeDevices
             if (!IsLoaded)
             {
                 final = State.Unloaded;     // Always overrides
+                _commandSequence.Clear();
             }
             else if (_illegal)
             {
                 final = State.Fault;        // Illegal command
+                _commandSequence.Clear();
             }
             else if (_exception)
             {
                 // If we're in Reset, remain there; otherwise Fault
                 // (This affects the setting of a specific bit in B1)
                 final = (_state == State.Reset ? State.Reset : State.Fault);
+                _commandSequence.Clear();
             }
             else
             {
-                final = State.Idle;
+                // Are we there yet?  Are we there yet?
+                final = (_commandSequence.Count > 0 ? State.Busy : State.Idle);
             }
 
-            Log.Write(Category.Streamer, "FinishCommand: queue clear, state is {0}\n", final);    // debug
+            EXIT("Finish");
             return final;
         }
 
@@ -1210,7 +1116,7 @@ namespace PERQemu.IO.TapeDevices
         {
             _status.B0 = (!IsLoaded ? StatusByte0.NoCartridge :
                          ((Info.IsWritable ? 0 : StatusByte0.WriteProtected) |
-                          (AtEndOfMedia ? StatusByte0.EndOfMedia : 0) |
+                          ((AtEndOfMedia || AtEndOfTape) ? StatusByte0.EndOfMedia : 0) |
                           (AtFileMark ? StatusByte0.FileMarkDetected : 0)));
 
             _status.B1 = ((_illegal ? StatusByte1.IllegalCommand : 0) |
@@ -1245,16 +1151,15 @@ namespace PERQemu.IO.TapeDevices
             {
                 _motionEvent = _scheduler.Schedule((ulong)delay * Conversion.MsecToNsec, nextStep);
 
-                // Toggle the motor state and update the icon now (doh)
+                // Toggle the motor state and update the icon now
                 _tapeInMotion = !_tapeInMotion;
                 ShowIcon(_tapeInMotion);
             }
             else
             {
-                // Since there's nothin' else to do, actually do the update AFTER the delay
+                // Since there's nothin' else to do, update AFTER the delay
                 _motionEvent = _scheduler.Schedule((ulong)delay * Conversion.MsecToNsec, (skewNsec, context) =>
                 {
-                    _motionEvent = null;
                     _tapeInMotion = !_tapeInMotion;
                     ShowIcon(_tapeInMotion);
                 });
@@ -1289,6 +1194,7 @@ namespace PERQemu.IO.TapeDevices
                     // a chance to catch the falling AND rising edges!
                     _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SetReady);
 
+                    _atFileMark = false;
                     _motionEvent = null;    // Clear the movement event
                     RunSequence();          // Return through the dispatcher
                 }
@@ -1333,9 +1239,7 @@ namespace PERQemu.IO.TapeDevices
             // at zero and do one full pass.  Rather than call Format() in one
             // go (would make the emulator seriously hiccup?) we'll do it a few
             // blocks at a time, which lets us blink the activity light to show
-            // progress.  Can consule the TapeSpeed rate limit setting to decide
-            // how realistic to make things. :-)
-
+            // progress.
             if (!_tapeInMotion)
             {
                 if (AtEndOfTape)
@@ -1343,16 +1247,16 @@ namespace PERQemu.IO.TapeDevices
                     if (_command == Command.Erase)
                     {
                         // At the end of an erase, set the "end of media" marker
-                        // in the block header.
-                        var sec = Read(0, (byte)(Geometry.Heads - 1), (ushort)(Geometry.Sectors - 1));
-                        SetBlockType(sec, BlockType.EndOfMedia);
-                        Write(sec);
+                        // in the block header of the last sector on the device
+                        var eom = new BlockBuffer(this, BlockType.EndOfMedia);
+                        eom.WriteTo(Geometry.TotalBlocks - 1);
 
                         // Housekeeping
-                        _lastBlock = Geometry.TotalBlocks - 3;  // Reset
+                        _lastBlock = Geometry.TotalBlocks - _buffers.Length;    // Reset
                         Log.Write(Category.Streamer, "Erase: Last block is now {0}", _lastBlock);
                     }
 
+                    _atFileMark = false;
                     _motionEvent = null;
                     RunSequence();
                 }
@@ -1381,12 +1285,8 @@ namespace PERQemu.IO.TapeDevices
                         {
                             for (var s = _position; s < _position + blocks; s++)
                             {
-                                var sec = new Sector(0, (byte)h, (ushort)s,
-                                                      Geometry.SectorSize,
-                                                      Geometry.HeaderSize);
-
-                                SetBlockType(sec, BlockType.Empty);
-                                Write(sec);
+                                var sec = new BlockBuffer(this, BlockType.Empty);
+                                sec.WriteTo(s + (h * Geometry.Sectors));
                             }
                         }
                     }
@@ -1405,6 +1305,7 @@ namespace PERQemu.IO.TapeDevices
 
         #endregion
 
+        #region Load, Unload and blinkenlight
 
         /// <summary>
         /// On load, check and set some flags 'n stuff.
@@ -1429,13 +1330,17 @@ namespace PERQemu.IO.TapeDevices
             if (_protocolEvent != null) _scheduler.Cancel(_protocolEvent);
             if (_motionEvent != null) _scheduler.Cancel(_motionEvent);
             _tapeInMotion = false;
+            _atFileMark = false;
 
             // Premature ejectulation?
             _exception |= (_state != State.Idle);
 
             FinishCommand();
 
+            // Reset to baseline
+            Info = DeviceInfo.A3020;
             Geometry = DeviceGeometry.NoMedia;
+            Specs = DevicePerformance.Archive30IPS;
             base.Unload();
         }
 
@@ -1448,27 +1353,30 @@ namespace PERQemu.IO.TapeDevices
             _activityLight = state;
         }
 
+        #endregion
 
         #region Debugging
 
         private void ENTER(string rtn)
         {
-            Log.Debug(Category.Streamer, "{0}: IN  {1}, {2} seq={3}, motor={4} | {5} {6} {7} | {8} {9}",
-                      rtn, _state, _handshake, _commandSequence.Count, _tapeInMotion,
+            Log.Debug(Category.Streamer, "{0,8}: IN  {1}, {2} seq={3} | {4} {5} {6} | {7} {8} {9}",
+                      rtn, _state, _phase, _commandSequence.Count,
                       _online ? "ONLINE" : "",
                       _request ? "RQST" : "",
                       _xfer ? "XFER" : "",
+                      _exception ? "EXCPT" : "",
                       _ready ? "RDY" : "",
                       _acknowledge ? "ACK" : "");
         }
 
         private void EXIT(string rtn)
         {
-            Log.Debug(Category.Streamer, "{0}: OUT {1}, {2} seq={3}, motor={4} | {5} {6} {7} | {8} {9}",
-                      rtn, _state, _handshake, _commandSequence.Count, _tapeInMotion,
+            Log.Debug(Category.Streamer, "{0,8}: OUT {1}, {2} seq={3} | {4} {5} {6} | {7} {8} {9}",
+                      rtn, _state, _phase, _commandSequence.Count,
                       _online ? "ONLINE" : "",
                       _request ? "RQST" : "",
                       _xfer ? "XFER" : "",
+                      _exception ? "EXCPT" : "",
                       _ready ? "RDY" : "",
                       _acknowledge ? "ACK" : "");
         }
@@ -1477,7 +1385,7 @@ namespace PERQemu.IO.TapeDevices
         {
             Console.WriteLine("Sidewinder controller status:");
             Console.WriteLine("  State={0} Handshake={1} Command={2} Data={3}",
-                               _state, _handshake, _command, _data);
+                               _state, _phase, _command, _data);
             Console.WriteLine("  Current signals:  {0} {1} {2} | {3} {4} {5} {6}",
                                _online ? "ONLINE" : "online",
                                _request ? "RQST" : "rqst",
@@ -1497,12 +1405,11 @@ namespace PERQemu.IO.TapeDevices
                               _tapeInMotion ? "IS" : "is not",
                               _activityLight ? "ON" : "off");
             Console.WriteLine("  Motion event {0} active", _motionEvent == null ? "is NOT" : "is");
-            Console.WriteLine("  Transfer timings: 30IPS={0} 90IPS={1} MaxLBN={2}, EOM={3}",
-                          SecTime30IPS, SecTime90IPS, _lastBlock - 2, _lastBlock);
-            Console.WriteLine("  LOADED DRIVE MIN SEEK: {0}usec (raw), {1}nsec, {2}msec",
-                              Specs.MinimumSeek,
-                              (ulong)Specs.MinimumSeek * Conversion.UsecToNsec,
-                              ((ulong)Specs.MinimumSeek * Conversion.UsecToNsec) * Conversion.NsecToMsec);
+            Console.WriteLine("  Transfer timings: MinSeek={0}ms 90IPS={1}ms MaxLBN={2}, EOM={3}",
+                              Specs.MinimumSeek / 1000.0,
+                              SecTime90IPS * Conversion.NsecToMsec,
+                              _lastBlock, Geometry.TotalBlocks - 1);
+
             Console.WriteLine("\nBuffer status:");
             Console.WriteLine($"  Host buffer = {_hostBuffer}, Tape buffer = {_tapeBuffer}");
 
@@ -1514,7 +1421,12 @@ namespace PERQemu.IO.TapeDevices
                     continue;
                 }
 
-                Console.WriteLine($"  Buffer {buf} is type {_buffers[buf].Type}, {_buffers[buf].Pointer} bytes");
+                Console.Write($"  Buffer {buf} is type {_buffers[buf].Type}, {_buffers[buf].Pointer} bytes ");
+                Console.WriteLine(_buffers[buf].Reading ?
+                                    (_buffers[buf].Ready ? "(ready)" :
+                                    (_buffers[buf].ReadComplete ? "(completed)" : "(reading)")) :
+                                    (_buffers[buf].Empty ? "(empty)" :
+                                    (_buffers[buf].Full ? "(full)" : "(writing)")));
             }
         }
 
@@ -1575,12 +1487,13 @@ namespace PERQemu.IO.TapeDevices
 
         // State of the mechanism
         private State _state;
-        private Phase _handshake;
+        private Phase _phase;
         private Command _command;
 
         // Global conditions
         private bool _illegal;
         private bool _tapeInMotion;
+        private bool _atFileMark;
         private bool _activityLight;
 
         // Status bytes from the drive itself
@@ -1725,100 +1638,4 @@ namespace PERQemu.IO.TapeDevices
         Reserved = 0xe0
     }
 
-    /// <summary>
-    /// Sector header bytes interpreted as block types, which look suspiciously
-    /// like .TAP markers, but I'm sure that's purely coincidental.  Still, you
-    /// should make sure these match the TAPFormatter's Marker types, maybe?
-    /// </summary>
-    internal enum BlockType : uint
-    {
-        FileMark = 0x00000000,
-        Data = 0x00000200,          // Good data (512 byte block)
-        Empty = 0x10000200,         // Internal use; not written to tape
-        BadData = 0x80000100,       // Bad flag (512 bytes present)
-        EraseGap = 0xfffffffe,      // Not used by PERQemu/PERQmedia
-        EndOfMedia = 0xffffffff     // Logical end of media
-    }
-
-    /// <summary>
-    /// Block buffer on the drive's controller.  The Sidewinder has three fixed
-    /// 512-byte buffers that it uses to stream blocks to and from the media;
-    /// we supplement that with a type code (derived from the SectorHeader data)
-    /// and keep a read/write pointer to simplify the byte-by-byte access that
-    /// the microcode does (there's no DMA to or from the streamer).
-    /// </summary>
-    internal class BlockBuffer
-    {
-        public BlockBuffer(BlockType type)
-        {
-            _type = type;
-            _data = new byte[512];
-            _currentByte = 0;
-        }
-
-        /// <summary>
-        /// Copy a data Sector from the media into a new block and set its type.
-        /// </summary>
-        public BlockBuffer(Sector fromSector)
-        {
-            // Blargh.  Add an extension method to Sector for translating
-            // header bytes <=> BlockTypes?  Meh.
-            var marker = (uint)((fromSector.ReadHeaderByte(0) << 24) |
-                                (fromSector.ReadHeaderByte(1) << 16) |
-                                (fromSector.ReadHeaderByte(2) << 8) |
-                                (fromSector.ReadHeaderByte(3)));
-
-            _type = (BlockType)marker;
-            _data = new byte[512];
-            fromSector.Data.CopyTo(_data, 0);
-            _currentByte = 0;
-        }
-
-        public BlockType Type => _type;
-
-        public byte[] Data => _data;
-        public int Pointer => _currentByte;         // debug output
-
-        public bool Full => _currentByte == _data.Length;
-        public bool Empty => _currentByte == 0;
-
-
-        public void Clear()
-        {
-            for (_currentByte = 0; _currentByte < _data.Length; _currentByte++)
-            {
-                _data[_currentByte] = 0;
-            }
-
-            _currentByte = 0;
-        }
-
-        public byte GetByte()
-        {
-            if (_currentByte < _data.Length)
-            {
-                return _data[_currentByte++];
-            }
-
-            return 0;
-        }
-
-        public void PutByte(byte value)
-        {
-            if (_currentByte < _data.Length)
-            {
-                _data[_currentByte++] = value;
-            }
-        }
-
-        public void SetType(BlockType t)
-        {
-            _type = t;
-        }
-
-        BlockType _type;
-
-        byte[] _data;
-        int _currentByte;
-    }
 }

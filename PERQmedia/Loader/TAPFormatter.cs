@@ -181,8 +181,7 @@ namespace PERQmedia
                         // data; back up by 4 bytes to position for ReadData
                         if (recordType < (uint)Marker.Cookie || recordType > (uint)Marker.DevSpecs)
                         {
-                            //Log.Debug(Category.MediaLoader, "Found non-header marker at {0}, header complete", fs.Position);
-                            Console.WriteLine($"Non-header token {recordType:x} found at {fs.Position}");
+                            Log.Debug(Category.MediaLoader, "Found non-header marker at {0}, header complete", fs.Position);
                             found = true;
                             break;
                         }
@@ -202,8 +201,6 @@ namespace PERQmedia
                             dev.FileInfo.TextLabel = label;
 
                             if ((size & 1) != 0) fs.ReadByte();     // Toss pad byte
-
-                            Console.WriteLine($"Read text! {dev.FileInfo.DecodeTextLabel()}");
                         }
                         else if (tag == (uint)Marker.ImageLabel)
                         {
@@ -214,8 +211,6 @@ namespace PERQmedia
                             dev.FileInfo.TextLabel = label;
 
                             if ((size & 1) != 0) fs.ReadByte();     // Toss pad byte
-
-                            Console.WriteLine($"Read image label!! {size} bytes!!");
                         }
                         else if (tag == (uint)Marker.DevInfo)
                         {
@@ -234,8 +229,6 @@ namespace PERQmedia
 
                             // Read the pad byte, if present
                             if ((size & 1) != 0) fs.ReadByte();     // Toss pad byte
-
-                            Console.WriteLine($"Read info!  {dev.Info.Name} - {dev.Info.Description}");
                         }
                         else if (recordType == (uint)Marker.DevGeometry)
                         {
@@ -245,8 +238,6 @@ namespace PERQmedia
                             var secSize = fs.ReadShort();
                             var headSize = (byte)fs.ReadByte();
                             dev.Geometry = new DeviceGeometry(cyls, heads, secs, secSize, headSize);
-
-                            Console.WriteLine($"Read geom!  {dev.Geometry}");
                         }
                         else if (recordType == (uint)Marker.DevSpecs)
                         {
@@ -258,21 +249,26 @@ namespace PERQmedia
                             var settle = fs.ReadInt();
                             var xferRate = fs.ReadInt();
                             dev.Specs = new DevicePerformance(rpm, pulse, delay, minSeek, maxSeek, settle, xferRate);
-
-                            Console.WriteLine($"Read specs! {dev.Specs}");
                         }
                         else
                         {
                             Log.Warn(Category.MediaLoader, "Unknown class E marker: {0:x} at pos {1}", recordType, fs.Position);
                         }
 
+                        // Verify the record
                         var checkType = fs.ReadUInt();
-                        if (checkType != recordType) Console.WriteLine($"BAD READ recT={recordType} chkT={checkType}");
+
+                        if (checkType != recordType)
+                        {
+                            Log.Error(Category.MediaLoader,
+                                      "Data record mismatch: {0:x} != {1:x}, file corrupt?", recordType, checkType);
+                            return false;
+                        }
                     }
 
-                    // This is in bytes, right?  Negative to rewind?  Nice docs, M$
+                    // Jump back, Jack.  Rewind 4 bytes to re-read the record
                     fs.Seek(-4, SeekOrigin.Current);
-                    Console.WriteLine($"Header rewind, now at {fs.Position}");
+                    Log.Detail(Category.MediaLoader, "Header rewind, now at pos {0}", fs.Position);
                 }
 
                 // At last!
@@ -315,25 +311,28 @@ namespace PERQmedia
 
                     if (recordType == (uint)Marker.EndOfMedia)
                     {
-                        // ...and I'm all out of bubble gum.  Er, and tape blocks
+                        // ...and I'm all out of tape blocks.
                         EOM = true;
-                        FillBlock(0xff, ref data);
                         Log.Debug(Category.MediaLoader, "Read EOM marker at block {0}, EOF is {1}", block, (fs.Position == fs.Length));
+                        FillBlock(0xff, ref data);
                     }
                     else if (recordType >= 0xff000000)
                     {
-                        FillBlock((byte)(recordType & 0xfe), ref data);
                         Log.Debug(Category.MediaLoader, "'Erase Gap' or reserved marker 0x{0:x} at block {1}", recordType, block);
+                        FillBlock((byte)(recordType & 0xfe), ref data);
                     }
                     else if (recordType == 0x0)
                     {
+                        // Don't log EVERY BLOODY SECTOR when loading an unformatted tape... :-|
+                        if (data[0] != 0x1c)
+                            Log.Detail(Category.MediaLoader, "File mark at block {0}", block);
+                        
                         FillBlock(0x1c, ref data);
-                        Log.Detail(Category.MediaLoader, "File mark at block {0}", block);
                     }
                     else if ((recordType & 0xf0000000) == 0xe0000000)
                     {
                         Log.Debug(Category.MediaLoader, "Stray metadata marker {0:x} at block {1}, skipped", recordType, block);
-                        continue;
+                        continue;   // This'll just spew and/or crash, probably
                     }
                     else
                     {
@@ -342,7 +341,7 @@ namespace PERQmedia
 
                         // Bad block flag is the msb
                         bad = (recordType & 0x80000000) != 0;
-#if DEBUG
+
                         // If bit 31 is set then bits 30:24 must be zero, so if
                         // we get anything else die horribly?  Shouldn't happen...
                         if ((recordType & 0x7f000000) != 0)
@@ -351,33 +350,22 @@ namespace PERQmedia
                             return false;
                         }
 
-                        // Debugging, mostly -- these should never happen!
-                        if (blockLen > 512)
+                        // Should never happen on files we write, but may on non-
+                        // PERQmedia written archives... either we're out of sync
+                        // or the file has different blocking; either way we bail
+                        if (blockLen != 512)
                         {
-                            Log.Warn(Category.MediaLoader, "Block {0} is too large ({1}), truncating to 512 bytes", block, blockLen);
-                        }
-                        else if (blockLen < 512)
-                        {
-                            Log.Debug(Category.MediaLoader, "Block {0} is too short ({1}), padding to 512 bytes", block, blockLen);
-                        }
-#endif
-                        // Read the data from the stream, storing up to the sector
-                        // size and throwing away any overrun...
-                        for (var i = 0; i < blockLen; i++)
-                        {
-                            if (i < data.Length)
-                                data[i] = (byte)fs.ReadByte();
-                            else
-                                fs.ReadByte();      // Overrun, just throw it away
+                            Log.Error(Category.MediaLoader, "Block {0} is wrong size ({1}), skipping it", block, blockLen);
+                            continue;
                         }
 
-                        // Explicitly pad any short blocks with nulls
-                        for (var i = blockLen; i < data.Length; i++)
-                            data[i] = 0x0;
+                        // Read the block from the stream
+                        fs.Read(data, 0, data.Length);
 
                         Log.Detail(Category.MediaLoader, "Read data block {0}, 0/{1}/{2} ({3} bytes)", block, head, sector, data.Length);
                     }
 
+                    //
                     // Special case:  If we've reached the last block of the file
                     // and haven't seen an EndOfMedia tag, it's probably a new
                     // blank tape that hasn't had an Erase or Write pass done on
@@ -388,7 +376,7 @@ namespace PERQmedia
                     // This ain't ideal, but I'll document it.  Run Stut (emulated
                     // or standalone) to properly format tapes or they'll be full
                     // sized when saved as .tap files!
-
+                    //
                     if (block == dev.Geometry.TotalBlocks - 1 && recordType != (uint)Marker.EndOfMedia)
                     {
                         Log.Info(Category.MediaLoader, "TAP loader: Inserting EOM record for unformatted tape");
@@ -401,13 +389,10 @@ namespace PERQmedia
                     }
 
                     // For ALL blocks, copy the marker into the header
-                    //unchecked
-                    //{
                     header[0] = (byte)(recordType >> 24);
                     header[1] = (byte)(recordType >> 16);
                     header[2] = (byte)(recordType >> 8);
                     header[3] = (byte)recordType;
-                    //}
 
                     // Create the sector, copy in the header & data
                     dev.Sectors[0, head, sector] = new Sector(0, (byte)head, (ushort)sector, (ushort)data.Length, (byte)header.Length, bad);
@@ -443,6 +428,7 @@ namespace PERQmedia
                 }
 
                 // Done!
+                Log.Info(Category.MediaLoader, "TAP formatter: Read {0} blocks, total size {1} bytes", block, fs.Position);
                 return true;
             }
             catch (EndOfStreamException e)
@@ -458,7 +444,7 @@ namespace PERQmedia
         public bool Write(Stream fs, StorageDevice dev)
         {
             uint recordType = 0;
-            uint size = 0;
+            int size = 0;
             bool pad = false;
 
             Log.Debug(Category.MediaLoader, "TAP formatter: Writing custom header...");
@@ -476,31 +462,31 @@ namespace PERQmedia
             fs.WriteUInt(recordType);
 
             // Text label, if present
-            size = (uint)(dev.FileInfo.TextLabel != null ? dev.FileInfo.TextLabel.Length : 0);
+            size = dev.FileInfo.TextLabel != null ? dev.FileInfo.TextLabel.Length : 0;
 
             if (size > 0)
             {
                 pad = (size & 1) != 0;
                 recordType = (uint)Marker.TextLabel;
-                recordType |= (size & 0x00ffffff);
+                recordType |= (uint)(size & 0x00ffffff);
 
                 fs.WriteUInt(recordType);
-                fs.Write(dev.FileInfo.TextLabel, 0, dev.FileInfo.TextLabel.Length);
+                fs.Write(dev.FileInfo.TextLabel, 0, size);
                 if (pad) fs.WriteByte(0);
                 fs.WriteUInt(recordType);
             }
 
             // Image label, if present
-            size = (uint)(dev.FileInfo.ImageLabel != null ? dev.FileInfo.ImageLabel.Length : 0);
+            size = dev.FileInfo.ImageLabel != null ? dev.FileInfo.ImageLabel.Length : 0;
 
             if (size > 0)
             {
                 pad = (size & 1) != 0;
                 recordType = (uint)Marker.ImageLabel;
-                recordType |= (size & 0x00ffffff);      // Silently clip to 16MB!
+                recordType |= (uint)(size & 0x00ffffff);      // Silently clip to 16MB!
 
                 fs.WriteUInt(recordType);
-                fs.Write(dev.FileInfo.ImageLabel, 0, dev.FileInfo.ImageLabel.Length);
+                fs.Write(dev.FileInfo.ImageLabel, 0, size);
                 if (pad) fs.WriteByte(0);
                 fs.WriteUInt(recordType);
             }
@@ -509,13 +495,13 @@ namespace PERQmedia
 
             // Because this is variable length, compute the size to set the marker;
             // length of the strings (one null terminator each), plus fixed fields
-            size = (uint)(dev.FileInfo.ArchivedBy.Length +
-                          dev.Info.Name.Length +
-                          dev.Info.Description.Length + 3 + 11);
+            size = (dev.FileInfo.ArchivedBy.Length +
+                    dev.Info.Name.Length +
+                    dev.Info.Description.Length + 3 + 11);
 
             pad = (size & 1) != 0;
             recordType = (uint)Marker.DevInfo;
-            recordType |= size;
+            recordType |= (uint)(size & 0x00ffffff);
 
             fs.WriteUInt(recordType);
             fs.WriteByte((byte)dev.FileInfo.FSType);                // 1 byte
