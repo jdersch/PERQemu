@@ -210,6 +210,44 @@ real tape contains error information I do attempt to preserve it, but that has
 not been an issue yet.  Obviously attention will be paid as the need arises.
 
 
+BUGS
+----
+
+The microcode (TSIO.micro for POS, v2.8; TSIO.micromac for Accent v0.2) does NOT
+follow the specification in at least one significantly erroneous way.  The drive
+is supposed to write a final file mark and automatically rewind when the "end of
+write" sequence is initiated by the host.  But the PERQ microcode doesn't rely 
+on, or seemingly even expect the drive to do that; in fact, they don't use that
+"feature" at all.  Rather than just drop the Online signal to say "done writing"
+they write three consecutive filemarks then IMMEDIATELY issue a ReadStatus -- 
+without waiting for the Ready response from the drive to indicate that the
+previous WriteFM command was completed.  They drop the Online signal *after*
+initiating the ReadStatus command!  Finally, the TSWrEnd routine explicitly
+issues a rewind command that would be completely superfluous if they just let
+the controller handle that automatically it as it's supposed to.  Ugh.
+
+The cryptic comment in the source that the "drive doesn't rewind if the last
+command was a Read Status" is either a complete misinterpretation of the spec --
+there's NO such documented behavior -- or it's based on observations of behavior
+from the drive's firmware that doesn't match the spec.  Either way, the emulator
+has to deal with one OR BOTH of these being true.
+
+By not using the SendCmd microroutine to transition from the final WriteFileMark
+to ReadStatus, it means the emulator has to see that the microcode has already
+made the transition (raising RQST while still ONLINE, then dropping ONLINE and
+RQST to pass the ReadStatus command byte) and abandon the documented "end of
+write" behavior.  To work around this illegal state machine transition, the
+least egregious path for the emulator is to latch the command byte, spoof the
+RDY signal to let the microcode think that the normal handshake completed, then
+allow WriteFileMark to complete before jumping straight into sending back the
+first status byte.  The Accent version seems to have the same problem, but adds
+an additional wait state to try to compensate -- so they clearly must have
+identified a problem but completely misunderstood the necessary fix (or the
+opportunity to simplify the code by using the "end of write" sequence properly).
+
+Sigh.  Bug compatibility is fun.
+
+
 Performance
 -----------
 

@@ -97,7 +97,7 @@ namespace PERQemu.IO.TapeDevices
         // Internal status
         private bool AtBeginningOfTape => _position == 0;
         private bool AtEndOfTape => _position == Geometry.Sectors - 1;
-        private bool AtEndOfMedia => _position == _lastBlock;
+        private bool AtEndOfMedia => _position == Geometry.TotalBlocks - 1;
         private bool AtFileMark => _atFileMark;
 
         /// <summary>
@@ -200,7 +200,7 @@ namespace PERQemu.IO.TapeDevices
                                 break;
 
                             default:
-                                Log.Info(Category.Streamer, "Unimplemented command {0}", _command);
+                                Log.Warn(Category.Streamer, "Unimplemented command {0}", _command);
                                 break;
                         }
                         break;
@@ -224,7 +224,7 @@ namespace PERQemu.IO.TapeDevices
                                 break;
 
                             default:
-                                Console.WriteLine($"Unhandled signal change for {_command} in Busy state");
+                                 Log.Warn(Category.Streamer, "Unhandled signal change for {0} in Busy state", _command);
                                 break;
                         }
                         break;
@@ -392,16 +392,9 @@ namespace PERQemu.IO.TapeDevices
                     _phase = Phase.StatusReady;
 
                     // Schedule the next transition in 20usec
-                    _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, (skewNsec, context) =>
-                    {
-                        // Do it this way so we can be called during a Write
-                        // or Read sequence without falling into FinishCommand
-                        // if the host wishes to continue; "elegantly clunky"?
-                        _commandSequence.Push(SendStatusByte);
-                        RunSequence();
-                    });
-
-                    Log.Detail(Category.Streamer, "ReadStatus: dir change, sending first byte in 20us");
+                    _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SendStatusByte);
+                        
+                    Log.Debug(Category.Streamer, "ReadStatus: dir change, sending first byte in 20us");
                     return State.Busy;
 
                 case Phase.StatusReady:
@@ -418,24 +411,27 @@ namespace PERQemu.IO.TapeDevices
                     return State.Busy;
 
                 case Phase.StatusAck:
-                    // Complete the handshake for the byte!
+                    // Complete the handshake for the byte sent
                     _phase = Phase.StatusAccepted;
 
                     // Any more to send?
                     if (!_status.ReadComplete)
                     {
-                        // Yep!  Ship it
+                        // Yep, schedule the next byte
                         _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SendStatusByte);
                         return State.Busy;
                     }
 
-                    // Nope!  All done - schedule our final transition
+                    // Nope!  Reset and retire
+                    _status.Clear();
+                    _phase = Phase.Ready;
+                    _state = State.Idle;
+
+                    // Schedule our final transition
                     _protocolEvent = _scheduler.Schedule(10 * Conversion.UsecToNsec, (skewNsec, context) =>
                     {
-                        _status.Clear();        // Reset
                         _fromHost = true;       // Turn around the bus 
                         _ready = true;          // Ready for new command
-                        _phase = Phase.Ready;   // Fixme: this probably isn't right
                     });
 
                     // Fall through to finish the command
@@ -447,10 +443,7 @@ namespace PERQemu.IO.TapeDevices
                     break;
             }
 
-            // If we fall out, we're done!  Reset the status buffer
-            _status.Clear();
-            Log.Debug(Category.Streamer, "ReadStatus complete");
-
+            Log.Debug(Category.Streamer, "ReadStatus: Complete");
             return RunSequence();
         }
 
@@ -481,7 +474,7 @@ namespace PERQemu.IO.TapeDevices
                     _commandSequence.Push(Rewind);
                     _commandSequence.Push(Wind);
 
-                    if (_position != 0)
+                    if (!AtBeginningOfTape)
                     {
                         _commandSequence.Push(Rewind);
                     }
@@ -510,12 +503,10 @@ namespace PERQemu.IO.TapeDevices
             ENTER("StartWr");
 
             //
-            // Initialize a new Write sequence
-            //
-            // These conditions are checked in GetCommandByte:
+            // Initialize a new Write sequence.  These conditions are checked
+            // in GetCommandByte:
             //    ONLINE is true; tape IS loaded and is NOT write protected
             //
-
             if (_command == Command.WriteFileMark)
                 _commandSequence.Push(WriteFileMark);
             else
@@ -531,11 +522,6 @@ namespace PERQemu.IO.TapeDevices
 
             // Zap the internal buffers
             ResetBuffers();
-
-            // Clear the current _lastBlock, assuming that a) a Read may have
-            // found and set the EOM flag short of the actual full capacity, and
-            // b) an Erase may not have been done first (is that required?).
-            _lastBlock = Geometry.TotalBlocks - _buffers.Length;   // Wiggle room!
 
             // Off we go...
             return RunSequence();
@@ -579,10 +565,11 @@ namespace PERQemu.IO.TapeDevices
                     //
                     if (!_online)
                     {
-                        Log.Info(Category.Streamer, "Online dropped, terminating write sequence");
+                        Log.Debug(Category.Streamer, "Online dropped, terminating write sequence");
 
                         // Put us back in command mode
                         _phase = Phase.Ready;
+                        _state = State.Idle;
 
                         // If Online drops at this point, the drive automatically
                         // writes a file mark and rewinds.  The PERQ microcode may
@@ -590,20 +577,20 @@ namespace PERQemu.IO.TapeDevices
                         // on the controller's default behavior, so in that case
                         // this will generally only occur if the controller times
                         // out and drops online (or Resets) to recover?
-                        _commandSequence.Push(Rewind);
+                        //_commandSequence.Push(Rewind);
 
                         // "If the last command was a WFM command, the controller
                         // will not write another file mark."
-                        if (_command != Command.WriteFileMark)
-                            _commandSequence.Push(WriteFileMark);
+                        //if (_command != Command.WriteFileMark)
+                        //    _commandSequence.Push(WriteFileMark);
 
-                        nextState = RunSequence();
+                        //nextState = RunSequence();
                         break;
                     }
 
                     if (_request)
                     {
-                        Log.Info(Category.Streamer, "Request raised, jumping out to receive new command!");
+                        Log.Debug(Category.Streamer, "Request raised, jumping out to receive new command!");
 
                         // Host wants to issue a new command.  At this point the
                         // byte is already on the bus, so we reset to the command
@@ -616,11 +603,12 @@ namespace PERQemu.IO.TapeDevices
                         // Don't leak that buffer!
                         if (_buffers[_hostBuffer].Empty)
                         {
-                            Log.Info(Category.Streamer, "Releasing {0} buffer {1}", _buffers[_hostBuffer].Type, _hostBuffer);
+                            Log.Debug(Category.Streamer, "Releasing {0} buffer {1}", _buffers[_hostBuffer].Type, _hostBuffer);
 
                             // This is sort of annoying, because the microcode does
                             // NOT have to issue a new WriteData command for every
-                            // block -- it can just drop Xfer and continue!  Argh.
+                            // block -- it can just drop Xfer and continue!  Accent
+                            // uses the continuation feature, but POS does not. :-/
                             _buffers[_hostBuffer].SetType(BlockType.Empty);
                         }
 
@@ -678,7 +666,7 @@ namespace PERQemu.IO.TapeDevices
                         _phase = Phase.DataAck;
                         _ready = false;
 
-                        _protocolEvent = _scheduler.Schedule(4 * Conversion.UsecToNsec, (skewNsec, context) =>
+                        _protocolEvent = _scheduler.Schedule(2 * Conversion.UsecToNsec, (skewNsec, context) =>
                          {
                              _acknowledge = true;
                              _phase = Phase.DataAccepted;
@@ -686,7 +674,7 @@ namespace PERQemu.IO.TapeDevices
                     }
                     else
                     {
-                        Log.Info(Category.Streamer, "Caught a stray signal change in DataReady");
+                        Log.Warn(Category.Streamer, "Caught a stray signal change in DataReady");
                     }
                     break;
 
@@ -700,19 +688,18 @@ namespace PERQemu.IO.TapeDevices
 
                     if (_buffers[_hostBuffer].Full)
                     {
-                        Log.Info(Category.Streamer, "Buffer {0} is full!", _hostBuffer);
-
-                        Flush();
-
-                        // Need a new buffer
+                        // Will need a new buffer
                         _phase = Phase.DataPaused;
+
+                        Log.Info(Category.Streamer, "Buffer {0} is full!", _hostBuffer);
+                        Flush();
 
                         // Reset Ack to indicate normal reception of the last byte;
                         // There's no response from the host after byte 512, but
                         // the transition to Ready will move us into the next phase.
-                        // Spec says T22-T23 is >100usec!
+                        // Spec says T22-T23 is >100usec!  That seems overly generous...
                         _acknowledge = false;
-                        _protocolEvent = _scheduler.Schedule(100 * Conversion.UsecToNsec, SetReady);
+                        _protocolEvent = _scheduler.Schedule(20 * Conversion.UsecToNsec, SetReady);
                     }
                     else
                     {
@@ -724,6 +711,32 @@ namespace PERQemu.IO.TapeDevices
                             {
                                 _acknowledge = false;
                             });
+                    }
+                    break;
+
+                case Phase.DataSent:
+                    // Here because the TSIO microcode is wrong: it doesn't wait
+                    // properly to issue the ReadStatus command, giving only a
+                    // short fixed delay and then proceeding without waiting for
+                    // Ready to go true.  This workaround catches that case. :-/
+                    if (_request)
+                    {
+                        Log.Warn(Category.Streamer, "** Microcode bug detected: Illegal transition (RQST when !RDY)");
+                        DumpState();
+
+                        // Set ready here to complete command exchange while the
+                        // WriteFileMark command previously issued is completed
+                        _ready = true;
+                    }
+                    if (!_request && (Command)_data == Command.ReadStatus)
+                    {
+                        // Reset now, so WriteFM can jump into SendStatusByte
+                        // and kick off the status read normally.  Ugh.
+                        _ready = false;
+                        _command = (Command)_data;
+
+                        Log.Warn(Category.Streamer, "** Microcode bug workaround: Latched {0} command", _command);
+                        DumpState();
                     }
                     break;
 
@@ -744,7 +757,7 @@ namespace PERQemu.IO.TapeDevices
                                 ((ulong)Specs.MinimumSeek * Conversion.UsecToNsec) :
                                 SecTime90IPS;
 
-            Log.Info(Category.Streamer, "Waiting for free buffer; retry in {0}ms...",
+            Log.Detail(Category.Streamer, "Waiting for free buffer; retry in {0}ms...",
                                           retry * Conversion.NsecToMsec);
 
             if (!_tapeInMotion) Flush();    // Kick the drive again?
@@ -830,15 +843,32 @@ namespace PERQemu.IO.TapeDevices
                     // WriteBehind calls us when the tape has stopped.  This ensures
                     // that the final file mark is flushed before rewinding!  At least
                     // one sector time has already elapsed, so we finally set Ready and
-                    // terminate the write sequence.
+                    // return to DataPaused where the write sequence can continue.
                     //
-                    _ready = true;
-                    _phase = Phase.Ready;
-                    RunSequence();
+                    if (_command == Command.WriteFileMark)
+                    {
+                        _phase = Phase.DataPaused;
+                        _ready = true;
+                    }
+                    else if (_command == Command.ReadStatus)
+                    {
+                        Log.Warn(Category.Streamer, "** Microcode bug workaround: Joining {0} command", _command);
+
+                        // Terminate the write sequence (return to Idle) and jump
+                        // straight into the ReadStatus loop.  This seems like the
+                        // least horrible option?  Oof.
+                        _phase = Phase.Accepted;
+                        UpdateStatus();
+                        DoReadStatus();
+                    }
+                    else
+                    {
+                        Log.Error(Category.Streamer, "WriteFM caught unexpected signal in phase {0}?", _phase);
+                    }
                     break;
 
                 default:
-                    Log.Error(Category.Streamer, "WriteFileMark entered in phase {0}?", _phase);
+                    Log.Error(Category.Streamer, "WriteFM entered in phase {0}?", _phase);
                     break;
             }
 
@@ -867,8 +897,9 @@ namespace PERQemu.IO.TapeDevices
             // Get the next dirty, dirty buffer
             if (!GetFullBuffer(ref _tapeBuffer))
             {
-                Log.Info(Category.Streamer, "Underrun! No buffer ready for writing");
+                Log.Debug(Category.Streamer, "Underrun! No buffer ready for writing");
 
+                // Are pauses like this actually counted as underruns by the hardware?
                 _status.Underruns++;
 
                 // Next buffer completion will call Flush to restart
@@ -876,8 +907,8 @@ namespace PERQemu.IO.TapeDevices
             }
             else
             {
-                Log.Info(Category.Streamer, "Sweet! Buffer {0} is ready to flush @ pos {1}",
-                          _tapeBuffer, _position);
+                Log.Info(Category.Streamer, "Writer: Buffer {0} is ready to flush @ pos {1}",
+                                            _tapeBuffer, _position);
 
                 // Commit the block!
                 WriteBuffer(_tapeBuffer, _position);
@@ -886,8 +917,8 @@ namespace PERQemu.IO.TapeDevices
                 _atFileMark = (_buffers[_tapeBuffer].Type == BlockType.FileMark);
 
                 // Clear the buffer now
-                _buffers[_tapeBuffer].SetType(BlockType.Empty);
                 _buffers[_tapeBuffer].Clear();
+                _buffers[_tapeBuffer].SetType(BlockType.Empty);
 
                 // If we're on track 0, the erase bar is zapping the other tracks!
                 if (_position < Geometry.Sectors)
@@ -911,51 +942,50 @@ namespace PERQemu.IO.TapeDevices
                     // that requires a ReadStatus in response.  Let's assume that
                     // here as well.  Worst case is we just blow 200ms spinning
                     // the virtual tape down and back up for no reason!
-                    Log.Info(Category.Streamer, "Wrote a file mark!");
+                    Log.Debug(Category.Streamer, "Wrote a file mark!");
 
                     UpdateStatus();
                     StartStop(WriteFileMark);
                     return;
                 }
 
-                if (AtEndOfMedia)
+                if (_position == _lastBlock)
                 {
                     // At the warning track; stop tape, set exception, require
                     // a Read Status to continue.  Jump back to DataReady for
-                    // the last Write/WriteFM/offline processing
+                    // the last Write/WriteFM/offline processing.  Except that
+                    // Stut doesn't do any of that.  It hits the hard limit and
+                    // gives up.
                     Log.Warn(Category.Streamer, "Reached the warning track, tape is almost full.");
-
-                    StartStop(null);
-                    _exception = true;
-                    return;
                 }
 
-                if (AtEndOfTape)
+                if (AtEndOfMedia)
                 {
                     // Here we have to jam on the brakes and halt the whole write op
-                    Log.Error(Category.Streamer, "Reached end of media, tape is full.  Hard stop.");
+                    Log.Error(Category.Streamer, "Reached end of physical media, tape is full.  Hard stop.");
 
                     StartStop(null);
                     _exception = true;
-                    FinishCommand();
+                    _state = FinishCommand();
                     return;
                 }
 
                 // If Online drops, stop motion?
                 if (!Online)
                 {
-                    Log.Write(Category.Streamer, "Controller reports offline, stopping tape.");
+                    Log.Info(Category.Streamer, "Controller reports offline, stopping tape.");
                     StartStop(null);
-
                     return;
                 }
 
                 // Skip this if we aren't rate limiting and save hundreds milliseconds! :-)
-                if (AtEndOfTape && Settings.Performance.HasFlag(RateLimit.TapeSpeed))
+                if (_position % Geometry.Sectors == 0 && Settings.Performance.HasFlag(RateLimit.TapeSpeed))
                 {
-                    // Lazily assume that Flush will start us back up, thereby
-                    // simplifying this case tremendously.  Hopefully.
-                    Console.WriteLine("\nAt EOT, have to change heads and direction!\n");
+                    // Stop at the end of each full pass over the tape to reverse
+                    // direction.  Flush will start us back up.  This would be more
+                    // useful if we swapped the activity icon to show the tape wound
+                    // on the opposite spool, which would be subtle but sexy. :-)
+                    Log.Info(Category.Streamer, "At EOT, have to change heads and direction!");
                     StartStop(null);
                 }
                 else
@@ -965,7 +995,7 @@ namespace PERQemu.IO.TapeDevices
                                         ((ulong)Specs.MinimumSeek * Conversion.UsecToNsec) : SecTime90IPS;
 
                     _motionEvent = _scheduler.Schedule(delay, WriteBehind);
-                    Log.Info(Category.Streamer, "Next tape block in {0}ms", delay * Conversion.NsecToMsec);
+                    Log.Detail(Category.Streamer, "Next tape block in {0}ms", delay * Conversion.NsecToMsec);
                 }
             }
         }
@@ -1047,7 +1077,7 @@ namespace PERQemu.IO.TapeDevices
 
         private State RunSequence()
         {
-            Log.Info(Category.Streamer, "RunSequence: {0} commands to go", _commandSequence.Count);
+            Log.Debug(Category.Streamer, "RunSequence: {0} commands to go", _commandSequence.Count);
 
             // Any commands queued up?
             if (_commandSequence.Count > 0)
@@ -1083,6 +1113,8 @@ namespace PERQemu.IO.TapeDevices
 
             if (!IsLoaded)
             {
+                _ready = false;
+                _exception = true;
                 final = State.Unloaded;     // Always overrides
                 _commandSequence.Clear();
             }
@@ -1103,6 +1135,10 @@ namespace PERQemu.IO.TapeDevices
                 // Are we there yet?  Are we there yet?
                 final = (_commandSequence.Count > 0 ? State.Busy : State.Idle);
             }
+
+            // Oh just set it already.  The whole elegant "run a sequence" thing
+            // is a bloody disaster since the PERQ does things its own damn way
+            _state = final;
 
             EXIT("Finish");
             return final;
@@ -1143,7 +1179,7 @@ namespace PERQemu.IO.TapeDevices
             // shorten it to a fixed 10ms (about 10x faster than typical)
             var delay = (Settings.Performance.HasFlag(RateLimit.TapeSpeed) ? Specs.StartupDelay : 10);
 
-            Log.Write(Category.Streamer, "Motor {0} in {1}ms",
+            Log.Info(Category.Streamer, "Motor {0} in {1}ms",
                        (_tapeInMotion ? "stopping" : "starting, up to speed"), delay);
 
             // Schedule it
@@ -1172,7 +1208,7 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private void Rewind(ulong skewNsec, object context)
         {
-            Log.Write(Category.Streamer, "Rewind: tape is {0}, position {1}",
+            Log.Info(Category.Streamer, "Rewind: tape is {0}, position {1}",
                        (_tapeInMotion ? "moving" : "stopped"), _position);
 
             // Rewinding is linear, but position counts logical blocks (over n
@@ -1231,7 +1267,7 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         private void Wind(ulong skewNsec, object context)
         {
-            Log.Write(Category.Streamer, "{0}: tape is {1}, position {2}",
+            Log.Info(Category.Streamer, "{0}: tape is {1}, position {2}",
                        _command, (_tapeInMotion ? "moving" : "stopped"), _position);
 
             // Like rewinding, this is a linear motion from BOT to EOT, but it
@@ -1250,10 +1286,6 @@ namespace PERQemu.IO.TapeDevices
                         // in the block header of the last sector on the device
                         var eom = new BlockBuffer(this, BlockType.EndOfMedia);
                         eom.WriteTo(Geometry.TotalBlocks - 1);
-
-                        // Housekeeping
-                        _lastBlock = Geometry.TotalBlocks - _buffers.Length;    // Reset
-                        Log.Write(Category.Streamer, "Erase: Last block is now {0}", _lastBlock);
                     }
 
                     _atFileMark = false;
@@ -1315,8 +1347,8 @@ namespace PERQemu.IO.TapeDevices
             // It's the only way to be sure
             Reset();
 
-            // Set our max LBN to the last possible block (as a backstop)
-            _lastBlock = Geometry.TotalBlocks - 1;
+            // Set the start of the "warning track"
+            _lastBlock = Geometry.TotalBlocks - _buffers.Length;
 
             Log.Info(Category.Streamer, "{0} online", Info.Description);
 
@@ -1333,9 +1365,9 @@ namespace PERQemu.IO.TapeDevices
             _atFileMark = false;
 
             // Premature ejectulation?
-            _exception |= (_state != State.Idle);
-
-            FinishCommand();
+            _ready = false;
+            _exception = true;
+            _state = FinishCommand();
 
             // Reset to baseline
             Info = DeviceInfo.A3020;

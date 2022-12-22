@@ -72,7 +72,7 @@ namespace PERQemu.IO.TapeDevices
                 }
             }
 
-            Log.Info(Category.Streamer, "GetEmpty: No free buffers!");
+            Log.Debug(Category.Streamer, "GetEmpty: No free buffers!");
             return false;
         }
 
@@ -94,7 +94,7 @@ namespace PERQemu.IO.TapeDevices
                 }
             }
 
-            Log.Info(Category.Streamer, "GetDirty: No dirty buffers remaining");
+            Log.Debug(Category.Streamer, "GetDirty: No dirty buffers remaining");
             return false;
         }
 
@@ -120,7 +120,7 @@ namespace PERQemu.IO.TapeDevices
         {
             _buffers[index].WriteTo(pos);
 
-            Log.Info(Category.Streamer, "WriteBuf: Writing @ pos {0} from buffer {1} (sector {2})",
+            Log.Debug(Category.Streamer, "WriteBuf: Writing @ pos {0} from buffer {1} (sector {2})",
                      pos, index, _buffers[index]);
         }
 
@@ -132,7 +132,7 @@ namespace PERQemu.IO.TapeDevices
         {
             _buffers[index] = new BlockBuffer(this, pos);
 
-            Log.Info(Category.Streamer, "ReadBuf: Reading @ pos {0} into buffer {1} (sector {2})",
+            Log.Debug(Category.Streamer, "ReadBuf: Reading @ pos {0} into buffer {1} (sector {2})",
                       pos, index, _buffers[index]);
         }
 
