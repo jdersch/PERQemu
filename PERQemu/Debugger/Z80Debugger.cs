@@ -18,10 +18,9 @@
 //
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Collections.Generic;
 
 namespace PERQemu.Debugger
 {
@@ -108,15 +107,15 @@ namespace PERQemu.Debugger
                     // And each source code line may begin with a symbol (i.e. "PRQVEC:")
                     // or indented code.  There should be no badly-formed lines as the
                     // listing is machine-generated.  We'll try to be careful anyway.
-                    string line = sw.ReadLine();
+                    var line = sw.ReadLine();
 
                     if (string.IsNullOrWhiteSpace(line))
                     {
                         throw new InvalidOperationException("Unexpected empty line in Z80 source listing");
                     }
 
-                    ushort address = ushort.Parse(line.Substring(4, 4), System.Globalization.NumberStyles.HexNumber);
-                    string source = line.Substring(8);
+                    var address = ushort.Parse(line.Substring(4, 4), System.Globalization.NumberStyles.HexNumber);
+                    var source = line.Substring(8);
 
                     // Log.Detail(Category.Z80Inst, "Loaded Z80 addr {0}, line '{1}'", address, source);
 
@@ -124,16 +123,16 @@ namespace PERQemu.Debugger
                     _sourceMap[address] = source;
 
                     // See if this line begins with a symbol and if so index it.
-                    string[] tokens = source.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    var tokens = source.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
 
                     if (tokens.Length < 1)
                     {
                         continue;
                     }
 
-                    if (tokens[0].EndsWith(":"))
+                    if (tokens[0].EndsWith(":", StringComparison.Ordinal))
                     {
-                        string symbol = tokens[0].Substring(0, tokens[0].Length - 1);
+                        var symbol = tokens[0].Substring(0, tokens[0].Length - 1);
 
                         _symbolToAddressMap[symbol] = address;
                         _addressToSymbolMap[address] = symbol;

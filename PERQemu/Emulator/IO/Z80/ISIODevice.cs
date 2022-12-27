@@ -17,8 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-
 namespace PERQemu.IO.Z80
 {
 

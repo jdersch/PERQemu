@@ -78,11 +78,12 @@ namespace PERQemu.IO.Z80
             _fdc.InterruptsEnabled = ((value & 0x01) != 0);
         }
 
-        private byte[] _ports = { 0xc8 };
 
-        private PERQToZ80FIFO _perqZ80fifo;
-        private Keyboard _keyboard;
-        private NECuPD765A _fdc;
-        private DMARouter _dmaRouter;
+        byte[] _ports = { 0xc8 };
+
+        PERQToZ80FIFO _perqZ80fifo;
+        Keyboard _keyboard;
+        NECuPD765A _fdc;
+        DMARouter _dmaRouter;
     }
 }

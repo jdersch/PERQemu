@@ -129,7 +129,7 @@ namespace PERQmedia
         /// <summary>
         /// Read a track's worth of sectors.
         /// </summary>
-        public void ReadTrack(Stream fs, StorageDevice dev)
+        public void ReadTrack(Stream fs)
         {
             // Get the track info
             fs.CheckRead(5);

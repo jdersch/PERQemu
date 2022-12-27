@@ -19,7 +19,6 @@
 
 using System;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Diagnostics;
 using System.Collections.Generic;
@@ -209,7 +208,7 @@ namespace PERQemu
         public static string OutputFile => _currentFile;
 
 
-        private static void SetMinLevel()
+        static void SetMinLevel()
         {
             _minLevel = (Severity)Math.Min((int)_consLevel, (int)_fileLevel);
         }
@@ -290,7 +289,7 @@ namespace PERQemu
             WriteInternal(s, c, fmt, args);
         }
 
-        private static void WriteInternal(Severity s, Category c, string fmt, params object[] args)
+        static void WriteInternal(Severity s, Category c, string fmt, params object[] args)
         {
             // Apply filters before we do the work to format the output
 #if DEBUG
@@ -453,7 +452,7 @@ namespace PERQemu
             _currentFile = Paths.BuildOutputPath(string.Format(_logFilePattern, _currentFileNum));
         }
 
-        private static int GetFileNum(string filename)
+        static int GetFileNum(string filename)
         {
             // For now, assume the fixed pattern "debugNN.log".  Yuck...
             return Convert.ToInt32(Path.GetFileName(_currentFile).Substring(5, 2));
@@ -463,7 +462,7 @@ namespace PERQemu
         /// Enable or disable logging to file.  When enabling, always opens an
         /// existing file in Append mode, or creates it anew.
         /// </summary>
-        private static bool Enable(bool enable)
+        static bool Enable(bool enable)
         {
             if (enable == _logToFile)
             {
@@ -490,7 +489,7 @@ namespace PERQemu
         /// <summary>
         /// Rotates the current log file.
         /// </summary>
-        private static void RotateFile()
+        static void RotateFile()
         {
             // Prep the next filename
             _currentFileNum = (_currentFileNum < _logLimit ? _currentFileNum + 1 : 0);
@@ -522,7 +521,7 @@ namespace PERQemu
         /// Sets up a dictionary for mapping Categories to console colors,
         /// to aid in distinguishing output when debugging.
         /// </summary>
-        private static void SetColors()
+        static void SetColors()
         {
             _colors = new Dictionary<Category, ConsoleColor>();
 
@@ -604,32 +603,32 @@ namespace PERQemu
             }
         }
 
-        private static Severity _minLevel;
-        private static Severity _consLevel;
-        private static Severity _fileLevel;
-        private static Category _categories;
+        static Severity _minLevel;
+        static Severity _consLevel;
+        static Severity _fileLevel;
+        static Category _categories;
 
-        private static Dictionary<Category, ConsoleColor> _colors;
+        static Dictionary<Category, ConsoleColor> _colors;
 
-        private static ConsoleColor _defaultForeground = Console.ForegroundColor;
-        private static ConsoleColor _defaultBackground = Console.BackgroundColor;
+        static ConsoleColor _defaultForeground = Console.ForegroundColor;
+        static ConsoleColor _defaultBackground = Console.BackgroundColor;
 
-        private static bool _loggingAvailable;
-        private static bool _logToConsole;
-        private static bool _logToFile;
-        private static string _logDirectory;
-        private static string _currentFile;
-        private static string _lastOutput;
-        private static int _repeatCount;
-        private static int _logSize;
-        private static int _logLimit;
+        static bool _loggingAvailable;
+        static bool _logToConsole;
+        static bool _logToFile;
+        static string _logDirectory;
+        static string _currentFile;
+        static string _lastOutput;
+        static int _repeatCount;
+        static int _logSize;
+        static int _logLimit;
 
 #if TRACING_ENABLED
-        private static string _logFilePattern;
-        private static int _currentFileNum;
+        static string _logFilePattern;
+        static int _currentFileNum;
 
-        private static long _turnstile;
-        private static StreamWriter _log;
+        static long _turnstile;
+        static StreamWriter _log;
 #endif
     }
 }

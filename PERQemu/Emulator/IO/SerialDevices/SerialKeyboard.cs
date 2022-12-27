@@ -61,7 +61,7 @@ namespace PERQemu.IO.SerialDevices
             throw new NotImplementedException();
         }
 
-        private ReceiveDelegate _rxDelegate;
 
+        ReceiveDelegate _rxDelegate;
     }
 }

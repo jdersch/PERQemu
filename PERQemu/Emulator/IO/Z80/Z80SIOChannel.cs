@@ -86,20 +86,20 @@ namespace PERQemu.IO.Z80
             // Debugging
             public SerialDevice Port => _port;
 
-            private bool RxEnabled => (_writeRegs[3] & (byte)WReg3.RxEnable) != 0;
-            private bool TxEnabled => (_writeRegs[5] & (byte)WReg5.TxEnable) != 0;
+            bool RxEnabled => (_writeRegs[3] & (byte)WReg3.RxEnable) != 0;
+            bool TxEnabled => (_writeRegs[5] & (byte)WReg5.TxEnable) != 0;
 
-            private WReg4Bits Bits => (WReg4Bits)((_writeRegs[4] & 0xc) >> 2);
-            private bool SyncMode => Bits == WReg4Bits.SyncModesEnable;
+            WReg4Bits Bits => (WReg4Bits)((_writeRegs[4] & 0xc) >> 2);
+            bool SyncMode => Bits == WReg4Bits.SyncModesEnable;
 
-            private WReg1IntEnables IntFlags => (WReg1IntEnables)((_writeRegs[1] & 0x18) >> 3);
-            private bool IntOnFirstRxCharacter => IntFlags == WReg1IntEnables.RxIntOnFirstChar;
-            private bool IntOnAllRxCharacters => IntFlags == WReg1IntEnables.RxIntOnAllParityAffectsVector ||
-                                                 IntFlags == WReg1IntEnables.RxIntOnAllParityNotAffectsVector;
+            WReg1IntEnables IntFlags => (WReg1IntEnables)((_writeRegs[1] & 0x18) >> 3);
+            bool IntOnFirstRxCharacter => IntFlags == WReg1IntEnables.RxIntOnFirstChar;
+            bool IntOnAllRxCharacters => IntFlags == WReg1IntEnables.RxIntOnAllParityAffectsVector ||
+                                         IntFlags == WReg1IntEnables.RxIntOnAllParityNotAffectsVector;
 
-            private bool RxInterruptEnabled => (IntOnFirstRxCharacter && _rxIntOnNextCharacter) || IntOnAllRxCharacters;
-            private bool TxInterruptEnabled => (_writeRegs[1] & (byte)WReg1.TxIntEnable) != 0;
-            private bool ExtInterruptEnabled => (_writeRegs[1] & (byte)WReg1.ExtIntEnable) != 0;
+            bool RxInterruptEnabled => (IntOnFirstRxCharacter && _rxIntOnNextCharacter) || IntOnAllRxCharacters;
+            bool TxInterruptEnabled => (_writeRegs[1] & (byte)WReg1.TxIntEnable) != 0;
+            bool ExtInterruptEnabled => (_writeRegs[1] & (byte)WReg1.ExtIntEnable) != 0;
 
 
             public void AttachDevice(ISIODevice device)
@@ -182,7 +182,7 @@ namespace PERQemu.IO.Z80
                     // TODO: handle CRC resets
 
                     // Execute command:
-                    WReg0Cmd cmd = (WReg0Cmd)((value & 0x38) >> 3);
+                    var cmd = (WReg0Cmd)((value & 0x38) >> 3);
 
                     Log.Debug(Category.SIO, "Channel {0} command is {1}", _channelNumber, cmd);
 
@@ -307,7 +307,7 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// Sends the the next byte on the transmit queue to the device.
             /// </summary>
-            private void SendData(ulong skewNsec, object context)
+            void SendData(ulong skewNsec, object context)
             {
                 if (_txFifo.Count > 0)
                 {
@@ -329,7 +329,7 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// Receive data from the device.  Invoked by the attached ISIODevice.
             /// </summary>
-            private void ReceiveData(byte data)
+            void ReceiveData(byte data)
             {
                 if (RxEnabled)
                 {
@@ -366,7 +366,7 @@ namespace PERQemu.IO.Z80
             /// Invoked by an attached ISerialDevice when it has data and/or extra
             /// status information to send.  Updates error bits in RR1.
             /// </summary>
-            private void ReceiveStatusData(byte data, CharStatus status)
+            void ReceiveStatusData(byte data, CharStatus status)
             {
                 // See what happened...
                 if (status != CharStatus.None)
@@ -414,10 +414,10 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// Update the read registers and interrupt status.
             /// </summary>
-            private void UpdateFlags()
+            void UpdateFlags()
             {
                 // Save the state of the pins before we update 'em
-                RReg0 oldPinState = (RReg0)_readRegs[0];
+                var oldPinState = (RReg0)_readRegs[0];
 
                 // Set RX-related flags in RR0
                 _readRegs[0] = (byte)((_rxFifo.Count > 0 ? RReg0.RxCharAvailable : 0) |
@@ -523,7 +523,7 @@ namespace PERQemu.IO.Z80
             /// to suit the user's actual hardware and synthesizing the data flow
             /// as bytes are received...
             /// </remarks>
-            private void UpdateBitsPerChar(int bits)
+            void UpdateBitsPerChar(int bits)
             {
 #if DEBUG
                 var rxBits = ((_writeRegs[3] & (byte)WReg3.RxBitsPerChar) >> 6);
@@ -556,7 +556,7 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// Changes the port's parity setting in response to register updates.
             /// </summary>
-            private void UpdateParity()
+            void UpdateParity()
             {
                 var enable = (_writeRegs[4] & (byte)WReg4.ParityEnable) != 0;
                 var polarity = (_writeRegs[4] & (byte)WReg4.ParityEvenOdd) >> 1;
@@ -574,7 +574,7 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// Pull out all the stop bits.
             /// </summary>
-            private void UpdateStopBits()
+            void UpdateStopBits()
             {
                 if (Bits != WReg4Bits.SyncModesEnable)
                 {
@@ -594,7 +594,7 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// Change the state of the programmable output pins (RTS, DTR).
             /// </summary>
-            private void UpdateOutputPins()
+            void UpdateOutputPins()
             {
                 if (_port != null)
                 {
@@ -610,31 +610,31 @@ namespace PERQemu.IO.Z80
             }
 
 
-            private int _channelNumber;
-            private int _selectedRegister;
+            int _channelNumber;
+            int _selectedRegister;
 
-            private bool _rxIntOnNextCharacter;
-            private bool _rxInterruptLatched;
-            private bool _txInterruptLatched;
-            private bool _extInterruptLatched;
+            bool _rxIntOnNextCharacter;
+            bool _rxInterruptLatched;
+            bool _txInterruptLatched;
+            bool _extInterruptLatched;
 
-            private int _interruptOffset;
+            int _interruptOffset;
 
-            private bool _huntMode;
-            private bool _breakDetected;
+            bool _huntMode;
+            bool _breakDetected;
 
-            private byte[] _writeRegs;
-            private byte[] _readRegs;
+            byte[] _writeRegs;
+            byte[] _readRegs;
 
             // These two FIFOs on the real hardware are just 3 bytes deep.  Here
             // they're unbounded in size and are (ab)used as the communications
             // stream between the SIO channel and the device it's connected to.
-            private Queue<byte> _rxFifo;
-            private Queue<byte> _txFifo;
-            private Scheduler _scheduler;
+            Queue<byte> _rxFifo;
+            Queue<byte> _txFifo;
+            Scheduler _scheduler;
 
-            private ISIODevice _device;
-            private SerialDevice _port;
+            ISIODevice _device;
+            SerialDevice _port;
         }
 
         //
@@ -642,7 +642,7 @@ namespace PERQemu.IO.Z80
         //
 
         [Flags]
-        private enum RReg0 : byte
+        enum RReg0 : byte
         {
             RxCharAvailable = 0x1,
             IntPending = 0x2,
@@ -655,7 +655,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum RReg1 : byte
+        enum RReg1 : byte
         {
             AllSent = 0x1,
             ExtraBits = 0x0e,
@@ -669,7 +669,7 @@ namespace PERQemu.IO.Z80
         // Write registers
         //
 
-        private enum WReg0Cmd
+        enum WReg0Cmd
         {
             NullCode = 0,
             SendAbort = 1,
@@ -681,7 +681,7 @@ namespace PERQemu.IO.Z80
             ReturnFromInt = 7
         }
 
-        private enum WReg0Crc
+        enum WReg0Crc
         {
             NullCode = 0,
             ResetRxCRC = 1,
@@ -690,7 +690,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WReg1
+        enum WReg1
         {
             ExtIntEnable = 0x1,
             TxIntEnable = 0x2,
@@ -700,7 +700,7 @@ namespace PERQemu.IO.Z80
             WaitReadyEnable = 0x80,
         }
 
-        private enum WReg1IntEnables
+        enum WReg1IntEnables
         {
             RxIntDisable = 0,
             RxIntOnFirstChar = 1,
@@ -709,7 +709,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WReg3
+        enum WReg3
         {
             RxEnable = 0x1,
             SyncCharLoadInhibit = 0x2,
@@ -720,13 +720,13 @@ namespace PERQemu.IO.Z80
             RxBitsPerChar = 0xc0
         }
 
-        private enum WReg4
+        enum WReg4
         {
             ParityEnable = 0x1,
             ParityEvenOdd = 0x2,
         }
 
-        private enum WReg4Bits
+        enum WReg4Bits
         {
             SyncModesEnable = 0,
             One = 1,
@@ -734,7 +734,7 @@ namespace PERQemu.IO.Z80
             Two = 3,
         }
 
-        private enum WReg4SyncMode
+        enum WReg4SyncMode
         {
             EightBit = 0,
             SixteenBit = 1,
@@ -742,7 +742,7 @@ namespace PERQemu.IO.Z80
             ExtSyncMode = 3,
         }
 
-        private enum WReg4ClockMode
+        enum WReg4ClockMode
         {
             X1 = 0,
             X16 = 1,
@@ -751,7 +751,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WReg5
+        enum WReg5
         {
             TxCRCEnable = 0x1,
             RTS = 0x2,

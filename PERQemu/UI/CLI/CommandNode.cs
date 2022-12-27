@@ -31,11 +31,12 @@ namespace PERQemu.UI
     {
         public MethodInvokeInfo(MethodInfo method, object instance)
         {
-            if (method == null || instance == null)
-            {
-                throw new ArgumentNullException("Command method and instance must be non-null");
-            }
-
+            if (method == null)
+                throw new ArgumentNullException(nameof(method), "Command method must be non-null");
+            
+            if (instance == null)
+                throw new ArgumentNullException(nameof(instance), "Command instance must be non-null");
+            
             Method = method;
             Instance = instance;
         }

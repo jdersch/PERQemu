@@ -170,16 +170,16 @@ namespace PERQemu.IO.Z80
             Console.WriteLine($"PERQ->Z80 FIFO: IRQ active={_interruptActive} enabled={_interruptsEnabled} requested={_dataReadyInterruptRequested}");
         }
 
-        private bool _interruptActive;
-        private bool _interruptsEnabled;
-        private bool _dataReadyInterruptRequested;
+        bool _interruptActive;
+        bool _interruptsEnabled;
+        bool _dataReadyInterruptRequested;
 
-        private byte _fifo;
-        private bool _valid;
-        private readonly object _lock;
+        byte _fifo;
+        bool _valid;
+        readonly object _lock;
 
-        private byte[] _ports = { 0xa0 };   // PERQR
+        byte[] _ports = { 0xa0 };   // PERQR
 
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }

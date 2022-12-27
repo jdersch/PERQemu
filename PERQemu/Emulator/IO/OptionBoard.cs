@@ -17,8 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-
 using PERQmedia;
 using PERQemu.Config;
 
@@ -42,7 +40,7 @@ namespace PERQemu.IO
             // constructor, setting up ports and other goodies
         }
 
-        public OptionBoard(PERQSystem system)
+        protected OptionBoard(PERQSystem system)
         {
             _sys = system;
         }
@@ -113,7 +111,7 @@ namespace PERQemu.IO
         protected static string _desc;
 
         // I/O port map for this board
-        private static bool[] _portsHandled = new bool[256];
+        static bool[] _portsHandled = new bool[256];
 
         // Parent
         protected PERQSystem _sys;

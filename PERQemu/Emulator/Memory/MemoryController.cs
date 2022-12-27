@@ -78,7 +78,7 @@ namespace PERQemu.Memory
             Recognize = ((result & 0x40) != 0);
             Complete = ((result & 0x20) != 0);
             Valid = ((result & 0x10) != 0);
-            Index = (int)(result & 0x0c) >> 2;
+            Index = (result & 0x0c) >> 2;
             NextState = (MemoryState)(result & 0x03);
         }
 
@@ -219,7 +219,7 @@ namespace PERQemu.Memory
             _state = _nextState;
 
             // Get the flags for the current bookmark
-            BookmarkEntry flags = GetBookmarkEntry(_bookmark, _state);
+            var flags = GetBookmarkEntry(_bookmark, _state);
 
             // Set the wait and next state based on the current flags
             _wait = flags.Abort;
@@ -282,7 +282,7 @@ namespace PERQemu.Memory
             {
                 // This microinstruction specifies a new memory request: initialize
                 // the next bookmark value based on the request type
-                int book = (int)nextCycle;
+                var book = (int)nextCycle;
 
                 // 
                 // Special cases for RasterOp
@@ -366,7 +366,7 @@ namespace PERQemu.Memory
                 }
 
                 // Get a new set of flags -- these may modify the current cycle!
-                BookmarkEntry flags = GetBookmarkEntry(book, _nextState);
+                var flags = GetBookmarkEntry(book, _nextState);
 
 #if DEBUG
                 // If the Recognize flag is not set, we're really out in left field...
@@ -414,7 +414,7 @@ namespace PERQemu.Memory
             //		3:2		current state
             //		1:0		current Tstate
             //
-            int lookup = (((int)book & 0x0f) << 4) | ((int)state << 2) | _mem.TState;
+            int lookup = (book & 0x0f) << 4 | ((int)state << 2) | _mem.TState;
 
             Log.Detail(Category.MemCycle, "{0} Bookmark[{1:x3}]: {2}", _name, lookup, _bkmTable[lookup]);
             return _bkmTable[lookup];

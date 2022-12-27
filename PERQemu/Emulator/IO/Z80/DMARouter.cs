@@ -78,7 +78,7 @@ namespace PERQemu.IO.Z80
             _selectedDevice.DMATerminate();
         }
 
-        private Z80System _system;
-        private IDMADevice _selectedDevice;
+        Z80System _system;
+        IDMADevice _selectedDevice;
     }
 }

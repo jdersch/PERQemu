@@ -20,8 +20,6 @@
 using System;
 using System.Collections.Generic;
 
-using PERQemu.Memory;
-
 namespace PERQemu.IO
 {
     public class UnhandledIORequestException : Exception
@@ -113,7 +111,7 @@ namespace PERQemu.IO
         /// Adds a new device to the dispatch table.
         /// Will throw if conflicts are found.
         /// </summary>
-        private void UpdateDispatchTable(IIODevice device)
+        void UpdateDispatchTable(IIODevice device)
         {
             Log.Debug(Category.IO, "Updating dispatch table for device {0}", device);
 
@@ -134,11 +132,11 @@ namespace PERQemu.IO
         /// <summary>
         /// Dispatch table for device IO
         /// </summary>
-        private IIODevice[] _deviceDispatch;
+        IIODevice[] _deviceDispatch;
 
         /// <summary>
         /// The devices attached to the bus
         /// </summary>
-        private List<IIODevice> _devices;
+        List<IIODevice> _devices;
     }
 }

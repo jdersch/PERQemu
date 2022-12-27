@@ -49,7 +49,7 @@ namespace PERQemu.IO.Z80
         {
             for (var i = 0; i < _wr.Length; i++)
                 _wr[i] = 0;
-            
+
             _writeBaseRegister = true;
             _baseRegister = 0;
 
@@ -114,7 +114,7 @@ namespace PERQemu.IO.Z80
         /// transaction this house of cards collapses.  If it solves the problem
         /// I'll figure out how to make it more robust...
         /// </remarks>
-        private DMAState RunStateMachine()
+        DMAState RunStateMachine()
         {
             DMAState nextState = _state;
 
@@ -319,7 +319,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private void WriteBaseRegister(byte value)
+        void WriteBaseRegister(byte value)
         {
             _wr[_baseRegister] = value;
 
@@ -355,7 +355,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private void WriteSubRegister(byte value)
+        void WriteSubRegister(byte value)
         {
             byte regVal = _wr[_baseRegister];
 
@@ -459,7 +459,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private void ExecuteCommand(byte command)
+        void ExecuteCommand(byte command)
         {
             switch (command)
             {
@@ -532,7 +532,7 @@ namespace PERQemu.IO.Z80
         /// Registers.  Like FDC status, the DMA chip expects that if you ask
         /// for all seven bytes, you're gonna read all seven bytes!
         /// </summary>
-        private void QueueStatusBytes(bool all)
+        void QueueStatusBytes(bool all)
         {
             //
             // Most of the status bits are active low, so inverted sense.  I'm
@@ -584,7 +584,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private enum DMAState
+        enum DMAState
         {
             Idle = 0,
             SourceRead,
@@ -592,7 +592,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WR0
+        enum WR0
         {
             Transfer = 0x1,
             Search = 0x2,
@@ -601,7 +601,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WR1
+        enum WR1
         {
             MemoryOrIO = 0x8,
             PortAIncrements = 0x10,
@@ -609,7 +609,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WR2
+        enum WR2
         {
             MemoryOrIO = 0x8,
             PortBIncrements = 0x10,
@@ -617,7 +617,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WR3
+        enum WR3
         {
             StopOnMatch = 0x4,
             InterruptEnable = 0x20,
@@ -625,7 +625,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum WR5
+        enum WR5
         {
             ReadyActiveHigh = 0x8,
             CEWAITMultiplexed = 0x10,
@@ -633,7 +633,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum ReadMask
+        enum ReadMask
         {
             None = 0x0,
             StatusByte = 0x1,
@@ -646,7 +646,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum RR0
+        enum RR0
         {
             None = 0x0,
             XferHasOccurred = 0x1,
@@ -656,7 +656,7 @@ namespace PERQemu.IO.Z80
             EndOfBlock = 0x20
         }
 
-        private struct RegisterDecodes
+        struct RegisterDecodes
         {
             public RegisterDecodes(byte mask, byte value)
             {
@@ -668,7 +668,7 @@ namespace PERQemu.IO.Z80
             public byte Value;
         }
 
-        private RegisterDecodes[] _decodes =
+        RegisterDecodes[] _decodes =
         {
             new RegisterDecodes(0x80, 0x00),    // WR0, not actually decoded (assumed if no matches are found)
             new RegisterDecodes(0x87, 0x04),
@@ -676,42 +676,42 @@ namespace PERQemu.IO.Z80
             new RegisterDecodes(0x83, 0x80),
             new RegisterDecodes(0x83, 0x81),
             new RegisterDecodes(0xc7, 0x82),
-            new RegisterDecodes(0x83, 0x83),    // WR6
+            new RegisterDecodes(0x83, 0x83)     // WR6
         };
 
-        private Z80IOBus _ioBus;
-        private Z80MemoryBus _memoryBus;
-        private IDMADevice _deviceA;
-        private IDMADevice _deviceB;
-        private byte _baseAddress;
+        Z80IOBus _ioBus;
+        Z80MemoryBus _memoryBus;
+        IDMADevice _deviceA;
+        IDMADevice _deviceB;
+        byte _baseAddress;
 
-        private bool _writeBaseRegister;
-        private int _baseRegister;
+        bool _writeBaseRegister;
+        int _baseRegister;
 
-        private byte[] _wr;
+        byte[] _wr;
 
-        private ushort _portAddressAInit;
-        private ushort _portAddressBInit;
-        private ushort _blockLength;
-        private byte _maskByte;
-        private byte _matchByte;
-        private byte _interruptControl;
-        private byte _pulseControl;
-        private byte _interruptVector;
-        private byte _data;
+        ushort _portAddressAInit;
+        ushort _portAddressBInit;
+        ushort _blockLength;
+        byte _maskByte;
+        byte _matchByte;
+        byte _interruptControl;
+        byte _pulseControl;
+        byte _interruptVector;
+        byte _data;
 
-        private DMAState _state;
-        private RR0 _status;
-        private ReadMask _statusMask;
-        private Queue<byte> _statusData;
+        DMAState _state;
+        RR0 _status;
+        ReadMask _statusMask;
+        Queue<byte> _statusData;
 
-        private bool _enableDMA;
-        private bool _interruptActive;
-        private bool _interruptEnabled;
+        bool _enableDMA;
+        bool _interruptActive;
+        bool _interruptEnabled;
 
         // Current port addresses
-        private ushort _portAddressA;
-        private ushort _portAddressB;
-        private ushort _byteCounter;
+        ushort _portAddressA;
+        ushort _portAddressB;
+        ushort _byteCounter;
     }
 }

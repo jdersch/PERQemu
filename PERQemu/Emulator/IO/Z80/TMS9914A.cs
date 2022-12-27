@@ -114,7 +114,7 @@ namespace PERQemu.IO.Z80
         // IZ80Device Interface
         //
 
-        private void AssertInterrupt()
+        void AssertInterrupt()
         {
             var oldIntr = _interruptActive;
 
@@ -255,7 +255,7 @@ namespace PERQemu.IO.Z80
                     break;
 
                 case WriteRegister.AuxiliaryCmd:
-                    AuxiliaryCommand cmd = (AuxiliaryCommand)(value & 0x1f);
+                    var cmd = (AuxiliaryCommand)(value & 0x1f);
                     bool cs = (value & 0x80) != 0;
 
                     DispatchAuxiliaryCommand(cmd, cs);
@@ -373,7 +373,7 @@ namespace PERQemu.IO.Z80
         // GPIB Processing
         //
 
-        private void ResetGPIB()
+        void ResetGPIB()
         {
             // todo: determine if this is anywhere close to correct :-/
             _iListen = false;
@@ -392,7 +392,7 @@ namespace PERQemu.IO.Z80
         /// Process GPIB Auxiliary Commands - a small subset the PERQ
         /// uses - to do resets, standby, or set talker/listener flags.
         /// </summary>
-        private void DispatchAuxiliaryCommand(AuxiliaryCommand cmd, bool cs)
+        void DispatchAuxiliaryCommand(AuxiliaryCommand cmd, bool cs)
         {
             Log.Debug(Category.GPIB, "Auxiliary Command is {0}, cs {1}", cmd, cs);
 
@@ -482,10 +482,10 @@ namespace PERQemu.IO.Z80
         /// the setting of talker/listener addresses).  These are "broadcast" to
         /// all devices on the bus.
         /// </summary>
-        private void DispatchGroupCommand(byte value)
+        void DispatchGroupCommand(byte value)
         {
-            RemoteCommandGroup grp = (RemoteCommandGroup)((value & 0x60) >> 5);
-            byte data = (byte)(value & 0x1f);
+            var grp = (RemoteCommandGroup)((value & 0x60) >> 5);
+            var data = (byte)(value & 0x1f);
 
             Log.Debug(Category.GPIB, "Remote command group is {0}, data 0x{1:x2}", grp, data);
 
@@ -564,7 +564,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private enum ReadRegister
+        enum ReadRegister
         {
             IntStatus0 = 0,         // GPIIS0
             AddressSwitch = 1,      // GPIASW
@@ -575,7 +575,7 @@ namespace PERQemu.IO.Z80
             DataIn = 7              // GPIIN
         }
 
-        private enum WriteRegister
+        enum WriteRegister
         {
             IntMask0 = 0,           // GPIIM0
             AddressRegister = 1,    // GPIADD
@@ -595,7 +595,7 @@ namespace PERQemu.IO.Z80
         /// Interrupt status (and mask) register 0 bits.
         /// </summary>
         [Flags]
-        private enum InterruptStatus0 : byte
+        enum InterruptStatus0 : byte
         {
             Int0 = 0x80,
             Int1 = 0x40,
@@ -611,7 +611,7 @@ namespace PERQemu.IO.Z80
         /// Interrupt status (and mask) register 1 bits.
         /// </summary>
         [Flags]
-        private enum InterruptStatus1 : byte
+        enum InterruptStatus1 : byte
         {
             GET = 0x80,
             ERR = 0x40,
@@ -634,7 +634,7 @@ namespace PERQemu.IO.Z80
         /// listen addresses, which is how the PERQ turns the BitPadOne on or
         /// off!  Oy vey.
         /// </summary>
-        private enum RemoteCommandGroup
+        enum RemoteCommandGroup
         {
             AddressedCommandGroup = 0x0,
             ListenAddressGroup = 0x1,
@@ -647,7 +647,7 @@ namespace PERQemu.IO.Z80
         /// mostly ignore) or setting the talker/listener addresses (which we
         /// care about).
         /// </summary>
-        private enum AddressCommands
+        enum AddressCommands
         {
             gtl = 0x01,     // Go to local
             sdc = 0x04,     // Selected device clear
@@ -664,7 +664,7 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// These enumerations come straight from the TMS9941A datasheet.
         /// </summary>
-        private enum AuxiliaryCommand
+        enum AuxiliaryCommand
         {
             swrst = 0x00,   // Software Reset
             dacr = 0x01,    // Release DAC holdoff
@@ -695,28 +695,28 @@ namespace PERQemu.IO.Z80
 
 
         // Local state
-        private bool _standby;
-        private bool _iListen;
-        private bool _iTalk;
+        bool _standby;
+        bool _iListen;
+        bool _iTalk;
 
-        private byte _listener;
-        private byte _talker;
+        byte _listener;
+        byte _talker;
 
-        private bool _sendNextEOI;
+        bool _sendNextEOI;
 
         // Interrupts
-        private bool _interruptsEnabled;
-        private bool _interruptActive;
+        bool _interruptsEnabled;
+        bool _interruptActive;
 
         // Registers
-        private byte _baseAddress;
-        private byte[] _ports;
+        byte _baseAddress;
+        byte[] _ports;
 
-        private byte[] _rdRegisters;
-        private byte[] _wrRegisters;
+        byte[] _rdRegisters;
+        byte[] _wrRegisters;
 
         // The Bus
-        private GPIBBus _bus;
-        private Queue<ushort> _busFifo;
+        GPIBBus _bus;
+        Queue<ushort> _busFifo;
     }
 }

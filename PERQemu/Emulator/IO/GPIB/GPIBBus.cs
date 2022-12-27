@@ -20,8 +20,6 @@
 using System;
 using System.Collections.Generic;
 
-using PERQemu;
-
 namespace PERQemu.IO.GPIB
 {
     /// <summary>
@@ -190,15 +188,15 @@ namespace PERQemu.IO.GPIB
         }
 
         // An illegal talker/listener ID
-        private const byte NOBODY = 0x1f;
+        const byte NOBODY = 0x1f;
 
-        private byte _talkerId;
-        private byte _listenerId;
+        byte _talkerId;
+        byte _listenerId;
 
         // Dispatch table for device IO
-        private IGPIBDevice[] _deviceDispatch;
+        IGPIBDevice[] _deviceDispatch;
 
         // The devices attached to the bus
-        private List<IGPIBDevice> _devices;
+        List<IGPIBDevice> _devices;
     }
 }

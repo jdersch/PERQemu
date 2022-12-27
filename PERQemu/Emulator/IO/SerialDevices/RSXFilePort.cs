@@ -18,9 +18,8 @@
 //
 
 using System;
-using System.Collections.Generic;
-using System.IO.Ports;
 using System.IO;
+using System.Collections.Generic;
 
 using PERQemu.IO.Z80;
 
@@ -152,7 +151,7 @@ namespace PERQemu.IO.SerialDevices
             SendData(value);
         }
 
-        private void ResetState()
+        void ResetState()
         {
             _transferState = TransferState.WaitingForCtrlQ;
             Close();
@@ -163,13 +162,13 @@ namespace PERQemu.IO.SerialDevices
         /// PERQ, as if it were being sent over the serial port.  Rate limited
         /// to a fixed 9600 baud (for now).
         /// </summary>
-        private void ReceiveData(ulong skewNsec, object context)
+        void ReceiveData(ulong skewNsec, object context)
         {
             if (_inputQueue.Count > 0)
             {
                 if (!_isPaused)
                 {
-                    byte b = _inputQueue.Dequeue();
+                    var b = _inputQueue.Dequeue();
 
                     _rxDelegate(b);
 
@@ -261,7 +260,7 @@ namespace PERQemu.IO.SerialDevices
                     {
                         // Command input complete, parse it to determine the
                         // filename and the mode if the input is correct
-                        bool success = ParseRSXCommand();
+                        var success = ParseRSXCommand();
 
                         if (success)
                         {
@@ -364,11 +363,11 @@ namespace PERQemu.IO.SerialDevices
         ///       Input:  Pip TI:=FileName
         ///       Output: Pip FileName=TI:
         /// </summary>
-        private bool ParseRSXCommand()
+        bool ParseRSXCommand()
         {
             bool success = true;
 
-            string[] tokens = _rsxCommand.Split(_separators);
+            var tokens = _rsxCommand.Split(_separators);
 
             // Should be three tokens, and first token must be "Pip"
             if (tokens.Length != 3 || tokens[0] != _pipToken)
@@ -409,7 +408,7 @@ namespace PERQemu.IO.SerialDevices
         /// preamble the protocol requires, or the the error message if the file
         /// can't be found (or open failed for any reason).
         /// </summary>
-        private void StartTransfer()
+        void StartTransfer()
         {
             // We must handle the null case -- it indicates the input file
             // could not be opened.  In this case we just return an empty file
@@ -464,7 +463,7 @@ namespace PERQemu.IO.SerialDevices
         /// <summary>
         /// Finish a transfer by closing the stream.  Resets the state machine.
         /// </summary>
-        private void TransferComplete()
+        void TransferComplete()
         {
             // Last byte in the queue, so close up shop
             if (_fileStream != null)
@@ -513,7 +512,7 @@ namespace PERQemu.IO.SerialDevices
         }
 
 
-        private enum TransferState
+        enum TransferState
         {
             WaitingForCtrlQ,
             WaitingForRSXCommand,
@@ -522,31 +521,31 @@ namespace PERQemu.IO.SerialDevices
         }
 
 
-        private Queue<byte> _inputQueue;
-        private SchedulerEvent _sendEvent;
+        Queue<byte> _inputQueue;
+        SchedulerEvent _sendEvent;
 
-        private string _fileName;
-        private FileMode _fileMode;
-        private FileAccess _fileAccess;
-        private FileStream _fileStream;
+        string _fileName;
+        FileMode _fileMode;
+        FileAccess _fileAccess;
+        FileStream _fileStream;
 
-        private TransferState _transferState;
-        private string _rsxCommand;
-        private string _errorString;
-        private bool _isPaused;
+        TransferState _transferState;
+        string _rsxCommand;
+        string _errorString;
+        bool _isPaused;
 
-        private ulong _charRateInNsec = Conversion.BaudRateToNsec(9600);
+        ulong _charRateInNsec = Conversion.BaudRateToNsec(9600);
 
-        private const byte CtrlQ = 0x11;        // ^Q
-        private const byte CtrlS = 0x13;        // ^S
-        private const byte CtrlZ = 0x1a;        // ^Z
-        private const byte LF = 0x0a;           // LF
-        private const byte CR = 0x0d;           // CR/EOL
-        private const byte EOT = (byte)'>';     // special EOT token for RSX transfer from PERQ
+        const byte CtrlQ = 0x11;        // ^Q
+        const byte CtrlS = 0x13;        // ^S
+        const byte CtrlZ = 0x1a;        // ^Z
+        const byte LF = 0x0a;           // LF
+        const byte CR = 0x0d;           // CR/EOL
+        const byte EOT = (byte)'>';     // special EOT token for RSX transfer from PERQ
 
-        private const string _pipToken = "Pip";
-        private const string _TIToken = "TI:";
-        private static char[] _separators = { ' ', '=' };
+        const string _pipToken = "Pip";
+        const string _TIToken = "TI:";
+        static char[] _separators = { ' ', '=' };
     }
 }
 

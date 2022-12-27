@@ -19,9 +19,7 @@
 
 using System;
 using System.IO.Ports;
-using System.Collections.Generic;
 
-using PERQemu;
 using PERQemu.IO.Z80;
 
 namespace PERQemu.IO.SerialDevices
@@ -194,9 +192,9 @@ namespace PERQemu.IO.SerialDevices
             set { _rts = value; _portChanged |= (_isOpen && _port.RtsEnable != _rts); }
         }
 
-        public override bool DCD => (_isOpen ? _port.CDHolding : false);
-        public override bool DSR => (_isOpen ? _port.DsrHolding : false);
-        public override bool CTS => (_isOpen ? _port.CtsHolding : false);
+        public override bool DCD => (_isOpen && _port.CDHolding);
+        public override bool DSR => (_isOpen && _port.DsrHolding);
+        public override bool CTS => (_isOpen && _port.CtsHolding);
 
 
         /// <summary>
@@ -224,7 +222,7 @@ namespace PERQemu.IO.SerialDevices
         /// callback to continue sending bytes at the proper pace until the buffer
         /// empties.
         /// </summary>
-        private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
+        void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             // If a _sendEvent is not already in progress, kick one off.  I'm
             // sure this is just one giant nasty race condition but lalalalala
@@ -234,7 +232,7 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        private void ReceiveByte(ulong skewNsec, object context)
+        void ReceiveByte(ulong skewNsec, object context)
         {
             if (ByteCount > 0)
             {
@@ -255,13 +253,13 @@ namespace PERQemu.IO.SerialDevices
             }
         }
 
-        private void OnPinChange(object sender, SerialPinChangedEventArgs e)
+        void OnPinChange(object sender, SerialPinChangedEventArgs e)
         {
             Log.Info(Category.RS232, "Pin changed! {0}", e.EventType);
             // Send it via _errDelegate
         }
 
-        private void OnError(object sender, SerialErrorReceivedEventArgs e)
+        void OnError(object sender, SerialErrorReceivedEventArgs e)
         {
             Log.Info(Category.RS232, "Serial port error! {0}", e.EventType);
             // Send it via _errDelegate
@@ -318,17 +316,17 @@ namespace PERQemu.IO.SerialDevices
 
 
         // Host side
-        private SerialPort _port;
-        private SerialSettings _host;
+        SerialPort _port;
+        SerialSettings _host;
 
         // PERQ side
-        private SerialSettings _perq;
-        private bool _dtr;
-        private bool _rts;
+        SerialSettings _perq;
+        bool _dtr;
+        bool _rts;
 
-        private SchedulerEvent _sendEvent;
-        private ulong _charRateInNsec;
-        private bool _portChanged;
+        SchedulerEvent _sendEvent;
+        ulong _charRateInNsec;
+        bool _portChanged;
     }
 }
 

@@ -40,7 +40,7 @@ namespace PERQemu.IO.Z80
 
         public string Name => "Keyboard";
         public byte[] Ports => _ports;
-        public byte? ValueOnDataBus => 0x28; // KBDVEC
+        public byte? ValueOnDataBus => 0x28;    // KBDVEC
         public bool IntLineIsActive => _interruptActive && _interruptsEnabled;
 
         public bool InterruptsEnabled
@@ -78,11 +78,12 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException("Keyboard port write");
         }
 
-        private byte _lastKeycode;
 
-        private bool _interruptsEnabled;
-        private bool _interruptActive;
+        byte _lastKeycode;
 
-        private byte[] _ports = { 0x80 };
+        bool _interruptsEnabled;
+        bool _interruptActive;
+
+        byte[] _ports = { 0x80 };
     }
 }

@@ -24,7 +24,6 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
 using System.IO;
 
 using PERQemu;
@@ -83,7 +82,7 @@ namespace PERQmedia
                 // Start readin' tracks and takin' names
                 while (fs.Position < fs.Length)
                 {
-                    _helper.ReadTrack(fs, dev);
+                    _helper.ReadTrack(fs);
                 }
 
                 // Now figure out what we got

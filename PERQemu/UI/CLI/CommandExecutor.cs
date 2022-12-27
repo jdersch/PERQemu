@@ -847,7 +847,7 @@ namespace PERQemu.UI
                 }
 
                 // Sort by command.  Sort by description is interesting too
-                Array.Sort(cmdArray, (x, y) => (x.Cmd.CompareTo(y.Cmd)));
+                Array.Sort(cmdArray, (x, y) => (string.Compare(x.Cmd, y.Cmd, StringComparison.Ordinal)));
 
                 // Set our empty key for the top-level node
                 string k = (key.Cmd == "") ? "root" : key.Cmd;

@@ -78,7 +78,7 @@ namespace PERQemu.IO.SerialDevices
             Log.Debug(Category.Tablet, "Kriz received byte 0x{0:x2} (ignored)", value);
         }
 
-        private void SendData(ulong skewNsec, object context)
+        void SendData(ulong skewNsec, object context)
         {
             // See the Notes below for message format details!
 
@@ -90,10 +90,10 @@ namespace PERQemu.IO.SerialDevices
             int tabY = _system.VideoController.DisplayHeight - _system.Mouse.MouseY + 64;
 
             // Format 'em and invert (data is active low)
-            byte tab1 = (byte)~((tabX >> 8) | (_system.Mouse.MouseOffTablet ? 0x40 : 0x00));
-            byte tab2 = (byte)~(tabX & 0xff);
-            byte tab3 = (byte)~((tabY >> 8) | (_system.Mouse.MouseButton << 5));
-            byte tab4 = (byte)~(tabY & 0xff);
+            var tab1 = (byte)~((tabX >> 8) | (_system.Mouse.MouseOffTablet ? 0x40 : 0x00));
+            var tab2 = (byte)~(tabX & 0xff);
+            var tab3 = (byte)~((tabY >> 8) | (_system.Mouse.MouseButton << 5));
+            var tab4 = (byte)~(tabY & 0xff);
 
             // Send the data off to the SIO
             _rxDelegate(0x81);      // sync
@@ -112,13 +112,13 @@ namespace PERQemu.IO.SerialDevices
             _sendEvent = _scheduler.Schedule(_dataInterval, SendData);
         }
 
-        
-        private static readonly ulong _dataInterval = (ulong)(16.666667 * Conversion.MsecToNsec);
 
-        private ReceiveDelegate _rxDelegate;
-        private SchedulerEvent _sendEvent;
-        private Scheduler _scheduler;
-        private PERQSystem _system;
+        static readonly ulong _dataInterval = (ulong)(16.666667 * Conversion.MsecToNsec);
+
+        ReceiveDelegate _rxDelegate;
+        SchedulerEvent _sendEvent;
+        Scheduler _scheduler;
+        PERQSystem _system;
     }
 }
 

@@ -70,7 +70,7 @@ namespace PERQemu.IO.Z80
         /// the CTC with a cylinder count; we just clock the counter until it
         /// expires, then deschedule.  The CTC fires the completion interrupt.
         /// </summary>
-        private void StepClockCallback(ulong skewNsec, object context)
+        void StepClockCallback(ulong skewNsec, object context)
         {
             // Step dem heads
             _system.IOB.DiskController.DoSingleSeek();
@@ -81,7 +81,7 @@ namespace PERQemu.IO.Z80
             if (leftToGo > 0)
             {
                 Log.Detail(Category.HardDisk, "SeekControl scheduling step {0} in {1:n}ms",
-                           leftToGo, StepTime * Conversion.NsecToMsec);
+                                               leftToGo, StepTime * Conversion.NsecToMsec);
                 _stepClockEvent = _system.Scheduler.Schedule(StepTime, StepClockCallback);
             }
             else
@@ -92,14 +92,14 @@ namespace PERQemu.IO.Z80
         }
 
         // The hardware runs on a 500KHz fixed clock source
-        private readonly ulong StepTime = 500 * Conversion.UsecToNsec;
+        readonly ulong StepTime = 500 * Conversion.UsecToNsec;
 
         // DiskStep wired to CTC channel 2
-        private readonly int Channel = 2;
+        readonly int Channel = 2;
 
-        private byte[] _ports = { 0xd8 };
+        byte[] _ports = { 0xd8 };
 
-        private SchedulerEvent _stepClockEvent;
-        private PERQSystem _system;
+        SchedulerEvent _stepClockEvent;
+        PERQSystem _system;
     }
 }

@@ -408,7 +408,7 @@ namespace PERQemu.Processor
         /// to avoid complications from the delay in the overlapped Fetch/Store.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ROpWord ComputeResult(ROpWord dest)
+        ROpWord ComputeResult(ROpWord dest)
         {
             ROpWord src = dest;
             EdgeStrategy e = EdgeStrategy.NoPopNoPeek;
@@ -627,7 +627,7 @@ namespace PERQemu.Processor
         /// Precomputes several values for the current RasterOp call so that
         /// they don't have to be repeated during Result() calls.
         /// </summary>
-        private void Setup()
+        void Setup()
         {
             if (!_setupDone)
             {
@@ -695,7 +695,7 @@ namespace PERQemu.Processor
         /// and Memory Tstate.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private State NextState()
+        State NextState()
         {
             // RasterOp is clocked after the Memory "tick", but before the
             // DispatchFunction which may (at the end of the cycle) specify a
@@ -753,9 +753,9 @@ namespace PERQemu.Processor
         /// of the current memory word (but throws an error if MDI is invalid).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ROpWord FetchNextWord()
+        ROpWord FetchNextWord()
         {
-            ROpWord w = new ROpWord();
+            var w = new ROpWord();
 
             if (_memory.MDIValid)
             {
@@ -782,7 +782,7 @@ namespace PERQemu.Processor
         /// Returns the correct Mask for a given destination word in the current quad.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private CombinerFlags DestWordMask(int index)
+        CombinerFlags DestWordMask(int index)
         {
             // Create the 9-bit index into the RDS ROM lookup table
             int lookup = (((int)_phase & 0x3) << 7) |
@@ -802,7 +802,7 @@ namespace PERQemu.Processor
         /// Returns the correct Mask for a given source word in the current quad.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private CombinerFlags SrcWordMask(int index)
+        CombinerFlags SrcWordMask(int index)
         {
             // Create a 9-bit index into the RDS ROM lookup tablee
             int lookup = (((int)_phase & 0x3) << 7) |
@@ -823,7 +823,7 @@ namespace PERQemu.Processor
         /// scan line, given a dest and source word.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private EdgeStrategy GetEdgeStrategy(CombinerFlags dstMask, CombinerFlags srcMask)
+        EdgeStrategy GetEdgeStrategy(CombinerFlags dstMask, CombinerFlags srcMask)
         {
             int lookup = (((int)_direction << 6) |
                          (((int)dstMask & 0x6) << 3) |           // XXX
@@ -849,12 +849,12 @@ namespace PERQemu.Processor
         /// if _srcNeedsAligned is true and the _srcFifo is not empty.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ClearLeadingSrcWords()
+        void ClearLeadingSrcWords()
         {
             // We only need to align the first edge in a Begin phase; else no-op
             if (_phase == Phase.Begin || _phase == Phase.BeginEnd || _phase == Phase.BeginEndClear)
             {
-                ROpWord w = _srcFifo.Peek();
+                var w = _srcFifo.Peek();
                 w.Mask = SrcWordMask(w.Index);
 
                 if ((w.Mask == CombinerFlags.Both) ||
@@ -878,7 +878,7 @@ namespace PERQemu.Processor
         /// region.  Called in SrcFetch if _leftOver is true.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ClearExtraSrcWords()
+        void ClearExtraSrcWords()
         {
             // We only need to clear after the second edge in an End/Clear phase
             if (_phase == Phase.EndClear || _phase == Phase.BeginEndClear)
@@ -898,7 +898,7 @@ namespace PERQemu.Processor
                     // We're here when there are still extra source words left
                     // over from the previous scan line.  We only want to drop
                     // words through the end of the current quad.
-                    ROpWord w = _srcFifo.Peek();
+                    var w = _srcFifo.Peek();
 
                     if ((_direction == Direction.LeftToRight && w.Index == 3) ||
                         (_direction == Direction.RightToLeft && w.Index == 0))
@@ -924,7 +924,7 @@ namespace PERQemu.Processor
         /// the current RasterOp function.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ushort Combine(ushort dstWord, ushort srcWord, ushort mask)
+        ushort Combine(ushort dstWord, ushort srcWord, ushort mask)
         {
             switch (_function)
             {
@@ -974,7 +974,7 @@ namespace PERQemu.Processor
         /// There is no error or sanity checking done here (yet).  If those
         /// files are missing or corrupt, hilarity will ensue.
         /// </remarks>
-        private static void LoadRasterOpROMs()
+        static void LoadRasterOpROMs()
         {
             // RDS is a lookup table with a 9-bit index, returning a CombinerFlag
             using (var fs = new FileStream(Paths.BuildPROMPath("rds00emu.rom"), FileMode.Open))
@@ -1049,13 +1049,13 @@ namespace PERQemu.Processor
         }
 
         // This is an expensive debugging aid...
-        private void DumpFifo(string line, Queue<ROpWord> q)
+        void DumpFifo(string line, Queue<ROpWord> q)
         {
             if (_ropDebug && (Log.ToConsole || Log.ToFile))
             {
                 if (q.Count > 0)
                 {
-                    ROpWord[] a = q.ToArray();
+                    var a = q.ToArray();
 
                     for (int i = 0; i < q.Count; i++)
                     {
@@ -1071,75 +1071,75 @@ namespace PERQemu.Processor
         }
 
         // Temporary debug switch
-        private bool _ropDebug;
+        bool _ropDebug;
 #endif
         #endregion
 
         // Can't reference the protected _memory from CPU parent class?
-        private MemoryBoard _memory;
+        MemoryBoard _memory;
 
         // RasterOp state
-        private State _state;
-        private Phase _phase;
-        private bool _setupDone;
+        State _state;
+        Phase _phase;
+        bool _setupDone;
 
         // CntlRasterOp register
-        private static bool _enabled;
-        private bool _latchOn;
-        private bool _extraSrcWord;
-        private Direction _direction;
+        static bool _enabled;
+        bool _latchOn;
+        bool _extraSrcWord;
+        Direction _direction;
 
         // WidRasterOp register
-        private int _widthExtraWords;
-        private int _widthExtraBits;
-        private MulDivCommand _muldivInst;
+        int _widthExtraWords;
+        int _widthExtraBits;
+        MulDivCommand _muldivInst;
 
         // Src & DstRasterOp registers
-        private Function _function;
-        private int _srcBitOffset;
-        private int _srcWordPosition;
-        private int _destBitOffset;
-        private int _destWordPosition;
+        Function _function;
+        int _srcBitOffset;
+        int _srcWordPosition;
+        int _destBitOffset;
+        int _destWordPosition;
 
         // Bit offset between SrcX and DstX
-        private int _xOffset;
+        int _xOffset;
 
         // Compute the 2nd source edge word, to make region tests simpler
-        private int _lastSrcPosition;
+        int _lastSrcPosition;
 
         // True if we're looking for the first edge (source FIFO)
-        private bool _srcNeedsAligned;
+        bool _srcNeedsAligned;
 
         // True if the second edge has been processed (dest FIFO)
-        private bool _leftOver;
+        bool _leftOver;
 
         // Precompute bitmasks for regions that fall within one word, or left/right edges
-        private ushort _leftEdgeMask;
-        private ushort _rightEdgeMask;
-        private ushort _bothEdgesMask;
+        ushort _leftEdgeMask;
+        ushort _rightEdgeMask;
+        ushort _bothEdgesMask;
 
         // Our own Shifter (cheating; the hardware has only one)
-        private CPU.Shifter _ropShifter;
+        CPU.Shifter _ropShifter;
 
         // The "half-pipeline register"
-        private ROpWord _halfPipe;
+        ROpWord _halfPipe;
 
         // Source words FIFO
-        private Queue<ROpWord> _srcFifo;
+        Queue<ROpWord> _srcFifo;
 
         // This does not actually exist in the real hardware.  This is sort of a
         // handwavy stand-in for the memory pipeline.  Result words are queued
         // here during the RasterOp cycle and pulled out when a Store is pending.
-        private Queue<ROpWord> _destFifo;
+        Queue<ROpWord> _destFifo;
 
         // Mask lookup table:  This is a synthesized table roughly analogous to
         // the PERQ RDS00 PROM, returning a CombinerMask to mark words flowing
         // through the source and destination FIFOs.
-        private static CombinerFlags[] _rdsTable;
+        static CombinerFlags[] _rdsTable;
 
         // Edge lookup table:  Encodes edge processing rules for aligning the
         // source words, sort of what the RSC03 PROM does.
-        private static EdgeStrategy[] _rscTable;
+        static EdgeStrategy[] _rscTable;
     }
 }
 

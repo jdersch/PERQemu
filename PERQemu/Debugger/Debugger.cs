@@ -86,12 +86,12 @@ namespace PERQemu.Debugger
             if (command.Contains("="))
             {
                 // It's an assignment
-                string[] tokens = command.Split(new char[] { '=' });
+                var tokens = command.Split(new char[] { '=' });
                 string varName = tokens[0];
                 string strValue = tokens[1];
 
                 // We assume value is always an int right now because I am lazy
-                uint value = CommandExecutor.TryParseUint(strValue);
+                var value = CommandExecutor.TryParseUint(strValue);
 
                 v = GetVariableFromToken(varName, out isArray, out arrayIndex);
 
@@ -108,11 +108,9 @@ namespace PERQemu.Debugger
                         // Cannot do assignment to an entire array
                         throw new ArgumentException("Cannot assign to array, must specify element to assign to");
                     }
-                    else
-                    {
-                        // Assign to the array element
-                        SetArrayElement(v, arrayIndex, value);
-                    }
+
+                    // Assign to the array element
+                    SetArrayElement(v, arrayIndex, value);
                 }
                 else
                 {
@@ -149,11 +147,11 @@ namespace PERQemu.Debugger
         }
 
 
-        private void PrintArray(DebuggerVariable v)
+        void PrintArray(DebuggerVariable v)
         {
             if (v.Property.PropertyType == typeof(Int32[]))
             {
-                Int32[] array = (Int32[])v.Property.GetValue(v.Instance, null);
+                var array = (Int32[])v.Property.GetValue(v.Instance, null);
 
                 // todo: use Columnify()
                 for (int i = 0; i < array.Length; i++)
@@ -175,11 +173,11 @@ namespace PERQemu.Debugger
         }
 
 
-        private void PrintArrayElement(DebuggerVariable v, uint arrayIndex)
+        void PrintArrayElement(DebuggerVariable v, uint arrayIndex)
         {
             if (v.Property.PropertyType == typeof(Int32[]))
             {
-                Int32[] array = (Int32[])v.Property.GetValue(v.Instance, null);
+                var array = (Int32[])v.Property.GetValue(v.Instance, null);
                 Console.WriteLine("{0:x8}", array[arrayIndex]);
             }
             else
@@ -189,11 +187,11 @@ namespace PERQemu.Debugger
         }
 
 
-        private void SetArrayElement(DebuggerVariable v, uint arrayIndex, uint value)
+        void SetArrayElement(DebuggerVariable v, uint arrayIndex, uint value)
         {
             if (v.Property.PropertyType == typeof(Int32[]))
             {
-                UInt32[] array = (UInt32[])v.Property.GetValue(v.Instance, null);
+                var array = (UInt32[])v.Property.GetValue(v.Instance, null);
                 array[arrayIndex] = value;
             }
             else
@@ -203,20 +201,20 @@ namespace PERQemu.Debugger
         }
 
 
-        private void PrintVariable(DebuggerVariable v)
+        void PrintVariable(DebuggerVariable v)
         {
             // todo: consult the user settings for preferred output radix!
             Console.WriteLine(v.Property.GetValue(v.Instance, null));
         }
 
 
-        private void SetVariable(DebuggerVariable v, uint value)
+        void SetVariable(DebuggerVariable v, uint value)
         {
             v.Property.SetValue(v.Instance, value, null);
         }
 
 
-        private DebuggerVariable GetVariableFromToken(string token, out bool isArray, out uint arrayIndex)
+        DebuggerVariable GetVariableFromToken(string token, out bool isArray, out uint arrayIndex)
         {
             string varName = string.Empty;
             string index = string.Empty;
@@ -324,18 +322,18 @@ namespace PERQemu.Debugger
         }
 
 
-        private void BuildVariableList(List<object> debugObjects)
+        void BuildVariableList(List<object> debugObjects)
         {
             _variableList = new List<DebuggerVariable>();
 
             // Go look for Debuggable attributes!
             foreach (object debugObject in debugObjects)
             {
-                Type type = debugObject.GetType();
+                var type = debugObject.GetType();
 
                 foreach (PropertyInfo info in type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 {
-                    object[] attribs = info.GetCustomAttributes(typeof(Debuggable), true);
+                    var attribs = info.GetCustomAttributes(typeof(Debuggable), true);
 
                     if (attribs.Length > 1)
                     {
@@ -346,7 +344,7 @@ namespace PERQemu.Debugger
                     {
                         // We have a debugger attribute set on this property.
                         // This cast should always succeed given that we're filtering for this type above.
-                        Debuggable prop = (Debuggable)attribs[0];
+                        var prop = (Debuggable)attribs[0];
 
                         _variableList.Add(new DebuggerVariable(prop.Name, prop.Description, info, debugObject));
                     }
@@ -354,14 +352,14 @@ namespace PERQemu.Debugger
             }
         }
 
-        private enum VariableParseState
+        enum VariableParseState
         {
             ParsingName,
             ParsingIndex,
             ParsingDone
         }
 
-        private List<DebuggerVariable> _variableList;
+        List<DebuggerVariable> _variableList;
     }
 }
 

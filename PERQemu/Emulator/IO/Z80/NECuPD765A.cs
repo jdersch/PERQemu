@@ -128,13 +128,13 @@ namespace PERQemu.IO.Z80
             set { _interruptsEnabled = value; }
         }
 
-        private byte StatusPort => _baseAddress;
-        private byte DataPort => (byte)(_baseAddress + 1);
+        byte StatusPort => _baseAddress;
+        byte DataPort => (byte)(_baseAddress + 1);
 
-        private FloppyDisk SelectedUnit => _drives[_unitSelect];
-        private bool SelectedUnitIsReady => SelectedUnit != null && SelectedUnit.Ready;
+        FloppyDisk SelectedUnit => _drives[_unitSelect];
+        bool SelectedUnitIsReady => SelectedUnit != null && SelectedUnit.Ready;
 
-        private ulong ByteTimeNsec => _byteTimeNsec;
+        ulong ByteTimeNsec => _byteTimeNsec;
 
         //
         // IDMADevice Implementation
@@ -177,7 +177,7 @@ namespace PERQemu.IO.Z80
         /// head 0 again to clear the condition.  Doh.  May have to futz with the
         /// status codes some more to see if Floppy can actually detect this...
         /// </remarks>
-        private void SelectUnitHead(byte select)
+        void SelectUnitHead(byte select)
         {
             // Deselect the current drive
             if (SelectedUnit != null)
@@ -363,13 +363,13 @@ namespace PERQemu.IO.Z80
         // Command Executors
         //
 
-        private void StubExecutor(ulong skewNsec, object context)
+        void StubExecutor(ulong skewNsec, object context)
         {
             var badCmd = _commandData.Dequeue();
             throw new NotImplementedException($"FDC command 0x{badCmd:x2} not implemented");
         }
 
-        private void InvalidCommandExecutor(ulong skewNsec, object context)
+        void InvalidCommandExecutor(ulong skewNsec, object context)
         {
             var badCmd = _commandData.Dequeue();
 
@@ -393,7 +393,7 @@ namespace PERQemu.IO.Z80
         /// poll of connected drives for status changes (drive door open/close
         /// events).
         /// </summary>
-        private void SpecifyExecutor(ulong skewNsec, object context)
+        void SpecifyExecutor(ulong skewNsec, object context)
         {
             //
             // Read the data specified.  Although the Z80 actually sets these,
@@ -429,7 +429,7 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// Initiate a Seek or Recalibrate (which is just a seek to track 0).
         /// </summary>
-        private void SeekExecutor(ulong skewNsec, object context)
+        void SeekExecutor(ulong skewNsec, object context)
         {
             var cmd = (Command)_commandData.Dequeue();
             SelectUnitHead(_commandData.Dequeue());
@@ -462,7 +462,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private void SeekCompleteCallback(ulong skewNsec, object context)
+        void SeekCompleteCallback(ulong skewNsec, object context)
         {
             // Stimpy!  We made it!
             _seekEnd = true;
@@ -484,7 +484,7 @@ namespace PERQemu.IO.Z80
         /// Returns data from Sense Interrupt Status command, to indicate the
         /// completion of a seek/recalibrate or a drive polling status change.
         /// </summary>
-        private void SenseInterruptStatusExecutor(ulong skewNsec, object context)
+        void SenseInterruptStatusExecutor(ulong skewNsec, object context)
         {
             _commandData.Dequeue();                     // toss command byte
 
@@ -500,7 +500,7 @@ namespace PERQemu.IO.Z80
         /// Executes the floppy Sense Drive Status command.  Not used by the
         /// old IOB Z80, but used by the new/EIO Z80!
         /// </summary>
-        private void SenseDriveStatusExecutor(ulong skewNsec, object context)
+        void SenseDriveStatusExecutor(ulong skewNsec, object context)
         {
             _commandData.Dequeue();                     // toss command byte
             SelectUnitHead(_commandData.Dequeue());     // get drive to query
@@ -533,7 +533,7 @@ namespace PERQemu.IO.Z80
 
         #region Reads, Writes
 
-        private void ReadDataExecutor(ulong skewNsec, object context)
+        void ReadDataExecutor(ulong skewNsec, object context)
         {
             if (BeginSectorTransfer())
             {
@@ -541,7 +541,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private void WriteDataExecutor(ulong skewNsec, object context)
+        void WriteDataExecutor(ulong skewNsec, object context)
         {
             if (BeginSectorTransfer())
             {
@@ -549,7 +549,7 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        private bool IsReadType(Command c)
+        bool IsReadType(Command c)
         {
             return (c == Command.ReadId ||
                     c == Command.ReadData ||
@@ -557,18 +557,18 @@ namespace PERQemu.IO.Z80
                     c == Command.ReadDeletedData);
         }
 
-        private bool IsWriteType(Command c)
+        bool IsWriteType(Command c)
         {
             return (c == Command.WriteData || c == Command.WriteDeletedData);
         }
 
-        private bool BeginSectorTransfer()
+        bool BeginSectorTransfer()
         {
             _transfer = new TransferRequest();
             _transfer.Type = _currentCommand.Command;
 
             // Pull data from command regs:
-            byte commandByte = _commandData.Dequeue();
+            var commandByte = _commandData.Dequeue();
             _transfer.MultiTrack = (commandByte & 0x80) != 0;
             _transfer.MFM = (commandByte & 0x40) != 0;
             _transfer.SkipDeletedAM = (commandByte & 0x20) != 0;
@@ -578,8 +578,8 @@ namespace PERQemu.IO.Z80
             _transfer.Sector = _commandData.Dequeue();
             _transfer.Number = _commandData.Dequeue();
             _transfer.EndOfTrack = _commandData.Dequeue();
-            byte gpl = _commandData.Dequeue();
-            byte dtl = _commandData.Dequeue();
+            var gpl = _commandData.Dequeue();
+            var dtl = _commandData.Dequeue();
 
             _transfer.SectorLength = (_transfer.Number == 0) ? dtl : (ushort)(128 << _transfer.Number);
             _transfer.Aborted = false;
@@ -626,7 +626,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private void SectorTransferCallback(ulong skewNsec, object context)
+        void SectorTransferCallback(ulong skewNsec, object context)
         {
             // Simulate the initial search for the sector, then kick off the sector transfer:
             Log.Detail(Category.FloppyDisk, "In transfer callback");
@@ -719,7 +719,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private void SectorByteReadCallback(ulong skewNsec, object context)
+        void SectorByteReadCallback(ulong skewNsec, object context)
         {
             // If the last trip was the end of the transfer, we're done
             if (_transfer.Aborted || _transfer.TransferIndex == _transfer.SectorLength)
@@ -749,7 +749,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private void SectorByteWriteCallback(ulong skewNsec, object context)
+        void SectorByteWriteCallback(ulong skewNsec, object context)
         {
             // If the last byte was not written, this is an overrun
             if (_writeDataReady)
@@ -779,7 +779,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private void FinishSectorTransfer()
+        void FinishSectorTransfer()
         {
             Log.Debug(Category.FloppyDisk, "Sector {0} transfer complete", _transfer.Sector);
 
@@ -811,7 +811,7 @@ namespace PERQemu.IO.Z80
 
         #region Format
 
-        private void FormatExecutor(ulong skewNsec, object context)
+        void FormatExecutor(ulong skewNsec, object context)
         {
             if (BeginFormat())
             {
@@ -820,7 +820,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private bool BeginFormat()
+        bool BeginFormat()
         {
             _transfer = new TransferRequest();
             _transfer.Type = Command.FormatTrack;
@@ -881,7 +881,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private void SectorFormatCallback(ulong skewNsec, object context)
+        void SectorFormatCallback(ulong skewNsec, object context)
         {
             // If the last byte was not written, this is an overrun
             if (_writeDataReady)
@@ -986,7 +986,7 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// Finish a data transfer: queue up the results bytes and interrupt.
         /// </summary>
-        private void FinishTransfer(TransferRequest request)
+        void FinishTransfer(TransferRequest request)
         {
             // Shut off DMA if early/abnormal termination?
             if (_readDataReady || _writeDataReady)
@@ -1033,7 +1033,7 @@ namespace PERQemu.IO.Z80
         /// Finish command processing by setting state, status and clearing
         /// the command data queue.
         /// </summary>
-        private void FinishCommand(bool raiseInterrupt)
+        void FinishCommand(bool raiseInterrupt)
         {
             // Reset EXM, set RQM and DIO to let the processor know results are
             // ready to read.  If no Result bytes, reset CB as well.
@@ -1060,7 +1060,7 @@ namespace PERQemu.IO.Z80
         /// enough to do it consistently.  The caller can pass in a status code
         /// and the actual drive status bits or error code is filled in.
         /// </summary>
-        private StatusRegister0 SetErrorStatus(StatusRegister0 error)
+        StatusRegister0 SetErrorStatus(StatusRegister0 error)
         {
             // This just can't happen
             if (SelectedUnit == null)
@@ -1105,7 +1105,7 @@ namespace PERQemu.IO.Z80
         /// ready or not.  Only checked once per second (if the controller isn't
         /// already busy) so it should be very low overhead.
         /// </remarks>
-        private void PollDrives(ulong skewNsec, object context)
+        void PollDrives(ulong skewNsec, object context)
         {
             // In Command mode, and no busy flags?
             if (_state == State.Command && ((byte)_status & 0x1f) == 0)
@@ -1150,7 +1150,7 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// Supplemental data structure: Transfer request.
         /// </summary>
-        private struct TransferRequest
+        struct TransferRequest
         {
             // Transfer type
             public Command Type;
@@ -1185,7 +1185,7 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private enum State
+        enum State
         {
             Command = 0,
             Execution,
@@ -1193,7 +1193,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum Status
+        enum Status
         {
             D0B = 0x1,      // FDD N Busy
             D1B = 0x2,
@@ -1206,7 +1206,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum StatusRegister0
+        enum StatusRegister0
         {
             None = 0x0,
             Unit0 = 0x1,
@@ -1221,7 +1221,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum StatusRegister1
+        enum StatusRegister1
         {
             None = 0x0,
             MissingAddrMark = 0x1,
@@ -1235,7 +1235,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum StatusRegister2
+        enum StatusRegister2
         {
             None = 0x0,
             MissingAddrMarkInDataField = 0x1,
@@ -1248,7 +1248,7 @@ namespace PERQemu.IO.Z80
         }
 
         [Flags]
-        private enum StatusRegister3
+        enum StatusRegister3
         {
             None = 0x0,
             Unit0 = 0x1,
@@ -1261,7 +1261,7 @@ namespace PERQemu.IO.Z80
             Fault = 0x80
         }
 
-        private enum Command
+        enum Command
         {
             Invalid = 0x00,
             ReadTrack = 0x02,
@@ -1281,7 +1281,7 @@ namespace PERQemu.IO.Z80
             Seek = 0x0f,
         }
 
-        private struct CommandData
+        struct CommandData
         {
             public CommandData(Command command, byte mask, int byteCount, SchedulerEventCallback executor)
             {
@@ -1298,56 +1298,56 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private FloppyDisk[] _drives;
-        private byte[] _pcn;
+        FloppyDisk[] _drives;
+        byte[] _pcn;
 
-        private int _unitSelect;
-        private int _headSelect;
+        int _unitSelect;
+        int _headSelect;
 
-        private Status _status;
-        private State _state;
+        Status _status;
+        State _state;
 
-        private CommandData[] _commands;
-        private CommandData _currentCommand;
-        private CommandData _invalidCommand;
-        private Queue<byte> _commandData;
-        private Queue<byte> _statusData;
+        CommandData[] _commands;
+        CommandData _currentCommand;
+        CommandData _invalidCommand;
+        Queue<byte> _commandData;
+        Queue<byte> _statusData;
 
         // The current transfer in progress
-        private TransferRequest _transfer;
+        TransferRequest _transfer;
 
-        private ulong _byteTimeNsec;
+        ulong _byteTimeNsec;
 
-        private byte _readByte;
-        private bool _readDataReady;
+        byte _readByte;
+        bool _readDataReady;
 
-        private byte _writeByte;
-        private bool _writeDataReady;
+        byte _writeByte;
+        bool _writeDataReady;
 
         // ST0 bits (used by SenseInterruptStatus)
-        private StatusRegister0 _errorStatus;
-        private bool _seekEnd;
-        private bool _interruptsEnabled;
-        private bool _interruptActive;
-        private bool _nonDMAMode;
+        StatusRegister0 _errorStatus;
+        bool _seekEnd;
+        bool _interruptsEnabled;
+        bool _interruptActive;
+        bool _nonDMAMode;
 
         // Timing constants
         // Sector time: 360 RPM, 26 sectors per rotation.  This is just for approximate timing.
-        private readonly ulong SectorTimeNsec = (ulong)((166.667 / 26.0) * Conversion.MsecToNsec);
+        readonly ulong SectorTimeNsec = (ulong)((166.667 / 26.0) * Conversion.MsecToNsec);
 
         // Timing for FM and MFM mode
-        private readonly ulong FMByteTimeNsec = 27 * Conversion.UsecToNsec;
-        private readonly ulong MFMByteTimeNsec = 13 * Conversion.UsecToNsec;
+        readonly ulong FMByteTimeNsec = 27 * Conversion.UsecToNsec;
+        readonly ulong MFMByteTimeNsec = 13 * Conversion.UsecToNsec;
 
         // Status polling interval
-        private readonly ulong PollTimeNsec = 500 * Conversion.MsecToNsec;
+        readonly ulong PollTimeNsec = 500 * Conversion.MsecToNsec;
 
-        private SchedulerEvent _pollEvent;
+        SchedulerEvent _pollEvent;
 
         // System interface
-        private byte _baseAddress;
-        private byte[] _ports;
-        private Scheduler _scheduler;
+        byte _baseAddress;
+        byte[] _ports;
+        Scheduler _scheduler;
 
         // I hate this, Konamiman.  I hate this So much.
         public event EventHandler NmiInterruptPulse;

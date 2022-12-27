@@ -117,7 +117,7 @@ namespace PERQemu
         }
 
         [Command("debug show variables", "Show debugger variables and their descriptions")]
-        private void ShowVars()
+        void ShowVars()
         {
             if (PERQemu.Sys == null)
             {
@@ -160,7 +160,7 @@ namespace PERQemu
         }
 
         [Command("debug set execution mode", "Set the execution mode for the virtual PERQ")]
-        private void SetExecutionMode(ExecutionMode mode)
+        void SetExecutionMode(ExecutionMode mode)
         {
             if (PERQemu.Controller.Mode != mode)
             {
@@ -170,7 +170,7 @@ namespace PERQemu
         }
 
         [Command("debug show execution mode", "Show the execution mode for the virtual PERQ")]
-        private void ShowExecutionMode()
+        void ShowExecutionMode()
         {
             Console.WriteLine(PERQemu.Controller.Mode);
         }
@@ -276,7 +276,7 @@ namespace PERQemu
         }
 #endif
 
-        private bool CheckSys()
+        bool CheckSys()
         {
             if (PERQemu.Sys == null)
             {
@@ -291,31 +291,31 @@ namespace PERQemu
         //
 
         [Command("debug show cpu registers", "Display the values of the CPU registers")]
-        private void ShowCPURegs()
+        void ShowCPURegs()
         {
             if (CheckSys()) PERQemu.Sys.CPU.ShowCPUState();
         }
 
         [Command("debug show opfile", "Display the contents of the opcode file")]
-        private void ShowOpfile()
+        void ShowOpfile()
         {
             if (CheckSys()) PERQemu.Sys.CPU.ShowOpfile();
         }
 
         [Command("debug show estack", "Display the contents of the expression stack")]
-        private void ShowEStack()
+        void ShowEStack()
         {
             if (CheckSys()) PERQemu.Sys.CPU.ShowEStack();
         }
 
         [Command("debug show cstack", "Display the contents of the 2910 call stack")]
-        private void ShowCStack()
+        void ShowCStack()
         {
             if (CheckSys()) PERQemu.Sys.CPU.ShowCStack();
         }
 
         [Command("debug show xy register", "Display the values of the XY registers")]
-        private void ShowRegister()
+        void ShowRegister()
         {
             if (!CheckSys()) return;
 
@@ -332,7 +332,7 @@ namespace PERQemu
         // and the previous one could be "show xy registers" to dump all of 'em
 
         [Command("debug show xy register", "Display the value of an XY register")]
-        private void ShowRegister(byte reg)
+        void ShowRegister(byte reg)
         {
             if (!CheckSys()) return;
 
@@ -341,7 +341,7 @@ namespace PERQemu
 
         [Conditional("DEBUG")]
         [Command("debug set xy register", "Change the value of an XY register")]
-        private void SetRegister(byte reg, uint val)
+        void SetRegister(byte reg, uint val)
         {
             if (!CheckSys()) return;
 
@@ -354,7 +354,7 @@ namespace PERQemu
         //
 
         [Command("debug show memory", "Dump the PERQ's memory")]
-        private void ShowMemory(uint startAddr, uint words = 64)
+        void ShowMemory(uint startAddr, uint words = 64)
         {
             if (!CheckSys()) return;
 
@@ -383,8 +383,8 @@ namespace PERQemu
                 // ASCII representation
                 for (var j = i; j < i + 8; j++)
                 {
-                    char high = (char)((PERQemu.Sys.Memory.FetchWord(j) & 0xff00) >> 8);
-                    char low = (char)(PERQemu.Sys.Memory.FetchWord(j) & 0xff);
+                    var high = (char)((PERQemu.Sys.Memory.FetchWord(j) & 0xff00) >> 8);
+                    var low = (char)(PERQemu.Sys.Memory.FetchWord(j) & 0xff);
 
                     high = PERQemu.CLI.IsPrintable(high) ? high : '.';
                     low = PERQemu.CLI.IsPrintable(low) ? low : '.';
@@ -398,7 +398,7 @@ namespace PERQemu
 
 #if DEBUG
         [Command("debug find memory", "Find a specific value in the PERQ's memory [@start, val]")]
-        private void FindMemory(uint startAddress, ushort val)
+        void FindMemory(uint startAddress, ushort val)
         {
             if (!CheckSys()) return;
 
@@ -417,7 +417,7 @@ namespace PERQemu
         }
 
         [Command("debug set memory", "Write a specific value in the PERQ's memory")]
-        private void SetMemory(uint address, ushort val)
+        void SetMemory(uint address, ushort val)
         {
             if (!CheckSys()) return;
 
@@ -431,7 +431,7 @@ namespace PERQemu
         }
 
         [Command("debug show memstate", "Dump the memory controller state")]
-        private void ShowMemQueues()
+        void ShowMemQueues()
         {
             if (CheckSys()) PERQemu.Sys.Memory.DumpQueues();
         }
@@ -441,31 +441,31 @@ namespace PERQemu
         // tuning much of this can be removed and archived...
 
         [Command("debug set rasterop debug", "Enable extended RasterOp debugging")]
-        private void SetRopDebug()
+        void SetRopDebug()
         {
             if (CheckSys()) PERQemu.Sys.CPU.RasterOp.Debug = true;
         }
 
         [Command("debug clear rasterop debug", "Disable extended RasterOp debugging")]
-        private void ClearRopDebug()
+        void ClearRopDebug()
         {
             if (CheckSys()) PERQemu.Sys.CPU.RasterOp.Debug = false;
         }
 
         [Command("debug show rasterop state", "Display current RasterOp unit status")]
-        private void ShowRopState()
+        void ShowRopState()
         {
             if (CheckSys()) PERQemu.Sys.CPU.RasterOp.ShowState();
         }
 
         [Command("debug show rasterop fifos", "Display current RasterOp source & destination FIFOs")]
-        private void ShowRopFifos()
+        void ShowRopFifos()
         {
             if (CheckSys()) PERQemu.Sys.CPU.RasterOp.ShowFifos();
         }
 
         [Command("debug show rasterop registers", "Display current RasterOp register contents")]
-        private void ShowRopRegs()
+        void ShowRopRegs()
         {
             if (CheckSys()) PERQemu.Sys.CPU.RasterOp.ShowRegs();
         }
@@ -729,7 +729,7 @@ namespace PERQemu
             {
                 Console.WriteLine("Don't be silly.");
                 return;
-            };
+            }
 
             int total = 0;
             var breakpoints = GetBreakpoints(type);
@@ -751,7 +751,7 @@ namespace PERQemu
             }
         }
 
-        private List<BreakpointList> GetBreakpoints(BreakpointType bp)
+        List<BreakpointList> GetBreakpoints(BreakpointType bp)
         {
             var selected = new List<BreakpointList>();
 
@@ -784,7 +784,7 @@ namespace PERQemu
             return selected;
         }
 
-        private BreakpointAction GetDefaultActionFor(BreakpointType bp)
+        BreakpointAction GetDefaultActionFor(BreakpointType bp)
         {
             var action = new BreakpointAction();
 
@@ -811,20 +811,20 @@ namespace PERQemu
         // Breakpoint handlers
         //
 
-        private void OnBreakpoint(BreakpointEventArgs a)
+        void OnBreakpoint(BreakpointEventArgs a)
         {
             // Default action
             Console.WriteLine($"Breakpoint {a.Type} at {a.Value}");
         }
 
-        private void OnInstAddr(BreakpointEventArgs a)
+        void OnInstAddr(BreakpointEventArgs a)
         {
             var upc = (ushort)a.Value;
 
             Console.WriteLine($"Microinstruction at {upc:x4} executed!");
         }
 
-        private void OnInterrupt(BreakpointEventArgs a)
+        void OnInterrupt(BreakpointEventArgs a)
         {
             var irq = (InterruptSource)a.Value;
             var status = (bool)a.Args[0];
@@ -838,7 +838,7 @@ namespace PERQemu
         //
 
         [Command("debug load microcode", "Load a microcode binary into the control store")]
-        private void LoadMicrocode([PathExpand] string binfile)
+        void LoadMicrocode([PathExpand] string binfile)
         {
             if (!CheckSys()) return;
 
@@ -854,19 +854,19 @@ namespace PERQemu
         }
 
         [Command("debug disassemble microcode", "Disassemble microinstructions (@ current PC)")]
-        private void DisassembleMicrocode()
+        void DisassembleMicrocode()
         {
             DisassembleMicrocode(PERQemu.Sys.CPU.PC, 16);
         }
 
         [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr])")]
-        private void DisassembleMicrocode(ushort startAddress)
+        void DisassembleMicrocode(ushort startAddress)
         {
             DisassembleMicrocode(startAddress, 16);
         }
 
         [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
-        private void DisassembleMicrocode(ushort startAddress, ushort length)
+        void DisassembleMicrocode(ushort startAddress, ushort length)
         {
             if (!CheckSys()) return;
 
@@ -881,13 +881,13 @@ namespace PERQemu
             // Disassemble microcode
             for (ushort i = startAddress; i < endAddr; i++)
             {
-                string line = Disassembler.Disassemble(i, PERQemu.Sys.CPU.GetInstruction(i));
+                var line = Disassembler.Disassemble(i, PERQemu.Sys.CPU.GetInstruction(i));
                 Console.WriteLine(line);
             }
         }
 
         [Command("debug jump", "Start or resume execution at a given microaddress")]
-        private void JumpTo(ushort nextPC)
+        void JumpTo(ushort nextPC)
         {
             if (!CheckSys()) return;
 
@@ -904,7 +904,7 @@ namespace PERQemu
         }
 
         [Command("debug load qcodes", "Load Q-code definitions for opcode disassembly")]
-        private void LoadQCodes(QCodeSets qcodes)
+        void LoadQCodes(QCodeSets qcodes)
         {
             QCodeHelper.LoadQCodeSet(qcodes);
         }
@@ -916,7 +916,7 @@ namespace PERQemu
         /// </summary>
         [Conditional("DEBUG")]
         [Command("debug make boot prom", Discreet = true)]
-        private void MakeROM(string basename, string output, bool fourk)
+        void MakeROM(string basename, string output, bool fourk)
         {
             // Turn on logging
             Log.Categories |= Category.Microstore;
@@ -937,40 +937,40 @@ namespace PERQemu
 
         [Conditional("DEBUG")]
         [Command("debug dump scheduler queue")]
-        private void DumpScheduler()
+        void DumpScheduler()
         {
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
         }
 
         [Conditional("DEBUG")]
         [Command("debug dump timers")]
-        private void DumpTimers()
+        void DumpTimers()
         {
             HighResolutionTimer.DumpTimers();
         }
 
         [Conditional("DEBUG")]
         [Command("debug dump fifos")]
-        private void DumpFifos()
+        void DumpFifos()
         {
             PERQemu.Sys.IOB.Z80System.DumpFifos();
         }
 
         [Conditional("DEBUG")]
         [Command("debug dump qcodes")]
-        private void DumpQcodes()
+        void DumpQcodes()
         {
             QCodeHelper.DumpContents();
         }
 
         [Command("debug dump rs232a")]
-        private void ShowRS232Status()
+        void ShowRS232Status()
         {
             PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
         }
 
         [Command("debug dump streamer")]
-        private void ShowStreamerStatus()
+        void ShowStreamerStatus()
         {
             if (PERQemu.Sys.OIO != null)
             {
@@ -984,8 +984,8 @@ namespace PERQemu
 
 #if DEBUG
         // A temporary working copy for editing breakpoints
-        private BreakpointEventArgs _bp;
-        private BreakpointAction _bpAction;
+        BreakpointEventArgs _bp;
+        BreakpointAction _bpAction;
 #endif
     }
 }

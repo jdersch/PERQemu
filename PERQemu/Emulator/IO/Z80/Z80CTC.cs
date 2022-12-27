@@ -105,7 +105,7 @@ namespace PERQemu.IO.Z80
             }
             else
             {
-                ControlFlags control = (ControlFlags)value;
+                var control = (ControlFlags)value;
                 Log.Detail(Category.CTC, "Control word: {0}", control);
 
                 if (control.HasFlag(ControlFlags.ControlOrVector))
@@ -202,15 +202,15 @@ namespace PERQemu.IO.Z80
         }
 
         protected Scheduler _scheduler;
-        private Channel[] _channels;
+        Channel[] _channels;
 
-        private bool _interruptActive;
+        bool _interruptActive;
 
-        private byte _interruptVectorBase;
-        private byte? _interruptVector;
+        byte _interruptVectorBase;
+        byte? _interruptVector;
 
-        private byte _baseAddress;
-        private byte[] _ports;
+        byte _baseAddress;
+        byte[] _ports;
 
 
         [Flags]
@@ -262,8 +262,8 @@ namespace PERQemu.IO.Z80
 
             public ICTCDevice TimerClient;
 
-            private SchedulerEvent Trigger;
-            private Z80CTC _ctc;
+            SchedulerEvent Trigger;
+            Z80CTC _ctc;
 
 
             /// <summary>
@@ -364,7 +364,7 @@ namespace PERQemu.IO.Z80
             /// <summary>
             /// In Timer mode, schedule the event to fire when elapsed.
             /// </summary>
-            private void QueueTimerTick()
+            void QueueTimerTick()
             {
                 if (Control.HasFlag(ControlFlags.CounterMode))
                 {
@@ -397,7 +397,7 @@ namespace PERQemu.IO.Z80
             /// Timers run until stopped by a reset.  Tell the CTC to fire an
             /// interrupt, then reset and reschedule.
             /// </summary>
-            private void TimerTickCallback(ulong skewNsec, object context)
+            void TimerTickCallback(ulong skewNsec, object context)
             {
                 Log.Debug(Category.CTC, "Channel {0} timer callback fired at {1}",
                                         context, _ctc._scheduler.CurrentTimeNsec);

@@ -59,7 +59,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Reset the device.
         /// </summary>
-        public void Reset(bool soft = false)
+        public void Reset()
         {
             // Stop any seek in progress
             if (_seekDelayEvent != null)

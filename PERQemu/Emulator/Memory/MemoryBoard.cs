@@ -17,7 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
@@ -49,7 +48,7 @@ namespace PERQemu.Memory
     /// CPU and I/O, Quads for video.  Booyah.
     /// </remarks>
     [StructLayout(LayoutKind.Explicit)]
-    internal struct Core
+    struct Core
     {
         [FieldOffset(0)]
         public ulong[] Quads;
@@ -302,20 +301,20 @@ namespace PERQemu.Memory
         #endregion
 
 
-        private Core _memory;
-        private MemoryController _mdiQueue;		// Queue for Fetch requests
-        private MemoryController _mdoQueue;     // Queue for Store requests
-        private VideoController _videoController;
+        Core _memory;
+        MemoryController _mdiQueue;		// Queue for Fetch requests
+        MemoryController _mdoQueue;     // Queue for Store requests
+        VideoController _videoController;
 
-        private int _memSize;
-        private int _memSizeMask;
+        int _memSize;
+        int _memSizeMask;
 
-        private int _Tstate;
-        private int _madr;
-        private ushort _mdi;
-        private bool _wait;
-        private bool _hold;
+        int _Tstate;
+        int _madr;
+        ushort _mdi;
+        bool _wait;
+        bool _hold;
 
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }
