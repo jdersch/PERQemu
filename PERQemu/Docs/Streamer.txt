@@ -12,25 +12,26 @@ See the UserGuide.pdf for more information about using the PERQ's streamer
 utility to load and save tape images.
 
 
-An Emulation in Two Halves
---------------------------
+An Emulation in Three Halves
+----------------------------
 
-Support for the Archive "Sidewinder" 3020I tape drive is broken into two parts:
-the PERQ controller is a very thin layer between the IO Option board (OIO) and
-the intelligent controller built into the external drive.  Initially it will
-support 20MB of storage per tape (equivalent to a DC-300XL 1/4" cartridge) and
-use the drive's rated 30 inches/second (IPS) speed and transfer rate.  There
-do not appear to be any limitations in the microcode or Pascal library that
-precludes emulation of the 9020I (90IPS, 20MB) or the 9045I (90IPS, 45-60MB)
-to provide more storage and higher transfer rates.  More on performance below.
+Support for the Archive "Sidewinder" streaming tape drive is broken into two
+parts:  the PERQ controller is a very thin layer between the IO Option board
+(OIO) and the intelligent controller built into the external drive.  Initially
+it will support the 3020I model, providing 20MB of storage per tape (equivalent
+to a DC-300XL 1/4" cartridge) and use the drive's rated 30 inches/second (IPS)
+speed and transfer rate.  There are no apparent limitations in the microcode or
+Pascal library that would preclude emulation of the 9020I (90IPS, 20MB) or the
+9045I (90IPS, 45-60MB) to provide more storage and higher transfer rates.  More
+on performance below.
 
 Two implementations of the PERQ interface are supported: the most common is the
 "wire-wrap version" which is optionally included on the OIO board.  Because the
 streamer does not use DMA it can be used in the CPU Option slot as well, so
 (like the PERQ Link) it is a "universal" option.  The second implementation is
-built into the Multibus/Laser Option (MLO) board.  No definitive schematics
-have been found for either version but there are a *lot* of drawings to search
-through...
+built into the Multibus/Laser Option (MLO) board.  Some partial schematics have
+been found for the OIO version, and it's likely that the MLO version is nearly
+identical.
 
 The PERQ side of the interface is Emulator/IO/TapeDevices/QICTapeController.cs.
 
@@ -45,20 +46,26 @@ is the "bus" between the two.
 
 The drive side of the interface is in Emulator/IO/TapeDevices/Sidewinder.cs.
 
-This contains all the code for the drive's controller AND mechanism; it handles
-the interface to PERQmedia by wrapping the StorageDevice class directly.  [This
-may be split into more than one file to make it more manageable.]  The physical
-drive is built to fit the same mechanical dimensions as the Shugart 8" floppy
-drives, and like the floppy the QIC-02 bus protocol and physical interface can
-attach from 1-4 drives in a string.  Like the floppy implementation, however,
-the PERQ only supports one drive at the default address (drive select 0).
+Halfway through the implementation it was clear that separating the drive and
+controller into distinct parts (like the FloppyDisk/NECuPD765 implementation)
+would help keep the code more manageable.  So a third "half" (CartridgeTape.cs)
+provides the mechanical ops and wraps the underlying StorageDevice, while the
+intelligent controller is emulated by the Sidewinder class.  This 
+
+The physical drive is built to fit the same mechanical dimensions as the Shugart
+8" floppy drives, and in theory (assuming the mounting holes line up) you could
+replace the SA851 with a 3020I inside the cabinet, but for emulation purposes we
+assume that the streamer is an external add-on.  Like the floppy the QIC-02 bus
+protocol and electrical interface can attach from 1-4 drives in a string.  But
+as with the floppy implementation, however, the PERQ only supports one drive at
+the default address (drive select 0, or "unit #3" in PERQemu configurations).
 
 The command set is very simple, but the extremely low-level interface makes it
 cumbersome to implement.  There are seven commands issued by the controller.
-Because the PERQ only manipulates the signal lines, emulation of the hardware's
-"handshake" is in the drive, which has to provide responses that align with the
-expected time delays built into the protocol; the microcode looks for status
-lines to change state to signal acknowledgements.
+Because the PERQ's microcode directly drives the signal lines, emulation of the
+hardware's "handshake" has to conform to the expected time delays built into the
+drive's specs; the microcode looks for transitions of the status lines to signal
+acknowledgements of data transfers.
 
 Three documents guide the hardware emulation strategy:
     Archive_Sidewinder_TheoryOpn.pdf, Rev C 8/16/82 (a copy in Docs)
@@ -79,8 +86,9 @@ The PERQ "controller" drives four output signals tied to bits in the control
 register:  RESET, REQUEST, ONLINE, and XFER.  It receives responses from the
 drive on three lines, passed to the microcode through the status register:
 READY, EXCEPTION, and ACK.  The 8-bit data bus allows one byte at a time to be
-passed back and forth; the DIRC signal is used internally to switch directions
-but it doesn't appear to be exposed to the software.
+passed back and forth; the DIRC signal in the hardware directly drives the
+direction pin on a 'LS245 latch that holds the data or control/status byte 
+being exchanged but it isn't exposed to the software and is not emulated here.
 
 Two sets of handshaking lines are used, implemented by state machines on the
 drive side.  Commands are always initiated by the host, and the REQUEST/READY
@@ -210,6 +218,51 @@ real tape contains error information I do attempt to preserve it, but that has
 not been an issue yet.  Obviously attention will be paid as the need arises.
 
 
+Internal Implementation Notes
+-----------------------------
+
+I'm just resigned to the fact that at this stage in my life and career, "not
+_too_ shabby" is the high water mark when it comes to my coding.  That said,
+in case anyone ever wants to delve into this monstrosity in the future, here
+are a few words about the basic structure.
+
+QICTapeController is super straightforward; it has "no moving parts" and just
+funnels command, status and data bytes between the microcode and the Sidewinder.
+The finicky part is the interplay between the two halves of the drive itself.
+CartridgeTape.cs is now the wrapper around the StorageDevice and it alone does
+all of the serializing of tape blocks between the controller and the media.  I
+did away with the fixed array of buffers in the controller and instead use a
+Queue<> that shuffles BlockBuffers between the two.  Because all parts of the
+streamer run in the same thread as the CPU and Scheduler, there are no worries
+about concurrency.  It is a fairly low-volume, low-use, low-demand device so
+performance isn't a huge concern.  (Remember, "never underestimate the bandwidth
+of a station wagon full of magtapes!")
+
+Essentially there is one active buffer for dealing with the block _currently_
+being written to or from the host.  The BlockBuffer provides a thin shell and
+some accessors that simplify byte access for the controller.  Completed blocks
+to be written to tape are then queued for the mechanism, which runs a "write
+behind" scheme to approximate the streaming nature of the hardware: the motor
+is spun up to speed and the drive expects to pop a full block off the queue to
+spool it to tape every 17.73msec (or 5.91msec in 90ips mode).  If starved of
+blocks it spins down the motor and waits for the controller to Flush() another
+block.  Similarly, the "read ahead" process works in the opposite direction,
+where the drive starts reading full blocks from the tape and queuing them up
+for the host.  As the controller and microcode do their little byte exchange
+handshaking dance, it pops blocks off the queue to make room for new ones.  As
+with the writer, the reader will spin down the motor if the host can't keep up,
+and a Fetch() call when the host is hungry again restarts the process.
+
+While the hardware has three fixed buffers, I have been playing with bumping
+that number up to see if the system can handle the 90ips rate.  Five buffers
+is a pretty reasonable compromise but a LOT more testing and tuning remain.
+Because efficiency isn't the utmost priority, running the profiler while the
+tape is transferring blocks would likely make strong men weep for all the data
+copying and memory allocation and GC going on.  Someday I'll have to sit down
+and really understand how C# references work and make this thing way cleaner,
+but that day is not today...
+
+
 BUGS
 ----
 
@@ -279,6 +332,11 @@ that would indicate an interrupt (using the "X" vector) could be enabled when
 the drive raises either the Ready or Exception lines!  However, there is zero
 evidence that this was ever supported in software.  Strange.
 
+This is something that would be worth scanning and putting in the archives for
+anyone who wants to build a streamer board (it's only about a dozen ICs and
+some wire wrap sockets) although finding drives and QIC media that haven't gone
+completely to rot is increasingly difficult these days...
+
 
 ---
-Last update: skeezics    Sat Dec 17 23:22:34 PST 2022
+Last update: skeezics    Wed Dec 28 01:22:37 PST 2022

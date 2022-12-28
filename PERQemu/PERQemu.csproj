@@ -234,6 +234,7 @@
     <Compile Include="Emulator\IO\TapeDevices\QICTapeController.cs" />
     <Compile Include="Emulator\IO\TapeDevices\Sidewinder.cs" />
     <Compile Include="Emulator\IO\TapeDevices\BlockBuffer.cs" />
+    <Compile Include="Emulator\IO\TapeDevices\CartridgeTape.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

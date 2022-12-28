@@ -17,140 +17,19 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-
-using PERQmedia;
-
 namespace PERQemu.IO.TapeDevices
 {
-    public partial class Sidewinder : StorageDevice
-    {
-        #region Buffer management
-
-        private void InitBuffers()
-        {
-            // Zero them out, reset the pointer(s)
-            for (var b = 0; b < _buffers.Length; b++)
-            {
-                _buffers[b] = new BlockBuffer(this, BlockType.Empty);
-            }
-            _hostBuffer = 0;
-            _tapeBuffer = 0;
-
-            Log.Info(Category.Streamer, "Buffers initialized");
-        }
-
-        private void ResetBuffers()
-        {
-            foreach (var b in _buffers)
-            {
-                b.Clear();
-                b.SetType(BlockType.Empty);
-            }
-            _hostBuffer = 0;
-            _tapeBuffer = 0;
-
-            Log.Info(Category.Streamer, "Buffers reset");
-        }
-
-        /// <summary>
-        /// Get the next empty buffer.  Return false if none currently available.
-        /// </summary>
-        private bool GetEmptyBuffer(ref int which)
-        {
-            // Try not to re-use the same buffer twice in a row!
-            for (var i = which + 1; i < which + _buffers.Length; i++)
-            {
-                var nextBuf = i % _buffers.Length;
-
-                // Be pedantic, make sure the buffer is properly reset (byte counter too)
-                if (_buffers[nextBuf].Type == BlockType.Empty && _buffers[nextBuf].Empty)
-                {
-                    Log.Debug(Category.Streamer, "GetNextBuf: Buffer {0} is empty", nextBuf);
-                    which = nextBuf;
-                    return true;
-                }
-            }
-
-            Log.Debug(Category.Streamer, "GetEmpty: No free buffers!");
-            return false;
-        }
-
-        /// <summary>
-        /// Update the index and return true if any unwritten buffers remain.
-        /// </summary>
-        private bool GetFullBuffer(ref int which)
-        {
-            for (var i = which + 1; i < which + _buffers.Length; i++)
-            {
-                var nextBuf = i % _buffers.Length;
-
-                // Don't snag any partially written ones!
-                if (_buffers[nextBuf].Type != BlockType.Empty && _buffers[nextBuf].Full)
-                {
-                    Log.Debug(Category.Streamer, "GetDirty: Buffer {0} is fully dirty :-]", nextBuf);
-                    which = nextBuf;
-                    return true;
-                }
-            }
-
-            Log.Debug(Category.Streamer, "GetDirty: No dirty buffers remaining");
-            return false;
-        }
-
-        /// <summary>
-        /// Just return the count of uncommitted buffers.
-        /// </summary>
-        private int DirtyBuffers()
-        {
-            var count = 0;
-
-            foreach (var b in _buffers)
-            {
-                if (b.Type != BlockType.Empty && b.Full) count++;
-            }
-
-            return count;
-        }
-
-        /// <summary>
-        /// Commit a buffer to the underlying media.
-        /// </summary>
-        private void WriteBuffer(int index, int pos)
-        {
-            _buffers[index].WriteTo(pos);
-
-            Log.Debug(Category.Streamer, "WriteBuf: Writing @ pos {0} from buffer {1} (sector {2})",
-                     pos, index, _buffers[index]);
-        }
-
-        /// <summary>
-        /// Reads a tape block into a buffer for sending to the host, translating
-        /// the tape position to C/H/S.
-        /// </summary>
-        private void ReadBuffer(int index, int pos)
-        {
-            _buffers[index] = new BlockBuffer(this, pos);
-
-            Log.Debug(Category.Streamer, "ReadBuf: Reading @ pos {0} into buffer {1} (sector {2})",
-                      pos, index, _buffers[index]);
-        }
-
-        #endregion
-    }
-
-
     /// <summary>
     /// Sector header bytes interpreted as block types, which look suspiciously
     /// like .TAP markers, but I'm sure that's purely coincidental.  Still, you
     /// should make sure these match the TAPFormatter's Marker types, maybe?
     /// </summary>
-    internal enum BlockType : uint
+    public enum BlockType : uint
     {
         FileMark = 0x00000000,
         Data = 0x00000200,          // Good data (512 byte block)
-        Empty = 0x10000200,         // Internal use; not written to tape
-        BadData = 0x80000100,       // Bad flag (512 bytes present)
+        Empty = 0x10000200,         // Internal use (unwritten block)
+        BadData = 0x80000200,       // Bad flag (512 bytes present)
         EraseGap = 0xfffffffe,      // Not used by PERQemu/PERQmedia
         EndOfMedia = 0xffffffff     // Logical end of media
     }
@@ -162,97 +41,26 @@ namespace PERQemu.IO.TapeDevices
     /// and keep a read/write pointer to simplify the byte-by-byte access that
     /// the microcode does (there's no DMA to or from the streamer).
     /// </summary>
-    /// <remarks>
-    /// We wrap up a Sector here so that it can be read/written directly to the
-    /// underlying StorageDevice atomically.  Buffers can be used for reading or
-    /// writing, but we track the "direction" so that the definitions of empty/
-    /// full (writing) or ready/complete (reading) make more sense.  This is a
-    /// bit messy and inefficient, probably full of memory leaks or unnecessary
-    /// GC pressure, but it simplifies the protocol handling by offloading buffer
-    /// mechanics.  When writing, we don't know in advance where a block will
-    /// actually land on the underlying device until we write it out, so the
-    /// buffer pool just accepts the data and waits for the WriteBehind process
-    /// to determine where the data ends up.
-    /// </remarks>
-    internal class BlockBuffer
+    public struct BlockBuffer
     {
-        /// <summary>
-        /// Initialize a new WRITE buffer and set its type.  Write buffers are
-        /// "positionless" until they are commtted to the tape, so the initial
-        /// sector address (in C/H/S) is invalid until the buffer is flushed.
-        /// </summary>
-        public BlockBuffer(StorageDevice dev, BlockType type)
+        public BlockBuffer(BlockType type)
         {
-            _dev = dev;
-
-            // New Sector for storage, with an out-of-range address to catch
-            // bad writes.  NB: The geometry here is fixed!  If there's no tape
-            // in the drive we can't relay on the "NoMedia" geometry (doh!)
-            _sector = new Sector(1, 0, 0, 512, 4, (type == BlockType.BadData));
+            _type = type;
+            _data = new byte[512];      // Fixed length for the streamer
             _currentByte = 0;
-            _reading = false;
-
-            SetType(type);
-        }
-
-        /// <summary>
-        /// Initialize a new READ buffer from its position on the tape (hiding
-        /// the C/H/S mapping from the controller).
-        /// </summary>
-        public BlockBuffer(StorageDevice dev, int pos)
-        {
-            _dev = dev;
-
-            var hd = (byte)(pos / _dev.Geometry.Sectors);
-            var sec = (ushort)(pos % _dev.Geometry.Sectors);
-
-            _sector = _dev.Read(0, hd, sec);
-
-            var marker = (uint)((_sector.ReadHeaderByte(0) << 24) |
-                                (_sector.ReadHeaderByte(1) << 16) |
-                                (_sector.ReadHeaderByte(2) << 8) |
-                                (_sector.ReadHeaderByte(3)));
-
-            _type = (BlockType)marker;
-            _currentByte = 0;
-            _reading = true;
-        }
-
-        public override string ToString()
-        {
-            return $"{_sector.CylinderID}/{_sector.HeadID}/{_sector.SectorID}, type {_type}";
-        }
+            }
 
         public BlockType Type => _type;
-
-        public byte[] Data => _sector.Data;     // no longer necessary??
-        public uint Pointer => _currentByte;     // debug output
-        public bool Reading => _reading;        // debug interest
+        public byte[] Data => _data;
+        public uint Pointer => _currentByte;    // debug output
 
         // This makes sense when writing...
-        public bool Full => (!_reading && _currentByte == _sector.Data.Length);
-        public bool Empty => (!_reading && _currentByte == 0);
+        public bool Full => _currentByte == _data.Length;
+        public bool Empty => _currentByte == 0;
 
-        // ... but when reading we flip 'em  BECAUSE WHY NOT, OKAY?
-        public bool Ready => (_reading && _currentByte == 0);
-        public bool ReadComplete => (_reading && _currentByte == _sector.Data.Length);
-
-        public void SetType(BlockType t)
-        {
-            var val = (uint)t;
-
-            _sector.WriteHeaderByte(0, (byte)(val >> 24));
-            _sector.WriteHeaderByte(1, (byte)(val >> 16));
-            _sector.WriteHeaderByte(2, (byte)(val >> 8));
-            _sector.WriteHeaderByte(3, (byte)val);
-
-            _type = t;
-        }
-
-        public void SetDirection(bool reading)
-        {
-            _reading = reading;
-        }
+        // ... but when reading we flip 'em
+        public bool Ready => _currentByte == 0;
+        public bool ReadComplete => _currentByte == _data.Length;
 
         public void Reset()
         {
@@ -261,19 +69,24 @@ namespace PERQemu.IO.TapeDevices
 
         public void Clear()
         {
-            for (_currentByte = 0; _currentByte < _sector.Data.Length; _currentByte++)
+            for (_currentByte = 0; _currentByte < _data.Length; _currentByte++)
             {
-                _sector.WriteByte(_currentByte, 0);
+                _data[_currentByte] = 0;
             }
 
             _currentByte = 0;
         }
 
+        public void SetType(BlockType t)
+        {
+            _type = t;
+        }
+
         public byte GetByte()
         {
-            if (_currentByte < _sector.Data.Length)
+            if (_currentByte < _data.Length)
             {
-                return _sector.ReadByte(_currentByte++);
+                return _data[_currentByte++];
             }
 
             return 0;
@@ -281,27 +94,14 @@ namespace PERQemu.IO.TapeDevices
 
         public void PutByte(byte value)
         {
-            if (_currentByte < _sector.Data.Length)
+            if (_currentByte < _data.Length)
             {
-                _sector.WriteByte(_currentByte++, value);
+                _data[_currentByte++] = value;
             }
         }
 
-        public void WriteTo(int pos)
-        {
-            // Update the sector address then write it to the StorageDev
-            _sector.CylinderID = 0;
-            _sector.HeadID = (byte)(pos / _dev.Geometry.Sectors);
-            _sector.SectorID = (ushort)(pos % _dev.Geometry.Sectors);
-
-            _dev.Write(_sector);
-        }
-
         BlockType _type;
-        Sector _sector;
-        StorageDevice _dev;
-
-        bool _reading;
+        byte[] _data;
         uint _currentByte;
     }
 }

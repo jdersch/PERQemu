@@ -49,9 +49,9 @@ namespace PERQemu.IO.TapeDevices
                 _dataPort = 0x84;
             }
 
-            // Will be attached if present in the config
             _drive = null;
         }
+
 
         public void Reset()
         {
@@ -63,20 +63,25 @@ namespace PERQemu.IO.TapeDevices
                 _drive.Reset();
             }
 
-            Log.Debug(Category.Streamer, "Controller reset");
+            Log.Debug(Category.Streamer, "Interface reset");
         }
 
-        /// <summary>
-        /// Attach the drive to the controller.  The PERQ software only supports
-        /// one drive at the default address (unit 0).
-        /// </summary>
         public void AttachDrive(uint unit, StorageDevice dev)
         {
-            if (_drive != null)
-                throw new InvalidOperationException("QICTapeController only supports 1 drive");
+            // Required by IStorageController but the split-brained nature of
+            // the Sidewinder makes this a no-op
+        }
 
-            _drive = dev as Sidewinder;
-            Log.Info(Category.Streamer, "Attached streamer tape unit {0}", unit);
+        public void AttachDrive(uint unit, Sidewinder drive)
+        {
+            // Attach the Sidewinder (controller) here; the CartridgeTape
+            // (underlying StorageDevice) is contained within
+            if (_drive != null)
+                throw new InvalidOperationException($"Controller only supports one tape unit");
+
+            _drive = drive;
+
+            Log.Info(Category.Streamer, "Attached streamer tape at unit {0}", unit);
         }
 
         /// <summary>
@@ -178,12 +183,12 @@ namespace PERQemu.IO.TapeDevices
                 _drive.DumpState();
         }
 
-        private Sidewinder _drive;
-        private OptionBoardType _board;
+        Sidewinder _drive;
+        OptionBoardType _board;
 
         // Handle OIO or MLO attachment
-        private byte _controlPort;
-        private byte _dataPort;
+        byte _controlPort;
+        byte _dataPort;
     }
 
     /// <summary>
@@ -191,7 +196,7 @@ namespace PERQemu.IO.TapeDevices
     /// the microcode to set them directly.
     /// </summary>
     [Flags]
-    internal enum Control
+    enum Control
     {
         None = 0x0,
         Online = 0x1,
@@ -207,7 +212,7 @@ namespace PERQemu.IO.TapeDevices
     /// the correct write ports.
     /// </summary>
     [Flags]
-    internal enum Status
+    enum Status
     {
         None = 0x0,
         Exception = 0x1,

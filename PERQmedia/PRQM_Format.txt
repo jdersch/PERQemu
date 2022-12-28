@@ -225,6 +225,37 @@ difference between the old Shugart and the 5.25" MFM drives would be fun.  Of
 course, clients are free to completely ignore this extra performance data.
 
 
+Tape Headers
+------------
+
+To promote interoperability with ".tap" format files while preserving all of
+the metadata that PRQM archives contain, the "extended" format is used.  The
+TAPFormatter reads files in standard or extended mode, but (currently) only
+writes files with the extended header.  These "class E" marker types, reserved
+for the purpose of including metadata in a file, are used by PERQmedia:
+
+    Cookie          0xe0000006      'PRQT' cookie (version '0')
+    TextLabel       0xe1000000      Text label (optional)
+    ImageLabel      0xe2000000      Image label (optional)
+    DevInfo         0xe4000000      Info record (var size, as above)
+    DevGeometry     0xe5000008      Geometry record (fixed, as above)
+    DevSpecs        0xe600001c      Specs record (fixed, as above)
+
+When reading and writing the variable sized TextLabel, ImageLabel and DevInfo
+sections, the lower 24 bits are encoded with the total length of the block (as
+is customary for Data records).  To maintain the even word alignment used by
+the TAP format, odd lengths are padded with a single null byte; the formatter
+takes care to add and strip these transparently.  [Should probably test this!]
+Any compliant .tap file parser should be able to skip over these PERQ-specific
+tags and read the tape blocks just fine, but this hasn't yet been verified.
+
+The standard encodings for File Marks, Data blocks and End Of Media markers are
+used.  Bad sectors are supported although currently PERQemu doesn't generate
+them, simply passing through any that are read in when the file is written out.
+When writing, PERQmedia always writes the extended header first, followed by
+the data (which uses only standard markers).
+
+
 Compression
 -----------
 

@@ -231,18 +231,18 @@ namespace PERQemu.IO.DiskDevices
             base.Unload();
         }
 
-        private bool _ready;
-        private bool _fault;
-        private bool _diskChange;
-        private bool _driveSelect;
-        private bool _isSingleSided;
-        private bool _isDoubleDensity;
+        bool _ready;
+        bool _fault;
+        bool _diskChange;
+        bool _driveSelect;
+        bool _isSingleSided;
+        bool _isDoubleDensity;
 
-        private ushort _cylinder;
-        private byte _head;
+        ushort _cylinder;
+        byte _head;
 
-        private SchedulerEvent _seekDelayEvent;
-        private SchedulerEvent _loadDelayEvent;
-        private Scheduler _scheduler;
+        SchedulerEvent _seekDelayEvent;
+        SchedulerEvent _loadDelayEvent;
+        Scheduler _scheduler;
     }
 }

@@ -65,8 +65,9 @@ namespace PERQemu.IO
 
         public abstract void IOWrite(byte port, int value);
 
-        public virtual void LoadDisk()
+        public virtual StorageDevice LoadDisk(Drive drive)
         {
+            return null;
         }
 
         public virtual StorageDevice LoadTape(Drive drive)
@@ -99,7 +100,7 @@ namespace PERQemu.IO
             {
                 if (_portsHandled[p])
                 {
-                    Log.Warn(Category.IO, "Port {0:x2} already registered!", p);
+                    Log.Warn(Category.IO, "Port 0x{0:x2} already registered!", p);
                 }
 
                 _portsHandled[p] = true;

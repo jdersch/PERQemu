@@ -70,32 +70,33 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// If the Streamer option is configured, create and attach the drive
-        /// and load the media (if a path is given).
+        /// If the Streamer option is configured, create the Sidewinder and hook
+        /// that to the OIO board, then load the media if a path is given.
         /// </summary>
         public override StorageDevice LoadTape(Drive drive)
         {
             // Sanity checks
+            if (_streamer == null)
+                throw new InvalidOperationException($"Request to load {drive.Type} but no drive attached");
+
             if (drive.Type != DeviceType.TapeQIC)
                 throw new InvalidOperationException($"OIO can't load tape type {drive.Type}");
 
-            if (_streamer == null)
-            {
-                Log.Warn(Category.Streamer, "Request to load {0} but no drive attached", drive.Type);
-                return null;
-            }
+            // The streamer is a little different; create the Sidewinder and
+            // attach that to the _streamer, then load the CartridgeTape if a
+            // media path was given.
+            var controller = new Sidewinder(_sys.Scheduler);
 
-            // Create, load the new device
-            var tape = new Sidewinder(_sys.Scheduler, drive.MediaPath);
+            // Attach the controller to the PERQ
+            _streamer.AttachDrive((uint)drive.Unit, controller);
 
+            // If a media path given, tell the Sidewinder to load it
             if (!string.IsNullOrEmpty(drive.MediaPath))
             {
-                tape.Load();
+                controller.Media.LoadFrom(drive.MediaPath);
             }
 
-            // Attach it to the controller
-            _streamer.AttachDrive((uint)drive.Unit, tape);
-            return tape;
+            return controller.Media;
         }
 
         /// <summary>
@@ -145,8 +146,8 @@ namespace PERQemu.IO
                     handled = true;
                     break;
 
-                // case 0x25:
-                //  read loopback/diagnostic?
+                    // case 0x25:
+                    //  read loopback/diagnostic?
             }
 
             if (!handled)

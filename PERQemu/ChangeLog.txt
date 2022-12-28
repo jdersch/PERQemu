@@ -568,9 +568,13 @@ December, 2022:
     would be cool to be able to produce tapes on a virtual PERQ and transport
     them to a real one in 20MB chunks, rather than over a 9600-baud serial port!
 
-    Todo: new tape images prepared, tons of testing, Stut port/update to use
+    4. Okay, NOW tape writes are working, saving, loading AND reading too.  That
+    makes it all much more useful.  There's a BUNCH of debugging and testing to
+    do but I might still squeeze in that release before the end of the year...
+
+    Todo: new tape images prepared, tons more testing, Stut port/update to use
     PERQmedia, updates to the User's Guide.
 
 
 ---
-Last update: skeezics    Sat Dec 17 23:22:34 PST 2022
+Last update: skeezics    Wed Dec 28 01:22:37 PST 2022

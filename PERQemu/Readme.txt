@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-12/18/2022 - skeezicsb - v0.4.8 (experimental)
+12/28/2022 - skeezicsb - v0.4.8 (experimental)
 11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4

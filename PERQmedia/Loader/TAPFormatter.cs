@@ -68,7 +68,7 @@ namespace PERQmedia
                     // An End Of Media mark with no valid data records?  Hmmm.
                     if ((Marker)recordType == Marker.EndOfMedia && count == 0)
                     {
-                        Log.Debug(Category.MediaLoader, "TAP error: EOM at record {0}, blank or invalid tape?", count);
+                        Log.Debug(Category.MediaLoader, "EOM at record {0}, blank or invalid tape?", count);
                         return false;
                     }
 
@@ -81,7 +81,7 @@ namespace PERQmedia
                         {
                             if (fs.ReadByte() != _cookie[b])
                             {
-                                Log.Debug(Category.MediaLoader, "TAP file contains an unknown cookie");
+                                Log.Debug(Category.MediaLoader, "Bad cookie!");
                                 found = false;      // False alarm
                             }
                         }
@@ -92,7 +92,7 @@ namespace PERQmedia
                         if (found && _fileVersion == Version)
                         {
                             // Got a good cookie!  Must be ours, then!
-                            Log.Debug(Category.MediaLoader, "TAP file contains a PERQmedia cookie!");
+                            Log.Debug(Category.MediaLoader, "Found a PERQmedia cookie!");
                             break;
                         }
                     }
@@ -113,9 +113,7 @@ namespace PERQmedia
                         // If it isn't a PERQ-sized block, bail out
                         if (dataLength != 512)
                         {
-                            Log.Debug(Category.MediaLoader,
-                                      "TAP error: image has non-PERQ block size: {0} bytes",
-                                      dataLength);
+                            Log.Debug(Category.MediaLoader, "Image has non-PERQ block size: {0} bytes", dataLength);
                             return false;
                         }
 
@@ -129,9 +127,7 @@ namespace PERQmedia
 
                         if (dataLength != recordType)
                         {
-                            Log.Debug(Category.MediaLoader,
-                                      "TAP error: first data block has length mismatch ({0} != {1})",
-                                      dataLength, recordType);
+                            Log.Debug(Category.MediaLoader, "First data block has length mismatch ({0} != {1})", dataLength, recordType);
                             return false;
                         }
 
@@ -143,7 +139,7 @@ namespace PERQmedia
                 // Never found a valid data block
                 if (!found)
                 {
-                    Log.Debug(Category.MediaLoader, "TAP error: no valid data marker in first {0} reads", count);
+                    Log.Debug(Category.MediaLoader, "No valid data marker in first {0} reads", count);
                     return false;
                 }
 
@@ -181,7 +177,7 @@ namespace PERQmedia
                         // data; back up by 4 bytes to position for ReadData
                         if (recordType < (uint)Marker.Cookie || recordType > (uint)Marker.DevSpecs)
                         {
-                            Log.Debug(Category.MediaLoader, "Found non-header marker at {0}, header complete", fs.Position);
+                            Log.Debug(Category.MediaLoader, "Header complete at pos {0}", fs.Position);
                             found = true;
                             break;
                         }
@@ -252,7 +248,7 @@ namespace PERQmedia
                         }
                         else
                         {
-                            Log.Warn(Category.MediaLoader, "Unknown class E marker: {0:x} at pos {1}", recordType, fs.Position);
+                            Log.Warn(Category.MediaLoader, "TAP formatter: Unknown class E marker: {0:x} at pos {1}", recordType, fs.Position);
                         }
 
                         // Verify the record
@@ -260,8 +256,7 @@ namespace PERQmedia
 
                         if (checkType != recordType)
                         {
-                            Log.Error(Category.MediaLoader,
-                                      "Data record mismatch: {0:x} != {1:x}, file corrupt?", recordType, checkType);
+                            Log.Error(Category.MediaLoader, "TAP formatter: Data record mismatch: {0:x} != {1:x}, file corrupt?", recordType, checkType);
                             return false;
                         }
                     }
@@ -290,8 +285,9 @@ namespace PERQmedia
         {
             try
             {
-                // Allocate our sectors
-                dev.CreateSectors();
+                // Because .tap files are sparse, we preallocate all of our
+                // sectors to prevent problems trying to read an empty tape
+                dev.Format();
 
                 // Working set
                 var data = new byte[dev.Geometry.SectorSize];       // 512 bytes
@@ -301,7 +297,7 @@ namespace PERQmedia
                 var head = 0;
                 var sector = 0;
 
-                Log.Debug(Category.MediaLoader, "TAP formatter: Data read starting at pos {0}...", fs.Position);
+                Log.Debug(Category.MediaLoader, "Data read starting at pos {0}...", fs.Position);
 
                 // I'm here to chew bubble gum and read tape blocks!
                 while (!EOM)
@@ -321,13 +317,19 @@ namespace PERQmedia
                         Log.Debug(Category.MediaLoader, "'Erase Gap' or reserved marker 0x{0:x} at block {1}", recordType, block);
                         FillBlock((byte)(recordType & 0xfe), ref data);
                     }
-                    else if (recordType == 0x0)
+                    else if (recordType == (uint)Marker.FileMark)
                     {
                         // Don't log EVERY BLOODY SECTOR when loading an unformatted tape... :-|
                         if (data[0] != 0x1c)
                             Log.Detail(Category.MediaLoader, "File mark at block {0}", block);
-                        
+
                         FillBlock(0x1c, ref data);
+                    }
+                    else if (recordType == (uint)Marker.Empty)
+                    {
+                        // Sigh.  We write Empty blocks as "private data" (class 1)
+                        // but to save some space the blocks of nulls are left out
+                        FillBlock(0, ref data);
                     }
                     else if ((recordType & 0xf0000000) == 0xe0000000)
                     {
@@ -344,18 +346,19 @@ namespace PERQmedia
 
                         // If bit 31 is set then bits 30:24 must be zero, so if
                         // we get anything else die horribly?  Shouldn't happen...
-                        if ((recordType & 0x7f000000) != 0)
+                        if (bad && (recordType & 0x7f000000) != 0)
                         {
-                            Log.Error(Category.MediaLoader, "Bad error flag at block {0}: {1:x} is bogus!", block, recordType);
+                            Log.Error(Category.MediaLoader, "TAP formatter: Bad error flag at block {0}: {1:x} is bogus!", block, recordType);
                             return false;
                         }
 
                         // Should never happen on files we write, but may on non-
                         // PERQmedia written archives... either we're out of sync
                         // or the file has different blocking; either way we bail
+                        // (and probably just blow up)
                         if (blockLen != 512)
                         {
-                            Log.Error(Category.MediaLoader, "Block {0} is wrong size ({1}), skipping it", block, blockLen);
+                            Log.Error(Category.MediaLoader, "TAP formatter: Block {0} is wrong size ({1}), skipping it", block, blockLen);
                             continue;
                         }
 
@@ -379,24 +382,23 @@ namespace PERQmedia
                     //
                     if (block == dev.Geometry.TotalBlocks - 1 && recordType != (uint)Marker.EndOfMedia)
                     {
-                        Log.Info(Category.MediaLoader, "TAP loader: Inserting EOM record for unformatted tape");
+                        Log.Info(Category.MediaLoader, "Inserting EOM record for unformatted tape");
 
-                        FillBlock((byte)(recordType & 0xff), ref data);
-                        FillBlock((byte)(recordType & 0xff), ref header);
+                        recordType = (uint)Marker.EndOfMedia;
+                        FillBlock(0xff, ref data);
 
                         // Prevent overruns, too...
                         EOM = true;
                     }
 
-                    // For ALL blocks, copy the marker into the header
-                    header[0] = (byte)(recordType >> 24);
-                    header[1] = (byte)(recordType >> 16);
-                    header[2] = (byte)(recordType >> 8);
-                    header[3] = (byte)recordType;
+                    // For all blocks the header IS the marker
+                    dev.Sectors[0, head, sector].WriteHeaderByte(0, (byte)(recordType >> 24));
+                    dev.Sectors[0, head, sector].WriteHeaderByte(1, (byte)(recordType >> 16));
+                    dev.Sectors[0, head, sector].WriteHeaderByte(2, (byte)(recordType >> 8));
+                    dev.Sectors[0, head, sector].WriteHeaderByte(3, (byte)recordType);
+                    dev.Sectors[0, head, sector].IsBad = bad;
 
-                    // Create the sector, copy in the header & data
-                    dev.Sectors[0, head, sector] = new Sector(0, (byte)head, (ushort)sector, (ushort)data.Length, (byte)header.Length, bad);
-                    header.CopyTo(dev.Sectors[0, head, sector].Header, 0);
+                    // Copy in the sector data
                     data.CopyTo(dev.Sectors[0, head, sector].Data, 0);
 
                     // Bump the block count and adjust our StorageDev's C/H/S
@@ -418,9 +420,10 @@ namespace PERQmedia
                     }
 
                     // Finally: check the end marker and make sure it matches
+                    // ... unless we stuck in an EOM, so quietly ignore that  doh
                     var checkType = fs.ReadUInt();
 
-                    if (checkType != recordType)
+                    if (checkType != recordType && !EOM)
                     {
                         Log.Error(Category.MediaLoader, "Record mismatch at block {0} (pos={1}), sync lost", block, fs.Position);
                         return false;
@@ -447,7 +450,7 @@ namespace PERQmedia
             int size = 0;
             bool pad = false;
 
-            Log.Debug(Category.MediaLoader, "TAP formatter: Writing custom header...");
+            Log.Debug(Category.MediaLoader, "Writing custom header...");
 
             //
             // Custom PERQ "extended" .tap file includes all the PERQmedia goodies
@@ -455,6 +458,7 @@ namespace PERQmedia
 
             // Cookie
             recordType = (uint)Marker.Cookie;
+
             fs.WriteUInt(recordType);
             fs.Write(_cookie, 0, _cookie.Length);
             fs.WriteByte(_fileVersion);
@@ -542,42 +546,49 @@ namespace PERQmedia
             fs.WriteInt(dev.Specs.TransferRate);
             fs.WriteUInt(recordType);
 
-            Log.Debug(Category.MediaLoader, "TAP formatter: Writing data...");
+            Log.Debug(Category.MediaLoader, "Writing data...");
 
             //
             // Dump all the sector data using "standard" .tap markers.
             //
             size = 0;
 
-            for (var hd = 0; hd < dev.Geometry.Heads; hd++)
+            for (byte hd = 0; hd < dev.Geometry.Heads; hd++)
             {
-                for (var blk = 0; blk < dev.Geometry.Sectors; blk++)
+                for (ushort sec = 0; sec < dev.Geometry.Sectors; sec++)
                 {
-                    var mark = GetMarker(dev.Sectors[0, hd, blk].Header);
+                    var block = dev.Read(0, hd, sec);
+                    var marker = GetMarker(block.Header);
 
-                    // Skip the empty ones, but write the rest
-                    if (mark != Marker.Empty)
-                    {
-                        // HA!  We just write the header, the data, then the header again! :-P
-                        fs.Write(dev.Sectors[0, hd, blk].Header, 0, dev.Geometry.HeaderSize);
+                    // HA!  We just write the header, the data, then the header again! :-P
+                    fs.Write(block.Header, 0, dev.Geometry.HeaderSize);
 
-                        // Unless it's a block that doesn't require writing the data!  Double ha!
-                        if (mark == Marker.Data || mark == Marker.BadData)
-                            fs.Write(dev.Sectors[0, hd, blk].Data, 0, dev.Geometry.SectorSize);
+                    // Unless it's a block that doesn't require writing the data!  Double ha!
+                    if (marker == Marker.Data || marker == Marker.BadData)
+                        fs.Write(block.Data, 0, dev.Geometry.SectorSize);
 
-                        // And a second copy, for reading backwards :-)
-                        fs.Write(dev.Sectors[0, hd, blk].Header, 0, dev.Geometry.HeaderSize);
+                    // And a second copy, for reading backwards :-)
+                    fs.Write(block.Header, 0, dev.Geometry.HeaderSize);
 
-                        size++;
-                    }
+                    Log.Info(Category.MediaLoader, "Wrote block {0}, 0/{1}/{2} type {3}", size, hd, sec, marker);
+                    recordType = (uint)marker;
+                    size++;
 
-                    // No point in writing out empty blocks; this is a perfectly
-                    // acceptable use of a goto, that poor maligned bastard
-                    if (mark == Marker.EndOfMedia) goto EOM;
+                    // No point in writing out empty blocks beyond the End of Media
+                    // marker; this is a perfectly acceptable use of a goto, says I
+                    if (marker == Marker.EndOfMedia) goto EOM;
                 }
             }
 
         EOM:
+            // Make sure the last thing written was an EOM!
+            if ((Marker)recordType != Marker.EndOfMedia)
+            {
+                Log.Warn(Category.MediaLoader, "Last sector written was 0x{0:x}; adding EOM", recordType);
+                fs.WriteUInt((uint)Marker.EndOfMedia);
+                fs.WriteUInt((uint)Marker.EndOfMedia);
+            }
+
             Log.Info(Category.MediaLoader, "TAP formatter: Wrote {0} blocks, total size {1} bytes", size, fs.Position);
 
             return true;
@@ -636,13 +647,21 @@ namespace PERQmedia
     The original "standard" TAP format doesn't store _any_ metadata about the
     contents, but the "extended" version does.  When writing, the "class E" tag
     is used to define metadata in "Tape Description Data Records" as defined by
-    the Jan, 2022 version of the spec.  Details below as I fill them in!
+    the Jan, 2022 version of the spec.  Details in PRQM_Format.txt.
 
     Because the PERQmedia format was designed primarily around disks with fixed
     sector sizes and TAP allows for every block to specify its own size, this
     formatter cannot handle any arbitrary .tap file.  For PERQ use, QIC tapes
     with fixed 512-byte blocks are all we can recognize, currently.  (This block
     size is set by Archive's controller, if not by the QIC-02 standard itself.)
+
+    When writing out a .tap image, we only need to include all the blocks from
+    0..EOM, since we can fill in the rest on read by just pre-formatting the
+    StorageDevice's underlying Sectors[].  For a newly created file that doesn't
+    have an EOM marker we add one on write; for a tape that ends prematurely we
+    try to synthesize one on read.  Obviously for purely PERQ-only use the PRQM
+    format saves lots of space, but it IS nice for debugging to be able to see
+    the uncompressed data...
     
     There's a version of 'tar' for the PERQ, but I haven't looked into it yet.
     It's not clear if that was written as an alternative to Stut for writing
@@ -650,5 +669,4 @@ namespace PERQmedia
     it written specifically to use 9-track reel-to-reel tapes with the MLO
     board and the Ciprico Tapemaster?  Could PNX access any of the streamer
     or Multibus hardware?  Lots of unanswered questions.
-
 */

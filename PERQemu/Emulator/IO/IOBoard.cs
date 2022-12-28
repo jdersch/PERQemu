@@ -115,7 +115,7 @@ namespace PERQemu.IO
 
             for (var p = 1; p < _portsHandled.Length; p++)
                 _portsHandled[p] = false;
-            
+
             Log.Detail(Category.Emulator, "IOBoard shutdown.");
         }
 
@@ -190,9 +190,9 @@ namespace PERQemu.IO
         protected IStorageController _hardDiskController;
 
         // I/O port map for this board
-        private static bool[] _portsHandled = new bool[256];
+        static bool[] _portsHandled = new bool[256];
 
         // Parent
-        private PERQSystem _sys;
+        PERQSystem _sys;
     }
 }

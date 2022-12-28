@@ -982,6 +982,49 @@ namespace PERQemu
             Console.WriteLine("No streamer drive.");
         }
 
+        [Command("debug show tape block", "Show contents of a tape block")]
+        void ShowStreamerBlock(int pos)
+        {
+            if (!CheckSys()) return;
+
+            if (pos >= PERQemu.Sys.Volumes[3].Geometry.TotalBlocks)
+            {
+                Console.WriteLine("Address must be in range 0..{0}", PERQemu.Sys.Volumes[3].Geometry.TotalBlocks - 1);
+                return;
+            }
+
+            var dev = PERQemu.Sys.Volumes[3] as IO.TapeDevices.CartridgeTape;
+            var block = dev.Read(pos);
+
+            Console.WriteLine($"Block {pos} is type {block.Type}:");
+
+            // Format and display 16 bytes per line
+            for (var i = 0; i < block.Data.Length; i += 16)
+            {
+                var line = new StringBuilder();
+                line.AppendFormat("{0:x3}: ", i);
+
+                for (var j = i; j < i + 16; j++)
+                {
+                    line.AppendFormat("{0:x2} ", block.Data[j]);
+                }
+
+                // ASCII representation
+                for (var j = i; j < i + 16; j += 2)
+                {
+                    var high = (char)block.Data[j];
+                    var low = (char)block.Data[j + 1];
+
+                    high = PERQemu.CLI.IsPrintable(high) ? high : '.';
+                    low = PERQemu.CLI.IsPrintable(low) ? low : '.';
+
+                    line.AppendFormat("{0}{1}", low, high);     // Reversed so strings read right :)
+                }
+
+                Console.WriteLine(line);
+            }
+        }
+
 #if DEBUG
         // A temporary working copy for editing breakpoints
         BreakpointEventArgs _bp;
