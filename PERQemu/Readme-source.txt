@@ -419,9 +419,11 @@ the code in Emulator/IO/TapeDevices:
     - QICTapeController is the thin PERQ interface to the QIC-02 "bus" that
       attaches one streaming tape drive.  It can be configured as the Tape
       option when the OIO board is selected.
-    - Sidewinder.cs contains all of the drive's mechanical and controller
-      logic, emulating the Archive Sidewinder 3020I drive.  A ton of extra
-      information is included in Docs/Streamer.txt.
+    - Sidewinder.cs contains the drive's controller logic, emulating the
+      Archive Sidewinder 3020I drive.  The mechanical portion and wrapper
+      around the StorageDevice is in CartridgeTape.cs, organized much like
+      the floppy controller and media.  A ton of extra detailed information
+      is included in Docs/Streamer.txt.
 
 All disk (and tape) controllers implement the IStorageController interface as
 defined in Emulator/IO/IStorageController.cs.  This provides a common point of

@@ -482,11 +482,13 @@ namespace PERQemu.IO.TapeDevices
 
             if (_command == Command.Erase)
             {
+                _commandSequence.Push(_drive.Rewind);
                 _commandSequence.Push(_drive.Erase);
             }
             else if (_command == Command.Retension)
             {
-                _commandSequence.Push(_drive.Wind);
+                _commandSequence.Push(_drive.Rewind);
+                _commandSequence.Push(_drive.Retension);
             }
             else if (_command != Command.Rewind)
             {
@@ -499,7 +501,6 @@ namespace PERQemu.IO.TapeDevices
                 _commandSequence.Push(_drive.Rewind);
             }
 
-            _drive.DriveCommand = _command;
             return RunSequence();
         }
 
@@ -604,14 +605,15 @@ namespace PERQemu.IO.TapeDevices
                         // on the controller's default behavior, so in that case
                         // this will generally only occur if the controller times
                         // out and drops online (or Resets) to recover?
-                        //_commandSequence.Push(Rewind);
+                        _commandSequence.Push(RewindComplete);
+                        _commandSequence.Push(_drive.Rewind);
 
                         // "If the last command was a WFM command, the controller
-                        // will not write another file mark."
+                        // will not write another file mark."  Hmm.
                         //if (_command != Command.WriteFileMark)
                         //    _commandSequence.Push(WriteFileMark);
 
-                        //nextState = RunSequence();
+                        nextState = RunSequence();
                         break;
                     }
 
@@ -1019,13 +1021,21 @@ namespace PERQemu.IO.TapeDevices
                     break;
 
                 default:
-                    // Todo: We might put a check for Online changing state here to catch cases
-                    // where Stut gets confused or we get stuck -- or possibly because interrupting
-                    // ReadFileMark commands might not happen at block boundaries?  On read sequences
-                    // it should be pretty clear that the result is always to stop, rewind, and reset
-                    // for a read status command?
+                    //
+                    // We check here for Online changing state to catch cases where
+                    // Stut gets confused or we get stuck, though that probably
+                    // shouldn't happen if/when things are fully debugged.  The spec
+                    // is pretty clear that the result is always to stop, rewind,
+                    // and reset for a read status command...
                     Log.Error(Category.Streamer, "Unexpected entry in phase {0}, state {1} (online={2})",
                                                  _phase, _state, _online);
+
+                    if (!_online)
+                    {
+                        Log.Info(Category.Streamer, "Drive offline, rewinding...");
+                        _commandSequence.Push(RewindComplete);
+                        _commandSequence.Push(_drive.Rewind);
+                    }
                     break;
             }
 
@@ -1193,7 +1203,7 @@ namespace PERQemu.IO.TapeDevices
 
         public State RunSequence()
         {
-            Log.Debug(Category.Streamer, "RunSequence: {0} commands to go", _commandSequence.Count);
+            Log.Info(Category.Streamer, "RunSequence: {0} commands to go", _commandSequence.Count);
 
             // Any commands queued up?
             if (_commandSequence.Count > 0)
@@ -1218,11 +1228,6 @@ namespace PERQemu.IO.TapeDevices
         {
             ENTER("Finish");
             UpdateStatus();
-
-            if (_drive.ActivityLight) _drive.ShowIcon(false);
-
-            // Reset state machine to accept next command
-            _phase = Phase.Ready;
 
             // Return to idle, but check for abnormal conditions...
             State final;
@@ -1251,6 +1256,11 @@ namespace PERQemu.IO.TapeDevices
                 // Are we there yet?  Are we there yet?
                 final = (_commandSequence.Count > 0 ? State.Busy : State.Idle);
             }
+
+            if (_drive.ActivityLight) _drive.ShowIcon(false);
+
+            // Reset state machine to accept next command
+            _phase = Phase.Ready;
 
             // Oh just set it already.  The whole elegant "run a sequence" thing
             // is a bloody disaster since the PERQ does things its own damn way
@@ -1286,6 +1296,7 @@ namespace PERQemu.IO.TapeDevices
         public void DriveFault()
         {
             _exception = true;
+            _acknowledge = false;
             _state = FinishCommand();
         }
 

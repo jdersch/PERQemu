@@ -69,13 +69,6 @@ namespace PERQemu.IO.TapeDevices
         // Signals we need to snoop
         bool Offline => !_controller.Online;
 
-        // Let's the controller tell us what to do (fixme: this is lazy)
-        public Command DriveCommand
-        {
-            get { return _command; }
-            set { _command = value; }
-        }
-
         /// <summary>
         /// Reset the drive.
         /// </summary>
@@ -185,20 +178,22 @@ namespace PERQemu.IO.TapeDevices
         }
 
         /// <summary>
-        /// Start an Erase or Retension command.  (Uses the context object to
-        /// set the command and lets Wind do the work to avoid duplication.)
-        /// I'm sure there's a more direct way?)
+        /// Start an Erase or Retension command in the dumbest way because using
+        /// the context object in this way seems to be impossibly complicated or
+        /// impossible and my brain has turned to jelly.  Just set the _command
+        /// and call Wind to do the work.  There must be a a less gross way but
+        /// I am too tired to find it.  Sigh.
         /// </summary>
         public void Erase(ulong skewNsec, object context)
         {
-            Log.Info(Category.Streamer, "--> Erase command setup");
-            Wind(0, Command.Erase);
+            _command = Command.Erase;
+            Wind(skewNsec, context);
         }
 
-        public void Reten(ulong skewNsec, object context)
+        public void Retension(ulong skewNsec, object context)
         {
-            Log.Info(Category.Streamer, "--> Retension command setup");
-            Wind(0, Command.Retension);
+            _command = Command.Retension;
+            Wind(skewNsec, context);
         }
 
         /// <summary>
@@ -209,11 +204,8 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         public void Wind(ulong skewNsec, object context)
         {
-            // Destructive or non?
-            var command = (Command)context;
-
             Log.Info(Category.Streamer, "{0}: tape is {1}, position {2}",
-                       command, (_tapeInMotion ? "moving" : "stopped"), _position);
+                       _command, (_tapeInMotion ? "moving" : "stopped"), _position);
 
             // Like rewinding, this is a linear motion from BOT to EOT, but it
             // shouldn't ever start in the middle of the tape; assume we start
@@ -225,17 +217,9 @@ namespace PERQemu.IO.TapeDevices
             {
                 if (AtEOT)
                 {
-                    if (command == Command.Erase)
-                    {
-                        Log.Info(Category.Streamer, "Inserting EOM record");
-                        // At the end of an erase, set the "end of media" marker
-                        // in the block header of the last sector on the device
-                        var eom = new BlockBuffer(BlockType.EndOfMedia);
-                        Write(Geometry.TotalBlocks - 1, eom);
-                    }
-
                     _atFileMark = false;
                     _motionEvent = null;
+                    _command = Command.None;
                     _controller.RunSequence();
                 }
                 else
@@ -254,16 +238,22 @@ namespace PERQemu.IO.TapeDevices
                 {
                     // As with rewind, do about 1 second's worth
                     var blocks = Math.Min((Geometry.Sectors - 1) - _position, SectorsPerSecond);
-
+                                      
                     // If erasing, actually zap the sectors.  The drive's erase
                     // bar does all n tracks at once!
-                    if (command == Command.Erase)
+                    if (_command == Command.Erase)
                     {
+                        var sec = new BlockBuffer(BlockType.Empty);
+
                         for (var h = 0; h < Geometry.Heads; h++)
                         {
-                            for (var s = _position; s < _position + blocks; s++)
+                            // OMFG. If doing the last chunk we either fail to write
+                            // the last column OR we double-write the first position
+                            // every time through.  Fencepost errors are SO ANNOYING
+                            var killMeNow = (_position + blocks == Geometry.Sectors - 1 ? 1 : 0);
+
+                            for (var s = _position; s < _position + blocks + killMeNow; s++)
                             {
-                                var sec = new BlockBuffer(BlockType.Empty);
                                 Write(s + (h * Geometry.Sectors), sec);
                             }
                         }
@@ -274,7 +264,7 @@ namespace PERQemu.IO.TapeDevices
 
                     // Now schedule next callback and blink
                     ulong delay = (ulong)blocks * SecTime90IPS;
-                    _motionEvent = _scheduler.Schedule(delay - skewNsec, Wind, command);
+                    _motionEvent = _scheduler.Schedule(delay - skewNsec, Wind);
 
                     ShowIcon(!_activityLight);
                 }
@@ -336,6 +326,10 @@ namespace PERQemu.IO.TapeDevices
             {
                 // Here we have to jam on the brakes and halt the whole write op
                 Log.Error(Category.Streamer, "Writer: Reached end of physical media, tape is full.  Hard stop.");
+
+                // Clear buffers so the controller doesn't get stuck; we're out
+                // of room, so just dump the data overboard
+                while (_controller.WritesPending) _controller.GetBuffer();
 
                 StartStop(null);
                 _controller.DriveFault();
@@ -409,10 +403,17 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         public void Write(int pos, BlockBuffer buf)
         {
-            var val = (uint)buf.Type;
-
             var hd = (byte)(pos / Geometry.Sectors);
             var sec = (ushort)(pos % Geometry.Sectors);
+
+            var val = (uint)buf.Type;
+
+            // Backstop: never overwrite the EOM marker!
+            if (pos == Geometry.TotalBlocks - 1)
+            {
+                Log.Info(Category.Streamer, "Writing EOM record at pos {0}", pos);
+                val = (uint)BlockType.EndOfMedia;
+            }
 
             Sectors[0, hd, sec].WriteHeaderByte(0, (byte)(val >> 24));
             Sectors[0, hd, sec].WriteHeaderByte(1, (byte)(val >> 16));
@@ -420,6 +421,8 @@ namespace PERQemu.IO.TapeDevices
             Sectors[0, hd, sec].WriteHeaderByte(3, (byte)val);
 
             buf.Data.CopyTo(Sectors[0, hd, sec].Data, 0);
+
+            IsModified = true;
 
             Log.Info(Category.Streamer, "Wrote @ pos {0} to sector 0/{1}/{2}, type {3}",
                                         pos, hd, sec, buf.Type);
@@ -435,14 +438,18 @@ namespace PERQemu.IO.TapeDevices
         /// </summary>
         public void Fetch()
         {
-            // The controller has buffer space, and we're not already in motion, fire it up
             if (_controller.BufferAvailable && !_tapeInMotion)
             {
                 StartStop(ReadAhead);
             }
         }
 
-
+        /// <summary>
+        /// Stream reads from the tape to the host.  Attempts to read and buffer
+        /// the next tape block every n msec (based on drive speed).  Stops when
+        /// there are no free buffers, a file mark or end of media is reached, or
+        /// the controller indicates an offline condition.
+        /// </summary>
         void ReadAhead(ulong skewNsec, object context)
         {
             // If the controller reports that Online has dropped, just quietly exit
@@ -485,8 +492,7 @@ namespace PERQemu.IO.TapeDevices
 
             // Is this block a file mark?  Flag it and stop the tape; when the
             // host catches up the protocol will handle the exception.  We do
-            // NOT advance the position pointer here!  (The "at file mark" flag
-            // gets set when the host catches up)
+            // NOT advance the position pointer here!
             if (block.Type == BlockType.FileMark)
             {
                 _controller.PutBuffer(block);
@@ -501,7 +507,7 @@ namespace PERQemu.IO.TapeDevices
                 {
                     // Thirty two empty blocks in a row constitutes an Unrecoverable
                     // Data Error, which could happen when trying to read an empty
-                    // or unformatted tape.  I guess we set an exception and halt?
+                    // or unformatted tape.  We set an exception and halt
                     _controller.DriveFault();
                     StartStop(null);
                     return;
@@ -520,7 +526,7 @@ namespace PERQemu.IO.TapeDevices
             if (_position % Geometry.Sectors == 0 && Settings.Performance.HasFlag(RateLimit.TapeSpeed))
             {
                 // Stop at the end of each full pass over the tape to reverse
-                // direction.  Flush will start us back up.  This would be more
+                // direction.  Fetch will start us back up.  This would be more
                 // useful if we swapped the activity icon to show the tape wound
                 // on the opposite spool, which would be subtle but sexy. :-)
                 Log.Info(Category.Streamer, "Reader: At EOT, have to change heads and direction!");
