@@ -18,15 +18,14 @@
 //
 
 using System;
+
 using PERQmedia;
 
 namespace PERQemu.IO.TapeDevices
 {
     /// <summary>
     /// Emulates the mechanical operations of a QIC tape drive.  For the PERQ
-    /// this means the Archive 'Sidewinder' 3020B, 9020B or 9045B basic drives;
-    /// Sidewinder.cs implements the intelligent controller that manages all of
-    /// the command and control operations, and interface to the PERQ.
+    /// this means the Archive 'Sidewinder' 3020B, 9020B or 9045B basic drives.
     /// </summary>
     public class CartridgeTape : StorageDevice
     {
@@ -101,7 +100,7 @@ namespace PERQemu.IO.TapeDevices
             // shorten it to a fixed 10ms (about 10x faster than typical)
             var delay = (Settings.Performance.HasFlag(RateLimit.TapeSpeed) ? Specs.StartupDelay : 10);
 
-            Log.Info(Category.Streamer, "Motor {0} in {1}ms",
+            Log.Debug(Category.Streamer, "Motor {0} in {1}ms",
                        (_tapeInMotion ? "stopping" : "starting, up to speed"), delay);
 
             // Schedule it
@@ -138,7 +137,7 @@ namespace PERQemu.IO.TapeDevices
             // number and only count down from there.
             if (_position >= Geometry.Sectors)
             {
-                Log.Write(Category.Streamer, "Rewind: Adjusting linear position {0} => {1}",
+                Log.Debug(Category.Streamer, "Rewind: Adjusting linear position {0} => {1}",
                            _position, _position % (Geometry.Sectors - 1));
 
                 _position = _position % (Geometry.Sectors - 1);
@@ -339,7 +338,7 @@ namespace PERQemu.IO.TapeDevices
             // Grab the next buffer off the queue
             var block = _controller.GetBuffer();
 
-            Log.Info(Category.Streamer, "Writer: {0} buffer is ready to flush @ pos {1}",
+            Log.Detail(Category.Streamer, "Writer: {0} buffer is ready to flush @ pos {1}",
                                         block.Type, _position);
 
             // Commit the block!
@@ -362,7 +361,7 @@ namespace PERQemu.IO.TapeDevices
                 // If we just wrote a file mark, spin down the tape with a call-
                 // back to WriteFileMark to let it know.  It's not 100% clear
                 // from the spec if the tape _always_ stops when a WFM is issued...
-                Log.Info(Category.Streamer, "Wrote a file mark!");
+                Log.Debug(Category.Streamer, "Wrote a file mark!");
 
                 StartStop(_controller.WriteFileMark);
                 return;
@@ -374,7 +373,7 @@ namespace PERQemu.IO.TapeDevices
             // If Online drops, stop motion?
             if (Offline)
             {
-                Log.Info(Category.Streamer, "Writer: Controller reports offline, stopping tape.");
+                Log.Debug(Category.Streamer, "Writer: Controller reports offline, stopping tape.");
                 StartStop(null);
                 return;
             }
@@ -386,14 +385,14 @@ namespace PERQemu.IO.TapeDevices
                 // direction.  Flush will start us back up.  This would be more
                 // useful if we swapped the activity icon to show the tape wound
                 // on the opposite spool, which would be subtle but sexy. :-)
-                Log.Info(Category.Streamer, "Writer: At EOT, have to change heads and direction!");
+                Log.Debug(Category.Streamer, "Writer: At EOT, have to change heads and direction!");
                 StartStop(null);
             }
             else
             {
                 // Keep on streamin'
                 _motionEvent = _scheduler.Schedule(SeekTime, WriteBehind);
-                Log.Info(Category.Streamer, "Writer: Next tape block in {0}ms", SeekTime * Conversion.NsecToMsec);
+                Log.Detail(Category.Streamer, "Writer: Next tape block in {0}ms", SeekTime * Conversion.NsecToMsec);
             }
         }
 
@@ -411,7 +410,7 @@ namespace PERQemu.IO.TapeDevices
             // Backstop: never overwrite the EOM marker!
             if (pos == Geometry.TotalBlocks - 1)
             {
-                Log.Info(Category.Streamer, "Writing EOM record at pos {0}", pos);
+                Log.Debug(Category.Streamer, "Writing EOM record at pos {0}", pos);
                 val = (uint)BlockType.EndOfMedia;
             }
 
@@ -424,7 +423,7 @@ namespace PERQemu.IO.TapeDevices
 
             IsModified = true;
 
-            Log.Info(Category.Streamer, "Wrote @ pos {0} to sector 0/{1}/{2}, type {3}",
+            Log.Detail(Category.Streamer, "Wrote @ pos {0} to sector 0/{1}/{2}, type {3}",
                                         pos, hd, sec, buf.Type);
         }
 
@@ -455,7 +454,7 @@ namespace PERQemu.IO.TapeDevices
             // If the controller reports that Online has dropped, just quietly exit
             if (Offline)
             {
-                Log.Info(Category.Streamer, "Reader: Controller reports offline, stopping tape.");
+                Log.Debug(Category.Streamer, "Reader: Controller reports offline, stopping tape.");
                 StartStop(null);
                 return;
             }
@@ -470,7 +469,7 @@ namespace PERQemu.IO.TapeDevices
             // Have we reached the end?
             if (AtEOM)
             {
-                Log.Warn(Category.Streamer, "Reader: At end of media, hard stop.");
+                Log.Error(Category.Streamer, "Reader: At end of media, hard stop.");
                 StartStop(null);
                 _controller.DriveFault();
                 return;
@@ -479,7 +478,7 @@ namespace PERQemu.IO.TapeDevices
             // Make sure we have a buffer to read into
             if (!_controller.BufferAvailable)
             {
-                Log.Info(Category.Streamer, "Reader: Underrun! No free read buffers available");
+                Log.Debug(Category.Streamer, "Reader: Underrun! No free read buffers available");
                 _controller.Underrun();
                 StartStop(null);
 
@@ -529,14 +528,14 @@ namespace PERQemu.IO.TapeDevices
                 // direction.  Fetch will start us back up.  This would be more
                 // useful if we swapped the activity icon to show the tape wound
                 // on the opposite spool, which would be subtle but sexy. :-)
-                Log.Info(Category.Streamer, "Reader: At EOT, have to change heads and direction!");
+                Log.Debug(Category.Streamer, "Reader: At EOT, have to change heads and direction!");
                 StartStop(null);
             }
             else
             {
                 // Keep on keepin' on
                 _motionEvent = _scheduler.Schedule(SeekTime, ReadAhead);
-                Log.Info(Category.Streamer, "Reader: Next tape block in {0}ms", SeekTime * Conversion.NsecToMsec);
+                Log.Detail(Category.Streamer, "Reader: Next tape block in {0}ms", SeekTime * Conversion.NsecToMsec);
             }
         }
 
@@ -557,14 +556,14 @@ namespace PERQemu.IO.TapeDevices
             var block = new BlockBuffer((BlockType)marker);
             Sectors[0, hd, sec].Data.CopyTo(block.Data, 0);
 
-            Log.Info(Category.Streamer, "Reading @ pos {0} from sector 0/{1}/{2}, type {3}",
+            Log.Detail(Category.Streamer, "Reading @ pos {0} from sector 0/{1}/{2}, type {3}",
                                         pos, hd, sec, (BlockType)marker);
             return block;
         }
 
         #endregion
 
-        #region Load, Unload and blinkenlight
+        #region Load, Unload and The Blinkenlight
 
         /// <summary>
         /// On load, check and set some flags 'n stuff.
@@ -576,8 +575,8 @@ namespace PERQemu.IO.TapeDevices
             // It's the only way to be sure
             Reset();
 
-            // Set the start of the "warning track"     FIXME: set the correct logical EOM on load
-            _lastBlock = Geometry.TotalBlocks - 1;
+            // Set the start of the "warning track"
+            _lastBlock = Geometry.TotalBlocks - Sidewinder.MAXBUFFERS;
 
             Log.Info(Category.Streamer, "{0} online", Info.Description);
 
