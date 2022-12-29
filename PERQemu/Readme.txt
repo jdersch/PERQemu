@@ -1,7 +1,39 @@
 ﻿PERQemu Readme
 
+12/28/2022 - skeezicsb - v0.4.8 (experimental)
+11/1/2022 - skeezicsb - v0.4.6 (experimental)
+3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
+
+
+    ***********
+    * NOTICE! *
+    ***********
+
+    This "experiments" branch is a pretty major divergence from the PERQemu
+    master.  The skeezicsb/master should track the original jdersch/master
+    but will occasionally incorporate a few tweaks to make it work on the
+    Mac and Mono.  A rough roadmap for future development is included at the
+    end of this document.
+
+    There are currently some platform-specific bugs to correct; "experiments"
+    functionality is most complete on MacOS, with Windows and Linux testing
+    (finally) starting to be done regularly.  See section 4 below for a list
+    of the most outstanding bugs and misfeatures.
+
+    The pre-release v0.4.6 is still a work in progress but is stable enough
+    to finally drive a stake in the ground and put it out there for use and
+    testing.  The first of these updates incorporates emulation of the QIC
+    tape option; it's rough, but should be code complete very shortly and
+    will roll up the last features and bug fixes before the v0.5.0 release!
+
+    Bug fixing and updates will continue on this branch, so please check back
+    often for updates.
+
+
+Updated Readme.txt follows.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 1.0 Introduction
@@ -11,7 +43,7 @@ PERQemu is an attempt to emulate the venerable Three Rivers Computer
 Corporation (3RCC) PERQ-1A system.
 
 Emulating this system has been an immense challenge, but so far it's been a lot
-of fun...  See section 4.0 to see what works and what doesn't.
+of fun...  See section 3.0 to see what works and what doesn't.
 
 PERQemu is written in C# under the .NET Framework 2.0.  The source code is now
 available on GitHub at https://github.com/jdersch/PERQemu/.  I've been working
@@ -33,7 +65,7 @@ PDP-11 for some of its performance tricks, it was designed and demonstrated
 in 1979 but not released in production quantities until late 1980.  It is
 estimated that fewer than 5,000 PERQs were built, mostly sold to universities.
 
-The PERQ-1 hardware consisted of the following:
+The PERQ-1 hardware consists of the following:
 
     - A custom bit-slice, microcoded CPU with 48-bit microinstruction words
     - 4K (PERQ-1) or 16K (PERQ-1A) of writable control store
@@ -41,467 +73,428 @@ The PERQ-1 hardware consisted of the following:
     - A high resolution bitmapped display at 768x1024 pixels (1bpp)
     - Custom RasterOp hardware to accelerate bitmap operations
 
-The original PERQs featured a standard set of peripherals:
+The original PERQs feature a standard set of peripherals:
 
     - A 12 or 24mb Shugart 4000-series hard disk (14" platters)
     - A single 8" Shugart floppy drive
     - A GPIB interface, typically used to interface with a Summagraphics
       BitPadOne digitizer tablet
     - One programmable RS232 port, up to 9600 baud
-    - A CVSD chip for audio output (and input)
+    - A CVSD chip for audio output
 
-Optional IO boards could be fitted, which provided:
+Optional IO boards can be fitted, which provide:
 
     - 3Mbit or 10Mbit Ethernet interfaces
     - Canon LBP-10 (and later Canon CX) laser printer interface
     - QIC streamer tape connection
 
-A later PERQ-2 series extended the original design in some significant ways
-and added a number of additional IO options.  At this stage PERQemu does not
-yet incorporate those enhancements.
+A later PERQ-2 series extends the original design in some significant ways
+and adds a number of additional IO options.
+
+
+1.2 Current Status
+------------------
+
+PERQemu versions through 0.4.5 focused exclusively on PERQ-1 support.  Before
+the Great Refactoring (v0.5.0 and beyond) the WinForms-based emulator could run
+only the PERQ-1 "old" Z80 with a single Shugart hard disk.  While the emulation
+was fairly complete, the options for OS and software to run were limited.
+
+This current experimental branch is undergoing major structural changes to
+allow all of the PERQ-1 and PERQ-2 models to be emulated.  This includes the
+"new" Z80 (enabling PERQ-1 models to run newer OS versions) and support for all
+of the PERQ-2 models as well.  As soon as the experimental branch is stable and
+can reliably run the PERQ-1 as before, it will be merged back into "master" and
+released.  Ongoing development will bring additional releases as new models,
+features and peripherals are incorporated.  Please check back often for updates!
+
+
+1.3 System Requirements
+-----------------------
+
+You will need a Windows machine with the .NET Framework 4.8 installed, or a
+Linux/UNIX/Mac OS machine with the Mono 6.x runtime installed.
+
+PERQemu is a nearly cycle-accurate, register-level emulation of a complex 
+microcoded processor AND a Z80 subsystem -- essentially two emulations running
+side-by-side.  Your computer should have a reasonably current processor with at
+least 2-4 CPU cores to run the emulator at speed.  While a CPU hog, PERQemu's
+memory footprint is very modest, requiring less than 100MB of RAM with a typical
+24MB Shugart hard drive configured.
+
+To gauge how faithfully your computer is able to emulate the PERQ, the title of
+the display window updates every few seconds to report the frame rate ("fps")
+and the average cycle time of the PERQ and Z80 processors.  At full speed the
+PERQ will display 60fps, with the CPU executing at 170ns and the Z80 at 407ns.
+
+Performance tuning is an ongoing concern.
 
 
 2.0 Getting Started
 ===================
 
-You will need a Windows machine with the .NET Framework 2.0 installed, or
-a Linux/UNIX/Mac OS machine with Mono installed.  It helps if the machine 
-is quite fast as the emulation is currently not particularly swift.
+This is a very basic "quick start" guide.  For more information about running
+the emulator, please consult the UserGuide.pdf included in this distribution.
+This comprehensive User's Guide includes a complete command reference.
+
 
 If you've gotten this far you've unpacked the Zip archive and you have a 
 directory containing the emulator executable, PERQemu.exe.
 
-There are three subdirectories:
+There are several subdirectories:
 
-    Disks - Contains disk images that the emulator can access:
+    Conf/
+        Contains a collection of "prefab" system configurations as well as
+        device data required for operation.  By default, all custom PERQ
+        configurations are also saved in and loaded from this directory.
 
-        - d6.phd: A dump from my very own PERQ1's disk, which has 
-              POS D.61 and Accent S4 installed.
+    Disks/
+        Contains disk images that the emulator can access.  Included with
+        the distribution are:
+
+        d6.phd:
+            (Josh) A dump from my very own PERQ1's disk, which has POS
+            D.61 and Accent S4 installed.
+
+        f0.prqm:
+            (Skeezics) A dump of my POS F.0 drive, which has a working
+            MPOS E.29 installation as well!
               
-        - f1.phd: A disk containing a more or less complete installation
-              of POS F.1, including source, documentation, the Pascal
-              compiler and a number of games, demos, and applications.
-              This was created from floppy images on Bitsavers.
+        f1.phd:
+            A disk containing a pretty complete installation of POS F.1,
+            including source, documentation, the Pascal compiler and a
+            number of games, demos, and applications.  This was created
+            from floppy images on Bitsavers.
 
-        - f15.phd: A disk containing the first new POS release in
-              over 30 years, built from scratch from a comprehensive
-              source review and rebuild of POS F.1, but with several
-              enhancements (and a roadmap for the future).  This disk
-              is a typical "binary only" deployment with all of the
-              games, demos and several apps.
+        f15dev.phd:
+            Updated Shugart image containing a full source installation
+            of the offshoot POS F.15 distribution.  Includes Amendment 1.
 
-        - f15dev.phd: Same as f15.phd, but with all of the source
-              code and development tools included.  A fascinating look
-              at a complete operating system from the 1980s.
+        g7.prqm:
+            The first PERQmedia-formatted Shugart image for use with the
+            "CIO" board.  Contains a POS G.7 installation (binary only)
+            with a few extras, and a basic Accent S6 installation without
+            any extra apps (yet).  This image includes some fun new demos
+            not previously available on PERQemu!
 
-    Floppies - Currently contains all of the floppy images for POS F.15.
+        pnx1.prqm:
+            A bundle of the basic PNX 1.3 installation from the PERQmedia
+            repository, but reformatted as a .prqm image.
 
-    PROM  - Contains dumps of PERQ ROMs necessary for operation.
+       Additional "stock" hard drive or floppy images may be included as
+       well.  Any custom disk images you create or import are loaded from
+       and saved in the Disks/ directory by default.  Please consult the
+       UserGuide for information about working with PERQemu media files.
 
-        
+    Output/
+        When logging debug output to disk is enabled, log files go here by
+        default.  When screenshots and printing are implemented, that output
+        will land here too.  (Output directory is a settable preference.)
+
+    PROM/
+    Resources/
+        These directories contain dumps of PERQ ROMs and other files
+        necessary for operation.
+
+
 To start the emulator, just run PERQemu.exe:
 
     Windows: double-click the icon.  PERQemu is a "console application,"
-        so a command window will appear and you'll be at the debugger prompt.
+        so a command window will appear and you'll be at the command prompt.
 
     Unix/Linux/Mac: invoke "mono PERQemu.exe" from the command-line in a
         terminal window.  The PERQemu debugger will announce itself, same
         as in the Windows version.
 
+The top-level command prompt is a single '>'.  The command-line interface (CLI)
+now organizes the extensive command set into a hierarchical set of "subsystems".
+The prompt will change according to the current level in the hierarchy, such as:
 
-To load a disk image, type "load harddisk" or "load floppy" followed by a
-pathname to the image file.  Use the pathname syntax appropriate for your
-platform.  (You can boot from a POS "boot floppy" but as on the real hardware,
-floppy boots are slow!)  PERQemu will report "Loaded." if the disk image file
-is read in successfully.
-
-The PERQ could boot from several sources, or use different boots from one
-hard disk image.  Lower case letters select a normal hard disk boot; upper
-case letters select the floppy.  You can boot the "old fashioned way" by
-waiting for the VFY patterns to appear and hitting the appropriate key, or
-tell PERQemu to do it for you by typing "set bootchar <c>" where <c> is the
-boot you wish to select.  The default boot letter is 'a'.
-
-Hit "g" or type "go" and hit enter and the emulation will be off and running!
-A large display window will appear, and soon you should see a strange set of
-comb-like patterns displayed as the microcode runs through its memory tests
-and other diagnostics.
-
-Note that the PERQ display is a fixed 768 x 1024 in a portrait orientation
-and PERQemu does not decorate the window with scroll bars or support any
-full-screen modes.  The mouse wheel or the PgUp/PgDn keys may be used to jump
-the PERQ display up or down if it doesn't fit your display.
-
-
-2.1 Booting and the DDS
------------------------
-
-The debugger console window's title will read "DDS" followed by a three-digit
-number:  this is the PERQ's "diagnostic display," where the progress of the
-boot sequence may be monitored.  Note that the DDS is specific to the operating
-system being booted!  When the boot is complete, the DDS will typically show:
-
-    PNX:    255
-    POS:    999
-    Accent: 400 (1MB of memory) or 450 (2MB)
-
-The PERQ does its best to fool you into thinking it's broken, showing wierd
-noise or patterns on the screen until it finally enables the video interrupt
-and the OS takes over the display.  Because we don't emulate the 2-3 minute
-"warm-up" time that the old Shugart hard drives required, most hard disk boots
-will complete in just a few seconds.  If your PERQ really is stuck, consult
-the "Fault Dictionary" in the Bitsavers on-line documentation repository (see
-below) or in the PERQemu source Docs directory on GitHub.
-
-
-2.2 POS
--------
-
-Once POS has booted, enter the date and login with user "guest" and a blank
-password (or alternately just hit "enter" at the login prompt.)  You'll need
-to put focus on the display window (click on it) so that the keyboard input
-goes to the PERQ and not the debugger.
-
-The mouse works approximately as you'd expect with one minor difference, due
-to functional differences between a digitizer tablet and a mouse.  Specifically:
-a digitizer knows when the puck is off the tablet, where a mouse does not.
-Normally this is not an issue, but if you need to simulate the "off the tablet"
-behavior, hold down the "Alt" key (Command key on the Mac).
-
-Full POS documentation can be found on Bitsavers at
-
-    http://www.bitsavers.org/pdf/perq/PERQ_SysSWRefManual_Feb1982.pdf
-    
-(also in sys:user>doc> in the F.1 hard disk image, or :boot>docs> in F.15)
-    
-Interaction with POS is through the command-line interpreter called the
-Shell.  Here are some basic commands to get you started:
-
-    ? - list the commands defined in your "login profile"
-
-    HELP - shows usage for various commands
-
-    DIR - show contents of the current directory.  Executable files are
-        suffixed with ".RUN" and directories are suffixed with ".DR".
-
-    PATH (or CD) - change directory.  More or less like your Unix or DOS
-        equivalent.  Note that the directory delimiter is ">" (this may
-        freak out Unix heads! :-)
-        CD foo>bar>baz> - change to directory foo>bar>baz
-        CD ..           - change to parent directory
-        CD sys:user>    - change to root of user partition
-
-    TYPE - display a file on the screen, similar to "more" on modern OSes.
-            
-    COMPILE - run the Pascal compiler.  Produces a .SEG file which must be
-        linked.
-
-    LINK - runs the linker.  Produces a ".RUN" file which may be executed.
-
-    COPY - copies a file from one location to another.  RSX: is a special
-        file which can be used to transfer files to/from the emulator host
-        machine.  See section 3.0 for more details.
-
-    EDITOR - a fairly simple text editor (see also PEPPER, a more Emacs-like
-        editor, available in most of the POS images)
-
-Executable files end with ".RUN", just type the name (minus .RUN) to start
-them.  Switches are prefaced by '/' as in most OSes of the day.  Commands
-and switches are not generally case-sensitive, and can usually be abbreviated
-as long as they are not ambiguous.  Most commands in POS will prompt you for
-arguments if you don't provide them, and most commands won't do anything
-harmful without asking you first.
-
-In general, "Ctrl+c" twice will abort a running program, unless it's hung.
-
-Note that control characters on the PERQ are actually case-sensitive!  A single
-Ctrl-c is an interrupt; a second Ctrl-c signals an abort.  A Ctrl-Shift-C is
-used to break out of command files and return you to the Shell.  The Pepper
-editor makes extensive use of shifted control characters to make up for the
-lack of a "meta" key that Emacs requires.  Quirky, no?
-
-There are games under sys:user>games>, demos under sys:user>demo>, various 
-utilities and OS source are under sys:boot>.  There are user directories 
-(from the original users of this machine at Siemens!) under sys:>user> in the 
-D.6 image that contain some interesting utilities.  Things are arranged a
-little bit differently in POS F.15; "type welcome.txt" to learn more when you
-first log in.
-
-You can log out of POS by typing "bye" to the Shell.  To log out and power
-down, type "bye off" or "bye /off" and POS will tidy up and power off the
-machine.  In the case of PERQemu, that means returning you to the debugger.
-Note that after the emulated PERQ powers itself off you must type "reset" to
-reboot it.
-
-REMEMBER:  PERQemu does not save modifications to the hard or floppy disks
-automatically; if you accidentally blow up the disk image, just exit and
-restart or reload the image - no harm done!  If you DO want to save your
-changes, type "save harddisk <filename>" or "save floppy <filename>" before
-you exit.
-
-
-2.3 Accent
-----------
-
-In the included D.6 disk image, an early release of the Accent OS from CMU
-is available too.  Accent is the forerunner of Mach, the kernel which was
-the basis for NeXTstep, which became MacOS X.  This version, S4, is an
-amazing and rare find, as it pre-dates the official S5 and S6 releases from
-Three Rivers/PERQ Systems in late 1984-early 1985.
-
-To boot Accent, either type "set bootchar z" or wait for the DDS to read 151
-and hit the z key.  Accent's startup sequence is different, and this early
-version of Accent isn't nearly as fast as POS; after prompting you to enter
-the date and time, starting the servers, starting up the window manager and
-running through all the initial command files takes a bit longer.  But once
-things are initialized, Accent's shell behaves very much like the POS Shell,
-with most of the same commands -- and a few exceptions:
-
-    - windows act more like folks today expect them to, though it's a bit
-      clumsy manipulating them at first
-    - you have to click to select a "listener" window to direct where your
-      typing will go -- the listener window has a grey border around it
-    - you can use the basic Emacs-like control keys to retrieve previously
-      typed commands and edit them (^p/^n for previous/next, ^f/^b forward/
-      back, etc)
-    - you can scroll back to see text that scrolled off the screen (^V/^v
-      for backward/forward by roughly a page full of text)
-    - interrupting or aborting the current program goes through the window
-      manager, so ^c or ^C doesn't work as in POS
-
-SAPPHIRE, the window manager, has a bunch of commands and some on-line help.
-All window manager commands are prefixed by Ctrl-Del, then a letter.  Until
-you're familiar with it, Ctrl-Del h for help brings up a command summary.
-There are also pop-up menus, and the icons change depending on what SAPPHIRE
-wants you to do (make a window, move a window, etc).  To interrupt a program
-in Accent, use Ctrl-Del c, or Ctrl-Del k for added oomph.
-
-Note that the mouse in Accent is in relative mode, which is awkward to emulate
-with a mouse; you can hold the "off tablet" key (Windows: Alt, Mac: Command)
-and relocate the host's mouse, then release.  The PERQ will compute relative
-movement based on the direction of the next swipe, not the absolute coordinates
-in the window.  You'll catch on with a few tries. :-)
-
-Button, button, who's got the button?  Accent S4 only enables the 4-button
-BitPad puck, though it maps the buttons to match the 3-button Kriz puck.  If
-you have a 3-button mouse, left-middle-right should be mapped appropriately.
-For a two-button mouse, Ctrl-Left simulates the third button; Ctrl-Right
-simulates the fourth PERQ button.  If you are using an old one-button Apple
-mouse, I just don't know what to tell ya...
-
-There is no clean way to log out of Accent, so the best way to make sure you
-flush buffers to disk (if you want to save your work) is to type "trap" at
-the Shell.  This will bring up the kernel debugger which will scribble in
-reverse video all over your screen.  From there type 'y' to exit to the pager
-process, and at that point there's no going back; switch to the PERQemu
-debugger window and hit Ctrl-c to stop execution, save or reset as desired.
-
-
-2.4 PNX
--------
-
-Unfortunately, we do not yet have a complete PNX 1.0 hard disk image.  It is
-possible to boot from floppy, prepare the hard disk, and lay down the boot-
-strap (essentially a "miniroot" in Unix parlance) which is bootable.  But the
-other floppies in the Bitsavers collection are missing track 0, and the rest
-of the PNX loading process cannot be completed at this time.  I hope to remedy
-this very soon.
-
-PNX, another unfortunately named PERQ operating system, was a very early Unix
-V7/System III mashup that included an in-kernel window manager - possibly one
-of the first Unix variants to do so.  This was primarily run on PERQs in the
-UK, where PNX was developed by ICL.  Because the on-disk format is based on
-the Unix filesystem, it cannot co-reside on a disk with POS or Accent (which
-share a common underlying filesystem layout).  PNX also used its own language
-interpreter, running an instruction set more favorable to C than the original
-PERQ Q-codes.  However, PERQemu's debugger cannot accurately disassemble PNX
-C-codes, since we don't currently have access to any PNX source code or
-documentation.
-
-Watch this space.
-
-
-3.0 Debugger Operations
-=======================
-
-Hit Ctrl+C when the debugger window has focus to break into the debugger at any 
-time.  Hit "Tab" to see a list of command completions.  You do not need to type 
-in an entire command to run it, only enough to disambiguate it from other
-commands.  For example "l h" is short for "load harddisk" and "d m" is short
-for "disassemble microcode".
-
-"Tab" will always show completions at any point during input.  For example,
-if you type "show" and hit tab, you will be presented with a list of possible
-completions for the "show" command.  Commands are not case-sensitive, though
-arguments may be (such as filenames, if your filesystem respects case).
-
-The debugger is a work-in-progress and some commands may be unintuitive or
-unfinished.  The more useful (and implemented) ones are:
-
-    GO - begins emulation execution from the current microcode PC.
-
-    RESET - resets the virtual PERQ.  Disk images are NOT reloaded, which makes
-        this useful for rebooting the PERQ when installing an OS, for example.
-
-    SET BOOTCHAR <char> - helper to make it easier to boot from an alternate
-        boot.  The D.6 image has two available boots: 'a' and 'z'.  'a' is the
-        default (POS), 'z' is Accent S4.                   
-
-    LOAD FLOPPY/HARDDISK <image> - loads a given hard disk or floppy image into
-        memory.
-                     
-    SAVE FLOPPY/HARDDISK <image> - saves the current in-memory hard disk or
-        floppy to the specified image file.
-                     
-    CREATE FLOPPY/HARDDISK - creates a blank disk image in memory.
-
-    SAVE SCREENSHOT <name> - saves a JPEG image of the current PERQ display.
-
-    SET RS232 <port name> - selects the serial port on the host machine to use
-        for the emulated PERQ.  "RSX:" is a special port which allows transfer
-        of files to/from the emulation host.  If RSX: is selected as the port,
-        from POS one can "COPY RSX:c:\path\to\hostfile.pas sys:foo>bar>baz.pas"
-        and the file will be copied from the host OS to the emulated PERQ; this
-        works for text (7-bit ASCII) only.  (It's also quite slow, since it has
-        to run at serial speeds).
-
-In the Debug build, there are a huge number of additional commands to inspect
-the state of the emulator and assist with debugging PERQ microcode.  These
-are not yet documented.
-
-
-3.1 Disk Operations
--------------------
-
-The basic thing to bear in mind when dealing with PERQemu and disk images is
-that PERQemu only makes changes to in-memory copies of the images.  That is:
-if you make changes to the disk, you must MANUALLY dump the image back to an
-image file when you are done or your changes WILL BE LOST when you exit the 
-emulator or load another image.
-
-Floppy disk images must be in RAW format (I am working on implementing DMK
-support).
-
-Hard disk images are in my extremely primitive dump format (which I intend
-to improve and document).  Currently only images of the 24mb Shugart drive are
-supported (mostly because I have so few images of other disks to work with...)
-
-To load a disk image, use the LOAD FLOPPY/LOAD HARDDISK command from the 
-debugger.
-
-To save a disk image, use the SAVE FLOPPY/SAVE HARDDISK command (go figure).
-You (currently) have to specify the pathname each time you save.
-
-To create a blank disk, use the CREATE FLOPPY/CREATE HARDDISK command.  This
-creates a blank, in-memory image of a disk.  You MUST save this image if you
-want to use it again.
-
-Note that in the current builds, disks are way, way faster than the actual
-hardware, so it's less of a chore to format a floppy or partition a Shugart
-hard disk than IRL.  Maybe in future releases we'll offer the 100% authentic
-83ms access times and the kerchunk-kerchunk-kachunk audio clips of the SA851
-floppy drive banging away on floppy boots... :-)
-
-
-4.0 What's Implemented
+    configure>
+or
+    settings>
+
+The CLI provides extensive prompting through tab completion and other on-line
+help.  Consult the UserGuide for help navigating and running commands.
+
+The first time you run PERQemu, the default configuration is selected.  The
+default is a PERQ-1A with the POS F.1 image already assigned.  This default
+configuration is the only one built-in to the emulator; all the rest are loaded
+from the Conf/ directory.
+
+To start the emulation, type the shortcut:
+
+    > go
+
+At this point the PERQ will "power on," the Display window will appear and the
+virtual machine will load the f1.phd hard disk image and start executing.
+Eventually you'll be greeted with the POS login prompt.
+
+As with previous versions of PERQemu, pressing ^C will pause the running PERQ.
+Unlike the older command interface, however, the CLI now remains active even
+when the emulator is running!  You may type "stop" or other commands to control
+or interact with the emulator.  Consult the UserGuide for more information.
+
+To shut down the PERQ, you can simply close the Display window.  The emulator
+will report that the machine is shutting down and return you to the prompt.
+You may also type the commands:
+
+    > stop
+
+to pause, or just
+
+    > power off
+
+to immediately halt and "power down" the virtual machine.  If you are in a
+real hurry:
+
+    > quit
+
+will exit the program, shutting down the machine if it is running.  Note that
+PERQemu does NOT automatically save any disk images that you load, so if you
+want to save changes to the hard drive or floppy disk images you should do so
+manually before issuing the "power off" or quit commands.  However, the new
+"settings" subsystem offers a set of preferences to making saving automatic.
+
+There is a LOT more to explore in PERQemu now, with dynamic configuration, new
+storage devices, extended debugging, user preference settings, and more on the
+way.  Say it with me now: "Consult the UserGuide for more information!"
+
+
+2.1 Operating System Support
+----------------------------
+
+As of v0.4.2, the following PERQ operating systems are known to boot:
+
+  - POS versions D.6, F.0 and F.1 (official 3RCC releases);
+  - POS version F.15 (released by Boondoggle Heavy Industries, Ltd);
+  - MPOS version E.29 (unreleased by 3RCC);
+  - Accent S4 (an early version from CMU, unreleased);
+  - PNX 1.3 (first public release by ICL).
+
+As of v0.4.6, these PERQ operating systems also boot:
+
+  - POS version G.6 (last official 3RCC release);
+  - POS version G.7 (released by Accent Systems, 1986?);
+  - Accent S6 (Release II from PERQ Systems Corporation, 1985).
+
+In addition, PNX 2 is able to run but the installer has bugs; we have not yet
+been able to create a working hard disk image.
+
+NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
+2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
+trouble with a full megaword of memory.
+
+Accent mouse tracking takes a little getting used to since it runs in relative
+mode.  To simulate mouse "swipes" you have to use the Alt key (Option key on
+Mac) to tell PERQemu the mouse is "off tablet", reposition, then release the
+key to start tracking again.  It's a little clumsy at first.
+
+
+If anyone has any other software that ran on the PERQ-1 and does not run
+successfully under PERQemu, send us a copy and we'll find out why!
+
+
+3.0 What's Implemented
 ======================
 
-The following hardware has been implemented in the emulator to an extent that
-it is reasonably functional (though there may still be issues):
+The following hardware has been implemented in the emulator:
 
-- PERQ 4K CPU - Complete.  Everything seems to work, all diagnostics pass
-  and it works enough to allow POS to boot.
-  
-- PERQ 16K CPU - Complete.  Mulstep/Divstep is implemented but not
-  exhaustively tested.  Pretty sure we've got this nailed.
-  
-- Memory and RasterOp - Complete.  Though in daily use and run through a
-  fairly rigorous variety of tests, three different OSes and every bit of
-  working software I can get my hands on, there's just the tiniest lingering
-  doubt that a weird edge case may still crop up.  However, both Memory and
-  RasterOp are now table driven and small tweaks to the ROM images have been
-  able to correct those when they're (painstakingly) identified.
-  
-- Hard and Floppy disk - 95% complete.  Enough is implemented to allow 
-  bringing up an "empty" hard disk with a new POS install from floppy images.
-  Double-density floppy support is notably spotty, and there are some very
-  low-level utilities that aren't fooled by our emulation, so work is ongoing.
+  Processors:
+    - 4K and 16K CPUs (20-bit) are tested and complete;
+    - 16K CPU (24-bit) is complete but not tested; waiting on PERQ-2/EIO;
+    - The CPU, memory and video run on a separate thread.
 
-- Keyboard - 99% complete.  Except for a HUGE CAVEAT FOR MacOS/Mono USERS:
+  Memory/VideoController:
+    - Now can be configured at runtime, up to 8MB in the 24-bit models;
+    - Only tested for operation with the 20-bit processors (max 2MB / 1MW).
 
-    The Mac OS X keyboard driver for Mono is utterly broken for our
-    purposes; I could not divine any way to update its mapping at a
-    low enough level to allow the emulated PERQ to work properly, so
-    I ended up basically rewriting it.  Since first patching this on
-    a PowerPC under 10.5.8 (Mono 2.10.x), the exact same patch still
-    applies to Mono 4.6.x on MacOS X Yosemite/Intel.  Obviously nobody
-    has looked at that code in years, or PERQemu just has requirements
-    that nobody else running Mono on a Mac has ever run across, ever.  :-|
+  Hard disk:
+    - All of the disk support has been completely rewritten to prepare for
+      the addition of PERQ-2 emulation.  Currently only the original PERQ-1
+      14" Shugart SA4000-series drives and controllers are tested to work with
+      the new Z80 implementation;
+    - All of the 8" Micropolis and 5.25" MFM drives will be available as PERQ-2
+      support is introduced.
+      
+  Floppy disk:
+    - Rewritten to work with the new Z80 and floppy disk controller;
+    - Supports dynamic loading and unloading of all media types (single- and
+      double-sided diskettes, in single- and double-density);
+    - Operation is reliable for booting and data transfer, though testing and
+      debugging is ongoing.
 
-    The fix, if you feel like sitting through a rebuild of Mono (or
-    trying to pester the right people in the right place to get this
-    applied to the actual Mono distribution?) is included in my fork
-    of PERQemu at
-        https://github.com/skeezicsb/PERQemu/Docs/KeyboardHandler.cs.Mac
+  Tape drive:
+    - The streaming tape drive is now available as the Tape option when the
+      OIO board is selected.  It emulates the Archive Sidewinder QIC tape
+      drive, providing 20MB of storage.  The UserGuide has more details!
 
-    Currently caps lock is problematic and can get out of sync with the host.
-    This is a minor inconvenience but it's on the bug list...
+  Displays:
+    - The standard 768 x 1024 portrait display is available for all models;
+    - The 1280 x 1024 landscape display is supported and tested with POS G.7
+      and Accent S6!  Although PERQ-1 landscape configurations were very rare,
+      the emulator runs 'em just fine!
+    - Now rendered by SDL2, so 32-bit WinForms is finally retired.
 
-- Display and hardware cursor - Complete.  The streamlined code trusts the
-  microcode to drive the vertical blanking, and the last of the mouse Y-pos
-  artifacts are gone.
+  Z80 I/O Processor:
+    - Simulation replaced by a real Z80 emulator running actual PERQ ROM code;
+    - Runs asynchronously on its own thread to improve performance;
+    - Allows different ROMs to be loaded to support CIO and EIO boards;
+    - New register-level interface written to support Z80 DMA, CTC, SIO, FDC
+      and GPIB controller chips;
+    - Z80 Debugger support includes single stepping and source code display
+      (for the current v8.7 ROMs; v10.17 source disassembly in progress).
 
-- Z80 Subsystem - 85% complete.  Currently only a simulation of the real 
-  thing; as this is completely transparent (the PERQ1 can't upload custom
-  software to the Z80 so a simulation is sufficient) a full emulation of 
-  the Z80 hardware is very low on my list of priorities (but it would be nice 
-  to have for accuracy's sake, or to allow PERQ-2 emulation).
-   
-- RS232 - Complete.  Talks to a real serial port on the host (where 
-  available).  Software running under emulation can control the physical
-  port.
-   
-- Tablets (Kriz and GPIB).  Complete.  Any software that requires a pointing
-  device should function with either input device selected.  (See note above
-  regarding button mapping between the 4-button GPIB and 3-button Kriz mice.)
-  Though the Kriz tablets were rarely connected to a PERQ-1, they were supported
-  and are FAR more efficient for the OS to handle than the BitPadOne's ASCII-
-  serial data format so we enable them by default.  Note that Accent S4 only
-  uses the GPIB tablet; PNX is untried at this point.  In POS F, you can choose
-  which one to use with a switch to LOGIN (or in your login profile):
-        LOGIN /TABLETTYPE=BITPAD    selects GPIB
-        LOGIN /TABLETTYPE=TABLET    selects Kriz
-  In the updated DETAILS program included with POS F.15, you can see which one
-  is active for your current session by typing "DETAILS /ALL".
-    
+  Keyboard:
+    - Now uses the SDL2 interface so no more horrible hacks required for MacOS;
+    - Support for the VT100-style PERQ-2 keyboard is now included but can't be
+      tested until EIO support is complete.
+    - Currently caps lock is problematic and can get out of sync with the host.
+      This is a minor inconvenience but it's on the bug list.  [TODO: check if
+      this is still the case under SDL2.]
 
-4.1 What's Not
+  RS-232:
+    - The Z80 SIO chip is implemented to work with the new Z80 emulator;
+    - Software running under emulation can control a real physical serial port
+      on the host;
+    - The RSX: pseudo-device for transferring text files from the host to POS
+      has been reinstated.
+
+  GPIB:
+    - The TMS9914 controller chip is implemented to work with the new Z80, but
+      it is still incomplete and occasionally seems to confuse POS (reporting
+      non-fatal errors that don't seem to negatively affect operation);
+    - Supports basic System Controller, Talker and Listener features, but just
+      enough to support what the PERQ needs.  Being able to drive a real GPIB
+      card in the host computer would be pretty darn cool but I wouldn't hold
+      my breath on that one.
+
+  Tablets:
+    - The proprietary Kriz tablet works with the new SIO chip; it is only
+      useful on POS F.1 and later (no support in D.6, F.0, PNX 1, or Accent S4);
+    - The simulated Summagraphics BitPadOne works with the new GPIB; it is
+      supported on all PERQ OSes;
+    - The BitPad/GPIB requires a ton of processing due to protocol overhead;
+      the Kriz is a far more efficient tablet and is generally preferred on
+      any OS that supports it!
+
+
+There is a ton of additional detail about the internals of PERQemu itself in
+the source distribution.  See Readme-source.txt, or the copious notes in the
+Docs/ directory for way, way more information than you need.  Way more.
+
+
+3.1 What's Not
 --------------
  
 - Ethernet.  Unimplemented, but on the list!
+
+- Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
  
 - PERQLink.  Unimplemented other than a stub that tells the microcode that
   there's nothing connected to it.
  
-- Sound.  Implemented, but not hooked up to any sort of host output device.    
+- Sound.  Yet to be rewritten to work with the new Z80/SIO and hooked up to
+  any sort of host output device.
 
-- Option boards: Canon, streamer tape.  On the list.
-   
-- Some debugger commands, including a set of configuration commands to allow
-  more dynamic PERQ configurations.  A work in progress.
-   
-  
-5.0 Changes
-===========
+- Multibus option and SMD disk/9-track tape support.  Dream on!
+
+- A proper GUI.  Sigh.
+
+Additionally, some debugger commands are planned/in development but are not
+documented or complete, and some CLI enhancements are unfinished.
+
+
+4.0 Quirks, Bugs, Misfeatures
+=============================
+
+The following known issues are present, with workarounds given where possible.
+Undoubtedly there are numerous other small bugs, glitches and aesthetic issues
+but the aim here is to document the most serious of them.  Feedback is welcome!
+
+
+1. Console sometimes loses track of the current input line.
+
+Symptoms:  Sometimes the console output will wrap around to the top of the
+window and overwrite previous output, rather than scrolling, making it difficult
+to see the input prompt.  This seems most prevalent on Windows 10.
+
+Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
+seems to fix most of the glitches.  Mac and Linux terminal applications don't
+tend to misbehave as badly.  Hitting ^L now clears and resets the window in
+case things are messy.  Recent changes should fix the worst issues.
+
+
+2. Minimizing the Display window makes it disappear for good / very difficult
+to restore.
+
+Symptoms:  Pressing the window's minimize button sends it to never-never-land.
+
+Workaround:  On Windows, disable "autohide" for the task bar.  Otherwise you
+have to do some weird Ctrl-right-click-Restore gyrations to force the Display
+window back onto the screen.  This was fixed?  Kind of?  Except when it isn't?
+My absolute loathing and utter disdain for Windows increases daily.
+
+
+3. Reading from the serial port is unreliable.
+
+Symptoms:  On Linux, reading data from a COM port (/dev/ttyS0) stalls unless
+output is transmitted (to prod the receiver).  Windows and Mac serial devices
+seem to struggle less, but this isn't exactly "production ready."  Flow control
+on all three plaltforms is unreliable and data may be garbled or lost.
+
+Workaround:  None, yet.  This is largely due to serious deficiencies in the
+C#/Mono System.IO.Ports.SerialPort implementation that will require a reworking
+of the emulator's port handling.
+
+
+5.0 History and Roadmap
+=======================
+
+v1.0 - TBD
+  Sometime before the heat death of the universe:
+  - Feature complete, with a nice GUI, full screen mode, VR, scratch 'n sniff
+  - Massive software library organized, catalogued, available for use and study
+
+v0.9 - TBD
+  Additional I/O Options once the baseline devices are complete:
+  - Ethernet!
+  - Canon laser printer
+  - Working audio output :-)
+
+v0.7 - TBD
+  Leverage the new architecture to roll out new models, new peripherals and
+  open up the full range of available operating systems!
+  - PERQ-2 EIO emulation support: expanded IO Board with faster Z80, second
+    serial port, RTC chip, support for two hard disks
+  - PERQ-2 peripherals: 8" and 5.25" disk drives, VT100-style keyboard,
+    landscape display option, 24-bit "T4" model with larger memory
+  - Get screenshots working again
 
 v0.5 - TBD
-  - Ethernet would be awwwwwwesommme!
-  - Double-density floppy and PFD header support
-  - Dynamic memory size configuration; other configuration options
-  - Display/CPU sync for fast platforms, speed improvements for slow ones :-/
-  - Split off the Getting Started section into a Users Guide, move this into
-    a HISTORY or CHANGES file, restrain my verbosity and make the Readme far
-    more succinct.
+  Merge the experiments back into the master branch once the new Z80 and all
+  of the new features are reasonably stable:
+  - True Z80 emulation
+  - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
+  - 64-bit Mono/MacOS build (no 32-bit WinForms limitation)
+  - SDL2 for improved display performance
+  - Unified PERQ media storage architecture and file format
+  - Dynamic runtime configuration of all PERQ models and features
+  - Enhanced command line interface with more prompts, in-line help
+  - Expanded logging and enhanced debugging support
+  - Persistent user preference settings
+
+v0.4.8 - Current "experimental" branch
+  - This version, in progress.
+  - Added streamer tape support!
+
+v0.4.6 - Experimental branch (v0.5.0 pre-release)
+  - All v0.5.0 features above, in a snapshot release prior to merge back into
+    master.
+
+v0.4.5beta - Unreleased
+  - A one-off build for VCF PNW with some experimental video hacks to improve
+    display performance.
 
 v0.4.4 - Fourth major release
   - RasterOp streamlining and refinements allowed us to remove the

@@ -1,11 +1,9 @@
 !!!     Low - Test Low bank of Perq microstore.
 !!!     High - Test high bank of Perq microstore.
 !       J. P. Strait           1 Nov 80.
-!       Copyright (C) Three Rivers Computer Corporation, 1980.
+!       Copyright (C) Three Rivers Computer Corporation, 1980, 1981, 1982, 1983.
 
 !!      Modification history.
-!
-!       5 Aug 83  V1.1   HC  Fix bugs in use of Victim register
 !
 !       1 Nov 80  V1.0  JPS  Start program.
 
@@ -75,7 +73,6 @@
 !            a) initialize the Op file empty
 !            b) make a Victim
 !            c) distinguish ReviveVictim from NextInst
-!            d) clear the victim register                 V1.1
 
         Constant(Hi2,  000000);  ! X=0, X=0
         Constant(Mid2, 001000);  ! Cnd=0, Jmp=2, B=0, H=0, F=0, SF=0
@@ -188,8 +185,7 @@ Top:    if True Loop;                ! clear the call stack
         Bpc := 10;
         MakeVictim := 1;
         NextOp, if Bpc[3] Goto(T1a); ! cancel "if Bpc[3] Goto(Refill)"
-T1a:    BPC := 0;                           ! V1.1 No victim 2nd time round
-        MakeVictim;
+T1a:    MakeVictim;
         MakeVictim := 0, if Eql Goto(T1b); ! if returning from ReviveVictim
         GotoS;      ! execute the instruction
 T1b:    R377;
@@ -203,24 +199,18 @@ T1b:    R377;
         Mid := Mid2;
         Low := Low2;
         NextInstDesired := 1;
-        T := 1;                      ! V1.1 
         Call(Write);                 ! write the instruction
         Bpc := 10;
         MakeVictim := 1;
         NextOp, if Bpc[3] Goto(T2a); ! cancel "if Bpc[3] Goto(Refill)"
-T2a:    T;                           ! V1.1 Finished Test2 ?
-        If EQL GoTo(T3a);            ! V1.1
-        MakeVictim;
+T2a:    MakeVictim;
         MakeVictim := 0, if Eql Goto(Wrong); ! if returning from ReviveVictim
-                                             ! at test location
         CallS;                       ! execute the instruction
         NextInstDesired := 0;
-        BPC := 0;                    ! V1.1 No victim 2nd time round
-        T := 0,ReviveVictim;         ! V1.1 Clear down victim register
 
 !       Test 3.
 
-T3a:    Test := 3;
+        Test := 3;
         Hi := Hi3;
         Mid := Mid3;
         Low := Low3;

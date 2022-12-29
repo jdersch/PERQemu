@@ -1,0 +1,253 @@
+﻿
+The ExecutionController
+=======================
+
+Notes regarding how the management of the virtual machine is accomplished
+through the ExecutionController.  Work in progress.
+
+
+Run States
+----------
+
+To allow for user interaction through the both a command-line or graphical
+user interface (CLI or GUI), the PERQSystem object is instantiated and managed
+by the ExecutionController.  It manages transitions through a series of run
+states from startup to shutdown:
+
+    RunState        Meaning
+    -----------     ----------------------------------------------------------
+
+    Off             No PERQ is defined; the Controller has not instantiated a
+                    PERQSystem object (or tried to and failed).  The user
+                    interacts with the Configurator to load or modify their
+                    configuration of choice, and then must issue the "power on"
+                    command to start the virtual machine.
+
+    WarmingUp       The "power on" command has been issued (or the GUI power
+                    button pressed) and the system is attempting to start up.
+                    If the Controller successfully initializes a Configuration
+                    the new PERQ attempts to load its media (a hard disk or
+                    floppy image, at minimum).  If successful, the system
+                    proceeds to Reset.  If there is a problem loading media,
+                    the system Halts so the user can correct the problem and
+                    try again.  (The UI checks to make sure the file can be
+                    read and is the correct type for the controller it is being
+                    attached to, but until the Load() is actually attempted it
+                    doesn't know if the file is actually valid.)
+
+    Reset           The Reset state is transitioned to automatically after the
+                    WarmingUp phase, after a typed "reset" command, or after
+                    the Reset button on the GUI front panel is pressed.  The
+                    ExecutionController will first Pause a running machine if
+                    necessary before performing the Reset.  The user may set
+                    the PauseOnReset preference to have the emulator remain
+                    Paused at this stage for a user command.  Otherwise the
+                    machine transitions to Running automatically, like pressing
+                    the boot button on the hardware does.
+
+    Paused          If the user types "stop" or presses the pause button in a
+                    Debugger GUI (TBD), the system stops execution and enters
+                    this state.  Alternatives are pressing ^C in the console or
+                    hitting the F8 (Mac) or Break (PC) keys while the Display
+                    window has focus.  When Paused the machine's state may be
+                    interrogated by Debuggers, removable disks may be loaded or
+                    unloaded, etc.  If the PauseWhenMinimized setting is true,
+                    PERQemu will pause execution when the Display window is
+                    minimized and resume its previous state when restored.
+                    [PauseWhenMinimized not yet implemented]
+
+    Running         The Running state is entered automatically after a Reset
+                    unless the "PauseOnReset" preference is set.  The "go" or
+                    "start" commands (CLI) or "play" button (GUI Debugger)
+                    transition the machine to the Running state.  It operates
+                    in one of two modes:
+
+                    In Asynchronous mode, the CPU and Z80 each run on their
+                    own thread.  The main CPU is regulated to its defined clock
+                    rate by a "heartbeat" timer [subject to user preference]
+                    while the Z80 automatically regulates itself to maintain
+                    the correct execution ratio.
+                    
+                    In Synchronous mode, the CPU and Z80 are run on one thread.
+                    While this may have some benefits when debugging, it's
+                    generally much slower as the single thread has to run the
+                    entire emulation (two CPUs and all the peripherals).  [It's
+                    not clear that this will be easy, useful or possible under
+                    the new CLI event loop.  "Mode" may just be removed, TBD]
+
+    SingleStep      This mode runs the CPU for one microinstruction.  The Z80
+                    may or may not run a step depending on the difference in
+                    processor clocks.  This is useful for microcode debugging.
+                    The SingleStep mode always returns to the Paused state.
+
+    RunInst,        These modes run the CPU or Z80 for one opcode/instruction.
+    RunZ80Inst      For the PERQ this means running microinstructions until a
+                    NextOp or NextInst function is executed, while the Z80 may
+                    or may not execute based on how many microcycles elapse.
+                    For the Z80 it means executing exactly one instruction,
+                    while the PERQ runs however many microcycles are necessary
+                    for the time elapsed.  Both of these stepping modes return
+                    to the Paused state.
+
+    Halted          This is the common error state.  Any uncaught exception
+                    thrown by the emulator will trap to this state, where the
+                    only recourse is to reset or shut down the virtual machine.
+                    Halted may provide an opportunity to use debugging commands
+                    and save any modified disks.
+
+    ShuttingDown    In response to the "power off" command, closing the Display
+                    window or toggling the power button on the GUI front panel
+                    (someday) the system performs an orderly shutdown.  Note
+                    that the PERQ-1 has a "soft power" feature and can shut
+                    itself down (POS "bye off" command). Pretty cool for 1980!
+
+                    During this phase the user is given an opportunity to save
+                    modified disks or floppies based on the Autosave preference
+                    settings.  ShuttingDown always transitions to Off.
+
+
+Events
+------
+
+[A work in progress.]
+
+RunStateChanged events are generated by the PERQSystem in response to updates
+from the ExecutionController as it shifts through the states described above.
+Any subscriber (CPU, Z80, GUI, etc) can track state changes directly.
+
+MachineStateChanged events are primarily useful for debugging, but also allow
+the user interface (CLI and/or GUI) to receive updates from the virtual machine.
+For example, the CLI tracks the DDS as it increments to simulate pressing the
+boot key at the right time.  It also updates the DDS on the console window's
+title bar, while a GUI could/will update a graphical rendering of the DDS on
+a front panel display.  A number of other "hooks" for things like disk or
+network activity, floppy loading or unloading, or the PERQ-1 "soft" power off
+exception may be handled more gracefully.
+
+Whether running in asynch or synch mode, the execution loop is pretty much the
+same: loop until an "off" message tells the thread to exit.
+
+
+A Rant
+------
+
+Since WinForms is dead, the dreadful nightmare of dealing with any kind of
+cross-platform GUI is beyond rational discussion.  Yes, it sucked.  It was
+clunky and slow, and the Mono implementation was incomplete and buggy as hell.
+But NOTHING has come along since that offers even a fraction of the Forms
+functionality out-of-the-box with as relatively little pain.  Not even close.
+So long, useful WindowsFormsSynchronizationContext keeping all the threading
+crap nicely hidden under the covers, out of sight, out of mind.  Now, instead,
+we stand screaming into the abyss of libraries that have the same threading
+requirements as WinForms but provide absolutely no equivalent means to make
+that easy or sane, and I've spent days wandering around and around circular
+passages of nutritionally void "SynchronizationContext" documentation and it
+leads only to total blood dimmed madness and the urge to defenestrate every
+computer in sight.  In 2022, in the whole of the C# landscape there are still
+exactly _zero_ useful toolkits, widget sets, screen painters or libraries that
+support reasonably featureful cross-platform GUIs at even the level of crappy
+ol' Winforms without having to basically write three separate F*!#*$)ING
+platform-specific front ends.  I have not yet achieved the perfect fugue state
+of "dejected resignation" required to process this gobsmacking reality.  This
+is sliding naked down the dull rusty razor of software development hell into
+a vat of rubbing alcohol.
+
+    [Enter... "MAUI"?  It appears that M$ has heard my anguished plea and
+    warmed over Xamarin.Forms into some newish XAML-based thing that looks
+    suspiciously like WinForms but makes all the right noises about being
+    an out-of-the-box, fully-supported cross-platform GUI with "designer"
+    support, native widgets, yadda yadda yadda.  OF COURSE it requires ONLY
+    the latest OS versions and leaves behind 98% of the client machines we
+    mere mortals and starving artists still use, and I'm sure that by the
+    time I have a machine that can run it they'll have deprecated it and
+    moved on to some other buzzword-compliant "solution."  Ugh.]
+
+So for now this version of PERQemu has a kooky but strangely featureful CLI
+driven by a uniquely kluged event loop that I've hacked together from baling
+wire, unicorn farts and the strange plasma that salad becomes when it sits in
+the fridge too long.  It multiplexes a high resolution timer dispatcher, the
+SDL2 event loop for the PERQ's Display AND polls for Console input to the CLI
+on the main application thread.  Like the PERQ itself, this odd conglomeration
+is at once profound and profane; my vision of an elegant GUI for PERQemu like
+a sleek Mercedes effortlessly cruising the autobahn rudely displaced by the
+boisterous backfiring of a smoking diesel bus overloaded with pilgrims hurtling
+toward the Ganges, careening around corners on two wheels in a colorful riot of
+manic glee and unmitigated terror.  It's about as "thread safe" as redlining a
+Vespa down the left lane of 580 into the City at 6AM wearing flip-flops and a
+feather boa; a white-knuckle thrill ride and you'll end up with bugs in your
+teeth but with luck it'll gitcha there.
+
+
+Notes
+-----
+
+The default ClockSynchronizer in Z80dotNet doesn't seem to regulate itself
+well, if at all.  Using a 128-bit decimal type to specify the speed in Mhz is
+21 times slower than a regular old floating point type.  Why.  WHY.  Massive
+overkill.  Rather than mess with it we set the Z80's default ClockSynchronizer
+to null and the PERQsystem/Z80system does the rate limiting.
+
+A new synchronization strategy has been devised that seems to work very well.
+There are essentially two time domains in the emulator now:  the "virtual time"
+as ticked off every cycle by the Scheduler objects, and real time which is used
+to rate limit the entire virtual machine.
+
+In real-time, the PERQ CPU runs a SystemTimer object that registers a periodic
+timer with the (homegrown) HighResolutionTimer.  It provides a WaitHandle and a
+"heartbeat" callback every n milliseconds (initially every 10-20ms).  The number
+of instruction cycles the PERQ's processor should execute in that time period is
+computed, and the CPU free runs until that number of clock cycles is executed.
+If the emulator is running fast, the CPU blocks in WaitForHeartbeat() until the
+timer fires, which clears the wait and allows the thread to resume.  If it's
+running too slow it continues without delay.
+
+To keep the Z80 and PERQ in sync with each other, the Z80 now runs entirely in
+the "virtual time" domain.  It simply compares the PERQ Scheduler (clocked every
+170ns) to its own (clocked at 407ns or 250ns, for the IOB or EIO respectively).
+If the Z80 is behind the PERQ, one opcode is executed and the Z80's clock is
+advanced; if it's ahead by more than a typical instruction length, it schedules
+(with the PERQ) a callback to wake it up again, otherwise a brief spin wait is
+used.  This also solves the problem of dealing with disparate clock rates when
+single stepping during debugging; now the "step", "inst" and "z80inst" states
+maintain the clock ratio between the two processors.  This strategy works in
+both asynchronous and synchronous execution modes.
+
+
+I have no idea how we're _supposed_ to program the Z80dotNet peripheral devices
+to acknowledge interrupts when there's no explicit mechanism for the processor
+to read and clear them.  The workaround is to simply snoop the ValueOnDataBus
+getter, which lets our IZ80Device know that the CPU is about to service it, so
+we can (if necessary) drop our interrupt request.  The CTC timer, for example,
+uses this trick so that the hard disk seek timing can count timer interrupts
+that otherwise are raised and never cleared.  Ain't no way no how our simulated
+Z80 peripheral controllers are going to snoop the instruction stream to pick
+out RETI instructions, c'mon now.
+
+
+State Machine
+-------------
+
+The actual mechanism for shifting states needs to be refined and documented
+here.  In short, the PowerOn routine starts things off by instantiating the
+virtual PERQ and setting its initial state.  Once created the PERQSystem
+object listens for RunStateChanged events and responds to them.  Other CLI
+commands are used to effect state changes throgh the TransitionTo() routine.
+
+State transitions have been codified into a structure used by TransitionTo()
+to determine which steps are needed to get from one to the next.  Weirdly.
+I've gotta fix my brain.
+
+Finally, PowerOff closes the book on the whole magnificent farce, shutting
+down the virtual machine and freeing the user to go get a nice cup of coffee.
+Which I clearly need, right now.
+
+
+Bottom line:
+
+    ALL of the ExecutionController interactions with PERQSystem (and the
+    Z80System) have to be substantially revisited and refined.  This is
+    all likely to change again until I've got it right, or die trying.
+
+
+--
+Last update: skeezics    Mon Jul 18 16:40:14 PDT 2022

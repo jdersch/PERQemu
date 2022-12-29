@@ -1,0 +1,206 @@
+﻿
+PERQ I/O Board Implemetation Notes
+==================================
+
+Every PERQ has a 5-slot backplane, which requires at minimum a CPU board, a
+memory board, and an IO board.  The two extra slots, labeled CPU Option and
+IO Option, can be fitted with several different boards.  This file describes
+which of these options are supported by PERQemu.
+
+PERQ_Chart.jpg shows which configurations we aim to support with PERQemu.
+This (undated) graphic was likely produced in 1984 or 1985?
+
+
+Confusion
+---------
+
+The PERQ-1 I/O Board is typically referred to as "IOB".  In practice this
+means it contains a Z80 subsystem with one RS-232 port, GPIB, audio output
+channel, DMA hardware, and controllers for the Shugart floppy and hard disk
+drives.  The IOB Z80 runs at ~2.5Mhz and typically runs firmware version
+v8.7 (which is what simulated Z80 in the earlier versions of PERQemu was
+designed to mimic).  This version of the firmware is known as the "old Z80"
+protocol.
+
+The PERQ-2 series contains an updated board called the "EIO", or "Ethernet
+IO" board.  It features a faster Z80 @ 4Mhz, an additional RS-232 port, an
+RTC chip, and a newer disk interface that supports 8" Micropolis or 5.25"
+ST-506/MFM type drives.  An version of the EIO board without the Ethernet
+controller, called the "NIO" board, was available as an option but how many
+of these were ever shipped is unclear;  I've never even seen one, but they
+are mentioned in various places including "PERQ_Chart.jpg" (included in the
+Docs directory).  The latest/most common version of the Z80 firmware is
+v10.017 (or thereabouts), which is known as the "new Z80".
+
+There is some confusion about what the "CIO" board is.  With later versions
+of POS, PNX and Accent, the "old Z80" protocols were dropped as the "new Z80"
+code is supposed to be faster, better maintained, and supports all of the
+new EIO/NIO features.  In order to not leave the installed base of PERQ-1s
+behind, firmware updates were made available so that the original IOBs could
+run the v10.x code, thus the old IOB with new firmware was called "current",
+or "CIO".  That's the theory, anyway.
+
+Microcode sources exist that imply that there was at least one subtle hardware
+and microcode change that would allow the CIO board to support the Micropolis
+hard disk, and some hint that perhaps ICL may have built a version of the PERQ-1
+configured this way!  [Update: there is now photographic evidence of an ICL-
+labeled CIO board to confirm this!]  Note that The Chart doesn't officially
+list the CIO as a hardware option.
+
+
+Options!
+--------
+
+There are no known dedicated CPU Option boards in the wild.  Rumors and even
+press clippings report that a "cache/pager board" was supposedly being readied
+(sometimes called the "pager box" as far back as March, '81) but there's no
+evidence that it ever shipped -- no schematics, notes, or code has been found
+to show it was ever completed, and only a few undocumented signal lines on the
+backplane hint at what it might have contained.  The only boards known to work
+in the CPU Option slot are the "link board", used for microcode debugging, and
+the "universal streamer board," a wire-wrapped QIC tape drive interface.
+
+There are quite a few interesting IO Option boards, but most of them are
+extremely rare.  PERQ was one of the early adopters of Ethernet, and many
+early PERQ-1s at Carnegie-Mellon University had wire-wrapped 3Mbit "prototype
+Ethernet" boards.  At least one physical example of this board still exists,
+and there is software support for it.  Adding emulation support to PERQemu
+for 3Mbit Ethernet would be _especially_ fun if it could then talk to an
+emulated Xerox Alto (see: Josh Dersch's amazing "Contralto" project).
+
+The PERQ Audre scanner board is a full-slot IO Option that provides a large
+memory buffer and hookup to a CCD camera mounted to a light rack and used for
+scanning and image processing.  These are super cool and would be really fun
+to mess with - we even have some code to drive one.  But it's likely there
+are no more real ones out there in the world anymore.  Which _sucks_.
+
+Three Rivers did produce a "Multibus/Laser Option" board, of which a few
+surviving examples still exist.  There is software support available as well.
+While documentation has turned up that shows development on this started much
+earlier than previously believed, and that initial development had been done
+on a PERQ-1, all of the surviving microcode seems to require the EIO board's
+DMA for data transfer.  So if/when we are able to add the "MLO" board, it'll
+be restricted to the PERQ-2/EIO configurations.  This board supports either
+one controller board plugged in directly [one physical example of this board
+is confirmed to exist!] OR it is cabled to an external card cage.  Microcode
+and Pascal support for driving either an SMD disk controller or a 9-track tape
+drive exists; for tape support we'll need to add the Ciprico Tapemaster board,
+but there's no information about what specific Multibus SMD disk controller
+cards that this software talkes to.  The idea of hanging a string of CDC 9766
+300MB drives off a PERQ is enticing.  Anyone have a clue?  Anyone?  Bueller?
+
+
+By far the most common IO option is Three Rivers' "OIO" board.  The basic
+"Option IO" Board comes in many flavors: it may contain the "link" option, a
+10Mbit Ethernet controller, a QIC streamer controller, and the Canon laser
+printer interface.  The "link" option is a DEC-compatible 16-bit parallel
+interface, originally used to bootstrap the earliest PERQ from a PDP-11; later
+it was used to allow one PERQ to debug microcode on another one using tools
+like ODTPRQ or PDM.  It is also used to connect the Metheus color graphics
+subsystem (which we don't have plans to emulate anytime soon).
+
+The "EthCan" board can be used to turn the PERQ-1 into a network print server,
+allowing users to send screen dumps or documents across the Ethernet to a
+dedicated PERQ for output on the Canon LBP-10 (or later) LBP-CX printers.
+The fully-loaded "EthCanTape" adds tape backup through an Archive Sidewinder
+30MB cartridge tape drive.  These were both popular OIO variants.  All of the
+OIO options will hopefully be included in PERQemu someday.
+
+While the Link and QIC Tape can be fitted in the CPU Option slot, for emulation
+purposes we'll just lump them all onto one virtual board.  There is limited
+support for the Link board in PERQemu; Ethernet and Canon printing are the most
+interesting options to add next.  The Streamer option shouldn't be too hard to
+tackle as its interface seems to be fairly simple.  Note that because the EIO
+board has a similar-but-not-quite-identical built-in Ethernet as the controller
+on the OIO, there appear to be hardware port and DMA channel conflicts that
+prevent dual-homed PERQs.  It was possible to put a 3Mbit board into an EIO-
+equipped PERQ-2 to build a 3-to-10 bridge node, but this was almost certainly
+not a standard/shipping configuration and was only used at CMU.  It is unlikely
+that PERQemu will ever support more than one Ethernet in a virtual machine.
+
+
+What PERQemu Supports (or will, I hope)
+---------------------------------------
+
+The "real Z80" allows us to faithfully emulate all of the PERQ models and any
+version of the firmware we can lay our hands upon.  The EIO hardware allows
+Z80 code to be loaded into its private RAM at boot time, patching or extending
+the ROM functionality, so we can't "fake it" with a simulation that just spoofs
+the protocol used.  So now the IO board instantiates a Z80 and feeds it actual
+ROM images based on the selected configuration.
+
+IOBoard.cs provides a base class from which all of the IO boards can be
+derived.  From the hardware standpoint, the basic functionality (connection
+to the IO bus on the backplane) is the same; only the particulars of the Z80
+and the type of hard disk interface are different:
+
+    IOB.cs  - supports the PERQ-1 chassis only, with the standard list of
+              peripherals described above.  The Z80 runs at 2.4576Mhz,
+              v8.7 firmware ("old" Z80).  The hard disk controller 
+              supports one Shugart drive only.
+              
+              Note that PERQemu's IOB supports the Kriz tablet, though that
+              was actually extremely rare on the PERQ-1.
+
+    CIO.cs  - for the PERQ-1, same as the IOB but loads the v10.017 Z80 ROM
+              so you can run the latest OS versions.  May allow one Micropolis
+              8" drive to be selected instead of the Shugart?
+
+    EIO.cs  - for all PERQ-2 systems, supports the standard interfaces listed
+              above.  The Z80 @ 4Mhz runs v10.017 firmware ("new" Z80).
+
+              In the early (rare) PERQ-2 (K1? T0?) chassis, I think there's
+              only physical space for one 8" Micropolis hard drive [Josh can
+              confirm this].  In the ICL-designed T1 chassis, one or two 8"
+              disks are possible.  In the T2 or 24-bit T4, the disk controller
+              supports one or two 5.25" MFM disks.  The same emulated EIO will
+              support 20- or 24-bit configurations by loading the slightly
+              different ROM; there's no need to build a separate 24-bit EIO.
+
+    NIO.cs  - wherever the EIO can go, the NIO is there without the network
+              interface.  Until we actually write the emulation of the
+              Ethernet and hook it up to an interface on the host, all of
+              the EIOs are essentially NIOs. :-)
+
+IOBoard.cs runs the Z80System on its own thread.  That's really the one feature
+that separates it from the Option IO boards; we may just cheat and define the
+OptionIO boards as IOBoards where Z80System is null, or OptionBoard.cs will be
+the base class for the Ether3Mbit, OIO and MLO boards.  May be a long time
+comin' before we get any of those written...
+
+The Ethernet driver will likely be split in half:  the PERQ emulation of its
+fully-custom TTL implementation and homegrown microcode interface will run
+on the CPU thread, while the actual host-side packet handling will run on a
+background thread as it does in Contralto/Darkstar?
+
+
+[edit: duplicated/too verbose/brought over from IOBoards.txt]
+
+
+Optional Boards Not Likely To Be Added
+--------------------------------------
+
+The Audre board was a wicked cool CCD camera interface.  The software still
+exists.  If anyone, anywhere in the world still has working boards or any
+kind of schematics or hardware documentation... not holding my breath.
+
+Metheus color display controllers could theoretically be emulated and attached
+through the Link board.  Software drivers for the PERQ exist.  Not planned.
+
+
+Due to microcode and hardware conflicts, it does not appear possible to run a
+PERQ-2 EIO with an OIO Ethernet option board.  While the T2 cabinet has both
+OSLAN A & B ports (ICL's branding of Ethernet?) there's no standard software
+support for it.  When Ethernet is implemented, PERQemu will only support one
+interface [and for simplicity, it may be "attached" to the IO Option board
+slot but will use the appropriate IO registers to appear as an EIO or OIO
+depending on the Chassis selection].
+
+
+
+This is a whole lot of typing that nobody else will read or care about...
+
+
+---
+Last update: skeezics    Mon Jul 18 15:13:12 PDT 2022
+

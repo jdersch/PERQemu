@@ -1,0 +1,65 @@
+#
+# PERQemu disk image formats
+#   .prqm = PERQmedia archive format
+#   .phd = hard disk; 9-byte header
+#   .pfd = floppy disk; 9-byte header
+#   .raw = raw floppy disk; no magic
+#
+# Add this to your system's equivalent of /etc/magic.  How to do that is
+# left as an exercise for the reader.
+#
+# .prqm media image:
+0   string  PRQM    PERQ storage media
+>4  byte    <0x30   (unknown version)
+>4  byte    0x30    (version 0),
+>4  byte    >0x30   (unknown version)
+>5  byte    0x00    5.25" MFM hard disk
+>5  byte    0x02    14" SA4000 hard disk
+>5  byte    0x03    8" Micropolis hard disk
+>5  byte    0x04    SMD hard disk
+>5  byte    0x05    8" floppy disk
+>5  byte    0x06    CIO Shugart
+>5  byte    0x07    CIO Micropolis
+>5  byte    0x0b    QIC cartridge tape
+>5  byte    0x0c    9-track tape
+>5  byte    >0x0f   unknown device type
+#
+# These are still supported but are obsolete, deprecated:
+#
+# .pfd floppy disk image - 9-byte header:
+0   string  PERQflp PERQ floppy disk image,
+>7  byte    0x41    SS/SD,
+>7  byte    0x81    SS/DD,
+>7  byte    0x42    DS/SD,
+>7  byte    0x82    DS/DD,
+>8  byte    0x00    unknown format
+>8  byte    0x01    RT-11 format
+>8  byte    0x02    POS filesystem
+>8  byte    0x03    PNX format
+>8  byte    0x82    POS filesystem (bootable)
+>8  byte    0x83    PNX format (bootable)
+#
+# .phd hard disk image - 9 byte header:
+0   string  PERQ    PERQ hard disk image
+>4  byte    0x00    (old dump format),
+>4  byte    0x01    (14", new dump format),
+>4  byte    0x02    (8", new dump format),
+>4  byte    0x04    (5.25", new dump format),
+>4  byte    0x08    (SMD, new dump format),
+>4  byte    >0x08   (unknown dump format),
+>5  belong  <0x00ca1e04 unknown type
+>5  belong  0x00ca1e04  Shugart SA4004 12MB
+>5  belong  0x00ca1e08  Shugart SA4008 24MB
+>5  belong  >0x00ca1e08 unknown type
+#
+# .raw files sometimes identified by repeating format patterns:
+0   long    0xaaaaaaaa  PERQ raw floppy image
+0   long    0xeeeeeeee  PERQ PNX 2 floppy disk image
+#
+# .IMD files are a generic floppy imaging format:
+0   string  IMD\040    IMD archived floppy image
+>4  string  1.18:   (version 1.18)
+#
+# (This barebones definition should be provided elsewhere; included here
+# for completeness.)
+#

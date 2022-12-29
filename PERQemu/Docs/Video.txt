@@ -1,0 +1,302 @@
+﻿
+PERQ Video Display Notes
+========================
+
+Some details recorded here for posterity.  These are the obscure little bits
+of information about display timing gleaned from various hardware and microcode
+sources as summarized below, and implemented in VideoController.cs.  For the
+emulator, timings are rounded to the nearest cycle (so they're not 100% accurate)
+although the new Scheduler/time-based scheme could be more precise.  A few micro-
+seconds here and there won't appreciably alter the experience. ;-)
+
+
+Vertical timing - both monitors:
+1024 lines displayed
+43 lines blanking
+----
+1067 lines
+
+Horizontal - Portrait:      Landscape:
+768 pixels displayed        1280 pixels displayed
+244 blank                   422 blank
+-----                       -----
+1012 pixel clocks           1702 pixel clocks
+
+
+Perq master clock = 5.89Mhz = ~170ns.  For emulation purposes, this is the rate
+that dictates the timescale for our video timings, so:
+
+Portrait:
+Pixel clock = 64.78824 MHz = 15.44ns -> ~11:1 clock ratio = 92 cpu clocks/line
+Visible field = 768 bit times * 15.44ns / 11 = ~70 cpu clocks
+Horizontal retrace = 244 bit times * 15.44ns / 11 = ~22 cpu clocks
+
+Landscape:
+Pixel clock = 108.962 MHz = 9.1ns -> ~18.5:1 clock ratio = 92 cpu clocks/line!
+Visible field = 1280 bit times * 9.1ns / 18.5 = ~70 cpu clocks
+Horizontal retrace = 422 bit times * 9.1ns / 18.5 = ~22 cpu clocks
+
+
+The astute reader may note that these timings are very close to VGA rates for
+the common 1024 x 768 (65Mhz) and 1280 x 1024 (108Mhz) modes.  Future PERQ-on-
+FPGA implementors take note. :-)
+
+
+How It Works
+------------
+
+The display is maintained in Pascal/microcode by setting up a display list that
+breaks down the vertical field into "bands" of up to 128 lines each.  Several
+control bits, including a function code that sets the screen's background color
+and a mixing function for the cursor image are programmed with a line count
+(from 1..128) into the hardware's video registers.  As the hardware draws each
+line on the display the line counter is decremented, triggering an interrupt
+when it reaches zero.  The microcode must then immediately fetch and program the
+values for the next band of the display; maximum latency is ~80 microinstructions
+to avoid the risk of the display glitching or breaking up.
+
+Vertical retrace is accounted for by the microcode setting up two bands
+totaling 43 lines.  The second of these sets a bit which indicates the end of
+the current display list (which, conveniently, is used to reset the scanline
+counter).
+
+The cursor image is moved about on screen by creating a band with the "cursor
+enabled" bit set.  This band is up to 64 lines high and is programmed to start
+"Y" lines into the frame.  The cursor's X position is rounded to the nearest
+byte boundary and programmed into a dedicated register.  When the cursor is
+enabled, the hardware mixes in the 8 bytes of the current line of the cursor
+image when the "X" byte is reached.  The cursor and display bytes are blended
+according to the raster function code programmed into the display list/video
+control register.
+
+Thus, the display list contains (at minimum) ten entries: 8 x 128 lines for the
+visible field, and two entries for the vertical blanking field.  An additional
+band is set up if the cursor is to be visible.  This means that at least ten
+interrupts must be fielded by the microcode for every frame of the display, 60
+times per second!  Ouch...
+
+This is true even when the bottom part of the display is "turned off" -- a POS
+feature that allows the system to temporarily use part of video memory for
+large programs such as Scavenger or the compiler.  On a 2MB (or later, 4MB)
+machine it seems silly to worry about an extra 96K of memory, but in a 256K
+PERQ that's a fairly sizeable chunk.  Accent and PNX don't offer this, as their
+window managers can't "resize" the screen dynamically, but it's a fun and
+fairly unique feature of POS that adds to its quirky charm.  Because PERQemu
+emulates the hardware, any OS or diagnostic/standalone program that programs
+the control registers properly will run.
+
+
+Subject to certain alignment restrictions, the display and cursor buffers may
+reside anywhere in main memory.  The hardware automatically tracks the addresses
+as each frame is drawn.  Animation effects or double-buffering the entire screen
+are possible by changing the Display Address or Cursor Address registers before
+the start of the frame.  Like the hardware it emulates, PERQemu does not check
+the validity of addresses programmed into the registers.  Caveat microcodor?
+
+
+Visual Bits
+-----------
+
+In PERQemu 0.4.6 the cursor/screen function bits are renamed to match the POS
+documentation, as follows:
+
+From io_others.pas:
+    CursFunction = (CTWhite, CTCursorOnly, CTBlackHole, CTInvBlackHole,
+                    CTNormal, CTInvert, CTCursCompl, CTInvCursCompl);
+                    
+From the POS Programming Examples:
+    "The even functions have zeroes in memory represented as white and
+    ones as black (this is the default: white background with black
+    characters).  Odd functions have zeroes represented as black and
+    ones as white.  The functions are as follows (inverted means screen
+    interpretation; zeroes black, ones white):
+    
+    CTWhite:        Screen picture is not shown, only cursor.
+    CTCursorOnly:   Same as CTWhite, only inverted.
+    CTBlackHole:    This function doesn't work.
+    CTInvBlackHole: This function doesn't work either.
+    CTNormal:       Ones in the cursor are black, zeros allow the
+                    screen to show through.
+    CTInvert:       Same as CTNormal only inverted.
+    CTCursCompl:    Ones in the cursor are XORed with screen,
+                    zeros allow screen to show through.
+    CTInvCursCompl: Same as CTCursCompl only inverted."
+
+It seems a little dubious to try to faithfully emulate the video functions that
+are described as "broken" by the machine's creators. :-)  The four that are
+most commonly used work as advertised; the others may not look exactly right
+until I've verified them on the actual hardware.
+
+
+Moving to SDL2
+--------------
+
+As of PERQemu 0.4.6, the old WinForms display is dead.  The move to SDL2 for
+the graphical display has a number of critical benefits:
+
+    can run in 64 bits, which is required for newer versions of (at least)
+    macOS that no longer provide 32-bit compatibility;
+
+    is more platform independent, and free of the restrictions and
+    performance issues with Mono's libgdiplus implementation;
+
+    fixes the keyboard problems (busted key translations in Mono on the Mac);
+
+    is much faster.  In theory.  In practice, so far?  Not so much. :-(
+
+There are downsides, though:
+
+    No viable higher level GUI toolkits means we only provide the basic
+    display window;
+
+    Packaging and bundling external libraries is maddeningly frustrating
+    sometimes, when Mono can't find a .dll or .dylib that's in 38 places
+    in the distribution and/or /Library/Frameworks or /opt or /usr/local
+    or <bang shoots self in foot/head>;
+
+    Uses a lot more memory.  Like, stupid amounts of memory.  Bloating up
+    the 1bpp display to full 32-bit color and jamming 300MB/sec into the
+    video card is just patently absurd.  But what can ya do.  "Progress."
+
+
+VideoController.cs drives the video section of the PERQ, handling the registers
+and state machine that tracks the horizontal and vertical video timings.  As
+each scan line is completed, the 1bpp video (with cursor mixed in appropriately)
+is handed off to Display.cs as a stream of bytes.  When the end of the visual
+field is reached, a refresh operation is called to paint the completed frame
+on screen.
+
+Display.cs manages the 32bpp buffer that is copied from system memory into an
+SDL texture (in GPU memory) and ultimately rendered to the display.  If SDL2 had
+*any* support for 1-bit monochrome or even 8-bit indexed color/greyscale pixels
+we'd be done, but no, why in the world would ANYONE EVER put up with just 256
+colors?  Bloody savages!  You'll use nothing but 32-bit color and like it!  We
+have always been at war with Oceana!
+
+Even if there was support for monochrome bitmaps, we couldn't get away with some
+sort of clever direct mapping from the MemoryBoard's image of the framebuffer
+because the video function and cursor mixing have to be accounted for.  So as
+the scanline data is delivered from the VideoController, the 1 bit PERQ pixels
+are painted into the Display's local buffer.  To help speed this up a table is
+generated at startup to map the bits to bytes as quickly as possible (i.e., we
+expand 256 byte values into 256 long words) and use an intermediate 8bpp buffer.
+This part of the loop runs on the CPU thread so it has to be minimal impact.
+
+On the SDL2 thread, the 8bpp buffer is expanded to 32bpp and copied to the GPU
+texture required to render it on the screen.  This is ugly and pointless and
+stupid but it yields around 10-12fps in performance and after trying 147,635
+other approaches I'm tired of screwing around with it.  Good enough.  Moving on.
+
+
+[Update:  Will "MAUI" finally make a _supported_ cross-platform GUI environment
+available?  I won't know for quite some time as I don't have any development box
+anywhere near current enough to run it, and adopting MAUI would impose the same
+requirements on client machines.  Preliminary reading of the spec makes it seem
+unlikely that the PERQ video display could be implemented directly as a MAUI
+object so SDL might always be required for rendering?]
+
+
+Video Controller State Machine
+------------------------------
+
+Dramatically simplified!  Before we were managing all of the video state
+transitions, but now the microcode does the work, which it's doing anyway! :-)
+
+Two small corrections made:
+    Bit 7 of the LineCount register is actually the "StartOver" bit!
+    This is set when the second of the VBlank bands is programmed, and
+    is now where we reset our scanline counter to the top of the field.
+
+    The VBlank timing was too short - had to add in the HBlank AND the
+    visible field.
+
+The state machine now starts in Idle mode.  The microcode sets up the Enable
+bit first when it wants to access RAM, since the video refresh also performs
+DRAM refresh.  This is the when the real hardware displays the rolling retrace
+lines, as VBlank states aren't being set and interrupts which aren't being
+generated are being ignored anyway. :-)  Once the memory sizing and test loop
+is started, an actual display list is set up and we get to watch the kewl test
+patterns roll by.
+
+On the hardware, the screen then goes wobbly again until the system is loaded
+and the Pascal/IO microcode takes over to set up the frame buffer and use the
+screen.  I just have this itching to simulate that retrace graphically, to 
+really make the experience that much more realistic. :-)  Since we now have to
+render everything through a 32 bit frame buffer we might as well add some visual
+sugar to sweeten the deal.
+
+Meanwhile, the Idle state transitions when the EnableVideo bit is set; at this
+point the first band should be programmed into the LineCount register and a
+CursorFunction set.  When the _lineCounter goes to zero we raise the interrupt
+(if enabled by the microcode) and go back to Idle mode.  The CPU clears the
+interrupt by reprogramming the LineCounter, then sets the flags to display
+another visual field OR enables the transition to VBlank.  Note that even in
+VBlank bands we let the HBlank state manage the line counter so that it's only
+done in ONE place.
+
+For a small measure of efficiency, the UpdateSignals() method is now called to
+update the current "CRT signals" when they're needed, rather than only on state
+transitions -- the caching effect screws up the video when large RasterOps are
+done by older versions of Accent and POS which use older microcode (RO.micro
+v0.7 or older).  Those poll the line counter interrupt status bit directly,
+rather than just rely on IntrPend to respond to the interrupt, so if the value
+isn't updated for several milliseconds the display list gets out of synch and
+the result is stuttering, tearing, or the cursor jumping around (in the Y axis).
+
+Overall I think this is less "creaky" and more faithful to the real hardware.
+
+
+The ScanLine Buffer
+-------------------
+
+Waaaay back I ran a bunch of tests to see if we could reduce the impact of
+copying so much data around.  Even on 32-bit Mono it looked like looping over
+12 quad words was substantially faster than zipping through 48 ushorts, and now
+on 64-bits it seems to give a couple of fps bump.  So I went nuts and dragged
+out the test code I'd introduced in the 0.4.5beta tree and dropped a stripped-
+down version into Memory and VideoController.
+
+Memory.cs now uses a Core struct to simulate a union type that can be accessed
+by word or by quad word.  That is, all "normal" accesses through the FetchWord()
+method work just as before, but the video can use FetchQuad() to grab bigger
+chunks.  We can then zip through an entire scanline in 12 meaty slabs (portrait
+display, 20 for Landscape).
+
+When the cursor is enabled, the old method of drawing the cursor on top of the
+just-completed scanline is updated to pre-fetch the cursor as a quad word, then
+mix the bytes in (clipped to screen boundaries).  It's a little clunky but is
+still faster than before, and at most it's only used to update 64 lines out of
+1024 so fairly low impact.
+
+
+Other Stuff
+-----------
+
+The first four CursorFunctions just show the cursor over a blank screen.  This
+isn't terribly useful.  I can't remember the last time I tried
+    "login /cursorfunction=0"
+to see what happens on the real hardware.  Rip in the fabric of spacetime?
+
+
+Landscape works!  Though there were only around a dozen PERQ-1s ever made with
+special 1MB landscape memory boards, POS G and Accent S6 both can detect and
+use the landscape display when the CIO Z80 is selected.
+
+
+Note that the "CRT signals" register bit for LandscapeDisplay is inverted
+(i.e., active low) so the code is a little twisted.  Just trust that it works.
+
+
+"Image Performance in CRT Displays" by Kenneth Compton, SPIE Press, 2003 has a
+wealth of technical information about the PC104 phosphor used in the original
+PERQ portrait monitor (based on a tube from Clinton Electronics).  However,
+there's no easy or obvious formula for calculating an RGB value for simulating
+the specific blueish/greenish tint of the actual "paper white" display.  If I
+were just slightly more insane, I'd incorporate phosphor aging and subtly adjust
+the white value over time.  While the just-slightly-not-fully-white color value
+chosen looks good on my Apple Cinema displays, it's much too violet/blue when
+rendered by Windows (on a Sun-branded 23" display using the same panel).  Sigh.
+
+
+---
+Last update: skeezics    Mon Oct  3 03:45:28 PDT 2022
