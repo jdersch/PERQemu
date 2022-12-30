@@ -218,7 +218,7 @@ this means:
     All configurations support one or two hard disks of the appropriate
     type.
 
-    All configurations [will] support one optional streamer.
+    All configurations can support one optional streamer.
 
 In the next release (0.4.6 in development, likely 0.5.0 when released) there
 will be an initial limit of four devices.  That may be increased as research
@@ -359,11 +359,10 @@ basic requirements of tape drives too, a possible ITapeController interface
 could/will produce:
 
     QICTapeController.cs:  controller for QIC-02 streaming tape drives
-        - will support DeviceType.TapeQIC images
-        - will likely only mimic the Archive Sidewinder 3020I (30ips)
-          or similar drives (QIC-02? QIC-11? QIC-24 36 42 hike!?)
+        - support DeviceType.TapeQIC images
+        - mimics the Archive Sidewinder 3020I (30ips) and its 90ips variants
         - attached through the Option IO board
-        - definitely on the to-do list since the streamer is well supported
+        - is supported/tested on POS and Accent
 
     MBusTapeController.cs:  controller for generic Multibus tape drives
         - would support DeviceType.Tape9Track images
@@ -411,9 +410,6 @@ would be very, very cool to be able to run emulated PERQs on a network with
 each other and with real PERQ hardware -- providing virtually unlimited file
 service, tape backup, print/time/FTP servers, etc.  "Nerrrrd." :-P
 
-The QIC Streamer is desirable as it allows much faster software installation
-(one or two tape changes instead of 8-10+ floppies), and we have an amazing
-library of backups to load and explore.
 
 The Canon laser printer interface is high on the list, since it should be a
 relatively simple thing to emulate.  The PERQ uses the Canon "video interface"
@@ -428,4 +424,4 @@ Wow.  If you read all that, give yourself a cookie!
 
 
 --
-Last update: skeezics    Mon Jul 18 14:48:04 PDT 2022
+Last update: skeezics    Thu Dec 29 01:28:56 PST 2022
