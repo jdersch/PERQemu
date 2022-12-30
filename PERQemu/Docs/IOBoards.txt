@@ -109,14 +109,15 @@ OIO options will hopefully be included in PERQemu someday.
 While the Link and QIC Tape can be fitted in the CPU Option slot, for emulation
 purposes we'll just lump them all onto one virtual board.  There is limited
 support for the Link board in PERQemu; Ethernet and Canon printing are the most
-interesting options to add next.  The Streamer option shouldn't be too hard to
-tackle as its interface seems to be fairly simple.  Note that because the EIO
-board has a similar-but-not-quite-identical built-in Ethernet as the controller
-on the OIO, there appear to be hardware port and DMA channel conflicts that
-prevent dual-homed PERQs.  It was possible to put a 3Mbit board into an EIO-
-equipped PERQ-2 to build a 3-to-10 bridge node, but this was almost certainly
-not a standard/shipping configuration and was only used at CMU.  It is unlikely
-that PERQemu will ever support more than one Ethernet in a virtual machine.
+interesting options to add next.  The Streamer option was introduced in v0.4.8.
+
+Note that because the EIO board has a similar-but-not-quite-identical built-in
+Ethernet as the controller on the OIO, there appear to be hardware port and DMA
+channel conflicts that prevent dual-homed PERQs.  It was possible to put a 3Mbit
+board into an EIO-equipped PERQ-2 to build a 3-to-10 bridge node [Josh HAS one
+of these now], but this was almost certainly not a standard/shipping config and
+was only used at CMU.  It is unlikely that PERQemu will ever support more than
+one Ethernet in one virtual machine, but it would be pretty cool.
 
 
 What PERQemu Supports (or will, I hope)
@@ -202,5 +203,5 @@ This is a whole lot of typing that nobody else will read or care about...
 
 
 ---
-Last update: skeezics    Mon Jul 18 15:13:12 PDT 2022
+Last update: skeezics    Thu Dec 29 01:28:56 PST 2022
 
