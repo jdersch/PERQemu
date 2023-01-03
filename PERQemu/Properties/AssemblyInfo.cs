@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Death")]
 [assembly: AssemblyProduct("PERQemu")]
-[assembly: AssemblyCopyright("Copyright © J. Dersch 2006-2022")]
+[assembly: AssemblyCopyright("Copyright © J. Dersch 2006-2023")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("0.4.8.0")]
-[assembly: AssemblyFileVersion("0.4.8.0")]
+[assembly: AssemblyVersion("0.4.8.1")]
+[assembly: AssemblyFileVersion("0.4.8.1")]

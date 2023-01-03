@@ -1,5 +1,5 @@
 //
-// Display.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Display.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -273,7 +273,7 @@ namespace PERQemu.UI
         /// Paint the completed frame on the screen.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void RenderDisplay(SDL.SDL_Event e)
+        void RenderDisplay(SDL.SDL_Event e)
         {
             // Adjust WHITE for slightly bluish tint of Clinton P-104 :-)
             const uint WHITE = 0xfff3f3ff;
@@ -289,7 +289,7 @@ namespace PERQemu.UI
             // this here (on the main/SDL thread) boosts frame rates by 10fps.
             for (int i = 0; i < _8bppDisplayBuffer.Length; i++)
             {
-                ulong quad = (ulong)_8bppDisplayBuffer[i];
+                var quad = (ulong)_8bppDisplayBuffer[i];
                 _32bppDisplayBuffer[j++] = (int)((quad & 0xff00000000000000U) != 0 ? BLACK : WHITE);
                 _32bppDisplayBuffer[j++] = (int)((quad & 0x00ff000000000000U) != 0 ? BLACK : WHITE);
                 _32bppDisplayBuffer[j++] = (int)((quad & 0x0000ff0000000000U) != 0 ? BLACK : WHITE);
@@ -336,7 +336,7 @@ namespace PERQemu.UI
         /// (or only in DEBUG mode?) or moved to a footer area where other status
         /// info, like caps lock or mouse capture status is displayed...
         /// </remarks>
-        private void UpdateFPS(SDL.SDL_Event e)
+        void UpdateFPS(SDL.SDL_Event e)
         {
             // Snapshot our data points
             var now = HighResolutionTimer.ElapsedHiRes();
@@ -377,7 +377,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Catch signals from the floppy controller to update our activity light.
         /// </summary>
-        private void OnFloppyActivity(MachineStateChangeEventArgs a)
+        void OnFloppyActivity(MachineStateChangeEventArgs a)
         {
             _floppyActive = (bool)a.Args[0];        // Unit 0
         }
@@ -385,7 +385,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Catch signals from the QIC tape controller to update our activity light.
         /// </summary>
-        private void OnStreamerActivity(MachineStateChangeEventArgs a)
+        void OnStreamerActivity(MachineStateChangeEventArgs a)
         {
             _streamerActive = (bool)a.Args[0];
         }
@@ -458,7 +458,7 @@ namespace PERQemu.UI
         /// scanline is drawn, the 1bpp PERQ data is expanded into 8-bit pseudo-
         /// palletized pixels eight at a time.
         /// </summary>
-        private static void MakePixelExpansionTable()
+        static void MakePixelExpansionTable()
         {
             _bitToPixel = new long[256];
             ulong tmp;
@@ -482,56 +482,56 @@ namespace PERQemu.UI
         //
         // Display
         //
-        private int _displayWidth;
-        private int _displayHeight;
+        int _displayWidth;
+        int _displayHeight;
 
         // Buffers for rendering pixels.  The two-step shuffle blows a ton of RAM
         // for a reasonable boost in speed, even though it makes that vein in my
         // temple throb.  What's a few dozen wasted megabytes between friends?
-        private int[] _32bppDisplayBuffer;
-        private long[] _8bppDisplayBuffer;
+        int[] _32bppDisplayBuffer;
+        long[] _8bppDisplayBuffer;
 
         // Table of precomputed pixel expansions
-        private static long[] _bitToPixel;
+        static long[] _bitToPixel;
 
         // Frame count
-        private long _frames;
-        private ulong _prevClock;
-        private ulong _prevZ80Clock;
-        private double _last;
+        long _frames;
+        ulong _prevClock;
+        ulong _prevZ80Clock;
+        double _last;
 
         //
         // SDL
         //
-        private IntPtr _sdlWindow = IntPtr.Zero;
-        private IntPtr _sdlRenderer = IntPtr.Zero;
+        IntPtr _sdlWindow = IntPtr.Zero;
+        IntPtr _sdlRenderer = IntPtr.Zero;
 
         // Rendering textures
-        private IntPtr _displayTexture = IntPtr.Zero;
+        IntPtr _displayTexture = IntPtr.Zero;
 
         // Events and stuff
-        private SDL.SDL_EventType _customEventType;
-        private SDL.SDL_Event _renderEvent;
-        private SDL.SDL_Event _fpsUpdateEvent;
+        SDL.SDL_EventType _customEventType;
+        SDL.SDL_Event _renderEvent;
+        SDL.SDL_Event _fpsUpdateEvent;
 
-        private const int RENDER_FRAME = 1;
-        private const int UPDATE_FPS = 2;
+        const int RENDER_FRAME = 1;
+        const int UPDATE_FPS = 2;
 
-        private int _fpsTimerId;
-        private HRTimerElapsedCallback _fpsTimerCallback;
+        int _fpsTimerId;
+        HRTimerElapsedCallback _fpsTimerCallback;
 
         // Floppy activity "light"
-        private static IntPtr _floppyTexture = IntPtr.Zero;
-        private SDL.SDL_Rect _floppyRect;
-        private bool _floppyActive;
+        static IntPtr _floppyTexture = IntPtr.Zero;
+        SDL.SDL_Rect _floppyRect;
+        bool _floppyActive;
 
         // Tape streamer activity light!
-        private static IntPtr _streamerTexture = IntPtr.Zero;
-        private SDL.SDL_Rect _streamerRect;
-        private bool _streamerActive;
+        static IntPtr _streamerTexture = IntPtr.Zero;
+        SDL.SDL_Rect _streamerRect;
+        bool _streamerActive;
 
         // Parent
-        private PERQSystem _system;
+        PERQSystem _system;
 
     }
 }

@@ -487,6 +487,44 @@ namespace PERQemu
             if (CheckSys()) PERQemu.Sys.CPU.ClearInterrupt(irq);
         }
 
+        [Command("debug set ethernet status", "Force a return status code from the fake Ethernet device")]
+        public void SetEtherStatus(byte status)
+        {
+            if (CheckSys())
+            {
+                var oio = PERQemu.Sys.OIO as IO.OIO;
+                oio.Ether.SetStatus(status);
+            }
+        }
+
+        [Command("debug patch ethernet status", "HACK to patch instruction to check Ethernet status (Accent S7)")]
+        public void PatchEther()
+        {
+            if (CheckSys())
+            {
+                var inst = PERQemu.Sys.CPU.GetInstruction(0xdbc);
+                Console.WriteLine($"Instruction at 0x0dbc is {inst}");
+
+                // If it's an "or not", patch the ALU op to an "and"
+                if (inst.UCode == 0xb3ef5a324203)
+                {
+                    Console.WriteLine("Patching the instruction!");
+
+                    // New inst is: b3ef 5932 4203;
+                    // scrambled:   b3ef 03b2 4249
+                    // inverted:    b3ef fc4d bdb6
+
+                    // Rewrite the low and middle words!
+                    PERQemu.Sys.CPU.WCS.WriteControlStore(CPU.ControlStoreWord.Low, 0xdbc, 0xbdb6);
+                    PERQemu.Sys.CPU.WCS.WriteControlStore(CPU.ControlStoreWord.Middle, 0xdbc, 0xfc4d);
+
+                    // Confirmation
+                    inst = PERQemu.Sys.CPU.GetInstruction(0xdbc);
+                    Console.WriteLine($"Instruction at 0x0dbc is {inst}");
+                }
+            }
+        }
+
 #if DEBUG
         //
         // Breakpoints

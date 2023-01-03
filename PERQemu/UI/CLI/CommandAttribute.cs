@@ -1,5 +1,5 @@
 ﻿//
-// CommandAttribute.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CommandAttribute.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -93,12 +93,12 @@ namespace PERQemu
             set { _prefix = value; }
         }
 
-        private string _commandName;
-        private string _description;
-        private bool _hidden;
-        private bool _repeats;
-        private bool _global;
-        private bool _prefix;
+        string _commandName;
+        string _description;
+        bool _hidden;
+        bool _repeats;
+        bool _global;
+        bool _prefix;
     }
 
     /// <summary>
@@ -138,7 +138,7 @@ namespace PERQemu
 
         public string Keyword => _match;
 
-        private readonly string _match;
+        readonly string _match;
     }
 
 }

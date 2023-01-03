@@ -1,5 +1,5 @@
 //
-// CommandExecutor.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CommandExecutor.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -63,7 +63,7 @@ namespace PERQemu.UI
 
                 while (!sr.EndOfStream)
                 {
-                    string line = sr.ReadLine();
+                    var line = sr.ReadLine();
 
                     if (!string.IsNullOrWhiteSpace(line))
                     {
@@ -119,7 +119,7 @@ namespace PERQemu.UI
             // A line beginning with an "@" indicates a script to execute
             if (line.StartsWith("@", StringComparison.CurrentCulture))
             {
-                string scriptFile = line.Substring(1);
+                var scriptFile = line.Substring(1);
 
                 ExecuteScript(scriptFile, true);
                 return;
@@ -180,7 +180,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Invokes the method for a command.
         /// </summary>
-        private void InvokeConsoleMethod(CommandNode command, string[] args)
+        void InvokeConsoleMethod(CommandNode command, string[] args)
         {
             if (command.Method == null)
             {
@@ -301,9 +301,9 @@ namespace PERQemu.UI
         /// </summary>
         public static List<string> SplitArgs(string commandString)
         {
-            List<string> args = new List<string>();
-            StringBuilder sb = new StringBuilder();
-            ParseState state = ParseState.NonWhiteSpace;
+            var args = new List<string>();
+            var sb = new StringBuilder();
+            var state = ParseState.NonWhiteSpace;
 
             commandString = commandString.Trim();
 
@@ -386,11 +386,11 @@ namespace PERQemu.UI
         /// arguments.  Validates arguments along the way and returns a node
         /// with a valid Method or null.
         /// </summary>
-        private CommandNode GetCommandFromString(string command, out string[] args)
+        CommandNode GetCommandFromString(string command, out string[] args)
         {
             args = null;
 
-            List<string> cmdWords = SplitArgs(command);
+            var cmdWords = SplitArgs(command);
 
             if (cmdWords.Count == 0)
             {
@@ -398,7 +398,7 @@ namespace PERQemu.UI
             }
 
             CommandNode current = _currentRoot;
-            List<string> argWords = new List<string>();
+            var argWords = new List<string>();
 
             while (cmdWords.Count > 0)
             {
@@ -484,7 +484,7 @@ namespace PERQemu.UI
         public static int TryParseInt(string arg)
         {
             int result = 0;
-            Radix r = GetRadix(ref arg);
+            var r = GetRadix(ref arg);
 
             try
             {
@@ -505,7 +505,7 @@ namespace PERQemu.UI
         public static uint TryParseUint(string arg)
         {
             uint result = 0;
-            Radix r = GetRadix(ref arg);
+            var r = GetRadix(ref arg);
 
             try
             {
@@ -526,7 +526,7 @@ namespace PERQemu.UI
         public static ushort TryParseUshort(string arg)
         {
             ushort result = 0;
-            Radix r = GetRadix(ref arg);
+            var r = GetRadix(ref arg);
 
             try
             {
@@ -547,7 +547,7 @@ namespace PERQemu.UI
         public static byte TryParseByte(string arg)
         {
             byte result = 0;
-            Radix r = GetRadix(ref arg);
+            var r = GetRadix(ref arg);
 
             try
             {
@@ -587,7 +587,7 @@ namespace PERQemu.UI
         /// or defining top-level commands that can be accessed from other levels
         /// of the hierarchy.  Does NOT check for name collisions, though...
         /// </remarks>
-        private void BuildCommandTree(List<object> commandObjects)
+        void BuildCommandTree(List<object> commandObjects)
         {
             // Create the root of the command tree
             _commandRoot = new CommandNode("Root", "");
@@ -744,7 +744,7 @@ namespace PERQemu.UI
         /// Builds a dictionary that maps a particular keyword to a set of
         /// argument nodes that reference it.
         /// </summary>
-        private void BuildMatchDictionary(List<ArgumentNode> list)
+        void BuildMatchDictionary(List<ArgumentNode> list)
         {
             // Set up the dictionary for KeywordMatch-tagged nodes
             _matchDict = new Dictionary<string, ArgumentNode[]>();
@@ -782,7 +782,7 @@ namespace PERQemu.UI
         /// runs once at startup and it's way simpler than trying to construct
         /// the list by traversing the command tree after the fact.
         /// </remarks>
-        private void BuildCommandsHelp(List<CommandHelp> list)
+        void BuildCommandsHelp(List<CommandHelp> list)
         {
             // Allocate the dictionary to copy into (by key)
             _commandsAtNode = new Dictionary<string, CommandHelp[]>();
@@ -937,10 +937,10 @@ namespace PERQemu.UI
             QuotedString = 2,
         }
 
-        private CommandNode _commandRoot;
-        private CommandNode _currentRoot;
+        CommandNode _commandRoot;
+        CommandNode _currentRoot;
 
-        private Dictionary<string, CommandHelp[]> _commandsAtNode;
-        private Dictionary<string, ArgumentNode[]> _matchDict;
+        Dictionary<string, CommandHelp[]> _commandsAtNode;
+        Dictionary<string, ArgumentNode[]> _matchDict;
     }
 }

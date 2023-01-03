@@ -1,5 +1,5 @@
 ﻿//
-// Scheduler.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Scheduler.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -71,9 +71,9 @@ namespace PERQemu
             get { return _callback; }
         }
 
-        private ulong _timestampNsec;
-        private object _context;
-        private SchedulerEventCallback _callback;
+        ulong _timestampNsec;
+        object _context;
+        SchedulerEventCallback _callback;
     }
 
 
@@ -195,10 +195,10 @@ namespace PERQemu
         public ulong TimeStepNsec => _timeStepNsec;
 
         // The time-base for the scheduler
-        private ulong _timeStepNsec;
-        private ulong _currentTimeNsec;
+        ulong _timeStepNsec;
+        ulong _currentTimeNsec;
 
-        private SchedulerQueue _schedule;
+        SchedulerQueue _schedule;
     }
 
 
@@ -211,7 +211,7 @@ namespace PERQemu
     /// The queue always contains a sentinel node a so that _top is guaranteed
     /// not to be null.  This simplifies things a lot.
     /// </remarks>
-    internal class SchedulerQueue
+    class SchedulerQueue
     {
         public SchedulerQueue()
         {
@@ -354,10 +354,10 @@ namespace PERQemu
             }
         }
 
-        private LinkedList<SchedulerEvent> _queue;
-        private object _queueLock;
+        LinkedList<SchedulerEvent> _queue;
+        object _queueLock;
 
-        private ulong _next;
-        private SchedulerEvent _last;
+        ulong _next;
+        SchedulerEvent _last;
     }
 }

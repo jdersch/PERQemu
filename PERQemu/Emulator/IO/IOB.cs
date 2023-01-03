@@ -1,5 +1,5 @@
 //
-// IOB.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// IOB.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -60,15 +60,15 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                case 0x40:  // Read disk status
+                case 0x40:    // Read disk status
                     return _hardDiskController.ReadStatus();
 
-                case 0x46:  // Read Z80 data
+                case 0x46:    // Read Z80 data
                     return _z80System.ReadData();
 
                 default:
                     Log.Warn(Category.IO, "Unhandled IOB Read from port {0:x2}", port);
-                    return 0xff;
+                    return 0xffff;
             }
         }
 
@@ -79,31 +79,31 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                case 0xc1:  // Shugart command/control register & Z80 status register
+                case 0xc1:    // Shugart command/control register & Z80 status register
                     _hardDiskController.LoadRegister(port, value & 0x7f);
                     _z80System.WriteStatus(value & 0x80);
                     break;
 
-                case 0xc7:  // Z80 data port
+                case 0xc7:    // Z80 data port
                     _z80System.WriteData(value);
                     break;
 
-                case 0xc2:  // Shugart Head register
-                case 0xc8:  // Shugart Cylinder/Sector register
-                case 0xc9:  // Shugart File SN Low Register
-                case 0xca:  // Shugart File SN High register
-                case 0xcb:  // Shugart Block Number register
-                case 0xd0:  // Shugart Data Buffer Address High register
-                case 0xd1:  // Shugart Header Address High register
-                case 0xd8:  // Shugart Data Buffer Address Low register
-                case 0xd9:  // Shugart Header Address low register
+                case 0xc2:    // Shugart Head register
+                case 0xc8:    // Shugart Cylinder/Sector register
+                case 0xc9:    // Shugart File SN Low Register
+                case 0xca:    // Shugart File SN High register
+                case 0xcb:    // Shugart Block Number register
+                case 0xd0:    // Shugart Data Buffer Address High register
+                case 0xd1:    // Shugart Header Address High register
+                case 0xd8:    // Shugart Data Buffer Address Low register
+                case 0xd9:    // Shugart Header Address low register
                     _hardDiskController.LoadRegister(port, value);
                     break;
 
                 case 0xd4:
                 case 0xd5:
                 case 0xdc:
-                case 0xdd:  // Just to see if anything calls these...
+                case 0xdd:    // Just to see if anything calls these...
                     throw new InvalidOperationException($"IOB DMA not yet implemented");
 
                 default:
@@ -115,7 +115,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Ports handled by the IOB.
         /// </summary>
-        private byte[] _handledPorts =
+        byte[] _handledPorts =
         {
             // Z80
             0x46,       // 106 CioZ80In: read Z80 input

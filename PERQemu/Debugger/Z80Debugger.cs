@@ -1,5 +1,5 @@
 ﻿//
-// Z80Debugger.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Z80Debugger.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -91,7 +91,7 @@ namespace PERQemu.Debugger
             return _addressToSymbolMap[addr];
         }
 
-        private void LoadZ80Source(string sourceFile)
+        void LoadZ80Source(string sourceFile)
         {
             _addressToSymbolMap = new Dictionary<ushort, string>();
             _symbolToAddressMap = new Dictionary<string, ushort>();
@@ -141,8 +141,8 @@ namespace PERQemu.Debugger
             }
         }
 
-        private Dictionary<string, ushort> _symbolToAddressMap;
-        private Dictionary<ushort, string> _addressToSymbolMap;
-        private Dictionary<ushort, string> _sourceMap;
+        Dictionary<string, ushort> _symbolToAddressMap;
+        Dictionary<ushort, string> _addressToSymbolMap;
+        Dictionary<ushort, string> _sourceMap;
     }
 }

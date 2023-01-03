@@ -21,6 +21,7 @@ using System;
 
 using PERQmedia;
 using PERQemu.Config;
+using PERQemu.IO.Network;
 using PERQemu.IO.TapeDevices;
 
 namespace PERQemu.IO
@@ -49,6 +50,10 @@ namespace PERQemu.IO
             _link = new PERQLink();
             RegisterPorts(_handledPorts);
 
+            // A hack to let Accent boot properly
+            _ether = new FakeEthernet(system);
+            RegisterPorts(_etherPorts);
+
             // Options:
             // _canon = new CanonPrinter();
             // _ether = new Ethernet10MbController();
@@ -60,10 +65,13 @@ namespace PERQemu.IO
             }
         }
 
+        public FakeEthernet Ether => _ether;
+
         public override void Reset()
         {
             _link.Reset();
 
+            if (_ether != null) _ether.Reset();
             if (_streamer != null) _streamer.Reset();
 
             base.Reset();
@@ -104,26 +112,21 @@ namespace PERQemu.IO
         /// </summary>
         public override int IORead(byte port)
         {
-            int retVal = 0xffff;        // Assume IO devices are active low?
+            int retVal = 0xffff;        // Unhandled things assume this?
             var handled = false;        // Missing/optional devices fall thru
 
             switch (port)
             {
-                case 0x06:    // lo, hi Ethernet bit counter
+                case 0x06:    // Fake Ethernet registers
                 case 0x07:
-                    retVal = 0;         // force it for now
+                case 0x0f:
+                case 0x70:
+                case 0x7b:
+                    retVal = _ether.ReadRegister(port);
                     handled = true;
                     break;
 
-                case 0x0e:   // Read streamer data
-                    if (_streamer != null)
-                    {
-                        retVal = _streamer.ReadData();
-                        handled = true;
-                    }
-                    break;
-
-                case 0x0d:   // Read streamer status
+                case 0x0d:    // Read streamer status
                     if (_streamer != null)
                     {
                         retVal = _streamer.ReadStatus();
@@ -131,23 +134,23 @@ namespace PERQemu.IO
                     }
                     break;
 
-                case 0x0f:  // fake Ethernet status register
-                    retVal = (_fakeEtherCSR == 0x20 ? 0x4 : 0x8);   // if reset, return done; else busy?
-                    handled = true;
+                case 0x0e:    // Read streamer data
+                    if (_streamer != null)
+                    {
+                        retVal = _streamer.ReadData();
+                        handled = true;
+                    }
                     break;
 
-                case 0x20:  // PERQlink input status port
+                case 0x20:    // PERQlink input status port
                     retVal = _link.ReadCommandStatus();
                     handled = true;
                     break;
 
-                case 0x22:  // PERQlink input data port
+                case 0x22:    // PERQlink input data port
                     retVal = _link.ReadData();
                     handled = true;
                     break;
-
-                    // case 0x25:
-                    //  read loopback/diagnostic?
             }
 
             if (!handled)
@@ -166,30 +169,39 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                case 0x84:  // Load Streamer data
-                case 0x86:  // Load Streamer control
+                case 0x84:    // Load Streamer data
+                case 0x86:    // Load Streamer control
                     if (_streamer != null)
                     {
                         _streamer.LoadRegister(port, value);
                     }
                     break;
 
-                case 0x99:  // fake Ethernet control register
-                    _fakeEtherCSR = value;
+                case 0x88:
+                case 0x89:
+                case 0x8a:
+                case 0x8c:
+                case 0x8d:
+                case 0x8e:
+                case 0x90:
+                case 0x91:
+                case 0x92:
+                case 0x93:
+                case 0x99:
+                case 0xd6:
+                case 0xd7:
+                case 0xde:
+                case 0xdf:    // Load (fake) Ethernet registers
+                    _ether.LoadRegister(port, value);
                     break;
 
-                case 0xa1:  // PERQlink output status
+                case 0xa1:    // PERQlink output status
                     _link.WriteCommandStatus(value);
                     break;
 
-                case 0xa3:  // PERQlink output data
+                case 0xa3:    // PERQlink output data
                     _link.WriteData(value);
                     break;
-
-                // case 0xa4:
-                //  write loopback/diagnostic?
-                // case 0xa5:
-                //  dummy write/diagnostic?
 
                 default:
                     Log.Warn(Category.IO, "Unhandled OIO Write to port {0:x2}, data {1:x4}", port, value);
@@ -203,7 +215,7 @@ namespace PERQemu.IO
 
             return 1;
         }
-
+        
         // Debugging
         public void DumpTapeStatus()
         {
@@ -215,7 +227,7 @@ namespace PERQemu.IO
         /// Complete list of IO ports used by the Option IO boards.  At present
         /// we only emulate the Link and Streamer options.
         /// </summary>
-        private byte[] _handledPorts =
+        byte[] _handledPorts =
         {
             // PERQLink ports
             0x20,   // 040 ReadCSR: read PERQLink control status
@@ -224,15 +236,17 @@ namespace PERQemu.IO
             0xa1,   // 241 WriteCSR: load PERQLink control register
             0xa3,   // 243 WriteData: load PERQLink data
             0xa4,   // 244 WrLnkReg: load PERQLink register (??) (diagnostic?)
-            0xa6,   // 246 WtDummy: load test value (??) (diagnostic)
+            0xa6    // 246 WtDummy: load test value (??) (diagnostic)
         };
 
-        private byte[] _etherPorts =
+        byte[] _etherPorts =
         {
             // Ethernet ports (TODO: not yet implemented)
             0x06,   // 006 E10ORdBCLow: read Ethernet bit count low byte
             0x07,   // 007 E10ORdBCHgh:   "      "     "    "   high byte
             0x0f,   // 017 E10ORdNetCR:   "      "    control register
+            0x70,   // fake 3Mbit port
+            0x7b,   // fake 3Mbit port
             0x88,   // 210 E10OWrUSCR: load Ethernet usec clock control
             0x89,   // 211 E10OWrUSHgh:  "     "       "    "   high byte
             0x8a,   // 212 E10OWrUSLow:  "     "       "    "   low byte
@@ -250,7 +264,7 @@ namespace PERQemu.IO
             0xdf    // 337 E10OWrHdrLo:   "      "    header    "      "    "
         };
 
-        private byte[] _canonPorts =
+        byte[] _canonPorts =
         {
             // Canon ports (TODO: not yet implemented)
             0x08,   // 010 IntStat: read Canon interrupt status (4 bits)
@@ -263,7 +277,7 @@ namespace PERQemu.IO
             0xff,   // 377 (??) dummy write used by Canon driver
         };
 
-        private byte[] _streamerPorts =
+        byte[] _streamerPorts =
         {
             // Streamer ports
             0x0d,   // 015 StrStat: read streamer state
@@ -273,11 +287,8 @@ namespace PERQemu.IO
         };
 
         // Attached devices
-        private PERQLink _link;
-        private QICTapeController _streamer;
-
-        // Temporary: fake Ethernet control register
-        private int _fakeEtherCSR;
-
+        PERQLink _link;
+        FakeEthernet _ether;
+        QICTapeController _streamer;
     }
 }

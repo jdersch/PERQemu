@@ -1,5 +1,5 @@
 //
-// CommandProcessor.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CommandProcessor.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -131,7 +131,7 @@ namespace PERQemu
                 {
                     // GetLine actually runs the Timer loop (while between
                     // keystrokes) which is brilliant and a little embarrassing
-                    string cmd = _editor.GetLine().Trim();
+                    var cmd = _editor.GetLine().Trim();
 
                     if (cmd != string.Empty)
                     {
@@ -175,7 +175,7 @@ namespace PERQemu
         /// <summary>
         /// Update the console title when the DDS changes.
         /// </summary>
-        private void OnDDSChange(MachineStateChangeEventArgs a)
+        void OnDDSChange(MachineStateChangeEventArgs a)
         {
             var dds = (int)a.Args[0];
             Console.Title = $"DDS {dds:d3}";
@@ -266,7 +266,7 @@ namespace PERQemu
         //
 
         [Command("about", "About PERQemu")]
-        private void About()
+        void About()
         {
             PERQemu.PrintBanner();
         }
@@ -299,7 +299,7 @@ namespace PERQemu
         }
 
         [Command("gui", "Start the graphical interface")]
-        private void LaunchGUI()
+        void LaunchGUI()
         {
             // I'm looking at YOU, 64-bit Cocoa WinForms port that was promised
             // over three YEARS ago.  Sigh.
@@ -307,21 +307,21 @@ namespace PERQemu
         }
 
         [Command("done", Discreet = true)]
-        private void Done()
+        void Done()
         {
             Console.WriteLine("Already at top-level.");
         }
 
         [Command("exit")]
         [Command("quit", "Quit PERQemu")]
-        private void Quit()
+        void Quit()
         {
             PERQemu.Controller.PowerOff();
             _running = false;
         }
 
         [Command("quit without save", "Quit PERQemu without committing changes")]
-        private void QuitNow()
+        void QuitNow()
         {
             PERQemu.Controller.PowerOff(false);     // Stop the machine, if running
             Settings.Changed = false;               // Force the "without save" part
@@ -336,7 +336,7 @@ namespace PERQemu
         // list above.
 
         [Command("help", "Show PERQemu help")]
-        private void Help()
+        void Help()
         {
             Console.WriteLine("This is PERQemu, an emulator for the Three Rivers PERQ workstation.\n" +
                               "Type 'commands' at the prompt to see which commands are available.\n");
@@ -353,7 +353,7 @@ namespace PERQemu
         }
 
         [Command("help editor", "Show command line editor help")]
-        private void HelpCLI()
+        void HelpCLI()
         {
             Console.WriteLine("Some commands accept optional arguments, while some require them; press the\n" +
                               "TAB key at any point to see a list of possible completions for the current\n" +
@@ -374,7 +374,7 @@ namespace PERQemu
         }
 
         [Command("help configure", "Show configuration help")]
-        private void HelpConfig()
+        void HelpConfig()
         {
             Console.WriteLine("The Configurator lets you load, modify and save PERQ configurations.  Several\n" +
                               "predefined system types are provided.  The default configuration is a typical\n" +
@@ -390,7 +390,7 @@ namespace PERQemu
         }
 
         [Command("help debugger", "Show debugger help")]
-        private void HelpDebug()
+        void HelpDebug()
         {
             Console.WriteLine("PERQemu provides extensive for debugging the emulator itself or code running\n" +
                               "on the virtual machine.  In 'release builds' a limited set of commands to\n" +
@@ -401,7 +401,7 @@ namespace PERQemu
         }
 
         [Command("help logging", "Show logging help")]
-        private void HelpLogging()
+        void HelpLogging()
         {
             Console.WriteLine("PERQemu provides voluminous debugging output and a set of commands to choose\n" +
                               "what type and how much information to display.  Logging incurs a substantial\n" +
@@ -421,8 +421,8 @@ namespace PERQemu
         }
 
 
-        private bool _running;
-        private CommandExecutor _exec;
-        private CommandPrompt _editor;
+        bool _running;
+        CommandExecutor _exec;
+        CommandPrompt _editor;
     }
 }

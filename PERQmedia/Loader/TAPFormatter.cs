@@ -1,5 +1,5 @@
 ﻿//
-// TAPFormatter.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// TAPFormatter.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -594,29 +594,29 @@ namespace PERQmedia
             return true;
         }
 
-        private Marker GetMarker(byte[] header)
+        Marker GetMarker(byte[] header)
         {
             var m = (uint)((header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3]);
 
             return (Marker)m;
         }
 
-        private void FillBlock(byte val, ref byte[] buf)
+        void FillBlock(byte val, ref byte[] buf)
         {
             for (var i = 0; i < buf.Length; i++) buf[i] = val;
         }
 
         // For checking our custom marker/header data
-        private byte[] _cookie = { (byte)'P', (byte)'R', (byte)'Q', (byte)'T' };
-        private byte _fileVersion = (byte)'0';
-        private byte _driveType;
+        byte[] _cookie = { (byte)'P', (byte)'R', (byte)'Q', (byte)'T' };
+        byte _fileVersion = (byte)'0';
+        byte _driveType;
     }
 
     /// <summary>
     /// Marker types used by .TAP, but with custom markers defined for extra
     /// metadata (all the same stuff PRQM uses!).
     /// </summary>
-    internal enum Marker : uint
+    enum Marker : uint
     {
         FileMark = 0x00000000,
         Data = 0x00000200,          // Good data (512 byte block)

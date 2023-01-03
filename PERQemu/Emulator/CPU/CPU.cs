@@ -265,6 +265,7 @@ namespace PERQemu.Processor
         public bool IncrementBPC => _incrementBPC;
         public ulong Clocks => _clocks;
         public ulong[] Microcode => _ustore.Microcode;
+        public ControlStore WCS => _ustore;             // Debugging/temporary?
         public RasterOp RasterOp => _rasterOp;
 
         #endregion

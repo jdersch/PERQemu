@@ -1,5 +1,5 @@
 //
-// IOBus.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// IOBus.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -24,10 +24,8 @@ namespace PERQemu.IO
 {
     public class UnhandledIORequestException : Exception
     {
-        public UnhandledIORequestException(string message)
-            : base(message)
+        public UnhandledIORequestException(string message) : base(message)
         {
-
         }
     }
 
@@ -77,12 +75,14 @@ namespace PERQemu.IO
                 value = device.IORead(ioPort);
 
                 // Add this back in if there's too much log spewage
-                //if (!(_deviceDispatch[ioPort] is VideoController))
-                Log.Debug(Category.IO, "Read 0x{0:x4} from port 0x{1:x2} ({2})", value, ioPort, device.ToString());
+                if (!(_deviceDispatch[ioPort] is Memory.VideoController))
+                    Log.Debug(Category.IO, "Read 0x{0:x4} from port 0x{1:x2} ({2})",
+                                            value, ioPort, device.ToString());
             }
             else
             {
-                Log.Warn(Category.IO, "Unhandled Read from port 0x{0:x2}, returning 0x{1:x4}", ioPort, value);
+                Log.Warn(Category.IO, "Unhandled Read from port 0x{0:x2}, returning 0x{1:x4}",
+                                       ioPort, value);
             }
 
             return value;
@@ -98,12 +98,14 @@ namespace PERQemu.IO
                 device.IOWrite(ioPort, value);
 
                 // Put this back if it spews too much
-                //if (!(_deviceDispatch[ioPort] is VideoController))
-                Log.Debug(Category.IO, "Write 0x{0:x4} to port 0x{1:x2} ({2})", value, ioPort, device.ToString());
+                if (!(_deviceDispatch[ioPort] is Memory.VideoController))
+                    Log.Debug(Category.IO, "Write 0x{0:x4} to port 0x{1:x2} ({2})",
+                                            value, ioPort, device.ToString());
             }
             else
             {
-                Log.Warn(Category.IO, "Unhandled Write of 0x{0:x4} to port 0x{1:x2})", value, ioPort);
+                Log.Warn(Category.IO, "Unhandled Write of 0x{0:x4} to port 0x{1:x2})",
+                                       value, ioPort);
             }
         }
 
@@ -121,7 +123,7 @@ namespace PERQemu.IO
                 {
                     if (_deviceDispatch[i] != null)
                     {
-                        throw new InvalidOperationException($"IO Port conflict at {i:x2} between {device} and {_deviceDispatch[i]}");
+                        throw new InvalidOperationException($"IO Port conflict at 0x{i:x2} between {device} and {_deviceDispatch[i]}");
                     }
 
                     _deviceDispatch[i] = device;

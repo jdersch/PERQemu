@@ -1,5 +1,5 @@
 //
-// VideoController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// VideoController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -34,7 +34,7 @@ namespace PERQemu.Memory
     /// when the cursor is enabled).
     /// </summary>
     [StructLayout(LayoutKind.Explicit)]
-    internal struct ScanLineBuffer
+    struct ScanLineBuffer
     {
         [FieldOffset(0)]
         public ulong[] Quads;
@@ -284,7 +284,7 @@ namespace PERQemu.Memory
         /// full 16 bits used as the base address.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int UnFrobAddress(int value)
+        int UnFrobAddress(int value)
         {
             // Early PERQ-1 256K memory board
             if (_system.Memory.MemSize < 0x40000)
@@ -303,7 +303,7 @@ namespace PERQemu.Memory
         }
 
 
-        private void RunStateMachine()
+        void RunStateMachine()
         {
             switch (_state)
             {
@@ -399,7 +399,7 @@ namespace PERQemu.Memory
             }
         }
 
-        private void UpdateSignals()
+        void UpdateSignals()
         {
             //
             // The LineCounterOverflow status bit in the CRT Signals register should
@@ -479,7 +479,7 @@ namespace PERQemu.Memory
         /// fast and shift things.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void GetCursorQuad(int addr)
+        void GetCursorQuad(int addr)
         {
             var quad = _system.Memory.FetchQuad(addr);
 
@@ -494,7 +494,7 @@ namespace PERQemu.Memory
         /// Transforms a display quad word based on the current Cursor function.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ulong TransformDisplayQuad(ulong quad)
+        ulong TransformDisplayQuad(ulong quad)
         {
             switch (_cursorFunc)
             {
@@ -523,7 +523,7 @@ namespace PERQemu.Memory
         /// Transforms a cursor byte based on the Cursor function and display byte.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte TransformCursorByte(byte dispByte, byte cursByte)
+        byte TransformCursorByte(byte dispByte, byte cursByte)
         {
             switch (_cursorFunc)
             {
@@ -552,7 +552,7 @@ namespace PERQemu.Memory
         }
 
         [Flags]
-        private enum CRTSignals
+        enum CRTSignals
         {
             None = 0x0,
             HorizontalSync = 0x1,
@@ -566,7 +566,7 @@ namespace PERQemu.Memory
         }
 
         [Flags]
-        private enum StatusRegister
+        enum StatusRegister
         {
             None = 0x0,
             LineCountMask = 0x7f,       // 7 bits = 1..128 lines in the band
@@ -578,7 +578,7 @@ namespace PERQemu.Memory
             WriteBadParity = 0x1000
         }
 
-        private enum VideoState
+        enum VideoState
         {
             Active = 0,
             HBlank,
@@ -586,7 +586,7 @@ namespace PERQemu.Memory
             Idle
         }
 
-        private enum CursorFunction
+        enum CursorFunction
         {
             CTWhite = 0,        // InvertedCursorInvertedDisplay
             CTCursorOnly,       // InvertedCursor
@@ -598,7 +598,7 @@ namespace PERQemu.Memory
             CTInvCursCompl      // XorCursor
         }
 
-        private byte[] _handledPorts =
+        byte[] _handledPorts =
         {
             0x65,               // Read CRT signals
             0x66,               // Read Hi address parity
@@ -619,39 +619,39 @@ namespace PERQemu.Memory
         // strange behavior in OSes that rely on a 60Hz vertical retrace to
         // run their clocks, but that'd be a nice problem to have... :-|
         //
-        private readonly ulong _scanLineTimeNsec = 11900;   // 70 microcycles
-        private readonly ulong _hBlankTimeNsec = 3740;      // 22 microcycles
+        readonly ulong _scanLineTimeNsec = 11900;   // 70 microcycles
+        readonly ulong _hBlankTimeNsec = 3740;      // 22 microcycles
 
         // Width is configurable; both displays are the same height
-        private int _displayWidth;
-        private const int _displayHeight = 1024;
-        private const int _lastVisibleScanLine = _displayHeight - 1;
+        int _displayWidth;
+        const int _displayHeight = 1024;
+        const int _lastVisibleScanLine = _displayHeight - 1;
 
         // Trade a little space for speed
-        private int _displayQuads;
-        private int _displayBytes;
-        private bool _isPortrait = true;
+        int _displayQuads;
+        int _displayBytes;
+        bool _isPortrait = true;
 
-        private ScanLineBuffer _scanlineData;
-        private byte[] _cursorData;
+        ScanLineBuffer _scanlineData;
+        byte[] _cursorData;
 
-        private VideoState _state;
-        private SchedulerEvent _currentEvent;
-        private int _scanLine;
-        private int _lineCounterInit;
-        private bool _lineCountOverflow;
-        private bool _startOver;
+        VideoState _state;
+        SchedulerEvent _currentEvent;
+        int _scanLine;
+        int _lineCounterInit;
+        bool _lineCountOverflow;
+        bool _startOver;
 
         // IO registers
-        private int _lineCounter;
-        private int _displayAddress;
-        private int _cursorAddress;
-        private int _cursorX;
-        private int _cursorY;
-        private CursorFunction _cursorFunc;
-        private CRTSignals _crtSignals;
-        private StatusRegister _videoStatus;
+        int _lineCounter;
+        int _displayAddress;
+        int _cursorAddress;
+        int _cursorX;
+        int _cursorY;
+        CursorFunction _cursorFunc;
+        CRTSignals _crtSignals;
+        StatusRegister _videoStatus;
 
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }

@@ -1,5 +1,5 @@
 ﻿//
-// Breakpoint.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Breakpoint.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -214,10 +214,10 @@ namespace PERQemu.Debugger
             }
         }
 
-        private BreakpointType _type;
-        private string _name;
-        private int _limit;
-        private Dictionary<int, BreakpointAction> _list;
+        BreakpointType _type;
+        string _name;
+        int _limit;
+        Dictionary<int, BreakpointAction> _list;
     }
 
     /// <summary>
@@ -329,13 +329,13 @@ namespace PERQemu.Debugger
             _deferred.Clear();
         }
 
-        private bool _masterEnable;
+        bool _masterEnable;
 
-        private BreakpointList _irqWatchList;
-        private BreakpointList _ioWatchList;
-        private BreakpointList _memWatchList;
-        private BreakpointList _uinstWatchList;
+        BreakpointList _irqWatchList;
+        BreakpointList _ioWatchList;
+        BreakpointList _memWatchList;
+        BreakpointList _uinstWatchList;
 
-        private List<BreakpointAction> _deferred;
+        List<BreakpointAction> _deferred;
     }
 }

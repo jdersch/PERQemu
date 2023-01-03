@@ -1,5 +1,5 @@
 //
-// QCode.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// QCode.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -153,7 +153,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Clears the "ordered" list of opcodes and extended dictionary.
         /// </summary>
-        private static void Clear()
+        static void Clear()
         {
             _qCodesOrdered = new QCode[256];
             _qCodesExtended = new Dictionary<ushort, QCode>();
@@ -164,7 +164,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Adds QCodes to the table (indexed by opcode number).
         /// </summary>
-        private static void AddToTable(QCode[] unordered)
+        static void AddToTable(QCode[] unordered)
         {
             for (int i = 0; i < unordered.Length; i++)
             {
@@ -184,7 +184,7 @@ namespace PERQemu.Debugger
         /// Adds extended opcodes to the dictionary.  Index is simply the prefix
         /// byte concatenated with the opcode byte in the obvious way.
         /// </summary>
-        private static void AddToDictionary(byte prefix, QCode[] exops)
+        static void AddToDictionary(byte prefix, QCode[] exops)
         {
             for (var i = 0; i < exops.Length; i++)
             {
@@ -220,14 +220,14 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Ordered table of QCodes, computed at runtime.
         /// </summary>
-        private static QCode[] _qCodesOrdered;
-        private static Dictionary<ushort, QCode> _qCodesExtended;
-        private static QCodeSets _loaded;
+        static QCode[] _qCodesOrdered;
+        static Dictionary<ushort, QCode> _qCodesExtended;
+        static QCodeSets _loaded;
 
         /// <summary>
         /// QCodes common to POS and Accent (ALL versions).
         /// </summary>
-        private static QCode[] _qCodesCommon =
+        static QCode[] _qCodesCommon =
         {
             new QCode(0, "LDC0"),
             new QCode(1, "LDC1"),
@@ -255,7 +255,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// V4 QCodes common to POS and Accent.
         /// </summary>
-        private static QCode[] _qCodesCommonV4 =
+        static QCode[] _qCodesCommonV4 =
         {
             new QCode(19, "LSA"),
             new QCode(20, "ROTSHI"),
@@ -453,7 +453,7 @@ namespace PERQemu.Debugger
         /// Note that POS doesn't use the KOPS code, but they are defined in
         /// Perq.Qcodes.Dfs so I leave them in for completeness.
         /// </remarks>
-        private static QCode[] _qCodesPOSV4 =
+        static QCode[] _qCodesPOSV4 =
         {
             new QCode(99, "LSSN"),
             new QCode(101, "PSW"),          // MPOS?
@@ -493,7 +493,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Second byte of extended POS V4 Real Ops.
         /// </summary>
-        private static QCode[] _qCodesPOSV4rops =
+        static QCode[] _qCodesPOSV4rops =
         {
             new QCode(0, "TNC"),
             new QCode(1, "FLT"),
@@ -516,7 +516,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Second byte of extended POS V4 Long Ops.
         /// </summary>
-        private static QCode[] _qCodesPOSV4lops =
+        static QCode[] _qCodesPOSV4lops =
         {
             new QCode(0, "CVTLI"),
             new QCode(1, "CVTIL"),
@@ -547,7 +547,7 @@ namespace PERQemu.Debugger
         ///                             241..244, 250..253
         ///                             LOPS, ROPS and KOPS extended codes
         /// </remarks>
-        private static QCode[] _qCodesAccentV4 =
+        static QCode[] _qCodesAccentV4 =
         {
             new QCode(45, "EQUptr"),
             new QCode(46, "NEQPtr"),
@@ -617,7 +617,7 @@ namespace PERQemu.Debugger
         /// ROPS/LOPS for Accent, but cleaned it up/simplified it considerably
         /// in the version 5 set by rolling them all into EXOP.
         /// </remarks>
-        private static QCode[] _qCodesAccentV4lops =
+        static QCode[] _qCodesAccentV4lops =
         {
             new QCode(16, "LBNOT"),         // aka LLNOT
             new QCode(17, "LBAND"),         //     LLAND
@@ -628,7 +628,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Second byte of the Accent V4 EXOP opcodes.
         /// </summary>
-        private static QCode[] _qCodesAccentV4exops =
+        static QCode[] _qCodesAccentV4exops =
         {
             new QCode(246, "LOPSHI"),       // EXOP, not LOPS?
             new QCode(247, "DECREG3"),
@@ -645,7 +645,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Second byte of the Accent V4 KOPS Kernel opcodes.
         /// </summary>
-        private static QCode[] _qCodesAccentV4kops =
+        static QCode[] _qCodesAccentV4kops =
         {
             new QCode(0, "KSVRETURN"),
             new QCode(1, "KCURPROCESS"),
@@ -670,7 +670,7 @@ namespace PERQemu.Debugger
         /// The QCode redesign for Accent, Version 5.  This is "phase II", used
         /// in Accent S6 by Pascal v12?  Need to do more research...
         /// </summary>
-        private static QCode[] _qCodesAccentV5 =
+        static QCode[] _qCodesAccentV5 =
         {
             // 0..18 in common
             new QCode(19, "LDCN"),
@@ -914,7 +914,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Second byte of the Accent V5 EXOP extended opcodes.
         /// </summary>
-        private static QCode[] _qCodesAccentV5exops =
+        static QCode[] _qCodesAccentV5exops =
         {
             new QCode(0, "exUndef0"),
             new QCode(1, "exUndef1"),
@@ -1108,7 +1108,7 @@ namespace PERQemu.Debugger
         /// Second byte of the Accent V5 KOPS Kernel opcodes.  These are
         /// in addition to the V4 KOPS codes!
         /// </summary>
-        private static QCode[] _qCodesAccentV5kops =
+        static QCode[] _qCodesAccentV5kops =
         {
             new QCode(19, "KVPENTER"),
             new QCode(20, "KVPREMOVE"),
