@@ -50,22 +50,28 @@ namespace PERQemu.IO
             _link = new PERQLink();
             RegisterPorts(_handledPorts);
 
-            // A hack to let Accent boot properly
-            _ether = new FakeEthernet(system);
-            RegisterPorts(_etherPorts);
+            if (system.Config.IOOptions.HasFlag(IOOptionType.Ether))
+            {
+                // The real one, someday
+                // _ether = new Ethernet10MbController();
 
-            // Options:
-            // _canon = new CanonPrinter();
-            // _ether = new Ethernet10MbController();
+                // A hack to let Accent boot properly
+                _ether = new FakeEthernet(system);
+                RegisterPorts(_etherPorts);
+            }
 
             if (system.Config.IOOptions.HasFlag(IOOptionType.Tape))
             {
                 _streamer = new QICTapeController(system.Config.IOOptionBoard);
                 RegisterPorts(_streamerPorts);
             }
+
+            // Unimplemented:
+            // _canon = new CanonPrinter();
         }
 
         public FakeEthernet Ether => _ether;
+        public QICTapeController Streamer => _streamer;
 
         public override void Reset()
         {
@@ -119,11 +125,19 @@ namespace PERQemu.IO
             {
                 case 0x06:    // Fake Ethernet registers
                 case 0x07:
+                    if (_ether != null)
+                    {
+                        retVal = _ether.ReadRegister(port);
+                        handled = true;
+                    }
+                    break;
+
                 case 0x0f:
-                case 0x70:
-                case 0x7b:
-                    retVal = _ether.ReadRegister(port);
-                    handled = true;
+                    if (_ether != null)
+                    {
+                        retVal = _ether.ReadStatus(port);
+                        handled = true;
+                    }
                     break;
 
                 case 0x0d:    // Read streamer status
@@ -187,12 +201,21 @@ namespace PERQemu.IO
                 case 0x91:
                 case 0x92:
                 case 0x93:
-                case 0x99:
                 case 0xd6:
                 case 0xd7:
                 case 0xde:
                 case 0xdf:    // Load (fake) Ethernet registers
-                    _ether.LoadRegister(port, value);
+                    if (_ether != null)
+                    {
+                        _ether.LoadRegister(port, value);
+                    }
+                    break;
+
+                case 0x99:    // Load (fake) Ethernet control register
+                    if (_ether != null)
+                    {
+                        _ether.LoadCommand(port, value);
+                    }
                     break;
 
                 case 0xa1:    // PERQlink output status
@@ -214,13 +237,6 @@ namespace PERQemu.IO
             _link.Clock();
 
             return 1;
-        }
-        
-        // Debugging
-        public void DumpTapeStatus()
-        {
-            if (_streamer != null)
-                _streamer.DumpStatus();
         }
 
         /// <summary>
@@ -245,8 +261,6 @@ namespace PERQemu.IO
             0x06,   // 006 E10ORdBCLow: read Ethernet bit count low byte
             0x07,   // 007 E10ORdBCHgh:   "      "     "    "   high byte
             0x0f,   // 017 E10ORdNetCR:   "      "    control register
-            0x70,   // fake 3Mbit port
-            0x7b,   // fake 3Mbit port
             0x88,   // 210 E10OWrUSCR: load Ethernet usec clock control
             0x89,   // 211 E10OWrUSHgh:  "     "       "    "   high byte
             0x8a,   // 212 E10OWrUSLow:  "     "       "    "   low byte

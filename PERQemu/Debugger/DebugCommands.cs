@@ -108,25 +108,22 @@ namespace PERQemu
             Console.WriteLine("Logging categories:");
             PERQemu.CLI.Columnify(Log.Categories.ToString().Split(' '));
 
-            // todo: may just bite the bullet and have separate console logging
+            // Todo: may just bite the bullet and have separate console logging
             // categories too, not just split severity levels... being able to
             // just spit the important stuff on the console while logging more
             // detailed traces to files would be nice...
 
-            // todo: show default output radix, anything else?
+            // Todo: show default output radix, anything else?
         }
 
-        [Command("debug show variables", "Show debugger variables and their descriptions")]
-        void ShowVars()
+        bool CheckSys()
         {
             if (PERQemu.Sys == null)
             {
-                Console.WriteLine("No PERQ defined.");
+                Console.WriteLine("Cannot execute; the PERQ is not powered on.");
+                return false;
             }
-            else
-            {
-                PERQemu.Sys.Debugger.ShowVariables();
-            }
+            return true;
         }
 
         [Command("step", Repeatable = true)]
@@ -174,6 +171,8 @@ namespace PERQemu
         {
             Console.WriteLine(PERQemu.Controller.Mode);
         }
+
+        #region Logging
 
         //
         // Logging
@@ -276,14 +275,20 @@ namespace PERQemu
         }
 #endif
 
-        bool CheckSys()
+        #endregion
+
+        #region CPU Internals
+
+        [Command("debug show variables", "Show debugger variables and their descriptions")]
+        void ShowVars()
         {
             if (PERQemu.Sys == null)
             {
-                Console.WriteLine("Cannot execute; the PERQ is not powered on.");
-                return false;
+                Console.WriteLine("No PERQ defined.");
+                return;
             }
-            return true;
+
+            PERQemu.Sys.Debugger.ShowVariables();
         }
 
         //
@@ -328,7 +333,7 @@ namespace PERQemu
             PERQemu.CLI.Columnify(values);
         }
 
-        // todo: if :xy[n] works, and :xy[n]=m works, then these could be removed
+        // Todo: if :xy[n] works, and :xy[n]=m works, then these could be removed
         // and the previous one could be "show xy registers" to dump all of 'em
 
         [Command("debug show xy register", "Display the value of an XY register")]
@@ -348,6 +353,10 @@ namespace PERQemu
             PERQemu.Sys.CPU.WriteRegister(reg, (int)val);   // Clips to 20-24 bits
             Console.WriteLine("XY[{0:x2}]={1:x6}", reg, PERQemu.Sys.CPU.ReadRegister(reg));
         }
+
+        #endregion
+
+        #region Memory and RasterOp
 
         //
         // Memory and RasterOp
@@ -374,7 +383,7 @@ namespace PERQemu
                 var line = new StringBuilder();
                 line.AppendFormat("{0:x6}: ", i);
 
-                // Words in hex (todo: add output radix support)
+                // Words in hex (Todo: add output radix support)
                 for (var j = i; j < i + 8; j++)
                 {
                     line.AppendFormat("{0:x4} ", PERQemu.Sys.Memory.FetchWord(j));
@@ -396,7 +405,6 @@ namespace PERQemu
             }
         }
 
-#if DEBUG
         [Command("debug find memory", "Find a specific value in the PERQ's memory [@start, val]")]
         void FindMemory(uint startAddress, ushort val)
         {
@@ -416,6 +424,7 @@ namespace PERQemu
             }
         }
 
+#if DEBUG
         [Command("debug set memory", "Write a specific value in the PERQ's memory")]
         void SetMemory(uint address, ushort val)
         {
@@ -471,59 +480,111 @@ namespace PERQemu
         }
 #endif
 
+        #endregion
+
+        #region Microcode and Qcode
+
         //
-        // Interrupts and I/O
+        // Microcode
         //
 
-        [Command("debug raise interrupt", "Assert a specific CPU interrupt")]
-        public void RaiseInterrupt(InterruptSource irq)
+        [Command("debug load microcode", "Load a microcode binary into the control store")]
+        void LoadMicrocode([PathExpand] string binfile)
         {
-            if (CheckSys()) PERQemu.Sys.CPU.RaiseInterrupt(irq);
-        }
+            if (!CheckSys()) return;
 
-        [Command("debug clear interrupt", "Clear a specific CPU interrupt")]
-        public void ClearInterrupt(InterruptSource irq)
-        {
-            if (CheckSys()) PERQemu.Sys.CPU.ClearInterrupt(irq);
-        }
-
-        [Command("debug set ethernet status", "Force a return status code from the fake Ethernet device")]
-        public void SetEtherStatus(byte status)
-        {
-            if (CheckSys())
+            try
             {
-                var oio = PERQemu.Sys.OIO as IO.OIO;
-                oio.Ether.SetStatus(status);
+                // Todo: Whoops, should probably not do this IF THE MACHINE IS RUNNING
+                PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(binfile));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unable to load microcode from '{binfile}': {e.Message}");
             }
         }
 
-        [Command("debug patch ethernet status", "HACK to patch instruction to check Ethernet status (Accent S7)")]
-        public void PatchEther()
+        [Command("debug disassemble microcode", "Disassemble microinstructions (@ current PC)")]
+        void DisassembleMicrocode()
         {
-            if (CheckSys())
+            DisassembleMicrocode(PERQemu.Sys.CPU.PC, 16);
+        }
+
+        [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr])")]
+        void DisassembleMicrocode(ushort startAddress)
+        {
+            DisassembleMicrocode(startAddress, 16);
+        }
+
+        [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
+        void DisassembleMicrocode(ushort startAddress, ushort length)
+        {
+            if (!CheckSys()) return;
+
+            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
+
+            if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
             {
-                var inst = PERQemu.Sys.CPU.GetInstruction(0xdbc);
-                Console.WriteLine($"Instruction at 0x0dbc is {inst}");
+                Console.WriteLine("Address out of range 0..{0}", PERQemu.Sys.CPU.Microcode.Length - 1);
+                return;
+            }
 
-                // If it's an "or not", patch the ALU op to an "and"
-                if (inst.UCode == 0xb3ef5a324203)
-                {
-                    Console.WriteLine("Patching the instruction!");
-
-                    // New inst is: b3ef 5932 4203;
-                    // scrambled:   b3ef 03b2 4249
-                    // inverted:    b3ef fc4d bdb6
-
-                    // Rewrite the low and middle words!
-                    PERQemu.Sys.CPU.WCS.WriteControlStore(CPU.ControlStoreWord.Low, 0xdbc, 0xbdb6);
-                    PERQemu.Sys.CPU.WCS.WriteControlStore(CPU.ControlStoreWord.Middle, 0xdbc, 0xfc4d);
-
-                    // Confirmation
-                    inst = PERQemu.Sys.CPU.GetInstruction(0xdbc);
-                    Console.WriteLine($"Instruction at 0x0dbc is {inst}");
-                }
+            // Disassemble microcode
+            for (ushort i = startAddress; i < endAddr; i++)
+            {
+                var line = Disassembler.Disassemble(i, PERQemu.Sys.CPU.GetInstruction(i));
+                Console.WriteLine(line);
             }
         }
+
+        [Command("debug jump", "Start or resume execution at a given microaddress")]
+        void JumpTo(ushort nextPC)
+        {
+            if (!CheckSys()) return;
+
+            if (nextPC > PERQemu.Sys.CPU.Microcode.Length - 1)
+            {
+                Console.WriteLine("Address out of range 0..{0}; PC not modified.",
+                                  PERQemu.Sys.CPU.Microcode.Length - 1);
+            }
+            else
+            {
+                PERQemu.Sys.CPU.PC = nextPC;
+                // resume execution
+            }
+        }
+
+        [Command("debug load qcodes", "Load Q-code definitions for opcode disassembly")]
+        void LoadQCodes(QCodeSets qcodes)
+        {
+            QCodeHelper.LoadQCodeSet(qcodes);
+        }
+
+        /// <summary>
+        /// Leverage the Instruction/ControlStore code to assist in building
+        /// boot ROM images from raw hex dumps.  (Once they're all successfully
+        /// ripped, converted to binaries and tested, this can be removed.)
+        /// </summary>
+        [Conditional("DEBUG")]
+        [Command("debug make boot prom", Discreet = true)]
+        void MakeROM(string basename, string output, bool fourk)
+        {
+            // Turn on logging
+            Log.Categories |= Category.Microstore;
+            Log.Level = Severity.Debug;
+
+            var grinder = new Unscrambler();
+
+            grinder.MakeBootPROM(basename, output, fourk);
+
+            Console.WriteLine("\nDisassembly:");
+            grinder.Reload(output);
+            grinder.ShowDisassembly();
+        }
+
+        #endregion
+
+        #region Breakpoints
 
 #if DEBUG
         //
@@ -870,135 +931,24 @@ namespace PERQemu
             Console.WriteLine($"CPU Interrupt {irq} now {status}");
         }
 #endif
+        #endregion
+
+        #region I/O
 
         //
-        // Microcode
+        // Interrupts and I/O devices
         //
 
-        [Command("debug load microcode", "Load a microcode binary into the control store")]
-        void LoadMicrocode([PathExpand] string binfile)
+        [Command("debug raise interrupt", "Assert a specific CPU interrupt")]
+        public void RaiseInterrupt(InterruptSource irq)
         {
-            if (!CheckSys()) return;
-
-            try
-            {
-                // todo: whoops, should probably not do this IF THE MACHINE IS RUNNING
-                PERQemu.Sys.CPU.LoadMicrocode(Paths.Canonicalize(binfile));
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"Unable to load microcode from '{binfile}': {e.Message}");
-            }
+            if (CheckSys()) PERQemu.Sys.CPU.RaiseInterrupt(irq);
         }
 
-        [Command("debug disassemble microcode", "Disassemble microinstructions (@ current PC)")]
-        void DisassembleMicrocode()
+        [Command("debug clear interrupt", "Clear a specific CPU interrupt")]
+        public void ClearInterrupt(InterruptSource irq)
         {
-            DisassembleMicrocode(PERQemu.Sys.CPU.PC, 16);
-        }
-
-        [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr])")]
-        void DisassembleMicrocode(ushort startAddress)
-        {
-            DisassembleMicrocode(startAddress, 16);
-        }
-
-        [Command("debug disassemble microcode", "Disassemble microinstructions (@ [addr, len])")]
-        void DisassembleMicrocode(ushort startAddress, ushort length)
-        {
-            if (!CheckSys()) return;
-
-            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
-
-            if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
-            {
-                Console.WriteLine("Address out of range 0..{0}", PERQemu.Sys.CPU.Microcode.Length - 1);
-                return;
-            }
-
-            // Disassemble microcode
-            for (ushort i = startAddress; i < endAddr; i++)
-            {
-                var line = Disassembler.Disassemble(i, PERQemu.Sys.CPU.GetInstruction(i));
-                Console.WriteLine(line);
-            }
-        }
-
-        [Command("debug jump", "Start or resume execution at a given microaddress")]
-        void JumpTo(ushort nextPC)
-        {
-            if (!CheckSys()) return;
-
-            if (nextPC > PERQemu.Sys.CPU.Microcode.Length - 1)
-            {
-                Console.WriteLine("Address out of range 0..{0}; PC not modified.",
-                                  PERQemu.Sys.CPU.Microcode.Length - 1);
-            }
-            else
-            {
-                PERQemu.Sys.CPU.PC = nextPC;
-                // resume execution
-            }
-        }
-
-        [Command("debug load qcodes", "Load Q-code definitions for opcode disassembly")]
-        void LoadQCodes(QCodeSets qcodes)
-        {
-            QCodeHelper.LoadQCodeSet(qcodes);
-        }
-
-        /// <summary>
-        /// Leverage the Instruction/ControlStore code to assist in building
-        /// boot ROM images from raw hex dumps.  (Once they're all successfully
-        /// ripped, converted to binaries and tested, this can be removed.)
-        /// </summary>
-        [Conditional("DEBUG")]
-        [Command("debug make boot prom", Discreet = true)]
-        void MakeROM(string basename, string output, bool fourk)
-        {
-            // Turn on logging
-            Log.Categories |= Category.Microstore;
-            Log.Level = Severity.Debug;
-
-            var grinder = new Unscrambler();
-
-            grinder.MakeBootPROM(basename, output, fourk);
-
-            Console.WriteLine("\nDisassembly:");
-            grinder.Reload(output);
-            grinder.ShowDisassembly();
-        }
-
-        //
-        // Miscellany and temporary/debugging hacks
-        //
-
-        [Conditional("DEBUG")]
-        [Command("debug dump scheduler queue")]
-        void DumpScheduler()
-        {
-            PERQemu.Sys.Scheduler.DumpEvents("CPU");
-        }
-
-        [Conditional("DEBUG")]
-        [Command("debug dump timers")]
-        void DumpTimers()
-        {
-            HighResolutionTimer.DumpTimers();
-        }
-
-        [Conditional("DEBUG")]
-        [Command("debug dump fifos")]
-        void DumpFifos()
-        {
-            PERQemu.Sys.IOB.Z80System.DumpFifos();
-        }
-
-        [Conditional("DEBUG")]
-        [Command("debug dump qcodes")]
-        void DumpQcodes()
-        {
-            QCodeHelper.DumpContents();
+            if (CheckSys()) PERQemu.Sys.CPU.ClearInterrupt(irq);
         }
 
         [Command("debug dump rs232a")]
@@ -1010,16 +960,23 @@ namespace PERQemu
         [Command("debug dump streamer")]
         void ShowStreamerStatus()
         {
+            if (!CheckSys()) return;
+
             if (PERQemu.Sys.OIO != null)
             {
-                var hack = PERQemu.Sys.OIO as IO.OIO;
-                hack.DumpTapeStatus();
-                return;
+                var oio = PERQemu.Sys.OIO as IO.OIO;
+
+                if (oio.Streamer != null)
+                {
+                    oio.Streamer.DumpStatus();
+                    return;
+                }
             }
 
             Console.WriteLine("No streamer drive.");
         }
 
+        [Conditional("DEBUG")]
         [Command("debug show tape block", "Show contents of a tape block")]
         void ShowStreamerBlock(int pos)
         {
@@ -1061,6 +1018,60 @@ namespace PERQemu
 
                 Console.WriteLine(line);
             }
+        }
+
+
+        [Command("debug dump ethernet", "Dump the internal state of the fake Ethernet device")]
+        public void ShowEtherStatus()
+        {
+            if (!CheckSys()) return;
+
+            if (PERQemu.Sys.OIO != null)
+            {
+                var oio = PERQemu.Sys.OIO as IO.OIO;
+
+                if (oio.Ether != null)
+                {
+                    oio.Ether.DumpEther();
+                    return;
+                }
+            }
+
+            Console.WriteLine("No Ethernet interface configured.");
+        }
+
+        #endregion
+
+        //
+        // Miscellany and temporary/debugging hacks
+        //
+
+        [Conditional("DEBUG")]
+        [Command("debug dump scheduler queue")]
+        void DumpScheduler()
+        {
+            PERQemu.Sys.Scheduler.DumpEvents("CPU");
+        }
+
+        [Conditional("DEBUG")]
+        [Command("debug dump timers")]
+        void DumpTimers()
+        {
+            HighResolutionTimer.DumpTimers();
+        }
+
+        [Conditional("DEBUG")]
+        [Command("debug dump fifos")]
+        void DumpFifos()
+        {
+            PERQemu.Sys.IOB.Z80System.DumpFifos();
+        }
+
+        [Conditional("DEBUG")]
+        [Command("debug dump qcodes")]
+        void DumpQcodes()
+        {
+            QCodeHelper.DumpContents();
         }
 
 #if DEBUG

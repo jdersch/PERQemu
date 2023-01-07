@@ -158,14 +158,11 @@ namespace PERQemu.Config
         /// </summary>
         public bool AddPrefab(Configuration conf)
         {
-            if (_prefabs.ContainsKey(conf.Key))
+            if (!_prefabs.ContainsKey(conf.Key))
             {
-                Log.Warn(Category.MediaLoader, "Prefabs list already contains '{0}'", conf.Key);
-                return false;
+                Log.Detail(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
+                _prefabs.Add(conf.Key, conf);
             }
-
-            Log.Detail(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
-            _prefabs.Add(conf.Key, conf);
 
             // Now go update the "Configs" keyword nodes
             PERQemu.CLI.UpdateKeywordMatchHelpers("Configs", GetPrefabs());

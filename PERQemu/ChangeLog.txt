@@ -576,5 +576,22 @@ December, 2022:
     PERQmedia, updates to the User's Guide.
 
 
+January, 2023!
+
+    1. Okay, I lied.  While the v0.4.8 pre-release was supposed to be the last
+    one, a couple of important bug fixes justify another point release:
+
+        Shugart hard disk "seek complete"/"on cylinder" status bit corrected;
+
+        Fake Ethernet driver is now loaded when the "OIO" option board is
+        selected; this now allows Accent S6 to initialize properly so its
+        floppy and serial port device servers can start up;
+
+        Linked the TestEther program in :boot>diags (POS G.7).
+
+    The bundled Disks/g7.prqm image incorporates these changes.  Updates to the
+    User's Guide explain how to configure the OIO to boot Accent.
+
+
 ---
-Last update: skeezics    Wed Dec 28 01:22:37 PST 2022
+Last update: skeezics    Sat Jan  7 00:29:16 PST 2023

@@ -1,5 +1,6 @@
 PERQemu Source - Readme
 
+v1.9 - 1/7/2023 - skeezics
 v1.8 - 12/18/2022 - skeezics
 v1.7 - 9/19/2022 - skeezics
 v1.6 - 11/29/2021 - skeezics
@@ -57,10 +58,11 @@ runs the POS "burn in" code (i.e. the SIGGRAPH demos) it's good to go!
 --------------------
 
 The next release will incorporate major changes and expanded functionality.
-It is currently in development on the "experiments" branch as PERQemu 0.4.6
+It is currently in development on the "experiments" branch as PERQemu 0.4.9
 but should warrant a bump to 0.5 given the scope of the changes.
 
-The experimental branch is being bumped to v0.4.8 (streamer added).
+PERQemu 0.4.9 adds a temporary "fake Ethernet" device and Shugart bug fix.
+The main branch is being bumped to v0.4.8 (streamer added).
 PERQemu 0.4.6 was a pre-release snapshot to preview v0.5.0 changes.
 PERQemu 0.4.5beta was an experimental/interim release for VCF PNW.
 The sixth snapshot was the first Github-tagged release, PERQemu 0.4.4.
@@ -509,6 +511,18 @@ The SystemTimer provides a "heartbeat" used to regulate the execution speed of
 the emulated PERQ in the real time domain.  It uses the HighResolutionTimer to
 try to limit the emulation to exactly 60fps (170ns CPU cycle) on fast hardware
 when the "CPUSpeed" RateLimit option setting is enabled.
+
+
+2.3.8  Network
+--------------
+
+An initial stab at implementing the PERQ side of the Ethernet interface is now
+included.  IO/Network/FakeEthernet.cs provides enough functionality to allow the
+OS to see that the hardware is present and retrieve the MAC address.  Packets
+queued for transmission just disappear; nothing is ever received.  This allows
+Accent to properly initialize.  It's the first step toward getting a real 
+Ethernet interface so that the emulator can talk to the outside world at speeds
+greater than 9600 baud. :-)
 
 
 2.4  The Debugger / Console interface

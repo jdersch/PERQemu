@@ -270,7 +270,7 @@ namespace PERQemu.IO.DiskDevices
                         (int)((_disk.Index ? HardStatus.Index : 0) |
                               (_disk.Track0 ? HardStatus.TrackZero : 0) |
                               (_disk.Fault ? HardStatus.DriveFault : 0) |
-                              (_disk.SeekComplete ? 0 : HardStatus.SeekComplete) |  // On Cylinder (inverted)
+                              (_disk.SeekComplete ? HardStatus.SeekComplete : 0) |
                               (_disk.Ready ? HardStatus.UnitReady : 0))));
             }
         }
