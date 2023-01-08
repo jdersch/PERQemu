@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -238,7 +238,7 @@ namespace PERQmedia
                 var sec = _sectorOrdering[i];
                 var sector = new Sector(cyl, head, sec, _sectorSize, 0);
 
-                SectorRecordType type = (SectorRecordType)fs.ReadByte();
+                var type = (SectorRecordType)fs.ReadByte();
 
                 Log.Detail(Category.MediaLoader,
                            "Reading sector {0} (mapped {1}), type {2} @ {3}",
@@ -290,7 +290,7 @@ namespace PERQmedia
         /// <summary>
         /// Fill all the bytes in a sector with a particular value.
         /// </summary>
-        private void Fill(Sector s, byte val)
+        void Fill(Sector s, byte val)
         {
             for (uint i = 0; i < s.Data.Length; i++)
                 s.WriteByte(i, val);
@@ -364,7 +364,7 @@ namespace PERQmedia
             _sectorSize = dev.Geometry.SectorSize;
 
             byte format = DoubleDensity ? (byte)Modulation.MFM500 : (byte)Modulation.FM500;
-            byte count = (byte)dev.Geometry.Sectors;
+            var count = (byte)dev.Geometry.Sectors;
 
             Log.Detail(Category.MediaLoader,
                        "WriteTracks {0} heads, size {1}, fmt {2}, count {3}",
@@ -470,7 +470,7 @@ namespace PERQmedia
         // 07 .... Deleted data read with data error
         // 08 xx Compressed, Deleted read with data error
         // 
-        private enum SectorRecordType
+        enum SectorRecordType
         {
             Unavailable = 0,
             Normal = 1,
@@ -502,17 +502,17 @@ namespace PERQmedia
 
 
         // Temporary storage for reading 'em in
-        private List<Sector> _sectors;
-        private List<ushort> _sectorOrdering;
+        List<Sector> _sectors;
+        List<ushort> _sectorOrdering;
 
         // Flags based on the data that comes in
-        private byte _heads;
-        private ushort _sectorSize;
+        byte _heads;
+        ushort _sectorSize;
 
         // Sector sizes that IMD supports
-        private static ushort[] _sectorSizes = { 128, 256, 512, 1024, 2048, 4096, 8192 };
+        static ushort[] _sectorSizes = { 128, 256, 512, 1024, 2048, 4096, 8192 };
 
         // Compatible version: IMD 1.18
-        private readonly byte _imdVersion = 118;
+        readonly byte _imdVersion = 118;
     }
 }

@@ -243,7 +243,7 @@ namespace PERQemu.Config
         /// Scan the Conf dir for saved system configs and preload them into
         /// the Prefabs list.  Sure.  Why not.
         /// </summary>
-        private void LoadPrefabs()
+        void LoadPrefabs()
         {
             // Let's be discreet, shall we?
             _quietly = true;
@@ -995,14 +995,14 @@ namespace PERQemu.Config
         public const int MAX_MEMORY = 1024 * 1024 * 8;
 
         // For preloading, discreetly
-        private bool _quietly;
+        bool _quietly;
 
-        private Hashtable _prefabs;
-        private Hashtable _geometries;
-        private Hashtable _driveSpecs;
-        private Hashtable _knownDrives;
+        Hashtable _prefabs;
+        Hashtable _geometries;
+        Hashtable _driveSpecs;
+        Hashtable _knownDrives;
 
-        private Configuration _default;
-        private Configuration _current;
+        Configuration _default;
+        Configuration _current;
     }
 }

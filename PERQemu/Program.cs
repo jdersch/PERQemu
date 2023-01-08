@@ -1,5 +1,5 @@
 //
-// Program.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Program.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -158,7 +158,7 @@ namespace PERQemu
 #endif
         }
 
-        public static string Copyright = "Copyright (c) 2006-2022, J. Dersch (derschjo@gmail.com)\n" +
+        public static string Copyright = "Copyright (c) 2006-2023, J. Dersch (derschjo@gmail.com)\n" +
                                          "Feebly assisted by S. Boondoggle (skeezicsb@gmail.com)";
 
         public static string Version => _version;
@@ -176,9 +176,9 @@ namespace PERQemu
         /// <summary>
         /// Quick and dirty command line parsing.
         /// </summary>
-        private static CmdLineArgs ParseArgs(string[] args)
+        static CmdLineArgs ParseArgs(string[] args)
         {
-            CmdLineArgs sw = new CmdLineArgs();
+            var sw = new CmdLineArgs();
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -221,16 +221,16 @@ namespace PERQemu
             public string runScript;
         }
 
-        private static string _version;
-        private static string _baseDir;
-        private static bool _hostIsUnix;
-        private static bool _initialized;
+        static string _version;
+        static string _baseDir;
+        static bool _hostIsUnix;
+        static bool _initialized;
 
-        private static CmdLineArgs _switches;
-        private static EventLoop _gui;
-        private static CommandProcessor _cli;
+        static CmdLineArgs _switches;
+        static EventLoop _gui;
+        static CommandProcessor _cli;
 
-        private static Configurator _config;
-        private static ExecutionController _controller;
+        static Configurator _config;
+        static ExecutionController _controller;
     }
 }

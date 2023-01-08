@@ -1,5 +1,5 @@
 ﻿//
-// CallStack.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CallStack.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -33,7 +33,7 @@ namespace PERQemu.Processor
         /// are not affected by overflow from the lower 12 bits; this class
         /// manages that logic.
         /// </remarks>
-        private sealed class CallStack
+        sealed class CallStack
         {
             public CallStack()
             {
@@ -119,7 +119,7 @@ namespace PERQemu.Processor
             /// </summary>
             public ushort PopFull()
             {
-                ushort address = (ushort)(_loStack[_loStackPtr] | _hiStack[_hiStackPtr]);
+                var address = (ushort)(_loStack[_loStackPtr] | _hiStack[_hiStackPtr]);
 
                 if (_loStackPtr > 0) { _loStackPtr--; }
                 if (_hiStackPtr > 0) { _hiStackPtr--; }
@@ -133,7 +133,7 @@ namespace PERQemu.Processor
             /// </summary>
             public ushort TopFull()
             {
-                ushort address = (ushort)(_loStack[_loStackPtr] | _hiStack[_hiStackPtr]);
+                var address = (ushort)(_loStack[_loStackPtr] | _hiStack[_hiStackPtr]);
 
                 Log.Debug(Category.Sequencer, "Returned {0:x4} from top of call stack", address);
                 return address;
@@ -171,19 +171,19 @@ namespace PERQemu.Processor
             }
 
             // Am2910 call stack limits
-            private const int StackSize = 6;
-            private const int StackLimit = StackSize - 1;
+            const int StackSize = 6;
+            const int StackLimit = StackSize - 1;
 
             // Low 12 bits (2910)
-            private ushort[] _loStack;
-            private int _loStackPtr;
+            ushort[] _loStack;
+            int _loStackPtr;
 
             // Upper bits (extra logic)
-            private ushort[] _hiStack;
-            private int _hiStackPtr;
+            ushort[] _hiStack;
+            int _hiStackPtr;
 
             // Housekeeping
-            private int _wcsHiMask;
+            int _wcsHiMask;
         }
     }
 }

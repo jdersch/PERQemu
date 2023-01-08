@@ -1,5 +1,5 @@
 //
-// Shifter.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Shifter.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -23,7 +23,6 @@ namespace PERQemu.Processor
 {
     public partial class CPU
     {
-
         public enum ShifterCommand
         {
             LeftShift = 0,
@@ -132,7 +131,7 @@ namespace PERQemu.Processor
             /// <summary>
             /// Precomputes all possible shifter values to make computation at runtime cheap.
             /// </summary>
-            private static void BuildShifterTable()
+            static void BuildShifterTable()
             {
                 _shifterTable = new ShifterTableEntry[0x100];
 
@@ -168,7 +167,7 @@ namespace PERQemu.Processor
                 }
             }
 
-            private struct ShifterTableEntry
+            struct ShifterTableEntry
             {
                 public ShifterCommand Command;
                 public int ShiftAmount;
@@ -176,8 +175,8 @@ namespace PERQemu.Processor
             }
 
             private ushort _output;
-            private ShifterTableEntry _params;
-            private static ShifterTableEntry[] _shifterTable;
+            ShifterTableEntry _params;
+            static ShifterTableEntry[] _shifterTable;
         }
     }
 }

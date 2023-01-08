@@ -1,5 +1,5 @@
 ﻿//
-// SystemTimer.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// SystemTimer.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -23,7 +23,7 @@ namespace PERQemu
 {
     /// <summary>
     /// Provides a heartbeat timer with a high-resolution interval.  Used to
-    /// gate real-time CPU execution (both the PERQ and Z80 processors).
+    /// gate real-time CPU execution.
     /// </summary>
     public class SystemTimer
     {
@@ -110,11 +110,11 @@ namespace PERQemu
             _sync.Set();
         }
 
-        private int _handle;
-        private bool _isEnabled;
-        private uint _period;
-        private double _interval;
-        private HRTimerElapsedCallback _callback;
-        private ManualResetEventSlim _sync;
+        int _handle;
+        bool _isEnabled;
+        uint _period;
+        double _interval;
+        HRTimerElapsedCallback _callback;
+        ManualResetEventSlim _sync;
     }
 }

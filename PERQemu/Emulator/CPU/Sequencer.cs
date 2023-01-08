@@ -1,5 +1,5 @@
 ﻿//
-// Sequencer.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Sequencer.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -454,7 +454,7 @@ namespace PERQemu.Processor
             /// so that case is handled elsewhere.)
             /// </remarks>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private void DoNextInst(Instruction uOp)
+            void DoNextInst(Instruction uOp)
             {
                 QCode q;
                 byte next = _cpu._opFile[_cpu.BPC];
@@ -509,22 +509,22 @@ namespace PERQemu.Processor
 
 
             // Access to the surrounding class
-            private CPU _cpu;
+            CPU _cpu;
 
             // 2910 S register
-            private ExtendedRegister _s;
+            ExtendedRegister _s;
 
             // Microcode address
-            private ExtendedRegister _pc;
+            ExtendedRegister _pc;
 
             // Victim latch
-            private ExtendedRegister _victim;
+            ExtendedRegister _victim;
 
             // 2910 call stack
-            private CallStack _callStack;
+            CallStack _callStack;
 
             // Support decoding two-byte ops
-            private bool _extendedOp;
+            bool _extendedOp;
         }
     }
 }

@@ -1,5 +1,5 @@
 //
-// ExecutionController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ExecutionController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -194,13 +194,13 @@ namespace PERQemu
         /// </remarks>
         public void Reset()
         {
+            _bootKeyArmed = true;
+
             // If no system, quietly no-op
             if (State > RunState.Off)
             {
                 TransitionTo(RunState.Reset);
                 Console.WriteLine("PERQ system reset.");
-
-                _bootKeyArmed = true;
 
                 if (State == RunState.Paused && !Settings.PauseOnReset)
                 {
@@ -310,7 +310,7 @@ namespace PERQemu
         /// that the keystroke is actually sent to the PERQ in a message -- it
         /// isn't enough to just have the boot character in the keyboard buffer!
         /// </remarks>
-        private void BootCharCallback(ulong skewNsec, object context)
+        void BootCharCallback(ulong skewNsec, object context)
         {
             var count = (int)context - 1;
 
@@ -419,7 +419,7 @@ namespace PERQemu
         /// <summary>
         /// Initiate a state change in the current PERQsystem.
         /// </summary>
-        private void SetState(RunState s)
+        void SetState(RunState s)
         {
             RunStateChangeEventHandler handler = RunStateChanged;
 
@@ -434,116 +434,116 @@ namespace PERQemu
         /// Set up table of legal transitions and the steps needed to get there.
         /// This is either brilliant, or insane.  ¯\_(ツ)_/¯
         /// </summary>
-        private void InitStateMachine()
+        void InitStateMachine()
         {
-            _SMDict = new Dictionary<SMKey, List<Transition>>() {
+            _SMDict = new Dictionary<SMKey, List<Transition>> {
                 {
-                    new SMKey(RunState.WarmingUp, RunState.Reset), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.Reset), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.Paused), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.Paused), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.RunInst), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.RunInst), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.RunInst); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.RunZ80Inst), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.RunZ80Inst), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.RunZ80Inst); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.SingleStep), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.SingleStep), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.SingleStep); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.Running), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.Running), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.Halted), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.Halted), new List<Transition> {
                         new Transition(() => { SetState(RunState.Halted); }, RunState.Halted) }
                 },
                 {
-                    new SMKey(RunState.WarmingUp, RunState.Off), new List<Transition>() {
+                    new SMKey(RunState.WarmingUp, RunState.Off), new List<Transition> {
                         new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.Reset), new List<Transition>() {
+                    new SMKey(RunState.Paused, RunState.Reset), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.RunInst), new List<Transition>() {
+                    new SMKey(RunState.Paused, RunState.RunInst), new List<Transition> {
                         new Transition(() => { SetState(RunState.RunInst); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.RunZ80Inst), new List<Transition>() {
+                    new SMKey(RunState.Paused, RunState.RunZ80Inst), new List<Transition> {
                         new Transition(() => { SetState(RunState.RunZ80Inst); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.SingleStep), new List<Transition>() {
+                    new SMKey(RunState.Paused, RunState.SingleStep), new List<Transition> {
                         new Transition(() => { SetState(RunState.SingleStep); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.Running), new List<Transition>() {
+                    new SMKey(RunState.Paused, RunState.Running), new List<Transition> {
                         new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
                 },
                 {
-                    new SMKey(RunState.Paused, RunState.Off), new List<Transition>() {
+                    new SMKey(RunState.Paused, RunState.Off), new List<Transition> {
                         new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
-                    new SMKey(RunState.Running, RunState.Paused), new List<Transition>() {
+                    new SMKey(RunState.Running, RunState.Paused), new List<Transition> {
                         new Transition(() => { SetState(RunState.Paused); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Running, RunState.Reset), new List<Transition>() {
+                    new SMKey(RunState.Running, RunState.Reset), new List<Transition> {
                         new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Running, RunState.RunInst), new List<Transition>() {
+                    new SMKey(RunState.Running, RunState.RunInst), new List<Transition> {
                         new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.RunInst); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Running, RunState.RunZ80Inst), new List<Transition>() {
+                    new SMKey(RunState.Running, RunState.RunZ80Inst), new List<Transition> {
                         new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.RunZ80Inst); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Running, RunState.SingleStep), new List<Transition>() {
+                    new SMKey(RunState.Running, RunState.SingleStep), new List<Transition> {
                         new Transition(() => { SetState(RunState.Paused); }, RunState.Paused),
                         new Transition(() => { SetState(RunState.SingleStep); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Running, RunState.Off), new List<Transition>() {
+                    new SMKey(RunState.Running, RunState.Off), new List<Transition> {
                         new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
-                    new SMKey(RunState.Halted, RunState.Reset), new List<Transition>() {
+                    new SMKey(RunState.Halted, RunState.Reset), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
                 },
                 {
-                    new SMKey(RunState.Halted, RunState.Off), new List<Transition>() {
+                    new SMKey(RunState.Halted, RunState.Off), new List<Transition> {
                         new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 }
             };
         }
 
         // To encode our state machine transitions
-        private Dictionary<SMKey, List<Transition>> _SMDict;
+        Dictionary<SMKey, List<Transition>> _SMDict;
 
-        private ExecutionMode _mode;
+        ExecutionMode _mode;
 
-        private static byte _bootChar;
-        private bool _bootKeyArmed;
+        static byte _bootChar;
+        bool _bootKeyArmed;
 
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }

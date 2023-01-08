@@ -1,5 +1,5 @@
 ﻿//
-// Sidewinder.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Sidewinder.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -250,7 +250,7 @@ namespace PERQemu.IO.TapeDevices
         /// Once accepted, return true until the command being executed completes
         /// and resets the state machine.
         /// </summary>
-        private bool GetCommandByte()
+        bool GetCommandByte()
         {
             if (_phase >= Phase.Accepted) return true;
 

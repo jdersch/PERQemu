@@ -1,5 +1,5 @@
 //
-// RegisterFile.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// RegisterFile.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -28,7 +28,7 @@ namespace PERQemu.Processor
         /// general purpose registers.  For the 16K and newer CPUs, includes
         /// the base register indexing feature.
         /// </summary>
-        private class RegisterFile
+        class RegisterFile
         {
             public RegisterFile()
             {
@@ -65,10 +65,8 @@ namespace PERQemu.Processor
                 {
                     return _registers[addr | _registerBase];
                 }
-                else
-                {
-                    return _registers[addr];
-                }
+
+                return _registers[addr];
             }
 
             /// <summary>
@@ -99,10 +97,10 @@ namespace PERQemu.Processor
             }
 
             // XY registers
-            private int[] _registers;
+            int[] _registers;
 
             // Base register
-            private byte _registerBase;
+            byte _registerBase;
         }
     }
 }

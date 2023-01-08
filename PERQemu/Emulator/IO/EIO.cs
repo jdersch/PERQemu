@@ -1,5 +1,5 @@
 //
-// EIO.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// EIO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -161,7 +161,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Ports handled by the EIO.  (But no Ethernet on NIO.)
         /// </summary>
-        private byte[] _handledPorts =
+        byte[] _handledPorts =
         {
             // Z80
             0x54,       // 124 EioZ80In: dismiss Z80 interrupt

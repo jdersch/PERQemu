@@ -1,5 +1,5 @@
 //
-// PERQSystem.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// PERQSystem.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -148,7 +148,7 @@ namespace PERQemu
             _volumes = new StorageDevice[_conf.Drives.Length];
 
             // Attach a debugger!
-            _debugger = new PERQDebugger(new List<object>() { _cpu.Processor });
+            _debugger = new PERQDebugger(new List<object> { _cpu.Processor });
 
             // Set our initial state; instantiated but not yet initialized...
             // shouldn't this just be... "On"?  Sigh.
@@ -195,7 +195,7 @@ namespace PERQemu
         /// for debugging, or on uniprocessor systems.  (A "uniprocessor"?
         /// Is that like a "land line" or a "glacier"?)
         /// </summary>
-        private void SetMode()
+        void SetMode()
         {
             _mode = PERQemu.Controller.Mode;
 
@@ -207,7 +207,7 @@ namespace PERQemu
             }
         }
 
-        private void OnRunStateChange(RunStateChangeEventArgs s)
+        void OnRunStateChange(RunStateChangeEventArgs s)
         {
             _state = s.State;
 
@@ -333,7 +333,7 @@ namespace PERQemu
         /// Executes the specified emulation delegate inside a try/catch block that
         /// properly handles PowerDown and other exceptions to return to debug state.
         /// </summary>
-        private void RunGuarded(RunDelegate execute)
+        void RunGuarded(RunDelegate execute)
         {
             try
             {
@@ -354,8 +354,7 @@ namespace PERQemu
             Log.Error(Category.All, "\nBreak due to internal emulation error: {0}", e.Message);
             Log.Error(Category.All, "System state may be inconsistent.\n");
 #if DEBUG
-            // Dubious usefulness...
-            Log.Write(Environment.StackTrace);
+            Log.Write(e.StackTrace);
 #endif
             // Make sure both threads stop
             PERQemu.Controller.TransitionTo(RunState.Halted);
@@ -601,7 +600,7 @@ namespace PERQemu
         /// manual step at a time.  Because why even bother with constructors
         /// when this is so much more fun?  <jams_dull_spoon_into_brain>
         /// </summary>
-        private SDL.SDL_MessageBoxData MakeMessageBox(StorageDevice dev, int unit)
+        SDL.SDL_MessageBoxData MakeMessageBox(StorageDevice dev, int unit)
         {
             var yesBtn = new SDL.SDL_MessageBoxButtonData();
             yesBtn.buttonid = 0;
@@ -633,7 +632,7 @@ namespace PERQemu
         /// if it should be saved or not.  For Yes or No does the obvious thing;
         /// for Maybe it pops up a dialog and lets the user decide.
         /// </summary>
-        private bool SaveRequested(int unit)
+        bool SaveRequested(int unit)
         {
             var dev = _volumes[unit];
             bool doit = false;
@@ -777,27 +776,27 @@ namespace PERQemu
 
 
         // The PERQ
-        private Configuration _conf;
-        private CPUBoard _cpu;
-        private MemoryBoard _mem;
-        private IOBus _ioBus;
-        private IOBoard _iob;
-        private OptionBoard _oio;
+        Configuration _conf;
+        CPUBoard _cpu;
+        MemoryBoard _mem;
+        IOBus _ioBus;
+        IOBoard _iob;
+        OptionBoard _oio;
 
         // Drives attached to this PERQ
-        private StorageDevice[] _volumes;
+        StorageDevice[] _volumes;
 
         // User interface hooks (SDL)
-        private Display _display;
-        private InputDevices _inputs;
+        Display _display;
+        InputDevices _inputs;
 
         // Debugger
-        private PERQDebugger _debugger;
+        PERQDebugger _debugger;
 
         // Controlly bits
-        private ExecutionMode _mode;
-        private volatile RunState _state;
+        ExecutionMode _mode;
+        volatile RunState _state;
 
-        private delegate void RunDelegate();
+        delegate void RunDelegate();
     }
 }

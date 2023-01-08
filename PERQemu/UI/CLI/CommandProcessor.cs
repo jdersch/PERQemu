@@ -184,7 +184,7 @@ namespace PERQemu
         /// <summary>
         /// Catch changes in the machine state to update the CLI.
         /// </summary>
-        private void OnRunStateChange(RunStateChangeEventArgs a)
+        void OnRunStateChange(RunStateChangeEventArgs a)
         {
             var state = a.State;
 
@@ -302,7 +302,7 @@ namespace PERQemu
         void LaunchGUI()
         {
             // I'm looking at YOU, 64-bit Cocoa WinForms port that was promised
-            // over three YEARS ago.  Sigh.
+            // over four YEARS ago.  Sigh.
             Console.WriteLine("Nope.  No cross-platform GUI available yet.");
         }
 
@@ -330,8 +330,8 @@ namespace PERQemu
 
         #region CLI Help (for now)
 
-        // todo:  a nice help system, either built-in (for offline operation) or
-        // web-based.  for now, dump out some basic help (in 80 columns).  if this
+        // Todo:  a nice help system, either built-in (for offline operation) or
+        // web-based.  For now, dump out some basic help (in 80 columns).  If this
         // starts to get large, split off into a HelpCommands class and add to the
         // list above.
 

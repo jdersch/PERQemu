@@ -117,7 +117,7 @@ namespace PERQemu.UI
             Console.WriteLine("Standard configurations:");
             foreach (var key in prefabs)
             {
-                Configuration perq = PERQemu.Config.GetConfigByName(key);
+                var perq = PERQemu.Config.GetConfigByName(key);
                 Console.WriteLine("    {0} - {1}", perq.Name.PadLeft(10), perq.Description);
             }
 
@@ -136,7 +136,7 @@ namespace PERQemu.UI
         [Command("configure show", "Show a pre-defined machine configuration")]
         public void ShowConfiguration([KeywordMatch("Configs")] string name)
         {
-            Configuration conf = PERQemu.Config.GetConfigByName(name);
+            var conf = PERQemu.Config.GetConfigByName(name);
 
             if (conf == null)
             {
@@ -478,7 +478,6 @@ namespace PERQemu.UI
 
                     // These are valid for OIO and MLO
                     case IOOptionType.Link:
-                    case IOOptionType.LinkTape:
                     case IOOptionType.Tape:
                         if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
                             PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
@@ -496,10 +495,7 @@ namespace PERQemu.UI
                     // These are only valid for OIO, but Ether may conflict
                     // if the EIO board is selected.  Does it work with the NIO?
                     case IOOptionType.Ether:
-                    case IOOptionType.EthCan:
-                    case IOOptionType.EthCanTape:
                     case IOOptionType.Canon:
-                    case IOOptionType.CanTape:
                         if (PERQemu.Config.Current.IOBoard == IOBoardType.NIO &&
                             opt.HasFlag(IOOptionType.Ether))
                         {
@@ -676,7 +672,7 @@ namespace PERQemu.UI
         {
             if (OKtoReconfig())
             {
-                bool changed = EnableOrDisableSerial(port, true);
+                var changed = EnableOrDisableSerial(port, true);
 
                 if (changed && !PERQemu.Config.Quietly)
                     Console.WriteLine($"RS-232 port {char.ToUpper(port)} enabled.");
@@ -688,7 +684,7 @@ namespace PERQemu.UI
         {
             if (OKtoReconfig())
             {
-                bool changed = EnableOrDisableSerial(port, false);
+                var changed = EnableOrDisableSerial(port, false);
 
                 if (changed && !PERQemu.Config.Quietly)
                     Console.WriteLine($"RS-232 port {char.ToUpper(port)} disabled.");

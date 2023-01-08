@@ -1,5 +1,5 @@
 ﻿//
-// ExtendedRegister.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ExtendedRegister.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -21,7 +21,6 @@ using System.Runtime.CompilerServices;
 
 namespace PERQemu.Processor
 {
-
     /// <summary>
     /// Represents an "extended" register, used in a number of ways throughout
     /// the PERQ CPU.  Defined as a low half and high half, can be treated as a
@@ -79,10 +78,10 @@ namespace PERQemu.Processor
 #endif
         }
 
-        private ushort _lo;
-        private ushort _hi;
+        ushort _lo;
+        ushort _hi;
 
-        private int _loBits, _loMask;
-        private int _hiBits, _hiMask;
+        int _loBits, _loMask;
+        int _hiBits, _hiMask;
     }
 }

@@ -1,5 +1,5 @@
 ﻿//
-// Instruction.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Instruction.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -65,7 +65,7 @@ namespace PERQemu.Processor
             /// Compute static data associated with this opcode that doesn't need to
             /// be computed on every execution.
             /// </summary>
-            private void ComputeCachedData()
+            void ComputeCachedData()
             {
                 // During address generation provide all 14 bits, since the hardware
                 // quietly provides the upper two-bit "bank register" on most jumps;
@@ -261,11 +261,8 @@ namespace PERQemu.Processor
 
     public class UnimplementedInstructionException : Exception
     {
-        public UnimplementedInstructionException(string message)
-            : base(message)
+        public UnimplementedInstructionException(string message) : base(message)
         {
-
         }
     }
 }
-

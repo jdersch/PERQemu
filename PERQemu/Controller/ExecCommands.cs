@@ -1,5 +1,5 @@
 ﻿//
-// ExecCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ExecCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -115,13 +115,13 @@ namespace PERQemu
         //
 
         [Command("bootchar", "Set the boot character (selects OS to boot)")]
-        private void SetBootChar(char key)
+        void SetBootChar(char key)
         {
             PERQemu.Controller.BootChar = (byte)key;
         }
 
         [Command("bootchar", "Show the boot character")]
-        private void ShowBootChar()
+        void ShowBootChar()
         {
             Console.Write("Bootchar is ");
             if (PERQemu.Controller.BootChar != 0)
@@ -138,7 +138,7 @@ namespace PERQemu
         // todo: allow for png formatter (read Settings.ScreenFormat)
         // todo: make path relative to Output/ (or Settings.OutputDir)
         [Command("save screenshot", "Save a screenshot of the current PERQ display")]
-        private void SaveScreenshot(string file)
+        void SaveScreenshot(string file)
         {
             string outputPath = file + ".jpg";  // FIXME
 
@@ -155,14 +155,14 @@ namespace PERQemu
 #if DEBUG
         // debugging
         [Command("hide", "Hide the PERQ display", Discreet = true)]
-        private void HideDisplay()
+        void HideDisplay()
         {
             PERQemu.Sys.Display.Hide();
             Console.WriteLine("Sent window hide event.");
         }
 
         [Command("unhide", "Restore the PERQ display", Discreet = true)]
-        private void ShowDisplay()
+        void ShowDisplay()
         {
             PERQemu.Sys.Display.Restore();
             Console.WriteLine("Sent window restore event.");

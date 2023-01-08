@@ -1,5 +1,5 @@
 //
-// OIO.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// OIO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -288,7 +288,7 @@ namespace PERQemu.IO
             0x94,   // 224 MargnCntl: load Canon page margin control port
             0x95,   // 225 LeftMar: load Canon blank words register (left margin)
             0x96,   // 226 RightMar: load Canon line length register (right margin)
-            0xff,   // 377 (??) dummy write used by Canon driver
+            0xff    // 377 (??) dummy write used by Canon driver
         };
 
         byte[] _streamerPorts =

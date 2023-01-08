@@ -246,7 +246,7 @@ namespace PERQemu.Config
 
         public string Summary()
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
 
             sb.AppendLine("Configuration: " + Name);
             sb.AppendLine("Description:   " + Description);

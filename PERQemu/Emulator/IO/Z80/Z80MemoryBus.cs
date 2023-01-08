@@ -1,5 +1,5 @@
 //
-// Z80MemoryBus.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Z80MemoryBus.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -63,7 +63,7 @@ namespace PERQemu.IO.Z80
         //
         // Implementation
         //
-        private byte ReadByte(int address)
+        byte ReadByte(int address)
         {
             if (address < ROM_SIZE)
             {
@@ -79,7 +79,7 @@ namespace PERQemu.IO.Z80
             throw new InvalidOperationException($"Unexpected memory read at address 0x{address:x}");
         }
 
-        private void WriteByte(int address, byte value)
+        void WriteByte(int address, byte value)
         {
             if (address >= RAM_ADDRESS && address < RAM_ADDRESS + RAM_SIZE)
             {
@@ -110,12 +110,12 @@ namespace PERQemu.IO.Z80
         }
 
         // Configured by the IO Board
-        private int RAM_SIZE;
-        private int RAM_ADDRESS;
-        private int ROM_SIZE;
-        private int ROM_ADDRESS;
+        int RAM_SIZE;
+        int RAM_ADDRESS;
+        int ROM_SIZE;
+        int ROM_ADDRESS;
 
-        private byte[] _rom;
-        private byte[] _ram;
+        byte[] _rom;
+        byte[] _ram;
     }
 }

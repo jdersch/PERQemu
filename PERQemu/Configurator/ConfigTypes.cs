@@ -1,5 +1,5 @@
 ﻿//
-// ConfigTypes.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ConfigTypes.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -62,12 +62,8 @@ namespace PERQemu.Config
         None = 0x00,
         Link = 0x01,        // Universal
         Ether = 0x02,       // OIO only
-        Canon = 0x04,       // MLO or OIO
-        EthCan = 0x06,      // Shortcut for popular OIO config
-        Tape = 0x08,        // MLO 9-track -or- OIO Streamer!?
-        LinkTape = 0x09,    // OIO or "Universal Streamer board" (CPU Option)
-        CanTape = 0x0c,     // Another shortcut, useful on PERQ-2s w/EIO
-        EthCanTape = 0x0e,  // OIO, rare but not unusual
+        Canon = 0x04,       // OIO or MLO
+        Tape = 0x08,        // OIO or MLO Streamer or MLO 9-track
         SMD = 0x10          // MLO only
     }
 
@@ -85,5 +81,4 @@ namespace PERQemu.Config
         BitPad = 0x2,
         Both = 0x3
     }
-
 }

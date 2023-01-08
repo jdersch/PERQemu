@@ -1,5 +1,5 @@
 ﻿//
-// ALU.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ALU.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -315,12 +315,12 @@ namespace PERQemu.Processor
             /// <summary>
             /// Build a table of ALU status flags based on the ALU PAL equations.
             /// </summary>
-            private static void BuildFlagTable()
+            static void BuildFlagTable()
             {
                 _palFlags = new ALUFlags[64];
 
                 // TODO: figure out how to incorporate the MulDiv/16K flags
-                //  to clean up the crazy MulDiv mess?
+                // to clean up the crazy MulDiv mess?
 
                 // index bits:
                 // 0 r15
@@ -403,12 +403,12 @@ namespace PERQemu.Processor
                 }
             }
 
-            private ExtendedRegister _r;
-            private ExtendedRegister _oldR;
-            private ALUFlags _flags;
-            private ALUFlags _oldFlags;
+            ExtendedRegister _r;
+            ExtendedRegister _oldR;
+            ALUFlags _flags;
+            ALUFlags _oldFlags;
 
-            private static ALUFlags[] _palFlags;
+            static ALUFlags[] _palFlags;
         }
     }
 }

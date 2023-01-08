@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -256,31 +256,31 @@ namespace PERQmedia
         }
 
         // Header/ID section
-        private byte[] _cookie = { (byte)'P', (byte)'R', (byte)'Q', (byte)'M' };
-        private byte _fileVersion = (byte)'0';
-        private byte _driveType;
+        byte[] _cookie = { (byte)'P', (byte)'R', (byte)'Q', (byte)'M' };
+        byte _fileVersion = (byte)'0';
+        byte _driveType;
 
         // Directory (n * 4 bytes)
-        private int[] _directory;
+        int[] _directory;
 
         // Version + type bytes
-        private readonly int _fixedHeaderBytes = 2;
+        readonly int _fixedHeaderBytes = 2;
 
         // Computed (no data copied)
-        private int _textLabelSize;
-        private int _imageLabelSize;
-        private int _infoSize;
-        private int _dataSize;
+        int _textLabelSize;
+        int _imageLabelSize;
+        int _infoSize;
+        int _dataSize;
 
         // MediaInfo (n + 10 bytes)
         // DeviceInfo (n + 2 bytes)
         // DeviceFlags (2 bytes)
         // DeviceGeometry (8 bytes)
         // Characteristics (28 bytes)
-        private readonly int _fixedInfoBytes = 50;
+        readonly int _fixedInfoBytes = 50;
 
         // Temporary storage for compressing the Data section
-        private byte[] _data;
+        byte[] _data;
 
         // Format Version 0 directory constants
         public static readonly int PM_DIR_ENTRIES = 4;

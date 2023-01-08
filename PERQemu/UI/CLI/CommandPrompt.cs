@@ -530,7 +530,7 @@ namespace PERQemu.UI
         {
             bool changed = false;
 
-            CompletionList result = GetCompletions(_commandTree, _input);
+            var result = GetCompletions(_commandTree, _input);
 
             // If not running silent and we have completions, spit 'em out
             if (!silent && result.Completions.Count > 0)

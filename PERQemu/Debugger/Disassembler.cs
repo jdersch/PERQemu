@@ -1,5 +1,5 @@
 //
-// Disassembler.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Disassembler.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -35,13 +35,13 @@ namespace PERQemu.Debugger
         /// </summary>
         public static string Disassemble(ushort address, CPU.Instruction op)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
 
             // Append the address and raw opcode
             sb.AppendFormat("{0:x4}: {1:x12}\t", address, op.UCode);
 
-            string amux = DisassembleAmuxInput(op);
-            string bmux = DisassembleBmuxInput(op);
+            var amux = DisassembleAmuxInput(op);
+            var bmux = DisassembleBmuxInput(op);
 
             // Append ALU op
             if (op.W == 0)
@@ -63,7 +63,7 @@ namespace PERQemu.Debugger
             }
 
             // Append function, if any
-            string func = DisassembleFunction(op);
+            var func = DisassembleFunction(op);
 
             if (func.Length > 0)
             {
@@ -77,7 +77,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleAmuxInput(CPU.Instruction uOp)
+        static string DisassembleAmuxInput(CPU.Instruction uOp)
         {
             string amux = "<invalid>";
 
@@ -120,7 +120,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleBmuxInput(CPU.Instruction uOp)
+        static string DisassembleBmuxInput(CPU.Instruction uOp)
         {
             string bmux = "<invalid>";
 
@@ -140,7 +140,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleALUOp(string amux, string bmux, CPU.Instruction op)
+        static string DisassembleALUOp(string amux, string bmux, CPU.Instruction op)
         {
             string alu = "<invalid>";
 
@@ -217,7 +217,7 @@ namespace PERQemu.Debugger
         /// <summary>
         /// Decode Function and Special Function fields.
         /// </summary>
-        private static string DisassembleFunction(CPU.Instruction uOp)
+        static string DisassembleFunction(CPU.Instruction uOp)
         {
             string function = "";
 
@@ -392,7 +392,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleShifterCommand(int input)
+        static string DisassembleShifterCommand(int input)
         {
             int low = (~input) & 0x0f;
             int high = ((~input) & 0xf0) >> 4;
@@ -421,7 +421,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleJump(CPU.Instruction uOp)
+        static string DisassembleJump(CPU.Instruction uOp)
         {
             string jump = "<invalid>";
 
@@ -492,7 +492,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string DisassembleJumpType(CPU.Instruction uOp)
+        static string DisassembleJumpType(CPU.Instruction uOp)
         {
             string type = "<invalid>";
 
@@ -591,7 +591,7 @@ namespace PERQemu.Debugger
         }
 
 
-        private static string CalcAddress(CPU.Instruction uOp)
+        static string CalcAddress(CPU.Instruction uOp)
         {
             // Always clip, to remove any ambiguity?
             var addr = uOp.NextAddress & CPU.WCSMask;
@@ -605,15 +605,11 @@ namespace PERQemu.Debugger
                 case 3:     // Long jump
                     return $"{addr:x4}";
 
-                case 1:     // Short (or Leap on 16K)
-                    // of Shift as addr source (16K)
-                    if (!CPU.Is4K && uOp.SF == 6)
-                        return "Shift";
-                    else
-                        return $"{addr:x4}";
-                    
+                case 1:     // Short (4K) or Leap / Shift as addr source (16K)
+                    return (!CPU.Is4K && uOp.SF == 6) ? "Shift" : $"{addr:x4}";
+
                 default:
-                    //throw new UnimplementedInstructionException("Error: F value does not specify a jump");
+                    // throw new UnimplementedInstructionException("Error: F value does not specify a jump");
                     return "<ERROR: F does not specify a jump>";
             }
         }

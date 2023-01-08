@@ -155,7 +155,7 @@ namespace PERQemu
             if (callback == null)
                 throw new InvalidOperationException("Null callback in Scheduler");
 #endif
-            SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, context, callback);
+            var e = new SchedulerEvent(timestampNsec + _currentTimeNsec, context, callback);
             _schedule.Push(e);
 
             return e;
@@ -166,7 +166,7 @@ namespace PERQemu
         /// </summary>
         public SchedulerEvent ReSchedule(SchedulerEvent old, ulong timestampNsec)
         {
-            SchedulerEvent e = new SchedulerEvent(timestampNsec + _currentTimeNsec, old.Context, old.EventCallback);
+            var e = new SchedulerEvent(timestampNsec + _currentTimeNsec, old.Context, old.EventCallback);
             _schedule.Remove(old);
             _schedule.Push(e);
 

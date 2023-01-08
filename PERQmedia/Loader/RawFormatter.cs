@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -245,7 +245,7 @@ namespace PERQmedia
         /// Map them back to the available ones so that older tools still read
         /// the values they expect.
         /// </summary>
-        private byte FSHintToRaw(StorageDevice dev)
+        byte FSHintToRaw(StorageDevice dev)
         {
             switch (dev.FileInfo.FSType)
             {
@@ -266,7 +266,7 @@ namespace PERQmedia
         }
 
         // The ill-conceived PFD cookie
-        private static byte[] _cookie = { (byte)'P', (byte)'E', (byte)'R', (byte)'Q',
-                                          (byte)'f', (byte)'l', (byte)'p' };
+        readonly static byte[] _cookie = { (byte)'P', (byte)'E', (byte)'R', (byte)'Q',
+                                           (byte)'f', (byte)'l', (byte)'p' };
     }
 }

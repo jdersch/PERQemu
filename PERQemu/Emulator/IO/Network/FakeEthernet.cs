@@ -46,7 +46,7 @@ namespace PERQemu.IO.Network
 
             _mcastGroups = new byte[6];
 
-            Log.Info(Category.Ethernet, "Interface created {0}", _physAddr);
+            Log.Debug(Category.Ethernet, "Interface created {0}", _physAddr);
         }
 
         public MachineAddress HWAddress => _physAddr;
