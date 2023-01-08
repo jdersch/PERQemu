@@ -1,5 +1,5 @@
 //
-// Configurator.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Configurator.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -323,6 +323,14 @@ namespace PERQemu.Config
                         }
                     }
 
+                    // If an Ethernet address has been set, save it
+                    if (_current.EtherAddress != 0)
+                    {
+                        sw.WriteLine("ethernet address " + _current.EtherAddress);
+                    }
+
+                    // Todo: For PERQ-2, save the configured serial number if set
+
                     // Write out the storage configuration
                     for (var unit = 0; unit < _current.Drives.Length; unit++)
                     {
@@ -498,6 +506,14 @@ namespace PERQemu.Config
                 // But I'll allow it. :-)
             }
             return true;
+        }
+
+        public bool HasEthernet(Configuration conf)
+        {
+            return (conf.IOBoard == IOBoardType.EIO ||
+                    conf.IOOptionBoard == OptionBoardType.Ether3 ||
+                    (conf.IOOptionBoard == OptionBoardType.OIO &&
+                     conf.IOOptions.HasFlag(IOOptionType.Ether)));
         }
 
         /// <summary>
@@ -770,8 +786,6 @@ namespace PERQemu.Config
         /// </summary>
         public void UpdateStorage(Configuration conf, IOBoardType newType)
         {
-            // fixme debugging
-            Console.WriteLine($"* Updating storage from {conf.IOBoard} to {newType}");
             conf.Reason = string.Empty;
 
             for (var unit = 0; unit < conf.Drives.Length; unit++)

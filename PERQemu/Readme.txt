@@ -373,7 +373,7 @@ The following hardware has been implemented in the emulator:
   Ethernet:
     - A fake, bare-bones interface is now available when the "Ether" option for
       the OIO option board is configured.  This is needed to allow Accent to
-      properly initialize.  Consule the User Guide for more details!
+      properly initialize.  Consult the User Guide for more details!
 
 
 There is a ton of additional detail about the internals of PERQemu itself in

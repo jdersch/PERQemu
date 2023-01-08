@@ -36,11 +36,17 @@ namespace PERQemu.IO.Network
             _timer = null;
             _response = null;
 
-            // Physical address is fixed; receive address can be programmed
+            // Physical address is configurable, but fixed;
             _physAddr = new MachineAddress(_system.Config.IOBoard);
+            _physAddr.Low = _system.Config.EtherAddress;
+
+            // Receive address can be programmed; set to HW initially
             _recvAddr = new MachineAddress(_system.Config.IOBoard);
+            _recvAddr.Low = _physAddr.Low;
 
             _mcastGroups = new byte[6];
+
+            Log.Info(Category.Ethernet, "Interface created {0}", _physAddr);
         }
 
         public MachineAddress HWAddress => _physAddr;
@@ -314,8 +320,6 @@ namespace PERQemu.IO.Network
                 // Sigh.  RecvComplete should be a separate bit, positively asserted
                 // to clearly distinguish it from XmitComplete.  There are free bits!
                 _status &= ~Status.Complete;
-
-                // Assume, for now, that the promiscuous bit is "sticky"
             }
 
             // Assume that reading the status register clears the interrupt
@@ -490,12 +494,11 @@ namespace PERQemu.IO.Network
             _mac[2] = 0x7c;
 
             // Coded by 3RCC:  00 = OIO, 01 = EIO, 02 = 24-bit EIO!
-            _mac[3] = (byte)(board == Config.IOBoardType.EIO ? 1 : 0);
+            _mac[3] = (byte)(board == IOBoardType.EIO ? 1 : 0);
 
             // Read from the NET PROMs (or configured by the user)
-            // Todo: make this configurable and saved in the machine config
-            _mac[4] = 0x23;
-            _mac[5] = 0x45;
+            _mac[4] = 0;
+            _mac[5] = 0;
         }
 
         // Just the bytes, ma'am

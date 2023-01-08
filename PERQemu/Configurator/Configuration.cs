@@ -1,5 +1,5 @@
 //
-// Configuration.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Configuration.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -73,6 +73,9 @@ namespace PERQemu.Config
             // Users must explicitly enable the RS-232 ports
             _rsaEnabled = false;
             _rsbEnabled = false;
+
+            // The default
+            _etherAddr = 0;
 
             _validated = true;
             _modified = false;
@@ -215,6 +218,12 @@ namespace PERQemu.Config
             set { _ioOptions = value; }
         }
 
+        public ushort EtherAddress
+        {
+            get { return _etherAddr; }
+            set { _etherAddr = value; }
+        }
+
         public DisplayType Display
         {
             get { return _displayType; }
@@ -267,16 +276,30 @@ namespace PERQemu.Config
                 sb.AppendLine(Settings.RSBDevice == string.Empty ? "<unassigned>" : Settings.RSBDevice);
             }
 
+            if (IOBoard == IOBoardType.EIO && EtherAddress != 0)
+            {
+                sb.AppendLine("    Ethernet:  node " + EtherAddress);
+            }
+
             if (IOOptionBoard != OptionBoardType.None)
             {
                 sb.Append("Option board:  " + IOOptionBoard);
 
                 if (IOOptions != IOOptionType.None)
                 {
-                    sb.Append("  Options: " + IOOptions);
+                    sb.Append("  Options:  " + IOOptions);
                 }
                 sb.AppendLine();
+
+                if ((IOOptionBoard == OptionBoardType.OIO ||
+                     IOOptionBoard == OptionBoardType.Ether3) &&
+                     EtherAddress != 0)
+                {
+                    sb.AppendLine("    Ethernet:  node " + EtherAddress);
+                }
             }
+
+            // Todo: for PERQ-2 models, backplane serial number
 
             sb.AppendLine();
             sb.AppendLine("Storage configuration:");
@@ -349,28 +372,30 @@ namespace PERQemu.Config
         // For now...
         public const byte MAX_DRIVES = 4;
 
-        private string _name;               // short name
-        private string _key;                // unique key for matching
-        private string _description;        // brief description
-        private string _filename;           // set on load or save
+        string _name;               // short name
+        string _key;                // unique key for matching
+        string _description;        // brief description
+        string _filename;           // set on load or save
 
-        private ChassisType _chassis;
-        private CPUType _cpuBoard;
-        private int _memSize;
-        private IOBoardType _ioBoard;
-        private OptionBoardType _ioOptionBoard;
-        private IOOptionType _ioOptions;
-        private DisplayType _displayType;
-        private TabletType _tabletType;
-        private Drive[] _drives;
+        ChassisType _chassis;
+        CPUType _cpuBoard;
+        int _memSize;
+        IOBoardType _ioBoard;
+        OptionBoardType _ioOptionBoard;
+        IOOptionType _ioOptions;
+        DisplayType _displayType;
+        TabletType _tabletType;
+        Drive[] _drives;
 
-        private bool _rsaEnabled;
-        private bool _rsbEnabled;
+        ushort _etherAddr;
 
-        private string _reason;
-        private bool _validated;
-        private bool _modified;
-        private bool _saved;
+        bool _rsaEnabled;
+        bool _rsbEnabled;
+
+        string _reason;
+        bool _validated;
+        bool _modified;
+        bool _saved;
     }
 
 

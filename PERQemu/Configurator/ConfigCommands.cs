@@ -1,5 +1,5 @@
 ﻿//
-// ConfigCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ConfigCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -20,7 +20,6 @@
 using System;
 
 using PERQmedia;
-
 using PERQemu.Config;
 
 namespace PERQemu.UI
@@ -46,7 +45,7 @@ namespace PERQemu.UI
         /// mess with a running instance are prohibited.  Returns true if the
         /// PERQ is off, false (with an error message) if it's running.
         /// </summary>
-        private bool OKtoReconfig()
+        bool OKtoReconfig()
         {
             if (PERQemu.Controller.State > RunState.Off)
             {
@@ -314,7 +313,7 @@ namespace PERQemu.UI
             }
         }
 
-        private uint RoundToPowerOf2(uint n)
+        uint RoundToPowerOf2(uint n)
         {
             n--;
             n |= n >> 1;
@@ -598,6 +597,35 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("configure ethernet address", "Set the low word (two octets) of the Ethernet address")]
+        public void SetEthernetAddress(ushort address)
+        {
+            if (PERQemu.Config.Quietly)
+            {
+                PERQemu.Config.Current.EtherAddress = address;
+                return;
+            }
+
+            if (address != PERQemu.Config.Current.EtherAddress)
+            {
+                PERQemu.Config.Current.EtherAddress = address;
+                PERQemu.Config.Changed = true;
+                Console.WriteLine($"Ethernet address (low word) now {address}.");
+            }
+
+            if (PERQemu.Config.HasEthernet(PERQemu.Config.Current))
+            {
+                if (PERQemu.Controller.State > RunState.Off)
+                {
+                    Console.WriteLine("Note: The running PERQ won't see the change until reset or restart.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Note: No Ethernet interface is currently configured.");
+            }
+        }
+
         [Command("configure display", "Configure the display device")]
         public void SetDisplay(DisplayType disp)
         {
@@ -667,7 +695,7 @@ namespace PERQemu.UI
             }
         }
 
-        private bool EnableOrDisableSerial(char port, bool flag)
+        bool EnableOrDisableSerial(char port, bool flag)
         {
             switch (port)
             {
