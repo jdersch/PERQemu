@@ -119,7 +119,7 @@ namespace PERQemu.UI
                     return false;       // No match
 
                 // Check the enumerated types for text matches
-                if (Param.ParameterType.IsEnum || Param.ParameterType == typeof(bool))
+                if (Param.ParameterType.IsEnum)
                 {
                     if (fuzzy)
                     {
@@ -127,6 +127,18 @@ namespace PERQemu.UI
                     }
 
                     return Helpers.Exists(x => x.Equals(arg, StringComparison.InvariantCultureIgnoreCase));
+                }
+
+                if (Param.ParameterType == typeof(bool))
+                {
+                    var tmp = new List<string> { "true", "false" };
+
+                    if (fuzzy)
+                    {
+                        return tmp.Exists(x => x.StartsWith(arg, StringComparison.InvariantCultureIgnoreCase));
+                    }
+
+                    return tmp.Exists(x => x.Equals(arg, StringComparison.InvariantCultureIgnoreCase));
                 }
 
                 // Check the rest
@@ -174,8 +186,7 @@ namespace PERQemu.UI
             }
             else if (Param.ParameterType == typeof(bool))
             {
-                Helpers.Add("true");
-                Helpers.Add("false");
+                Helpers.Add($"[true|false] ({Param.Name})");
             }
             else if (Param.ParameterType == typeof(int))
             {

@@ -727,9 +727,7 @@ namespace PERQemu.UI
                 // Start down the chain!
                 match.SearchRoot = argNode;
 
-                if (argNode.Param.ParameterType.IsEnum ||
-                    argNode.Param.ParameterType == typeof(bool) ||
-                    argNode.DoKeywordMatch)
+                if (argNode.Param.ParameterType.IsEnum || argNode.DoKeywordMatch)
                 {
                     match.Completions.AddRange(
                         argNode.Helpers.FindAll(
@@ -743,6 +741,25 @@ namespace PERQemu.UI
                     if (match.Completions.Count == 0 && argNode.DoKeywordMatch)
                     {
                         match.Match = word;
+                        match.SearchRoot = null;
+                    }
+                }
+                else if (argNode.Param.ParameterType == typeof(bool))
+                {
+                    // You can't handle the truth
+                    if (word.StartsWith("t", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        match.Match = "true";
+                        match.Completions.Add("true");
+                    }
+                    else if (word.StartsWith("f", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        match.Match = "false";
+                        match.Completions.Add("false");
+                    }
+                    else
+                    {
+                        match.Match = "BAD BOOLEAN";
                         match.SearchRoot = null;
                     }
                 }

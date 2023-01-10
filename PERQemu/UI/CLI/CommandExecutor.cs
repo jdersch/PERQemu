@@ -606,6 +606,9 @@ namespace PERQemu.UI
 
                 foreach (MethodInfo info in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 {
+                    // Prune methods tagged with a Conditional("DEBUG") attribute!
+                    if (IsDebugMethod(info)) continue;
+
                     object[] attribs = info.GetCustomAttributes(typeof(CommandAttribute), true);
 
                     // This cast should always succeed given that we're
@@ -738,6 +741,31 @@ namespace PERQemu.UI
 
             // Organize the commands help
             BuildCommandsHelp(helpers);
+        }
+
+        /// <summary>
+        /// Return true if a method has the Conditional("DEBUG") attribute and
+        /// we're in a release build, to keep debug commands from leaking into
+        /// the command tree.  (VS2022 just seems to be completely broken for
+        /// some reason, but this does still happen in earlier versions.  Ugh.)
+        /// </summary>
+        bool IsDebugMethod(MethodInfo mi)
+        {
+#if !DEBUG
+            object[] attribs = mi.GetCustomAttributes(typeof(ConditionalAttribute), true);
+
+            if (attribs.Length > 0)
+            {
+                foreach (ConditionalAttribute cond in attribs)
+                {
+                    if (cond.ConditionString == "DEBUG")
+                    {
+                        return true;
+                    }
+                }
+            }
+#endif
+            return false;
         }
 
         /// <summary>
