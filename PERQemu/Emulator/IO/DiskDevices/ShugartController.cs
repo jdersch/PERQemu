@@ -65,7 +65,7 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         void ResetFlags()
         {
-            _controllerStatus = Status.Done;
+            _controllerBusy = false;
 
             _serialNumberHigh = 0;
             _serialNumberLow = 0;
@@ -98,8 +98,9 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public int ReadStatus()
         {
-            Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4}", DiskStatus);
-            return DiskStatus;
+            var stat = DiskStatus;
+            Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4} ({1})", stat, (Status)stat);
+            return stat;
         }
 
         /// <summary>
@@ -115,11 +116,11 @@ namespace PERQemu.IO.DiskDevices
         {
             switch (address)
             {
-                case 0xc1:      // Command register
+                case 0xc1:    // Command register
                     LoadCommandRegister(value);
                     break;
 
-                case 0xc2:      // Head register
+                case 0xc2:    // Head register
                     // Hardware latches 4 bits
                     _head = (byte)(value & 0x0f);
                     _disk.HeadSelect(_head);
@@ -127,58 +128,58 @@ namespace PERQemu.IO.DiskDevices
                     Log.Debug(Category.HardDisk, "Shugart head latch set to {0}", _head);
                     break;
 
-                case 0xc8:  // Shugart Cylinder/Sector register
+                case 0xc8:    // Shugart Cylinder/Sector register
                     _sector = (ushort)(value & 0x1f);
                     _head = (byte)((value & 0xe0) >> 5);
                     _cylinder = (ushort)((value & 0xff80) >> 8);
 
-                    Log.Debug(Category.HardDisk, "Shugart cylinder/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
+                    Log.Debug(Category.HardDisk, "Shugart cyl/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
                     break;
 
-                case 0xc9:  // Shugart File SN Low Register
+                case 0xc9:    // Shugart File SN Low Register
                     _serialNumberLow = value & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
                     break;
 
-                case 0xca:  // Shugart File SN High register
+                case 0xca:    // Shugart File SN High register
                     _serialNumberHigh = value & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
                     break;
 
-                case 0xcb:  // Shugart Block Number register
+                case 0xcb:    // Shugart Block Number register
                     _blockNumber = value & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
                     break;
 
-                case 0xcc:  // Micropolis Sector register
+                case 0xcc:    // Micropolis Sector register
                     // Added to the CIO board but ignored by the Shugart controller
                     // May initially log things to see that it's always being set to 0
                     if (value != 0)
                         Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x4} to MicropSec ignored!", value);
                     break;
 
-                case 0xd0:  // Shugart Data Buffer Address High register (4 bits)
+                case 0xd0:    // Shugart Data Buffer Address High register (4 bits)
                     _dataBufferHigh = (~value) & 0xf;
 
                     Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
                     break;
 
-                case 0xd1:  // Shugart Header Address High register (4 bits)
+                case 0xd1:    // Shugart Header Address High register (4 bits)
                     _headerAddressHigh = (~value) & 0xf;
 
                     Log.Debug(Category.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
                     break;
 
-                case 0xd8:  // Shugart Data Buffer Address Low register (unfrobbed)
+                case 0xd8:    // Shugart Data Buffer Address Low register (unfrobbed)
                     _dataBufferLow = (~(0x3ff ^ value)) & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
                     break;
 
-                case 0xd9:  // Shugart Header Address low register (unfrobbed)
+                case 0xd9:    // Shugart Header Address low register (unfrobbed)
                     _headerAddressLow = (~(0x3ff ^ value)) & 0xffff;
 
                     Log.Debug(Category.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
@@ -207,6 +208,22 @@ namespace PERQemu.IO.DiskDevices
             var command = (Command)(data & 0x07);
             _seekCommand = (SeekCommand)(data & 0x78);
 
+            // WHY, Three Rivers?
+            if ((command == Command.Reset && _seekCommand.HasFlag(SeekCommand.Step)) ||
+                (command == Command.Idle && _seekState == SeekState.WaitForStepRelease))
+            {
+                // Command code 6 (Seek) is never actually sent to the hardware's
+                // disk state machine for some insane reason.  So a Step + Reset
+                // gets mapped so that we don't gratuitously reset the controller
+                // AND the disk on EVERY BLOODY SEEK.  ARGH.  Similarly, an "idle"
+                // command can be the falling edge of a manual step pulse (by the
+                // microcode, not the Z80, typically during boot).  
+                command = Command.Seek;
+                Log.Debug(Category.HardDisk, "'Hidden' Seek command! Step={0} Dir={1}",
+                                             _seekCommand.HasFlag(SeekCommand.Step),
+                                             _seekCommand.HasFlag(SeekCommand.Direction));
+            }
+
             Log.Detail(Category.HardDisk, "Shugart command data: {0:x4}", data);
             Log.Debug(Category.HardDisk, "Shugart command is: {0}", command);
 
@@ -230,6 +247,11 @@ namespace PERQemu.IO.DiskDevices
 
                     Log.Debug(Category.HardDisk, "Shugart state machine reset");
                     SetBusyState();
+                    break;
+
+                case Command.Seek:
+                    // Handle the seek bits
+                    ClockSeek();
                     break;
 
                 case Command.ReadChk:
@@ -256,21 +278,19 @@ namespace PERQemu.IO.DiskDevices
                     Log.Error(Category.HardDisk, "Unhandled Shugart command {0}", command);
                     break;
             }
-
-            // Handle the seek bits
-            ClockSeek();
         }
 
         public int DiskStatus
         {
             get
             {
-                return ((int)_controllerStatus | (_disk == null ? 0 :
-                        (int)((_disk.Index ? HardStatus.Index : 0) |
-                              (_disk.Track0 ? HardStatus.TrackZero : 0) |
-                              (_disk.Fault ? HardStatus.DriveFault : 0) |
-                              (_disk.SeekComplete ? HardStatus.SeekComplete : 0) |
-                              (_disk.Ready ? HardStatus.UnitReady : 0))));
+                return (int)(_disk == null ? Status.Done :
+                            ((_controllerBusy ? Status.Busy : 0) |
+                             (_disk.Index ? Status.Index : 0) |
+                             (_disk.Track0 ? Status.TrackZero : 0) |
+                             (_disk.Fault ? Status.DriveFault : 0) |
+                             (_disk.SeekComplete ? Status.SeekComplete : 0) |
+                             (_disk.Ready ? Status.UnitReady : 0)));
             }
         }
 
@@ -357,14 +377,15 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         void ReadBlock()
         {
-            // Todo: This is actually a DMA operation, but that's not
-            // implemented yet.  So just do the whole block, lickety split
 #if DEBUG
             if (_disk.CurCylinder != _cylinder || _disk.CurHead != _head)
                 Log.Warn(Category.HardDisk,
-                         "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
+                         "Read out of sync with disk: cyl {0}={1}, hd {2}={3}?",
                          _disk.CurCylinder, _cylinder, _disk.CurHead, _head);
 #endif
+            // Todo: This is actually a DMA operation, but that's not
+            // implemented yet.  So just do the whole block, lickety split
+
             // Read the sector from the disk
             var sec = _disk.GetSector(_cylinder, _head, _sector);
 
@@ -401,7 +422,7 @@ namespace PERQemu.IO.DiskDevices
 #if DEBUG
             if (_disk.CurCylinder != _cylinder || _disk.CurHead != _head)
                 Log.Warn(Category.HardDisk,
-                         "Out of sync with disk: cyl {0}={1}, hd {2}={3}?",
+                         "Write out of sync with disk: cyl {0}={1}, hd {2}={3}?",
                          _disk.CurCylinder, _cylinder, _disk.CurHead, _head);
 #endif
             // Todo: Should be a DMA op.  See above.
@@ -482,14 +503,14 @@ namespace PERQemu.IO.DiskDevices
         void SetBusyState()
         {
             // Already busy?  Nothing to do here.
-            if (_controllerStatus == Status.Busy) return;
+            if (_controllerBusy) return;
 
             // Set busy flag (code 7), and queue a workitem for resetting it and
             // firing an interrupt.  Time would normally vary based on platter
             // rotation, seek and head settling time, etc.  But we don't really
             // know that in advance, so for seeks don't queue anything; for other
             // commands (reads, writes, etc) just fake up a short/fixed delay.
-            _controllerStatus = Status.Busy;
+            _controllerBusy = true;
 
             if (_seekState != SeekState.WaitForSeekComplete)
             {
@@ -506,7 +527,7 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         void ClearBusyState(bool raiseInterrupt = false)
         {
-            _controllerStatus = Status.Done;
+            _controllerBusy = false;
 
             if (raiseInterrupt)
             {
@@ -565,20 +586,13 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        /// Controller status.  Super detailed.
-        /// </summary>
-        enum Status
-        {
-            Done = 0x0,
-            Busy = 0x7
-        }
-
-        /// <summary>
         /// Status bits from the drive mapped to the DiskStatus word.
         /// </summary>
         [Flags]
-        enum HardStatus
+        enum Status
         {
+            Done = 0x0,
+            Busy = 0x7,
             Index = 0x08,
             TrackZero = 0x10,
             DriveFault = 0x20,
@@ -588,9 +602,6 @@ namespace PERQemu.IO.DiskDevices
 
         // The physical disk data
         HardDisk _disk;
-
-        // Controller status (3 bits)
-        Status _controllerStatus;
 
         // Registers
         ushort _cylinder;
@@ -605,12 +616,19 @@ namespace PERQemu.IO.DiskDevices
         int _dataBufferLow;
         int _dataBufferHigh;
 
+        // Controller status
+        bool _controllerBusy;
+
         SeekState _seekState;
         SeekCommand _seekCommand;
 
-        // Work timing for reads/writes.  Assume .1ms for now?  (The
-        // actual mechanical delays are baked into the drive itself now)
+        // Work timing for reads/writes.  The mechanical delays are baked into
+        // the drive itself now; this accounts for the time to DMA the sector
+        // header and data (since we don't actually model that, currently).  The
+        // absolute best case at 100% utilization is 528 bytes (66 quads) * 680ns
+        // or 44.88usec, but let's make that a little more realistic?
         ulong _busyDurationNsec = 100 * Conversion.UsecToNsec;
+
         SchedulerEvent _busyEvent;
 
         PERQSystem _system;
