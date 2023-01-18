@@ -142,7 +142,7 @@ namespace PERQemu.IO
             0xc9,       // 311 DskFSNlo: (FileL) load Shugart file serial # low bits
             0xca,       // 312 DskFSNhi: (FileH)   "     "      "     "    high bits
             0xcb,       // 313 DskLBN: (Block) load Shugart logical block #
-            0xcc,       // 314 MicSecNo: extra Micropolis reg? CIO only?
+            0xcc,       // 314 MicSecNo: Micropolis sector # (CIO only)
             0xd0,       // 320 DatAdrH: load Shugart data buffer address high bits
             0xd1,       // 321 CWAdrH:    "     "    header  "      "      "    "
             0xd8,       // 330 DatAdrL: load Shugart data buffer address low bits

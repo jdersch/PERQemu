@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-1/7/2023 - skeezicsb - v0.4.9 (main)
+1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
 11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
@@ -168,6 +168,9 @@ There are several subdirectories:
             with a few extras, and a basic Accent S6 installation without
             any extra apps (yet).  This image includes some fun new demos
             not previously available on PERQemu!
+
+        s6lisp.prqm:
+            Update of the g7 image with Spice Lisp version M3!
 
         pnx1.prqm:
             A bundle of the basic PNX 1.3 installation from the PERQmedia

@@ -298,7 +298,7 @@ namespace PERQemu
             if ((s >= _minLevel) && ((c & _categories) != 0) || (c == Category.All))
 #endif
             {
-                var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
+                var output = string.Format(c != Category.All ? c.ToString() + ": " + fmt : fmt, args);
 
                 // Cut down on the noise: things like the processor looping to
                 // check an I/O status byte spews a lot... summarize that (but

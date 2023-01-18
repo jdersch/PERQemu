@@ -600,6 +600,10 @@ January, 2023!
     Ethernet word is set to '1'.  Should probably reserve all-0 and all-1 to
     mean "unset" and "generate a random one"? :-)
 
+    3. A few small fixes plus a new bundled disk image (with configuration file)
+    that includes Lisp.  Enough interest to justify rolling out another release
+    bundle!  User Guide updated.
+
 
 ---
-Last update: skeezics    Sat Jan  7 17:01:52 PST 2023
+Last update: skeezics    Tue Jan 17 16:48:28 PST 2023

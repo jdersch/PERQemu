@@ -488,7 +488,7 @@ namespace PERQemu.UI
                         }
                         else
                         {
-                            Console.WriteLine("That option not compatible with the selected IO Option board.");
+                            Console.WriteLine("That option is incompatible with the selected IO Option board.");
                         }
                         break;
 
@@ -760,7 +760,7 @@ namespace PERQemu.UI
             // Now look for what was given (or its qualified version)
             foreach (var d in PERQemu.Config.Current.Drives)
             {
-                if (d.MediaPath == file || d.MediaPath == path)
+                if (d.MediaPath == file || (path != "" && d.MediaPath == path))
                 {
                     ConfigUnassignUnit((byte)d.Unit);
                     return;

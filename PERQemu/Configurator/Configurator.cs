@@ -318,7 +318,7 @@ namespace PERQemu.Config
                     {
                         foreach (IOOptionType opt in Enum.GetValues(typeof(IOOptionType)))
                         {
-                            if (_current.IOOptions.HasFlag(opt))
+                            if (_current.IOOptions.HasFlag(opt) && opt != IOOptionType.None)
                                 sw.WriteLine("option add " + opt);
                         }
                     }
