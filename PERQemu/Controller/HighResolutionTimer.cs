@@ -1,5 +1,5 @@
 //
-// HighResolutionTimer.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// HighResolutionTimer.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -42,9 +42,9 @@ namespace PERQemu
     /// Internal class to track our timer clients (multiple intervals for
     /// one stopwatch).
     /// </summary>
-    internal class TimerThing
+    class TimerRequest
     {
-        public TimerThing()
+        public TimerRequest()
         {
             Interval = 0;
             NextTrigger = 0;
@@ -53,7 +53,7 @@ namespace PERQemu
             Free = true;
         }
 
-        public TimerThing(double interval, HRTimerElapsedCallback handler)
+        public TimerRequest(double interval, HRTimerElapsedCallback handler)
         {
             Interval = interval;
             NextTrigger = interval;
@@ -100,7 +100,7 @@ namespace PERQemu
         static HighResolutionTimer()
         {
             _stopwatch = new Stopwatch();
-            _requesters = new List<TimerThing>();
+            _requesters = new List<TimerRequest>();
 
             _runTimers = false;
             _throttle = new AutoResetEvent(true);
@@ -185,7 +185,7 @@ namespace PERQemu
             }
 
             // None free?  Extend...
-            _requesters.Add(new TimerThing(interval, cb));
+            _requesters.Add(new TimerRequest(interval, cb));
 
             Log.Debug(Category.Timer,
                       "Added new timer {0}, interval {1:N3}, next trigger {2:N3}",
@@ -265,7 +265,6 @@ namespace PERQemu
             catch
             {
                 Log.Error(Category.Timer, "Bad call to unregister timer {0}!", tag);
-                // do proper exception handling here...
             }
         }
 
@@ -410,7 +409,7 @@ namespace PERQemu
         /// not modified while the VM is running).
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static double NextInterval(double now)
+        static double NextInterval(double now)
         {
             double next = 0d;
             bool found = false;
@@ -443,7 +442,7 @@ namespace PERQemu
         /// Resets the intervals to zero.  Must be called when the Stopwatch
         /// is reset, otherwise the first interval can be a long, long wait. ;-)
         /// </summary>
-        private static void ResetIntervals()
+        static void ResetIntervals()
         {
             for (int i = 0; i < _requesters.Count; i++)
             {
@@ -466,16 +465,16 @@ namespace PERQemu
         }
 
 #if DEBUG
-        private static long shortSpin, longSpin, shortSleep, longSleep;
+        static long shortSpin, longSpin, shortSleep, longSleep;
 #endif
 
         /// <summary>
         /// The timer is running and firing events
         /// </summary>
-        private static volatile bool _runTimers;
+        static volatile bool _runTimers;
 
-        private static Stopwatch _stopwatch;
-        private static AutoResetEvent _throttle;
-        private static List<TimerThing> _requesters;
+        static Stopwatch _stopwatch;
+        static AutoResetEvent _throttle;
+        static List<TimerRequest> _requesters;
     }
 }

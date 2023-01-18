@@ -1,6 +1,7 @@
 ﻿PERQemu Readme
 
-12/28/2022 - skeezicsb - v0.4.8 (experimental)
+1/17/2023 - skeezicsb - v0.4.9 (main)
+12/28/2022 - skeezicsb - v0.4.8 (main)
 11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
@@ -11,25 +12,16 @@
     * NOTICE! *
     ***********
 
-    This "experiments" branch is a pretty major divergence from the PERQemu
-    master.  The skeezicsb/master should track the original jdersch/master
-    but will occasionally incorporate a few tweaks to make it work on the
-    Mac and Mono.  A rough roadmap for future development is included at the
-    end of this document.
+    The "skeezicsb/PERQemu" repository has been slightly reorganized.  The
+    master branch will continue to track the original jdersch/master, while
+    skeezicsb/main will offer pre-releases that are stable enough to mess
+    around with.  The skeezicsb/experiments branch will contain development
+    snapshots or debugging code that may frighten the horses.
 
-    There are currently some platform-specific bugs to correct; "experiments"
-    functionality is most complete on MacOS, with Windows and Linux testing
-    (finally) starting to be done regularly.  See section 4 below for a list
-    of the most outstanding bugs and misfeatures.
-
-    The pre-release v0.4.6 is still a work in progress but is stable enough
-    to finally drive a stake in the ground and put it out there for use and
-    testing.  The first of these updates incorporates emulation of the QIC
-    tape option; it's rough, but should be code complete very shortly and
-    will roll up the last features and bug fixes before the v0.5.0 release!
-
-    Bug fixing and updates will continue on this branch, so please check back
-    often for updates.
+    A rough roadmap for future development is included at the end of this
+    document.  See section 4 below for a list of the most outstanding bugs
+    and misfeatures.  Please check back often for the latest bug fixes and
+    new developments.
 
 
 Updated Readme.txt follows.
@@ -39,8 +31,8 @@ Updated Readme.txt follows.
 1.0 Introduction
 ================
 
-PERQemu is an attempt to emulate the venerable Three Rivers Computer
-Corporation (3RCC) PERQ-1A system.
+PERQemu is an emulation of the venerable Three Rivers Computer Corporation (3RCC)
+PERQ-1A system.
 
 Emulating this system has been an immense challenge, but so far it's been a lot
 of fun...  See section 3.0 to see what works and what doesn't.
@@ -176,6 +168,9 @@ There are several subdirectories:
             with a few extras, and a basic Accent S6 installation without
             any extra apps (yet).  This image includes some fun new demos
             not previously available on PERQemu!
+
+        s6lisp.prqm:
+            Update of the g7 image with Spice Lisp version M3!
 
         pnx1.prqm:
             A bundle of the basic PNX 1.3 installation from the PERQmedia
@@ -378,6 +373,11 @@ The following hardware has been implemented in the emulator:
       the Kriz is a far more efficient tablet and is generally preferred on
       any OS that supports it!
 
+  Ethernet:
+    - A fake, bare-bones interface is now available when the "Ether" option for
+      the OIO option board is configured.  This is needed to allow Accent to
+      properly initialize.  Consult the User Guide for more details!
+
 
 There is a ton of additional detail about the internals of PERQemu itself in
 the source distribution.  See Readme-source.txt, or the copious notes in the
@@ -387,7 +387,7 @@ Docs/ directory for way, way more information than you need.  Way more.
 3.1 What's Not
 --------------
  
-- Ethernet.  Unimplemented, but on the list!
+- Ethernet.  Unimplemented, but on the list! [See above]
 
 - Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
  
@@ -484,8 +484,11 @@ v0.5 - TBD
   - Expanded logging and enhanced debugging support
   - Persistent user preference settings
 
-v0.4.8 - Current "experimental" branch
+v0.4.9 - Current "experimental" branch
   - This version, in progress.
+  - Added a minimal Ethernet interface, bug fixes.
+
+v0.4.8 - Main branch (v0.5.0 pre-relase)
   - Added streamer tape support!
 
 v0.4.6 - Experimental branch (v0.5.0 pre-release)

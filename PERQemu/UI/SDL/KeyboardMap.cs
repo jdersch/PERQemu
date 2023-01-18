@@ -1,5 +1,5 @@
 //
-// KeyboardMap.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// KeyboardMap.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -18,6 +18,7 @@
 //
 
 using SDL2;
+
 using System;
 using System.Collections.Generic;
 
@@ -100,7 +101,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Map the custom PERQ-1 keyboard.
         /// </summary>
-        private void SetupPERQ1Map()
+        void SetupPERQ1Map()
         {
             // Alphabetic
             SetKeyMapping(SDL.SDL_Keycode.SDLK_a, 0x61, 0x41);
@@ -178,7 +179,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Map the PERQ 2 "VT100-style" keyboard.
         /// </summary>
-        private void SetupPERQ2Map()
+        void SetupPERQ2Map()
         {
             //
             // TODO: um, according to Tony's mapping, the Ctrl and Ctrl-Shift
@@ -289,12 +290,12 @@ namespace PERQemu.UI
         }
 
         // Maps for normal and shifted keys
-        private Dictionary<SDL.SDL_Keycode, byte> _normal = new Dictionary<SDL.SDL_Keycode, byte>();
-        private Dictionary<SDL.SDL_Keycode, byte> _shifted = new Dictionary<SDL.SDL_Keycode, byte>();
+        Dictionary<SDL.SDL_Keycode, byte> _normal = new Dictionary<SDL.SDL_Keycode, byte>();
+        Dictionary<SDL.SDL_Keycode, byte> _shifted = new Dictionary<SDL.SDL_Keycode, byte>();
 
         // Have to catch/test for CAPS LOCK status ourselves, and maintain local state.  Ugh.
-        private bool _lockCaps;
-        private bool _lockNums;
+        bool _lockCaps;
+        bool _lockNums;
     }
 }
 

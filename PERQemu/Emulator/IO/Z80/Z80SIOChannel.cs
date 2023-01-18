@@ -1,5 +1,5 @@
 //
-// Z80SIOChannel.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Z80SIOChannel.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -149,7 +149,10 @@ namespace PERQemu.IO.Z80
 
                 if (_rxFifo.Count == 0)
                 {
-                    Log.Warn(Category.SIO, "Channel {0} read from empty FIFO", _channelNumber);
+                    // The bloody tablet driver does this on purpose, apparently?
+                    // Or we're off by one somewhere?  Enabling the Kriz tablet
+                    // causes a lot of spurious log spewage, so turn this down for now
+                    Log.Debug(Category.SIO, "Channel {0} read from empty FIFO", _channelNumber);
                     return data;
                 }
 

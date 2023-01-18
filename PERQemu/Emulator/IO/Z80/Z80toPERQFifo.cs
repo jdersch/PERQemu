@@ -1,5 +1,5 @@
 //
-// PERQFifo.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// PERQFifo.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -124,12 +124,12 @@ namespace PERQemu.IO.Z80
             Console.WriteLine($"Z80->PERQ FIFO: 0x{_fifo:x2} (valid={_valid})");
         }
 
-        private byte _fifo;
-        private bool _valid;
-        private readonly object _lock;
+        byte _fifo;
+        bool _valid;
+        readonly object _lock;
 
-        private byte[] _ports = { 0x88, 0xd0 };     // IOReg1, PERQW
+        byte[] _ports = { 0x88, 0xd0 };     // IOReg1, PERQW
 
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }

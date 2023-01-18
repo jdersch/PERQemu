@@ -1,5 +1,5 @@
 //
-// HardDisk.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// HardDisk.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -81,7 +81,7 @@ namespace PERQemu.IO.DiskDevices
 
             // A "soft" reset from the controller just clears the fault status
             // and should probably clear the seek state... but what if a seek
-            // is in progress?  Abort or wait for motion to stop?  todo: check this?
+            // is in progress?  Abort or wait for motion to stop?
 
             FaultClear();
             StopSeek();
@@ -96,7 +96,7 @@ namespace PERQemu.IO.DiskDevices
             if (_startupEvent == null)
             {
                 // Cold start: schedule a ready event so our drive can
-                // come up to speed.  todo: play the spin-up audio! :-)
+                // come up to speed.  Todo: play the spin-up audio! :-)
                 MotorStart();
             }
 
@@ -173,7 +173,7 @@ namespace PERQemu.IO.DiskDevices
             }
 
             ulong start = _scheduler.CurrentTimeNsec;
-            ulong delay = (ulong)Specs.MinimumSeek;
+            var delay = (ulong)Specs.MinimumSeek;
 
             // Schedule the time delay based on drive specifications
             if (_seekEvent == null)
@@ -205,7 +205,7 @@ namespace PERQemu.IO.DiskDevices
                 // be a nice smooth ramp function but for now just clamped based on
                 // drive specs for full-stroke seek times (expressed in milliseconds
                 // or months-of-sundays, take your pick)
-                int tmp = Math.Min(_stepCount * Specs.MinimumSeek, Specs.MaximumSeek);
+                var tmp = Math.Min(_stepCount * Specs.MinimumSeek, Specs.MaximumSeek);
                 delay = ((ulong)tmp * Conversion.MsecToNsec) - (_lastStep - start);
 
                 Log.Detail(Category.HardDisk,
@@ -284,7 +284,7 @@ namespace PERQemu.IO.DiskDevices
         /// Spin up the virtual drive.  This schedules an event to raise the
         /// ready signal (which should cause an interrupt) after hardware reset.
         /// </summary>
-        private void MotorStart()
+        void MotorStart()
         {
             ulong delay = 100;
 
@@ -313,7 +313,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Signal that the drive is online.
         /// </summary>
-        private void DriveReady(ulong skew, object context)
+        void DriveReady(ulong skew, object context)
         {
             _ready = true;
             _startupEvent = null;
@@ -324,7 +324,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Raises the Index signal for the drive's specified duration.
         /// </summary>
-        private void IndexPulseStart(ulong skew, object context)
+        void IndexPulseStart(ulong skew, object context)
         {
             _index = true;
             _indexEvent = _scheduler.Schedule(_indexPulseDurationNsec, IndexPulseEnd);
@@ -333,7 +333,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Clears the Index pulse and schedules the next one.
         /// </summary>
-        private void IndexPulseEnd(ulong skew, object context)
+        void IndexPulseEnd(ulong skew, object context)
         {
             var next = _discRotationTimeNsec - _indexPulseDurationNsec;
 
@@ -357,31 +357,30 @@ namespace PERQemu.IO.DiskDevices
         }
 
         // Access to a scheduler
-        private Scheduler _scheduler;
+        Scheduler _scheduler;
 
         // Status that the drive keeps track of
-        private bool _ready;
-        private bool _fault;
-        private bool _index;
-        private bool _seekComplete;
+        bool _ready;
+        bool _fault;
+        bool _index;
+        bool _seekComplete;
 
         // Where my heads at
-        private ushort _cyl;
-        private byte _head;
+        ushort _cyl;
+        byte _head;
 
         // Index timing
-        private ulong _discRotationTimeNsec;
-        private ulong _indexPulseDurationNsec;
-        private SchedulerEvent _indexEvent;
+        ulong _discRotationTimeNsec;
+        ulong _indexPulseDurationNsec;
+        SchedulerEvent _indexEvent;
 
         // Seek timing
-        private int _stepCount;
-        private ulong _lastStep;
-        private SchedulerEvent _seekEvent;
-
-        private SchedulerEventCallback _seekCallback;
+        int _stepCount;
+        ulong _lastStep;
+        SchedulerEvent _seekEvent;
+        SchedulerEventCallback _seekCallback;
 
         // Startup delay
-        private SchedulerEvent _startupEvent;
+        SchedulerEvent _startupEvent;
     }
 }

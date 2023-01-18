@@ -1,5 +1,5 @@
 ﻿//
-// CommandPrompt.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CommandPrompt.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -218,7 +218,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Displays the current prompt and sets the origin.
         /// </summary>
-        private void DisplayPrompt()
+        void DisplayPrompt()
         {
             // Force column zero
             Console.SetCursorPosition(0, Console.CursorTop);
@@ -244,7 +244,7 @@ namespace PERQemu.UI
         /// If the window has been resized, recompute the origin and clip the
         /// coordinates to fit the new console and refresh the prompt.
         /// </summary>
-        private bool UpdateOrigin()
+        bool UpdateOrigin()
         {
             if (Console.BufferHeight != _lastHeight || Console.BufferWidth != _lastWidth)
             {
@@ -265,7 +265,7 @@ namespace PERQemu.UI
         /// Positions the cursor and updates the saved column and row, clipping
         /// to the window coordinates if necessary.
         /// </summary>
-        private bool UpdateCursor(int col, int row)
+        bool UpdateCursor(int col, int row)
         {
             var changed = false;
 
@@ -294,7 +294,7 @@ namespace PERQemu.UI
         /// text position, redisplaying the prompt if necessary.  Accounts for
         /// window resizing and updates the last column and row.
         /// </summary>
-        private void UpdateDisplay()
+        void UpdateDisplay()
         {
             Console.CursorVisible = false;
 
@@ -307,7 +307,7 @@ namespace PERQemu.UI
             // Current input string is shorter than the last?  Overprint with
             // spaces to erase, and always add one extra to account for cursor
             // when a long input line wraps
-            string clear = " ".PadRight(Math.Max(1, _lastInputLength - _input.Length));
+            var clear = " ".PadRight(Math.Max(1, _lastInputLength - _input.Length));
 
             Console.SetCursorPosition(_originColumn, _originRow);
             Console.Write(_input + clear);
@@ -341,7 +341,7 @@ namespace PERQemu.UI
         }
 
 
-        private int TextPosition
+        int TextPosition
         {
             get { return _textPosition; }
             set
@@ -352,7 +352,7 @@ namespace PERQemu.UI
             }
         }
 
-        private bool InsideString()
+        bool InsideString()
         {
             var result = false;
 
@@ -365,46 +365,46 @@ namespace PERQemu.UI
             return result;
         }
 
-        private void ClearScreen()
+        void ClearScreen()
         {
             Console.Clear();
             DisplayPrompt();
         }
 
-        private void ClearInput()
+        void ClearInput()
         {
             _input = string.Empty;
             HistoryIndex = _commandHistory.Count - 1;
             TextPosition = 0;
         }
 
-        private void MoveToBeginning()
+        void MoveToBeginning()
         {
             TextPosition = 0;
         }
 
-        private void MoveToEnd()
+        void MoveToEnd()
         {
             TextPosition = _input.Length;
         }
 
-        private void MoveLeft()
+        void MoveLeft()
         {
             TextPosition--;
         }
 
-        private void MoveRight()
+        void MoveRight()
         {
             TextPosition++;
         }
 
-        private void InsertChar(char c)
+        void InsertChar(char c)
         {
             _input = _input.Insert(TextPosition, c.ToString());
             TextPosition++;
         }
 
-        private void DeleteCharAtCursor(bool backspace)
+        void DeleteCharAtCursor(bool backspace)
         {
             if (_input.Length == 0)
             {
@@ -417,13 +417,11 @@ namespace PERQemu.UI
                 {
                     return;     // At the beginning of input, can't backspace 
                 }
-                else
-                {
-                    // Remove 1 char at the position before the cursor,
-                    // and move the cursor back one char
-                    _input = _input.Remove(TextPosition - 1, 1);
-                    TextPosition--;
-                }
+
+                // Remove 1 char at the position before the cursor,
+                // and move the cursor back one char
+                _input = _input.Remove(TextPosition - 1, 1);
+                TextPosition--;
             }
             else
             {
@@ -431,12 +429,10 @@ namespace PERQemu.UI
                 {
                     return;     // At the end of input, can't delete
                 }
-                else
-                {
-                    // Remove one char at the current cursor position,
-                    // but do not move the cursor
-                    _input = _input.Remove(TextPosition, 1);
-                }
+
+                // Remove one char at the current cursor position,
+                // but do not move the cursor
+                _input = _input.Remove(TextPosition, 1);
             }
         }
 
@@ -444,7 +440,7 @@ namespace PERQemu.UI
 
         #region Command history
 
-        private void HistoryPrev()
+        void HistoryPrev()
         {
             if (_commandHistory.Count > 0)
             {
@@ -454,7 +450,7 @@ namespace PERQemu.UI
             }
         }
 
-        private void HistoryNext()
+        void HistoryNext()
         {
             if (HistoryIndex < _commandHistory.Count - 1)
             {
@@ -469,7 +465,7 @@ namespace PERQemu.UI
             TextPosition = _input.Length;
         }
 
-        private void AddToHistory(string cmd)
+        void AddToHistory(string cmd)
         {
             if (cmd != string.Empty)
             {
@@ -489,7 +485,7 @@ namespace PERQemu.UI
             }
         }
 
-        private int HistoryIndex
+        int HistoryIndex
         {
             get { return _historyIndex; }
             set
@@ -530,11 +526,11 @@ namespace PERQemu.UI
         /// <summary>
         /// Provide command completion based on the current input line.
         /// </summary>
-        private bool DoCompletion(bool silent)
+        bool DoCompletion(bool silent)
         {
             bool changed = false;
 
-            CompletionList result = GetCompletions(_commandTree, _input);
+            var result = GetCompletions(_commandTree, _input);
 
             // If not running silent and we have completions, spit 'em out
             if (!silent && result.Completions.Count > 0)
@@ -568,7 +564,7 @@ namespace PERQemu.UI
         /// list.  Returns null and an empty match string if the user (or parser)
         /// is off into the weeds.
         /// </remarks>
-        private CompletionList GetCompletions(CommandNode root, string input)
+        CompletionList GetCompletions(CommandNode root, string input)
         {
             var result = new CompletionList(root, input);
             var tokens = CommandExecutor.SplitArgs(input);
@@ -581,7 +577,7 @@ namespace PERQemu.UI
                 return result;
             }
 
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
 
             while (tokens.Count > 0)
             {
@@ -638,7 +634,7 @@ namespace PERQemu.UI
 #if !DEBUG
                                 if (!c.Hidden)
 #endif
-                                    result.Completions.Add(c.ToString());
+                                result.Completions.Add(c.ToString());
                             }
                         }
 
@@ -681,7 +677,7 @@ namespace PERQemu.UI
         /// return the longest common prefix and a list of possible completions.
         /// If no matches are found, return the input string and clear the list.
         /// </summary>
-        private CompletionList FindCompletions(CommandNode root, string word)
+        CompletionList FindCompletions(CommandNode root, string word)
         {
             var match = new CompletionList(null, string.Empty);
 
@@ -731,9 +727,7 @@ namespace PERQemu.UI
                 // Start down the chain!
                 match.SearchRoot = argNode;
 
-                if (argNode.Param.ParameterType.IsEnum ||
-                    argNode.Param.ParameterType == typeof(bool) ||
-                    argNode.DoKeywordMatch)
+                if (argNode.Param.ParameterType.IsEnum || argNode.DoKeywordMatch)
                 {
                     match.Completions.AddRange(
                         argNode.Helpers.FindAll(
@@ -750,6 +744,25 @@ namespace PERQemu.UI
                         match.SearchRoot = null;
                     }
                 }
+                else if (argNode.Param.ParameterType == typeof(bool))
+                {
+                    // You can't handle the truth
+                    if (word.StartsWith("t", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        match.Match = "true";
+                        match.Completions.Add("true");
+                    }
+                    else if (word.StartsWith("f", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        match.Match = "false";
+                        match.Completions.Add("false");
+                    }
+                    else
+                    {
+                        match.Match = "BAD BOOLEAN";
+                        match.SearchRoot = null;
+                    }
+                }
                 else
                 {
                     // Not an enum, so return the helper string(s)
@@ -763,7 +776,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Find the longest common prefix in an array of strings.
         /// </summary>
-        private string LongestCommonPrefix(string[] a)
+        string LongestCommonPrefix(string[] a)
         {
             int size = a.Length;
 
@@ -785,7 +798,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Map the classic EMACS control keys to the DOS-style line editor commands.
         /// </summary>
-        private void InitEditKeyMap()
+        void InitEditKeyMap()
         {
             _editKeyMap = new Dictionary<ConsoleKey, ConsoleKey>();
 
@@ -810,26 +823,26 @@ namespace PERQemu.UI
             // todo: ^Y - yank word
         }
 
-        private readonly int MAX_HISTORY = 100;     // Season to taste
+        readonly int MAX_HISTORY = 100;     // Season to taste
 
-        private CommandNode _commandTree;
-        private CommandNode _commandTreeRoot;
+        CommandNode _commandTree;
+        CommandNode _commandTreeRoot;
 
-        private string _prompt;
-        private string _input;
+        string _prompt;
+        string _input;
 
-        private int _textPosition;
-        private int _originRow;
-        private int _originColumn;
-        private int _lastRow;
-        private int _lastColumn;
-        private int _lastWidth;
-        private int _lastHeight;
-        private int _lastInputLength;
+        int _textPosition;
+        int _originRow;
+        int _originColumn;
+        int _lastRow;
+        int _lastColumn;
+        int _lastWidth;
+        int _lastHeight;
+        int _lastInputLength;
 
-        private List<string> _commandHistory;
-        private int _historyIndex;
+        List<string> _commandHistory;
+        int _historyIndex;
 
-        private Dictionary<ConsoleKey, ConsoleKey> _editKeyMap;
+        Dictionary<ConsoleKey, ConsoleKey> _editKeyMap;
     }
 }

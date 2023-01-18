@@ -1,5 +1,5 @@
 ﻿//
-// InputDevices.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// InputDevices.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -267,19 +267,19 @@ namespace PERQemu.UI
         }
 
         // Mouse
-        private int _mouseX;
-        private int _mouseY;
-        private int _mouseButton;
-        private bool _mouseOffTablet;
+        int _mouseX;
+        int _mouseY;
+        int _mouseButton;
+        bool _mouseOffTablet;
 
         // Keyboard
-        private bool _shift;
-        private bool _ctrl;
-        private bool _alt;
+        bool _shift;
+        bool _ctrl;
+        bool _alt;
 
-        private KeyboardMap _keymap;
+        KeyboardMap _keymap;
 
         // Parent
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }

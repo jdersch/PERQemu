@@ -235,6 +235,7 @@
     <Compile Include="Emulator\IO\TapeDevices\Sidewinder.cs" />
     <Compile Include="Emulator\IO\TapeDevices\BlockBuffer.cs" />
     <Compile Include="Emulator\IO\TapeDevices\CartridgeTape.cs" />
+    <Compile Include="Emulator\IO\Network\FakeEthernet.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -706,6 +707,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Docs\Streamer.txt" />
+    <None Include="Disks\s6lisp.prqm">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Conf\s6lisp.cfg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
@@ -740,6 +747,7 @@
     <Folder Include="Docs\Hardware References\" />
     <Folder Include="Resources\" />
     <Folder Include="Emulator\IO\TapeDevices\" />
+    <Folder Include="Emulator\IO\Network\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

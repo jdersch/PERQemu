@@ -1,5 +1,5 @@
 ﻿//
-// MicropolisDiskController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// MicropolisDiskController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -72,12 +72,12 @@ namespace PERQemu.IO.DiskDevices
             Log.Debug(Category.HardDisk, "Micropolis controller reset");
         }
 
-        private HardDisk SelectedDisk => _disks[_selected];
+        HardDisk SelectedDisk => _disks[_selected];
 
         /// <summary>
         /// Resets the flags ("soft" reset under microcode control).
         /// </summary>
-        private void ResetFlags()
+        void ResetFlags()
         {
             _controllerStatus = Status.Done;
 
@@ -100,7 +100,6 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
 		public void AttachDrive(uint unit, StorageDevice dev)
         {
-
             if (unit < 1 || (_system.Config.Chassis == ChassisType.PERQ1 && unit > 1) ||
                             (_system.Config.Chassis != ChassisType.PERQ1 && unit > 2))
                 throw new InvalidOperationException($"MicropolisController unit {unit} out of range");
@@ -108,7 +107,6 @@ namespace PERQemu.IO.DiskDevices
             unit--;
 
             _disks[unit] = dev as HardDisk;
-
             _disks[unit].SetSeekCompleteCallback(SeekCompletionCallback);
 
             Log.Debug(Category.HardDisk, "Attached disk '{0}' (unit {1})", _disks[unit].Info.Name, unit);
@@ -304,7 +302,7 @@ namespace PERQemu.IO.DiskDevices
         /// command to the drive.  It is presumed that the microcode determines
         /// the correct pulse duration and interval to accomplish buffered seeks.
         /// </remarks>
-        private void ClockSeek()
+        void ClockSeek()
         {
             if (_seekState == SeekState.WaitForStepSet && _seekCommand.HasFlag(SeekCommand.Step))
             {
@@ -349,7 +347,7 @@ namespace PERQemu.IO.DiskDevices
         }
 
         /// <summary>
-        // TODO: Seek completion for the Micropolis
+        // Todo: Seek completion for the Micropolis
         /// </summary>
         public void SeekCompletionCallback(ulong skewNsec, object context)
         {
@@ -366,9 +364,9 @@ namespace PERQemu.IO.DiskDevices
         /// Reads a block from cyl/head/sec into memory at the addresses
         /// specified by the controller registers.
         /// </summary>
-        private void ReadBlock()
+        void ReadBlock()
         {
-            // todo: This is actually a DMA operation, but that's not
+            // Todo: This is actually a DMA operation, but that's not
             // implemented yet.  So just do the whole block, lickety split
 #if DEBUG
             if (SelectedDisk.CurCylinder != _cylinder || SelectedDisk.CurHead != _head)
@@ -377,7 +375,7 @@ namespace PERQemu.IO.DiskDevices
                          SelectedDisk.CurCylinder, _cylinder, SelectedDisk.CurHead, _head);
 #endif
             // Read the sector from the disk
-            Sector sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
+            var sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -407,7 +405,7 @@ namespace PERQemu.IO.DiskDevices
         /// Does a write to the cyl/head/sec specified by the controller registers.
         /// Does NOT commit to disk, only in memory copy is affected.
         /// </summary>
-        private void WriteBlock(bool writeHeader)
+        void WriteBlock(bool writeHeader)
         {
 #if DEBUG
             if (SelectedDisk.CurCylinder != _cylinder || SelectedDisk.CurHead != _head)
@@ -416,7 +414,7 @@ namespace PERQemu.IO.DiskDevices
                          SelectedDisk.CurCylinder, _cylinder, SelectedDisk.CurHead, _head);
 #endif
             // todo: Should be a DMA op.  See above.
-            Sector sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
+            var sec = SelectedDisk.GetSector(_cylinder, _head, _sector);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -452,11 +450,11 @@ namespace PERQemu.IO.DiskDevices
         /// Does a "format" of the cyl/head/sec specified by the controller
         /// registers.  Does NOT commit to disk, only in memory copy is affected.
         /// </summary>
-        private void FormatBlock()
+        void FormatBlock()
         {
-            Sector sec = new Sector(_cylinder, _head, _sector,
-                                    SelectedDisk.Geometry.SectorSize,
-                                    SelectedDisk.Geometry.HeaderSize);
+            var sec = new Sector(_cylinder, _head, _sector,
+                                  SelectedDisk.Geometry.SectorSize,
+                                  SelectedDisk.Geometry.HeaderSize);
 
             int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
             int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
@@ -492,7 +490,7 @@ namespace PERQemu.IO.DiskDevices
         /// quirk).  To get the real address, we do the XNOR operation again...
         // TODO: is this relevant to the Micropolis?
         /// </summary>
-        private int Unfrob(int value)
+        int Unfrob(int value)
         {
             return (0x3ff & value) | ((~0x3ff) & (~value));
         }
@@ -503,7 +501,7 @@ namespace PERQemu.IO.DiskDevices
         // TODO: figure out interrupt requests from the Micropolis adapter, and
         // take the masking bit into consideration
         /// </summary>
-        private void SetBusyState()
+        void SetBusyState()
         {
             // Already busy?  Nothing to do here.
             if (_controllerStatus == Status.Busy) return;
@@ -529,7 +527,7 @@ namespace PERQemu.IO.DiskDevices
         /// interrupt, depending on the caller's situation.
         // TODO: update for Micropolis
         /// </summary>
-        private void ClearBusyState(bool raiseInterrupt = false)
+        void ClearBusyState(bool raiseInterrupt = false)
         {
             _controllerStatus = Status.Done;
 
@@ -543,7 +541,7 @@ namespace PERQemu.IO.DiskDevices
             }
         }
 
-        private enum SeekState
+        enum SeekState
         {
             WaitForStepSet = 0,
             WaitForStepRelease,
@@ -553,7 +551,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Disk command.  See diskde.pas (line 917) for POS G or PerqDisk (Accent).
         /// </summary>
-        private enum Command
+        enum Command
         {
             Idle = 0x0,
             ReadChk = 0x1,
@@ -581,7 +579,7 @@ namespace PERQemu.IO.DiskDevices
         /// was all re-written for the EIO board.  Sigh.
         /// </remarks>
         [Flags]
-        private enum SeekCommand
+        enum SeekCommand
         {
             Direction = 0x08,
             Step = 0x10,
@@ -592,7 +590,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Controller status.  Super detailed.
         /// </summary>
-        private enum Status
+        enum Status
         {
             Done = 0x0,
             Busy = 0x7
@@ -602,7 +600,7 @@ namespace PERQemu.IO.DiskDevices
         /// Status bits from the drive mapped to the DiskStatus word.
         /// </summary>
         [Flags]
-        private enum HardStatus
+        enum HardStatus
         {
             Index = 0x08,
             TrackZero = 0x10,
@@ -612,34 +610,34 @@ namespace PERQemu.IO.DiskDevices
         }
 
         // The physical disk data
-        private HardDisk[] _disks;
+        HardDisk[] _disks;
 
         // Controller status (3 bits)
-        private Status _controllerStatus;
+        Status _controllerStatus;
 
         // Registers
-        private int _selected;
-        private ushort _cylinder;
-        private byte _head;
-        private ushort _sector;
+        int _selected;
+        ushort _cylinder;
+        byte _head;
+        ushort _sector;
 
-        private int _serialNumberLow;
-        private int _serialNumberHigh;
-        private int _blockNumber;
-        private int _headerAddressLow;
-        private int _headerAddressHigh;
-        private int _dataBufferLow;
-        private int _dataBufferHigh;
+        int _serialNumberLow;
+        int _serialNumberHigh;
+        int _blockNumber;
+        int _headerAddressLow;
+        int _headerAddressHigh;
+        int _dataBufferLow;
+        int _dataBufferHigh;
 
-        private SeekState _seekState;
-        private SeekCommand _seekCommand;
+        SeekState _seekState;
+        SeekCommand _seekCommand;
 
         // Work timing for reads/writes.  Assume .1ms for now?  (The
         // actual mechanical delays are baked into the drive itself now)
-        private ulong _busyDurationNsec = 100 * Conversion.UsecToNsec;
-        private SchedulerEvent _busyEvent;
+        ulong _busyDurationNsec = 100 * Conversion.UsecToNsec;
+        SchedulerEvent _busyEvent;
 
-        private PERQSystem _system;
+        PERQSystem _system;
     }
 }
 

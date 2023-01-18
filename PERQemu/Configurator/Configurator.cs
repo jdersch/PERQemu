@@ -1,5 +1,5 @@
 //
-// Configurator.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Configurator.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -158,14 +158,11 @@ namespace PERQemu.Config
         /// </summary>
         public bool AddPrefab(Configuration conf)
         {
-            if (_prefabs.ContainsKey(conf.Key))
+            if (!_prefabs.ContainsKey(conf.Key))
             {
-                Log.Warn(Category.MediaLoader, "Prefabs list already contains '{0}'", conf.Key);
-                return false;
+                Log.Detail(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
+                _prefabs.Add(conf.Key, conf);
             }
-
-            Log.Detail(Category.MediaLoader, "Adding machine config '{0}'", conf.Key);
-            _prefabs.Add(conf.Key, conf);
 
             // Now go update the "Configs" keyword nodes
             PERQemu.CLI.UpdateKeywordMatchHelpers("Configs", GetPrefabs());
@@ -246,7 +243,7 @@ namespace PERQemu.Config
         /// Scan the Conf dir for saved system configs and preload them into
         /// the Prefabs list.  Sure.  Why not.
         /// </summary>
-        private void LoadPrefabs()
+        void LoadPrefabs()
         {
             // Let's be discreet, shall we?
             _quietly = true;
@@ -321,10 +318,18 @@ namespace PERQemu.Config
                     {
                         foreach (IOOptionType opt in Enum.GetValues(typeof(IOOptionType)))
                         {
-                            if (_current.IOOptions.HasFlag(opt))
+                            if (_current.IOOptions.HasFlag(opt) && opt != IOOptionType.None)
                                 sw.WriteLine("option add " + opt);
                         }
                     }
+
+                    // If an Ethernet address has been set, save it
+                    if (_current.EtherAddress != 0)
+                    {
+                        sw.WriteLine("ethernet address " + _current.EtherAddress);
+                    }
+
+                    // Todo: For PERQ-2, save the configured serial number if set
 
                     // Write out the storage configuration
                     for (var unit = 0; unit < _current.Drives.Length; unit++)
@@ -501,6 +506,14 @@ namespace PERQemu.Config
                 // But I'll allow it. :-)
             }
             return true;
+        }
+
+        public bool HasEthernet(Configuration conf)
+        {
+            return (conf.IOBoard == IOBoardType.EIO ||
+                    conf.IOOptionBoard == OptionBoardType.Ether3 ||
+                    (conf.IOOptionBoard == OptionBoardType.OIO &&
+                     conf.IOOptions.HasFlag(IOOptionType.Ether)));
         }
 
         /// <summary>
@@ -773,8 +786,6 @@ namespace PERQemu.Config
         /// </summary>
         public void UpdateStorage(Configuration conf, IOBoardType newType)
         {
-            // fixme debugging
-            Console.WriteLine($"* Updating storage from {conf.IOBoard} to {newType}");
             conf.Reason = string.Empty;
 
             for (var unit = 0; unit < conf.Drives.Length; unit++)
@@ -984,14 +995,14 @@ namespace PERQemu.Config
         public const int MAX_MEMORY = 1024 * 1024 * 8;
 
         // For preloading, discreetly
-        private bool _quietly;
+        bool _quietly;
 
-        private Hashtable _prefabs;
-        private Hashtable _geometries;
-        private Hashtable _driveSpecs;
-        private Hashtable _knownDrives;
+        Hashtable _prefabs;
+        Hashtable _geometries;
+        Hashtable _driveSpecs;
+        Hashtable _knownDrives;
 
-        private Configuration _default;
-        private Configuration _current;
+        Configuration _default;
+        Configuration _current;
     }
 }

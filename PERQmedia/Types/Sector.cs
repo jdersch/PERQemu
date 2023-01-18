@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -130,11 +130,11 @@ namespace PERQmedia
         // computing the size of a sector.  This is a hack.
         public static readonly int SECTOR_OVERHEAD = 6;
 
-        private ushort _cylinderID;
-        private byte _headID;
-        private ushort _sectorID;
-        private byte[] _rawHeader;
-        private byte[] _sectorData;
-        private bool _sectorBad;
+        ushort _cylinderID;
+        byte _headID;
+        ushort _sectorID;
+        byte[] _rawHeader;
+        byte[] _sectorData;
+        bool _sectorBad;
     }
 }

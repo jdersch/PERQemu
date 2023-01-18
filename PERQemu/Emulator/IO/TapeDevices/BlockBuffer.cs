@@ -1,5 +1,5 @@
 ﻿//
-// BlockBuffer.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// BlockBuffer.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //

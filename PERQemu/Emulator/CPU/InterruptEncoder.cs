@@ -1,5 +1,5 @@
 ﻿//
-// InterruptEncoder.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// InterruptEncoder.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -22,7 +22,6 @@ using System.Threading;
 
 namespace PERQemu.Processor
 {
-
     /// <summary>
     /// PERQ hardware interrupts, listed from lowest to highest priority.
     /// </summary>
@@ -133,6 +132,6 @@ namespace PERQemu.Processor
             }
         }
 
-        private long[] _intr;
+        long[] _intr;
     }
 }

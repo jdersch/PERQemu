@@ -1,5 +1,5 @@
 ﻿//
-// ExpressionStack.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ExpressionStack.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -134,8 +134,8 @@ namespace PERQemu.Processor
                 }
             }
 
-            private int[] _stack;
-            private int _stackPointer;
+            int[] _stack;
+            int _stackPointer;
         }
     }
 }

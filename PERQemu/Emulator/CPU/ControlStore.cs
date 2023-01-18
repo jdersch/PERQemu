@@ -1,5 +1,5 @@
 ﻿//
-// ControlStore.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ControlStore.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -273,7 +273,7 @@ namespace PERQemu.Processor
             /// <summary>
             /// Reads a 48-bit word in from the given stream.
             /// </summary>
-            private ulong ReadMicrocodeWord(FileStream fs, out ushort addr)
+            ulong ReadMicrocodeWord(FileStream fs, out ushort addr)
             {
                 ulong word = 0;
 
@@ -294,22 +294,22 @@ namespace PERQemu.Processor
 
 
             // Writable control store, 48-bit words
-            private ulong[] _microcode;
+            ulong[] _microcode;
 
             // Decoded microcode cache
-            private Instruction[] _microcodeCache;
+            Instruction[] _microcodeCache;
 
             // Wait state flag when CPU is writing to RAM
-            private bool _wcsHold;
+            bool _wcsHold;
 
             // Microcode ROM, 48-bit words
-            private ulong[] _rom;
+            ulong[] _rom;
 
             // ROM size: 512 (typical) out of 2K (max)
-            private int _romSize;
+            int _romSize;
 
             // ROM enable latch
-            private bool _romEnabled;
+            bool _romEnabled;
         }
     }
 }

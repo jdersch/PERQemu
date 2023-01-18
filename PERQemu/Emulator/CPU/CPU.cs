@@ -1,5 +1,5 @@
 //
-// CPU.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CPU.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -265,6 +265,7 @@ namespace PERQemu.Processor
         public bool IncrementBPC => _incrementBPC;
         public ulong Clocks => _clocks;
         public ulong[] Microcode => _ustore.Microcode;
+        public ControlStore WCS => _ustore;             // Debugging/temporary?
         public RasterOp RasterOp => _rasterOp;
 
         #endregion
@@ -486,7 +487,7 @@ namespace PERQemu.Processor
         /// Selects the proper AMUX input for the specified instruction.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int GetAmuxInput(Instruction uOp)
+        int GetAmuxInput(Instruction uOp)
         {
             int amux = 0;
 
@@ -520,7 +521,7 @@ namespace PERQemu.Processor
 #if DEBUG
                             // This is a fairly expensive log, so only call it if we have to
                             if (Log.Categories.HasFlag(Category.QCode))
-                            { 
+                            {
                                 var q = QCodeHelper.GetExtendedOpCode(_lastOpcode);
                                 Log.Debug(Category.QCode, "NextOp extended opcode is {0:x4}-{1} at BPC {2}",
                                           _lastOpcode, q.Mnemonic, BPC);
@@ -586,7 +587,7 @@ namespace PERQemu.Processor
         /// Selects the proper BMUX input for the specified instruction.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int GetBmuxInput(Instruction uOp)
+        int GetBmuxInput(Instruction uOp)
         {
             int bmux = 0;
 
@@ -607,7 +608,7 @@ namespace PERQemu.Processor
         /// Dispatches function and special function operations based on the instruction
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void DispatchFunction(Instruction uOp)
+        void DispatchFunction(Instruction uOp)
         {
             switch (uOp.F)
             {
@@ -1051,11 +1052,11 @@ namespace PERQemu.Processor
         protected static ulong _cycleTime;
 
         // Major components, common to all CPU types
-        private RasterOp _rasterOp;
-        private Sequencer _usequencer;
-        private ControlStore _ustore;
-        private RegisterFile _xy;
-        private ExpressionStack _estack;
+        RasterOp _rasterOp;
+        Sequencer _usequencer;
+        ControlStore _ustore;
+        RegisterFile _xy;
+        ExpressionStack _estack;
 
         // Shared with the sequencer
         protected ALU _alu;
@@ -1063,34 +1064,34 @@ namespace PERQemu.Processor
         protected InterruptEncoder _interrupt;
 
         // Memory card reference
-        private MemoryBoard _memory;
+        MemoryBoard _memory;
 
         // Parent
-        private PERQSystem _system;
+        PERQSystem _system;
 
         //
         // Parts we implement in this file directly
         //
 
-        // Multiplier Quotient register ("MQ") only exists in the 16K or newer CPUs,
-        // but some microcode (VFY 2.x, e.g.) tries to write/read from MQ to test
-        // for WCS size on the fly.  So we define MQ for all CPU types, but treat
-        // it as read-only in the 4K variant.
-        private ushort _mq;
-        private bool _mqEnabled;
+        // Byte Program Counter
+        protected int _bpc;
+        protected bool _incrementBPC;
 
         // Note that the Op file is only 8 bytes, but BPC is a 4-bit counter...
         protected byte[] _opFile = new byte[16];
 
         // Flag if LoadOp is requested (hardware assisted refill of the 8x8 OpFile)
-        private bool _refillOp;
-
-        // Byte Program Counter
-        protected int _bpc;
-        protected bool _incrementBPC;
+        bool _refillOp;
 
         // IO data
-        private int _iod;
+        int _iod;
+
+        // Multiplier Quotient register ("MQ") only exists in the 16K or newer CPUs,
+        // but some microcode (VFY 2.x, e.g.) tries to write/read from MQ to test
+        // for WCS size on the fly.  So we define MQ for all CPU types, but treat
+        // it as read-only in the 4K variant.
+        ushort _mq;
+        bool _mqEnabled;
 
         //
         // Housekeeping
@@ -1099,14 +1100,14 @@ namespace PERQemu.Processor
         protected bool _break;
 
         // Diagnostic counter
-        private int _dds;
+        int _dds;
 
         // Copy of Bmux bits in microstate register
         // for mysterious, if not nefarious purposes
         protected int _lastBmux;
 
         // Trace/debugging support
-        private ushort _lastPC;
-        private ushort _lastOpcode;
+        ushort _lastPC;
+        ushort _lastOpcode;
     }
 }

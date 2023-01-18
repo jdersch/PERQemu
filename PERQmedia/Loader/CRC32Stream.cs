@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //  
 //  This file inspired by bits of code from numerous sources, including
 //      Rei Miyasaka (CodeProject Open License)
@@ -160,7 +160,7 @@ namespace PERQmedia
             return crc;
         }
 
-        private static void GenerateTable()
+        static void GenerateTable()
         {
             unchecked
             {
@@ -186,15 +186,15 @@ namespace PERQmedia
         // The underlying Stream
         Stream _stream;
 
-        // Running checksum values
-        private static uint _readCRC;
-        private static uint _writeCRC;
-
         // Standard polynomial
         public static uint Polynomial = 0xedb88320;
 
+        // Running checksum values
+        static uint _readCRC;
+        static uint _writeCRC;
+
         // Pre-generated table
-        private static uint[] _table;
+        static uint[] _table;
     }
 }
 

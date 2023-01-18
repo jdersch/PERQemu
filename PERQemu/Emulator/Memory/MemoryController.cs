@@ -1,5 +1,5 @@
 //
-// MemoryController.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// MemoryController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -23,7 +23,6 @@ using System.Runtime.CompilerServices;
 
 namespace PERQemu.Memory
 {
-
     /// <summary>
     /// Represents a request to the memory subsystem.
     /// </summary>
@@ -192,7 +191,7 @@ namespace PERQemu.Memory
         /// If the current op is complete and a pending op is ready, promote it.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Recognize()
+        void Recognize()
         {
             if (_pending.Active && !_current.Active)
             {
@@ -213,7 +212,7 @@ namespace PERQemu.Memory
         /// index of the current op if applicable.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void RunStateMachine()
+        void RunStateMachine()
         {
             // Bump the state
             _state = _nextState;
@@ -268,7 +267,7 @@ namespace PERQemu.Memory
         /// WARNING: THIS IS WHERE THE SAUSAGE IS MADE.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void UpdateBookmarks(MemoryCycle nextCycle)
+        void UpdateBookmarks(MemoryCycle nextCycle)
         {
             if (nextCycle == MemoryCycle.None)
             {
@@ -405,7 +404,7 @@ namespace PERQemu.Memory
         /// Gets the bookmark for a particular cycle type.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private BookmarkEntry GetBookmarkEntry(int book, MemoryState state)
+        BookmarkEntry GetBookmarkEntry(int book, MemoryState state)
         {
             //
             // Index into the "bookmark" table:
@@ -423,7 +422,7 @@ namespace PERQemu.Memory
         /// <summary>
         /// Load the BKM16 ROM image from disk.
         /// </summary>
-        private static void LoadBookmarkROM()
+        static void LoadBookmarkROM()
         {
             // BKM is a lookup table with an 8-bit index, returning an 8-bit value
             using (var fs = new FileStream(Paths.BuildPROMPath("bkm16emu.rom"), FileMode.Open))
@@ -451,27 +450,27 @@ namespace PERQemu.Memory
         }
 #endif
 
-        private string _name;
-        private MemoryState _state;
-        private MemoryState _nextState;
+        string _name;
+        MemoryState _state;
+        MemoryState _nextState;
 
-        private MemoryRequest _current;
-        private MemoryRequest _pending;
+        MemoryRequest _current;
+        MemoryRequest _pending;
 
-        private int _quadWordMask;
-        private int _doubleWordMask;
+        int _quadWordMask;
+        int _doubleWordMask;
 
-        private int _address;
-        private int _index;
-        private bool _wait;
-        private bool _valid;
+        int _address;
+        int _index;
+        bool _wait;
+        bool _valid;
 
-        private int _bookmark;
-        private int _nextBookmark;
+        int _bookmark;
+        int _nextBookmark;
 
-        private static BookmarkEntry[] _bkmTable;
+        static BookmarkEntry[] _bkmTable;
 
-        private MemoryBoard _mem;   // parent
+        MemoryBoard _mem;   // parent
     }
 }
 
@@ -483,19 +482,21 @@ namespace PERQemu.Memory
 The real PERQ memory rules are seriously hairy.  To make matters much worse, the
 wording in the Microprogrammers' Guide is terribly confusing:
 
-1. For any Fetch executed in T3, any memory reference in T0 or T1 is ignored, EXCEPT:
-- a Store in T2 will start immediately          [Uh, we're talking about T0/T1 here??]
-- a Store4 or Store4R can be specified in T0    [Will stall until T2? Or need MDO in T1?]
-All others will abort until the correct cycle.   [But.. you said "ignored" above. What?]
+1. For any Fetch executed in T3, any memory reference in T0 or T1 is ignored,
+EXCEPT:
+    - a Store in T2 will start immediately          [Uh, we're talking about T0/T1 here??]
+    - a Store4 or Store4R can be specified in T0    [Will stall until T2? Or need MDO in T1?]
+
+All others will abort until the correct cycle.      [But you said "ignored" above. What?]
 
 2. After a Store in T2, any memory reference in T3 or T0 is ignored, but
 refs started in T1 are aborted until the correct cycle.
 
 3. After a Store2/4/4R in T3, any reference in the next 4 cycles is ignored.
-But references started in T0 are aborted until the correct cycle.  [Uh, "ignored"?  You
-keep using that word. I do not think it means what you think it means...]
+But references started in T0 are aborted until the correct cycle.  ["Ignored?"
+You keep using that word. I do not think it means what you think it means...]
 
-Hold must be asserted in T2 to be effective; PERQemu doesn't worry about IO contention...
+Hold must be asserted in T2 to be effective; PERQemu doesn't worry about IO contention.
 
 After a Fetch, MDI is valid from T2 to the following T1; all other Fetches supply
 one word for a single microcycle.
@@ -504,9 +505,9 @@ one word for a single microcycle.
 
 Notes on the "indirect fetches" special case:
 
-Because MDI is valid for four cycles after a one-word Fetch, a running Fetch can provide the address
-for a subsequent Fetch (of any variety) issued in the immediate T2 -- first valid MDI cycle, when we
-transition from WaitT2 to Running: 
+Because MDI is valid for four cycles after a one-word Fetch, a running Fetch can
+provide the address for a subsequent Fetch (of any variety) issued in the immediate
+T2 -- first valid MDI cycle, when we transition from WaitT2 to Running: 
 	MA := addr1, Fetch;		(t3)
 	(explicit inst or Nop)	(t0)
 	(explicit inst or Nop)	(t1)
@@ -514,59 +515,75 @@ transition from WaitT2 to Running:
 			..				(t0,t1)
 	Rnn := MDI;				(t2)
 
-Page 3-36 of the uProgrammer's Guide (15-Jan-1984) illustrates this, and states explicitly that the
-second Fetch* instruction is in fact stalled by one cycle.
+Page 3-36 of the uProgrammer's Guide (15-Jan-1984) illustrates this, and states
+explicitly that the second Fetch* instruction is in fact stalled by one cycle.
 
-In the previous queue-based implementation, the second Fetch would execute in t2, then stall in t3
-waiting for Recognize() to invalidate the MemoryInstructions in the t0, t1 slots, then queue up the
-new instructions to execute starting as usual in the next t2.  It was a hack, but it worked because
-we kept a RequestID that tracked each instruction word and could Retire() instructions in any order.
-The MDI access happened in t2, so the second Fetch latched the correct starting address.
+In the previous queue-based implementation, the second Fetch would execute in t2,
+then stall in t3 waiting for Recognize() to invalidate the MemoryInstructions in
+the t0, t1 slots, then queue up the new instructions to execute starting as usual
+in the next t2.  It was a hack, but it worked because we kept a RequestID that
+tracked each instruction word and could Retire() instructions in any order.  The
+MDI access happened in t2, so the second Fetch latched the correct starting address.
 
-The new implementation now snoops the microinstruction and aborts the processor until the correct
-cycle when a memory op is selected:  the uOp.MemoryCycle is passed through Memory.Tick() ->
-MemoryController.Clock()), which consults the runes, tea leaves and other cosmic sources to set the
-Wait flag at the _top_ of the microcycle, before it executes.  This means we can single-step through
-all phases of the request, including aborts, and it means that when the instruction executes we're
-already in the correct cycle.  It does away with all of the queues entirely (and the associated GC
-overhead) and replaces all the mechanics with a simple table lookup.  This is based loosely on the
-hardware's "bookmark" ROM (BKM16.2), which now determines the timing of state machine transitions,
-and provides a small set of flags and the Index value for multi-word fetches and stores.
+The new implementation now snoops the microinstruction and aborts the processor
+until the correct cycle when a memory op is selected:  the uOp.MemoryCycle is
+passed through Memory.Tick() -> MemoryController.Clock()), which consults the
+runes, tea leaves and other cosmic sources to set the Wait flag at the _top_ of
+the microcycle, before it executes.  This means we can single-step through all
+phases of the request, including aborts, and it means that when the instruction
+executes we're already in the correct cycle.  It does away with all of the queues
+entirely (and the associated GC overhead) and replaces all the mechanics with a
+simple table lookup.  This is based loosely on the hardware's "bookmark" ROM
+(BKM16.2), which now determines the timing of state machine transitions, and
+provides a small set of flags/index value for multi-word fetches and stores.
 
-The first whack at this was based on setting an initial bookmark value based on the cycle type,
-memory state machine state, time val, RasterOp enabled flag, and next cycle type (to handle the
-overlap cases below).  This would be looked up in a separate table, producing a single n-bit
-bookmark which would essentially be the next address in the table.  A 13-bit index seemed excessive,
-and editing an 8,192-line input file extremely tedious.  By stripping off 5 bits and special-casing
-the weird ones, it's a faaaar more manageable 256 entries, some of which are unused.  The tradeoff
-is a bit of complexity in UpdateBookmark().
+The first whack at this was based on setting an initial bookmark value based on
+the cycle type, memory state machine state, time val, RasterOp enabled flag, and
+next cycle type (to handle the overlap cases below).  This would be looked up in
+a separate table, producing a single n-bit bookmark which would essentially be
+the next address in the table.  A 13-bit index seemed excessive, and editing an
+8,192-line input file extremely tedious.  By stripping off 5 bits and special-
+casing the weird ones, it's a faaaar more manageable 256 entries, some of which
+are unused.  The tradeoff is a bit of complexity in UpdateBookmark().
 
 Those tricky cases that require special attention are two:
-1.	Store4 or Store4R when RasterOp is enabled can execute in t0, rather than the usual t3;
-	this means the timings shift by one cycle, and the simplest way to accommodate that is to
-	fake up a separate bookmark value for those two cycles.  Because we're using 4 bits to
-	represent the 8 fetch/store types plus a "none", it seemed simpler to use two empty slots
-	rather than add another bit ("RopEnabled") to the index, doubling the table size.  When a
-	Store4/4R is issued in t0 and the RasterOp unit is enabled, we set the bookmark type to
-	the appropriate fake one for the duration.
+1.	Store4 or Store4R when RasterOp is enabled can execute in t0, rather than the
+    usual t3; this means the timings shift by one cycle, and the simplest way to
+    accommodate that is to fake up a separate bookmark value for those two cycles.
+    Because we're using 4 bits to represent the 8 fetch/store types plus a "none",
+    it seemed simpler to use two empty slots rather than add another bit (for
+    "RopEnabled") to the index, doubling the table size.  When a Store4/4R is
+    issued in t0 and the RasterOp unit is enabled, we set the bookmark type to 
+    the appropriate fake one for the duration.
 
-2.	The overlapped Fetch cases, detailed above.  This turns out to be a little trickier, but
-	the solution was very similar: rather than add four more bits to the index ("curOp" and
-	"nextOp"), ballooning up the table, or splitting it into two (like the "GMV" PROM in the
-	hardware) I created another fake cycle type: "IndFetch".  The dark bit of magic here is
-	that we use this bookmark value only for the t2,t3 where the overlap occurs -- specifying
-	that the MDI word is still valid -- but then setting the "real" bookmark value to the
-	correct fetch type to track the second cycle (with its usual timings).  That is, we have
-	to use modified flags in the _top_ of the overlapped t3 -- allow the CPU to execute with
-	MDI from the first Fetch -- then accept the new Fetch<> in the bottom half of the cycle
-	with the correct bookmark type.  Because the overlapped request executes in t3 as usual,
-	we transition back to WaitT2 in the next cycle -- invalidating MDI in the t0,t1 slots as
-	we did in the queue implementation, but essentially "for free."
+2.	The overlapped Fetch cases, detailed above.  This turns out to be a little
+    trickier, but the solution was very similar: rather than add four more bits
+    to the index ("curOp" and "nextOp"), ballooning up the table, or splitting 
+    it into two (like the "GMV" PROM in the hardware) I created another fake 
+    cycle type: "IndFetch".  The dark bit of magic here is that we use this
+    bookmark value only for the t2,t3 where the overlap occurs -- specifying
+	that the MDI word is still valid -- but then setting the "real" bookmark
+	value to the correct fetch type to track the second cycle (with its usual
+	timings).  That is, we use modified flags in the top of the overlapped t3 --
+	allow the CPU to execute with MDI from the first Fetch -- then accept the new
+	Fetch<> in the bottom half of the cycle with the correct bookmark type.
+	Because the overlapped request executes in t3 as usual, we transition back
+	to WaitT2 in the next cycle -- invalidating MDI in the t0,t1 slots as we did
+	in the queue implementation, but essentially "for free." 
+	
+TL;DR: the new mechanism is a balance between keeping the lookup table as compact
+as possible while accepting only a couple of oddball cases.  The "pure" approaches
+would have required more input bits and a much larger index (and a LOT more work 
+to create :-) so this is hopefully a good compromise -- and a decent performance
+benefit!
 
-TL;DR: the new mechanism is a balance between keeping the lookup table as compact as possible
-while accepting only a couple of oddball cases.  The "pure" approaches would have required more
-input bits and a much larger index (and a LOT more work to create :-) so this is hopefully a
-good compromise -- and a decent performance benefit!
+[In 2021-2022 a bunch more tapes/floppies were archived that included a few more
+detailed drawings, files and notes regarding the implementation of the memory
+state machine in the hardware, shedding new light on how some of the trickier
+overlapped cases and RasterOp pipelining actually works.  It may be possible to
+revisit this and simplify/clarify/streamline the emulation in the future, perhaps
+as part of implementing the DMA/Hold bit functionality (which may be necessary
+or desirable to make the EIO board/Ethernet emulation more accurate?).]
 
 */
 #endregion

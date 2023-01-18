@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -203,7 +203,7 @@ namespace PERQmedia
         /// <summary>
         /// Converts the image to byte array.
         /// </summary>
-        private byte[] ConvertImageToByteArray(Image image, ImageFormat fmt)
+        byte[] ConvertImageToByteArray(Image image, ImageFormat fmt)
         {
             using (var memoryStream = new MemoryStream())
             {
@@ -213,10 +213,11 @@ namespace PERQmedia
         }
 
         // Storage for the "raw" label data
-        private byte[] _textLabel;
-        private byte[] _imageLabel;
+        byte[] _textLabel;
+        byte[] _imageLabel;
     }
 }
+
 /*
 
 using System;

@@ -1,5 +1,5 @@
 ﻿//
-// TMS9914A.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// TMS9914A.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -465,6 +465,16 @@ namespace PERQemu.IO.Z80
 
                 case AuxiliaryCommand.dai:
                     _interruptsEnabled = cs;
+                    break;
+
+                case AuxiliaryCommand.rhdf:    // Release RFD holdoff
+                case AuxiliaryCommand.hdfa:    // Holdoff on all data
+                case AuxiliaryCommand.hdfe:    // Holdoff on EOI only
+                    if (cs)
+                    {
+                        Log.Warn(Category.GPIB, "Unimplemented Aux Command {0} with cs {1}", cmd, cs);
+                    }
+                    // If turning off something we never turned on, ignore it! :-)
                     break;
 
                 default:

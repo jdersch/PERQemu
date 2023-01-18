@@ -1,5 +1,5 @@
 //
-// Z80IOBus.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Z80IOBus.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -50,8 +50,10 @@ namespace PERQemu.IO.Z80
             }
         }
 
-        // debugging: print transitions of z80 irq signals
-        // for eio this might have to actually become a standalone priority encoder (am9517)
+        /// <summary>
+        /// Debugging: print transitions of Z80 IRQ signals.  For EIO this might
+        /// become a standalone priority encoder (Am9517)?
+        /// </summary>
         public void ActiveInterrupts()
         {
             for (var d = 0; d < _devices.Count; d++)
@@ -114,7 +116,7 @@ namespace PERQemu.IO.Z80
             _z80System.CPU.RegisterInterruptSource(device);
         }
 
-        private byte ReadPort(int port)
+        byte ReadPort(int port)
         {
             IZ80Device device = _devicePorts[port];
             byte value = 0xff;
@@ -133,7 +135,7 @@ namespace PERQemu.IO.Z80
             return value;
         }
 
-        private void WritePort(int port, byte value)
+        void WritePort(int port, byte value)
         {
             IZ80Device device = _devicePorts[port];
 
@@ -150,10 +152,10 @@ namespace PERQemu.IO.Z80
         }
 
         // debug
-        private bool[] _status;
+        bool[] _status;
 
-        private List<IZ80Device> _devices;
-        private IZ80Device[] _devicePorts;
-        private Z80System _z80System;
+        List<IZ80Device> _devices;
+        IZ80Device[] _devicePorts;
+        Z80System _z80System;
     }
 }

@@ -1,5 +1,5 @@
 //
-// Z80System.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Z80System.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -100,13 +100,13 @@ namespace PERQemu.IO.Z80
             // Attach the configured tablet(s)
             if (system.Config.Tablet.HasFlag(TabletType.BitPad))
             {
-                BitPadOne tablet = new BitPadOne(_scheduler, system);
+                var tablet = new BitPadOne(_scheduler, system);
                 _tms9914a.Bus.AddDevice(tablet);
             }
 
             if (system.Config.Tablet.HasFlag(TabletType.Kriz))
             {
-                KrizTablet tablet = new KrizTablet(_scheduler, system);
+                var tablet = new KrizTablet(_scheduler, system);
                 _z80sio.AttachDevice(1, tablet);
             }
 
@@ -335,7 +335,7 @@ namespace PERQemu.IO.Z80
         /// <summary>
         /// The thread proc for asynchronous Z80 execution.
         /// </summary>
-        private void AsyncThread()
+        void AsyncThread()
         {
             // Catch events from the controller
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
@@ -411,7 +411,7 @@ namespace PERQemu.IO.Z80
             Log.Detail(Category.Emulator, "Z80System shutdown.");
         }
 
-        private void OnRunStateChange(RunStateChangeEventArgs s)
+        void OnRunStateChange(RunStateChangeEventArgs s)
         {
             Log.Debug(Category.Controller, "[Z80 state change event -> {0}]", s.State);
             _stopAsyncThread = (s.State != RunState.Running);
@@ -489,11 +489,11 @@ namespace PERQemu.IO.Z80
             IZ80Registers regs = _cpu.Registers;
 
             // TODO: should display shadow regs?
-            string state = string.Format("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4} IX=${6:x4} IY=${7:x4}",
+            var state = string.Format("Z80 PC=${0:x4} SP=${1:x4} AF=${2:x4} BC=${3:x4} DE=${4:x4} HL=${5:x4} IX=${6:x4} IY=${7:x4}",
                                          regs.PC, regs.SP, regs.AF, regs.BC, regs.DE, regs.HL, regs.IX, regs.IY);
             ushort offset = 0;
-            string symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
-            string source = _z80Debugger.GetSourceLineForAddress(regs.PC);
+            var symbol = _z80Debugger.GetSymbolForAddress(regs.PC, out offset);
+            var source = _z80Debugger.GetSourceLineForAddress(regs.PC);
 
             // Log the state
             Log.Debug(Category.Z80Inst, "{0}", state);
@@ -527,32 +527,32 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private Z80Processor _cpu;
-        private Z80MemoryBus _memory;
-        private Z80IOBus _bus;
-        private Z80SIO _z80sio;
-        private Z80CTC _z80ctc;
-        private Z80DMA _z80dma;
-        private IOReg3 _ioReg3;
-        private DMARouter _dmaRouter;
-        private PERQToZ80FIFO _perqToZ80Fifo;
-        private Z80ToPERQFIFO _z80ToPerqFifo;
-        private HardDiskSeekControl _seekControl;
-        private NECuPD765A _fdc;
-        private TMS9914A _tms9914a;
+        Z80Processor _cpu;
+        Z80MemoryBus _memory;
+        Z80IOBus _bus;
+        Z80SIO _z80sio;
+        Z80CTC _z80ctc;
+        Z80DMA _z80dma;
+        IOReg3 _ioReg3;
+        DMARouter _dmaRouter;
+        PERQToZ80FIFO _perqToZ80Fifo;
+        Z80ToPERQFIFO _z80ToPerqFifo;
+        HardDiskSeekControl _seekControl;
+        NECuPD765A _fdc;
+        TMS9914A _tms9914a;
 
-        private Keyboard _keyboard;
+        Keyboard _keyboard;
 
-        private Z80Debugger _z80Debugger;
-        private Scheduler _scheduler;
-        private PERQSystem _system;
+        Z80Debugger _z80Debugger;
+        Scheduler _scheduler;
+        PERQSystem _system;
 
-        private ManualResetEventSlim _sync;
-        private long _wakeup;
+        ManualResetEventSlim _sync;
+        long _wakeup;
 
-        private Thread _asyncThread;
+        Thread _asyncThread;
 
-        private volatile bool _running;
-        private volatile bool _stopAsyncThread;
+        volatile bool _running;
+        volatile bool _stopAsyncThread;
     }
 }

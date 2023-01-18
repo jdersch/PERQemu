@@ -1,5 +1,5 @@
 ﻿//
-// DebugAttribute.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// DebugAttribute.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -63,9 +63,9 @@ namespace PERQemu.Debugger
             get { return _size; }
         }
 
-        private string _name;
-        private string _description;
-        private int _size;
+        string _name;
+        string _description;
+        int _size;
     }
 }
 

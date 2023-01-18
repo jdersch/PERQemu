@@ -1,5 +1,5 @@
 ﻿//
-// EventLoop.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// EventLoop.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -197,7 +197,7 @@ namespace PERQemu.UI
         /// Handle SDL events.  This executes in the UI context (main thread).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SDLMessageHandler(SDL.SDL_Event e)
+        void SDLMessageHandler(SDL.SDL_Event e)
         {
             // If a delegate is registered, pass it the event
             if (_uiEventDispatch.ContainsKey(e.type))
@@ -262,7 +262,7 @@ namespace PERQemu.UI
         /// coalesce multiple updates when the events come in a flurry; resets the
         /// changed flag.
         /// </summary>
-        private void UpdateWindowState()
+        void UpdateWindowState()
         {
             var flags = SDL.SDL_GetWindowFlags(_displayWindow);
             Log.Detail(Category.UI, "Update: Window flags {0}", flags);
@@ -288,7 +288,7 @@ namespace PERQemu.UI
         /// Called when the Display window is minimized or hidden; if the
         /// PauseWhenMinimized setting is true, pause the emulator.
         /// </summary>
-        private void HideOrMinimize(SDL.SDL_WindowFlags flags)
+        void HideOrMinimize(SDL.SDL_WindowFlags flags)
         {
             // Pause only if minimized or "iconified", not just hidden?  Splitting hairs?
             if (((flags & SDL.SDL_WindowFlags.SDL_WINDOW_MINIMIZED) != 0) &&
@@ -304,7 +304,7 @@ namespace PERQemu.UI
         /// <summary>
         /// If we're embiggened, unpause if paused.
         /// </summary>
-        private void UnhideOrRestore(SDL.SDL_WindowFlags flags)
+        void UnhideOrRestore(SDL.SDL_WindowFlags flags)
         {
             // SDL2 on Windows will set *both* SHOWN and MINIMIZED at the same time
             // because THAT makes sense... if the "auto hide task bar" Windows setting
@@ -327,7 +327,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Set our preferred cursor on window focus.
         /// </summary>
-        private void FocusCursor()
+        void FocusCursor()
         {
             if (Settings.CursorPreference == Cursor.Hidden)
             {
@@ -345,7 +345,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Restore the system cursor when leaving the window.
         /// </summary>
-        private void ReleaseCursor()
+        void ReleaseCursor()
         {
             SDL.SDL_SetCursor(_defaultCursor);
             SDL.SDL_ShowCursor(SDL.SDL_ENABLE);
@@ -385,17 +385,17 @@ namespace PERQemu.UI
         }
 
 
-        private int _timerHandle;
-        private bool _sdlRunning;
-        private bool _resumeOnRestore;
-        private bool _winStateChanged;
-        private uint _winFlags;
+        int _timerHandle;
+        bool _sdlRunning;
+        bool _resumeOnRestore;
+        bool _winStateChanged;
+        uint _winFlags;
 
-        private IntPtr _displayWindow;
-        private IntPtr _defaultCursor;
-        private IntPtr _crossHairs;
+        IntPtr _displayWindow;
+        IntPtr _defaultCursor;
+        IntPtr _crossHairs;
 
-        private Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate> _uiEventDispatch;
+        Dictionary<SDL.SDL_EventType, SDLMessageHandlerDelegate> _uiEventDispatch;
     }
 }
 

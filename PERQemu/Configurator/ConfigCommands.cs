@@ -1,5 +1,5 @@
 ﻿//
-// ConfigCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// ConfigCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -20,7 +20,6 @@
 using System;
 
 using PERQmedia;
-
 using PERQemu.Config;
 
 namespace PERQemu.UI
@@ -46,7 +45,7 @@ namespace PERQemu.UI
         /// mess with a running instance are prohibited.  Returns true if the
         /// PERQ is off, false (with an error message) if it's running.
         /// </summary>
-        private bool OKtoReconfig()
+        bool OKtoReconfig()
         {
             if (PERQemu.Controller.State > RunState.Off)
             {
@@ -118,7 +117,7 @@ namespace PERQemu.UI
             Console.WriteLine("Standard configurations:");
             foreach (var key in prefabs)
             {
-                Configuration perq = PERQemu.Config.GetConfigByName(key);
+                var perq = PERQemu.Config.GetConfigByName(key);
                 Console.WriteLine("    {0} - {1}", perq.Name.PadLeft(10), perq.Description);
             }
 
@@ -137,7 +136,7 @@ namespace PERQemu.UI
         [Command("configure show", "Show a pre-defined machine configuration")]
         public void ShowConfiguration([KeywordMatch("Configs")] string name)
         {
-            Configuration conf = PERQemu.Config.GetConfigByName(name);
+            var conf = PERQemu.Config.GetConfigByName(name);
 
             if (conf == null)
             {
@@ -314,7 +313,7 @@ namespace PERQemu.UI
             }
         }
 
-        private uint RoundToPowerOf2(uint n)
+        uint RoundToPowerOf2(uint n)
         {
             n--;
             n |= n >> 1;
@@ -479,7 +478,6 @@ namespace PERQemu.UI
 
                     // These are valid for OIO and MLO
                     case IOOptionType.Link:
-                    case IOOptionType.LinkTape:
                     case IOOptionType.Tape:
                         if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
                             PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
@@ -490,17 +488,14 @@ namespace PERQemu.UI
                         }
                         else
                         {
-                            Console.WriteLine("That option not compatible with the selected IO Option board.");
+                            Console.WriteLine("That option is incompatible with the selected IO Option board.");
                         }
                         break;
 
                     // These are only valid for OIO, but Ether may conflict
                     // if the EIO board is selected.  Does it work with the NIO?
                     case IOOptionType.Ether:
-                    case IOOptionType.EthCan:
-                    case IOOptionType.EthCanTape:
                     case IOOptionType.Canon:
-                    case IOOptionType.CanTape:
                         if (PERQemu.Config.Current.IOBoard == IOBoardType.NIO &&
                             opt.HasFlag(IOOptionType.Ether))
                         {
@@ -598,6 +593,35 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("configure ethernet address", "Set the low word (two octets) of the Ethernet address")]
+        public void SetEthernetAddress(ushort address)
+        {
+            if (PERQemu.Config.Quietly)
+            {
+                PERQemu.Config.Current.EtherAddress = address;
+                return;
+            }
+
+            if (address != PERQemu.Config.Current.EtherAddress)
+            {
+                PERQemu.Config.Current.EtherAddress = address;
+                PERQemu.Config.Changed = true;
+                Console.WriteLine($"Ethernet address (low word) now {address}.");
+            }
+
+            if (PERQemu.Config.HasEthernet(PERQemu.Config.Current))
+            {
+                if (PERQemu.Controller.State > RunState.Off)
+                {
+                    Console.WriteLine("Note: The running PERQ won't see the change until reset or restart.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Note: No Ethernet interface is currently configured.");
+            }
+        }
+
         [Command("configure display", "Configure the display device")]
         public void SetDisplay(DisplayType disp)
         {
@@ -648,7 +672,7 @@ namespace PERQemu.UI
         {
             if (OKtoReconfig())
             {
-                bool changed = EnableOrDisableSerial(port, true);
+                var changed = EnableOrDisableSerial(port, true);
 
                 if (changed && !PERQemu.Config.Quietly)
                     Console.WriteLine($"RS-232 port {char.ToUpper(port)} enabled.");
@@ -660,14 +684,14 @@ namespace PERQemu.UI
         {
             if (OKtoReconfig())
             {
-                bool changed = EnableOrDisableSerial(port, false);
+                var changed = EnableOrDisableSerial(port, false);
 
                 if (changed && !PERQemu.Config.Quietly)
                     Console.WriteLine($"RS-232 port {char.ToUpper(port)} disabled.");
             }
         }
 
-        private bool EnableOrDisableSerial(char port, bool flag)
+        bool EnableOrDisableSerial(char port, bool flag)
         {
             switch (port)
             {
@@ -736,7 +760,7 @@ namespace PERQemu.UI
             // Now look for what was given (or its qualified version)
             foreach (var d in PERQemu.Config.Current.Drives)
             {
-                if (d.MediaPath == file || d.MediaPath == path)
+                if (d.MediaPath == file || (path != "" && d.MediaPath == path))
                 {
                     ConfigUnassignUnit((byte)d.Unit);
                     return;

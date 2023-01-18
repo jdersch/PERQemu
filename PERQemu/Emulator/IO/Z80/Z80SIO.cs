@@ -1,5 +1,5 @@
 //
-// Z80SIO.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Z80SIO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -186,9 +186,9 @@ namespace PERQemu.IO.Z80
         }
 
 
-        private Channel[] _channels;
+        Channel[] _channels;
 
-        private byte _baseAddress;
-        private byte[] _ports;
+        byte _baseAddress;
+        byte[] _ports;
     }
 }

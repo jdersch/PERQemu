@@ -1,5 +1,5 @@
 //
-// CPUBoard.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// CPUBoard.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -130,7 +130,7 @@ namespace PERQemu.Processor
         /// <summary>
         /// The thread proc for asynchronous CPU and Scheduler execution.
         /// </summary>
-        private void AsyncThread()
+        void AsyncThread()
         {
             // Catch events from the controller
             PERQemu.Controller.RunStateChanged += OnRunStateChange;
@@ -203,7 +203,7 @@ namespace PERQemu.Processor
             Log.Detail(Category.Emulator, "CPUBoard shutdown.");
         }
 
-        private void OnRunStateChange(RunStateChangeEventArgs s)
+        void OnRunStateChange(RunStateChangeEventArgs s)
         {
             Log.Debug(Category.Controller, "[CPU state change event -> {0}]", s.State);
             _stopAsyncThread = (s.State != RunState.Running);
@@ -225,13 +225,13 @@ namespace PERQemu.Processor
             }
         }
 
-        private CPU _processor;
-        private Scheduler _scheduler;
-        private PERQSystem _system;
+        CPU _processor;
+        Scheduler _scheduler;
+        PERQSystem _system;
 
-        private SystemTimer _heartbeat;
+        SystemTimer _heartbeat;
 
-        private Thread _asyncThread;
-        private volatile bool _stopAsyncThread;
+        Thread _asyncThread;
+        volatile bool _stopAsyncThread;
     }
 }

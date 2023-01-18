@@ -1,5 +1,5 @@
 //
-// BitPadOne.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// BitPadOne.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -104,7 +104,7 @@ namespace PERQemu.IO.GPIB
         /// turns the tablet off and on quite frequently -- we collect the mouse
         /// data every trip, but only send it if we're the GPIB Talker.
         /// </summary>
-        private void SendData(ulong skewNsec, object context)
+        void SendData(ulong skewNsec, object context)
         {
             // Please see the Notes below for tablet data format details!
 
@@ -149,9 +149,9 @@ namespace PERQemu.IO.GPIB
         /// Sends the X, Y integer coordinates as four digit ASCII strings.
         /// Because THAT's efficient, 125 times a second.
         /// </summary>
-        private void WriteIntAsStringToQueue(int i)
+        void WriteIntAsStringToQueue(int i)
         {
-            string str = string.Format("{0:d4}", i);
+            var str = string.Format("{0:d4}", i);
 
             for (int j = 0; j < str.Length; j++)
             {
@@ -159,20 +159,20 @@ namespace PERQemu.IO.GPIB
             }
         }
 
-        private bool _talking;
-        private bool _listening;
-        private BusWriteDelegate _txDelegate;
+        bool _talking;
+        bool _listening;
+        BusWriteDelegate _txDelegate;
 
-        private readonly byte[] _buttonMapping = { 0x30, 0x32, 0x31, 0x33, 0x38, 0x35, 0x36, 0x37,
+        readonly byte[] _buttonMapping = { 0x30, 0x32, 0x31, 0x33, 0x38, 0x35, 0x36, 0x37,
                                                    0x34, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46 };
-        private const byte _delimiter1 = 0x2c;      // ,
-        private const byte _delimiter2 = 0x0a;      // LF
+        const byte _delimiter1 = 0x2c;      // ,
+        const byte _delimiter2 = 0x0a;      // LF
 
-        private ulong _sampleInterval = (1000 / SampleRate) * Conversion.MsecToNsec;
-        private SchedulerEvent _sampleEvent;
+        ulong _sampleInterval = (1000 / SampleRate) * Conversion.MsecToNsec;
+        SchedulerEvent _sampleEvent;
 
-        private Scheduler _scheduler;
-        private PERQSystem _system;
+        Scheduler _scheduler;
+        PERQSystem _system;
     }
 }
 

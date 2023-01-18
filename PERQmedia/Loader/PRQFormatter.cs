@@ -3,7 +3,7 @@
 //
 //  Author:  S. Boondoggle <skeezicsb@gmail.com>
 //
-//  Copyright (c) 2022, Boondoggle Heavy Industries, Ltd.
+//  Copyright (c) 2022-2023, Boondoggle Heavy Industries, Ltd.
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -68,7 +68,7 @@ namespace PERQmedia
         /// Read the header section and verify that the file contains a
         /// PRQM-formatted image.
         /// </summary>
-        private bool ReadHeaderWithCRC(CRC32Stream fs, StorageDevice dev)
+        bool ReadHeaderWithCRC(CRC32Stream fs, StorageDevice dev)
         {
             try
             {
@@ -165,7 +165,7 @@ namespace PERQmedia
         /// <summary>
         /// Read the data section from a PRQM file.
         /// </summary>
-        private bool ReadDataWithCRC(CRC32Stream fs, StorageDevice dev)
+        bool ReadDataWithCRC(CRC32Stream fs, StorageDevice dev)
         {
             if (fs.Position != _helper.DataStart)
             {
@@ -227,7 +227,7 @@ namespace PERQmedia
 
                 if (_helper.Data.Length != total)
                 {
-                    Log.Warn(Category.MediaLoader, 
+                    Log.Warn(Category.MediaLoader,
                               "Data size mismatch: computed {0} != actual {1}",
                               total, _helper.Data.Length);
                     // Probably screwed at this point?
@@ -269,7 +269,7 @@ namespace PERQmedia
         /// Write a PERQmedia archive from a StorageDevice to the opened
         /// stream.  Compresses the data and computes the CRC.
         /// </summary>
-        private bool WriteWithCRC(CRC32Stream fs, StorageDevice dev)
+        bool WriteWithCRC(CRC32Stream fs, StorageDevice dev)
         {
             // Reset the CRC
             CRC32Stream.ResetChecksum();
@@ -359,6 +359,6 @@ namespace PERQmedia
             return true;
         }
 
-        private PRQFormatHelper _helper;
+        PRQFormatHelper _helper;
     }
 }

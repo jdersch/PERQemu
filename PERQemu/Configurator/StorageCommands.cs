@@ -1,5 +1,5 @@
 //
-// StorageCommands.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// StorageCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -51,7 +51,7 @@ namespace PERQemu.UI
         }
 
         [Command("storage status", "Show status of loaded storage devices")]
-        private void StorageStatus()
+        void StorageStatus()
         {
             if (PERQemu.Controller.State == RunState.Off)
             {
@@ -86,7 +86,7 @@ namespace PERQemu.UI
         }
 
         [Command("storage status", "Show detailed status of a loaded storage device")]
-        private void StorageStatus(int unit)
+        void StorageStatus(int unit)
         {
             if (PERQemu.Controller.State == RunState.Off)
             {
@@ -159,7 +159,7 @@ namespace PERQemu.UI
         //
 
         [Command("load floppy", "Load a floppy disk image")]
-        private void LoadFloppy(string filename)
+        void LoadFloppy(string filename)
         {
             try
             {
@@ -172,7 +172,7 @@ namespace PERQemu.UI
         }
 
         [Command("unload floppy", "Unload the loaded floppy disk")]
-        private void UnloadFloppy()
+        void UnloadFloppy()
         {
             try
             {
@@ -185,13 +185,13 @@ namespace PERQemu.UI
         }
 
         [Command("save floppy", "Save the loaded floppy disk")]
-        private void SaveFloppy()
+        void SaveFloppy()
         {
             SaveFloppyAs("");       // Lazy...
         }
 
         [Command("save floppy as", "Save the loaded floppy disk with a new name")]
-        private void SaveFloppyAs(string filename)
+        void SaveFloppyAs(string filename)
         {
             try
             {
@@ -204,7 +204,7 @@ namespace PERQemu.UI
         }
 
         [Command("save floppy as", "Save the loaded floppy disk with a new name and format")]
-        private void SaveFloppyAs(string filename, Formatters format)
+        void SaveFloppyAs(string filename, Formatters format)
         {
             if (format == Formatters.Unknown)
             {
@@ -230,7 +230,7 @@ namespace PERQemu.UI
         // Hard Disk Commands
         //
 
-        private bool OKtoLoad()
+        bool OKtoLoad()
         {
             // Hard drives in the PERQ are generally fixed and non-removable;
             // Don't allow them to be updated while the machine is running
@@ -246,7 +246,7 @@ namespace PERQemu.UI
         }
 
         [Command("load harddisk", "Load a hard disk image")]
-        private void LoadHardDisk(string filename)  // todo: int unit = 1
+        void LoadHardDisk(string filename)  // todo: int unit = 1
         {
             if (!OKtoLoad()) return;
 
@@ -261,7 +261,7 @@ namespace PERQemu.UI
         }
 
         [Command("unload harddisk", "Unload a hard disk [unit #]")]
-        private void UnloadHardDisk(int unit = 1)
+        void UnloadHardDisk(int unit = 1)
         {
             if (!OKtoLoad()) return;
 
@@ -276,13 +276,13 @@ namespace PERQemu.UI
         }
 
         [Command("save harddisk", "Save the hard disk")]
-        private void SaveHardDisk()
+        void SaveHardDisk()
         {
             SaveHardDiskAs("");     // Yeah, silly.
         }
 
         [Command("save harddisk as", "Save the hard disk with a new name")]
-        private void SaveHardDiskAs(string filename)
+        void SaveHardDiskAs(string filename)
         {
             try
             {
@@ -295,7 +295,7 @@ namespace PERQemu.UI
         }
 
         [Command("save harddisk as", "Save the hard disk with a new name and format")]
-        private void SaveHardDiskWith(string filename, Formatters format)
+        void SaveHardDiskWith(string filename, Formatters format)
         {
             if (format == Formatters.Unknown)
             {
@@ -322,7 +322,7 @@ namespace PERQemu.UI
         //
 
         [Command("load tape", "Load a tape cartridge")]
-        private void LoadTape(string filename)
+        void LoadTape(string filename)
         {
             try
             {
@@ -335,13 +335,13 @@ namespace PERQemu.UI
         }
 
         [Command("save tape", "Save the loaded cartridge tape")]
-        private void SaveTape()
+        void SaveTape()
         {
             SaveTapeAs("");       // Lazy...
         }
 
         [Command("save tape as", "Save the loaded tape with a new name")]
-        private void SaveTapeAs(string filename)
+        void SaveTapeAs(string filename)
         {
             try
             {
@@ -354,7 +354,7 @@ namespace PERQemu.UI
         }
 
         [Command("save tape as", "Save the loaded tape with a new name and format")]
-        private void SaveTapeAs(string filename, Formatters format)
+        void SaveTapeAs(string filename, Formatters format)
         {
             if (format == Formatters.Unknown)
             {
@@ -373,7 +373,7 @@ namespace PERQemu.UI
         }
 
         [Command("unload tape", "Unload the tape cartridge")]
-        private void UnloadTape()
+        void UnloadTape()
         {
             try
             {
@@ -409,7 +409,7 @@ namespace PERQemu.UI
         /// The caller must check the machine's running state and inform the user
         /// if the media type can't be loaded (non-removable types, generally).
         /// </remarks>
-        private bool LoadInternal(int unit, string filename)
+        bool LoadInternal(int unit, string filename)
         {
             // If the machine is defined, see if the drive is loaded
             if (PERQemu.Controller.State > RunState.Off && PERQemu.Sys.Volumes[unit].IsLoaded)
@@ -466,7 +466,7 @@ namespace PERQemu.UI
         /// okay to unload the device, but we do the check to see if it needs
         /// saving first.
         /// </remarks>
-        private void UnloadInternal(int unit)
+        void UnloadInternal(int unit)
         {
             // If the machine is defined, check the drive and unload it
             if (PERQemu.Controller.State != RunState.Off)
@@ -586,7 +586,7 @@ namespace PERQemu.UI
             return SaveInternal(unit, filename);
         }
 
-        private void CheckSave(int unit)
+        void CheckSave(int unit)
         {
             // Save should be okay any time the machine is defined
             if (PERQemu.Controller.State == RunState.Off)
@@ -620,7 +620,7 @@ namespace PERQemu.UI
         /// For now, all new drives are created in PRQM format by default. :-)
         /// </summary>
         [Command("storage create", "Creates a new blank, formatted floppy, disk or tape image")]
-        private void CreateMedia([KeywordMatch("DriveTypes")] string driveType,
+        void CreateMedia([KeywordMatch("DriveTypes")] string driveType,
                                  [PathExpand] string filename,
                                  bool overwrite = false)
         {
@@ -676,9 +676,9 @@ namespace PERQemu.UI
         /// Lists the known device types, all purdy like.
         /// </summary>
         [Command("storage list", "List known storage devices")]
-        private void ListKnownTypes()
+        void ListKnownTypes()
         {
-            string[] drives = PERQemu.Config.GetKnownDevices();
+            var drives = PERQemu.Config.GetKnownDevices();
             Array.Sort(drives);
 
             Console.WriteLine("Drive Type    Drive Class    Description");
@@ -698,7 +698,7 @@ namespace PERQemu.UI
         /// Shows the detailed specs for a particular drive.
         /// </summary>
         [Command("storage show", "Show device specifications")]
-        private void ShowDeviceSpecs([KeywordMatch("DriveTypes")] string driveType)
+        void ShowDeviceSpecs([KeywordMatch("DriveTypes")] string driveType)
         {
             var drive = PERQemu.Config.GetKnownDeviceByName(driveType);
             if (drive == null)
@@ -755,7 +755,7 @@ namespace PERQemu.UI
         /// record.  Quietly sets the prefix, then restores it on "done".
         /// </summary>
         [Command("storage define", "Define a new drive type", Prefix = true, Discreet = true)]
-        private void StorageDefine(DeviceType type, string name)
+        void StorageDefine(DeviceType type, string name)
         {
             _dev = new StorageDevice();
             _dev.Info.Type = type;
@@ -765,19 +765,19 @@ namespace PERQemu.UI
 
         [Conditional("DEBUG")]
         [Command("storage define commands", "Show the sooper sekrit incantations")]
-        private void ShowDefineCommands()
+        void ShowDefineCommands()
         {
             PERQemu.CLI.ShowCommands("storage define");
         }
 
         [Command("storage define description", "Describe the drive's make and model")]
-        private void DefineDesc(string desc)
+        void DefineDesc(string desc)
         {
             _dev.Info.Description = desc;
         }
 
         [Command("storage define geometry", "Define the drive's geometry")]
-        private void DefineNewGeometry(string tag, ushort cyl, byte heads, ushort sec, ushort secSize = 512, byte hdrSize = 0)
+        void DefineNewGeometry(string tag, ushort cyl, byte heads, ushort sec, ushort secSize = 512, byte hdrSize = 0)
         {
             // Add a new geometry record to the hash
             var geom = new DeviceGeometry(cyl, heads, sec, secSize, hdrSize);
@@ -786,13 +786,13 @@ namespace PERQemu.UI
         }
 
         [Command("storage define geometry")]
-        private void DefineGeometry(string tag)
+        void DefineGeometry(string tag)
         {
             _dev.Geometry = PERQemu.Config.GetGeometry(tag);
         }
 
         [Command("storage define performance", "Define the drive's performance characteristics")]
-        private void DefineNewSpecs(string tag, int rpm, int pulse, int delay, int seekMin, int seekMax, int settle, int xfer)
+        void DefineNewSpecs(string tag, int rpm, int pulse, int delay, int seekMin, int seekMax, int settle, int xfer)
         {
             var specs = new DevicePerformance(rpm, pulse, delay, seekMin, seekMax, settle, xfer);
             PERQemu.Config.AddDriveSpecs(tag, specs);
@@ -800,19 +800,19 @@ namespace PERQemu.UI
         }
 
         [Command("storage define performance")]
-        private void DefineSpecs(string tag)
+        void DefineSpecs(string tag)
         {
             _dev.Specs = PERQemu.Config.GetDriveSpecs(tag);
         }
 
         [Command("storage define removable", "Define whether the drive has removable media")]
-        private void DefineRemovable(bool canRemove)
+        void DefineRemovable(bool canRemove)
         {
             _dev.Info.IsRemovable = canRemove;
         }
 
         [Command("storage define done", "Complete and save the new drive definition")]
-        private void DefineDone()
+        void DefineDone()
         {
             try
             {
@@ -828,6 +828,6 @@ namespace PERQemu.UI
 
         #endregion
 
-        private static StorageDevice _dev;
+        static StorageDevice _dev;
     }
 }

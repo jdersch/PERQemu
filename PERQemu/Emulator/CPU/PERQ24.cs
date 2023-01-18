@@ -1,16 +1,17 @@
-﻿// PERQ24.cs - Copyright 2021 Josh Dersch (derschjo@gmail.com)
+﻿//
+// PERQ24.cs - Copyright (c) 2021-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
-// PERQemu is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// PERQemu is free software: you can redistribute it and/or modify it
+// under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// PERQemu is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// PERQemu is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
@@ -47,13 +48,11 @@ namespace PERQemu.Processor
             if (h == 1)
             {
                 // On PERQ24, uState1 is the upper 8 Bmux bits
-                return  ((~_lastBmux) >> 16) & 0xff;
+                return ((~_lastBmux) >> 16) & 0xff;
             }
-            else
-            {
-                // Return the usual 20-bit uState
-                return base.ReadMicrostateRegister(h);
-            }
+
+            // Return the usual 20-bit uState
+            return base.ReadMicrostateRegister(h);
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿//
-// Log.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// Log.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -298,7 +298,7 @@ namespace PERQemu
             if ((s >= _minLevel) && ((c & _categories) != 0) || (c == Category.All))
 #endif
             {
-                var output = string.Format((c == Category.All ? "" : c.ToString() + ": ") + fmt, args);
+                var output = string.Format(c != Category.All ? c.ToString() + ": " + fmt : fmt, args);
 
                 // Cut down on the noise: things like the processor looping to
                 // check an I/O status byte spews a lot... summarize that (but
@@ -584,7 +584,7 @@ namespace PERQemu
             _colors.Add(Category.FloppyDisk, ConsoleColor.DarkCyan);
             _colors.Add(Category.Multibus, ConsoleColor.DarkBlue);
             _colors.Add(Category.HardDisk, ConsoleColor.DarkGreen);
-            _colors.Add(Category.Ethernet, ConsoleColor.Gray);
+            _colors.Add(Category.Ethernet, ConsoleColor.Cyan);
             _colors.Add(Category.Streamer, ConsoleColor.Gray);
             _colors.Add(Category.Canon, ConsoleColor.Gray);
             _colors.Add(Category.Link, ConsoleColor.Gray);

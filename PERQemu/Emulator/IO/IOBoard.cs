@@ -1,5 +1,5 @@
 ﻿//
-// IOBoard.cs - Copyright (c) 2006-2022 Josh Dersch (derschjo@gmail.com)
+// IOBoard.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -169,7 +169,7 @@ namespace PERQemu.IO
             {
                 if (_portsHandled[p])
                 {
-                    Log.Warn(Category.IO, "Port {0:x} already registered!", p);
+                    Log.Warn(Category.IO, "Port 0x{0:x} already registered!", p);
                 }
 
                 _portsHandled[p] = true;
