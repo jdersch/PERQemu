@@ -97,12 +97,21 @@ namespace PERQemu.Processor
 
                 _scheduler.Clock();
 
-                // If the Z80 is paused and wants a wakeup, do it
-                if (_scheduler.CurrentTimeNsec > _system.IOB.Z80System.Wakeup)
+                if (_system.Mode == ExecutionMode.Synchronous)
                 {
-                    if (_system.IOB.Z80System.IsRunning && !_system.IOB.Z80System.Throttle.IsSet)
+                    // Run the Z80 directly!  It no-ops to maintain synch rather
+                    // than set the wait handle in this mode
+                    _system.IOB.Z80System.Run();
+                }
+                else
+                {
+                    // In asynch mode, we check to see if the Z80 wants a wakeup
+                    if (_scheduler.CurrentTimeNsec > _system.IOB.Z80System.Wakeup)
                     {
-                        _system.IOB.Z80System.Throttle.Set();
+                        if (_system.IOB.Z80System.IsRunning && !_system.IOB.Z80System.Throttle.IsSet)
+                        {
+                            _system.IOB.Z80System.Throttle.Set();
+                        }
                     }
                 }
 

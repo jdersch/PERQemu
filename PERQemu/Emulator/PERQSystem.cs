@@ -227,23 +227,13 @@ namespace PERQemu
                     // Bring up the window if it's minimized
                     _display.Restore();
 
+                    // Start up the CPU thread (both modes)
+                    _cpu.RunAsync();
+
                     if (_mode == ExecutionMode.Asynchronous)
                     {
-                        // Start up the background threads
-                        _cpu.RunAsync();
+                        // Start up the separate Z80 thread
                         _iob.RunAsync();
-                    }
-                    else
-                    {
-                        // Run the PERQ CPU and Z80 CPU in lockstep until manually stopped
-                        RunGuarded(() =>
-                            {
-                                while (_state == RunState.Running)
-                                {
-                                    _cpu.Run();
-                                    _iob.Run();
-                                }
-                            });
                     }
                     break;
 
@@ -314,11 +304,8 @@ namespace PERQemu
 
                 case RunState.Paused:
                 case RunState.Halted:
-                    if (Mode == ExecutionMode.Asynchronous)
-                    {
-                        _cpu.Stop();
-                        _iob.Stop();
-                    }
+                    _cpu.Stop();
+                    _iob.Stop();
 #if DEBUG
                     // Ah!  If we've paused on a breakpoint and there's a script
                     // to run, do it now;  Otherwise this is a no-op.  Kewl.

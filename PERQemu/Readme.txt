@@ -487,6 +487,7 @@ v0.5 - TBD
 v0.4.9 - Current "experimental" branch
   - This version, in progress.
   - Added a minimal Ethernet interface, bug fixes.
+  - Bundled a working Spice Lisp disk image.
 
 v0.4.8 - Main branch (v0.5.0 pre-relase)
   - Added streamer tape support!
