@@ -1,0 +1,427 @@
+﻿
+Configuration Notes
+===================
+
+Notes on the new "Configurator" and how virtual PERQs can be specified,
+saved, and loaded.  Consult PERQ_Chart.png for reference.
+
+
+Goals
+-----
+
+Configurator allows users to configure a virtual PERQ using a graphical or
+command-line interface.  This configuration can then be passed to the execution
+controller which manages the actual setup, running, and shutdown of the virtual
+machine.  The configuration should allow for all of the options from The Chart,
+subject only to the limits of what hardware the emulator currently supports.
+For convenience, media files (disk images) can be saved with the configuration
+so that complete virtual machines may be quickly loaded from disk and run.
+
+The PERQemu distribution includes a new top-level "Conf" directory which holds
+a number of pre-configured systems to allow new users to try out the emulator
+right away.  These "prefabs" are in the same format and can be edited in the
+same way as configurations the user creates.
+
+Saved configurations are simply a collection of CLI commands, which means they
+are human-readable text files that may be (carefully) edited outside of the
+emulator.  This means the savvy user can just type the shortcut:
+
+    > @Conf/myperq.cfg
+
+at the command prompt, or use the command:
+
+    > configuration load myperq
+
+to achieve the same result.  From the command line, too:
+
+    mac_or_linux% mono PERQemu.exe Conf/myperq.cfg
+
+Currently PERQemu is a "console application" and offers only the CLI; while
+eventually a GUI for Windows could appear, there are dim hopes for a reasonable
+cross-platform solution that will include Mac or Linux users.
+
+Ideally, a configuration file type could be registered/recognized by the host
+OS so that double-clicking it would launch PERQemu and automatically load the
+file, but that will undoubtedly require some sort of installer script or fussy
+extra procedure to set up, so we'll put that on the list for a later release.
+
+
+Implementation
+--------------
+
+Configuration.cs and ConfigTypes.cs provide the structure for describing a
+virtual PERQ.  Configurator.cs is the top-level object that manages loading,
+saving and verification of Configurations.  While it might make more sense to
+have the Configuration object validate itself, or be more classically OO, I
+thought it simpler to have the Configurator be the brains.  It's responsible
+for checking that various combinations of options are valid, interface with
+the file system, and work with the GUI and CLI rather than have them poking
+at the Configuration directly.  This could change.  I ain't married to it.
+
+ConfigCommands.cs is the CLI interface.  It provides a complete "subsystem"
+that offers the full range of configuration options.  The CLI always operates
+on the "current" configuration object; changes are applied immediately.  This
+imposes a few restrictions: the virtual PERQ must not be running if changes
+are to be made.
+
+ConfigForm.cs is the old WinForms implementation of a graphical Configurator.
+It is not currently part of PERQemu.  The GUI version works with its own
+Configuration object, so the user can make whatever changes they like but only
+apply them if they choose; a Cancel button leaves the current configuration
+intact.  Since it runs as a modal dialog, it can only be brought up when the
+PERQ isn't running.
+
+
+Chassis Types
+-------------
+
+Selecting the chassis type is a shorthand for limiting certain configuration
+choices.  I/O boards are tied to the chassis type (PERQ-1 or PERQ-2), as are
+the keyboard and default tablet types as well.  PERQ-1s are limited to just
+one hard disk (see IOBoards.txt for more) while PERQ-2s may contain a second
+internal drive.  Mostly I wanted to do some sexy visuals in the configurator,
+with a snazzy 3D rendering of the exact machine type displayed as options were
+selected.  (See: Configurator.png)
+
+There are some fairly arbitrary restrictions that we may or may not enforce;
+the problem isn't that the emulator "cares" how you configure your PERQ, but
+one of software support.  A machine running POS F can't support the landscape
+display, and later versions of some OSes dropped support for the 4K CPU or
+required the "new" Z80 protocols.  So the Configurator's built-in rules try
+to limit options that will result in a PERQ that won't boot or won't have any
+software to run.
+
+
+Board Options
+-------------
+
+All PERQs share a set of common features and a required minimal configuration.
+PERQemu mimics the physical structure of the machine:
+
+    Component   Emulator implementation
+    ---------   --------------------------------------------------------------
+
+    CPU board   Contains a Processor (20- or 24-bit, 4K or 16K) and scheduling
+                domain; runs on its own thread.
+
+    MEM board   System memory array and video controller, DMA arbitration
+                [not yet implemented]; runs on CPU thread.
+
+    IO board    Contains at minimum a hard disk controller and Z80 subsystem,
+                which has its own scheduling domain and runs on a separate
+                thread.  The floppy controller and emulated drive are managed
+                by and run on the Z80 thread; hard disk devices (along with
+                their controller) run in the CPU domain.
+
+In addition, IO Option boards may be added [as support for them is introduced]
+which provide additional storage and networking options or peripherals.
+
+CPU board selection is partly determined by Chassis type.  The "PERQ-1A" CPU
+is universal; this 20-bit, 16K CPU can run in every machine.  The original 4K
+20-bit processor is available in the PERQ-1 only (or very limited early PERQ-2
+configurations) but is of mostly historical interest as most OS options later
+dropped support for it. The 24-bit 16K is available only with the PERQ-2/T2
+chassis; this configuration is referred to as the PERQ-2/T4 or the PERQ-4.
+
+    [24-bit CPU support is present but has not yet been tested until the
+    EIO board is complete and a disk image with a 24-bit OS is produced.]
+
+MEM board selection is simplified in PERQemu; all capacities and video support
+for both portrait and landscape displays is unified in one implementation.
+With a 20-bit CPU, maximum capacity is 2MB (or 1 megaword).  There are some
+exceptions to this:
+
+    PNX 1.3 doesn't support 2MB; to boot a PNX 1.3 disk choose 1MB.
+
+    While technically the exceedingly rare PERQ-1 with a landscape display
+    only supported 1MB, we won't enforce that (unless we discover some OS
+    or firmware issue with 2MB).
+
+The 24-bit CPU can address 32MB (16 megawords) of RAM, but PERQemu sets an
+8MB (4 megaword) limit as this is the largest capacity ever documented or
+hinted at in any PERQ literature from the period.  Note that only Accent is
+known to support more than 2MB or memory; POS cannot run in 24-bit mode [*]
+and it isn't clear whether or not later versions of PNX can either.
+
+    [*] If anyone comes across POS G.82 or G.85 sources, let me know. These
+    versions may allow POS to boot on the 24-bit CPU though they may not use
+    the 24-bit features - they allow booting POS without having to remove the
+    board to change jumpers for 20-bit compatibility mode.
+
+IO board selection is intimately tied to Chassis type as well.  For the PERQ-1
+the classic "IOB" provides Shugart disk support and runs the "old" Z80 ROMs,
+which limits the selection of OSes that can run.  The "CIO" option upgrades
+the PERQ-1 to the "new" Z80 protocols and (theoretically) adds Micropolis 8"
+disk drive support in lieu of the 14" Shugart.
+
+All PERQ-2 configurations used the "Ethernet IO" or EIO board.  This board
+incorporates an Ethernet controller in addition to the standard peripherals
+from the older IOB/CIO boards.  The EIO supports one or two 8" or 5.25" hard
+disks and sports a faster Z80 subsystem with a second RS-232 port and a real-
+time clock (RTC) chip.
+
+The "Ethernet IO" board was allegedly offered in a configuration without the
+Ethernet interface, known as the "NIO" (Non-Ethernet IO).  If you configure a
+PERQ-2 without an Ethernet PERQemu will just quietly change the board type to
+NIO, or back to EIO if you add the Ethernet back in.  Since PERQemu doesn't yet
+support Ethernet, effectively all EIOs are NIOs for now.
+
+    [For more information about I/O boards and future I/O Option board
+    types, see the supplemental documentation in Docs/IOBoards.txt.]
+
+
+Storage Options
+---------------
+
+From the Configurator's point of view, only three things are needed for any
+storage device:
+
+    Unit number:    a unique identifier
+    Device type:    which controller to attach a drive to
+    Media file:     path to the archived disk or tape image
+
+The actual contents of the media file are only the concern of the Emulator,
+which now uses the PERQmedia library to validate and load files in various
+formats at run time.  Selection of Chassis type and IO Board determines which
+drive types are supported in a given configuration.
+
+The practical and maximum limits for devices in a single system:
+
+    Drive type      #      Max
+    Floppy          1       2       Note 1
+
+    Hard disk:
+        Disk14      1       2       Note 2
+        Disk8       2       2
+        Disk5       2       4
+
+    Optional:
+        DiskSMD     -       4       Note 3
+        TapeQIC     1       1
+        Tape9Trk    -       1       Note 3
+
+    Theoretical:
+        DiskGPIB    -       4       Note 4
+        TapeGPIB    -       2       Note 4
+                   ---    -----
+                    4     12-17
+
+The Configuration class contains the list of storage devices appropriate to
+the machine being described.  The goal is to allow any valid PERQ configuration
+that can be realized with software and firmware support.  In practical terms
+this means:
+
+    All configurations support one SA851 floppy drive.  Although listed as
+    "optional" on the price list, I don't think I've ever seen a PERQ that
+    didn't have a floppy drive...
+
+    All configurations support one or two hard disks of the appropriate
+    type.
+
+    All configurations can support one optional streamer.
+
+In the next release (0.4.6 in development, likely 0.5.0 when released) there
+will be an initial limit of four devices.  That may be increased as research
+into the software limitations determines how many drives are really possible.
+
+
+The emulator only "knows" about the SA851 floppy and the SA4000-series 12- and
+24-MB hard drives.  All other disk and tape devices are configured dynamically
+from a definitions database loaded at startup.  This allows users to create
+other drive types on their own without recompiling.  The database contains
+definitions for all of the known/common drive types shipped by the company, as
+well as a few popular options from the period.
+
+[Note 1]
+    A second Shugart SA851 floppy drive is a no-brainer; the hardware only
+    allows one unit to be selected but the changes required to enable the
+    second select line and update the microcode/Pascal to allow it are not
+    too difficult for someone feeling brave enough to attempt it.
+
+[Note 2]
+    A second Shugart SA4000-series hard drive is not physically possible
+    in a real PERQ-1 chassis, and similar hardware/firmware limits to allow
+    unit selection in a multiple-drive system are present.  The PERQ-1 IOB
+    hardwires DS1 to GND, while DS2 and DS3 are passed through (but never
+    used by the standard software).  The DS4 line is configured for Seek
+    Complete operation by hardware jumper, and the DS3 line is potentially
+    in conflict with the Z80 control reg (selecting drive 3 would also turn
+    off the Z80, and the seek control function).  However, a simple hardware
+    mod could enable DS2 to select between drives 1 & 2 with only minor 
+    changes to the microcode.  Enabling support for the mythical SA4104 48MB
+    drive would similarly be feasible, if the thing actually exists; the main
+    difficulty is modifying the microcode to allow selection of heads 8-15.
+
+    It isn't clear how many 8" Micropolis 1200-series drives were actually
+    shipped, or in which circumstances two could be fitted in one machine.
+    The practical limit is two drives, only in the T1/T2 type case (not the
+    weird skinny "ugly duckling" K0?)  All kinds of hints exist that there
+    may have been PERQ-1 "CIO" configurations where the Shugart 14" drive was
+    replaced by a Micropolis 8".  I have no idea if this was actually true.
+          
+    Several places in the later PERQ literature allude to a 4-disk option in
+    the 5.25"/MFM systems.  Did they intend to build a new DIB with all four
+    channels present?  Or allow two 2-port DIBs to be daisy chained?  Unknown.
+    But the POS G filesystem's volume support and the relative simplicity of
+    expanding the I/O code to allow units 2 & 3 to be selected are something
+    of a no-brainer.
+       
+    Those little relaxations of the rules would allow for much larger emulated
+    systems to be built.  Bigger PERQs... <handwave>... world domination!  HA!
+
+[Note 3]
+    Because we don't yet support the MLO at all, and have never determined what
+    specific Multibus controllers Three Rivers wrote the code to support, it's
+    just an educated guess that four SMD hard drives is a reasonable maximum
+    that could be attached, but two is more likely given limits to how much 
+    space the filesystem/partition scheme could actually accommodate.  PERQ
+    literature suggests two CDC 9766's for a 600MB file server, for instance.
+    The 9-track tape drive is also a complete mystery, but we'll figure on
+    maybe one (or two?) Pertec-interfaced drives?  This is light years away.
+
+[Note 4]
+    The possibility of supporting a number of GPIB-connected disk and tape
+    drives is tantalizing, as there is no hardware impediment to doing so;
+    it's just a matter of writing the software support (likely the HP "CS-80"
+    stack).  While it would likely be unusably slow on a PERQ-1 given the
+    anemic GPIB throughput, the emulator wouldn't necessarily suffer so...
+    This is another curious "what if?" that may be explored at some point in
+    the distant future, probably around 2025, between forays into the barren
+    desert hellscape of our collapsed society to scavenge a few drops of water
+    to brew our precious, precious coffee...
+
+
+Storage Devices & Media Types
+-----------------------------
+
+PERQmedia is a subproject that encapsulates all of the translation of a PERQ
+storage device from an in-memory cache to a disk file in the host's filesystem.
+It allows PERQemu to be separated from the details of loading and saving disk,
+floppy and tape images in all of the various supported formats and provides a
+simple block-oriented access to the virtual device's data blocks.
+
+The PERQmedia documentation has all the info about the formats it supports.
+
+PERQemu wraps the StorageDevice in classes that deal with the specific behavior
+and interactions of each device type and the Controller classes that emulate
+them.  These live in Emulator/IO/DiskDevices:
+
+    FloppyDisk.cs:  the "generic" floppy disk class
+        - can load DeviceType.Floppy images
+        - only has to mimic the Shugart SA851 8" floppy drive
+        - interfaced to the PERQ through IO/Z80/NECuPD765.cs
+
+    HardDisk.cs:  the generic hard disk class
+        - can load any DeviceType.Disk* image, in theory
+        - handles seeks using a generic stepping algorithm that could
+          be subclassed if smoother accelleration ramps desired
+        - provides the "mechanical" hard disk emulation, handling seeks,
+          head settling, index pulses, etc.
+        - interfaced to an IOBoard through an IStorageController
+
+The IStorageController interface will define the common hooks for the PERQ to
+control the HardDisks using the appropriate protocols.  These are:
+
+    ShugartController.cs:  controller for Shugart SA4000-series drives
+        - loads DeviceType.Disk14Inch images
+        - provides the state machine that makes the generic HardDisk
+          look like a Shugart to the PERQ
+        - has to play nicely with the Z80-controlled HardDiskSeekControl
+          device that uses the Z80 CTC to generate step pulses
+
+    MicropolisController.cs:  controller for Micropolis 8" hard drivies
+        - loads DeviceType.Disk8Inch images
+        - provides an interface specific to the Micropolis 1200-series
+          drives (21-70MB) used in early PERQ 2 models
+        - in theory, a "CIO" PERQ-1 could talk to this controller?  But
+          I expect normally it will attach to an NIO/EIO in a PERQ-2?
+        - [under development]
+
+    MFMController.cs:  controller for all generic ST-506/MFM drives
+        - loads DeviceType.Disk5Inch images
+        - supports a bunch of drives from different manufacturers in
+          varying capacities, used exclusively on the EIO/NIO in PERQ-2
+        - [not yet implemented]
+
+    SMDController.cs:  controller for future SMD (Multibus) drives
+        - will support DeviceType.DiskSMD images
+        - is a long way off, but this is definitely something fun to
+          pursue since numerous documents and source code allude to
+          there being actual PERQs in the world with SMD-attached disks
+          at one point
+
+The possibility of doing real or imagined GPIB or SCSI disk controllers for
+future emulated (or actual :-) hardware is left as an exercise for the reader.
+
+
+As the StorageDevice class is intended to be general enough to encompass the
+basic requirements of tape drives too, a possible ITapeController interface
+could/will produce:
+
+    QICTapeController.cs:  controller for QIC-02 streaming tape drives
+        - support DeviceType.TapeQIC images
+        - mimics the Archive Sidewinder 3020I (30ips) and its 90ips variants
+        - attached through the Option IO board
+        - is supported/tested on POS and Accent
+
+    MBusTapeController.cs:  controller for generic Multibus tape drives
+        - would support DeviceType.Tape9Track images
+        - software support exists but there's weirdly no specifics
+          about what 9-track drives or controllers were used
+          [update: seems the Ciprico Tapemaster is supported]
+        - cool as it is to consider emulating a reel-to-reel tape drive
+          this one is wildly implausible, even for a fanatic like me
+
+
+For configuration purposes, the user can assign files to drive units and the
+UI can verify that the appropriate type of disk image will be loaded.  Other
+useful tools and subprojects may/will be incorporated to aid in the creation
+and maintenance of a "media library" of curated PERQ images that may be easily
+loaded into the emulator.  The CLI may present textual "media labels" to help
+identify the contents of media files, while a GUI could present a graphical
+scan or representation of the media label saved within the archive.
+
+
+Additional Peripherals
+----------------------
+
+With the Z80 rewrite, PERQemu's support of the PERQ-1 RS-232 port requires
+some additional testing and new configuration support.  With the addition of
+the EIO forthcoming, a second RS-232 port will be included as well.  Serial
+devices may be attached to real ports on the host computer, or to a pseudo
+"RSX:" device that allows RSX-11 "PIP" style file transfers to and from the
+virtual machine from the host.  Three Rivers supplied a very basic terminal
+program (Chatter), but both Kermit and a sophisticated VT-100 emulator (Jet)
+are available as well.  Several serial-connected printers are supported by
+POS as well, but it would be a stretch to find an actual Xerox Diablo or TI
+Paper Tiger and do any real testing.  Volunteers?
+
+The GPIB interface now supports the IOB and CIO (both Z80 versions), primarily
+to attach the Summagraphics BitPad One graphics tablet.  Older versions of POS
+and Accent won't see the Kriz Tablet.  Three Rivers did support (informally) a
+few GPIB-connected devices, and there are many interesting possibilities for
+enhancing the emulator to do more with it, but the to-do list is so long that
+JWST can't see the end of it.  Sigh.
+
+
+Ethernet is the #1 desired extra "peripheral" to support -- allowing the
+emulated PERQ to talk to the outside world.  Accent is a network OS, and it
+would be very, very cool to be able to run emulated PERQs on a network with
+each other and with real PERQ hardware -- providing virtually unlimited file
+service, tape backup, print/time/FTP servers, etc.  "Nerrrrd." :-P
+
+
+The Canon laser printer interface is high on the list, since it should be a
+relatively simple thing to emulate.  The PERQ uses the Canon "video interface"
+to send a bitstream to the marking engine at 240dpi (LBP-10) or 300dpi (CX).
+(This should be familiar to any NeXT heads.)  The plan for PERQemu is to just
+stream the bits into a bitmap and save them as TIFF, JPG or PNG images.  (It's
+simple enough to post-process the pages into a multi-page PDF if desired, but
+let's not get carried away.)
+
+
+Wow.  If you read all that, give yourself a cookie!
+
+
+--
+Last update: skeezics    Thu Dec 29 01:28:56 PST 2022

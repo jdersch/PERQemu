@@ -1,0 +1,248 @@
+
+
+EtherNet Programmers Guide                                 16 Sep 81
+
+
+
+
+OVERVIEW
+
+This document describes the PERQ interface to the 10Mb Ethernet as defined
+by DEC, XEROX and Intel.  The reader is urged to familiarize himself with
+the document describing the Ethernet.  It is also assumed that the reader
+is familiar with programming IO devices on the PERQ.
+
+The interface appears to the programmer as a bunch of ports on the PERQ
+IO bus, a DMA channel and an interrupt line.  Status, commands and port
+address information are exchanged via the IO ports.  The data is transfer-
+red to PERQ memory over the DMA channel.  The interface will interrupt the
+PERQ on successful or unsuccessful completion of a Transmit or receive.
+This interrupt is maskable.
+
+The interface is half duplex, i.e. it cannot simultaneously transmit and
+receive.  This prevents an interface from sending packets addressed to
+itself or to its group address and expect to receive them.
+
+
+TRANSMITS
+
+When a program wants to transmit it has to make sure that the interface
+is idle ie not in the middle of transmit or Receive. This can be done by
+monitoring a bit in the status register.  When the interface is idle the
+program has to do the following:
+
+    1) Set up the header and data buffers (can be done ahead of time);
+
+    2) Set up the DMA channel;
+
+    3) Set up the number of bits to be transmitted, Header and Data, in
+       the bit counter;
+
+    4) Set the Transmit and Go bits in the control register.
+
+The interface will interrupt on the completion or abnormal termination of
+the Transmit.  The transmit will be terminated abnormally in the case of a
+collision on the net.  A bit in the status register will indicate that a
+collision occurred.  The program will have to retransmit after 'backing off'
+as defined in the Ethernet document.
+
+The interface has a microsecond clock built in to do the back off in an
+elegant manner.  The microsecond clock can be used as a timer.  Please refer
+to the microsecond clock documentation for programming details.  When the
+program has determined how long to wait, in accordance to the back off
+algorithm, the microsecond clock is set up to interrupt the PERQ after this
+wait period.  At this time the PERQ can reset the DMA channel and the net
+interface to try to transmit once again.  During the wait period the inter-
+face must be set up to receive any packets that may be sent across the net.
+
+
+
+
+
+				- 1 -
+
+
+EtherNet Programmers Guide                         16 Sep 81
+
+
+
+
+RECEIVES
+
+If the interface is not transmitting it must be set up to receive packets
+from the net.  Receives are set up as follows:
+
+    1) Set up the DMA Channel;
+
+    2) The bit counter has to be initialized to zero;
+
+    3) Load the port address into the register file;
+
+    4) Set the Go bit in the control register.
+
+When the interface has received a packet the PERQ gets an interrupt.
+Reading the status register will indicate if the packet was received with
+the right CRC.  The number of bits received, header and data, may be read
+from the bit counter.  The number of bits received must be divisible by 8,
+i.e. the packet must contain an integral number of bytes.  If this is not
+the case the packet received is in error.
+
+
+PROGRAMMING DETAILS
+
+The Bit Counter
+
+The bit counter is a 16 bit counter that counts the number of bits in the
+packet that is being received or sent.  During transmits the bit counter
+must be loaded with the ones complement of the total number of bits in the
+packet (excluding CRC) to be sent.  During receives the counter must be set
+to zero.  When the packet has been received the counter will contain the
+number of bits received.
+
+
+IO PORTS
+
+Write Ports
+
+    BCWtCntl    Control register for the bit counter
+                Currently this location has to be initialized with the
+                value 3.
+
+    BCWtHB      Most significant byte of the counter
+                This byte can be set to any value.  The MSB is set to the
+                value of IOD<7:0>.  The high order IOD bits are unused.
+
+    BCWtLB      Least significant byte of the counter
+                This byte can be set to any value. The LSB is set to the
+                value of IOD<7:0>.  The high order IOD bits are unused.
+
+    WtNetCntl   Bit <3>  Enable the counter
+                When 0 it disables the counter.  All reads and writes
+
+
+
+				- 2 -
+
+
+EtherNet Programmers Guide                         16 Sep 81
+
+
+
+
+                should be done with this bit cleared.  When 1 it enables
+                the counter.  Any reads and writes done when this bit is
+                set are invalid.  This bit should be set during transmits
+                and receives.
+
+Read Ports
+
+    BCRdHB      Most significant byte of the counter
+                Should be read with the counter disabled.  IOD<7:0>
+                will have the value of the MSB.  IOD<15:8> are undefined.
+
+    BCRdLB      Least significant byte of the counter
+                Should be read with the counter disabled.  Yields the
+                current value of the clock.  IOD<7:0> will have the
+                value of the LSB.  IOD<15:8> are undefined.
+
+
+Use of Bit Counter During Transmits
+
+Following is the typical micro code:
+
+    ! Code to set initial values for the clock. InitValueHB and InitValueLB
+    ! contain the values for the high and low bytes of the clock.
+
+    0, IOB(WtNetCntl);          ! Disable the counter
+    InitValueHB, IOB(uSWtHB);   ! Set initial value of the high byte
+    InitValueLB, IOB(uSWtLB);   ! Set initial value of the low byte
+    EnuSecClk, IOB(WtNetCntl);  ! Enable the clock
+
+
+The value loaded into the counter is the ones complement of the number of
+bits to be transmitted - 1.
+
+
+Use of Bit Counter During Reads
+
+Set the clock to zero when the interface is being initialized for receives.
+When a packet is received the following microcode will read the number of
+bits in the packet:
+
+    ! Code to read the value of the clock
+
+    0, IOB(WtNetCntl);          ! Disable the clock
+    IOB(uSRdHB);
+    HB := IOD, IOB(uSRdLB);     ! Get the high byte
+    LB := IOD;                  ! Get the low byte
+    EnuSecClk, IOB(WtNetCntl);  ! Enable the clock if necessary
+
+
+
+
+
+
+
+				- 3 -
+
+
+EtherNet Programmers Guide                         16 Sep 81
+
+
+
+
+The REGISTER File
+
+There is a 4 word (16 bit) register file that is used to pass port address
+information to the interface.  The Ethernet has 48 bit addresses.  The first
+three words in the file are used to pass the port address to the interface.
+The fourth word may be used for group addressing.  No decision has been made
+on how this is to be used.
+
+
+The NET CONTROL register
+
+Setting the following bits in this register cause the following:
+
+    <0> Enables interrupts from the network
+    <1> Enables interrupts from the micro second clock
+    <2> Enables the micro second clock
+    <3> Enables the bit counter
+    <4> Transmit:  Interface transmits if this bit is set
+    <5> Reset:  Resets the interface.  This bit has to be a one during
+        normal operation.  A zero will reset the interface
+    <6> Receive all:  When this bit is set the interface will receive
+        all the packets on the bus
+    <8> Go: Interface will attempt to transmit or receive
+
+
+The Status Register
+
+Ones in the following bit positions have the following significance:
+
+    <0> CRC Error in the received packet
+    <1> Collision while transmitting
+    <2> A Receive or transmit has just been completed
+            0 for receives, 1 for transmits
+    <3> The interface is busy sending or receiving
+    <5> Micro second clock overflow
+    <7> Carrier Sense.  There are bits in the ether
+
+
+Interrupts
+
+The interface is currently hardwired to interrupt on the Ext X interrupt,
+i.e. interrupt vector at Base + 30.  If interrupts from the interface are
+enabled then the PERQ is interrupted on normal or abnormal completion of
+transmits or receives.  The micro second clock also shares this interrupt.
+Bits in the status register can be used to determine which of the devices
+interrupted.  Interrupts can be masked by clearing the appropriate bits in
+the contol register.
+
+
+
+
+
+
+				- 4 -
+

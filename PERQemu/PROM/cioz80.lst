@@ -1,0 +1,5330 @@
+ROM:8000 ;
+ROM:8000 ; This file manually hacked together from reading the ROMs from
+ROM:8000 ; my PERQ-1A (v10.017L, v10.017H) and stitching them together into
+ROM:8000 ; one 8K x 8 image. We don't seem to have a definitive source of
+ROM:8000 ; the "CIO" version of the new Z80 code, though we have complete
+ROM:8000 ; EIO sources.  This listing produced by an online disassembler;
+ROM:8000 ; will have to sit down someday with the EIO version and see how
+ROM:8000 ; much of this lines up (aside from port numbers/addresses, etc.)
+ROM:8000 ;
+ROM:8000 ; This format is slightly different than pz80.lst.  Hopefully it
+ROM:8000 ; will still work with the debugger.  There is a TON of code to
+ROM:8000 ; manually disassemble and document.
+ROM:8000 ;
+ROM:8000 ; --
+ROM:8000 ; skeezics	30-jun-2022
+ROM:8000 ;
+ROM:0000 START:
+ROM:0000 f3		di
+ROM:0001 c3 14 0b	jp 0x0b14
+ROM:0004 0a		ld a,(bc)
+ROM:0005 11 92 ff	ld de,0xff92
+ROM:0008 08		ex af,af'
+ROM:0009 01 0a 01	ld bc,0x010a
+ROM:000c 0c		inc c
+ROM:000d 01 0e 01	ld bc,0x010e
+ROM:0010 10 01		djnz 0x0013
+ROM:0012 12		ld (de),a
+ROM:0013 01 14 01	ld bc,0x0114
+ROM:0016 16 01		ld d,0x01
+ROM:0018 18 01		jr 0x001b
+ROM:001a 1a		ld a,(de)
+ROM:001b 01 1c 01	ld bc,0x011c
+ROM:001e 1e 01		ld e,0x01
+ROM:0020 ec 0c f4	call pe,0xf40c
+ROM:0023 10 c9		djnz 0xffee
+ROM:0025 08		ex af,af'
+ROM:0026 26 01		ld h,0x01
+ROM:0028 75		ld (hl),l
+ROM:0029 0c		inc c
+ROM:002a ec 0c 2c	call pe,0x2c0c
+ROM:002d 01 2e 01	ld bc,0x012e
+ROM:0030 67		ld h,a
+ROM:0031 1c		inc e
+ROM:0032 13		inc de
+ROM:0033 02		ld (bc),a
+ROM:0034 4b		ld c,e
+ROM:0035 17		rla
+ROM:0036 2c		inc l
+ROM:0037 18 52		jr 0x008b
+ROM:0039 18 7d		jr 0x00b8
+ROM:003b 18 a1		jr 0xffde
+ROM:003d 18 cb		jr 0x000a
+ROM:003f 18 40		jr 0x0081
+ROM:0041 01 42 01	ld bc,0x0142
+ROM:0044 c4 0a 46	call nz,0x460a
+ROM:0047 01 3c 04	ld bc,0x043c
+ROM:004a 4a		ld c,d
+ROM:004b 01 4c 01	ld bc,0x014c
+ROM:004e 4e		ld c,(hl)
+ROM:004f 01 50 01	ld bc,0x0150
+ROM:0052 52		ld d,d
+ROM:0053 01 54 01	ld bc,0x0154
+ROM:0056 56		ld d,(hl)
+ROM:0057 01 58 01	ld bc,0x0158
+ROM:005a 5a		ld e,d
+ROM:005b 01 5c 01	ld bc,0x015c
+ROM:005e 5e		ld e,(hl)
+ROM:005f 01 60 01	ld bc,0x0160
+ROM:0062 62		ld h,d
+ROM:0063 01 64 01	ld bc,0x0164
+ROM:0066 66		ld h,(hl)
+ROM:0067 01 68 01	ld bc,0x0168
+ROM:006a 6a		ld l,d
+ROM:006b 01 6c 01	ld bc,0x016c
+ROM:006e 6e		ld l,(hl)
+ROM:006f 01 70 01	ld bc,0x0170
+ROM:0072 72		ld (hl),d
+ROM:0073 01 74 01	ld bc,0x0174
+ROM:0076 76	        halt
+ROM:0077 01 78 01	ld bc,0x0178
+ROM:007a 7a		ld a,d
+ROM:007b 01 7c 01	ld bc,0x017c
+ROM:007e 7e		ld a,(hl)
+ROM:007f 01 80 01	ld bc,0x0180
+ROM:0082 82		add a,d
+ROM:0083 01 84 01	ld bc,0x0184
+ROM:0086 86		add a,(hl)
+ROM:0087 01 88 01	ld bc,0x0188
+ROM:008a 8a		adc a,d
+ROM:008b 01 8c 01	ld bc,0x018c
+ROM:008e 8e		adc a,(hl)
+ROM:008f 01 90 01	ld bc,0x0190
+ROM:0092 92		sub d
+ROM:0093 01 94 01	ld bc,0x0194
+ROM:0096 96		sub (hl)
+ROM:0097 01 98 01	ld bc,0x0198
+ROM:009a 9a		sbc a,d
+ROM:009b 01 9c 01	ld bc,0x019c
+ROM:009e 9e		sbc a,(hl)
+ROM:009f 01 a0 01	ld bc,0x01a0
+ROM:00a2 a2		and d
+ROM:00a3 01 a4 01	ld bc,0x01a4
+ROM:00a6 a6		and (hl)
+ROM:00a7 01 a8 01	ld bc,0x01a8
+ROM:00aa aa		xor d
+ROM:00ab 01 ac 01	ld bc,0x01ac
+ROM:00ae ae		xor (hl)
+ROM:00af 01 b0 01	ld bc,0x01b0
+ROM:00b2 b2		or d
+ROM:00b3 01 b4 01	ld bc,0x01b4
+ROM:00b6 b6		or (hl)
+ROM:00b7 01 b8 01	ld bc,0x01b8
+ROM:00ba ba		cp d
+ROM:00bb 01 bc 01	ld bc,0x01bc
+ROM:00be be		cp (hl)
+ROM:00bf 01 c0 01	ld bc,0x01c0
+ROM:00c2 c2 01 c4	jp nz,0xc401
+ROM:00c5 01 c6 01	ld bc,0x01c6
+ROM:00c8 c8		ret z
+ROM:00c9 01 ca 01	ld bc,0x01ca
+ROM:00cc cc 01 ce	call z,0xce01
+ROM:00cf 01 d0 01	ld bc,0x01d0
+ROM:00d2 d2 01 d4	jp nc,0xd401
+ROM:00d5 01 d6 01	ld bc,0x01d6
+ROM:00d8 d8		ret c
+ROM:00d9 01 da 01	ld bc,0x01da
+ROM:00dc dc 01 de	call c,0xde01
+ROM:00df 01 e0 01	ld bc,0x01e0
+ROM:00e2 e2 01 e4	jp po,0xe401
+ROM:00e5 01 e6 01	ld bc,0x01e6
+ROM:00e8 e8		ret pe
+ROM:00e9 01 ea 01	ld bc,0x01ea
+ROM:00ec ec 01 ee	call pe,0xee01
+ROM:00ef 01 f0 01	ld bc,0x01f0
+ROM:00f2 f2 01 f4	jp p,0xf401
+ROM:00f5 01 f6 01	ld bc,0x01f6
+ROM:00f8 f8		ret m
+ROM:00f9 01 fa 01	ld bc,0x01fa
+ROM:00fc fc 01 fe	call m,0xfe01
+ROM:00ff 01 76 76	ld bc,0x7676
+ROM:0102 76		halt
+ROM:0103 76		halt
+ROM:0104 76		halt
+ROM:0105 76		halt
+ROM:0106 76		halt
+ROM:0107 76		halt
+ROM:0108 76		halt
+ROM:0109 76		halt
+ROM:010a 76		halt
+ROM:010b 76		halt
+ROM:010c 76		halt
+ROM:010d 76		halt
+ROM:010e 76		halt
+ROM:010f 76		halt
+ROM:0110 76		halt
+ROM:0111 76		halt
+ROM:0112 76		halt
+ROM:0113 76		halt
+ROM:0114 76		halt
+ROM:0115 76		halt
+ROM:0116 76		halt
+ROM:0117 76		halt
+ROM:0118 76		halt
+ROM:0119 76		halt
+ROM:011a 76		halt
+ROM:011b 76		halt
+ROM:011c 76		halt
+ROM:011d 76		halt
+ROM:011e 76		halt
+ROM:011f 76		halt
+ROM:0120 76		halt
+ROM:0121 76		halt
+ROM:0122 76		halt
+ROM:0123 76		halt
+ROM:0124 76		halt
+ROM:0125 76		halt
+ROM:0126 76		halt
+ROM:0127 76		halt
+ROM:0128 76		halt
+ROM:0129 76		halt
+ROM:012a 76		halt
+ROM:012b 76		halt
+ROM:012c 76		halt
+ROM:012d 76		halt
+ROM:012e 76		halt
+ROM:012f 76		halt
+ROM:0130 76		halt
+ROM:0131 76		halt
+ROM:0132 76		halt
+ROM:0133 76		halt
+ROM:0134 76		halt
+ROM:0135 76		halt
+ROM:0136 76		halt
+ROM:0137 76		halt
+ROM:0138 76		halt
+ROM:0139 76		halt
+ROM:013a 76		halt
+ROM:013b 76		halt
+ROM:013c 76		halt
+ROM:013d 76		halt
+ROM:013e 76		halt
+ROM:013f 76		halt
+ROM:0140 76		halt
+ROM:0141 76		halt
+ROM:0142 76		halt
+ROM:0143 76		halt
+ROM:0144 76		halt
+ROM:0145 76		halt
+ROM:0146 76		halt
+ROM:0147 76		halt
+ROM:0148 76		halt
+ROM:0149 76		halt
+ROM:014a 76		halt
+ROM:014b 76		halt
+ROM:014c 76		halt
+ROM:014d 76		halt
+ROM:014e 76		halt
+ROM:014f 76		halt
+ROM:0150 76		halt
+ROM:0151 76		halt
+ROM:0152 76		halt
+ROM:0153 76		halt
+ROM:0154 76		halt
+ROM:0155 76		halt
+ROM:0156 76		halt
+ROM:0157 76		halt
+ROM:0158 76		halt
+ROM:0159 76		halt
+ROM:015a 76		halt
+ROM:015b 76		halt
+ROM:015c 76		halt
+ROM:015d 76		halt
+ROM:015e 76		halt
+ROM:015f 76		halt
+ROM:0160 76		halt
+ROM:0161 76		halt
+ROM:0162 76		halt
+ROM:0163 76		halt
+ROM:0164 76		halt
+ROM:0165 76		halt
+ROM:0166 76		halt
+ROM:0167 76		halt
+ROM:0168 76		halt
+ROM:0169 76		halt
+ROM:016a 76		halt
+ROM:016b 76		halt
+ROM:016c 76		halt
+ROM:016d 76		halt
+ROM:016e 76		halt
+ROM:016f 76		halt
+ROM:0170 76		halt
+ROM:0171 76		halt
+ROM:0172 76		halt
+ROM:0173 76		halt
+ROM:0174 76		halt
+ROM:0175 76		halt
+ROM:0176 76		halt
+ROM:0177 76		halt
+ROM:0178 76		halt
+ROM:0179 76		halt
+ROM:017a 76		halt
+ROM:017b 76		halt
+ROM:017c 76		halt
+ROM:017d 76		halt
+ROM:017e 76		halt
+ROM:017f 76		halt
+ROM:0180 76		halt
+ROM:0181 76		halt
+ROM:0182 76		halt
+ROM:0183 76		halt
+ROM:0184 76		halt
+ROM:0185 76		halt
+ROM:0186 76		halt
+ROM:0187 76		halt
+ROM:0188 76		halt
+ROM:0189 76		halt
+ROM:018a 76		halt
+ROM:018b 76		halt
+ROM:018c 76		halt
+ROM:018d 76		halt
+ROM:018e 76		halt
+ROM:018f 76		halt
+ROM:0190 76		halt
+ROM:0191 76		halt
+ROM:0192 76		halt
+ROM:0193 76		halt
+ROM:0194 76		halt
+ROM:0195 76		halt
+ROM:0196 76		halt
+ROM:0197 76		halt
+ROM:0198 76		halt
+ROM:0199 76		halt
+ROM:019a 76		halt
+ROM:019b 76		halt
+ROM:019c 76		halt
+ROM:019d 76		halt
+ROM:019e 76		halt
+ROM:019f 76		halt
+ROM:01a0 76		halt
+ROM:01a1 76		halt
+ROM:01a2 76		halt
+ROM:01a3 76		halt
+ROM:01a4 76		halt
+ROM:01a5 76		halt
+ROM:01a6 76		halt
+ROM:01a7 76		halt
+ROM:01a8 76		halt
+ROM:01a9 76		halt
+ROM:01aa 76		halt
+ROM:01ab 76		halt
+ROM:01ac 76		halt
+ROM:01ad 76		halt
+ROM:01ae 76		halt
+ROM:01af 76		halt
+ROM:01b0 76		halt
+ROM:01b1 76		halt
+ROM:01b2 76		halt
+ROM:01b3 76		halt
+ROM:01b4 76		halt
+ROM:01b5 76		halt
+ROM:01b6 76		halt
+ROM:01b7 76		halt
+ROM:01b8 76		halt
+ROM:01b9 76		halt
+ROM:01ba 76		halt
+ROM:01bb 76		halt
+ROM:01bc 76		halt
+ROM:01bd 76		halt
+ROM:01be 76		halt
+ROM:01bf 76		halt
+ROM:01c0 76		halt
+ROM:01c1 76		halt
+ROM:01c2 76		halt
+ROM:01c3 76		halt
+ROM:01c4 76		halt
+ROM:01c5 76		halt
+ROM:01c6 76		halt
+ROM:01c7 76		halt
+ROM:01c8 76		halt
+ROM:01c9 76		halt
+ROM:01ca 76		halt
+ROM:01cb 76		halt
+ROM:01cc 76		halt
+ROM:01cd 76		halt
+ROM:01ce 76		halt
+ROM:01cf 76		halt
+ROM:01d0 76		halt
+ROM:01d1 76		halt
+ROM:01d2 76		halt
+ROM:01d3 76		halt
+ROM:01d4 76		halt
+ROM:01d5 76		halt
+ROM:01d6 76		halt
+ROM:01d7 76		halt
+ROM:01d8 76		halt
+ROM:01d9 76		halt
+ROM:01da 76		halt
+ROM:01db 76		halt
+ROM:01dc 76		halt
+ROM:01dd 76		halt
+ROM:01de 76		halt
+ROM:01df 76		halt
+ROM:01e0 76		halt
+ROM:01e1 76		halt
+ROM:01e2 76		halt
+ROM:01e3 76		halt
+ROM:01e4 76		halt
+ROM:01e5 76		halt
+ROM:01e6 76		halt
+ROM:01e7 76		halt
+ROM:01e8 76		halt
+ROM:01e9 76		halt
+ROM:01ea 76		halt
+ROM:01eb 76		halt
+ROM:01ec 76		halt
+ROM:01ed 76		halt
+ROM:01ee 76		halt
+ROM:01ef 76		halt
+ROM:01f0 76		halt
+ROM:01f1 76		halt
+ROM:01f2 76		halt
+ROM:01f3 76		halt
+ROM:01f4 76		halt
+ROM:01f5 76		halt
+ROM:01f6 76		halt
+ROM:01f7 76		halt
+ROM:01f8 76		halt
+ROM:01f9 76		halt
+ROM:01fa 76		halt
+ROM:01fb 76		halt
+ROM:01fc 76		halt
+ROM:01fd 76		halt
+ROM:01fe 76		halt
+ROM:01ff 76		halt
+ROM:0200 fb		ei
+ROM:0201 ed 4d		reti
+ROM:0203 ;
+ROM:0203 INIT???	; init another flag or something
+ROM:0203 3e 01		ld a,0x01		; set a
+ROM:0205 21 62 2c	ld hl,0x2c62	; <- id/label
+ROM:0208 06 07		ld b,0x07		; init 8 bytes
+ROM:020a 77		ld (hl),a		; gpib regs?
+ROM:020b 23		inc hl
+ROM:020c 10 fc		djnz 0x020a
+ROM:020e af		xor a
+ROM:020f 32 0e 2c	ld (0x2c0e),a	; <- id/label
+ROM:0212 c9		ret
+ROM:0213 d9		exx
+ROM:0214 08		ex af,af'
+ROM:0215 3e 00		ld a,0x00
+ROM:0217 d3 b3		out (0xb3),a
+ROM:0219 db b3		in a,(0xb3)
+ROM:021b cb 5f		bit 3,a
+ROM:021d 28 2e		jr z,0x024d
+ROM:021f 21 68 2c	ld hl,0x2c68
+ROM:0222 34		inc (hl)
+ROM:0223 3a 61 2c	ld a,(0x2c61)
+ROM:0226 be		cp (hl)
+ROM:0227 20 24		jr nz,0x024d
+ROM:0229 af		xor a
+ROM:022a 77		ld (hl),a
+ROM:022b 21 67 2c	ld hl,0x2c67
+ROM:022e 34		inc (hl)
+ROM:022f 3e 3c		ld a,0x3c
+ROM:0231 be		cp (hl)
+ROM:0232 20 19		jr nz,0x024d
+ROM:0234 36 00		ld (hl),0x00
+ROM:0236 21 66 2c	ld hl,0x2c66
+ROM:0239 34		inc (hl)
+ROM:023a be		cp (hl)
+ROM:023b 20 10		jr nz,0x024d
+ROM:023d 36 00		ld (hl),0x00
+ROM:023f 21 65 2c	ld hl,0x2c65
+ROM:0242 34		inc (hl)
+ROM:0243 3e 18		ld a,0x18
+ROM:0245 be		cp (hl)
+ROM:0246 20 05		jr nz,0x024d
+ROM:0248 36 00		ld (hl),0x00
+ROM:024a cd 56 02	call 0x0256
+ROM:024d 3e 10		ld a,0x10
+ROM:024f d3 b3		out (0xb3),a
+ROM:0251 d9		exx
+ROM:0252 08		ex af,af'
+ROM:0253 fb		ei
+ROM:0254 ed 4d		reti
+ROM:0256 3a 63 2c	ld a,(0x2c63)
+ROM:0259 3d		dec a
+ROM:025a fa 9d 02	jp m,0x029d
+ROM:025d fe 0c		cp 0x0c
+ROM:025f f2 9d 02	jp p,0x029d
+ROM:0262 4f		ld c,a
+ROM:0263 cd 02 1f	call 0x1f02
+ROM:0266 91		sub c
+ROM:0267 02		ld (bc),a
+ROM:0268 7e		ld a,(hl)
+ROM:0269 02		ld (bc),a
+ROM:026a 91		sub c
+ROM:026b 02		ld (bc),a
+ROM:026c 8d		adc a,l
+ROM:026d 02		ld (bc),a
+ROM:026e 91		sub c
+ROM:026f 02		ld (bc),a
+ROM:0270 8d		adc a,l
+ROM:0271 02		ld (bc),a
+ROM:0272 91		sub c
+ROM:0273 02		ld (bc),a
+ROM:0274 91		sub c
+ROM:0275 02		ld (bc),a
+ROM:0276 8d		adc a,l
+ROM:0277 02		ld (bc),a
+ROM:0278 91		sub c
+ROM:0279 02		ld (bc),a
+ROM:027a 8d		adc a,l
+ROM:027b 02		ld (bc),a
+ROM:027c a8		xor b
+ROM:027d 02		ld (bc),a
+ROM:027e 3a 62 2c	ld a,(0x2c62)
+ROM:0281 e6 03		and 0x03
+ROM:0283 28 04		jr z,0x0289
+ROM:0285 06 1c		ld b,0x1c
+ROM:0287 18 0a		jr 0x0293
+ROM:0289 06 1d		ld b,0x1d
+ROM:028b 18 06		jr 0x0293
+ROM:028d 06 1e		ld b,0x1e
+ROM:028f 18 02		jr 0x0293
+ROM:0291 06 1f		ld b,0x1f
+ROM:0293 3a 64 2c	ld a,(0x2c64)
+ROM:0296 b8		cp b
+ROM:0297 28 05		jr z,0x029e
+ROM:0299 3c		inc a
+ROM:029a 32 64 2c	ld (0x2c64),a
+ROM:029d c9		ret
+ROM:029e 3e 01		ld a,0x01
+ROM:02a0 32 64 2c	ld (0x2c64),a
+ROM:02a3 21 63 2c	ld hl,0x2c63
+ROM:02a6 34		inc (hl)
+ROM:02a7 c9		ret
+ROM:02a8 3a 64 2c	ld a,(0x2c64)
+ROM:02ab fe 1f		cp 0x1f
+ROM:02ad 28 05		jr z,0x02b4
+ROM:02af 3c		inc a
+ROM:02b0 32 64 2c	ld (0x2c64),a
+ROM:02b3 c9		ret
+ROM:02b4 3e 01		ld a,0x01
+ROM:02b6 32 64 2c	ld (0x2c64),a
+ROM:02b9 32 63 2c	ld (0x2c63),a
+ROM:02bc 21 62 2c	ld hl,0x2c62
+ROM:02bf 34		inc (hl)
+ROM:02c0 c9		ret
+ROM:02c1 21 0e 2c	ld hl,0x2c0e
+ROM:02c4 3a 27 2c	ld a,(0x2c27)
+ROM:02c7 fe 09		cp 0x09
+ROM:02c9 28 0e		jr z,0x02d9
+ROM:02cb fe 0c		cp 0x0c
+ROM:02cd 28 05		jr z,0x02d4
+ROM:02cf cb ce		set 1,(hl)
+ROM:02d1 c3 17 0e	jp 0x0e17
+ROM:02d4 cb d6		set 2,(hl)
+ROM:02d6 c3 17 0e	jp 0x0e17
+ROM:02d9 cb c6		set 0,(hl)
+ROM:02db 3a 28 2c	ld a,(0x2c28)
+ROM:02de 32 61 2c	ld (0x2c61),a
+ROM:02e1 21 29 2c	ld hl,0x2c29
+ROM:02e4 11 62 2c	ld de,0x2c62
+ROM:02e7 01 07 00	ld bc,0x0007
+ROM:02ea ed b0		ldir
+ROM:02ec c3 17 0e	jp 0x0e17
+ROM:02ef 21 0e 2c	ld hl,0x2c0e
+ROM:02f2 7e		ld a,(hl)
+ROM:02f3 e6 07		and 0x07
+ROM:02f5 c8		ret z
+ROM:02f6 0e 0a		ld c,0x0a
+ROM:02f8 cb 47		bit 0,a
+ROM:02fa c2 c9 0d	jp nz,0x0dc9
+ROM:02fd cb 4f		bit 1,a
+ROM:02ff c2 c2 0d	jp nz,0x0dc2
+ROM:0302 cb 57		bit 2,a
+ROM:0304 c8		ret z
+ROM:0305 cb 96		res 2,(hl)
+ROM:0307 21 00 2c	ld hl,0x2c00
+ROM:030a cd f2 0e	call 0x0ef2
+ROM:030d 3e 0a		ld a,0x0a
+ROM:030f 32 16 2c	ld (0x2c16),a
+ROM:0312 3e 0a		ld a,0x0a
+ROM:0314 32 17 2c	ld (0x2c17),a
+ROM:0317 3e 07		ld a,0x07
+ROM:0319 32 18 2c	ld (0x2c18),a
+ROM:031c 3a 61 2c	ld a,(0x2c61)
+ROM:031f 32 19 2c	ld (0x2c19),a
+ROM:0322 01 07 00	ld bc,0x0007
+ROM:0325 21 62 2c	ld hl,0x2c62
+ROM:0328 11 1a 2c	ld de,0x2c1a
+ROM:032b f3		di
+ROM:032c ed b0		ldir
+ROM:032e fb		ei
+ROM:032f c3 93 0d	jp 0x0d93
+ROM:0332 ;
+ROM:0332 INITDMA:	; initialize the DMA chip
+ROM:0332 3e c3		ld a,0xc3
+ROM:0334 d3 98		out (0x98),a
+ROM:0336 af		xor a
+ROM:0337 32 5d 2c	ld (0x2c5d),a	; <- status word?
+ROM:033a c9		ret
+ROM:033b 47		ld b,a
+ROM:033c 21 56 2c	ld hl,0x2c56
+ROM:033f cd f2 0e	call 0x0ef2
+ROM:0342 21 00 2e	ld hl,0x2e00
+ROM:0345 22 58 2c	ld (0x2c58),hl
+ROM:0348 21 00 2f	ld hl,0x2f00
+ROM:034b 22 5a 2c	ld (0x2c5a),hl
+ROM:034e 21 12 2c	ld hl,0x2c12	; ioreg3
+ROM:0351 f3		di
+ROM:0352 7e		ld a,(hl)
+ROM:0353 e6 1f		and 0x1f
+ROM:0355 b0		or b
+ROM:0356 77		ld (hl),a
+ROM:0357 d3 c8		out (0xc8),a	; ioreg3
+ROM:0359 fb		ei
+ROM:035a af		xor a
+ROM:035b 32 57 2c	ld (0x2c57),a
+ROM:035e 3e c3		ld a,0xc3
+ROM:0360 d3 98		out (0x98),a
+ROM:0362 c9		ret
+ROM:0363 cd 32 03	call 0x0332
+ROM:0366 21 56 2c	ld hl,0x2c56
+ROM:0369 c3 0e 0f	jp 0x0f0e
+ROM:036c ed 5b 58 2c	ld de,(0x2c58)
+ROM:0370 2a 5a 2c	ld hl,(0x2c5a)
+ROM:0373 ed 53 5a 2c	ld (0x2c5a),de
+ROM:0377 22 58 2c	ld (0x2c58),hl
+ROM:037a c9		ret
+ROM:037b 3e 01		ld a,0x01
+ROM:037d d3 98		out (0x98),a
+ROM:037f 3e c7		ld a,0xc7
+ROM:0381 d3 98		out (0x98),a
+ROM:0383 3e cb		ld a,0xcb
+ROM:0385 d3 98		out (0x98),a
+ROM:0387 3e 6d		ld a,0x6d
+ROM:0389 d3 98		out (0x98),a
+ROM:038b 7d		ld a,l
+ROM:038c d3 98		out (0x98),a
+ROM:038e 0b		dec bc
+ROM:038f 79		ld a,c
+ROM:0390 d3 98		out (0x98),a
+ROM:0392 78		ld a,b
+ROM:0393 d3 98		out (0x98),a
+ROM:0395 3e 6c		ld a,0x6c
+ROM:0397 d3 98		out (0x98),a
+ROM:0399 af		xor a
+ROM:039a d3 98		out (0x98),a
+ROM:039c 3e 50		ld a,0x50
+ROM:039e d3 98		out (0x98),a
+ROM:03a0 af		xor a
+ROM:03a1 d3 98		out (0x98),a
+ROM:03a3 3e dd		ld a,0xdd
+ROM:03a5 d3 98		out (0x98),a
+ROM:03a7 7b		ld a,e
+ROM:03a8 d3 98		out (0x98),a
+ROM:03aa 7a		ld a,d
+ROM:03ab d3 98		out (0x98),a
+ROM:03ad 3e 1e		ld a,0x1e
+ROM:03af d3 98		out (0x98),a
+ROM:03b1 79		ld a,c
+ROM:03b2 d3 98		out (0x98),a
+ROM:03b4 3e 48		ld a,0x48
+ROM:03b6 d3 98		out (0x98),a
+ROM:03b8 3e 8a		ld a,0x8a
+ROM:03ba d3 98		out (0x98),a
+ROM:03bc 3e cf		ld a,0xcf
+ROM:03be d3 98		out (0x98),a
+ROM:03c0 3e ab		ld a,0xab
+ROM:03c2 d3 98		out (0x98),a
+ROM:03c4 3e 87		ld a,0x87
+ROM:03c6 d3 98		out (0x98),a
+ROM:03c8 03		inc bc
+ROM:03c9 c9		ret
+ROM:03ca 3e c7		ld a,0xc7
+ROM:03cc d3 98		out (0x98),a
+ROM:03ce 3e cb		ld a,0xcb
+ROM:03d0 d3 98		out (0x98),a
+ROM:03d2 3e 6d		ld a,0x6d
+ROM:03d4 d3 98		out (0x98),a
+ROM:03d6 7d		ld a,l
+ROM:03d7 d3 98		out (0x98),a
+ROM:03d9 0b		dec bc
+ROM:03da 79		ld a,c
+ROM:03db d3 98		out (0x98),a
+ROM:03dd 78		ld a,b
+ROM:03de d3 98		out (0x98),a
+ROM:03e0 3e 6c		ld a,0x6c
+ROM:03e2 d3 98		out (0x98),a
+ROM:03e4 af		xor a
+ROM:03e5 d3 98		out (0x98),a
+ROM:03e7 3e cf		ld a,0xcf
+ROM:03e9 d3 98		out (0x98),a
+ROM:03eb 3e 01		ld a,0x01
+ROM:03ed d3 98		out (0x98),a
+ROM:03ef 3e dd		ld a,0xdd
+ROM:03f1 d3 98		out (0x98),a
+ROM:03f3 7b		ld a,e
+ROM:03f4 d3 98		out (0x98),a
+ROM:03f6 7a		ld a,d
+ROM:03f7 d3 98		out (0x98),a
+ROM:03f9 3e 1e		ld a,0x1e
+ROM:03fb d3 98		out (0x98),a
+ROM:03fd 79		ld a,c
+ROM:03fe d3 98		out (0x98),a
+ROM:0400 3e 48		ld a,0x48
+ROM:0402 d3 98		out (0x98),a
+ROM:0404 3e 50		ld a,0x50
+ROM:0406 d3 98		out (0x98),a
+ROM:0408 af		xor a
+ROM:0409 d3 98		out (0x98),a
+ROM:040b 3e 8a		ld a,0x8a
+ROM:040d d3 98		out (0x98),a
+ROM:040f 3e cf		ld a,0xcf
+ROM:0411 d3 98		out (0x98),a
+ROM:0413 3e ab		ld a,0xab
+ROM:0415 d3 98		out (0x98),a
+ROM:0417 3e 87		ld a,0x87
+ROM:0419 d3 98		out (0x98),a
+ROM:041b 03		inc bc
+ROM:041c c9		ret
+ROM:041d 3e 83		ld a,0x83
+ROM:041f d3 98		out (0x98),a
+ROM:0421 3e bf		ld a,0xbf
+ROM:0423 d3 98		out (0x98),a
+ROM:0425 db 98		in a,(0x98)
+ROM:0427 cb 5f		bit 3,a
+ROM:0429 c8		ret z
+ROM:042a cb 6f		bit 5,a
+ROM:042c c8		ret z
+ROM:042d 21 57 2c	ld hl,0x2c57
+ROM:0430 c3 0e 0f	jp 0x0f0e
+ROM:0433 3e af		ld a,0xaf
+ROM:0435 d3 98		out (0x98),a
+ROM:0437 3e 87		ld a,0x87
+ROM:0439 d3 98		out (0x98),a
+ROM:043b c9		ret
+ROM:043c d9		exx
+ROM:043d 08		ex af,af'
+ROM:043e 3e a3		ld a,0xa3
+ROM:0440 d3 98		out (0x98),a
+ROM:0442 cd 77 04	call 0x0477
+ROM:0445 21 57 2c	ld hl,0x2c57
+ROM:0448 cd 0e 0f	call 0x0f0e
+ROM:044b d9		exx
+ROM:044c 08		ex af,af'
+ROM:044d fb		ei
+ROM:044e ed 4d		reti
+ROM:0450 3e 83		ld a,0x83
+ROM:0452 d3 98		out (0x98),a
+ROM:0454 3e bb		ld a,0xbb
+ROM:0456 d3 98		out (0x98),a
+ROM:0458 3e 3f		ld a,0x3f
+ROM:045a d3 98		out (0x98),a
+ROM:045c 3e a7		ld a,0xa7
+ROM:045e d3 98		out (0x98),a
+ROM:0460 db 98		in a,(0x98)
+ROM:0462 67		ld h,a
+ROM:0463 db 98		in a,(0x98)
+ROM:0465 4f		ld c,a
+ROM:0466 db 98		in a,(0x98)
+ROM:0468 47		ld b,a
+ROM:0469 03		inc bc
+ROM:046a db 98		in a,(0x98)
+ROM:046c 5f		ld e,a
+ROM:046d db 98		in a,(0x98)
+ROM:046f 57		ld d,a
+ROM:0470 db 98		in a,(0x98)
+ROM:0472 6f		ld l,a
+ROM:0473 7c		ld a,h
+ROM:0474 26 00		ld h,0x00
+ROM:0476 c9		ret
+ROM:0477 21 5d 2c	ld hl,0x2c5d
+ROM:047a cb 7e		bit 7,(hl)
+ROM:047c c8		ret z
+ROM:047d cb be		res 7,(hl)
+ROM:047f ed 4b 5c 2c	ld bc,(0x2c5c)
+ROM:0483 ed 5b 5e 2c	ld de,(0x2c5e)
+ROM:0487 3a 60 2c	ld a,(0x2c60)
+ROM:048a 6f		ld l,a
+ROM:048b cb 70		bit 6,b
+ROM:048d ca ca 03	jp z,0x03ca
+ROM:0490 cb b0		res 6,b
+ROM:0492 c3 7b 03	jp 0x037b
+ROM:0495 ;
+ROM:0495 INITFDC:	; init the floppy controller
+ROM:0495 21 12 2c	ld hl,0x2c12	; ioreg3
+ROM:0498 cb c6		set 0,(hl)
+ROM:049a 3e 00		ld a,0x00
+ROM:049c 32 35 2c	ld (0x2c35),a	; zero stuff
+ROM:049f 32 0b 2c	ld (0x2c0b),a	; find/id these
+ROM:04a2 32 55 2c	ld (0x2c55),a
+ROM:04a5 32 3e 2c	ld (0x2c3e),a	; 1st cmd buf byte
+ROM:04a8 32 4d 2c	ld (0x2c4d),a	; zero num result bytes
+ROM:04ab 3e 00		ld a,0x00
+ROM:04ad 32 44 2c	ld (0x2c44),a	; fdc cmd/status regs
+ROM:04b0 cd 01 0a	call 0x0a01	; get chip status
+ROM:04b3 c9		ret
+ROM:04b4 ;
+ROM:04b4 FLPCMD:	; handle a floppy command
+ROM:04b4 3a 27 2c	ld a,(0x2c27)	; get cmd byte?
+ROM:04b7 fe 0c		cp 0x0c		; is it 12?
+ROM:04b9 21 03 2c	ld hl,0x2c03	; <- id/label idle?
+ROM:04bc c2 0e 0f	jp nz,0x0f0e	; ?
+ROM:04bf 21 0b 2c	ld hl,0x2c0b
+ROM:04c2 cb d6		set 2,(hl)
+ROM:04c4 c3 17 0e	jp 0x0e17
+ROM:04c7 0e 03		ld c,0x03
+ROM:04c9 af		xor a
+ROM:04ca 21 55 2c	ld hl,0x2c55
+ROM:04cd be		cp (hl)
+ROM:04ce c4 a5 0d	call nz,0x0da5
+ROM:04d1 21 0b 2c	ld hl,0x2c0b
+ROM:04d4 7e		ld a,(hl)
+ROM:04d5 e6 07		and 0x07
+ROM:04d7 c8		ret z
+ROM:04d8 0e 03		ld c,0x03
+ROM:04da cb 47		bit 0,a
+ROM:04dc c2 c9 0d	jp nz,0x0dc9
+ROM:04df cb 4f		bit 1,a
+ROM:04e1 c2 c2 0d	jp nz,0x0dc2
+ROM:04e4 cb 57		bit 2,a
+ROM:04e6 c8		ret z
+ROM:04e7 cb 96		res 2,(hl)
+ROM:04e9 21 00 2c	ld hl,0x2c00
+ROM:04ec cd f2 0e	call 0x0ef2
+ROM:04ef 3e 0a		ld a,0x0a
+ROM:04f1 32 16 2c	ld (0x2c16),a
+ROM:04f4 3e 03		ld a,0x03
+ROM:04f6 32 17 2c	ld (0x2c17),a
+ROM:04f9 3e 07		ld a,0x07
+ROM:04fb 32 18 2c	ld (0x2c18),a
+ROM:04fe 01 08 00	ld bc,0x0008
+ROM:0501 21 4d 2c	ld hl,0x2c4d	; start of result byte buf
+ROM:0504 11 19 2c	ld de,0x2c19
+ROM:0507 ed b0		ldir
+ROM:0509 c3 93 0d	jp 0x0d93
+ROM:050c 3e 1a		ld a,0x1a	; load 26
+ROM:050e 32 36 2c	ld (0x2c36),a	; write to EOT
+ROM:0511 3e 07		ld a,0x07	; load 7
+ROM:0513 32 37 2c	ld (0x2c37),a	; write to GPL
+ROM:0516 3e 00		ld a,0x00	; load 0
+ROM:0518 32 38 2c	ld (0x2c38),a	; write to DTL
+ROM:051b 3e 00		ld a,0x00	; load 0
+ROM:051d 32 39 2c	ld (0x2c39),a	; write to Options?
+ROM:0520 21 3e 2c	ld hl,0x2c3e	; load start of cmd buf
+ROM:0523 36 15		ld (hl),0x15	; fdc Specify command
+ROM:0525 23		inc hl
+ROM:0526 36 03		ld (hl),0x03	; write step rate
+ROM:0528 23		inc hl
+ROM:0529 36 0f		ld (hl),0x0f	; write HUT
+ROM:052b 23		inc hl
+ROM:052c 36 24		ld (hl),0x24	; write HLT
+ROM:052e cd 0d 09	call 0x090d	; ship it?
+ROM:0531 da 4b 05	jp c,0x054b	; jump if send failed?
+ROM:0534 21 3e 2c	ld hl,0x2c3e	; start of cmd buf
+ROM:0537 36 17		ld (hl),0x17	; fdc Recalibrate cmd
+ROM:0539 23		inc hl		; bump cmd byte
+ROM:053a af		xor a		; zero it
+ROM:053b 77		ld (hl),a	; poke it
+ROM:053c 32 3a 2c	ld (0x2c3a),a	; floppy cyl
+ROM:053f cd 0d 09	call 0x090d	; ship it
+ROM:0542 da 4b 05	jp c,0x054b	; check for err/status?
+ROM:0545 21 35 2c	ld hl,0x2c35	; <- id/label
+ROM:0548 cd f2 0e	call 0x0ef2	; 
+ROM:054b 21 03 2c	ld hl,0x2c03
+ROM:054e cd f2 0e	call 0x0ef2
+ROM:0551 11 3e 2c	ld de,0x2c3e	; flp cmd buf
+ROM:0554 21 27 2c	ld hl,0x2c27
+ROM:0557 01 06 00	ld bc,0x0006
+ROM:055a ed b0		ldir
+ROM:055c cd 17 0e	call 0x0e17
+ROM:055f 21 3e 2c	ld hl,0x2c3e	; flp cmd buf
+ROM:0562 7e		ld a,(hl)
+ROM:0563 23		inc hl
+ROM:0564 cd 69 05	call 0x0569
+ROM:0567 18 e2		jr 0x054b
+ROM:0569 fe 08		cp 0x08
+ROM:056b ca 26 07	jp z,0x0726
+ROM:056e fe 10		cp 0x10
+ROM:0570 ca 2f 06	jp z,0x062f
+ROM:0573 fe 11		cp 0x11
+ROM:0575 ca 99 06	jp z,0x0699
+ROM:0578 fe 17		cp 0x17
+ROM:057a ca 2b 07	jp z,0x072b
+ROM:057d fe 18		cp 0x18
+ROM:057f ca 4d 07	jp z,0x074d
+ROM:0582 fe 15		cp 0x15
+ROM:0584 ca 44 07	jp z,0x0744
+ROM:0587 fe 16		cp 0x16
+ROM:0589 ca 6b 07	jp z,0x076b
+ROM:058c fe 09		cp 0x09
+ROM:058e ca 12 06	jp z,0x0612
+ROM:0591 fe 12		cp 0x12
+ROM:0593 ca 59 07	jp z,0x0759
+ROM:0596 fe 13		cp 0x13
+ROM:0598 ca 2f 06	jp z,0x062f
+ROM:059b fe 14		cp 0x14
+ROM:059d ca 99 06	jp z,0x0699
+ROM:05a0 fe 0a		cp 0x0a
+ROM:05a2 ca d4 07	jp z,0x07d4
+ROM:05a5 fe 0b		cp 0x0b
+ROM:05a7 ca b8 07	jp z,0x07b8
+ROM:05aa 21 0b 2c	ld hl,0x2c0b
+ROM:05ad 0e 03		ld c,0x03
+ROM:05af c3 c2 0d	jp 0x0dc2
+ROM:05b2 21 0b 2c	ld hl,0x2c0b
+ROM:05b5 0e 03		ld c,0x03
+ROM:05b7 c3 c9 0d	jp 0x0dc9
+ROM:05ba cd 63 03	call 0x0363
+ROM:05bd 21 0b 2c	ld hl,0x2c0b
+ROM:05c0 cb ce		set 1,(hl)
+ROM:05c2 e1		pop hl
+ROM:05c3 c3 51 05	jp 0x0551
+ROM:05c6 23		inc hl
+ROM:05c7 7e		ld a,(hl)
+ROM:05c8 32 3b 2c	ld (0x2c3b),a	; floppy sector
+ROM:05cb 23		inc hl
+ROM:05cc 4e		ld c,(hl)
+ROM:05cd 23		inc hl
+ROM:05ce 46		ld b,(hl)
+ROM:05cf ed 43 3c 2c	ld (0x2c3c),bc
+ROM:05d3 c9		ret
+ROM:05d4 3a 38 2c	ld a,(0x2c38)	; floppy DTL (sec size)
+ROM:05d7 01 80 00	ld bc,0x0080
+ROM:05da b7		or a
+ROM:05db 28 15		jr z,0x05f2
+ROM:05dd 01 00 01	ld bc,0x0100
+ROM:05e0 3d		dec a
+ROM:05e1 28 0f		jr z,0x05f2
+ROM:05e3 01 00 02	ld bc,0x0200
+ROM:05e6 3d		dec a
+ROM:05e7 28 09		jr z,0x05f2
+ROM:05e9 01 00 04	ld bc,0x0400
+ROM:05ec 3d		dec a
+ROM:05ed 28 03		jr z,0x05f2
+ROM:05ef 01 80 00	ld bc,0x0080
+ROM:05f2 2a 3c 2c	ld hl,(0x2c3c)
+ROM:05f5 b7		or a
+ROM:05f6 ed 42		sbc hl,bc
+ROM:05f8 d0		ret nc
+ROM:05f9 09		add hl,bc
+ROM:05fa 44		ld b,h
+ROM:05fb 4d		ld c,l
+ROM:05fc af		xor a
+ROM:05fd 6f		ld l,a
+ROM:05fe 67		ld h,a
+ROM:05ff c9		ret
+ROM:0600 21 4d 2c	ld hl,0x2c4d	; floppy num result bytes
+ROM:0603 7e		ld a,(hl)
+ROM:0604 b7		or a
+ROM:0605 37		scf
+ROM:0606 c8		ret z
+ROM:0607 fe 02		cp 0x02
+ROM:0609 37		scf
+ROM:060a c8		ret z
+ROM:060b 23		inc hl
+ROM:060c 7e		ld a,(hl)
+ROM:060d e6 c0		and 0xc0
+ROM:060f c8		ret z
+ROM:0610 37		scf
+ROM:0611 c9		ret
+ROM:0612 46		ld b,(hl)
+ROM:0613 23		inc hl
+ROM:0614 4e		ld c,(hl)
+ROM:0615 23		inc hl
+ROM:0616 7e		ld a,(hl)
+ROM:0617 23		inc hl
+ROM:0618 fe 02		cp 0x02
+ROM:061a 30 8e		jr nc,0x05aa
+ROM:061c 32 38 2c	ld (0x2c38),a	; floppy DTL
+ROM:061f 7e		ld a,(hl)
+ROM:0620 e6 e0		and 0xe0
+ROM:0622 32 39 2c	ld (0x2c39),a	; floppy MT,MF,SK bits
+ROM:0625 21 36 2c	ld hl,0x2c36	; floppy EOT
+ROM:0628 70		ld (hl),b
+ROM:0629 21 37 2c	ld hl,0x2c37	; floppy GPL
+ROM:062c 71		ld (hl),c
+ROM:062d 18 83		jr 0x05b2
+ROM:062f cd c6 05	call 0x05c6
+ROM:0632 79		ld a,c
+ROM:0633 b0		or b
+ROM:0634 ca b2 05	jp z,0x05b2
+ROM:0637 3e 20		ld a,0x20
+ROM:0639 cd 3b 03	call 0x033b
+ROM:063c cd 8a 06	call 0x068a
+ROM:063f 38 41		jr c,0x0682
+ROM:0641 cd 6c 03	call 0x036c
+ROM:0644 21 35 2c	ld hl,0x2c35
+ROM:0647 cd f2 0e	call 0x0ef2
+ROM:064a cd 1d 04	call 0x041d
+ROM:064d 21 57 2c	ld hl,0x2c57
+ROM:0650 cd f2 0e	call 0x0ef2
+ROM:0653 cd 00 06	call 0x0600
+ROM:0656 38 2a		jr c,0x0682
+ROM:0658 21 3b 2c	ld hl,0x2c3b	; floppy sector
+ROM:065b 34		inc (hl)
+ROM:065c cd d4 05	call 0x05d4
+ROM:065f c5		push bc
+ROM:0660 22 3c 2c	ld (0x2c3c),hl
+ROM:0663 7d		ld a,l
+ROM:0664 b4		or h
+ROM:0665 c4 8a 06	call nz,0x068a
+ROM:0668 c1		pop bc
+ROM:0669 38 17		jr c,0x0682
+ROM:066b ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:066f 3e 03		ld a,0x03
+ROM:0671 cd 78 0e	call 0x0e78
+ROM:0674 2a 3c 2c	ld hl,(0x2c3c)
+ROM:0677 7c		ld a,h
+ROM:0678 b5		or l
+ROM:0679 20 c6		jr nz,0x0641
+ROM:067b 21 0b 2c	ld hl,0x2c0b
+ROM:067e cb c6		set 0,(hl)
+ROM:0680 18 05		jr 0x0687
+ROM:0682 21 0b 2c	ld hl,0x2c0b
+ROM:0685 cb ce		set 1,(hl)
+ROM:0687 c3 63 03	jp 0x0363
+ROM:068a cd d4 05	call 0x05d4
+ROM:068d ed 5b 58 2c	ld de,(0x2c58)
+ROM:0691 2e a9		ld l,0xa9
+ROM:0693 cd 7b 03	call 0x037b
+ROM:0696 c3 0d 09	jp 0x090d
+ROM:0699 cd c6 05	call 0x05c6
+ROM:069c 79		ld a,c
+ROM:069d b0		or b
+ROM:069e ca b2 05	jp z,0x05b2
+ROM:06a1 3e 20		ld a,0x20
+ROM:06a3 cd 3b 03	call 0x033b
+ROM:06a6 cd 0b 07	call 0x070b
+ROM:06a9 38 5d		jr c,0x0708
+ROM:06ab 78		ld a,b
+ROM:06ac b1		or c
+ROM:06ad 28 40		jr z,0x06ef
+ROM:06af cd 6c 03	call 0x036c
+ROM:06b2 c5		push bc
+ROM:06b3 cd 1a 07	call 0x071a
+ROM:06b6 c1		pop bc
+ROM:06b7 38 39		jr c,0x06f2
+ROM:06b9 21 3b 2c	ld hl,0x2c3b	; floppy sector
+ROM:06bc 34		inc (hl)
+ROM:06bd 2a 3c 2c	ld hl,(0x2c3c)
+ROM:06c0 b7		or a
+ROM:06c1 ed 42		sbc hl,bc
+ROM:06c3 22 3c 2c	ld (0x2c3c),hl
+ROM:06c6 7c		ld a,h
+ROM:06c7 b5		or l
+ROM:06c8 c4 0b 07	call nz,0x070b
+ROM:06cb 38 2c		jr c,0x06f9
+ROM:06cd c5		push bc
+ROM:06ce 21 35 2c	ld hl,0x2c35
+ROM:06d1 cd f2 0e	call 0x0ef2
+ROM:06d4 cd 1d 04	call 0x041d
+ROM:06d7 21 57 2c	ld hl,0x2c57
+ROM:06da cd f2 0e	call 0x0ef2
+ROM:06dd cd 00 06	call 0x0600
+ROM:06e0 c1		pop bc
+ROM:06e1 38 0f		jr c,0x06f2
+ROM:06e3 2a 3c 2c	ld hl,(0x2c3c)
+ROM:06e6 7c		ld a,h
+ROM:06e7 b5		or l
+ROM:06e8 20 c1		jr nz,0x06ab
+ROM:06ea 21 0b 2c	ld hl,0x2c0b
+ROM:06ed cb c6		set 0,(hl)
+ROM:06ef c3 63 03	jp 0x0363
+ROM:06f2 21 0b 2c	ld hl,0x2c0b
+ROM:06f5 cb ce		set 1,(hl)
+ROM:06f7 18 f6		jr 0x06ef
+ROM:06f9 21 35 2c	ld hl,0x2c35
+ROM:06fc cd f2 0e	call 0x0ef2
+ROM:06ff cd 1d 04	call 0x041d
+ROM:0702 21 57 2c	ld hl,0x2c57
+ROM:0705 cd f2 0e	call 0x0ef2
+ROM:0708 c3 ba 05	jp 0x05ba
+ROM:070b cd d4 05	call 0x05d4
+ROM:070e ed 5b 58 2c	ld de,(0x2c58)
+ROM:0712 3e 03		ld a,0x03
+ROM:0714 21 03 2c	ld hl,0x2c03
+ROM:0717 c3 20 0e	jp 0x0e20
+ROM:071a ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:071e 2e a9		ld l,0xa9
+ROM:0720 cd ca 03	call 0x03ca
+ROM:0723 c3 0d 09	jp 0x090d
+ROM:0726 3a 40 2c	ld a,(0x2c40)
+ROM:0729 18 01		jr 0x072c
+ROM:072b af		xor a
+ROM:072c 32 3a 2c	ld (0x2c3a),a	; floppy cyl
+ROM:072f cd 0d 09	call 0x090d
+ROM:0732 da aa 05	jp c,0x05aa
+ROM:0735 21 35 2c	ld hl,0x2c35
+ROM:0738 cd f2 0e	call 0x0ef2
+ROM:073b cd 00 06	call 0x0600
+ROM:073e da aa 05	jp c,0x05aa
+ROM:0741 c3 b2 05	jp 0x05b2
+ROM:0744 cd 0d 09	call 0x090d
+ROM:0747 da aa 05	jp c,0x05aa
+ROM:074a c3 b2 05	jp 0x05b2
+ROM:074d cd 0d 09	call 0x090d
+ROM:0750 da aa 05	jp c,0x05aa
+ROM:0753 21 0b 2c	ld hl,0x2c0b
+ROM:0756 cb d6		set 2,(hl)
+ROM:0758 c9		ret
+ROM:0759 cd 0d 09	call 0x090d
+ROM:075c da aa 05	jp c,0x05aa
+ROM:075f 21 35 2c	ld hl,0x2c35
+ROM:0762 cd f2 0e	call 0x0ef2
+ROM:0765 21 0b 2c	ld hl,0x2c0b
+ROM:0768 cb d6		set 2,(hl)
+ROM:076a c9		ret
+ROM:076b 3e 20		ld a,0x20
+ROM:076d cd 3b 03	call 0x033b
+ROM:0770 06 00		ld b,0x00
+ROM:0772 21 40 2c	ld hl,0x2c40
+ROM:0775 4e		ld c,(hl)
+ROM:0776 cb 21		sla c
+ROM:0778 cb 21		sla c
+ROM:077a ed 5b 58 2c	ld de,(0x2c58)
+ROM:077e 3e 03		ld a,0x03
+ROM:0780 21 03 2c	ld hl,0x2c03
+ROM:0783 cd 20 0e	call 0x0e20
+ROM:0786 da ba 05	jp c,0x05ba
+ROM:0789 ed 5b 58 2c	ld de,(0x2c58)
+ROM:078d 2e a9		ld l,0xa9
+ROM:078f cd ca 03	call 0x03ca
+ROM:0792 cd 0d 09	call 0x090d
+ROM:0795 21 35 2c	ld hl,0x2c35
+ROM:0798 cd f2 0e	call 0x0ef2
+ROM:079b cd 1d 04	call 0x041d
+ROM:079e 21 57 2c	ld hl,0x2c57
+ROM:07a1 cd f2 0e	call 0x0ef2
+ROM:07a4 cd 00 06	call 0x0600
+ROM:07a7 38 07		jr c,0x07b0
+ROM:07a9 21 0b 2c	ld hl,0x2c0b
+ROM:07ac cb c6		set 0,(hl)
+ROM:07ae 18 05		jr 0x07b5
+ROM:07b0 21 0b 2c	ld hl,0x2c0b
+ROM:07b3 cb ce		set 1,(hl)
+ROM:07b5 c3 63 03	jp 0x0363
+ROM:07b8 3e 00		ld a,0x00
+ROM:07ba 32 35 2c	ld (0x2c35),a
+ROM:07bd 32 0b 2c	ld (0x2c0b),a
+ROM:07c0 32 55 2c	ld (0x2c55),a
+ROM:07c3 32 3e 2c	ld (0x2c3e),a	; floppy cmd buf
+ROM:07c6 32 4d 2c	ld (0x2c4d),a	; floppy num result bytes
+ROM:07c9 3e 00		ld a,0x00
+ROM:07cb 32 44 2c	ld (0x2c44),a	; fdc regs/status buf
+ROM:07ce cd 01 0a	call 0x0a01
+ROM:07d1 c3 b2 05	jp 0x05b2
+ROM:07d4 3e 1a		ld a,0x1a
+ROM:07d6 32 36 2c	ld (0x2c36),a	; floppy EOT
+ROM:07d9 3e 07		ld a,0x07
+ROM:07db 32 37 2c	ld (0x2c37),a	; floppy GPL
+ROM:07de 3e 00		ld a,0x00
+ROM:07e0 32 38 2c	ld (0x2c38),a	; floppy DTL
+ROM:07e3 3e 00		ld a,0x00
+ROM:07e5 32 39 2c	ld (0x2c39),a	; floppy option bits
+ROM:07e8 21 3e 2c	ld hl,0x2c3e	; start of cmd buf
+ROM:07eb 36 15		ld (hl),0x15
+ROM:07ed 23		inc hl
+ROM:07ee 36 03		ld (hl),0x03
+ROM:07f0 23		inc hl
+ROM:07f1 36 0f		ld (hl),0x0f
+ROM:07f3 23		inc hl
+ROM:07f4 36 24		ld (hl),0x24
+ROM:07f6 cd 0d 09	call 0x090d
+ROM:07f9 da 80 08	jp c,0x0880
+ROM:07fc 21 3e 2c	ld hl,0x2c3e	; start of cmd buf
+ROM:07ff 36 17		ld (hl),0x17
+ROM:0801 23		inc hl
+ROM:0802 af		xor a
+ROM:0803 77		ld (hl),a
+ROM:0804 32 3a 2c	ld (0x2c3a),a	; floppy cyl
+ROM:0807 cd 0d 09	call 0x090d
+ROM:080a da 80 08	jp c,0x0880
+ROM:080d 21 35 2c	ld hl,0x2c35
+ROM:0810 cd f2 0e	call 0x0ef2
+ROM:0813 3e 20		ld a,0x20
+ROM:0815 cd 3b 03	call 0x033b
+ROM:0818 3e 01		ld a,0x01
+ROM:081a 32 3b 2c	ld (0x2c3b),a	; floppy sector
+ROM:081d 32 3a 2c	ld (0x2c3a),a	; floppy cyl
+ROM:0820 af		xor a
+ROM:0821 32 3f 2c	ld (0x2c3f),a	; floppy head/unit select
+ROM:0824 cd 88 08	call 0x0888
+ROM:0827 38 57		jr c,0x0880
+ROM:0829 21 35 2c	ld hl,0x2c35
+ROM:082c cd f2 0e	call 0x0ef2
+ROM:082f cd 1d 04	call 0x041d
+ROM:0832 21 57 2c	ld hl,0x2c57
+ROM:0835 cd f2 0e	call 0x0ef2
+ROM:0838 cd 00 06	call 0x0600
+ROM:083b 38 43		jr c,0x0880
+ROM:083d 2a 58 2c	ld hl,(0x2c58)
+ROM:0840 7e		ld a,(hl)
+ROM:0841 fe 55		cp 0x55
+ROM:0843 20 3b		jr nz,0x0880
+ROM:0845 23		inc hl
+ROM:0846 7e		ld a,(hl)
+ROM:0847 fe aa		cp 0xaa
+ROM:0849 20 35		jr nz,0x0880
+ROM:084b cd b9 08	call 0x08b9
+ROM:084e cd 88 08	call 0x0888
+ROM:0851 38 2d		jr c,0x0880
+ROM:0853 cd 6c 03	call 0x036c
+ROM:0856 21 35 2c	ld hl,0x2c35
+ROM:0859 cd f2 0e	call 0x0ef2
+ROM:085c cd 1d 04	call 0x041d
+ROM:085f 21 57 2c	ld hl,0x2c57
+ROM:0862 cd f2 0e	call 0x0ef2
+ROM:0865 cd 00 06	call 0x0600
+ROM:0868 38 16		jr c,0x0880
+ROM:086a cd b9 08	call 0x08b9
+ROM:086d cd 88 08	call 0x0888
+ROM:0870 38 0e		jr c,0x0880
+ROM:0872 01 80 00	ld bc,0x0080
+ROM:0875 ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:0879 3e 03		ld a,0x03
+ROM:087b cd 78 0e	call 0x0e78
+ROM:087e 18 d3		jr 0x0853
+ROM:0880 21 0b 2c	ld hl,0x2c0b
+ROM:0883 cb ce		set 1,(hl)
+ROM:0885 c3 63 03	jp 0x0363
+ROM:0888 3a 3b 2c	ld a,(0x2c3b)	; floppy sector
+ROM:088b fe 01		cp 0x01
+ROM:088d 20 16		jr nz,0x08a5
+ROM:088f 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:0892 cb 57		bit 2,a
+ROM:0894 20 0f		jr nz,0x08a5
+ROM:0896 21 3e 2c	ld hl,0x2c3e	; start of cmd buf
+ROM:0899 36 08		ld (hl),0x08
+ROM:089b cd 0d 09	call 0x090d
+ROM:089e d8		ret c
+ROM:089f 21 35 2c	ld hl,0x2c35
+ROM:08a2 cd f2 0e	call 0x0ef2
+ROM:08a5 01 80 00	ld bc,0x0080
+ROM:08a8 ed 5b 58 2c	ld de,(0x2c58)
+ROM:08ac 2e a9		ld l,0xa9
+ROM:08ae cd 7b 03	call 0x037b
+ROM:08b1 21 3e 2c	ld hl,0x2c3e	; start of cmd buf
+ROM:08b4 36 10		ld (hl),0x10
+ROM:08b6 c3 0d 09	jp 0x090d
+ROM:08b9 21 3b 2c	ld hl,0x2c3b	; floppy sector
+ROM:08bc 34		inc (hl)
+ROM:08bd 3a 36 2c	ld a,(0x2c36)	; floppy EOT
+ROM:08c0 be		cp (hl)
+ROM:08c1 d0		ret nc
+ROM:08c2 36 01		ld (hl),0x01
+ROM:08c4 21 3a 2c	ld hl,0x2c3a	; floppy cyl
+ROM:08c7 34		inc (hl)
+ROM:08c8 c9		ret
+ROM:08c9 ; here on floppy interrupt?
+ROM:08c9 d9		exx
+ROM:08ca 08		ex af,af'
+ROM:08cb 21 44 2c	ld hl,0x2c44	; fdc cmd/status regs?
+ROM:08ce 7e		ld a,(hl)
+ROM:08cf e6 1f		and 0x1f
+ROM:08d1 28 21		jr z,0x08f4	
+ROM:08d3 fe 0f		cp 0x0f
+ROM:08d5 28 04		jr z,0x08db
+ROM:08d7 fe 07		cp 0x07
+ROM:08d9 20 07		jr nz,0x08e2
+ROM:08db 36 08		ld (hl),0x08
+ROM:08dd 06 01		ld b,0x01
+ROM:08df cd e0 09	call 0x09e0	; check floppy status
+ROM:08e2 cd 01 0a	call 0x0a01	; get status bytes
+ROM:08e5 18 00		jr 0x08e7	; why
+ROM:08e7 21 35 2c	ld hl,0x2c35	; <- id/label
+ROM:08ea cd 0e 0f	call 0x0f0e	; save stuff? update tcb?
+ROM:08ed 3e 00		ld a,0x00	; zero
+ROM:08ef 32 44 2c	ld (0x2c44),a	; fdc cmd/status regs
+ROM:08f2 18 14		jr 0x0908	; head for the exit 
+ROM:08f4 36 08		ld (hl),0x08
+ROM:08f6 06 01		ld b,0x01
+ROM:08f8 cd e0 09	call 0x09e0
+ROM:08fb 3e 00		ld a,0x00
+ROM:08fd 32 44 2c	ld (0x2c44),a	; fdc cmd/status regs
+ROM:0900 cd 01 0a	call 0x0a01
+ROM:0903 21 55 2c	ld hl,0x2c55
+ROM:0906 cb c6		set 0,(hl)
+ROM:0908 d9		exx
+ROM:0909 08		ex af,af'
+ROM:090a fb		ei
+ROM:090b ed 4d		reti
+ROM:090d ;
+ROM:090d FLPSEND:	; send a floppy command to the fdc?
+ROM:090d 21 44 2c	ld hl,0x2c44	; fdc cmd/status regs
+ROM:0910 3a 3e 2c	ld a,(0x2c3e)	; 1st byte in fdc cmd buf
+ROM:0913 fe 10		cp 0x10
+ROM:0915 28 2c		jr z,0x0943	; jump if read
+ROM:0917 fe 11		cp 0x11
+ROM:0919 28 30		jr z,0x094b	; jump if write
+ROM:091b fe 08		cp 0x08
+ROM:091d ca d0 09	jp z,0x09d0	; jump if seek
+ROM:0920 fe 17		cp 0x17
+ROM:0922 ca 85 09	jp z,0x0985	; jump if recalibrate
+ROM:0925 fe 13		cp 0x13
+ROM:0927 28 1e		jr z,0x0947	; jump if read deleted
+ROM:0929 fe 14		cp 0x14
+ROM:092b 28 22		jr z,0x094f	; jump if write deleted
+ROM:092d fe 12		cp 0x12
+ROM:092f ca 5e 09	jp z,0x095e	; jump if read id
+ROM:0932 fe 15		cp 0x15
+ROM:0934 ca a1 09	jp z,0x09a1	; jump if specify
+ROM:0937 fe 16		cp 0x16
+ROM:0939 ca 68 09	jp z,0x0968	; jump if format
+ROM:093c fe 18		cp 0x18
+ROM:093e ca 91 09	jp z,0x0991	; jump if drive status
+ROM:0941 37		scf		; set error flag?
+ROM:0942 c9		ret
+ROM:0943 ;
+ROM:0943 FLPREAD:	; send floppy read command
+ROM:0943 06 06		ld b,0x06	; fdc read data cmd
+ROM:0945 18 0c		jr 0x0953
+ROM:0947 06 0c		ld b,0x0c	; fdc read deleted data
+ROM:0949 18 08		jr 0x0953
+ROM:094b 06 05		ld b,0x05	; fdc write data
+ROM:094d 18 04		jr 0x0953
+ROM:094f 06 09		ld b,0x09	; fdc write deleted data
+ROM:0951 18 00		jr 0x0953
+ROM:0953 cd 39 0a	call 0x0a39	; set up cmd byte
+ROM:0956 cd 45 0a	call 0x0a45	; set up cmd regs
+ROM:0959 06 09		ld b,0x09	; set count
+ROM:095b c3 e0 09	jp 0x09e0	; ship it
+ROM:095e ;
+ROM:095e FLPRDID:	; send floppy read id command
+ROM:095e 06 0a		ld b,0x0a	; fdc read id cmd
+ROM:0960 cd 39 0a	call 0x0a39	; set up cmd byte
+ROM:0963 06 02		ld b,0x02	; count byte
+ROM:0965 c3 e0 09	jp 0x09e0	; ship it
+ROM:0968 ;
+ROM:0968 FLPFRM:	; send floppy format command
+ROM:0968 06 0d		ld b,0x0d	; fdc write id (format) cmd
+ROM:096a cd 39 0a	call 0x0a39	; set up cmd byte
+ROM:096d 3a 38 2c	ld a,(0x2c38)	; floppy DTL
+ROM:0970 77		ld (hl),a	; save it
+ROM:0971 23		inc hl
+ROM:0972 3a 40 2c	ld a,(0x2c40)	; floppy SC (sec/trk)
+ROM:0975 77		ld (hl),a
+ROM:0976 23		inc hl
+ROM:0977 3a 42 2c	ld a,(0x2c42)	; floppy GPL
+ROM:097a 77		ld (hl),a
+ROM:097b 23		inc hl
+ROM:097c 3a 41 2c	ld a,(0x2c41)	; floppy filler byte (D)
+ROM:097f 77		ld (hl),a
+ROM:0980 06 06		ld b,0x06	; set count
+ROM:0982 c3 e0 09	jp 0x09e0	; ship it
+ROM:0985 ;
+ROM:0985 FLPRECAL:	; send floppy recalibrate command
+ROM:0985 36 07		ld (hl),0x07	; fdc recalibrate cmd
+ROM:0987 23		inc hl
+ROM:0988 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:098b 77		ld (hl),a
+ROM:098c 06 02		ld b,0x02	; set count
+ROM:098e c3 e0 09	jp 0x09e0	; ship it
+ROM:0991 ;
+ROM:0991 FLPSENSE:	; send floppy sense drive status command
+ROM:0991 36 04		ld (hl),0x04	; fdc sense drive status cmd
+ROM:0993 23		inc hl
+ROM:0994 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:0997 77		ld (hl),a
+ROM:0998 06 02		ld b,0x02	; set count
+ROM:099a cd e0 09	call 0x09e0	; off it goes
+ROM:099d d8		ret c		; return result byte
+ROM:099e c3 01 0a	jp 0x0a01	; or get status if failed?
+ROM:09a1 ;
+ROM:09a1 FLPSPCFY:	; specify floppy params to the fdc
+ROM:09a1 36 03		ld (hl),0x03	; fdc specify command
+ROM:09a3 23		inc hl		; bump
+ROM:09a4 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:09a7 fe 10		cp 0x10
+ROM:09a9 30 23		jr nc,0x09ce	; jump if bit 4 set?
+ROM:09ab ed 44		neg		; negate?
+ROM:09ad cb 27		sla a		; shift left to move value
+ROM:09af cb 27		sla a		; into upper nibble
+ROM:09b1 cb 27		sla a
+ROM:09b3 cb 27		sla a
+ROM:09b5 47		ld b,a		; save in b
+ROM:09b6 3a 40 2c	ld a,(0x2c40)	; load HUT value
+ROM:09b9 fe 10		cp 0x10		; compare again?
+ROM:09bb 30 11		jr nc,0x09ce	; jump if HUT > 16?
+ROM:09bd b0		or b		; combine with SRT
+ROM:09be 77		ld (hl),a	; store the SRT/HUT val
+ROM:09bf 23		inc hl		; bump
+ROM:09c0 3a 41 2c	ld a,(0x2c41)	; load HLT value
+ROM:09c3 fe 80		cp 0x80		; check high bit
+ROM:09c5 30 07		jr nc,0x09ce	; jump if HLT too big?
+ROM:09c7 cb 27		sla a		; shift HLT for ND bit (0)
+ROM:09c9 77		ld (hl),a	; store it
+ROM:09ca 06 03		ld b,0x03	; count byte
+ROM:09cc 18 12		jr 0x09e0	; send it
+ROM:09ce 37		scf		; error flag
+ROM:09cf c9		ret
+ROM:09d0 FLPSEEK:	; issue a floppy seek
+ROM:09d0 36 0f		ld (hl),0x0f	; fdc seek command
+ROM:09d2 23		inc hl
+ROM:09d3 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:09d6 77		ld (hl),a
+ROM:09d7 23		inc hl
+ROM:09d8 3a 3a 2c	ld a,(0x2c3a)	; floppy cyl
+ROM:09db 77		ld (hl),a
+ROM:09dc 06 03		ld b,0x03	; count byte
+ROM:09de 18 00		jr 0x09e0	; do it
+ROM:09e0 ;
+ROM:09e0 FLPCMD:	; send a command to the fdc
+ROM:09e0 21 44 2c	ld hl,0x2c44	; start of fdc cmd regs
+ROM:09e3 0e ff		ld c,0xff	; set a timeout counter
+ROM:09e5 db a8		in a,(0xa8)	; read fdc status
+ROM:09e7 cb 7f		bit 7,a		; check RQM
+ROM:09e9 20 05		jr nz,0x09f0	; jump if set
+ROM:09eb 0d		dec c		; dec timeout count
+ROM:09ec 20 f7		jr nz,0x09e5	; retry?
+ROM:09ee 37		scf		; timed out, set err flag
+ROM:09ef c9		ret
+ROM:09f0 cb 77		bit 6,a		; check DIO
+ROM:09f2 20 08		jr nz,0x09fc	; jump if need to read
+ROM:09f4 7e		ld a,(hl)	; get next byte to send
+ROM:09f5 23		inc hl		; bump addr
+ROM:09f6 d3 a9		out (0xa9),a	; ship it
+ROM:09f8 10 e9		djnz 0x09e3	; more bytes?
+ROM:09fa b7		or a		; clear carry (return 0)?
+ROM:09fb c9		ret
+ROM:09fc cd 01 0a	call 0x0a01	; go read status
+ROM:09ff 37		scf
+ROM:0a00 c9		ret
+ROM:0a01 ;
+ROM:0a01 RDFDCSTAT:	; read from the FDC status port
+ROM:0a01 21 4e 2c	ld hl,0x2c4e	; start of fdc status buf?
+ROM:0a04 06 00		ld b,0x00	; init byte count?
+ROM:0a06 0e ff		ld c,0xff	; init timeout counter
+ROM:0a08 db a8		in a,(0xa8)	; read fdc status
+ROM:0a0a cb 7f		bit 7,a		; check RQM
+ROM:0a0c 20 05		jr nz,0x0a13	; jump if not set
+ROM:0a0e 0d		dec c		; retry count
+ROM:0a0f 20 f7		jr nz,0x0a08	; try again?
+ROM:0a11 37		scf		; return timeout err
+ROM:0a12 c9		ret	
+ROM:0a13 cb 77		bit 6,a		; check DIO
+ROM:0a15 28 07		jr z,0x0a1e	; jump if not set
+ROM:0a17 db a9		in a,(0xa9)	; read the byte
+ROM:0a19 77		ld (hl),a	; store it
+ROM:0a1a 23		inc hl		; bump addr
+ROM:0a1b 04		inc b		; bump count
+ROM:0a1c 18 e8		jr 0x0a06	; get another
+ROM:0a1e 78		ld a,b		; save num bytes
+ROM:0a1f 06 03		ld b,0x03	; set the "type code" for 7
+ROM:0a21 fe 07		cp 0x07		; result bytes, compare
+ROM:0a23 28 0e		jr z,0x0a33	; jump if we got all 7
+ROM:0a25 06 02		ld b,0x02	; type code for 1 status byte
+ROM:0a27 fe 01		cp 0x01		; compare it
+ROM:0a29 28 08		jr z,0x0a33	; jump if 1 byte
+ROM:0a2b 06 01		ld b,0x01	; type code for 2 bytes
+ROM:0a2d fe 02		cp 0x02		; compare it
+ROM:0a2f 28 02		jr z,0x0a33	; yep
+ROM:0a31 06 00		ld b,0x00	; okay, musta been zero.
+ROM:0a33 78		ld a,b		; store the "type code"
+ROM:0a34 32 4d 2c	ld (0x2c4d),a	; save it and return
+ROM:0a37 b7		or a
+ROM:0a38 c9		ret
+ROM:0a39 ;
+ROM:0a39 FLPOPTBITS:	; set the option bits/cmd byte, head/unit select byte
+ROM:0a39 3a 39 2c	ld a,(0x2c39)	; floppy option bits
+ROM:0a3c b0		or b		; add in the cmd?
+ROM:0a3d 77		ld (hl),a	; write that
+ROM:0a3e 23		inc hl		; bump byte
+ROM:0a3f 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:0a42 77		ld (hl),a	; save it
+ROM:0a43 23		inc hl		; bump byte
+ROM:0a44 c9		ret
+ROM:0a45 ;
+ROM:0a45 FLPCMDREGS:	; set up the buffer for a transfer?
+ROM:0a45 3a 3a 2c	ld a,(0x2c3a)	; floppy cyl (C)
+ROM:0a48 77		ld (hl),a	; write that
+ROM:0a49 23		inc hl		; bump
+ROM:0a4a 3a 3f 2c	ld a,(0x2c3f)	; floppy head/unit select
+ROM:0a4d cb 2f		sra a		; div by 2
+ROM:0a4f cb 2f		sra a		; div by 2
+ROM:0a51 e6 01		and 0x01	; head 0 or 1 (H)
+ROM:0a53 77		ld (hl),a	; save it
+ROM:0a54 23		inc hl		; bump
+ROM:0a55 3a 3b 2c	ld a,(0x2c3b)	; floppy sec (R)
+ROM:0a58 77		ld (hl),a	; save it
+ROM:0a59 23		inc hl
+ROM:0a5a 3a 38 2c	ld a,(0x2c38)	; floppy DTL (N)
+ROM:0a5d 77		ld (hl),a
+ROM:0a5e 23		inc hl
+ROM:0a5f 3a 36 2c	ld a,(0x2c36)	; floppy EOT
+ROM:0a62 77		ld (hl),a
+ROM:0a63 23		inc hl
+ROM:0a64 3a 37 2c	ld a,(0x2c37)	; floppy GPL
+ROM:0a67 77		ld (hl),a
+ROM:0a68 23		inc hl
+ROM:0a69 36 80		ld (hl),0x80	; fixed sector size (single)
+ROM:0a6b 23		inc hl
+ROM:0a6c c9		ret
+ROM:0a6d ;
+ROM:0a6d INITSEEK:	; initialize shugart seek control
+ROM:0a6d af		xor a		; set a zero
+ROM:0a6e 32 48 2d	ld (0x2d48),a	; <- label this
+ROM:0a71 32 0f 2c	ld (0x2c0f),a	; <- label this
+ROM:0a74 d3 d8		out (0xd8),a	; seek ctrl
+ROM:0a76 3e 53		ld a,0x53	; reset, counter mode
+ROM:0a78 d3 92		out (0x92),a	; ctc chn 2
+ROM:0a7a c9		ret
+ROM:0a7b ;
+ROM:0a7b 21 27 2c	ld hl,0x2c27
+ROM:0a7e 7e		ld a,(hl)
+ROM:0a7f fe 08		cp 0x08
+ROM:0a81 28 08		jr z,0x0a8b
+ROM:0a83 21 0f 2c	ld hl,0x2c0f
+ROM:0a86 cb ce		set 1,(hl)
+ROM:0a88 c3 17 0e	jp 0x0e17
+ROM:0a8b 23		inc hl
+ROM:0a8c 7e		ld a,(hl)
+ROM:0a8d b7		or a
+ROM:0a8e 28 18		jr z,0x0aa8	; bail if ncyls == 0??
+ROM:0a90 0e 92		ld c,0x92	; ctc chn 2
+ROM:0a92 06 d7		ld b,0xd7	; set TC, counter mode
+ROM:0a94 ed 41		out (c),b	; send it
+ROM:0a96 ed 79		out (c),a	; time const word
+ROM:0a98 0e d8		ld c,0xd8	; seek ctrl port
+ROM:0a9a 06 08		ld b,0x08	; != 0 is go flag?
+ROM:0a9c ed 41		out (c),b	; send it
+ROM:0a9e 32 48 2d	ld (0x2d48),a
+ROM:0aa1 af		xor a
+ROM:0aa2 32 49 2d	ld (0x2d49),a
+ROM:0aa5 c3 17 0e	jp 0x0e17
+ROM:0aa8 21 0f 2c	ld hl,0x2c0f
+ROM:0aab cb c6		set 0,(hl)
+ROM:0aad c3 17 0e	jp 0x0e17
+ROM:0ab0 21 0f 2c	ld hl,0x2c0f
+ROM:0ab3 7e		ld a,(hl)
+ROM:0ab4 e6 07		and 0x07
+ROM:0ab6 c8		ret z
+ROM:0ab7 0e 01		ld c,0x01
+ROM:0ab9 cb 47		bit 0,a
+ROM:0abb c2 c9 0d	jp nz,0x0dc9
+ROM:0abe cb 4f		bit 1,a
+ROM:0ac0 c2 c2 0d	jp nz,0x0dc2
+ROM:0ac3 c9		ret
+ROM:0ac4 d9		exx
+ROM:0ac5 08		ex af,af'
+ROM:0ac6 af		xor a
+ROM:0ac7 d3 d8		out (0xd8),a
+ROM:0ac9 21 49 2d	ld hl,0x2d49
+ROM:0acc 7e		ld a,(hl)
+ROM:0acd b7		or a
+ROM:0ace 28 0c		jr z,0x0adc
+ROM:0ad0 35		dec (hl)
+ROM:0ad1 28 33		jr z,0x0b06
+ROM:0ad3 3e b7		ld a,0xb7
+ROM:0ad5 d3 92		out (0x92),a
+ROM:0ad7 af		xor a
+ROM:0ad8 d3 92		out (0x92),a
+ROM:0ada 18 33		jr 0x0b0f
+ROM:0adc 3a 48 2d	ld a,(0x2d48)
+ROM:0adf fe 20		cp 0x20
+ROM:0ae1 30 0a		jr nc,0x0aed
+ROM:0ae3 21 ac 0e	ld hl,0x0eac
+ROM:0ae6 16 00		ld d,0x00
+ROM:0ae8 5f		ld e,a
+ROM:0ae9 19		add hl,de
+ROM:0aea 7e		ld a,(hl)
+ROM:0aeb 18 02		jr 0x0aef
+ROM:0aed c6 34		add a,0x34
+ROM:0aef 6f		ld l,a
+ROM:0af0 26 00		ld h,0x00
+ROM:0af2 29		add hl,hl
+ROM:0af3 29		add hl,hl
+ROM:0af4 5f		ld e,a
+ROM:0af5 16 00		ld d,0x00
+ROM:0af7 19		add hl,de
+ROM:0af8 3e b7		ld a,0xb7
+ROM:0afa d3 92		out (0x92),a
+ROM:0afc 7d		ld a,l
+ROM:0afd d3 92		out (0x92),a
+ROM:0aff 24		inc h
+ROM:0b00 7c		ld a,h
+ROM:0b01 32 49 2d	ld (0x2d49),a
+ROM:0b04 18 09		jr 0x0b0f
+ROM:0b06 3e 03		ld a,0x03
+ROM:0b08 d3 92		out (0x92),a
+ROM:0b0a 21 0f 2c	ld hl,0x2c0f
+ROM:0b0d cb c6		set 0,(hl)
+ROM:0b0f d9		exx
+ROM:0b10 08		ex af,af'
+ROM:0b11 fb		ei
+ROM:0b12 ed 4d		reti
+ROM:0b14 INIT:		; cold start initialization
+ROM:0b14 3e 53		ld a,0x53
+ROM:0b16 d3 92		out (0x92),a	; ctc
+ROM:0b18 d3 d8		out (0xd8),a	; seek control
+ROM:0b1a af		xor a		; clear a
+ROM:0b1b 21 00 00	ld hl,0x0000	; addr 0
+ROM:0b1e 06 20		ld b,0x20	; set b
+ROM:0b20 86		add a,(hl)	; sum in a
+ROM:0b21 2c		inc l		; looping
+ROM:0b22 20 fc		jr nz,0x0b20	; to compute checksum
+ROM:0b24 24		inc h		; bump h
+ROM:0b25 10 f9		djnz 0x0b20	; to count over 8K
+ROM:0b27 b7		or a		; 
+ROM:0b28 20 fe		jr nz,0x0b28	; die if it doesn't
+ROM:0b2a af		xor a		; compute!?
+ROM:0b2b 21 00 2c	ld hl,0x2c00	; must've worked
+ROM:0b2e 77		ld (hl),a	; addr of ram start
+ROM:0b2f 54		ld d,h		; prep for another
+ROM:0b30 5d		ld e,l		; loop...
+ROM:0b31 13		inc de
+ROM:0b32 01 ff 03	ld bc,0x03ff	; count
+ROM:0b35 ed b0		ldir		; copy 1k bytes
+ROM:0b37 31 80 2e	ld sp,0x2e80	; set up stack ptr
+ROM:0b3a af		xor a		; clear a
+ROM:0b3b 32 01 2c	ld (0x2c01),a	; init some flags
+ROM:0b3e 32 02 2c	ld (0x2c02),a
+ROM:0b41 32 03 2c	ld (0x2c03),a
+ROM:0b44 32 04 2c	ld (0x2c04),a
+ROM:0b47 32 05 2c	ld (0x2c05),a	; find/label these!
+ROM:0b4a 32 06 2c	ld (0x2c06),a
+ROM:0b4d 32 57 2c	ld (0x2c57),a
+ROM:0b50 32 35 2c	ld (0x2c35),a
+ROM:0b53 3c		inc a		; set to 1
+ROM:0b54 32 00 2c	ld (0x2c00),a	
+ROM:0b57 32 56 2c	ld (0x2c56),a
+ROM:0b5a af		xor a		; clear it again?
+ROM:0b5b 32 12 2c	ld (0x2c12),a	; clear ioreg3 (mem)
+ROM:0b5e d3 c0		out (0xc0),a	; disable touch tablet
+ROM:0b60 cd 6d 0a	call 0x0a6d	; init hard disk seek
+ROM:0b63 cd d3 0b	call 0x0bd3	; init ctc to idle
+ROM:0b66 cd e1 0c	call 0x0ce1	; init ???
+ROM:0b69 cd e2 0b	call 0x0be2	; init keyboard
+ROM:0b6c cd 32 03	call 0x0332	; init dma
+ROM:0b6f cd 95 04	call 0x0495	; init fdc
+ROM:0b72 cd 03 02	call 0x0203	; init ???
+ROM:0b75 cd e7 18	call 0x18e7	; init ctc clocks?
+ROM:0b78 cd c9 0c	call 0x0cc9	; init ???
+ROM:0b7b cd 93 1c	call 0x1c93	; init sio
+ROM:0b7e cd 06 10	call 0x1006	; init gpib
+ROM:0b81 cd 38 16	call 0x1638	; enable sio?
+ROM:0b84 cd 4f 1f	call 0x1f4f	; clear another flag
+ROM:0b87 3a 12 2c	ld a,(0x2c12)	; load ioreg3 (mem)
+ROM:0b8a d3 c8		out (0xc8),a	; write to ioreg3 (hw)
+ROM:0b8c cd cc 0e	call 0x0ecc	; init tcbs?
+ROM:0b8f 3e 01		ld a,0x01
+ROM:0b91 01 9f 0c	ld bc,0x0c9f
+ROM:0b94 21 97 2d	ld hl,0x2d97
+ROM:0b97 cd b5 0f	call 0x0fb5	; setting up tasks?
+ROM:0b9a 3e 05		ld a,0x05
+ROM:0b9c 01 0c 05	ld bc,0x050c
+ROM:0b9f 21 b1 2d	ld hl,0x2db1
+ROM:0ba2 cd b5 0f	call 0x0fb5	; task
+ROM:0ba5 3e 05		ld a,0x05
+ROM:0ba7 01 a9 19	ld bc,0x19a9
+ROM:0baa 21 cb 2d	ld hl,0x2dcb
+ROM:0bad cd b5 0f	call 0x0fb5	; task
+ROM:0bb0 3e 05		ld a,0x05
+ROM:0bb2 01 17 1d	ld bc,0x1d17
+ROM:0bb5 21 e5 2d	ld hl,0x2de5
+ROM:0bb8 cd b5 0f	call 0x0fb5	; task
+ROM:0bbb 3e 05		ld a,0x05
+ROM:0bbd 01 bb 11	ld bc,0x11bb
+ROM:0bc0 21 ff 2d	ld hl,0x2dff
+ROM:0bc3 cd b5 0f	call 0x0fb5	; task
+ROM:0bc6 3e 00		ld a,0x00
+ROM:0bc8 ed 47		ld i,a
+ROM:0bca ed 5e		im 2		; intr mode 2
+ROM:0bcc dd 2a 53 2d	ld ix,(0x2d53)	; <- id/label
+ROM:0bd0 c3 65 0f	jp 0x0f65	; jump to scheduler?
+ROM:0bd3 ;
+ROM:0bd3 INITCTC:	; initialize CTC
+ROM:0bd3 3e 40		ld a,0x40
+ROM:0bd5 d3 90		out (0x90),a
+ROM:0bd7 3e 03		ld a,0x03
+ROM:0bd9 d3 90		out (0x90),a
+ROM:0bdb d3 91		out (0x91),a
+ROM:0bdd d3 92		out (0x92),a
+ROM:0bdf d3 93		out (0x93),a
+ROM:0be1 c9		ret
+ROM:0be2 ;
+ROM:0be2 INITKBD:	; initialize keyboard
+ROM:0be2 af		xor a
+ROM:0be3 32 26 2d	ld (0x2d26),a	; <- circ buf ptrs?
+ROM:0be6 32 27 2d	ld (0x2d27),a
+ROM:0be9 21 0c 2c	ld hl,0x2c0c	; status word?
+ROM:0bec 77		ld (hl),a
+ROM:0bed cb ee		set 5,(hl)
+ROM:0bef db 80		in a,(0x80)	; clear input buffer
+ROM:0bf1 21 12 2c	ld hl,0x2c12	; ioreg3
+ROM:0bf4 cb ce		set 1,(hl)	; set kbd enable
+ROM:0bf6 c9		ret
+ROM:0bf7 21 0c 2c	ld hl,0x2c0c
+ROM:0bfa 3a 27 2c	ld a,(0x2c27)
+ROM:0bfd fe 09		cp 0x09
+ROM:0bff 28 12		jr z,0x0c13
+ROM:0c01 fe 0c		cp 0x0c
+ROM:0c03 28 09		jr z,0x0c0e
+ROM:0c05 fe 0b		cp 0x0b
+ROM:0c07 20 1b		jr nz,0x0c24
+ROM:0c09 cd e2 0b	call 0x0be2
+ROM:0c0c 18 11		jr 0x0c1f
+ROM:0c0e cb d6		set 2,(hl)
+ROM:0c10 c3 17 0e	jp 0x0e17
+ROM:0c13 3a 28 2c	ld a,(0x2c28)
+ROM:0c16 b7		or a
+ROM:0c17 28 04		jr z,0x0c1d
+ROM:0c19 cb ee		set 5,(hl)
+ROM:0c1b 18 02		jr 0x0c1f
+ROM:0c1d cb ae		res 5,(hl)
+ROM:0c1f cb c6		set 0,(hl)
+ROM:0c21 c3 17 0e	jp 0x0e17
+ROM:0c24 cb ce		set 1,(hl)
+ROM:0c26 c3 17 0e	jp 0x0e17
+ROM:0c29 0e 08		ld c,0x08
+ROM:0c2b 21 26 2d	ld hl,0x2d26
+ROM:0c2e cd e6 0d	call 0x0de6
+ROM:0c31 21 0c 2c	ld hl,0x2c0c
+ROM:0c34 7e		ld a,(hl)
+ROM:0c35 e6 07		and 0x07
+ROM:0c37 c8		ret z
+ROM:0c38 0e 08		ld c,0x08
+ROM:0c3a cb 47		bit 0,a
+ROM:0c3c c2 c9 0d	jp nz,0x0dc9
+ROM:0c3f cb 4f		bit 1,a
+ROM:0c41 c2 c2 0d	jp nz,0x0dc2
+ROM:0c44 cb 57		bit 2,a
+ROM:0c46 c8		ret z
+ROM:0c47 cb 96		res 2,(hl)
+ROM:0c49 21 00 2c	ld hl,0x2c00
+ROM:0c4c cd f2 0e	call 0x0ef2
+ROM:0c4f 3e 04		ld a,0x04
+ROM:0c51 32 16 2c	ld (0x2c16),a
+ROM:0c54 3e 08		ld a,0x08
+ROM:0c56 32 17 2c	ld (0x2c17),a
+ROM:0c59 3e 07		ld a,0x07
+ROM:0c5b 32 18 2c	ld (0x2c18),a
+ROM:0c5e 21 0c 2c	ld hl,0x2c0c
+ROM:0c61 af		xor a
+ROM:0c62 cb 66		bit 4,(hl)
+ROM:0c64 28 01		jr z,0x0c67
+ROM:0c66 3c		inc a
+ROM:0c67 32 1a 2c	ld (0x2c1a),a
+ROM:0c6a cb a6		res 4,(hl)
+ROM:0c6c 7e		ld a,(hl)
+ROM:0c6d e6 20		and 0x20
+ROM:0c6f 32 19 2c	ld (0x2c19),a
+ROM:0c72 c3 93 0d	jp 0x0d93
+ROM:0c75 d9		exx
+ROM:0c76 08		ex af,af'
+ROM:0c77 db 80		in a,(0x80)
+ROM:0c79 21 0c 2c	ld hl,0x2c0c
+ROM:0c7c cb 6e		bit 5,(hl)
+ROM:0c7e 28 1a		jr z,0x0c9a
+ROM:0c80 57		ld d,a
+ROM:0c81 21 26 2d	ld hl,0x2d26
+ROM:0c84 cd c8 1e	call 0x1ec8
+ROM:0c87 fe 1e		cp 0x1e
+ROM:0c89 38 07		jr c,0x0c92
+ROM:0c8b 21 0c 2c	ld hl,0x2c0c
+ROM:0c8e cb e6		set 4,(hl)
+ROM:0c90 18 08		jr 0x0c9a
+ROM:0c92 af		xor a
+ROM:0c93 cd b7 1e	call 0x1eb7
+ROM:0c96 7a		ld a,d
+ROM:0c97 cd b7 1e	call 0x1eb7
+ROM:0c9a d9		exx
+ROM:0c9b 08		ex af,af'
+ROM:0c9c fb		ei
+ROM:0c9d ed 4d		reti
+ROM:0c9f ;
+ROM:0c9f MAINLOOP:	; top of main loop??
+ROM:0c9f cd 79 10	call 0x1079	; check the thing
+ROM:0ca2 cd 5b 19	call 0x195b	; check the next thing
+ROM:0ca5 cd d6 0c	call 0x0cd6	; and so on
+ROM:0ca8 cd d1 1c	call 0x1cd1
+ROM:0cab cd b0 0a	call 0x0ab0
+ROM:0cae cd 4e 0f	call 0x0f4e
+ROM:0cb1 cd 79 10	call 0x1079	; same as above (rsa?)
+ROM:0cb4 cd b9 16	call 0x16b9	; fill these in
+ROM:0cb7 cd c7 04	call 0x04c7
+ROM:0cba cd 29 0c	call 0x0c29
+ROM:0cbd cd ef 02	call 0x02ef
+ROM:0cc0 cd 5c 1f	call 0x1f5c
+ROM:0cc3 cd 4e 0f	call 0x0f4e	; scheduler??
+ROM:0cc6 c3 9f 0c	jp 0x0c9f	; loop!
+ROM:0cc9 ;
+ROM:0cc9 INIT???	; sets another flag...
+ROM:0cc9 af		xor a
+ROM:0cca 32 09 2c	ld (0x2c09),a	; <- id/label
+ROM:0ccd c9		ret
+ROM:0cce 21 09 2c	ld hl,0x2c09	; ^^^
+ROM:0cd1 cb ce		set 1,(hl)
+ROM:0cd3 c3 17 0e	jp 0x0e17
+ROM:0cd6 21 09 2c	ld hl,0x2c09
+ROM:0cd9 cb 4e		bit 1,(hl)
+ROM:0cdb c8		ret z
+ROM:0cdc 0e 05		ld c,0x05
+ROM:0cde c3 c2 0d	jp 0x0dc2
+ROM:0ce1 ;
+ROM:0ce1 INITIOR3:	; initialize ioreg3 copy & input state
+ROM:0ce1 21 12 2c	ld hl,0x2c12	; ioreg3 copy
+ROM:0ce4 cb d6		set 2,(hl)	; set perq int enable
+ROM:0ce6 3e 00		ld a,0x00	; set zero
+ROM:0ce8 32 13 2c	ld (0x2c13),a	; input state = waitsom
+ROM:0ceb c9		ret
+ROM:0cec ;
+ROM:0cec FIRSTIRQ:	; here after first interrupt after init?
+ROM:0cec d9		exx
+ROM:0ced 08		ex af,af'
+ROM:0cee 3a 13 2c	ld a,(0x2c13)	; perq input state
+ROM:0cf1 3d		dec a
+ROM:0cf2 28 13		jr z,0x0d07	; jump if state = 1
+ROM:0cf4 3d		dec a
+ROM:0cf5 28 30		jr z,0x0d27	; jump if state = 2
+ROM:0cf7 db a0		in a,(0xa0)	; read from data in
+ROM:0cf9 fe aa		cp 0xaa		; check for SOM (STX)
+ROM:0cfb 20 43		jr nz,0x0d40	; jump if not SOM
+ROM:0cfd 3e 02		ld a,0x02	; state = getcount
+ROM:0cff 32 13 2c	ld (0x2c13),a	; write it
+ROM:0d02 d9		exx		; restore and return
+ROM:0d03 08		ex af,af'
+ROM:0d04 fb		ei
+ROM:0d05 ed 4d		reti
+ROM:0d07 ;
+ROM:0d07 RDDATABYTE:	; here on data byte
+ROM:0d07 db a0		in a,(0xa0)	; read from data in
+ROM:0d09 2a 14 2c	ld hl,(0x2c14)	; count byte addr
+ROM:0d0c 77		ld (hl),a	; save it
+ROM:0d0d 23		inc hl		; bump next byte ptr
+ROM:0d0e 22 14 2c	ld (0x2c14),hl	; save it
+ROM:0d11 21 34 2c	ld hl,0x2c34	; bytes received
+ROM:0d14 35		dec (hl)	; count down
+ROM:0d15 20 29		jr nz,0x0d40	; last byte?
+ROM:0d17 cd 0e 0e	call 0x0e0e	; disable input irq
+ROM:0d1a 3e 00		ld a,0x00	; next state = waitsom
+ROM:0d1c 32 13 2c	ld (0x2c13),a	; save it
+ROM:0d1f cd 50 0d	call 0x0d50	; wut
+ROM:0d22 d9		exx		; cleanup & return
+ROM:0d23 08		ex af,af'
+ROM:0d24 fb		ei
+ROM:0d25 ed 4d		reti
+ROM:0d27 ;
+ROM:0d27 CNTBYTE:	; here on count byte
+ROM:0d27 db a0		in a,(0xa0)	; read perq fifo
+ROM:0d29 b7		or a
+ROM:0d2a 28 19		jr z,0x0d45	; jump if count > 0
+ROM:0d2c fe 0f		cp 0x0f
+ROM:0d2e 30 1c		jr nc,0x0d4c	; check if overflow
+ROM:0d30 21 25 2c	ld hl,0x2c25	; <- id/label count?
+ROM:0d33 77		ld (hl),a
+ROM:0d34 23		inc hl
+ROM:0d35 22 14 2c	ld (0x2c14),hl	; <- id/label
+ROM:0d38 32 34 2c	ld (0x2c34),a	; working count
+ROM:0d3b 3e 01		ld a,0x01	; next state = getdata
+ROM:0d3d 32 13 2c	ld (0x2c13),a	; write it
+ROM:0d40 ;
+ROM:0d40 DONE:	        ; bug out after collecting up a command buffer?
+ROM:0d40 d9		exx
+ROM:0d41 08		ex af,af'
+ROM:0d42 fb		ei
+ROM:0d43 ed 4d		reti
+ROM:0d45 3e 00		ld a,0x00	; clear a
+ROM:0d47 32 13 2c	ld (0x2c13),a	; next state = waitsom
+ROM:0d4a 18 f4		jr 0x0d40	; ?  "jr"
+ROM:0d4c 3e 0e		ld a,0x0e
+ROM:0d4e 18 e0		jr 0x0d30
+ROM:0d50 3a 26 2c	ld a,(0x2c26)	; 1st cmd buf byte?
+ROM:0d53 fe 03		cp 0x03		; dev = 3?
+ROM:0d55 ca b4 04	jp z,0x04b4	; floppy
+ROM:0d58 fe 01		cp 0x01		; ???
+ROM:0d5a ca 7b 0a	jp z,0x0a7b
+ROM:0d5d fe 04		cp 0x04		; dev = 4?
+ROM:0d5f ca 20 19	jp z,0x1920	; rs232 a
+ROM:0d62 fe 05		cp 0x05		; dev = 5?
+ROM:0d64 ca ce 0c	jp z,0x0cce	; rs232 b
+ROM:0d67 fe 06		cp 0x06		; dev = 6?
+ROM:0d69 ca be 1c	jp z,0x1cbe	; speech
+ROM:0d6c fe 07		cp 0x07		; dev = 7?
+ROM:0d6e ca 3e 10	jp z,0x103e	; gpib
+ROM:0d71 fe 08		cp 0x08		; dev = 8?
+ROM:0d73 ca f7 0b	jp z,0x0bf7	; kbd
+ROM:0d76 fe 0a		cp 0x0a		; dev = 10?
+ROM:0d78 ca c1 02	jp z,0x02c1	; clock
+ROM:0d7b fe 0b		cp 0x0b		; dev = 11?
+ROM:0d7d ca 6a 16	jp z,0x166a	; pointer
+ROM:0d80 fe 0f		cp 0x0f		; dev = 15?
+ROM:0d82 ca 54 1f	jp z,0x1f54	; z80
+ROM:0d85 c3 17 0e	jp 0x0e17
+ROM:0d88 3e aa		ld a,0xaa
+ROM:0d8a d3 d0		out (0xd0),a
+ROM:0d8c db 88		in a,(0x88)
+ROM:0d8e cb 77		bit 6,a
+ROM:0d90 c8		ret z
+ROM:0d91 18 f9		jr 0x0d8c
+ROM:0d93 21 16 2c	ld hl,0x2c16
+ROM:0d96 46		ld b,(hl)
+ROM:0d97 04		inc b
+ROM:0d98 0e d0		ld c,0xd0
+ROM:0d9a cd 88 0d	call 0x0d88
+ROM:0d9d ed b3		otir
+ROM:0d9f 21 00 2c	ld hl,0x2c00
+ROM:0da2 c3 0e 0f	jp 0x0f0e
+ROM:0da5 f3		di
+ROM:0da6 7e		ld a,(hl)
+ROM:0da7 36 00		ld (hl),0x00
+ROM:0da9 fb		ei
+ROM:0daa b7		or a
+ROM:0dab c8		ret z
+ROM:0dac 47		ld b,a
+ROM:0dad 21 00 2c	ld hl,0x2c00
+ROM:0db0 cd f2 0e	call 0x0ef2
+ROM:0db3 21 16 2c	ld hl,0x2c16
+ROM:0db6 36 03		ld (hl),0x03
+ROM:0db8 23		inc hl
+ROM:0db9 71		ld (hl),c
+ROM:0dba 23		inc hl
+ROM:0dbb 36 06		ld (hl),0x06
+ROM:0dbd 23		inc hl
+ROM:0dbe 70		ld (hl),b
+ROM:0dbf c3 93 0d	jp 0x0d93
+ROM:0dc2 cb 8e		res 1,(hl)
+ROM:0dc4 06 05		ld b,0x05
+ROM:0dc6 c3 cd 0d	jp 0x0dcd
+ROM:0dc9 cb 86		res 0,(hl)
+ROM:0dcb 06 04		ld b,0x04
+ROM:0dcd 21 00 2c	ld hl,0x2c00
+ROM:0dd0 cd f2 0e	call 0x0ef2
+ROM:0dd3 cd 88 0d	call 0x0d88
+ROM:0dd6 3e 02		ld a,0x02
+ROM:0dd8 d3 d0		out (0xd0),a
+ROM:0dda 79		ld a,c
+ROM:0ddb d3 d0		out (0xd0),a
+ROM:0ddd 78		ld a,b
+ROM:0dde d3 d0		out (0xd0),a
+ROM:0de0 21 00 2c	ld hl,0x2c00
+ROM:0de3 c3 0e 0f	jp 0x0f0e
+ROM:0de6 ; ?
+ROM:0de6 cd c8 1e	call 0x1ec8	; do some mask thing
+ROM:0de9 e6 fe		and 0xfe	; and it further
+ROM:0deb c8		ret z		; bail if zero?
+ROM:0dec fe 0c		cp 0x0c		; 
+ROM:0dee 38 02		jr c,0x0df2
+ROM:0df0 3e 0c		ld a,0x0c
+ROM:0df2 eb		ex de,hl
+ROM:0df3 47		ld b,a
+ROM:0df4 21 00 2c	ld hl,0x2c00
+ROM:0df7 cd f2 0e	call 0x0ef2
+ROM:0dfa 78		ld a,b
+ROM:0dfb c6 02		add a,0x02
+ROM:0dfd 21 16 2c	ld hl,0x2c16
+ROM:0e00 77		ld (hl),a
+ROM:0e01 23		inc hl
+ROM:0e02 71		ld (hl),c
+ROM:0e03 23		inc hl
+ROM:0e04 36 03		ld (hl),0x03
+ROM:0e06 23		inc hl
+ROM:0e07 eb		ex de,hl
+ROM:0e08 cd dc 1e	call 0x1edc
+ROM:0e0b c3 93 0d	jp 0x0d93
+ROM:0e0e ;
+ROM:0e0e CLRPRQINT:	; clear the perq interrupt enable bit in ioreg3
+ROM:0e0e 21 12 2c	ld hl,0x2c12	; ioreg3 copy
+ROM:0e11 cb 96		res 2,(hl)	; reset bit 2
+ROM:0e13 7e		ld a,(hl)	; save it
+ROM:0e14 d3 c8		out (0xc8),a	; update hardware
+ROM:0e16 c9		ret
+ROM:0e17 ;
+ROM:0e17 SETPRQINT:	; set the perq interrupt enable bit in ioreg3
+ROM:0e17 21 12 2c	ld hl,0x2c12	; in-mem copy
+ROM:0e1a cb d6		set 2,(hl)	; set bit 2
+ROM:0e1c 7e		ld a,(hl)	; save it
+ROM:0e1d d3 c8		out (0xc8),a	; update ioreg3
+ROM:0e1f c9		ret
+ROM:0e20 e5		push hl
+ROM:0e21 f5		push af
+ROM:0e22 21 00 2c	ld hl,0x2c00
+ROM:0e25 cd f2 0e	call 0x0ef2
+ROM:0e28 cd 88 0d	call 0x0d88
+ROM:0e2b 3e 04		ld a,0x04
+ROM:0e2d d3 d0		out (0xd0),a
+ROM:0e2f f1		pop af
+ROM:0e30 d3 d0		out (0xd0),a
+ROM:0e32 3e 01		ld a,0x01
+ROM:0e34 d3 d0		out (0xd0),a
+ROM:0e36 79		ld a,c
+ROM:0e37 d3 d0		out (0xd0),a
+ROM:0e39 78		ld a,b
+ROM:0e3a d3 d0		out (0xd0),a
+ROM:0e3c d5		push de
+ROM:0e3d 21 00 2c	ld hl,0x2c00
+ROM:0e40 cd 0e 0f	call 0x0f0e
+ROM:0e43 d1		pop de
+ROM:0e44 e1		pop hl
+ROM:0e45 cd f2 0e	call 0x0ef2
+ROM:0e48 d5		push de
+ROM:0e49 e5		push hl
+ROM:0e4a 3a 27 2c	ld a,(0x2c27)
+ROM:0e4d fe 02		cp 0x02
+ROM:0e4f 37		scf
+ROM:0e50 20 23		jr nz,0x0e75
+ROM:0e52 0e a0		ld c,0xa0
+ROM:0e54 21 28 2c	ld hl,0x2c28
+ROM:0e57 46		ld b,(hl)
+ROM:0e58 23		inc hl
+ROM:0e59 af		xor a
+ROM:0e5a b8		cp b
+ROM:0e5b 7e		ld a,(hl)
+ROM:0e5c eb		ex de,hl
+ROM:0e5d 28 02		jr z,0x0e61
+ROM:0e5f ed b2		inir
+ROM:0e61 b7		or a
+ROM:0e62 28 05		jr z,0x0e69
+ROM:0e64 ed b2		inir
+ROM:0e66 3d		dec a
+ROM:0e67 20 fb		jr nz,0x0e64
+ROM:0e69 21 28 2c	ld hl,0x2c28
+ROM:0e6c 4e		ld c,(hl)
+ROM:0e6d 23		inc hl
+ROM:0e6e 46		ld b,(hl)
+ROM:0e6f cd 17 0e	call 0x0e17
+ROM:0e72 3e 02		ld a,0x02
+ROM:0e74 b7		or a
+ROM:0e75 e1		pop hl
+ROM:0e76 d1		pop de
+ROM:0e77 c9		ret
+ROM:0e78 f5		push af
+ROM:0e79 21 00 2c	ld hl,0x2c00
+ROM:0e7c cd f2 0e	call 0x0ef2
+ROM:0e7f cd 88 0d	call 0x0d88
+ROM:0e82 3e 04		ld a,0x04
+ROM:0e84 d3 d0		out (0xd0),a
+ROM:0e86 f1		pop af
+ROM:0e87 d3 d0		out (0xd0),a
+ROM:0e89 3e 02		ld a,0x02
+ROM:0e8b d3 d0		out (0xd0),a
+ROM:0e8d 79		ld a,c
+ROM:0e8e d3 d0		out (0xd0),a
+ROM:0e90 78		ld a,b
+ROM:0e91 d3 d0		out (0xd0),a
+ROM:0e93 eb		ex de,hl
+ROM:0e94 af		xor a
+ROM:0e95 b9		cp c
+ROM:0e96 78		ld a,b
+ROM:0e97 41		ld b,c
+ROM:0e98 0e d0		ld c,0xd0
+ROM:0e9a 28 02		jr z,0x0e9e
+ROM:0e9c ed b3		otir
+ROM:0e9e b7		or a
+ROM:0e9f 28 05		jr z,0x0ea6
+ROM:0ea1 ed b3		otir
+ROM:0ea3 3d		dec a
+ROM:0ea4 20 fb		jr nz,0x0ea1
+ROM:0ea6 21 00 2c	ld hl,0x2c00
+ROM:0ea9 cd 0e 0f	call 0x0f0e
+ROM:0eac c9		ret
+ROM:0ead 2a 2c 2e	ld hl,(0x2e2c)
+ROM:0eb0 30 32		jr nc,0x0ee4
+ROM:0eb2 34		inc (hl)
+ROM:0eb3 36 38		ld (hl),0x38
+ROM:0eb5 3a 3a 3c	ld a,(0x3c3a)
+ROM:0eb8 3e 3e		ld a,0x3e
+ROM:0eba 40		ld b,b		; <- shugart seek tab?
+ROM:0ebb 42		ld b,d		; <- or a jump table?
+ROM:0ebc 42		ld b,d
+ROM:0ebd 44		ld b,h
+ROM:0ebe 46		ld b,(hl)
+ROM:0ebf 46		ld b,(hl)
+ROM:0ec0 48		ld c,b
+ROM:0ec1 48		ld c,b
+ROM:0ec2 4a		ld c,d
+ROM:0ec3 4c		ld c,h
+ROM:0ec4 4c		ld c,h
+ROM:0ec5 4e		ld c,(hl)
+ROM:0ec6 4e		ld c,(hl)
+ROM:0ec7 50		ld d,b
+ROM:0ec8 50		ld d,b
+ROM:0ec9 52		ld d,d
+ROM:0eca 52		ld d,d
+ROM:0ecb 52		ld d,d		; <- shugart seek tab?
+ROM:0ecc ;
+ROM:0ecc THING:		; called at end of init block... task setup stuff?
+ROM:0ecc 3e 03		ld a,0x03
+ROM:0ece 21 55 2d	ld hl,0x2d55	; <- tasks? dcbs?
+ROM:0ed1 22 53 2d	ld (0x2d53),hl	; <- id/label
+ROM:0ed4 11 08 00	ld de,0x0008
+ROM:0ed7 06 05		ld b,0x05
+ROM:0ed9 e5		push hl
+ROM:0eda dd e1		pop ix
+ROM:0edc 19		add hl,de
+ROM:0edd dd 75 06	ld (ix+6),l
+ROM:0ee0 dd 74 07	ld (ix+7),h
+ROM:0ee3 dd 77 00	ld (ix+0),a
+ROM:0ee6 10 f1		djnz 0x0ed9
+ROM:0ee8 21 55 2d	ld hl,0x2d55
+ROM:0eeb dd 75 06	ld (ix+6),l
+ROM:0eee dd 74 07	ld (ix+7),h
+ROM:0ef1 c9		ret
+ROM:0ef2 ;
+ROM:0ef2 FLPTHING:	; what dis  update the floppy tcb?
+ROM:0ef2 f3		di		; no interrupts
+ROM:0ef3 35		dec (hl)	; backup a byte
+ROM:0ef4 f2 0c 0f	jp p,0x0f0c	; p? 
+ROM:0ef7 dd 2a 53 2d	ld ix,(0x2d53)	; <- id/label (tbl base?)
+ROM:0efb 3e 02		ld a,0x02	; 
+ROM:0efd dd 77 00	ld (ix+0),a	; <- write a 2 to?
+ROM:0f00 dd 75 04	ld (ix+4),l	; <- get an addr from?
+ROM:0f03 dd 74 05	ld (ix+5),h	;
+ROM:0f06 cd 4e 0f	call 0x0f4e	; return to scheduler!?
+ROM:0f09 c3 f2 0e	jp 0x0ef2	; repeat
+ROM:0f0c fb		ei
+ROM:0f0d c9		ret
+ROM:0f0e ;
+ROM:0f0e FLOPTHING:	; first thing a floppy checks for?
+ROM:0f0e 0e 00		ld c,0x00	; clear c
+ROM:0f10 ed 5f		ld a,r		; load refresh reg??
+ROM:0f12 e2 17 0f	jp po,0x0f17	; jump on parity/overflow?
+ROM:0f15 0c		inc c		; set c
+ROM:0f16 f3		di		; disable interrupts
+ROM:0f17 7e		ld a,(hl)	; get a thing
+ROM:0f18 b7		or a
+ROM:0f19 f2 48 0f	jp p,0x0f48	; jump if odd parity WTF?
+ROM:0f1c dd e5		push ix		; save ix
+ROM:0f1e dd 2a 53 2d	ld ix,(0x2d53)	; <- id/label
+ROM:0f22 06 04		ld b,0x04
+ROM:0f24 dd 56 07	ld d,(ix+7)
+ROM:0f27 dd 5e 06	ld e,(ix+6)
+ROM:0f2a d5		push de
+ROM:0f2b dd e1		pop ix
+ROM:0f2d 1a		ld a,(de)
+ROM:0f2e fe 02		cp 0x02
+ROM:0f30 20 12		jr nz,0x0f44
+ROM:0f32 dd 7e 04	ld a,(ix+4)
+ROM:0f35 bd		cp l
+ROM:0f36 20 0c		jr nz,0x0f44
+ROM:0f38 dd 7e 05	ld a,(ix+5)
+ROM:0f3b bc		cp h
+ROM:0f3c 20 06		jr nz,0x0f44
+ROM:0f3e 3e 01		ld a,0x01
+ROM:0f40 12		ld (de),a
+ROM:0f41 34		inc (hl)
+ROM:0f42 28 02		jr z,0x0f46
+ROM:0f44 10 de		djnz 0x0f24
+ROM:0f46 dd e1		pop ix
+ROM:0f48 34		inc (hl)	; bump a thing
+ROM:0f49 79		ld a,c		; i think we're walking
+ROM:0f4a b7		or a		; thru cmd bytes
+ROM:0f4b c8		ret z		; done?
+ROM:0f4c fb		ei
+ROM:0f4d c9		ret
+ROM:0f4e ;
+ROM:0f4e ENTER:		; enter scheduler from interrupt!?
+ROM:0f4e f3		di
+ROM:0f4f fd e5		push iy
+ROM:0f51 dd e5		push ix
+ROM:0f53 e5		push hl
+ROM:0f54 d5		push de
+ROM:0f55 c5		push bc
+ROM:0f56 f5		push af
+ROM:0f57 21 00 00	ld hl,0x0000
+ROM:0f5a 39		add hl,sp
+ROM:0f5b dd 2a 53 2d	ld ix,(0x2d53)	; vvv
+ROM:0f5f dd 75 02	ld (ix+2),l
+ROM:0f62 dd 74 03	ld (ix+3),h
+ROM:0f65 ;
+ROM:0f65 SCHED:		; initial entry to scheduler jumps here...
+ROM:0f65 06 05		ld b,0x05
+ROM:0f67 0e 00		ld c,0x00
+ROM:0f69 dd 7e 00	ld a,(ix+0)	; check the thing set @ 0efd?
+ROM:0f6c fe 01		cp 0x01
+ROM:0f6e 20 0a		jr nz,0x0f7a	; jump if ?
+ROM:0f70 dd 7e 01	ld a,(ix+1)	; looking for next ready
+ROM:0f73 b9		cp c		; task?  or something?
+ROM:0f74 38 04		jr c,0x0f7a
+ROM:0f76 dd e5		push ix
+ROM:0f78 e1		pop hl
+ROM:0f79 4f		ld c,a
+ROM:0f7a dd 56 07	ld d,(ix+7)	; have to see what these
+ROM:0f7d dd 5e 06	ld e,(ix+6)	; offsets point to
+ROM:0f80 d5		push de		; save new de
+ROM:0f81 dd e1		pop ix
+ROM:0f83 10 e4		djnz 0x0f69	; repeat if non zero?
+ROM:0f85 79		ld a,c
+ROM:0f86 b7		or a
+ROM:0f87 28 18		jr z,0x0fa1
+ROM:0f89 22 53 2d	ld (0x2d53),hl	; <- id/label
+ROM:0f8c dd 2a 53 2d	ld ix,(0x2d53)	; task table base??
+ROM:0f90 dd 6e 02	ld l,(ix+2)
+ROM:0f93 dd 66 03	ld h,(ix+3)
+ROM:0f96 f9		ld sp,hl
+ROM:0f97 f1		pop af		; clear init stack
+ROM:0f98 c1		pop bc		; to start first task?
+ROM:0f99 d1		pop de
+ROM:0f9a e1		pop hl
+ROM:0f9b dd e1		pop ix
+ROM:0f9d fd e1		pop iy
+ROM:0f9f fb		ei		; enable interrupts
+ROM:0fa0 c9		ret		; wait wut
+ROM:0fa1 ;
+ROM:0fa1 WAKEUP:	; do we actually halt here then wake on irq??
+ROM:0fa1 76		halt
+ROM:0fa2 3e 01		ld a,0x01
+ROM:0fa4 dd 2a 53 2d	ld ix,(0x2d53)	; ^^^
+ROM:0fa8 dd 46 01	ld b,(ix+1)
+ROM:0fab dd 77 01	ld (ix+1),a
+ROM:0fae cd 4e 0f	call 0x0f4e	; call into ourselves?
+ROM:0fb1 dd 70 01	ld (ix+1),b
+ROM:0fb4 c9		ret
+ROM:0fb5 ;
+ROM:0fb5 TASKSETUP:	; init a task?
+ROM:0fb5 f5		push af
+ROM:0fb6 c5		push bc
+ROM:0fb7 dd 2a 53 2d	ld ix,(0x2d53)	; <- id/label
+ROM:0fbb 06 05		ld b,0x05
+ROM:0fbd dd 7e 00	ld a,(ix+0)
+ROM:0fc0 fe 03		cp 0x03
+ROM:0fc2 20 1b		jr nz,0x0fdf
+ROM:0fc4 c1		pop bc
+ROM:0fc5 f1		pop af
+ROM:0fc6 dd 77 01	ld (ix+1),a
+ROM:0fc9 2b		dec hl
+ROM:0fca 70		ld (hl),b
+ROM:0fcb 2b		dec hl
+ROM:0fcc 71		ld (hl),c
+ROM:0fcd 01 0c 00	ld bc,0x000c
+ROM:0fd0 b7		or a
+ROM:0fd1 ed 42		sbc hl,bc
+ROM:0fd3 dd 74 03	ld (ix+3),h
+ROM:0fd6 dd 75 02	ld (ix+2),l
+ROM:0fd9 3e 01		ld a,0x01
+ROM:0fdb dd 77 00	ld (ix+0),a
+ROM:0fde c9		ret
+ROM:0fdf ; part of task setup?
+ROM:0fdf dd 56 07	ld d,(ix+7)
+ROM:0fe2 dd 5e 06	ld e,(ix+6)
+ROM:0fe5 d5		push de
+ROM:0fe6 dd e1		pop ix
+ROM:0fe8 10 d3		djnz 0x0fbd
+ROM:0fea c1		pop bc
+ROM:0feb f1		pop af
+ROM:0fec c9		ret
+ROM:0fed ;
+ROM:0fed ff		rst 0x38
+ROM:0fee ff		rst 0x38
+ROM:0fef ff		rst 0x38
+ROM:0ff0 ff		rst 0x38
+ROM:0ff1 ff		rst 0x38
+ROM:0ff2 ff		rst 0x38
+ROM:0ff3 ff		rst 0x38
+ROM:0ff4 ff		rst 0x38
+ROM:0ff5 ff		rst 0x38
+ROM:0ff6 ff		rst 0x38
+ROM:0ff7 ff		rst 0x38
+ROM:0ff8 ff		rst 0x38
+ROM:0ff9 ff		rst 0x38
+ROM:0ffa ff		rst 0x38
+ROM:0ffb ff		rst 0x38
+ROM:0ffc ff		rst 0x38
+ROM:0ffd ff		rst 0x38
+ROM:0ffe ff		rst 0x38
+ROM:0fff ff		rst 0x38
+ROM:0fff ; End of cioz80.lo
+ROM:1000 ; Start of cioz80.hi
+ROM:1000 ff		rst 0x38
+ROM:1001 ff		rst 0x38
+ROM:1002 ff		rst 0x38
+ROM:1003 ff		rst 0x38
+ROM:1004 0a		ld a,(bc)
+ROM:1005 ; error in disassembly - should be a return of some kind?
+ROM:1005 11 3e 80	ld de,0x803e
+ROM:1006 ; error in disassembly here - 1006 is missing!  that 80 
+ROM:1006 ;
+ROM:1006 INITGPIB:	; init the gpib controller?
+ROM:1006 3e 80		ld a,0x80
+ROM:1008 d3 be		out (0xbe),a	; 9914a
+ROM:100a af		xor a
+ROM:100b 32 73 2c	ld (0x2c73),a	; <- id/label
+ROM:100e 32 74 2c	ld (0x2c74),a
+ROM:1011 32 95 2c	ld (0x2c95),a
+ROM:1014 32 96 2c	ld (0x2c96),a
+ROM:1017 32 0d 2c	ld (0x2c0d),a
+ROM:101a 32 b8 2c	ld (0x2cb8),a
+ROM:101d 32 72 2c	ld (0x2c72),a	; gpib regs
+ROM:1020 21 69 2c	ld hl,0x2c69
+ROM:1023 77		ld (hl),a
+ROM:1024 cb ee		set 5,(hl)
+ROM:1026 cb e6		set 4,(hl)
+ROM:1028 3e 03		ld a,0x03
+ROM:102a d3 be		out (0xbe),a	; setup
+ROM:102c 3e 04		ld a,0x04
+ROM:102e d3 be		out (0xbe),a	; various
+ROM:1030 db bf		in a,(0xbf)	; read one?
+ROM:1032 3e 02		ld a,0x02
+ROM:1034 d3 be		out (0xbe),a	; command
+ROM:1036 3e 00		ld a,0x00
+ROM:1038 d3 be		out (0xbe),a	; regs
+ROM:103a 7e		ld a,(hl)
+ROM:103b d3 b8		out (0xb8),a	; etc.
+ROM:103d c9		ret
+ROM:103e 3a 27 2c	ld a,(0x2c27)
+ROM:1041 fe 0c		cp 0x0c
+ROM:1043 28 0a		jr z,0x104f
+ROM:1045 fe 0b		cp 0x0b
+ROM:1047 28 0e		jr z,0x1057
+ROM:1049 21 05 2c	ld hl,0x2c05
+ROM:104c c3 0e 0f	jp 0x0f0e
+ROM:104f 21 0d 2c	ld hl,0x2c0d
+ROM:1052 cb d6		set 2,(hl)
+ROM:1054 c3 17 0e	jp 0x0e17
+ROM:1057 21 b7 2c	ld hl,0x2cb7
+ROM:105a 46		ld b,(hl)
+ROM:105b cb fe		set 7,(hl)
+ROM:105d 3a 0d 2c	ld a,(0x2c0d)
+ROM:1060 cb 77		bit 6,a
+ROM:1062 28 07		jr z,0x106b
+ROM:1064 af		xor a
+ROM:1065 b0		or b
+ROM:1066 20 03		jr nz,0x106b
+ROM:1068 cd 1d 04	call 0x041d
+ROM:106b af		xor a
+ROM:106c 32 0d 2c	ld (0x2c0d),a
+ROM:106f 3e 80		ld a,0x80
+ROM:1071 d3 be		out (0xbe),a
+ROM:1073 21 05 2c	ld hl,0x2c05
+ROM:1076 c3 0e 0f	jp 0x0f0e
+ROM:1079 ; ?
+ROM:1079 0e 07		ld c,0x07	; ?
+ROM:107b 21 73 2c	ld hl,0x2c73	; <- id/label
+ROM:107e cd e6 0d	call 0x0de6	; go do some masky things
+ROM:1081 0e 07		ld c,0x07	; set c
+ROM:1083 af		xor a		; clear a
+ROM:1084 21 72 2c	ld hl,0x2c72	; <- id/label
+ROM:1087 be		cp (hl)		; compare that to cur byte?
+ROM:1088 c4 a5 0d	call nz,0x0da5	; call if if ain't zero
+ROM:108b 21 0d 2c	ld hl,0x2c0d	; <- id/label
+ROM:108e 7e		ld a,(hl)	; load it
+ROM:108f e6 0f		and 0x0f	; mask low bits
+ROM:1091 c8		ret z		; zero?
+ROM:1092 0e 07		ld c,0x07
+ROM:1094 cb 47		bit 0,a
+ROM:1096 c2 c9 0d	jp nz,0x0dc9
+ROM:1099 cb 4f		bit 1,a
+ROM:109b c2 c2 0d	jp nz,0x0dc2
+ROM:109e cb 57		bit 2,a
+ROM:10a0 28 33		jr z,0x10d5
+ROM:10a2 cb 96		res 2,(hl)
+ROM:10a4 21 00 2c	ld hl,0x2c00
+ROM:10a7 cd f2 0e	call 0x0ef2
+ROM:10aa 3e 0c		ld a,0x0c
+ROM:10ac 32 16 2c	ld (0x2c16),a
+ROM:10af 3e 07		ld a,0x07
+ROM:10b1 32 17 2c	ld (0x2c17),a
+ROM:10b4 3e 07		ld a,0x07
+ROM:10b6 32 18 2c	ld (0x2c18),a
+ROM:10b9 01 06 00	ld bc,0x0006
+ROM:10bc 21 6a 2c	ld hl,0x2c6a
+ROM:10bf 11 19 2c	ld de,0x2c19
+ROM:10c2 ed b0		ldir
+ROM:10c4 db ba		in a,(0xba)
+ROM:10c6 12		ld (de),a
+ROM:10c7 13		inc de
+ROM:10c8 db be		in a,(0xbe)
+ROM:10ca 12		ld (de),a
+ROM:10cb 13		inc de
+ROM:10cc af		xor a
+ROM:10cd 12		ld (de),a
+ROM:10ce 13		inc de
+ROM:10cf db bb		in a,(0xbb)
+ROM:10d1 12		ld (de),a
+ROM:10d2 c3 93 0d	jp 0x0d93
+ROM:10d5 cb 5f		bit 3,a
+ROM:10d7 c8		ret z
+ROM:10d8 21 73 2c	ld hl,0x2c73
+ROM:10db cd c8 1e	call 0x1ec8
+ROM:10de fe 1e		cp 0x1e
+ROM:10e0 d0		ret nc
+ROM:10e1 f3		di
+ROM:10e2 3a 6a 2c	ld a,(0x2c6a)
+ROM:10e5 cd b7 1e	call 0x1eb7
+ROM:10e8 db bf		in a,(0xbf)
+ROM:10ea cd b7 1e	call 0x1eb7
+ROM:10ed 21 0d 2c	ld hl,0x2c0d
+ROM:10f0 cb 9e		res 3,(hl)
+ROM:10f2 fb		ei
+ROM:10f3 c9		ret
+ROM:10f4 d9		exx
+ROM:10f5 08		ex af,af'
+ROM:10f6 db b8		in a,(0xb8)
+ROM:10f8 32 6a 2c	ld (0x2c6a),a
+ROM:10fb db bc		in a,(0xbc)
+ROM:10fd 32 6b 2c	ld (0x2c6b),a
+ROM:1100 db ba		in a,(0xba)
+ROM:1102 32 6c 2c	ld (0x2c6c),a
+ROM:1105 db be		in a,(0xbe)
+ROM:1107 32 6d 2c	ld (0x2c6d),a
+ROM:110a db bb		in a,(0xbb)
+ROM:110c 32 6f 2c	ld (0x2c6f),a
+ROM:110f 3a 6a 2c	ld a,(0x2c6a)
+ROM:1112 e6 4f		and 0x4f
+ROM:1114 c4 89 11	call nz,0x1189
+ROM:1117 3a 6a 2c	ld a,(0x2c6a)
+ROM:111a cb 6f		bit 5,a
+ROM:111c c4 2c 11	call nz,0x112c
+ROM:111f 3a 6a 2c	ld a,(0x2c6a)
+ROM:1122 cb 67		bit 4,a
+ROM:1124 c4 55 11	call nz,0x1155
+ROM:1127 d9		exx
+ROM:1128 08		ex af,af'
+ROM:1129 fb		ei
+ROM:112a ed 4d		reti
+ROM:112c 21 b8 2c	ld hl,0x2cb8
+ROM:112f af		xor a
+ROM:1130 be		cp (hl)
+ROM:1131 28 07		jr z,0x113a
+ROM:1133 35		dec (hl)
+ROM:1134 20 04		jr nz,0x113a
+ROM:1136 3e 83		ld a,0x83
+ROM:1138 d3 be		out (0xbe),a
+ROM:113a 21 73 2c	ld hl,0x2c73
+ROM:113d cd c8 1e	call 0x1ec8
+ROM:1140 fe 1e		cp 0x1e
+ROM:1142 30 0b		jr nc,0x114f
+ROM:1144 3a 6a 2c	ld a,(0x2c6a)
+ROM:1147 cd b7 1e	call 0x1eb7
+ROM:114a db bf		in a,(0xbf)
+ROM:114c c3 b7 1e	jp 0x1eb7
+ROM:114f 21 0d 2c	ld hl,0x2c0d
+ROM:1152 cb de		set 3,(hl)
+ROM:1154 c9		ret
+ROM:1155 21 95 2c	ld hl,0x2c95
+ROM:1158 cd c8 1e	call 0x1ec8
+ROM:115b 28 26		jr z,0x1183
+ROM:115d fe 01		cp 0x01
+ROM:115f 20 10		jr nz,0x1171
+ROM:1161 21 0d 2c	ld hl,0x2c0d
+ROM:1164 cb 7e		bit 7,(hl)
+ROM:1166 28 12		jr z,0x117a
+ROM:1168 3e 88		ld a,0x88
+ROM:116a d3 be		out (0xbe),a
+ROM:116c cb be		res 7,(hl)
+ROM:116e c3 7a 11	jp 0x117a
+ROM:1171 fe 13		cp 0x13
+ROM:1173 20 05		jr nz,0x117a
+ROM:1175 21 0d 2c	ld hl,0x2c0d
+ROM:1178 cb c6		set 0,(hl)
+ROM:117a 21 95 2c	ld hl,0x2c95
+ROM:117d cd a7 1e	call 0x1ea7
+ROM:1180 d3 bf		out (0xbf),a
+ROM:1182 c9		ret
+ROM:1183 21 0d 2c	ld hl,0x2c0d
+ROM:1186 cb ae		res 5,(hl)
+ROM:1188 c9		ret
+ROM:1189 21 0d 2c	ld hl,0x2c0d
+ROM:118c cb 76		bit 6,(hl)
+ROM:118e 28 22		jr z,0x11b2
+ROM:1190 21 b7 2c	ld hl,0x2cb7
+ROM:1193 46		ld b,(hl)
+ROM:1194 3a 6a 2c	ld a,(0x2c6a)
+ROM:1197 cb 5f		bit 3,a
+ROM:1199 20 0b		jr nz,0x11a6
+ROM:119b 3a 6b 2c	ld a,(0x2c6b)
+ROM:119e e6 48		and 0x48
+ROM:11a0 28 0d		jr z,0x11af
+ROM:11a2 cb f6		set 6,(hl)
+ROM:11a4 18 02		jr 0x11a8
+ROM:11a6 cb c6		set 0,(hl)
+ROM:11a8 af		xor a
+ROM:11a9 b0		or b
+ROM:11aa 20 03		jr nz,0x11af
+ROM:11ac cd 1d 04	call 0x041d
+ROM:11af 21 0d 2c	ld hl,0x2c0d
+ROM:11b2 cb 66		bit 4,(hl)
+ROM:11b4 c8		ret z
+ROM:11b5 21 72 2c	ld hl,0x2c72
+ROM:11b8 cb ce		set 1,(hl)
+ROM:11ba c9		ret
+ROM:11bb ;
+ROM:11bb FLPCHKCMD:	; dispatch on floppy command byte??
+ROM:11bb 21 05 2c	ld hl,0x2c05	; <- id/label
+ROM:11be cd f2 0e	call 0x0ef2	; 
+ROM:11c1 3a 27 2c	ld a,(0x2c27)	; get flop cmd byte?
+ROM:11c4 fe 03		cp 0x03
+ROM:11c6 ca 08 12	jp z,0x1208
+ROM:11c9 fe 19		cp 0x19
+ROM:11cb ca 0b 12	jp z,0x120b
+ROM:11ce fe 0e		cp 0x0e
+ROM:11d0 ca 02 14	jp z,0x1402
+ROM:11d3 fe 0f		cp 0x0f
+ROM:11d5 ca 35 13	jp z,0x1335
+ROM:11d8 fe 0d		cp 0x0d
+ROM:11da ca 72 12	jp z,0x1272
+ROM:11dd fe 09		cp 0x09
+ROM:11df ca d7 12	jp z,0x12d7
+ROM:11e2 fe 0b		cp 0x0b
+ROM:11e4 ca ea 12	jp z,0x12ea
+ROM:11e7 fe 1a		cp 0x1a
+ROM:11e9 ca f2 12	jp z,0x12f2
+ROM:11ec fe 1b		cp 0x1b
+ROM:11ee ca fe 12	jp z,0x12fe
+ROM:11f1 fe 1c		cp 0x1c
+ROM:11f3 ca 47 15	jp z,0x1547
+ROM:11f6 fe 1d		cp 0x1d
+ROM:11f8 ca cb 14	jp z,0x14cb
+ROM:11fb cd 17 0e	call 0x0e17
+ROM:11fe 21 0d 2c	ld hl,0x2c0d
+ROM:1201 0e 07		ld c,0x07
+ROM:1203 cd c2 0d	call 0x0dc2
+ROM:1206 18 b3		jr 0x11bb
+ROM:1208 af		xor a
+ROM:1209 18 02		jr 0x120d
+ROM:120b f6 01		or 0x01
+ROM:120d f5		push af
+ROM:120e 3a 25 2c	ld a,(0x2c25)
+ROM:1211 d6 02		sub 0x02
+ROM:1213 20 03		jr nz,0x1218
+ROM:1215 f1		pop af
+ROM:1216 18 46		jr 0x125e
+ROM:1218 47		ld b,a
+ROM:1219 11 28 2c	ld de,0x2c28
+ROM:121c 21 95 2c	ld hl,0x2c95
+ROM:121f f3		di
+ROM:1220 cd cf 1e	call 0x1ecf
+ROM:1223 21 0d 2c	ld hl,0x2c0d
+ROM:1226 f1		pop af
+ROM:1227 28 02		jr z,0x122b
+ROM:1229 cb fe		set 7,(hl)
+ROM:122b cb 6e		bit 5,(hl)
+ROM:122d 20 24		jr nz,0x1253
+ROM:122f fb		ei
+ROM:1230 cb ee		set 5,(hl)
+ROM:1232 21 95 2c	ld hl,0x2c95
+ROM:1235 cd c8 1e	call 0x1ec8
+ROM:1238 fe 01		cp 0x01
+ROM:123a 20 0d		jr nz,0x1249
+ROM:123c 21 0d 2c	ld hl,0x2c0d
+ROM:123f cb 7e		bit 7,(hl)
+ROM:1241 28 06		jr z,0x1249
+ROM:1243 cb be		res 7,(hl)
+ROM:1245 3e 08		ld a,0x08
+ROM:1247 d3 be		out (0xbe),a
+ROM:1249 21 95 2c	ld hl,0x2c95
+ROM:124c cd a7 1e	call 0x1ea7
+ROM:124f d3 bf		out (0xbf),a
+ROM:1251 18 0b		jr 0x125e
+ROM:1253 21 95 2c	ld hl,0x2c95
+ROM:1256 cd c8 1e	call 0x1ec8
+ROM:1259 fb		ei
+ROM:125a fe 13		cp 0x13
+ROM:125c 30 0e		jr nc,0x126c
+ROM:125e cd 17 0e	call 0x0e17
+ROM:1261 0e 07		ld c,0x07
+ROM:1263 21 0d 2c	ld hl,0x2c0d
+ROM:1266 cd c9 0d	call 0x0dc9
+ROM:1269 c3 bb 11	jp 0x11bb
+ROM:126c cd 17 0e	call 0x0e17
+ROM:126f c3 bb 11	jp 0x11bb
+ROM:1272 3a 25 2c	ld a,(0x2c25)
+ROM:1275 d6 02		sub 0x02
+ROM:1277 28 e5		jr z,0x125e
+ROM:1279 21 95 2c	ld hl,0x2c95
+ROM:127c 11 28 2c	ld de,0x2c28
+ROM:127f 47		ld b,a
+ROM:1280 cd f3 1e	call 0x1ef3
+ROM:1283 c5		push bc
+ROM:1284 cd 17 0e	call 0x0e17
+ROM:1287 21 0d 2c	ld hl,0x2c0d
+ROM:128a cd 27 1f	call 0x1f27
+ROM:128d 21 95 2c	ld hl,0x2c95
+ROM:1290 c1		pop bc
+ROM:1291 70		ld (hl),b
+ROM:1292 23		inc hl
+ROM:1293 71		ld (hl),c
+ROM:1294 2b		dec hl
+ROM:1295 cd c8 1e	call 0x1ec8
+ROM:1298 cb 3f		srl a
+ROM:129a 47		ld b,a
+ROM:129b f3		di
+ROM:129c c5		push bc
+ROM:129d cd a7 1e	call 0x1ea7
+ROM:12a0 fe 08		cp 0x08
+ROM:12a2 30 2e		jr nc,0x12d2
+ROM:12a4 b7		or a
+ROM:12a5 20 0f		jr nz,0x12b6
+ROM:12a7 cd a7 1e	call 0x1ea7
+ROM:12aa 32 69 2c	ld (0x2c69),a
+ROM:12ad d3 b8		out (0xb8),a
+ROM:12af c1		pop bc
+ROM:12b0 10 ea		djnz 0x129c
+ROM:12b2 fb		ei
+ROM:12b3 c3 61 12	jp 0x1261
+ROM:12b6 0f		rrca
+ROM:12b7 cb 11		rl c
+ROM:12b9 0f		rrca
+ROM:12ba cb 11		rl c
+ROM:12bc 0f		rrca
+ROM:12bd cb 11		rl c
+ROM:12bf 79		ld a,c
+ROM:12c0 e6 07		and 0x07
+ROM:12c2 c6 b8		add a,0xb8
+ROM:12c4 57		ld d,a
+ROM:12c5 cd a7 1e	call 0x1ea7
+ROM:12c8 4a		ld c,d
+ROM:12c9 ed 79		out (c),a
+ROM:12cb c1		pop bc
+ROM:12cc 10 ce		djnz 0x129c
+ROM:12ce fb		ei
+ROM:12cf c3 61 12	jp 0x1261
+ROM:12d2 fb		ei
+ROM:12d3 c1		pop bc
+ROM:12d4 c3 fe 11	jp 0x11fe
+ROM:12d7 21 0d 2c	ld hl,0x2c0d
+ROM:12da 3a 28 2c	ld a,(0x2c28)
+ROM:12dd b7		or a
+ROM:12de 28 05		jr z,0x12e5
+ROM:12e0 cb e6		set 4,(hl)
+ROM:12e2 c3 5e 12	jp 0x125e
+ROM:12e5 cb a6		res 4,(hl)
+ROM:12e7 c3 5e 12	jp 0x125e
+ROM:12ea f3		di
+ROM:12eb cd 06 10	call 0x1006
+ROM:12ee fb		ei
+ROM:12ef c3 5e 12	jp 0x125e
+ROM:12f2 cd 17 0e	call 0x0e17
+ROM:12f5 21 0d 2c	ld hl,0x2c0d
+ROM:12f8 cd 27 1f	call 0x1f27
+ROM:12fb c3 61 12	jp 0x1261
+ROM:12fe cd 17 0e	call 0x0e17
+ROM:1301 21 0d 2c	ld hl,0x2c0d
+ROM:1304 cd 27 1f	call 0x1f27
+ROM:1307 3e 0c		ld a,0x0c
+ROM:1309 d3 be		out (0xbe),a
+ROM:130b 21 73 2c	ld hl,0x2c73
+ROM:130e 0e 07		ld c,0x07
+ROM:1310 cd 31 1f	call 0x1f31
+ROM:1313 21 0d 2c	ld hl,0x2c0d
+ROM:1316 cb 5e		bit 3,(hl)
+ROM:1318 ca 61 12	jp z,0x1261
+ROM:131b cb 9e		res 3,(hl)
+ROM:131d 21 73 2c	ld hl,0x2c73
+ROM:1320 3a 6a 2c	ld a,(0x2c6a)
+ROM:1323 cd b7 1e	call 0x1eb7
+ROM:1326 f3		di
+ROM:1327 db bf		in a,(0xbf)
+ROM:1329 cd b7 1e	call 0x1eb7
+ROM:132c fb		ei
+ROM:132d 0e 07		ld c,0x07
+ROM:132f cd e6 0d	call 0x0de6
+ROM:1332 c3 61 12	jp 0x1261
+ROM:1335 2a 28 2c	ld hl,(0x2c28)
+ROM:1338 7c		ld a,h
+ROM:1339 b5		or l
+ROM:133a ca 5e 12	jp z,0x125e
+ROM:133d e5		push hl
+ROM:133e af		xor a
+ROM:133f 32 b7 2c	ld (0x2cb7),a
+ROM:1342 cd 17 0e	call 0x0e17
+ROM:1345 21 0d 2c	ld hl,0x2c0d
+ROM:1348 cd 27 1f	call 0x1f27
+ROM:134b 3e c0		ld a,0xc0
+ROM:134d cd 3b 03	call 0x033b
+ROM:1350 e1		pop hl
+ROM:1351 cd 0c 1f	call 0x1f0c
+ROM:1354 e5		push hl
+ROM:1355 ed 5b 58 2c	ld de,(0x2c58)
+ROM:1359 21 05 2c	ld hl,0x2c05
+ROM:135c 3e 07		ld a,0x07
+ROM:135e cd 20 0e	call 0x0e20
+ROM:1361 da de 13	jp c,0x13de
+ROM:1364 3a 69 2c	ld a,(0x2c69)
+ROM:1367 cb a7		res 4,a
+ROM:1369 d3 b8		out (0xb8),a
+ROM:136b f3		di
+ROM:136c 3a b7 2c	ld a,(0x2cb7)
+ROM:136f b7		or a
+ROM:1370 c2 ea 13	jp nz,0x13ea
+ROM:1373 21 0d 2c	ld hl,0x2c0d
+ROM:1376 cb f6		set 6,(hl)
+ROM:1378 2e bf		ld l,0xbf
+ROM:137a cd ca 03	call 0x03ca
+ROM:137d fb		ei
+ROM:137e e1		pop hl
+ROM:137f 7c		ld a,h
+ROM:1380 b5		or l
+ROM:1381 28 38		jr z,0x13bb
+ROM:1383 cd 0c 1f	call 0x1f0c
+ROM:1386 e5		push hl
+ROM:1387 cd 6c 03	call 0x036c
+ROM:138a ed 5b 58 2c	ld de,(0x2c58)
+ROM:138e 21 05 2c	ld hl,0x2c05
+ROM:1391 3e 07		ld a,0x07
+ROM:1393 cd 20 0e	call 0x0e20
+ROM:1396 38 3d		jr c,0x13d5
+ROM:1398 ed 53 5e 2c	ld (0x2c5e),de
+ROM:139c 3e bf		ld a,0xbf
+ROM:139e 32 60 2c	ld (0x2c60),a
+ROM:13a1 cb f8		set 7,b
+ROM:13a3 ed 43 5c 2c	ld (0x2c5c),bc
+ROM:13a7 21 57 2c	ld hl,0x2c57
+ROM:13aa cd f2 0e	call 0x0ef2
+ROM:13ad f3		di
+ROM:13ae 3a b7 2c	ld a,(0x2cb7)
+ROM:13b1 b7		or a
+ROM:13b2 20 36		jr nz,0x13ea
+ROM:13b4 cd 77 04	call 0x0477
+ROM:13b7 fb		ei
+ROM:13b8 c3 7e 13	jp 0x137e
+ROM:13bb 21 57 2c	ld hl,0x2c57
+ROM:13be cd f2 0e	call 0x0ef2
+ROM:13c1 3a b7 2c	ld a,(0x2cb7)
+ROM:13c4 b7		or a
+ROM:13c5 20 25		jr nz,0x13ec
+ROM:13c7 cd 63 03	call 0x0363
+ROM:13ca cd f7 13	call 0x13f7
+ROM:13cd 0e 07		ld c,0x07
+ROM:13cf cd c9 0d	call 0x0dc9
+ROM:13d2 c3 bb 11	jp 0x11bb
+ROM:13d5 21 57 2c	ld hl,0x2c57
+ROM:13d8 cd f2 0e	call 0x0ef2
+ROM:13db cd f7 13	call 0x13f7
+ROM:13de e1		pop hl
+ROM:13df cd 63 03	call 0x0363
+ROM:13e2 21 0d 2c	ld hl,0x2c0d
+ROM:13e5 cb ce		set 1,(hl)
+ROM:13e7 c3 c1 11	jp 0x11c1
+ROM:13ea fb		ei
+ROM:13eb e1		pop hl
+ROM:13ec cd 63 03	call 0x0363
+ROM:13ef cd f7 13	call 0x13f7
+ROM:13f2 cb ce		set 1,(hl)
+ROM:13f4 c3 bb 11	jp 0x11bb
+ROM:13f7 21 0d 2c	ld hl,0x2c0d
+ROM:13fa cb b6		res 6,(hl)
+ROM:13fc 3a 69 2c	ld a,(0x2c69)
+ROM:13ff d3 b8		out (0xb8),a
+ROM:1401 c9		ret
+ROM:1402 2a 28 2c	ld hl,(0x2c28)
+ROM:1405 7c		ld a,h
+ROM:1406 b5		or l
+ROM:1407 ca 5e 12	jp z,0x125e
+ROM:140a e5		push hl
+ROM:140b af		xor a
+ROM:140c 32 b7 2c	ld (0x2cb7),a
+ROM:140f cd 17 0e	call 0x0e17
+ROM:1412 3e c0		ld a,0xc0
+ROM:1414 cd 3b 03	call 0x033b
+ROM:1417 e1		pop hl
+ROM:1418 cd 0c 1f	call 0x1f0c
+ROM:141b e5		push hl
+ROM:141c 3a 69 2c	ld a,(0x2c69)
+ROM:141f cb af		res 5,a
+ROM:1421 d3 b8		out (0xb8),a
+ROM:1423 ed 5b 58 2c	ld de,(0x2c58)
+ROM:1427 f3		di
+ROM:1428 3a b7 2c	ld a,(0x2cb7)
+ROM:142b b7		or a
+ROM:142c 20 63		jr nz,0x1491
+ROM:142e 21 0d 2c	ld hl,0x2c0d
+ROM:1431 cb f6		set 6,(hl)
+ROM:1433 3e 02		ld a,0x02
+ROM:1435 d3 be		out (0xbe),a
+ROM:1437 2e bf		ld l,0xbf
+ROM:1439 cd 7b 03	call 0x037b
+ROM:143c fb		ei
+ROM:143d e1		pop hl
+ROM:143e 7c		ld a,h
+ROM:143f b5		or l
+ROM:1440 28 53		jr z,0x1495
+ROM:1442 50		ld d,b
+ROM:1443 59		ld e,c
+ROM:1444 cd 0c 1f	call 0x1f0c
+ROM:1447 e5		push hl
+ROM:1448 d5		push de
+ROM:1449 ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:144d ed 53 5e 2c	ld (0x2c5e),de
+ROM:1451 3e bf		ld a,0xbf
+ROM:1453 32 60 2c	ld (0x2c60),a
+ROM:1456 78		ld a,b
+ROM:1457 cb f0		set 6,b
+ROM:1459 cb f8		set 7,b
+ROM:145b ed 43 5c 2c	ld (0x2c5c),bc
+ROM:145f 47		ld b,a
+ROM:1460 21 57 2c	ld hl,0x2c57
+ROM:1463 cd f2 0e	call 0x0ef2
+ROM:1466 f3		di
+ROM:1467 3a b7 2c	ld a,(0x2cb7)
+ROM:146a b7		or a
+ROM:146b 20 18		jr nz,0x1485
+ROM:146d cd 77 04	call 0x0477
+ROM:1470 fb		ei
+ROM:1471 cd 6c 03	call 0x036c
+ROM:1474 d1		pop de
+ROM:1475 c5		push bc
+ROM:1476 42		ld b,d
+ROM:1477 4b		ld c,e
+ROM:1478 ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:147c 3e 07		ld a,0x07
+ROM:147e cd 78 0e	call 0x0e78
+ROM:1481 c1		pop bc
+ROM:1482 c3 3d 14	jp 0x143d
+ROM:1485 fb		ei
+ROM:1486 d1		pop de
+ROM:1487 e1		pop hl
+ROM:1488 cd 50 04	call 0x0450
+ROM:148b 78		ld a,b
+ROM:148c b1		or c
+ROM:148d 28 1b		jr z,0x14aa
+ROM:148f 18 10		jr 0x14a1
+ROM:1491 fb		ei
+ROM:1492 e1		pop hl
+ROM:1493 18 15		jr 0x14aa
+ROM:1495 21 57 2c	ld hl,0x2c57
+ROM:1498 cd f2 0e	call 0x0ef2
+ROM:149b 3a b7 2c	ld a,(0x2cb7)
+ROM:149e b7		or a
+ROM:149f 20 e7		jr nz,0x1488
+ROM:14a1 ed 5b 58 2c	ld de,(0x2c58)
+ROM:14a5 3e 07		ld a,0x07
+ROM:14a7 cd 78 0e	call 0x0e78
+ROM:14aa cd 63 03	call 0x0363
+ROM:14ad 21 0d 2c	ld hl,0x2c0d
+ROM:14b0 cb b6		res 6,(hl)
+ROM:14b2 3a 69 2c	ld a,(0x2c69)
+ROM:14b5 d3 b8		out (0xb8),a
+ROM:14b7 3a b7 2c	ld a,(0x2cb7)
+ROM:14ba cb 3f		srl a
+ROM:14bc 28 05		jr z,0x14c3
+ROM:14be cb ce		set 1,(hl)
+ROM:14c0 c3 bb 11	jp 0x11bb
+ROM:14c3 0e 07		ld c,0x07
+ROM:14c5 cd c9 0d	call 0x0dc9
+ROM:14c8 c3 bb 11	jp 0x11bb
+ROM:14cb 3a 25 2c	ld a,(0x2c25)
+ROM:14ce d6 02		sub 0x02
+ROM:14d0 47		ld b,a
+ROM:14d1 cd 96 15	call 0x1596
+ROM:14d4 c1		pop bc
+ROM:14d5 cd c8 1e	call 0x1ec8
+ROM:14d8 47		ld b,a
+ROM:14d9 2a 95 2c	ld hl,(0x2c95)
+ROM:14dc e5		push hl
+ROM:14dd 7d		ld a,l
+ROM:14de 32 96 2c	ld (0x2c96),a
+ROM:14e1 cb 51		bit 2,c
+ROM:14e3 20 0a		jr nz,0x14ef
+ROM:14e5 21 95 2c	ld hl,0x2c95
+ROM:14e8 cb f9		set 7,c
+ROM:14ea cd e6 15	call 0x15e6
+ROM:14ed 30 4e		jr nc,0x153d
+ROM:14ef 3e 8a		ld a,0x8a
+ROM:14f1 d3 be		out (0xbe),a
+ROM:14f3 cb 61		bit 4,c
+ROM:14f5 20 04		jr nz,0x14fb
+ROM:14f7 3e 0b		ld a,0x0b
+ROM:14f9 d3 be		out (0xbe),a
+ROM:14fb e1		pop hl
+ROM:14fc f3		di
+ROM:14fd 3a b7 2c	ld a,(0x2cb7)
+ROM:1500 b7		or a
+ROM:1501 20 3b		jr nz,0x153e
+ROM:1503 af		xor a
+ROM:1504 b8		cp b
+ROM:1505 28 32		jr z,0x1539
+ROM:1507 22 95 2c	ld (0x2c95),hl
+ROM:150a 21 0d 2c	ld hl,0x2c0d
+ROM:150d cb ee		set 5,(hl)
+ROM:150f fb		ei
+ROM:1510 cb 71		bit 6,c
+ROM:1512 28 0b		jr z,0x151f
+ROM:1514 05		dec b
+ROM:1515 28 04		jr z,0x151b
+ROM:1517 cb fe		set 7,(hl)
+ROM:1519 18 04		jr 0x151f
+ROM:151b 3e 08		ld a,0x08
+ROM:151d d3 be		out (0xbe),a
+ROM:151f 51		ld d,c
+ROM:1520 21 95 2c	ld hl,0x2c95
+ROM:1523 cd a7 1e	call 0x1ea7
+ROM:1526 d3 bf		out (0xbf),a
+ROM:1528 cb 6a		bit 5,d
+ROM:152a ca 61 12	jp z,0x1261
+ROM:152d 21 0d 2c	ld hl,0x2c0d
+ROM:1530 cd 27 1f	call 0x1f27
+ROM:1533 3a b7 2c	ld a,(0x2cb7)
+ROM:1536 b7		or a
+ROM:1537 20 09		jr nz,0x1542
+ROM:1539 fb		ei
+ROM:153a c3 61 12	jp 0x1261
+ROM:153d e1		pop hl
+ROM:153e fb		ei
+ROM:153f 21 0d 2c	ld hl,0x2c0d
+ROM:1542 cb ce		set 1,(hl)
+ROM:1544 c3 bb 11	jp 0x11bb
+ROM:1547 06 06		ld b,0x06
+ROM:1549 cd 96 15	call 0x1596
+ROM:154c cd a7 1e	call 0x1ea7
+ROM:154f c1		pop bc
+ROM:1550 47		ld b,a
+ROM:1551 cb 51		bit 2,c
+ROM:1553 20 07		jr nz,0x155c
+ROM:1555 cb b9		res 7,c
+ROM:1557 cd e6 15	call 0x15e6
+ROM:155a 30 32		jr nc,0x158e
+ROM:155c 3e 04		ld a,0x04
+ROM:155e cb 61		bit 4,c
+ROM:1560 28 02		jr z,0x1564
+ROM:1562 f6 80		or 0x80
+ROM:1564 d3 be		out (0xbe),a
+ROM:1566 3e 03		ld a,0x03
+ROM:1568 d3 be		out (0xbe),a
+ROM:156a 3e 02		ld a,0x02
+ROM:156c d3 be		out (0xbe),a
+ROM:156e 3e 89		ld a,0x89
+ROM:1570 d3 be		out (0xbe),a
+ROM:1572 78		ld a,b
+ROM:1573 32 b8 2c	ld (0x2cb8),a
+ROM:1576 b7		or a
+ROM:1577 3e 0b		ld a,0x0b
+ROM:1579 d3 be		out (0xbe),a
+ROM:157b ca 61 12	jp z,0x1261
+ROM:157e 3a b8 2c	ld a,(0x2cb8)
+ROM:1581 b7		or a
+ROM:1582 ca 0b 13	jp z,0x130b
+ROM:1585 cd a2 0f	call 0x0fa2
+ROM:1588 3a b7 2c	ld a,(0x2cb7)
+ROM:158b b7		or a
+ROM:158c 28 f0		jr z,0x157e
+ROM:158e 21 0d 2c	ld hl,0x2c0d
+ROM:1591 cb ce		set 1,(hl)
+ROM:1593 c3 bb 11	jp 0x11bb
+ROM:1596 11 28 2c	ld de,0x2c28
+ROM:1599 21 95 2c	ld hl,0x2c95
+ROM:159c cd f3 1e	call 0x1ef3
+ROM:159f af		xor a
+ROM:15a0 32 b7 2c	ld (0x2cb7),a
+ROM:15a3 cd 17 0e	call 0x0e17
+ROM:15a6 50		ld d,b
+ROM:15a7 59		ld e,c
+ROM:15a8 21 0d 2c	ld hl,0x2c0d
+ROM:15ab cd 27 1f	call 0x1f27
+ROM:15ae 3e 0c		ld a,0x0c
+ROM:15b0 d3 be		out (0xbe),a
+ROM:15b2 3e 0a		ld a,0x0a
+ROM:15b4 d3 be		out (0xbe),a
+ROM:15b6 3e 09		ld a,0x09
+ROM:15b8 d3 be		out (0xbe),a
+ROM:15ba 21 96 2c	ld hl,0x2c96
+ROM:15bd 73		ld (hl),e
+ROM:15be 2b		dec hl
+ROM:15bf 72		ld (hl),d
+ROM:15c0 cd a7 1e	call 0x1ea7
+ROM:15c3 5f		ld e,a
+ROM:15c4 cd a7 1e	call 0x1ea7
+ROM:15c7 cb 43		bit 0,e
+ROM:15c9 28 05		jr z,0x15d0
+ROM:15cb 32 69 2c	ld (0x2c69),a
+ROM:15ce d3 b8		out (0xb8),a
+ROM:15d0 cd a7 1e	call 0x1ea7
+ROM:15d3 cb 4b		bit 1,e
+ROM:15d5 28 02		jr z,0x15d9
+ROM:15d7 d3 bc		out (0xbc),a
+ROM:15d9 dd e1		pop ix
+ROM:15db d5		push de
+ROM:15dc cd a7 1e	call 0x1ea7
+ROM:15df 57		ld d,a
+ROM:15e0 cd a7 1e	call 0x1ea7
+ROM:15e3 5f		ld e,a
+ROM:15e4 dd e9		jp (ix)
+ROM:15e6 c5		push bc
+ROM:15e7 cb 59		bit 3,c
+ROM:15e9 20 05		jr nz,0x15f0
+ROM:15eb 3e 3f		ld a,0x3f
+ROM:15ed cd b7 1e	call 0x1eb7
+ROM:15f0 7a		ld a,d
+ROM:15f1 fe 1f		cp 0x1f
+ROM:15f3 30 17		jr nc,0x160c
+ROM:15f5 c1		pop bc
+ROM:15f6 c5		push bc
+ROM:15f7 3e 20		ld a,0x20
+ROM:15f9 cb 79		bit 7,c
+ROM:15fb 20 01		jr nz,0x15fe
+ROM:15fd 07		rlca
+ROM:15fe 82		add a,d
+ROM:15ff cd b7 1e	call 0x1eb7
+ROM:1602 7b		ld a,e
+ROM:1603 fe 20		cp 0x20
+ROM:1605 30 05		jr nc,0x160c
+ROM:1607 c6 60		add a,0x60
+ROM:1609 cd b7 1e	call 0x1eb7
+ROM:160c f3		di
+ROM:160d 3a b7 2c	ld a,(0x2cb7)
+ROM:1610 b7		or a
+ROM:1611 20 22		jr nz,0x1635
+ROM:1613 3a 69 2c	ld a,(0x2c69)
+ROM:1616 cb e7		set 4,a
+ROM:1618 d3 b8		out (0xb8),a
+ROM:161a 3e 5f		ld a,0x5f
+ROM:161c d3 bf		out (0xbf),a
+ROM:161e 21 0d 2c	ld hl,0x2c0d
+ROM:1621 cb ee		set 5,(hl)
+ROM:1623 fb		ei
+ROM:1624 cd 27 1f	call 0x1f27
+ROM:1627 3a 69 2c	ld a,(0x2c69)
+ROM:162a d3 b8		out (0xb8),a
+ROM:162c 3a b7 2c	ld a,(0x2cb7)
+ROM:162f b7		or a
+ROM:1630 20 04		jr nz,0x1636
+ROM:1632 c1		pop bc
+ROM:1633 37		scf
+ROM:1634 c9		ret
+ROM:1635 fb		ei
+ROM:1636 c1		pop bc
+ROM:1637 c9		ret
+ROM:1638 ;
+ROM:1638 INIT???
+ROM:1638 af		xor a
+ROM:1639 32 52 2d	ld (0x2d52),a	; <- id/label
+ROM:163c 32 10 2c	ld (0x2c10),a
+ROM:163f 3e 03		ld a,0x03
+ROM:1641 d3 b3		out (0xb3),a	; sio enables
+ROM:1643 3e 00		ld a,0x00
+ROM:1645 d3 b3		out (0xb3),a
+ROM:1647 3e 07		ld a,0x07
+ROM:1649 d3 b3		out (0xb3),a
+ROM:164b 3e 81		ld a,0x81
+ROM:164d d3 b3		out (0xb3),a
+ROM:164f af		xor a
+ROM:1650 d3 b3		out (0xb3),a
+ROM:1652 c9		ret
+ROM:1653 21 10 2c	ld hl,0x2c10
+ROM:1656 46		ld b,(hl)
+ROM:1657 cd 38 16	call 0x1638
+ROM:165a 70		ld (hl),b
+ROM:165b cb 68		bit 5,b
+ROM:165d c8		ret z
+ROM:165e 3e 03		ld a,0x03
+ROM:1660 d3 b3		out (0xb3),a
+ROM:1662 3e d1		ld a,0xd1
+ROM:1664 d3 b3		out (0xb3),a
+ROM:1666 af		xor a
+ROM:1667 d3 b3		out (0xb3),a
+ROM:1669 c9		ret
+ROM:166a 3a 27 2c	ld a,(0x2c27)
+ROM:166d 21 10 2c	ld hl,0x2c10
+ROM:1670 fe 09		cp 0x09
+ROM:1672 28 09		jr z,0x167d
+ROM:1674 fe 0c		cp 0x0c
+ROM:1676 28 39		jr z,0x16b1
+ROM:1678 cb ce		set 1,(hl)
+ROM:167a c3 17 0e	jp 0x0e17
+ROM:167d 3a 28 2c	ld a,(0x2c28)
+ROM:1680 b7		or a
+ROM:1681 28 1a		jr z,0x169d
+ROM:1683 cb ee		set 5,(hl)
+ROM:1685 cb fe		set 7,(hl)
+ROM:1687 fe 80		cp 0x80
+ROM:1689 20 02		jr nz,0x168d
+ROM:168b cb f6		set 6,(hl)
+ROM:168d 3e 03		ld a,0x03
+ROM:168f d3 b3		out (0xb3),a
+ROM:1691 3e d1		ld a,0xd1
+ROM:1693 d3 b3		out (0xb3),a
+ROM:1695 af		xor a
+ROM:1696 d3 b3		out (0xb3),a
+ROM:1698 32 52 2d	ld (0x2d52),a
+ROM:169b 18 0f		jr 0x16ac
+ROM:169d cb ae		res 5,(hl)
+ROM:169f cb b6		res 6,(hl)
+ROM:16a1 3e 03		ld a,0x03
+ROM:16a3 d3 b3		out (0xb3),a
+ROM:16a5 3e 00		ld a,0x00
+ROM:16a7 d3 b3		out (0xb3),a
+ROM:16a9 af		xor a
+ROM:16aa d3 b3		out (0xb3),a
+ROM:16ac cb c6		set 0,(hl)
+ROM:16ae c3 17 0e	jp 0x0e17
+ROM:16b1 21 10 2c	ld hl,0x2c10
+ROM:16b4 cb d6		set 2,(hl)
+ROM:16b6 c3 17 0e	jp 0x0e17
+ROM:16b9 21 10 2c	ld hl,0x2c10
+ROM:16bc 7e		ld a,(hl)
+ROM:16bd e6 0f		and 0x0f
+ROM:16bf c8		ret z
+ROM:16c0 0e 0b		ld c,0x0b
+ROM:16c2 cb 47		bit 0,a
+ROM:16c4 c2 c9 0d	jp nz,0x0dc9
+ROM:16c7 cb 4f		bit 1,a
+ROM:16c9 c2 c2 0d	jp nz,0x0dc2
+ROM:16cc cb 57		bit 2,a
+ROM:16ce 28 1d		jr z,0x16ed
+ROM:16d0 cb 96		res 2,(hl)
+ROM:16d2 21 00 2c	ld hl,0x2c00
+ROM:16d5 cd f2 0e	call 0x0ef2
+ROM:16d8 21 16 2c	ld hl,0x2c16
+ROM:16db 36 03		ld (hl),0x03
+ROM:16dd 23		inc hl
+ROM:16de 36 0b		ld (hl),0x0b
+ROM:16e0 23		inc hl
+ROM:16e1 36 07		ld (hl),0x07
+ROM:16e3 23		inc hl
+ROM:16e4 3a 10 2c	ld a,(0x2c10)
+ROM:16e7 e6 20		and 0x20
+ROM:16e9 77		ld (hl),a
+ROM:16ea c3 93 0d	jp 0x0d93
+ROM:16ed cb 6e		bit 5,(hl)
+ROM:16ef c8		ret z
+ROM:16f0 cb 5e		bit 3,(hl)
+ROM:16f2 c8		ret z
+ROM:16f3 21 00 2c	ld hl,0x2c00
+ROM:16f6 cd f2 0e	call 0x0ef2
+ROM:16f9 f3		di
+ROM:16fa 3a 52 2d	ld a,(0x2d52)
+ROM:16fd b7		or a
+ROM:16fe 20 44		jr nz,0x1744
+ROM:1700 21 10 2c	ld hl,0x2c10
+ROM:1703 cb 9e		res 3,(hl)
+ROM:1705 cb be		res 7,(hl)
+ROM:1707 2a 4a 2d	ld hl,(0x2d4a)
+ROM:170a 44		ld b,h
+ROM:170b 78		ld a,b
+ROM:170c e6 0f		and 0x0f
+ROM:170e 67		ld h,a
+ROM:170f 22 19 2c	ld (0x2c19),hl
+ROM:1712 2a 4c 2d	ld hl,(0x2d4c)
+ROM:1715 4c		ld c,h
+ROM:1716 79		ld a,c
+ROM:1717 e6 0f		and 0x0f
+ROM:1719 67		ld h,a
+ROM:171a 22 1b 2c	ld (0x2c1b),hl
+ROM:171d cb 39		srl c
+ROM:171f 79		ld a,c
+ROM:1720 e6 08		and 0x08
+ROM:1722 cb 39		srl c
+ROM:1724 cb 39		srl c
+ROM:1726 cb 39		srl c
+ROM:1728 cb 39		srl c
+ROM:172a b1		or c
+ROM:172b 4f		ld c,a
+ROM:172c 78		ld a,b
+ROM:172d e6 f0		and 0xf0
+ROM:172f cb 27		sla a
+ROM:1731 b1		or c
+ROM:1732 32 1d 2c	ld (0x2c1d),a
+ROM:1735 fb		ei
+ROM:1736 21 16 2c	ld hl,0x2c16
+ROM:1739 36 07		ld (hl),0x07
+ROM:173b 23		inc hl
+ROM:173c 36 0b		ld (hl),0x0b
+ROM:173e 23		inc hl
+ROM:173f 36 03		ld (hl),0x03
+ROM:1741 c3 93 0d	jp 0x0d93
+ROM:1744 fb		ei
+ROM:1745 21 00 2c	ld hl,0x2c00
+ROM:1748 c3 0e 0f	jp 0x0f0e
+ROM:174b d9		exx
+ROM:174c 08		ex af,af'
+ROM:174d 3a 52 2d	ld a,(0x2d52)
+ROM:1750 4f		ld c,a
+ROM:1751 db b2		in a,(0xb2)
+ROM:1753 2f		cpl
+ROM:1754 cd 02 1f	call 0x1f02
+ROM:1757 5f		ld e,a
+ROM:1758 17		rla
+ROM:1759 67		ld h,a
+ROM:175a 17		rla
+ROM:175b 6f		ld l,a
+ROM:175c 17		rla
+ROM:175d 77		ld (hl),a
+ROM:175e 17		rla
+ROM:175f 32 4f 2d	ld (0x2d4f),a
+ROM:1762 3e 01		ld a,0x01
+ROM:1764 c3 1a 18	jp 0x181a
+ROM:1767 32 4e 2d	ld (0x2d4e),a
+ROM:176a 3e 02		ld a,0x02
+ROM:176c c3 1a 18	jp 0x181a
+ROM:176f 32 51 2d	ld (0x2d51),a
+ROM:1772 3e 03		ld a,0x03
+ROM:1774 c3 1a 18	jp 0x181a
+ROM:1777 32 50 2d	ld (0x2d50),a
+ROM:177a 3a 4f 2d	ld a,(0x2d4f)
+ROM:177d cb 7f		bit 7,a
+ROM:177f c2 01 18	jp nz,0x1801
+ROM:1782 47		ld b,a
+ROM:1783 3a 10 2c	ld a,(0x2c10)
+ROM:1786 e6 c0		and 0xc0
+ROM:1788 c2 f1 17	jp nz,0x17f1
+ROM:178b 3a 4b 2d	ld a,(0x2d4b)
+ROM:178e a8		xor b
+ROM:178f e6 f0		and 0xf0
+ROM:1791 20 5e		jr nz,0x17f1
+ROM:1793 cb 70		bit 6,b
+ROM:1795 20 6a		jr nz,0x1801
+ROM:1797 06 00		ld b,0x00
+ROM:1799 0e 0f		ld c,0x0f
+ROM:179b ed 5b 4e 2d	ld de,(0x2d4e)
+ROM:179f 7a		ld a,d
+ROM:17a0 a1		and c
+ROM:17a1 57		ld d,a
+ROM:17a2 2a 4a 2d	ld hl,(0x2d4a)
+ROM:17a5 7c		ld a,h
+ROM:17a6 a1		and c
+ROM:17a7 67		ld h,a
+ROM:17a8 b7		or a
+ROM:17a9 ed 52		sbc hl,de
+ROM:17ab 28 11		jr z,0x17be
+ROM:17ad 11 32 00	ld de,0x0032
+ROM:17b0 f2 b7 17	jp p,0x17b7
+ROM:17b3 11 ce ff	ld de,0xffce
+ROM:17b6 eb		ex de,hl
+ROM:17b7 b7		or a
+ROM:17b8 ed 52		sbc hl,de
+ROM:17ba f2 22 18	jp p,0x1822
+ROM:17bd 04		inc b
+ROM:17be ed 5b 50 2d	ld de,(0x2d50)
+ROM:17c2 7a		ld a,d
+ROM:17c3 a1		and c
+ROM:17c4 57		ld d,a
+ROM:17c5 2a 4c 2d	ld hl,(0x2d4c)
+ROM:17c8 7c		ld a,h
+ROM:17c9 a1		and c
+ROM:17ca 67		ld h,a
+ROM:17cb b7		or a
+ROM:17cc ed 52		sbc hl,de
+ROM:17ce 28 13		jr z,0x17e3
+ROM:17d0 11 32 00	ld de,0x0032
+ROM:17d3 f2 da 17	jp p,0x17da
+ROM:17d6 11 ce ff	ld de,0xffce
+ROM:17d9 eb		ex de,hl
+ROM:17da b7		or a
+ROM:17db ed 52		sbc hl,de
+ROM:17dd fa f1 17	jp m,0x17f1
+ROM:17e0 c3 22 18	jp 0x1822
+ROM:17e3 af		xor a
+ROM:17e4 b8		cp b
+ROM:17e5 20 0a		jr nz,0x17f1
+ROM:17e7 3a 51 2d	ld a,(0x2d51)
+ROM:17ea 4f		ld c,a
+ROM:17eb 3a 4d 2d	ld a,(0x2d4d)
+ROM:17ee a9		xor c
+ROM:17ef 28 10		jr z,0x1801
+ROM:17f1 21 10 2c	ld hl,0x2c10
+ROM:17f4 cb de		set 3,(hl)
+ROM:17f6 11 4a 2d	ld de,0x2d4a
+ROM:17f9 21 4e 2d	ld hl,0x2d4e
+ROM:17fc 01 04 00	ld bc,0x0004
+ROM:17ff ed b0		ldir
+ROM:1801 3e 03		ld a,0x03
+ROM:1803 d3 b3		out (0xb3),a
+ROM:1805 3e c0		ld a,0xc0
+ROM:1807 d3 b3		out (0xb3),a
+ROM:1809 db b2		in a,(0xb2)
+ROM:180b db b2		in a,(0xb2)
+ROM:180d db b2		in a,(0xb2)
+ROM:180f 3e 03		ld a,0x03
+ROM:1811 d3 b3		out (0xb3),a
+ROM:1813 3e d1		ld a,0xd1
+ROM:1815 d3 b3		out (0xb3),a
+ROM:1817 af		xor a
+ROM:1818 d3 b3		out (0xb3),a
+ROM:181a 32 52 2d	ld (0x2d52),a
+ROM:181d d9		exx
+ROM:181e 08		ex af,af'
+ROM:181f fb		ei
+ROM:1820 ed 4d		reti
+ROM:1822 21 10 2c	ld hl,0x2c10
+ROM:1825 cb fe		set 7,(hl)
+ROM:1827 cb 9e		res 3,(hl)
+ROM:1829 c3 f6 17	jp 0x17f6
+ROM:182c d9		exx
+ROM:182d 08		ex af,af'
+ROM:182e 3e 30		ld a,0x30
+ROM:1830 d3 b3		out (0xb3),a
+ROM:1832 db b2		in a,(0xb2)
+ROM:1834 3e ff		ld a,0xff
+ROM:1836 32 4f 2d	ld (0x2d4f),a
+ROM:1839 3a 52 2d	ld a,(0x2d52)
+ROM:183c fe 03		cp 0x03
+ROM:183e 30 04		jr nc,0x1844
+ROM:1840 3c		inc a
+ROM:1841 32 52 2d	ld (0x2d52),a
+ROM:1844 d9		exx
+ROM:1845 08		ex af,af'
+ROM:1846 fb		ei
+ROM:1847 ed 4d		reti
+ROM:1849 00		nop
+ROM:184a 57		ld d,a
+ROM:184b 40		ld b,b
+ROM:184c 20 10		jr nz,0x185e
+ROM:184e 08		ex af,af'
+ROM:184f 04		inc b
+ROM:1850 02		ld (bc),a
+ROM:1851 01 d9 08	ld bc,0x08d9
+ROM:1854 21 dc 2c	ld hl,0x2cdc
+ROM:1857 cd c8 1e	call 0x1ec8
+ROM:185a 28 16		jr z,0x1872
+ROM:185c fe 13		cp 0x13
+ROM:185e 20 08		jr nz,0x1868
+ROM:1860 21 08 2c	ld hl,0x2c08
+ROM:1863 cb c6		set 0,(hl)
+ROM:1865 21 dc 2c	ld hl,0x2cdc
+ROM:1868 cd a7 1e	call 0x1ea7
+ROM:186b d3 b0		out (0xb0),a
+ROM:186d d9		exx
+ROM:186e 08		ex af,af'
+ROM:186f fb		ei
+ROM:1870 ed 4d		reti
+ROM:1872 21 08 2c	ld hl,0x2c08
+ROM:1875 cb ae		res 5,(hl)
+ROM:1877 3e 28		ld a,0x28
+ROM:1879 d3 b1		out (0xb1),a
+ROM:187b 18 f0		jr 0x186d
+ROM:187d d9		exx
+ROM:187e 08		ex af,af'
+ROM:187f db b1		in a,(0xb1)
+ROM:1881 21 ff 2c	ld hl,0x2cff
+ROM:1884 77		ld (hl),a
+ROM:1885 4f		ld c,a
+ROM:1886 21 b9 2c	ld hl,0x2cb9
+ROM:1889 7e		ld a,(hl)
+ROM:188a cb cf		set 1,a
+ROM:188c e6 f3		and 0xf3
+ROM:188e cb 59		bit 3,c
+ROM:1890 28 02		jr z,0x1894
+ROM:1892 cb d7		set 2,a
+ROM:1894 cb 69		bit 5,c
+ROM:1896 28 02		jr z,0x189a
+ROM:1898 cb df		set 3,a
+ROM:189a 77		ld (hl),a
+ROM:189b 3e 10		ld a,0x10
+ROM:189d d3 b1		out (0xb1),a
+ROM:189f 18 cc		jr 0x186d
+ROM:18a1 d9		exx
+ROM:18a2 08		ex af,af'
+ROM:18a3 af		xor a
+ROM:18a4 32 fe 2c	ld (0x2cfe),a
+ROM:18a7 db b0		in a,(0xb0)
+ROM:18a9 57		ld d,a
+ROM:18aa 21 ba 2c	ld hl,0x2cba
+ROM:18ad cd c8 1e	call 0x1ec8
+ROM:18b0 fe 1e		cp 0x1e
+ROM:18b2 30 0f		jr nc,0x18c3
+ROM:18b4 3a fe 2c	ld a,(0x2cfe)
+ROM:18b7 cd b7 1e	call 0x1eb7
+ROM:18ba 7a		ld a,d
+ROM:18bb cd b7 1e	call 0x1eb7
+ROM:18be d9		exx
+ROM:18bf 08		ex af,af'
+ROM:18c0 fb		ei
+ROM:18c1 ed 4d		reti
+ROM:18c3 21 b9 2c	ld hl,0x2cb9
+ROM:18c6 cb c6		set 0,(hl)
+ROM:18c8 c3 6d 18	jp 0x186d
+ROM:18cb d9		exx
+ROM:18cc 08		ex af,af'
+ROM:18cd 3e 01		ld a,0x01
+ROM:18cf d3 b1		out (0xb1),a
+ROM:18d1 db b1		in a,(0xb1)
+ROM:18d3 32 fe 2c	ld (0x2cfe),a
+ROM:18d6 e6 e0		and 0xe0
+ROM:18d8 21 b9 2c	ld hl,0x2cb9
+ROM:18db b6		or (hl)
+ROM:18dc 77		ld (hl),a
+ROM:18dd 3e 30		ld a,0x30
+ROM:18df d3 b1		out (0xb1),a
+ROM:18e1 db b0		in a,(0xb0)
+ROM:18e3 57		ld d,a
+ROM:18e4 c3 aa 18	jp 0x18aa
+ROM:18e7 ;
+ROM:18e7 INIT???	; init the baud rate timers?
+ROM:18e7 21 1f 19	ld hl,0x191f	; <- id/label
+ROM:18ea 06 01		ld b,0x01
+ROM:18ec c3 f4 18	jp 0x18f4
+ROM:18ef 21 14 19	ld hl,0x1914
+ROM:18f2 06 0b		ld b,0x0b
+ROM:18f4 af		xor a
+ROM:18f5 32 ba 2c	ld (0x2cba),a	; <- id/label
+ROM:18f8 32 bb 2c	ld (0x2cbb),a
+ROM:18fb 32 dc 2c	ld (0x2cdc),a
+ROM:18fe 32 dd 2c	ld (0x2cdd),a
+ROM:1901 32 08 2c	ld (0x2c08),a
+ROM:1904 32 b9 2c	ld (0x2cb9),a
+ROM:1907 3e 07		ld a,0x07
+ROM:1909 d3 90		out (0x90),a	; ctc
+ROM:190b 3e 01		ld a,0x01
+ROM:190d d3 90		out (0x90),a	; ctc
+ROM:190f 0e b1		ld c,0xb1
+ROM:1911 ed b3		otir		; writes 0x18 to sio
+ROM:1913 c9		ret
+ROM:1914 18 40		jr 0x1956
+ROM:1916 04		inc b
+ROM:1917 48		ld c,b
+ROM:1918 03		inc bc
+ROM:1919 e1		pop hl
+ROM:191a 05		dec b
+ROM:191b ea 01 17	jp pe,0x1701
+ROM:191e 00		nop
+ROM:191f 18 3a		jr 0x195b
+ROM:1921 27		daa
+ROM:1922 2c		inc l
+ROM:1923 fe 0c		cp 0x0c
+ROM:1925 28 0a		jr z,0x1931
+ROM:1927 fe 0b		cp 0x0b
+ROM:1929 28 0e		jr z,0x1939
+ROM:192b 21 01 2c	ld hl,0x2c01
+ROM:192e c3 0e 0f	jp 0x0f0e
+ROM:1931 21 08 2c	ld hl,0x2c08
+ROM:1934 cb d6		set 2,(hl)
+ROM:1936 c3 17 0e	jp 0x0e17
+ROM:1939 21 00 2d	ld hl,0x2d00
+ROM:193c 46		ld b,(hl)
+ROM:193d cb fe		set 7,(hl)
+ROM:193f 3a 08 2c	ld a,(0x2c08)
+ROM:1942 cb 77		bit 6,a
+ROM:1944 28 07		jr z,0x194d
+ROM:1946 af		xor a
+ROM:1947 b0		or b
+ROM:1948 20 03		jr nz,0x194d
+ROM:194a cd 1d 04	call 0x041d
+ROM:194d af		xor a
+ROM:194e 32 08 2c	ld (0x2c08),a
+ROM:1951 3e 18		ld a,0x18
+ROM:1953 d3 b1		out (0xb1),a
+ROM:1955 21 01 2c	ld hl,0x2c01
+ROM:1958 c3 0e 0f	jp 0x0f0e
+ROM:195b 0e 04		ld c,0x04	; load a 4
+ROM:195d 21 ba 2c	ld hl,0x2cba	; <- id/label
+ROM:1960 cd e6 0d	call 0x0de6	; check the thing
+ROM:1963 0e 04		ld c,0x04	; and we're back, reset c
+ROM:1965 af		xor a		; clear a
+ROM:1966 21 b9 2c	ld hl,0x2cb9	; <- id/label
+ROM:1969 be		cp (hl)		; compare it
+ROM:196a c4 a5 0d	call nz,0x0da5	; test it?
+ROM:196d 21 08 2c	ld hl,0x2c08	; <- id/label
+ROM:1970 7e		ld a,(hl)	; load it
+ROM:1971 e6 07		and 0x07	; mask low bits
+ROM:1973 c8		ret z		; zero?
+ROM:1974 0e 04		ld c,0x04
+ROM:1976 cb 47		bit 0,a
+ROM:1978 c2 c9 0d	jp nz,0x0dc9
+ROM:197b cb 4f		bit 1,a
+ROM:197d c2 c2 0d	jp nz,0x0dc2
+ROM:1980 cb 57		bit 2,a
+ROM:1982 c8		ret z
+ROM:1983 cb 96		res 2,(hl)
+ROM:1985 21 00 2c	ld hl,0x2c00
+ROM:1988 cd f2 0e	call 0x0ef2
+ROM:198b 3e 04		ld a,0x04
+ROM:198d 32 16 2c	ld (0x2c16),a
+ROM:1990 3e 04		ld a,0x04
+ROM:1992 32 17 2c	ld (0x2c17),a
+ROM:1995 3e 07		ld a,0x07
+ROM:1997 32 18 2c	ld (0x2c18),a
+ROM:199a 3a ff 2c	ld a,(0x2cff)
+ROM:199d 32 19 2c	ld (0x2c19),a
+ROM:19a0 3a fe 2c	ld a,(0x2cfe)
+ROM:19a3 32 1a 2c	ld (0x2c1a),a
+ROM:19a6 c3 93 0d	jp 0x0d93
+ROM:19a9 21 01 2c	ld hl,0x2c01	; <- id/label
+ROM:19ac cd f2 0e	call 0x0ef2	
+ROM:19af 3a 27 2c	ld a,(0x2c27)
+ROM:19b2 fe 03		cp 0x03
+ROM:19b4 ca 34 1a	jp z,0x1a34
+ROM:19b7 fe 0e		cp 0x0e
+ROM:19b9 ca 9c 1b	jp z,0x1b9c
+ROM:19bc fe 0f		cp 0x0f
+ROM:19be ca cb 1a	jp z,0x1acb
+ROM:19c1 fe 0d		cp 0x0d
+ROM:19c3 ca 7b 1a	jp z,0x1a7b
+ROM:19c6 fe 09		cp 0x09
+ROM:19c8 28 3b		jr z,0x1a05
+ROM:19ca fe 0b		cp 0x0b
+ROM:19cc 28 15		jr z,0x19e3
+ROM:19ce fe 1a		cp 0x1a
+ROM:19d0 28 19		jr z,0x19eb
+ROM:19d2 fe 1b		cp 0x1b
+ROM:19d4 28 21		jr z,0x19f7
+ROM:19d6 cd 17 0e	call 0x0e17
+ROM:19d9 21 08 2c	ld hl,0x2c08
+ROM:19dc 0e 04		ld c,0x04
+ROM:19de cd c2 0d	call 0x0dc2
+ROM:19e1 18 c6		jr 0x19a9
+ROM:19e3 f3		di
+ROM:19e4 cd ef 18	call 0x18ef
+ROM:19e7 fb		ei
+ROM:19e8 c3 67 1a	jp 0x1a67
+ROM:19eb cd 17 0e	call 0x0e17
+ROM:19ee 21 08 2c	ld hl,0x2c08
+ROM:19f1 cd 27 1f	call 0x1f27
+ROM:19f4 c3 6a 1a	jp 0x1a6a
+ROM:19f7 cd 17 0e	call 0x0e17
+ROM:19fa 21 ba 2c	ld hl,0x2cba
+ROM:19fd 0e 04		ld c,0x04
+ROM:19ff cd 31 1f	call 0x1f31
+ROM:1a02 c3 6a 1a	jp 0x1a6a
+ROM:1a05 ed 5b 28 2c	ld de,(0x2c28)
+ROM:1a09 cd 17 0e	call 0x0e17
+ROM:1a0c 21 08 2c	ld hl,0x2c08
+ROM:1a0f cd 27 1f	call 0x1f27
+ROM:1a12 7b		ld a,e
+ROM:1a13 ba		cp d
+ROM:1a14 20 c3		jr nz,0x19d9
+ROM:1a16 b7		or a
+ROM:1a17 28 14		jr z,0x1a2d
+ROM:1a19 fe 09		cp 0x09
+ROM:1a1b 30 bc		jr nc,0x19d9
+ROM:1a1d 4f		ld c,a
+ROM:1a1e 06 00		ld b,0x00
+ROM:1a20 21 49 18	ld hl,0x1849
+ROM:1a23 09		add hl,bc
+ROM:1a24 3e 07		ld a,0x07
+ROM:1a26 d3 90		out (0x90),a
+ROM:1a28 7e		ld a,(hl)
+ROM:1a29 d3 90		out (0x90),a
+ROM:1a2b 18 3d		jr 0x1a6a
+ROM:1a2d 3e 03		ld a,0x03
+ROM:1a2f d3 90		out (0x90),a
+ROM:1a31 c3 6a 1a	jp 0x1a6a
+ROM:1a34 3a 25 2c	ld a,(0x2c25)
+ROM:1a37 d6 02		sub 0x02
+ROM:1a39 ca 67 1a	jp z,0x1a67
+ROM:1a3c 47		ld b,a
+ROM:1a3d 11 28 2c	ld de,0x2c28
+ROM:1a40 21 dc 2c	ld hl,0x2cdc
+ROM:1a43 f3		di
+ROM:1a44 cd cf 1e	call 0x1ecf
+ROM:1a47 21 08 2c	ld hl,0x2c08
+ROM:1a4a cb 6e		bit 5,(hl)
+ROM:1a4c 20 0e		jr nz,0x1a5c
+ROM:1a4e fb		ei
+ROM:1a4f cb ee		set 5,(hl)
+ROM:1a51 21 dc 2c	ld hl,0x2cdc
+ROM:1a54 cd a7 1e	call 0x1ea7
+ROM:1a57 d3 b0		out (0xb0),a
+ROM:1a59 c3 67 1a	jp 0x1a67
+ROM:1a5c 21 dc 2c	ld hl,0x2cdc
+ROM:1a5f cd c8 1e	call 0x1ec8
+ROM:1a62 fb		ei
+ROM:1a63 fe 13		cp 0x13
+ROM:1a65 30 0e		jr nc,0x1a75
+ROM:1a67 cd 17 0e	call 0x0e17
+ROM:1a6a 0e 04		ld c,0x04
+ROM:1a6c 21 08 2c	ld hl,0x2c08
+ROM:1a6f cd c9 0d	call 0x0dc9
+ROM:1a72 c3 a9 19	jp 0x19a9
+ROM:1a75 cd 17 0e	call 0x0e17
+ROM:1a78 c3 a9 19	jp 0x19a9
+ROM:1a7b 3a 25 2c	ld a,(0x2c25)
+ROM:1a7e d6 02		sub 0x02
+ROM:1a80 28 e5		jr z,0x1a67
+ROM:1a82 47		ld b,a
+ROM:1a83 21 dc 2c	ld hl,0x2cdc
+ROM:1a86 11 28 2c	ld de,0x2c28
+ROM:1a89 cd f3 1e	call 0x1ef3
+ROM:1a8c c5		push bc
+ROM:1a8d cd 17 0e	call 0x0e17
+ROM:1a90 21 08 2c	ld hl,0x2c08
+ROM:1a93 cd 27 1f	call 0x1f27
+ROM:1a96 21 dc 2c	ld hl,0x2cdc
+ROM:1a99 c1		pop bc
+ROM:1a9a 70		ld (hl),b
+ROM:1a9b 23		inc hl
+ROM:1a9c 71		ld (hl),c
+ROM:1a9d 2b		dec hl
+ROM:1a9e cd c8 1e	call 0x1ec8
+ROM:1aa1 cb 3f		srl a
+ROM:1aa3 47		ld b,a
+ROM:1aa4 f3		di
+ROM:1aa5 c5		push bc
+ROM:1aa6 cd a7 1e	call 0x1ea7
+ROM:1aa9 fe 08		cp 0x08
+ROM:1aab 30 19		jr nc,0x1ac6
+ROM:1aad fe 01		cp 0x01
+ROM:1aaf 28 15		jr z,0x1ac6
+ROM:1ab1 fe 02		cp 0x02
+ROM:1ab3 28 11		jr z,0x1ac6
+ROM:1ab5 d3 b1		out (0xb1),a
+ROM:1ab7 cd a7 1e	call 0x1ea7
+ROM:1aba d3 b1		out (0xb1),a
+ROM:1abc c1		pop bc
+ROM:1abd 10 e6		djnz 0x1aa5
+ROM:1abf af		xor a
+ROM:1ac0 d3 b1		out (0xb1),a
+ROM:1ac2 fb		ei
+ROM:1ac3 c3 6a 1a	jp 0x1a6a
+ROM:1ac6 c1		pop bc
+ROM:1ac7 fb		ei
+ROM:1ac8 c3 d9 19	jp 0x19d9
+ROM:1acb 2a 28 2c	ld hl,(0x2c28)
+ROM:1ace 7c		ld a,h
+ROM:1acf b5		or l
+ROM:1ad0 28 95		jr z,0x1a67
+ROM:1ad2 e5		push hl
+ROM:1ad3 af		xor a
+ROM:1ad4 32 00 2d	ld (0x2d00),a
+ROM:1ad7 cd 17 0e	call 0x0e17
+ROM:1ada 21 08 2c	ld hl,0x2c08
+ROM:1add cd 27 1f	call 0x1f27
+ROM:1ae0 3e 80		ld a,0x80
+ROM:1ae2 cd 3b 03	call 0x033b
+ROM:1ae5 e1		pop hl
+ROM:1ae6 cd 0c 1f	call 0x1f0c
+ROM:1ae9 e5		push hl
+ROM:1aea ed 5b 58 2c	ld de,(0x2c58)
+ROM:1aee 21 01 2c	ld hl,0x2c01
+ROM:1af1 3e 04		ld a,0x04
+ROM:1af3 cd 20 0e	call 0x0e20
+ROM:1af6 da 71 1b	jp c,0x1b71
+ROM:1af9 f3		di
+ROM:1afa 3a 00 2d	ld a,(0x2d00)
+ROM:1afd b7		or a
+ROM:1afe c2 7d 1b	jp nz,0x1b7d
+ROM:1b01 21 08 2c	ld hl,0x2c08
+ROM:1b04 cb f6		set 6,(hl)
+ROM:1b06 cb fe		set 7,(hl)
+ROM:1b08 3e 01		ld a,0x01
+ROM:1b0a d3 b1		out (0xb1),a
+ROM:1b0c 3e d5		ld a,0xd5
+ROM:1b0e d3 b1		out (0xb1),a
+ROM:1b10 2e b0		ld l,0xb0
+ROM:1b12 cd ca 03	call 0x03ca
+ROM:1b15 fb		ei
+ROM:1b16 e1		pop hl
+ROM:1b17 7c		ld a,h
+ROM:1b18 b5		or l
+ROM:1b19 28 38		jr z,0x1b53
+ROM:1b1b cd 0c 1f	call 0x1f0c
+ROM:1b1e e5		push hl
+ROM:1b1f cd 6c 03	call 0x036c
+ROM:1b22 ed 5b 58 2c	ld de,(0x2c58)
+ROM:1b26 21 01 2c	ld hl,0x2c01
+ROM:1b29 3e 04		ld a,0x04
+ROM:1b2b cd 20 0e	call 0x0e20
+ROM:1b2e 38 38		jr c,0x1b68
+ROM:1b30 ed 53 5e 2c	ld (0x2c5e),de
+ROM:1b34 3e b0		ld a,0xb0
+ROM:1b36 32 60 2c	ld (0x2c60),a
+ROM:1b39 cb f8		set 7,b
+ROM:1b3b ed 43 5c 2c	ld (0x2c5c),bc
+ROM:1b3f 21 57 2c	ld hl,0x2c57
+ROM:1b42 cd f2 0e	call 0x0ef2
+ROM:1b45 f3		di
+ROM:1b46 3a 00 2d	ld a,(0x2d00)
+ROM:1b49 b7		or a
+ROM:1b4a 20 31		jr nz,0x1b7d
+ROM:1b4c cd 77 04	call 0x0477
+ROM:1b4f fb		ei
+ROM:1b50 c3 16 1b	jp 0x1b16
+ROM:1b53 21 57 2c	ld hl,0x2c57
+ROM:1b56 cd f2 0e	call 0x0ef2
+ROM:1b59 3a 00 2d	ld a,(0x2d00)
+ROM:1b5c b7		or a
+ROM:1b5d 20 20		jr nz,0x1b7f
+ROM:1b5f cd 63 03	call 0x0363
+ROM:1b62 cd 8a 1b	call 0x1b8a
+ROM:1b65 c3 6a 1a	jp 0x1a6a
+ROM:1b68 21 57 2c	ld hl,0x2c57
+ROM:1b6b cd f2 0e	call 0x0ef2
+ROM:1b6e cd 8a 1b	call 0x1b8a
+ROM:1b71 e1		pop hl
+ROM:1b72 cd 63 03	call 0x0363
+ROM:1b75 21 08 2c	ld hl,0x2c08
+ROM:1b78 cb ce		set 1,(hl)
+ROM:1b7a c3 af 19	jp 0x19af
+ROM:1b7d fb		ei
+ROM:1b7e e1		pop hl
+ROM:1b7f cd 63 03	call 0x0363
+ROM:1b82 cd 8a 1b	call 0x1b8a
+ROM:1b85 cb ce		set 1,(hl)
+ROM:1b87 c3 a9 19	jp 0x19a9
+ROM:1b8a f3		di
+ROM:1b8b 21 08 2c	ld hl,0x2c08
+ROM:1b8e cb b6		res 6,(hl)
+ROM:1b90 cb be		res 7,(hl)
+ROM:1b92 3e 01		ld a,0x01
+ROM:1b94 d3 b1		out (0xb1),a
+ROM:1b96 3e 17		ld a,0x17
+ROM:1b98 d3 b1		out (0xb1),a
+ROM:1b9a fb		ei
+ROM:1b9b c9		ret
+ROM:1b9c 2a 28 2c	ld hl,(0x2c28)
+ROM:1b9f 7c		ld a,h
+ROM:1ba0 b5		or l
+ROM:1ba1 ca 67 1a	jp z,0x1a67
+ROM:1ba4 e5		push hl
+ROM:1ba5 af		xor a
+ROM:1ba6 32 00 2d	ld (0x2d00),a
+ROM:1ba9 cd 17 0e	call 0x0e17
+ROM:1bac 3e 80		ld a,0x80
+ROM:1bae cd 3b 03	call 0x033b
+ROM:1bb1 e1		pop hl
+ROM:1bb2 cd 0c 1f	call 0x1f0c
+ROM:1bb5 e5		push hl
+ROM:1bb6 ed 5b 58 2c	ld de,(0x2c58)
+ROM:1bba f3		di
+ROM:1bbb 3a 00 2d	ld a,(0x2d00)
+ROM:1bbe b7		or a
+ROM:1bbf c2 29 1c	jp nz,0x1c29
+ROM:1bc2 21 08 2c	ld hl,0x2c08
+ROM:1bc5 cb f6		set 6,(hl)
+ROM:1bc7 3e 01		ld a,0x01
+ROM:1bc9 d3 b1		out (0xb1),a
+ROM:1bcb 3e e7		ld a,0xe7
+ROM:1bcd d3 b1		out (0xb1),a
+ROM:1bcf 2e b0		ld l,0xb0
+ROM:1bd1 cd 7b 03	call 0x037b
+ROM:1bd4 fb		ei
+ROM:1bd5 e1		pop hl
+ROM:1bd6 7c		ld a,h
+ROM:1bd7 b5		or l
+ROM:1bd8 28 53		jr z,0x1c2d
+ROM:1bda 50		ld d,b
+ROM:1bdb 59		ld e,c
+ROM:1bdc cd 0c 1f	call 0x1f0c
+ROM:1bdf e5		push hl
+ROM:1be0 d5		push de
+ROM:1be1 ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:1be5 ed 53 5e 2c	ld (0x2c5e),de
+ROM:1be9 3e b0		ld a,0xb0
+ROM:1beb 32 60 2c	ld (0x2c60),a
+ROM:1bee 78		ld a,b
+ROM:1bef cb f0		set 6,b
+ROM:1bf1 cb f8		set 7,b
+ROM:1bf3 ed 43 5c 2c	ld (0x2c5c),bc
+ROM:1bf7 47		ld b,a
+ROM:1bf8 21 57 2c	ld hl,0x2c57
+ROM:1bfb cd f2 0e	call 0x0ef2
+ROM:1bfe f3		di
+ROM:1bff 3a 00 2d	ld a,(0x2d00)
+ROM:1c02 b7		or a
+ROM:1c03 20 18		jr nz,0x1c1d
+ROM:1c05 cd 77 04	call 0x0477
+ROM:1c08 fb		ei
+ROM:1c09 cd 6c 03	call 0x036c
+ROM:1c0c d1		pop de
+ROM:1c0d c5		push bc
+ROM:1c0e 42		ld b,d
+ROM:1c0f 4b		ld c,e
+ROM:1c10 ed 5b 5a 2c	ld de,(0x2c5a)
+ROM:1c14 3e 04		ld a,0x04
+ROM:1c16 cd 78 0e	call 0x0e78
+ROM:1c19 c1		pop bc
+ROM:1c1a c3 d5 1b	jp 0x1bd5
+ROM:1c1d fb		ei
+ROM:1c1e d1		pop de
+ROM:1c1f e1		pop hl
+ROM:1c20 cd 50 04	call 0x0450
+ROM:1c23 78		ld a,b
+ROM:1c24 b1		or c
+ROM:1c25 28 1b		jr z,0x1c42
+ROM:1c27 18 10		jr 0x1c39
+ROM:1c29 fb		ei
+ROM:1c2a e1		pop hl
+ROM:1c2b 18 15		jr 0x1c42
+ROM:1c2d 21 57 2c	ld hl,0x2c57
+ROM:1c30 cd f2 0e	call 0x0ef2
+ROM:1c33 3a 00 2d	ld a,(0x2d00)
+ROM:1c36 b7		or a
+ROM:1c37 20 e7		jr nz,0x1c20
+ROM:1c39 ed 5b 58 2c	ld de,(0x2c58)
+ROM:1c3d 3e 04		ld a,0x04
+ROM:1c3f cd 78 0e	call 0x0e78
+ROM:1c42 cd 63 03	call 0x0363
+ROM:1c45 21 08 2c	ld hl,0x2c08
+ROM:1c48 cb b6		res 6,(hl)
+ROM:1c4a f3		di
+ROM:1c4b 3e 01		ld a,0x01
+ROM:1c4d d3 b1		out (0xb1),a
+ROM:1c4f 3e 17		ld a,0x17
+ROM:1c51 d3 b1		out (0xb1),a
+ROM:1c53 fb		ei
+ROM:1c54 3a 00 2d	ld a,(0x2d00)
+ROM:1c57 b7		or a
+ROM:1c58 28 05		jr z,0x1c5f
+ROM:1c5a cb ce		set 1,(hl)
+ROM:1c5c c3 a9 19	jp 0x19a9
+ROM:1c5f 0e 04		ld c,0x04
+ROM:1c61 cd c9 0d	call 0x0dc9
+ROM:1c64 c3 a9 19	jp 0x19a9
+ROM:1c67 d9		exx
+ROM:1c68 08		ex af,af'
+ROM:1c69 21 04 2d	ld hl,0x2d04
+ROM:1c6c cd c8 1e	call 0x1ec8
+ROM:1c6f 28 14		jr z,0x1c85
+ROM:1c71 fe 13		cp 0x13
+ROM:1c73 20 08		jr nz,0x1c7d
+ROM:1c75 21 0a 2c	ld hl,0x2c0a
+ROM:1c78 cb c6		set 0,(hl)
+ROM:1c7a 21 04 2d	ld hl,0x2d04
+ROM:1c7d cd a7 1e	call 0x1ea7
+ROM:1c80 d3 b2		out (0xb2),a
+ROM:1c82 c3 8e 1c	jp 0x1c8e
+ROM:1c85 21 0a 2c	ld hl,0x2c0a
+ROM:1c88 cb ae		res 5,(hl)
+ROM:1c8a 3e 28		ld a,0x28
+ROM:1c8c d3 b3		out (0xb3),a
+ROM:1c8e d9		exx
+ROM:1c8f 08		ex af,af'
+ROM:1c90 fb		ei
+ROM:1c91 ed 4d		reti
+ROM:1c93 ;
+ROM:1c93 INITSIO:	; send setup data to the sio chip
+ROM:1c93 af		xor a
+ROM:1c94 32 04 2d	ld (0x2d04),a	; <- id/label
+ROM:1c97 32 05 2d	ld (0x2d05),a
+ROM:1c9a 32 0a 2c	ld (0x2c0a),a
+ROM:1c9d 32 01 2d	ld (0x2d01),a
+ROM:1ca0 3e 07		ld a,0x07
+ROM:1ca2 d3 91		out (0x91),a	; sio
+ROM:1ca4 3e 05		ld a,0x05
+ROM:1ca6 d3 91		out (0x91),a	; sio
+ROM:1ca8 21 b2 1c	ld hl,0x1cb2	; start of init data
+ROM:1cab 06 0c		ld b,0x0c	; count to 12
+ROM:1cad 0e b3		ld c,0xb3	; sio addr
+ROM:1caf ed b3		otir		; send 'em
+ROM:1cb1 c9		ret
+ROM:1cb2 18 04		jr 0x1cb8	; <-- data block
+ROM:1cb4 00		nop
+ROM:1cb5 06 aa		ld b,0xaa
+ROM:1cb7 02		ld (bc),a
+ROM:1cb8 30 05		jr nc,0x1cbf
+ROM:1cba ea 01 1f	jp pe,0x1f01
+ROM:1cbd 00		nop		; <-- data block
+ROM:1cbe 21 02 2c	ld hl,0x2c02
+ROM:1cc1 3a 27 2c	ld a,(0x2c27)
+ROM:1cc4 fe 0c		cp 0x0c
+ROM:1cc6 c2 0e 0f	jp nz,0x0f0e
+ROM:1cc9 21 0a 2c	ld hl,0x2c0a
+ROM:1ccc cb d6		set 2,(hl)
+ROM:1cce c3 17 0e	jp 0x0e17
+ROM:1cd1 0e 06		ld c,0x06
+ROM:1cd3 af		xor a
+ROM:1cd4 21 01 2d	ld hl,0x2d01
+ROM:1cd7 be		cp (hl)
+ROM:1cd8 c4 a5 0d	call nz,0x0da5
+ROM:1cdb 21 0a 2c	ld hl,0x2c0a
+ROM:1cde 7e		ld a,(hl)
+ROM:1cdf e6 07		and 0x07
+ROM:1ce1 c8		ret z
+ROM:1ce2 0e 06		ld c,0x06
+ROM:1ce4 cb 47		bit 0,a
+ROM:1ce6 c2 c9 0d	jp nz,0x0dc9
+ROM:1ce9 cb 4f		bit 1,a
+ROM:1ceb c2 c2 0d	jp nz,0x0dc2
+ROM:1cee cb 57		bit 2,a
+ROM:1cf0 c8		ret z
+ROM:1cf1 cb 96		res 2,(hl)
+ROM:1cf3 21 00 2c	ld hl,0x2c00
+ROM:1cf6 cd f2 0e	call 0x0ef2
+ROM:1cf9 3e 04		ld a,0x04
+ROM:1cfb 32 16 2c	ld (0x2c16),a
+ROM:1cfe 3e 06		ld a,0x06
+ROM:1d00 32 17 2c	ld (0x2c17),a
+ROM:1d03 3e 07		ld a,0x07
+ROM:1d05 32 18 2c	ld (0x2c18),a
+ROM:1d08 3a 02 2d	ld a,(0x2d02)
+ROM:1d0b 32 19 2c	ld (0x2c19),a
+ROM:1d0e 3a 03 2d	ld a,(0x2d03)
+ROM:1d11 32 1a 2c	ld (0x2c1a),a
+ROM:1d14 c3 93 0d	jp 0x0d93
+ROM:1d17 21 02 2c	ld hl,0x2c02	; <- id/label
+ROM:1d1a cd f2 0e	call 0x0ef2	
+ROM:1d1d 3a 27 2c	ld a,(0x2c27)
+ROM:1d20 fe 03		cp 0x03
+ROM:1d22 28 46		jr z,0x1d6a
+ROM:1d24 fe 0f		cp 0x0f
+ROM:1d26 ca e0 1d	jp z,0x1de0
+ROM:1d29 fe 0d		cp 0x0d
+ROM:1d2b ca b0 1d	jp z,0x1db0
+ROM:1d2e fe 09		cp 0x09
+ROM:1d30 28 2b		jr z,0x1d5d
+ROM:1d32 fe 0b		cp 0x0b
+ROM:1d34 28 11		jr z,0x1d47
+ROM:1d36 fe 1a		cp 0x1a
+ROM:1d38 28 17		jr z,0x1d51
+ROM:1d3a cd 17 0e	call 0x0e17
+ROM:1d3d 21 0a 2c	ld hl,0x2c0a
+ROM:1d40 0e 06		ld c,0x06
+ROM:1d42 cd c2 0d	call 0x0dc2
+ROM:1d45 18 d0		jr 0x1d17
+ROM:1d47 f3		di
+ROM:1d48 cd 93 1c	call 0x1c93
+ROM:1d4b cd 53 16	call 0x1653
+ROM:1d4e fb		ei
+ROM:1d4f 18 4b		jr 0x1d9c
+ROM:1d51 cd 17 0e	call 0x0e17
+ROM:1d54 21 0a 2c	ld hl,0x2c0a
+ROM:1d57 cd 27 1f	call 0x1f27
+ROM:1d5a c3 9f 1d	jp 0x1d9f
+ROM:1d5d 21 0a 2c	ld hl,0x2c0a
+ROM:1d60 cd 27 1f	call 0x1f27
+ROM:1d63 0e 91		ld c,0x91
+ROM:1d65 cd 45 1f	call 0x1f45
+ROM:1d68 18 32		jr 0x1d9c
+ROM:1d6a 3a 25 2c	ld a,(0x2c25)
+ROM:1d6d d6 02		sub 0x02
+ROM:1d6f 28 2b		jr z,0x1d9c
+ROM:1d71 47		ld b,a
+ROM:1d72 11 28 2c	ld de,0x2c28
+ROM:1d75 21 04 2d	ld hl,0x2d04
+ROM:1d78 f3		di
+ROM:1d79 cd cf 1e	call 0x1ecf
+ROM:1d7c 21 0a 2c	ld hl,0x2c0a
+ROM:1d7f cb 6e		bit 5,(hl)
+ROM:1d81 20 0e		jr nz,0x1d91
+ROM:1d83 fb		ei
+ROM:1d84 cb ee		set 5,(hl)
+ROM:1d86 21 04 2d	ld hl,0x2d04
+ROM:1d89 cd a7 1e	call 0x1ea7
+ROM:1d8c d3 b2		out (0xb2),a
+ROM:1d8e c3 9c 1d	jp 0x1d9c
+ROM:1d91 21 04 2d	ld hl,0x2d04
+ROM:1d94 cd c8 1e	call 0x1ec8
+ROM:1d97 fb		ei
+ROM:1d98 fe 13		cp 0x13
+ROM:1d9a 30 0e		jr nc,0x1daa
+ROM:1d9c cd 17 0e	call 0x0e17
+ROM:1d9f 0e 06		ld c,0x06
+ROM:1da1 21 0a 2c	ld hl,0x2c0a
+ROM:1da4 cd c9 0d	call 0x0dc9
+ROM:1da7 c3 17 1d	jp 0x1d17
+ROM:1daa cd 17 0e	call 0x0e17
+ROM:1dad c3 17 1d	jp 0x1d17
+ROM:1db0 21 0a 2c	ld hl,0x2c0a
+ROM:1db3 cd 27 1f	call 0x1f27
+ROM:1db6 3a 25 2c	ld a,(0x2c25)
+ROM:1db9 d6 02		sub 0x02
+ROM:1dbb cb 3f		srl a
+ROM:1dbd 28 dd		jr z,0x1d9c
+ROM:1dbf 47		ld b,a
+ROM:1dc0 21 28 2c	ld hl,0x2c28
+ROM:1dc3 7e		ld a,(hl)
+ROM:1dc4 fe 08		cp 0x08
+ROM:1dc6 d2 3a 1d	jp nc,0x1d3a
+ROM:1dc9 fe 01		cp 0x01
+ROM:1dcb ca 3a 1d	jp z,0x1d3a
+ROM:1dce fe 02		cp 0x02
+ROM:1dd0 ca 3a 1d	jp z,0x1d3a
+ROM:1dd3 23		inc hl
+ROM:1dd4 f3		di
+ROM:1dd5 d3 b3		out (0xb3),a
+ROM:1dd7 7e		ld a,(hl)
+ROM:1dd8 d3 b3		out (0xb3),a
+ROM:1dda fb		ei
+ROM:1ddb 23		inc hl
+ROM:1ddc 10 e5		djnz 0x1dc3
+ROM:1dde 18 bc		jr 0x1d9c
+ROM:1de0 2a 28 2c	ld hl,(0x2c28)
+ROM:1de3 7c		ld a,h
+ROM:1de4 b5		or l
+ROM:1de5 28 b5		jr z,0x1d9c
+ROM:1de7 e5		push hl
+ROM:1de8 cd 17 0e	call 0x0e17
+ROM:1deb 21 0a 2c	ld hl,0x2c0a
+ROM:1dee cd 27 1f	call 0x1f27
+ROM:1df1 3e a0		ld a,0xa0
+ROM:1df3 cd 3b 03	call 0x033b
+ROM:1df6 21 0a 2c	ld hl,0x2c0a
+ROM:1df9 cb ee		set 5,(hl)
+ROM:1dfb e1		pop hl
+ROM:1dfc cd 0c 1f	call 0x1f0c
+ROM:1dff e5		push hl
+ROM:1e00 ed 5b 58 2c	ld de,(0x2c58)
+ROM:1e04 21 02 2c	ld hl,0x2c02
+ROM:1e07 3e 06		ld a,0x06
+ROM:1e09 cd 20 0e	call 0x0e20
+ROM:1e0c da 80 1e	jp c,0x1e80
+ROM:1e0f f3		di
+ROM:1e10 3e 01		ld a,0x01
+ROM:1e12 d3 b3		out (0xb3),a
+ROM:1e14 3e dd		ld a,0xdd
+ROM:1e16 d3 b3		out (0xb3),a
+ROM:1e18 21 0a 2c	ld hl,0x2c0a
+ROM:1e1b cb f6		set 6,(hl)
+ROM:1e1d 2e b2		ld l,0xb2
+ROM:1e1f cd ca 03	call 0x03ca
+ROM:1e22 fb		ei
+ROM:1e23 e1		pop hl
+ROM:1e24 7c		ld a,h
+ROM:1e25 b5		or l
+ROM:1e26 28 33		jr z,0x1e5b
+ROM:1e28 cd 0c 1f	call 0x1f0c
+ROM:1e2b e5		push hl
+ROM:1e2c cd 6c 03	call 0x036c
+ROM:1e2f ed 5b 58 2c	ld de,(0x2c58)
+ROM:1e33 21 02 2c	ld hl,0x2c02
+ROM:1e36 3e 06		ld a,0x06
+ROM:1e38 cd 20 0e	call 0x0e20
+ROM:1e3b da 77 1e	jp c,0x1e77
+ROM:1e3e ed 43 5c 2c	ld (0x2c5c),bc
+ROM:1e42 ed 53 5e 2c	ld (0x2c5e),de
+ROM:1e46 3e b2		ld a,0xb2
+ROM:1e48 32 60 2c	ld (0x2c60),a
+ROM:1e4b 21 5d 2c	ld hl,0x2c5d
+ROM:1e4e cb fe		set 7,(hl)
+ROM:1e50 21 57 2c	ld hl,0x2c57
+ROM:1e53 cd f2 0e	call 0x0ef2
+ROM:1e56 cd 77 04	call 0x0477
+ROM:1e59 18 c8		jr 0x1e23
+ROM:1e5b 0e 06		ld c,0x06
+ROM:1e5d 21 0a 2c	ld hl,0x2c0a
+ROM:1e60 cd c9 0d	call 0x0dc9
+ROM:1e63 21 57 2c	ld hl,0x2c57
+ROM:1e66 cd f2 0e	call 0x0ef2
+ROM:1e69 cd 63 03	call 0x0363
+ROM:1e6c cd 94 1e	call 0x1e94
+ROM:1e6f 21 0a 2c	ld hl,0x2c0a
+ROM:1e72 cb ae		res 5,(hl)
+ROM:1e74 c3 17 1d	jp 0x1d17
+ROM:1e77 21 57 2c	ld hl,0x2c57
+ROM:1e7a cd f2 0e	call 0x0ef2
+ROM:1e7d cd 94 1e	call 0x1e94
+ROM:1e80 e1		pop hl
+ROM:1e81 cd 63 03	call 0x0363
+ROM:1e84 0e 06		ld c,0x06
+ROM:1e86 21 0a 2c	ld hl,0x2c0a
+ROM:1e89 cd c2 0d	call 0x0dc2
+ROM:1e8c 21 0a 2c	ld hl,0x2c0a
+ROM:1e8f cb ae		res 5,(hl)
+ROM:1e91 c3 1d 1d	jp 0x1d1d
+ROM:1e94 f3		di
+ROM:1e95 21 0a 2c	ld hl,0x2c0a
+ROM:1e98 cb b6		res 6,(hl)
+ROM:1e9a 3e 01		ld a,0x01
+ROM:1e9c d3 b3		out (0xb3),a
+ROM:1e9e 3e 1f		ld a,0x1f
+ROM:1ea0 d3 b3		out (0xb3),a
+ROM:1ea2 af		xor a
+ROM:1ea3 d3 b3		out (0xb3),a
+ROM:1ea5 fb		ei
+ROM:1ea6 c9		ret
+ROM:1ea7 23		inc hl
+ROM:1ea8 4e		ld c,(hl)
+ROM:1ea9 06 00		ld b,0x00
+ROM:1eab e5		push hl
+ROM:1eac 0c		inc c
+ROM:1ead 09		add hl,bc
+ROM:1eae 46		ld b,(hl)
+ROM:1eaf e1		pop hl
+ROM:1eb0 79		ld a,c
+ROM:1eb1 e6 1f		and 0x1f
+ROM:1eb3 77		ld (hl),a
+ROM:1eb4 2b		dec hl
+ROM:1eb5 78		ld a,b
+ROM:1eb6 c9		ret
+ROM:1eb7 4e		ld c,(hl)
+ROM:1eb8 06 00		ld b,0x00
+ROM:1eba 0c		inc c
+ROM:1ebb 23		inc hl
+ROM:1ebc e5		push hl
+ROM:1ebd 09		add hl,bc
+ROM:1ebe 77		ld (hl),a
+ROM:1ebf e1		pop hl
+ROM:1ec0 79		ld a,c
+ROM:1ec1 e6 1f		and 0x1f
+ROM:1ec3 be		cp (hl)
+ROM:1ec4 2b		dec hl
+ROM:1ec5 c8		ret z
+ROM:1ec6 77		ld (hl),a
+ROM:1ec7 c9		ret
+ROM:1ec8 ; does this mask off the fdc command so the upper bits can be added back in?
+ROM:1ec8 7e		ld a,(hl)	; load something
+ROM:1ec9 23		inc hl		; bump addr
+ROM:1eca 96		sub (hl)	; sub what's there
+ROM:1ecb 2b		dec hl		; dec addr
+ROM:1ecc e6 1f		and 0x1f	; mask low 5 bits?
+ROM:1ece c9		ret
+ROM:1ecf 78		ld a,b
+ROM:1ed0 b7		or a
+ROM:1ed1 c8		ret z
+ROM:1ed2 c5		push bc
+ROM:1ed3 1a		ld a,(de)
+ROM:1ed4 cd b7 1e	call 0x1eb7
+ROM:1ed7 13		inc de
+ROM:1ed8 c1		pop bc
+ROM:1ed9 10 f7		djnz 0x1ed2
+ROM:1edb c9		ret
+ROM:1edc 78		ld a,b
+ROM:1edd b7		or a
+ROM:1ede c8		ret z
+ROM:1edf 23		inc hl
+ROM:1ee0 c5		push bc
+ROM:1ee1 4e		ld c,(hl)
+ROM:1ee2 06 00		ld b,0x00
+ROM:1ee4 0c		inc c
+ROM:1ee5 e5		push hl
+ROM:1ee6 09		add hl,bc
+ROM:1ee7 7e		ld a,(hl)
+ROM:1ee8 12		ld (de),a
+ROM:1ee9 e1		pop hl
+ROM:1eea 79		ld a,c
+ROM:1eeb e6 1f		and 0x1f
+ROM:1eed 77		ld (hl),a
+ROM:1eee 13		inc de
+ROM:1eef c1		pop bc
+ROM:1ef0 10 ee		djnz 0x1ee0
+ROM:1ef2 c9		ret
+ROM:1ef3 f3		di
+ROM:1ef4 4e		ld c,(hl)
+ROM:1ef5 c5		push bc
+ROM:1ef6 1a		ld a,(de)
+ROM:1ef7 cd b7 1e	call 0x1eb7
+ROM:1efa 13		inc de
+ROM:1efb c1		pop bc
+ROM:1efc 10 f7		djnz 0x1ef5
+ROM:1efe 46		ld b,(hl)
+ROM:1eff 71		ld (hl),c
+ROM:1f00 fb		ei
+ROM:1f01 c9		ret
+ROM:1f02 e1		pop hl
+ROM:1f03 06 00		ld b,0x00
+ROM:1f05 09		add hl,bc
+ROM:1f06 09		add hl,bc
+ROM:1f07 5e		ld e,(hl)
+ROM:1f08 23		inc hl
+ROM:1f09 56		ld d,(hl)
+ROM:1f0a eb		ex de,hl
+ROM:1f0b e9		jp (hl)
+ROM:1f0c 01 01 01	ld bc,0x0101
+ROM:1f0f b7		or a
+ROM:1f10 ed 42		sbc hl,bc
+ROM:1f12 30 07		jr nc,0x1f1b
+ROM:1f14 09		add hl,bc
+ROM:1f15 44		ld b,h
+ROM:1f16 4d		ld c,l
+ROM:1f17 af		xor a
+ROM:1f18 6f		ld l,a
+ROM:1f19 67		ld h,a
+ROM:1f1a c9		ret
+ROM:1f1b 28 03		jr z,0x1f20
+ROM:1f1d 23		inc hl
+ROM:1f1e 0b		dec bc
+ROM:1f1f c9		ret
+ROM:1f20 21 81 00	ld hl,0x0081
+ROM:1f23 01 80 00	ld bc,0x0080
+ROM:1f26 c9		ret
+ROM:1f27 b7		or a
+ROM:1f28 cb 6e		bit 5,(hl)
+ROM:1f2a c8		ret z
+ROM:1f2b cd a2 0f	call 0x0fa2
+ROM:1f2e c3 27 1f	jp 0x1f27
+ROM:1f31 06 03		ld b,0x03
+ROM:1f33 cd c8 1e	call 0x1ec8
+ROM:1f36 b7		or a
+ROM:1f37 c8		ret z
+ROM:1f38 c5		push bc
+ROM:1f39 e5		push hl
+ROM:1f3a cd e6 0d	call 0x0de6
+ROM:1f3d e1		pop hl
+ROM:1f3e cd a2 0f		call 0x0fa2
+ROM:1f41 c1		pop bc
+ROM:1f42 10 ef		djnz 0x1f33
+ROM:1f44 c9		ret
+ROM:1f45 3e 07		ld a,0x07
+ROM:1f47 ed 79		out (c),a
+ROM:1f49 3a 28 2c		ld a,(0x2c28)
+ROM:1f4c ed 79		out (c),a
+ROM:1f4e c9		ret
+ROM:1f4f ;
+ROM:1f4f INIT???	; clear another flag or status word?
+ROM:1f4f af		xor a
+ROM:1f50 32 11 2c	ld (0x2c11),a	; <- id/label
+ROM:1f53 c9		ret
+ROM:1f54 21 11 2c	ld hl,0x2c11	; ^^^
+ROM:1f57 cb ce		set 1,(hl)
+ROM:1f59 c3 17 0e	jp 0x0e17
+ROM:1f5c 21 11 2c	ld hl,0x2c11
+ROM:1f5f 0e 0f		ld c,0x0f
+ROM:1f61 cb 4e		bit 1,(hl)
+ROM:1f63 c2 c2 0d	jp nz,0x0dc2
+ROM:1f66 c9		ret
+ROM:1f67 ff		rst 0x38
+ROM:1f68 ff		rst 0x38
+ROM:1f69 ff		rst 0x38
+ROM:1f6a ff		rst 0x38
+ROM:1f6b ff		rst 0x38
+ROM:1f6c ff		rst 0x38
+ROM:1f6d ff		rst 0x38
+ROM:1f6e ff		rst 0x38
+ROM:1f6f ff		rst 0x38
+ROM:1f70 ff		rst 0x38
+ROM:1f71 ff		rst 0x38
+ROM:1f72 ff		rst 0x38
+ROM:1f73 ff		rst 0x38
+ROM:1f74 ff		rst 0x38
+ROM:1f75 ff		rst 0x38
+ROM:1f76 ff		rst 0x38
+ROM:1f77 ff		rst 0x38
+ROM:1f78 ff		rst 0x38
+ROM:1f79 ff		rst 0x38
+ROM:1f7a ff		rst 0x38
+ROM:1f7b ff		rst 0x38
+ROM:1f7c ff		rst 0x38
+ROM:1f7d ff		rst 0x38
+ROM:1f7e ff		rst 0x38
+ROM:1f7f ff		rst 0x38
+ROM:1f80 ff		rst 0x38
+ROM:1f81 ff		rst 0x38
+ROM:1f82 ff		rst 0x38
+ROM:1f83 ff		rst 0x38
+ROM:1f84 ff		rst 0x38
+ROM:1f85 ff		rst 0x38
+ROM:1f86 ff		rst 0x38
+ROM:1f87 ff		rst 0x38
+ROM:1f88 ff		rst 0x38
+ROM:1f89 ff		rst 0x38
+ROM:1f8a ff		rst 0x38
+ROM:1f8b ff		rst 0x38
+ROM:1f8c ff		rst 0x38
+ROM:1f8d ff		rst 0x38
+ROM:1f8e ff		rst 0x38
+ROM:1f8f ff		rst 0x38
+ROM:1f90 ff		rst 0x38
+ROM:1f91 ff		rst 0x38
+ROM:1f92 ff		rst 0x38
+ROM:1f93 ff		rst 0x38
+ROM:1f94 ff		rst 0x38
+ROM:1f95 ff		rst 0x38
+ROM:1f96 ff		rst 0x38
+ROM:1f97 ff		rst 0x38
+ROM:1f98 ff		rst 0x38
+ROM:1f99 ff		rst 0x38
+ROM:1f9a ff		rst 0x38
+ROM:1f9b ff		rst 0x38
+ROM:1f9c ff		rst 0x38
+ROM:1f9d ff		rst 0x38
+ROM:1f9e ff		rst 0x38
+ROM:1f9f ff		rst 0x38
+ROM:1fa0 ff		rst 0x38
+ROM:1fa1 ff		rst 0x38
+ROM:1fa2 ff		rst 0x38
+ROM:1fa3 ff		rst 0x38
+ROM:1fa4 ff		rst 0x38
+ROM:1fa5 ff		rst 0x38
+ROM:1fa6 ff		rst 0x38
+ROM:1fa7 ff		rst 0x38
+ROM:1fa8 ff		rst 0x38
+ROM:1fa9 ff		rst 0x38
+ROM:1faa ff		rst 0x38
+ROM:1fab ff		rst 0x38
+ROM:1fac ff		rst 0x38
+ROM:1fad ff		rst 0x38
+ROM:1fae ff		rst 0x38
+ROM:1faf ff		rst 0x38
+ROM:1fb0 ff		rst 0x38
+ROM:1fb1 ff		rst 0x38
+ROM:1fb2 ff		rst 0x38
+ROM:1fb3 ff		rst 0x38
+ROM:1fb4 ff		rst 0x38
+ROM:1fb5 ff		rst 0x38
+ROM:1fb6 ff		rst 0x38
+ROM:1fb7 ff		rst 0x38
+ROM:1fb8 ff		rst 0x38
+ROM:1fb9 ff		rst 0x38
+ROM:1fba ff		rst 0x38
+ROM:1fbb ff		rst 0x38
+ROM:1fbc ff		rst 0x38
+ROM:1fbd ff		rst 0x38
+ROM:1fbe ff		rst 0x38
+ROM:1fbf ff		rst 0x38
+ROM:1fc0 ff		rst 0x38
+ROM:1fc1 ff		rst 0x38
+ROM:1fc2 ff		rst 0x38
+ROM:1fc3 ff		rst 0x38
+ROM:1fc4 ff		rst 0x38
+ROM:1fc5 ff		rst 0x38
+ROM:1fc6 ff		rst 0x38
+ROM:1fc7 ff		rst 0x38
+ROM:1fc8 ff		rst 0x38
+ROM:1fc9 ff		rst 0x38
+ROM:1fca ff		rst 0x38
+ROM:1fcb ff		rst 0x38
+ROM:1fcc ff		rst 0x38
+ROM:1fcd ff		rst 0x38
+ROM:1fce ff		rst 0x38
+ROM:1fcf ff		rst 0x38
+ROM:1fd0 ff		rst 0x38
+ROM:1fd1 ff		rst 0x38
+ROM:1fd2 ff		rst 0x38
+ROM:1fd3 ff		rst 0x38
+ROM:1fd4 ff		rst 0x38
+ROM:1fd5 ff		rst 0x38
+ROM:1fd6 ff		rst 0x38
+ROM:1fd7 ff		rst 0x38
+ROM:1fd8 ff		rst 0x38
+ROM:1fd9 ff		rst 0x38
+ROM:1fda ff		rst 0x38
+ROM:1fdb ff		rst 0x38
+ROM:1fdc ff		rst 0x38
+ROM:1fdd ff		rst 0x38
+ROM:1fde ff		rst 0x38
+ROM:1fdf ff		rst 0x38
+ROM:1fe0 ff		rst 0x38
+ROM:1fe1 ff		rst 0x38
+ROM:1fe2 ff		rst 0x38
+ROM:1fe3 ff		rst 0x38
+ROM:1fe4 ff		rst 0x38
+ROM:1fe5 ff		rst 0x38
+ROM:1fe6 ff		rst 0x38
+ROM:1fe7 ff		rst 0x38
+ROM:1fe8 ff		rst 0x38
+ROM:1fe9 ff		rst 0x38
+ROM:1fea ff		rst 0x38
+ROM:1feb ff		rst 0x38
+ROM:1fec ff		rst 0x38
+ROM:1fed ff		rst 0x38
+ROM:1fee ff		rst 0x38
+ROM:1fef ff		rst 0x38
+ROM:1ff0 ff		rst 0x38
+ROM:1ff1 ff		rst 0x38
+ROM:1ff2 ff		rst 0x38
+ROM:1ff3 ff		rst 0x38
+ROM:1ff4 ff		rst 0x38
+ROM:1ff5 ff		rst 0x38
+ROM:1ff6 ff		rst 0x38
+ROM:1ff7 ff		rst 0x38
+ROM:1ff8 ff		rst 0x38
+ROM:1ff9 ff		rst 0x38
+ROM:1ffa ff		rst 0x38
+ROM:1ffb ff		rst 0x38
+ROM:1ffc ff		rst 0x38
+ROM:1ffd ff		rst 0x38
+ROM:1ffe ff		rst 0x38
+ROM:1fff ff		rst 0x38
+ROM:1fff ; End of cioz80.hi
+ROM:2000 BAD:	; why is the debugger trying to access this?
+RAM:2C00 RAM:	; fake symbol to avoid an empty dictionary lookup
+RAM:2C00 ; Begin of fake segment RAM
+RAM:2C00 ; Segment type: Regular
+RAM:2C00		segment RAM
+RAM:2C00		org 2C00h
+RAM:2C00		ds 1
+RAM:2C01		ds 1
+RAM:2C02		ds 1
+RAM:2C03		ds 1
+RAM:2C04		ds 1
+RAM:2C05		ds 1
+RAM:2C06		ds 1
+RAM:2C07		ds 1
+RAM:2C08		ds 1
+RAM:2C09		ds 1
+RAM:2C0A		ds 1
+RAM:2C0B		ds 1
+RAM:2C0C		ds 1
+RAM:2C0D		ds 1
+RAM:2C0E		ds 1
+RAM:2C0F		ds 1
+RAM:2C10		ds 1
+RAM:2C11		ds 1
+RAM:2C12 IOR3:		; in-memory copy of IO REG 3
+RAM:2C12		ds 1
+RAM:2C13 INST:		; perq input state
+RAM:2C13		ds 1
+RAM:2C14 INCNT:		; input count byte
+RAM:2C14		ds 1
+RAM:2C15		ds 1
+RAM:2C16		ds 1
+RAM:2C17		ds 1
+RAM:2C18		ds 1
+RAM:2C19		ds 1
+RAM:2C1A		ds 1
+RAM:2C1B		ds 1
+RAM:2C1C		ds 1
+RAM:2C1D		ds 1
+RAM:2C1E		ds 1
+RAM:2C1F		ds 1
+RAM:2C20		ds 1
+RAM:2C21		ds 1
+RAM:2C22		ds 1
+RAM:2C23		ds 1
+RAM:2C24		ds 1
+RAM:2C25		ds 1
+RAM:2C26		ds 1
+RAM:2C27		ds 1
+RAM:2C28		ds 1
+RAM:2C29		ds 1
+RAM:2C2A		ds 1
+RAM:2C2B		ds 1
+RAM:2C2C		ds 1
+RAM:2C2D		ds 1
+RAM:2C2E		ds 1
+RAM:2C2F		ds 1
+RAM:2C30		ds 1
+RAM:2C31		ds 1
+RAM:2C32		ds 1
+RAM:2C33		ds 1
+RAM:2C34 COUNT:		; working count for incoming message
+RAM:2C34		ds 1
+RAM:2C35		ds 1
+RAM:2C36 FLPEOT:	; highest floppy sector
+RAM:2C36		ds 1
+RAM:2C37 FLPGPL:	; floppy gap length
+RAM:2C37		ds 1
+RAM:2C38 FLPDTL:	; floppy data length (density)
+RAM:2C38		ds 1
+RAM:2C39 FLPOPT:	; floppy option bits MT, MF, SK
+RAM:2C39		ds 1
+RAM:2C3A FLPCYL:	; floppy cylinder
+RAM:2C3A		ds 1
+RAM:2C3B FLPSEC:	; floppy sector
+RAM:2C3B		ds 1
+RAM:2C3C		ds 1
+RAM:2C3D		ds 1
+RAM:2C3E FLPCMDBUF:	; start of floppy command buffer
+RAM:2C3E		ds 1
+RAM:2C3F FLPUNIT:	; floppy head/unit select byte
+RAM:2C3F		ds 1
+RAM:2C40 FLPHUT:	; floppy srt/hut value?
+RAM:2C40		ds 1
+RAM:2C41 FLPHLT:	; floppy head load time (and filler byte?)
+RAM:2C41		ds 1
+RAM:2C42		ds 1
+RAM:2C43		ds 1
+RAM:2C44 FLPRESBUF:	; start of buf for writing fdc regs/reading status
+RAM:2C44		ds 1
+RAM:2C45		ds 1
+RAM:2C46		ds 1
+RAM:2C47		ds 1
+RAM:2C48		ds 1
+RAM:2C49		ds 1
+RAM:2C4A		ds 1
+RAM:2C4B		ds 1
+RAM:2C4C		ds 1
+RAM:2C4D FLPNUMSTB:	; number of valid status bytes?
+RAM:2C4D		ds 1
+RAM:2C4E FLPSTATBUF:	; result bytes read
+RAM:2C4E		ds 1
+RAM:2C4F		ds 1
+RAM:2C50		ds 1
+RAM:2C51		ds 1
+RAM:2C52		ds 1
+RAM:2C53		ds 1
+RAM:2C54		ds 1
+RAM:2C55		ds 1
+RAM:2C55 ; -- end of stat buf?
+RAM:2C56		ds 1
+RAM:2C57		ds 1
+RAM:2C58		ds 1
+RAM:2C59		ds 1
+RAM:2C5A		ds 1
+RAM:2C5B		ds 1
+RAM:2C5C		ds 1
+RAM:2C5D		ds 1
+RAM:2C5E		ds 1
+RAM:2C5F		ds 1
+RAM:2C60		ds 1
+RAM:2C61		ds 1
+RAM:2C62		ds 1
+RAM:2C63		ds 1
+RAM:2C64		ds 1
+RAM:2C65		ds 1
+RAM:2C66		ds 1
+RAM:2C67		ds 1
+RAM:2C68		ds 1
+RAM:2C69		ds 1
+RAM:2C6A		ds 1
+RAM:2C6B		ds 1
+RAM:2C6C		ds 1
+RAM:2C6D		ds 1
+RAM:2C6E		ds 1
+RAM:2C6F		ds 1
+RAM:2C70		ds 1
+RAM:2C71		ds 1
+RAM:2C72		ds 1
+RAM:2C73		ds 1
+RAM:2C74		ds 1
+RAM:2C75		ds 1
+RAM:2C76		ds 1
+RAM:2C77		ds 1
+RAM:2C78		ds 1
+RAM:2C79		ds 1
+RAM:2C7A		ds 1
+RAM:2C7B		ds 1
+RAM:2C7C		ds 1
+RAM:2C7D		ds 1
+RAM:2C7E		ds 1
+RAM:2C7F		ds 1
+RAM:2C80		ds 1
+RAM:2C81		ds 1
+RAM:2C82		ds 1
+RAM:2C83		ds 1
+RAM:2C84		ds 1
+RAM:2C85		ds 1
+RAM:2C86		ds 1
+RAM:2C87		ds 1
+RAM:2C88		ds 1
+RAM:2C89		ds 1
+RAM:2C8A		ds 1
+RAM:2C8B		ds 1
+RAM:2C8C		ds 1
+RAM:2C8D		ds 1
+RAM:2C8E		ds 1
+RAM:2C8F		ds 1
+RAM:2C90		ds 1
+RAM:2C91		ds 1
+RAM:2C92		ds 1
+RAM:2C93		ds 1
+RAM:2C94		ds 1
+RAM:2C95		ds 1
+RAM:2C96		ds 1
+RAM:2C97		ds 1
+RAM:2C98		ds 1
+RAM:2C99		ds 1
+RAM:2C9A		ds 1
+RAM:2C9B		ds 1
+RAM:2C9C		ds 1
+RAM:2C9D		ds 1
+RAM:2C9E		ds 1
+RAM:2C9F		ds 1
+RAM:2CA0		ds 1
+RAM:2CA1		ds 1
+RAM:2CA2		ds 1
+RAM:2CA3		ds 1
+RAM:2CA4		ds 1
+RAM:2CA5		ds 1
+RAM:2CA6		ds 1
+RAM:2CA7		ds 1
+RAM:2CA8		ds 1
+RAM:2CA9		ds 1
+RAM:2CAA		ds 1
+RAM:2CAB		ds 1
+RAM:2CAC		ds 1
+RAM:2CAD		ds 1
+RAM:2CAE		ds 1
+RAM:2CAF		ds 1
+RAM:2CB0		ds 1
+RAM:2CB1		ds 1
+RAM:2CB2		ds 1
+RAM:2CB3		ds 1
+RAM:2CB4		ds 1
+RAM:2CB5		ds 1
+RAM:2CB6		ds 1
+RAM:2CB7		ds 1
+RAM:2CB8		ds 1
+RAM:2CB9		ds 1
+RAM:2CBA		ds 1
+RAM:2CBB		ds 1
+RAM:2CBC		ds 1
+RAM:2CBD		ds 1
+RAM:2CBE		ds 1
+RAM:2CBF		ds 1
+RAM:2CC0		ds 1
+RAM:2CC1		ds 1
+RAM:2CC2		ds 1
+RAM:2CC3		ds 1
+RAM:2CC4		ds 1
+RAM:2CC5		ds 1
+RAM:2CC6		ds 1
+RAM:2CC7		ds 1
+RAM:2CC8		ds 1
+RAM:2CC9		ds 1
+RAM:2CCA		ds 1
+RAM:2CCB		ds 1
+RAM:2CCC		ds 1
+RAM:2CCD		ds 1
+RAM:2CCE		ds 1
+RAM:2CCF		ds 1
+RAM:2CD0		ds 1
+RAM:2CD1		ds 1
+RAM:2CD2		ds 1
+RAM:2CD3		ds 1
+RAM:2CD4		ds 1
+RAM:2CD5		ds 1
+RAM:2CD6		ds 1
+RAM:2CD7		ds 1
+RAM:2CD8		ds 1
+RAM:2CD9		ds 1
+RAM:2CDA		ds 1
+RAM:2CDB		ds 1
+RAM:2CDC		ds 1
+RAM:2CDD		ds 1
+RAM:2CDE		ds 1
+RAM:2CDF		ds 1
+RAM:2CE0		ds 1
+RAM:2CE1		ds 1
+RAM:2CE2		ds 1
+RAM:2CE3		ds 1
+RAM:2CE4		ds 1
+RAM:2CE5		ds 1
+RAM:2CE6		ds 1
+RAM:2CE7		ds 1
+RAM:2CE8		ds 1
+RAM:2CE9		ds 1
+RAM:2CEA		ds 1
+RAM:2CEB		ds 1
+RAM:2CEC		ds 1
+RAM:2CED		ds 1
+RAM:2CEE		ds 1
+RAM:2CEF		ds 1
+RAM:2CF0		ds 1
+RAM:2CF1		ds 1
+RAM:2CF2		ds 1
+RAM:2CF3		ds 1
+RAM:2CF4		ds 1
+RAM:2CF5		ds 1
+RAM:2CF6		ds 1
+RAM:2CF7		ds 1
+RAM:2CF8		ds 1
+RAM:2CF9		ds 1
+RAM:2CFA		ds 1
+RAM:2CFB		ds 1
+RAM:2CFC		ds 1
+RAM:2CFD		ds 1
+RAM:2CFE		ds 1
+RAM:2CFF		ds 1
+RAM:2D00		ds 1
+RAM:2D01		ds 1
+RAM:2D02		ds 1
+RAM:2D03		ds 1
+RAM:2D04		ds 1
+RAM:2D05		ds 1
+RAM:2D06		ds 1
+RAM:2D07		ds 1
+RAM:2D08		ds 1
+RAM:2D09		ds 1
+RAM:2D0A		ds 1
+RAM:2D0B		ds 1
+RAM:2D0C		ds 1
+RAM:2D0D		ds 1
+RAM:2D0E		ds 1
+RAM:2D0F		ds 1
+RAM:2D10		ds 1
+RAM:2D11		ds 1
+RAM:2D12		ds 1
+RAM:2D13		ds 1
+RAM:2D14		ds 1
+RAM:2D15		ds 1
+RAM:2D16		ds 1
+RAM:2D17		ds 1
+RAM:2D18		ds 1
+RAM:2D19		ds 1
+RAM:2D1A		ds 1
+RAM:2D1B		ds 1
+RAM:2D1C		ds 1
+RAM:2D1D		ds 1
+RAM:2D1E		ds 1
+RAM:2D1F		ds 1
+RAM:2D20		ds 1
+RAM:2D21		ds 1
+RAM:2D22		ds 1
+RAM:2D23		ds 1
+RAM:2D24		ds 1
+RAM:2D25		ds 1
+RAM:2D26		ds 1
+RAM:2D27		ds 1
+RAM:2D28		ds 1
+RAM:2D29		ds 1
+RAM:2D2A		ds 1
+RAM:2D2B		ds 1
+RAM:2D2C		ds 1
+RAM:2D2D		ds 1
+RAM:2D2E		ds 1
+RAM:2D2F		ds 1
+RAM:2D30		ds 1
+RAM:2D31		ds 1
+RAM:2D32		ds 1
+RAM:2D33		ds 1
+RAM:2D34		ds 1
+RAM:2D35		ds 1
+RAM:2D36		ds 1
+RAM:2D37		ds 1
+RAM:2D38		ds 1
+RAM:2D39		ds 1
+RAM:2D3A		ds 1
+RAM:2D3B		ds 1
+RAM:2D3C		ds 1
+RAM:2D3D		ds 1
+RAM:2D3E		ds 1
+RAM:2D3F		ds 1
+RAM:2D40		ds 1
+RAM:2D41		ds 1
+RAM:2D42		ds 1
+RAM:2D43		ds 1
+RAM:2D44		ds 1
+RAM:2D45		ds 1
+RAM:2D46		ds 1
+RAM:2D47		ds 1
+RAM:2D48		ds 1
+RAM:2D49		ds 1
+RAM:2D4A		ds 1
+RAM:2D4B		ds 1
+RAM:2D4C		ds 1
+RAM:2D4D		ds 1
+RAM:2D4E		ds 1
+RAM:2D4F		ds 1
+RAM:2D50		ds 1
+RAM:2D51		ds 1
+RAM:2D52		ds 1
+RAM:2D53		ds 1
+RAM:2D54		ds 1
+RAM:2D55		ds 1
+RAM:2D56		ds 1
+RAM:2D57		ds 1
+RAM:2D58		ds 1
+RAM:2D59		ds 1
+RAM:2D5A		ds 1
+RAM:2D5B		ds 1
+RAM:2D5C		ds 1
+RAM:2D5D		ds 1
+RAM:2D5E		ds 1
+RAM:2D5F		ds 1
+RAM:2D60		ds 1
+RAM:2D61		ds 1
+RAM:2D62		ds 1
+RAM:2D63		ds 1
+RAM:2D64		ds 1
+RAM:2D65		ds 1
+RAM:2D66		ds 1
+RAM:2D67		ds 1
+RAM:2D68		ds 1
+RAM:2D69		ds 1
+RAM:2D6A		ds 1
+RAM:2D6B		ds 1
+RAM:2D6C		ds 1
+RAM:2D6D		ds 1
+RAM:2D6E		ds 1
+RAM:2D6F		ds 1
+RAM:2D70		ds 1
+RAM:2D71		ds 1
+RAM:2D72		ds 1
+RAM:2D73		ds 1
+RAM:2D74		ds 1
+RAM:2D75		ds 1
+RAM:2D76		ds 1
+RAM:2D77		ds 1
+RAM:2D78		ds 1
+RAM:2D79		ds 1
+RAM:2D7A		ds 1
+RAM:2D7B		ds 1
+RAM:2D7C		ds 1
+RAM:2D7D		ds 1
+RAM:2D7E		ds 1
+RAM:2D7F		ds 1
+RAM:2D80		ds 1
+RAM:2D81		ds 1
+RAM:2D82		ds 1
+RAM:2D83		ds 1
+RAM:2D84		ds 1
+RAM:2D85		ds 1
+RAM:2D86		ds 1
+RAM:2D87		ds 1
+RAM:2D88		ds 1
+RAM:2D89		ds 1
+RAM:2D8A		ds 1
+RAM:2D8B		ds 1
+RAM:2D8C		ds 1
+RAM:2D8D		ds 1
+RAM:2D8E		ds 1
+RAM:2D8F		ds 1
+RAM:2D90		ds 1
+RAM:2D91		ds 1
+RAM:2D92		ds 1
+RAM:2D93		ds 1
+RAM:2D94		ds 1
+RAM:2D95		ds 1
+RAM:2D96		ds 1
+RAM:2D97		ds 1
+RAM:2D98		ds 1
+RAM:2D99		ds 1
+RAM:2D9A		ds 1
+RAM:2D9B		ds 1
+RAM:2D9C		ds 1
+RAM:2D9D		ds 1
+RAM:2D9E		ds 1
+RAM:2D9F		ds 1
+RAM:2DA0		ds 1
+RAM:2DA1		ds 1
+RAM:2DA2		ds 1
+RAM:2DA3		ds 1
+RAM:2DA4		ds 1
+RAM:2DA5		ds 1
+RAM:2DA6		ds 1
+RAM:2DA7		ds 1
+RAM:2DA8		ds 1
+RAM:2DA9		ds 1
+RAM:2DAA		ds 1
+RAM:2DAB		ds 1
+RAM:2DAC		ds 1
+RAM:2DAD		ds 1
+RAM:2DAE		ds 1
+RAM:2DAF		ds 1
+RAM:2DB0		ds 1
+RAM:2DB1		ds 1
+RAM:2DB2		ds 1
+RAM:2DB3		ds 1
+RAM:2DB4		ds 1
+RAM:2DB5		ds 1
+RAM:2DB6		ds 1
+RAM:2DB7		ds 1
+RAM:2DB8		ds 1
+RAM:2DB9		ds 1
+RAM:2DBA		ds 1
+RAM:2DBB		ds 1
+RAM:2DBC		ds 1
+RAM:2DBD		ds 1
+RAM:2DBE		ds 1
+RAM:2DBF		ds 1
+RAM:2DC0		ds 1
+RAM:2DC1		ds 1
+RAM:2DC2		ds 1
+RAM:2DC3		ds 1
+RAM:2DC4		ds 1
+RAM:2DC5		ds 1
+RAM:2DC6		ds 1
+RAM:2DC7		ds 1
+RAM:2DC8		ds 1
+RAM:2DC9		ds 1
+RAM:2DCA		ds 1
+RAM:2DCB		ds 1
+RAM:2DCC		ds 1
+RAM:2DCD		ds 1
+RAM:2DCE		ds 1
+RAM:2DCF		ds 1
+RAM:2DD0		ds 1
+RAM:2DD1		ds 1
+RAM:2DD2		ds 1
+RAM:2DD3		ds 1
+RAM:2DD4		ds 1
+RAM:2DD5		ds 1
+RAM:2DD6		ds 1
+RAM:2DD7		ds 1
+RAM:2DD8		ds 1
+RAM:2DD9		ds 1
+RAM:2DDA		ds 1
+RAM:2DDB		ds 1
+RAM:2DDC		ds 1
+RAM:2DDD		ds 1
+RAM:2DDE		ds 1
+RAM:2DDF		ds 1
+RAM:2DE0		ds 1
+RAM:2DE1		ds 1
+RAM:2DE2		ds 1
+RAM:2DE3		ds 1
+RAM:2DE4		ds 1
+RAM:2DE5		ds 1
+RAM:2DE6		ds 1
+RAM:2DE7		ds 1
+RAM:2DE8		ds 1
+RAM:2DE9		ds 1
+RAM:2DEA		ds 1
+RAM:2DEB		ds 1
+RAM:2DEC		ds 1
+RAM:2DED		ds 1
+RAM:2DEE		ds 1
+RAM:2DEF		ds 1
+RAM:2DF0		ds 1
+RAM:2DF1		ds 1
+RAM:2DF2		ds 1
+RAM:2DF3		ds 1
+RAM:2DF4		ds 1
+RAM:2DF5		ds 1
+RAM:2DF6		ds 1
+RAM:2DF7		ds 1
+RAM:2DF8		ds 1
+RAM:2DF9		ds 1
+RAM:2DFA		ds 1
+RAM:2DFB		ds 1
+RAM:2DFC		ds 1
+RAM:2DFD		ds 1
+RAM:2DFE		ds 1
+RAM:2DFF		ds 1
+RAM:2E00		ds 1
+RAM:2E01		ds 1
+RAM:2E02		ds 1
+RAM:2E03		ds 1
+RAM:2E04		ds 1
+RAM:2E05		ds 1
+RAM:2E06		ds 1
+RAM:2E07		ds 1
+RAM:2E08		ds 1
+RAM:2E09		ds 1
+RAM:2E0A		ds 1
+RAM:2E0B		ds 1
+RAM:2E0C		ds 1
+RAM:2E0D		ds 1
+RAM:2E0E		ds 1
+RAM:2E0F		ds 1
+RAM:2E10		ds 1
+RAM:2E11		ds 1
+RAM:2E12		ds 1
+RAM:2E13		ds 1
+RAM:2E14		ds 1
+RAM:2E15		ds 1
+RAM:2E16		ds 1
+RAM:2E17		ds 1
+RAM:2E18		ds 1
+RAM:2E19		ds 1
+RAM:2E1A		ds 1
+RAM:2E1B		ds 1
+RAM:2E1C		ds 1
+RAM:2E1D		ds 1
+RAM:2E1E		ds 1
+RAM:2E1F		ds 1
+RAM:2E20		ds 1
+RAM:2E21		ds 1
+RAM:2E22		ds 1
+RAM:2E23		ds 1
+RAM:2E24		ds 1
+RAM:2E25		ds 1
+RAM:2E26		ds 1
+RAM:2E27		ds 1
+RAM:2E28		ds 1
+RAM:2E29		ds 1
+RAM:2E2A		ds 1
+RAM:2E2B		ds 1
+RAM:2E2C		ds 1
+RAM:2E2D		ds 1
+RAM:2E2E		ds 1
+RAM:2E2F		ds 1
+RAM:2E30		ds 1
+RAM:2E31		ds 2
+RAM:2E33		ds 1
+RAM:2E34		ds 1
+RAM:2E35		ds 1
+RAM:2E36		ds 1
+RAM:2E37		ds 1
+RAM:2E38		ds 1
+RAM:2E39		ds 1
+RAM:2E3A		ds 1
+RAM:2E3B		ds 1
+RAM:2E3C		ds 1
+RAM:2E3D		ds 1
+RAM:2E3E		ds 1
+RAM:2E3F		ds 1
+RAM:2E40		ds 1
+RAM:2E41		ds 1
+RAM:2E42		ds 1
+RAM:2E43		ds 1
+RAM:2E44		ds 1
+RAM:2E45		ds 1
+RAM:2E46		ds 1
+RAM:2E47		ds 1
+RAM:2E48		ds 1
+RAM:2E49		ds 1
+RAM:2E4A		ds 1
+RAM:2E4B		ds 1
+RAM:2E4C		ds 1
+RAM:2E4D		ds 1
+RAM:2E4E		ds 1
+RAM:2E4F		ds 1
+RAM:2E50		ds 1
+RAM:2E51		ds 1
+RAM:2E52		ds 1
+RAM:2E53		ds 1
+RAM:2E54		ds 1
+RAM:2E55		ds 1
+RAM:2E56		ds 1
+RAM:2E57		ds 1
+RAM:2E58		ds 1
+RAM:2E59		ds 1
+RAM:2E5A		ds 1
+RAM:2E5B		ds 1
+RAM:2E5C		ds 1
+RAM:2E5D		ds 1
+RAM:2E5E		ds 1
+RAM:2E5F		ds 1
+RAM:2E60		ds 1
+RAM:2E61		ds 1
+RAM:2E62		ds 1
+RAM:2E63		ds 1
+RAM:2E64		ds 1
+RAM:2E65		ds 1
+RAM:2E66		ds 1
+RAM:2E67		ds 1
+RAM:2E68		ds 1
+RAM:2E69		ds 1
+RAM:2E6A		ds 1
+RAM:2E6B		ds 1
+RAM:2E6C		ds 1
+RAM:2E6D		ds 1
+RAM:2E6E		ds 1
+RAM:2E6F		ds 1
+RAM:2E70		ds 1
+RAM:2E71		ds 1
+RAM:2E72		ds 1
+RAM:2E73		ds 1
+RAM:2E74		ds 1
+RAM:2E75		ds 1
+RAM:2E76		ds 1
+RAM:2E77		ds 1
+RAM:2E78		ds 1
+RAM:2E79		ds 1
+RAM:2E7A		ds 1
+RAM:2E7B		ds 1
+RAM:2E7C		ds 1
+RAM:2E7D		ds 1
+RAM:2E7E		ds 1
+RAM:2E7F		ds 1
+RAM:2E80		ds 1
+RAM:2E81		ds 1
+RAM:2E82		ds 1
+RAM:2E83		ds 1
+RAM:2E84		ds 1
+RAM:2E85		ds 1
+RAM:2E86		ds 1
+RAM:2E87		ds 1
+RAM:2E88		ds 1
+RAM:2E89		ds 1
+RAM:2E8A		ds 1
+RAM:2E8B		ds 1
+RAM:2E8C		ds 1
+RAM:2E8D		ds 1
+RAM:2E8E		ds 1
+RAM:2E8F		ds 1
+RAM:2E90		ds 1
+RAM:2E91		ds 1
+RAM:2E92		ds 1
+RAM:2E93		ds 1
+RAM:2E94		ds 1
+RAM:2E95		ds 1
+RAM:2E96		ds 1
+RAM:2E97		ds 1
+RAM:2E98		ds 1
+RAM:2E99		ds 1
+RAM:2E9A		ds 1
+RAM:2E9B		ds 1
+RAM:2E9C		ds 1
+RAM:2E9D		ds 1
+RAM:2E9E		ds 1
+RAM:2E9F		ds 1
+RAM:2EA0		ds 1
+RAM:2EA1		ds 1
+RAM:2EA2		ds 1
+RAM:2EA3		ds 1
+RAM:2EA4		ds 1
+RAM:2EA5		ds 1
+RAM:2EA6		ds 1
+RAM:2EA7		ds 1
+RAM:2EA8		ds 1
+RAM:2EA9		ds 1
+RAM:2EAA		ds 1
+RAM:2EAB		ds 1
+RAM:2EAC		ds 1
+RAM:2EAD		ds 1
+RAM:2EAE		ds 1
+RAM:2EAF		ds 1
+RAM:2EB0		ds 1
+RAM:2EB1		ds 1
+RAM:2EB2		ds 1
+RAM:2EB3		ds 1
+RAM:2EB4		ds 1
+RAM:2EB5		ds 1
+RAM:2EB6		ds 1
+RAM:2EB7		ds 1
+RAM:2EB8		ds 1
+RAM:2EB9		ds 1
+RAM:2EBA		ds 1
+RAM:2EBB		ds 1
+RAM:2EBC		ds 1
+RAM:2EBD		ds 1
+RAM:2EBE		ds 1
+RAM:2EBF		ds 1
+RAM:2EC0		ds 1
+RAM:2EC1		ds 1
+RAM:2EC2		ds 1
+RAM:2EC3		ds 1
+RAM:2EC4		ds 1
+RAM:2EC5		ds 1
+RAM:2EC6		ds 1
+RAM:2EC7		ds 1
+RAM:2EC8		ds 1
+RAM:2EC9		ds 1
+RAM:2ECA		ds 1
+RAM:2ECB		ds 1
+RAM:2ECC		ds 1
+RAM:2ECD		ds 1
+RAM:2ECE		ds 1
+RAM:2ECF		ds 1
+RAM:2ED0		ds 1
+RAM:2ED1		ds 1
+RAM:2ED2		ds 1
+RAM:2ED3		ds 1
+RAM:2ED4		ds 1
+RAM:2ED5		ds 1
+RAM:2ED6		ds 1
+RAM:2ED7		ds 1
+RAM:2ED8		ds 1
+RAM:2ED9		ds 1
+RAM:2EDA		ds 1
+RAM:2EDB		ds 1
+RAM:2EDC		ds 1
+RAM:2EDD		ds 1
+RAM:2EDE		ds 1
+RAM:2EDF		ds 1
+RAM:2EE0		ds 1
+RAM:2EE1		ds 1
+RAM:2EE2		ds 1
+RAM:2EE3		ds 1
+RAM:2EE4		ds 1
+RAM:2EE5		ds 1
+RAM:2EE6		ds 1
+RAM:2EE7		ds 1
+RAM:2EE8		ds 1
+RAM:2EE9		ds 1
+RAM:2EEA		ds 1
+RAM:2EEB		ds 1
+RAM:2EEC		ds 1
+RAM:2EED		ds 1
+RAM:2EEE		ds 1
+RAM:2EEF		ds 1
+RAM:2EF0		ds 1
+RAM:2EF1		ds 1
+RAM:2EF2		ds 1
+RAM:2EF3		ds 1
+RAM:2EF4		ds 1
+RAM:2EF5		ds 1
+RAM:2EF6		ds 1
+RAM:2EF7		ds 1
+RAM:2EF8		ds 1
+RAM:2EF9		ds 1
+RAM:2EFA		ds 1
+RAM:2EFB		ds 1
+RAM:2EFC		ds 1
+RAM:2EFD		ds 1
+RAM:2EFE		ds 1
+RAM:2EFF		ds 1
+RAM:2F00		ds 1
+RAM:2F01		ds 1
+RAM:2F02		ds 1
+RAM:2F03		ds 1
+RAM:2F04		ds 1
+RAM:2F05		ds 1
+RAM:2F06		ds 1
+RAM:2F07		ds 1
+RAM:2F08		ds 1
+RAM:2F09		ds 1
+RAM:2F0A		ds 1
+RAM:2F0B		ds 1
+RAM:2F0C		ds 1
+RAM:2F0D		ds 1
+RAM:2F0E		ds 1
+RAM:2F0F		ds 1
+RAM:2F10		ds 1
+RAM:2F11		ds 1
+RAM:2F12		ds 1
+RAM:2F13		ds 1
+RAM:2F14		ds 1
+RAM:2F15		ds 1
+RAM:2F16		ds 1
+RAM:2F17		ds 1
+RAM:2F18		ds 1
+RAM:2F19		ds 1
+RAM:2F1A		ds 1
+RAM:2F1B		ds 1
+RAM:2F1C		ds 1
+RAM:2F1D		ds 1
+RAM:2F1E		ds 1
+RAM:2F1F		ds 1
+RAM:2F20		ds 1
+RAM:2F21		ds 1
+RAM:2F22		ds 1
+RAM:2F23		ds 1
+RAM:2F24		ds 1
+RAM:2F25		ds 1
+RAM:2F26		ds 1
+RAM:2F27		ds 1
+RAM:2F28		ds 1
+RAM:2F29		ds 1
+RAM:2F2A		ds 1
+RAM:2F2B		ds 1
+RAM:2F2C		ds 1
+RAM:2F2D		ds 1
+RAM:2F2E		ds 1
+RAM:2F2F		ds 1
+RAM:2F30		ds 1
+RAM:2F31		ds 1
+RAM:2F32		ds 1
+RAM:2F33		ds 1
+RAM:2F34		ds 1
+RAM:2F35		ds 1
+RAM:2F36		ds 1
+RAM:2F37		ds 1
+RAM:2F38		ds 1
+RAM:2F39		ds 1
+RAM:2F3A		ds 1
+RAM:2F3B		ds 1
+RAM:2F3C		ds 1
+RAM:2F3D		ds 1
+RAM:2F3E		ds 1
+RAM:2F3F		ds 1
+RAM:2F40		ds 1
+RAM:2F41		ds 1
+RAM:2F42		ds 1
+RAM:2F43		ds 1
+RAM:2F44		ds 1
+RAM:2F45		ds 1
+RAM:2F46		ds 1
+RAM:2F47		ds 1
+RAM:2F48		ds 1
+RAM:2F49		ds 1
+RAM:2F4A		ds 1
+RAM:2F4B		ds 1
+RAM:2F4C		ds 1
+RAM:2F4D		ds 1
+RAM:2F4E		ds 1
+RAM:2F4F		ds 1
+RAM:2F50		ds 1
+RAM:2F51		ds 1
+RAM:2F52		ds 1
+RAM:2F53		ds 1
+RAM:2F54		ds 1
+RAM:2F55		ds 1
+RAM:2F56		ds 1
+RAM:2F57		ds 1
+RAM:2F58		ds 1
+RAM:2F59		ds 1
+RAM:2F5A		ds 1
+RAM:2F5B		ds 1
+RAM:2F5C		ds 1
+RAM:2F5D		ds 1
+RAM:2F5E		ds 1
+RAM:2F5F		ds 1
+RAM:2F60		ds 1
+RAM:2F61		ds 1
+RAM:2F62		ds 1
+RAM:2F63		ds 1
+RAM:2F64		ds 1
+RAM:2F65		ds 1
+RAM:2F66		ds 1
+RAM:2F67		ds 1
+RAM:2F68		ds 1
+RAM:2F69		ds 1
+RAM:2F6A		ds 1
+RAM:2F6B		ds 1
+RAM:2F6C		ds 1
+RAM:2F6D		ds 1
+RAM:2F6E		ds 1
+RAM:2F6F		ds 1
+RAM:2F70		ds 1
+RAM:2F71		ds 1
+RAM:2F72		ds 1
+RAM:2F73		ds 1
+RAM:2F74		ds 1
+RAM:2F75		ds 1
+RAM:2F76		ds 1
+RAM:2F77		ds 1
+RAM:2F78		ds 1
+RAM:2F79		ds 1
+RAM:2F7A		ds 1
+RAM:2F7B		ds 1
+RAM:2F7C		ds 1
+RAM:2F7D		ds 1
+RAM:2F7E		ds 1
+RAM:2F7F		ds 1
+RAM:2F80		ds 1
+RAM:2F81		ds 1
+RAM:2F82		ds 1
+RAM:2F83		ds 1
+RAM:2F84		ds 1
+RAM:2F85		ds 1
+RAM:2F86		ds 1
+RAM:2F87		ds 1
+RAM:2F88		ds 1
+RAM:2F89		ds 1
+RAM:2F8A		ds 1
+RAM:2F8B		ds 1
+RAM:2F8C		ds 1
+RAM:2F8D		ds 1
+RAM:2F8E		ds 1
+RAM:2F8F		ds 1
+RAM:2F90		ds 1
+RAM:2F91		ds 1
+RAM:2F92		ds 1
+RAM:2F93		ds 1
+RAM:2F94		ds 1
+RAM:2F95		ds 1
+RAM:2F96		ds 1
+RAM:2F97		ds 1
+RAM:2F98		ds 1
+RAM:2F99		ds 1
+RAM:2F9A		ds 1
+RAM:2F9B		ds 1
+RAM:2F9C		ds 1
+RAM:2F9D		ds 1
+RAM:2F9E		ds 1
+RAM:2F9F		ds 1
+RAM:2FA0		ds 1
+RAM:2FA1		ds 1
+RAM:2FA2		ds 1
+RAM:2FA3		ds 1
+RAM:2FA4		ds 1
+RAM:2FA5		ds 1
+RAM:2FA6		ds 1
+RAM:2FA7		ds 1
+RAM:2FA8		ds 1
+RAM:2FA9		ds 1
+RAM:2FAA		ds 1
+RAM:2FAB		ds 1
+RAM:2FAC		ds 1
+RAM:2FAD		ds 1
+RAM:2FAE		ds 1
+RAM:2FAF		ds 1
+RAM:2FB0		ds 1
+RAM:2FB1		ds 1
+RAM:2FB2		ds 1
+RAM:2FB3		ds 1
+RAM:2FB4		ds 1
+RAM:2FB5		ds 1
+RAM:2FB6		ds 1
+RAM:2FB7		ds 1
+RAM:2FB8		ds 1
+RAM:2FB9		ds 1
+RAM:2FBA		ds 1
+RAM:2FBB		ds 1
+RAM:2FBC		ds 1
+RAM:2FBD		ds 1
+RAM:2FBE		ds 1
+RAM:2FBF		ds 1
+RAM:2FC0		ds 1
+RAM:2FC1		ds 1
+RAM:2FC2		ds 1
+RAM:2FC3		ds 1
+RAM:2FC4		ds 1
+RAM:2FC5		ds 1
+RAM:2FC6		ds 1
+RAM:2FC7		ds 1
+RAM:2FC8		ds 1
+RAM:2FC9		ds 1
+RAM:2FCA		ds 1
+RAM:2FCB		ds 1
+RAM:2FCC		ds 1
+RAM:2FCD		ds 1
+RAM:2FCE		ds 1
+RAM:2FCF		ds 1
+RAM:2FD0		ds 1
+RAM:2FD1		ds 1
+RAM:2FD2		ds 1
+RAM:2FD3		ds 1
+RAM:2FD4		ds 1
+RAM:2FD5		ds 1
+RAM:2FD6		ds 1
+RAM:2FD7		ds 1
+RAM:2FD8		ds 1
+RAM:2FD9		ds 1
+RAM:2FDA		ds 1
+RAM:2FDB		ds 1
+RAM:2FDC		ds 1
+RAM:2FDD		ds 1
+RAM:2FDE		ds 1
+RAM:2FDF		ds 1
+RAM:2FE0		ds 1
+RAM:2FE1		ds 1
+RAM:2FE2		ds 1
+RAM:2FE3		ds 1
+RAM:2FE4		ds 1
+RAM:2FE5		ds 1
+RAM:2FE6		ds 1
+RAM:2FE7		ds 1
+RAM:2FE8		ds 1
+RAM:2FE9		ds 1
+RAM:2FEA		ds 1
+RAM:2FEB		ds 1
+RAM:2FEC		ds 1
+RAM:2FED		ds 1
+RAM:2FEE		ds 1
+RAM:2FEF		ds 1
+RAM:2FF0		ds 1
+RAM:2FF1		ds 1
+RAM:2FF2		ds 1
+RAM:2FF3		ds 1
+RAM:2FF4		ds 1
+RAM:2FF5		ds 1
+RAM:2FF6		ds 1
+RAM:2FF7		ds 1
+RAM:2FF8		ds 1
+RAM:2FF9		ds 1
+RAM:2FFA		ds 1
+RAM:2FFB		ds 1
+RAM:2FFC		ds 1
+RAM:2FFD		ds 1
+RAM:2FFE		ds 1
+RAM:2FFF		ds 1
+RAM:2FFF ; End of 'RAM'
+RAM:2FFF		end

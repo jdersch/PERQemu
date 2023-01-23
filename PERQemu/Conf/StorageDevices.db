@@ -1,0 +1,232 @@
+﻿#
+#   StorageDevices.db - List of standard PERQ storage devices
+#
+#            ** PLEASE DO NOT HAND-EDIT THIS FILE **
+#
+#   Users may define their own storage types using the command-line
+#   interface within PERQemu.  Errors in this file will prevent the
+#   emulator from initializing properly or may limit functionality.
+#
+storage
+
+# Standard 8" floppy drive
+# Floppy geometries are built-in
+# SA851 performance specs are built-in
+
+define Floppy Floppy256
+description "Shugart SA851 SS/SD (256KB) floppy disk"
+geometry SSSD
+performance SA851
+removable true
+done
+
+define Floppy Floppy512
+description "Shugart SA851 DS/SD (512KB) floppy disk"
+geometry DSSD
+performance SA851
+removable true
+done
+
+define Floppy Floppy1024
+description "Shugart SA851 DS/DD (1MB) floppy disk"
+geometry DSDD
+performance SA851
+removable true
+done
+
+# Standard 14" drives
+# Shugart12 and Shugart24 geometries are built-in
+# SA4000 performance specs are built-in
+
+define Disk14Inch Shugart12
+description "Shugart SA4004 12MB hard disk"
+geometry Shugart12
+performance SA4000
+done
+
+define Disk14Inch Shugart24
+description "Shugart SA4008 24MB hard disk"
+geometry Shugart24
+performance SA4000
+done
+
+# include this mythical beast for fun
+
+define Disk14Inch Shugart48
+description "Shugart SA4104 48MB hard disk (unsupported)"
+geometry Shugart48 202 16 30 512 16
+performance SA4000
+done
+
+# Standard 8" drives
+
+define Disk8Inch Microp21
+description "Micropolis 1201 21MB hard disk"
+geometry Microp21 580 3 24 512 16
+performance M1200 3600 10000 25000 4 96 8 889000
+done
+
+define Disk8Inch Microp35
+description "Micropolis 1202 35MB hard disk"
+geometry Microp35 580 5 24 512 16
+performance M1200
+done
+
+define Disk8Inch Microp70
+description "Micropolis 1203 70MB hard disk"
+geometry Microp70 1160 5 24 512 16
+performance M1200
+done
+
+# Standard 5.25" drives
+
+define Disk5Inch Microp33
+description "Micropolis 1303 33MB hard disk"
+geometry M1303 830 5 16 512 16
+performance M1300 3600 200000 25000 7 66 1 625000
+done
+
+define Disk5Inch Microp40
+description "Micropolis 1304 40MB hard disk"
+geometry M1304 830 6 16 512 16
+performance M1300
+done
+
+define Disk5Inch Toshiba43
+description "Toshiba MK-53 43MB hard disk"
+geometry MK53 830 5 16 512 16
+performance MK50 3600 10000 25000 6 45 1 625000
+done
+
+define Disk5Inch Toshiba60
+description "Toshiba MK-54 60MB hard disk"
+geometry MK54 830 7 16 512 16
+performance MK50
+done
+
+define Disk5Inch Toshiba86
+description "Toshiba MK-56 86MB hard disk"
+geometry MK56 830 10 16 512 16
+performance MK50
+done
+
+# A rare 3.5" MFM drive for fun
+
+define Disk5Inch Toshiba53
+description "Toshiba MK-134 53MB (3.5in) hard disk"
+geometry MK134 733 7 16 512 16
+performance MK134 3600 10000 25000 7 50 1 625000
+done
+
+define Disk5Inch Vertex51
+description "Priam/Vertex V150 51MB hard disk"
+geometry V150 987 5 16 512 16
+performance V100 3600 200000 25000 5 60 3 625000
+done
+
+define Disk5Inch Vertex72
+description "Priam/Vertex V170 72MB hard disk"
+geometry V170 987 7 16 512 16
+performance V100
+done
+
+define Disk5Inch Vertex85
+description "Priam/Vertex V185 85MB hard disk"
+geometry V185 1166 7 16 512 16
+performance V100
+done
+
+define Disk5Inch Maxtor71
+description "Maxtor XT-1085 71MB hard disk"
+geometry XT1085 1024 8 16 512 16
+performance XT1000 3600 5340 20000 4 43 3 625000
+done
+
+define Disk5Inch Maxtor85
+description "Maxtor XT-1105 85MB hard disk"
+geometry XT1105 918 11 16 512 16
+performance XT1000
+done
+
+define Disk5Inch Maxtor120
+description "Maxtor XT-1140 120MB hard disk"
+geometry XT1140 918 15 16 512 16
+performance XT1000
+done
+
+define Disk5Inch Maxtor160
+description "Maxtor XT-2190 160MB hard disk"
+geometry XT2190 1224 15 16 512 16
+performance XT1000
+done
+
+# SMD drives
+
+define DiskSMD CDC9764
+description "CDC 9764 150MB (removable) hard disk"
+geometry CDC9764 411 19 32 512 16
+performance CDC976X 3600 2500 30000 6 55 1 1209600
+removable true
+done
+
+define DiskSMD CDC9766
+description "CDC 9766 300MB (removable) hard disk"
+geometry CDC9766 823 19 32 512 16
+performance CDC976X
+removable true
+done
+
+# Additional SMD types that are wicked cool
+
+define DiskSMD Eagle
+description "Fujitsu M2351A 'Eagle' 474MB hard disk"
+geometry Eagle474 842 20 48 512 16
+performance M2351A 3961 1076 30000 5 35 1 1859000
+done
+            
+define DiskSMD SuperEagle
+description "Fujitsu M2361A 'Super Eagle' 689MB hard disk"
+geometry Eagle689 842 20 69 512 16
+performance M2361A 3600 1627 40000 5 35 1 2458000
+done
+            
+# Standard streamer tape
+
+# The default geometry for the Archive 3020I is built-in
+# The default drive performance specs are built-in
+
+# This tiny test tape is for dev/debug only
+define TapeQIC TestTape
+description "Archive 3020I Test cartridge (2MB)"
+geometry QICtest 1 4 1024 512 4
+performance Archive30IPS
+removable true
+done
+
+# Standard drive: 4 tracks, 450' cartridge
+# Turn off rate limiting for 90IPS operation :-)
+
+define TapeQIC Archive20
+description "Archive 3020I DC-300XL (20MB) QIC tape"
+geometry QIC20
+performance Archive30IPS
+removable true
+done
+
+# Enhanced drive: 9 tracks, 450' cartridge
+define TapeQIC Archive45
+description "Archive 9045I DC-300XL (45MB) QIC tape"
+geometry QIC45 1 9 10240 512 4
+performance Archive90IPS 90 0 300 5910 60518400 0 86700
+removable true
+done
+
+# 9045I with a 600' cartridge
+define TapeQIC Archive60
+description "Archive 9045I DC-600A (60MB) QIC tape"
+geometry QIC60 1 9 13650 512 4
+performance Archive90Ext 90 0 300 5910 80671500 0 86700
+removable true
+done
+
+# End of PERQemu 0.4.8 standard definitions
