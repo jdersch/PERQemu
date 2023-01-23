@@ -604,6 +604,11 @@ January, 2023!
     that includes Lisp.  Enough interest to justify rolling out another release
     bundle!  User Guide updated.
 
+    4. Small tweak to the Kriz tablet: identified and now set the correct bit
+    to indicate the landscape tablet is attached.  Fixes cursor scaling when the
+    landscape display is selected.  Reading the Ethernet address was off by
+    four bits; it is now reported correctly.
+
 
 ---
-Last update: skeezics    Tue Jan 17 16:48:28 PST 2023
+Last update: skeezics    Mon Jan 23 10:38:24 PST 2023
