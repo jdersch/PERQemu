@@ -463,7 +463,7 @@ namespace PERQemu
                 {
                     new SMKey(RunState.WarmingUp, RunState.Running), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused),
-                        new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
+                        new Transition(() => { SetState(RunState.Running); }, RunState.Running) }
                 },
                 {
                     new SMKey(RunState.WarmingUp, RunState.Halted), new List<Transition> {
@@ -491,7 +491,7 @@ namespace PERQemu
                 },
                 {
                     new SMKey(RunState.Paused, RunState.Running), new List<Transition> {
-                        new Transition(() => { SetState(RunState.Running); }, RunState.Paused, false) }
+                        new Transition(() => { SetState(RunState.Running); }, RunState.Running) }
                 },
                 {
                     new SMKey(RunState.Paused, RunState.Off), new List<Transition> {

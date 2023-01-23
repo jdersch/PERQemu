@@ -363,8 +363,10 @@ namespace PERQemu.IO.Network
             // DMA the address bytes into the header buffer
             _system.Memory.StoreWord(addr++, _physAddr.High);
             _system.Memory.StoreWord(addr++, _physAddr.Mid);
-            _system.Memory.StoreWord(addr++, (ushort)((_physAddr.Hn << 8) | _physAddr.MHn));
-            _system.Memory.StoreWord(addr, (ushort)((_physAddr.MLn << 8) | _physAddr.Ln));
+
+            // The low word's four nibbles are spread out like this:
+            _system.Memory.StoreWord(addr++, (ushort)((_physAddr.Hn << 12) | (_physAddr.MHn << 4)));
+            _system.Memory.StoreWord(addr, (ushort)((_physAddr.MLn << 12) | (_physAddr.Ln << 4)));
 
             FinishCommand();
         }

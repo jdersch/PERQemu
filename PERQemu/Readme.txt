@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-1/17/2023 - skeezicsb - v0.4.9 (main)
+1/23/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
 11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
@@ -487,6 +487,7 @@ v0.5 - TBD
 v0.4.9 - Current "experimental" branch
   - This version, in progress.
   - Added a minimal Ethernet interface, bug fixes.
+  - Bundled a working Spice Lisp disk image.
 
 v0.4.8 - Main branch (v0.5.0 pre-relase)
   - Added streamer tape support!

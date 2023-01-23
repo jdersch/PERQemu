@@ -90,14 +90,16 @@ namespace PERQemu.IO.SerialDevices
             int tabY = _system.VideoController.DisplayHeight - _system.Mouse.MouseY + 64;
 
             // Format 'em and invert (data is active low)
-            var tab1 = (byte)~((tabX >> 8) | (_system.Mouse.MouseOffTablet ? 0x40 : 0x00));
+            var tab1 = (byte)~(((tabX >> 8) & 0x0f) |
+                               (_system.Mouse.MouseOffTablet ? 0x40 : 0) |
+                               (_system.Config.Display == Config.DisplayType.Landscape ? 0x20 : 0));
             var tab2 = (byte)~(tabX & 0xff);
-            var tab3 = (byte)~((tabY >> 8) | (_system.Mouse.MouseButton << 5));
+            var tab3 = (byte)~(((tabY >> 8) & 0x0f) | (_system.Mouse.MouseButton << 5));
             var tab4 = (byte)~(tabY & 0xff);
 
             // Send the data off to the SIO
             _rxDelegate(0x81);      // sync
-            _rxDelegate(tab1);      // high bits of X + TabOffTablet
+            _rxDelegate(tab1);      // high bits of X + flags
             _rxDelegate(tab2);      // low X
             _rxDelegate(tab3);      // high bits of Y + switch bits
             _rxDelegate(tab4);      // low Y
@@ -141,21 +143,23 @@ namespace PERQemu.IO.SerialDevices
     characters.  The SIO B receive routine counts from 0..6, so seven total bytes
     make up a complete tablet message.
      
-    Data format (from the v8.7 ROM):
+    Data format (from the v8.7 ROM), with updates from "kriz.doc":
 
         ;   Byte0<7:0> = sync char (filtered out by SIO B hardware)
-        ;   Byte1<7>   = 0
+        ;   Byte1<7>   = ValidMsg       (0)
         ;   Byte1<6>   = TabOffTablet   (1 -> mouse off tablet)
-        ;   Byte1<5>   = TabCoil        (always 0 for now)
+        ;   Byte1<5>   = Landscape      (1 -> landscape tablet)
         ;   Byte1<4>   = unused         (0)
         ;   Byte1<3:0> = high bits of X
         ;   Byte2<7:0> = low X
-        ;   Byte3<7:5> = the 3 Switches
+        ;   Byte3<7:5> = the 3 Switches (right, middle, left)
         ;   Byte3<4>   = unused         (0)
         ;   Byte3<3:0> = high bits of Y
         ;   Byte4<7:0> = low Y
     
-    (The Z80 then reformats that into a different format to send to the PERQ...)
+    The Z80 then reformats that into a different format to send to the PERQ.
+    Note that "kriz.doc" also states that the sync char is 0x7e in hex?  But we
+    are using 0x81, which came from the Z80 code directly?  (Should check this.)
     
     Also from v87.v80:
     

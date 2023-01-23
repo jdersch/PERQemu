@@ -227,68 +227,24 @@ namespace PERQemu.IO.Z80
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Run()
         {
-            IZ80Registers regs = _cpu.Registers;
-
-            if (_running)
+            // Is this thing on?
+            if (!_running)
             {
-                // Is the master CPU clock ahead of us?
-                var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
-
-                if (diff > 0)
+                if (_system.Mode == ExecutionMode.Asynchronous)
                 {
-#if DEBUG
-                    // For now: debugging; future: actual InterruptEncoder as a bus device?
-                    _bus.ActiveInterrupts();
-
-                    // This is hugely expensive so only call it if selected
-                    if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
-#endif
-                    //
-                    // The IOB/CIO hardware will pull the Z80's WAIT line low if access
-                    // to the two FIFO buffers is attempted while the contents are not
-                    // valid; this is true on IN or OUT instructions, as well as looping
-                    // variants INIR (in both IOB and CIO firmware) and OTIR (used only
-                    // by the CIO version).  There's no useful or obvious way to leverage
-                    // Z80dotNet's "Before" memory access delegates to inject a wait state
-                    // so this grody hack peeks ahead in the instruction stream to locate
-                    // IN/OUT or INIR/OUTIR accesses to the FIFOs and check their IsReady
-                    // properties, aborting (delaying) the execution until the microcode
-                    // has read/written data to clear the condition.  Sigh.
-                    //
-                    var peek = (ushort)(_memory[regs.PC] << 8 | _memory[regs.PC + 1]);
-
-                    if (peek == 0xdba0 || peek == 0xedb2)
-                    {
-                        if (!_perqToZ80Fifo.IsReady)
-                        {
-                            Log.Debug(Category.FIFO, "Wait state for FIFO op ({0})",
-                                                      (peek == 0xdba0) ? "IN" : "INIR");
-                            return;
-                        }
-                    }
-                    else if (peek == 0xd3d0 || (peek == 0xedb3 && regs.C == 0xd0))
-                    {
-                        if (!_z80ToPerqFifo.IsReady)
-                        {
-                            Log.Debug(Category.FIFO, "Wait state for FIFO op ({0})",
-                                                      (peek == 0xd3d0) ? "OUT" : "OTIR");
-                            return;
-                        }
-                    }
-
-                    // Yes!  Run an instruction
-                    var ticks = _cpu.ExecuteNextInstruction();
-
-                    // Advance our wakeup time now so the CPU can chill a bit
-                    _wakeup = (long)(_scheduler.CurrentTimeNsec + ((ulong)ticks * IOBoard.Z80CycleTime));
-
-                    // Run a DMA cycle
-                    _z80dma.Clock();
-
-                    // Run the scheduler
-                    _scheduler.Clock(ticks);
+                    // Pause the thread until the Z80 is turned back on
+                    _wakeup = long.MaxValue;
+                    _sync.Reset();
                 }
-                else
+                return;
+            }
+
+            // Is the master CPU clock ahead of us?
+            var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
+
+            if (diff <= 0)
+            {
+                if (_system.Mode == ExecutionMode.Asynchronous)
                 {
                     // If we are less than one full microcycle ahead of the CPU,
                     // just spin; otherwise, block (when we return).  The PERQ
@@ -304,13 +260,63 @@ namespace PERQemu.IO.Z80
                         _sync.Reset();
                     }
                 }
+                return;
             }
-            else
+
+            // Run an instruction!
+            IZ80Registers regs = _cpu.Registers;
+
+#if DEBUG
+            // For now: debugging; future: actual InterruptEncoder as a bus device?
+            _bus.ActiveInterrupts();
+
+            // This is hugely expensive so only call it if selected
+            if (Log.Categories.HasFlag(Category.Z80Inst)) ShowZ80State();
+#endif
+            //
+            // The IOB/CIO hardware will pull the Z80's WAIT line low if access
+            // to the two FIFO buffers is attempted while the contents are not
+            // valid; this is true on IN or OUT instructions, as well as looping
+            // variants INIR (in both IOB and CIO firmware) and OTIR (used only
+            // by the CIO version).  There's no useful or obvious way to leverage
+            // Z80dotNet's "Before" memory access delegates to inject a wait state
+            // so this grody hack peeks ahead in the instruction stream to locate
+            // IN/OUT or INIR/OUTIR accesses to the FIFOs and check their IsReady
+            // properties, aborting (delaying) the execution until the microcode
+            // has read/written data to clear the condition.  Sigh.
+            //
+            var peek = (ushort)(_memory[regs.PC] << 8 | _memory[regs.PC + 1]);
+
+            if (peek == 0xdba0 || peek == 0xedb2)
             {
-                // Pause the thread until the Z80 is turned back on
-                _wakeup = long.MaxValue;
-                _sync.Reset();
+                if (!_perqToZ80Fifo.IsReady)
+                {
+                    Log.Debug(Category.FIFO, "Wait state for FIFO op ({0})",
+                                              (peek == 0xdba0) ? "IN" : "INIR");
+                    return;
+                }
             }
+            else if (peek == 0xd3d0 || (peek == 0xedb3 && regs.C == 0xd0))
+            {
+                if (!_z80ToPerqFifo.IsReady)
+                {
+                    Log.Debug(Category.FIFO, "Wait state for FIFO op ({0})",
+                                              (peek == 0xd3d0) ? "OUT" : "OTIR");
+                    return;
+                }
+            }
+
+            // Yes!  Run an instruction
+            var ticks = _cpu.ExecuteNextInstruction();
+
+            // Advance our wakeup time now so the CPU can chill a bit
+            _wakeup = (long)(_scheduler.CurrentTimeNsec + ((ulong)ticks * IOBoard.Z80CycleTime));
+
+            // Run a DMA cycle
+            _z80dma.Clock();
+
+            // Run the scheduler
+            _scheduler.Clock(ticks);
         }
 
         /// <summary>
