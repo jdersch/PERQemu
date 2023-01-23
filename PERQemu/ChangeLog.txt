@@ -609,6 +609,8 @@ January, 2023!
     landscape display is selected.  Reading the Ethernet address was off by
     four bits; it is now reported correctly.
 
+    === Submitted pull request for merge back into master branch as v0.5.0 ===
+
 
 ---
-Last update: skeezics    Mon Jan 23 10:38:24 PST 2023
+Last update: skeezics    Mon Jan 23 15:02:15 PST 2023

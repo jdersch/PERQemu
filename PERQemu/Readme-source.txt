@@ -1,16 +1,5 @@
 PERQemu Source - Readme
 
-v1.9 - 1/17/2023 - skeezics
-v1.8 - 12/18/2022 - skeezics
-v1.7 - 9/19/2022 - skeezics
-v1.6 - 11/29/2021 - skeezics
-V1.5 - 6/20/2018 - skeezics
-V1.4 - 5/15/2018 - skeezics
-V1.3 - 3/11/2018 - skeezics
-V1.2 - 3/18/2017 - skeezics
-V1.1 - 9/21/2014 - skeezics
-V1.0 - 6/01/2013 - jdersch
-
 
 1.0  Introduction (Author)
 ==========================
@@ -33,11 +22,11 @@ fanatics out there.
 -- Josh
 
 
-1.1  Introduction (This Branch)
--------------------------------
+1.1  Introduction (Experiments Branch)
+--------------------------------------
 
-This "experiments" branch is developing rapidly and undergoing fairly major
-restructuring.  I aim to make it possible to merge back into Josh's master
+The "skeezicsb/experiments" branch is developing rapidly and undergoing fairly
+major restructuring.  I aim to make it possible to merge back into Josh's master
 after it's stable enough to release, and after he's had time to go through the
 code and clean up all of my quirks, shortcuts, errors and other questionable
 coding choices. ;-)
@@ -52,6 +41,9 @@ Testing on Windows and Linux (in a VM) is now being integrated, but due to the
 sprawling, interactive nature of the emulator there are no automated tests so
 I mostly use the same QA approach that 3RCC used, for better or worse: if it
 runs the POS "burn in" code (i.e. the SIGGRAPH demos) it's good to go!
+
+[With the pull request to merge this back into the master branch, this file
+could use yet another rewrite...]
 
 
 1.2  Version History
@@ -646,3 +638,18 @@ PERQemu incorporates more features, additional supplemental bits are being
 added as well -- archived media, more scanned documentation, even marketing
 materials and photos and more will be gathered into a definitive collection of
 PERQ info and lore.  More to come!
+
+
+Update history:
+
+v2.0 - 1/24/2023 - skeezics - corresponds to the merge for v0.5.0
+v1.9 - 1/17/2023 - skeezics
+v1.8 - 12/18/2022 - skeezics
+v1.7 - 9/19/2022 - skeezics
+v1.6 - 11/29/2021 - skeezics
+V1.5 - 6/20/2018 - skeezics
+V1.4 - 5/15/2018 - skeezics
+V1.3 - 3/11/2018 - skeezics
+V1.2 - 3/18/2017 - skeezics
+V1.1 - 9/21/2014 - skeezics
+V1.0 - 6/01/2013 - jdersch

@@ -1,31 +1,12 @@
 ﻿PERQemu Readme
 
-1/23/2023 - skeezicsb - v0.4.9 (main)
+1/24/2023 - jdersch - v0.5.0
+1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
 11/1/2022 - skeezicsb - v0.4.6 (experimental)
 3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
 6/24/2018 - skeezicsb - v0.4 - v0.4.4
 6/24/2010 - jdersch - v0.1 - v0.3
-
-
-    ***********
-    * NOTICE! *
-    ***********
-
-    The "skeezicsb/PERQemu" repository has been slightly reorganized.  The
-    master branch will continue to track the original jdersch/master, while
-    skeezicsb/main will offer pre-releases that are stable enough to mess
-    around with.  The skeezicsb/experiments branch will contain development
-    snapshots or debugging code that may frighten the horses.
-
-    A rough roadmap for future development is included at the end of this
-    document.  See section 4 below for a list of the most outstanding bugs
-    and misfeatures.  Please check back often for the latest bug fixes and
-    new developments.
-
-
-Updated Readme.txt follows.
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 1.0 Introduction
@@ -471,7 +452,7 @@ v0.7 - TBD
     landscape display option, 24-bit "T4" model with larger memory
   - Get screenshots working again
 
-v0.5 - TBD
+v0.5 - New baseline
   Merge the experiments back into the master branch once the new Z80 and all
   of the new features are reasonably stable:
   - True Z80 emulation
@@ -484,8 +465,7 @@ v0.5 - TBD
   - Expanded logging and enhanced debugging support
   - Persistent user preference settings
 
-v0.4.9 - Current "experimental" branch
-  - This version, in progress.
+v0.4.9 - Experimental branch (v0.5.0 pre-release) 
   - Added a minimal Ethernet interface, bug fixes.
   - Bundled a working Spice Lisp disk image.
 
