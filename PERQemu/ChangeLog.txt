@@ -1,0 +1,35 @@
+﻿PERQemu "experiments" branch ChangeBlog
+
+
+Summary of changes on the development branch since the v0.5.0 release.  Previous
+notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
+avoid wasting precious time scrolling to the end. :-)
+
+
+February, 2023:
+
+    2. Fixed some small bugs that allowed PNX 2 to install itself and built up
+    a Shugart disk image.  However, ICL's interpretation of the video hardware
+    programming produces corrupted/inconsistent display.  Once that's debugged
+    and a workaround devised, a PNX 2 image will be posted to the PERQmedia
+    archive.
+
+    1. Started work on the Micropolis 8" disk driver, attempting to build and
+    test support for the "CIO Micropolis" configuration.  Without source code
+    to PNX or ICL's POS R.4 modifications -- and no schematics or even a clear
+    description of what the "ICL CIO" board or CIOShugart/CIOMicropolis disk
+    support ACTUALLY MEANS -- it has proven impossible.  There are several
+    different versions of the Micropolis code that are completely at odds with
+    the available documentation and the EIO way of doing things; booting from
+    floppy produces different results/installs different microcode that makes
+    subsequent attempts to boot from the hard drive fail.  It's basically a
+    complete disaster.  There's no point in continuing to bash my head on it.
+    For now this means the "CIO" board ONLY supports Shugart 14" drives and the
+    8" Micropolis will ONLY be supported on the PERQ-2 and PERQ-2/T1 models as
+    the EIO board is developed.  If further exploration of the available media
+    yields more information about the "CIO Micropolis" interface it can be
+    added in later.  Bummer.
+
+
+---
+Last update: skeezics    Sat Feb  4 15:55:46 PST 2023
