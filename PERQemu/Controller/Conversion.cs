@@ -47,6 +47,15 @@ namespace PERQemu
         public static readonly double MsecToSec = 0.001;
 
         /// <summary>
+        /// Convert disk revolutions to nanoseconds for scheduling index pulses.
+        /// </summary>
+        public static ulong RPMtoNsec(int rpm)
+        {
+            // Put the ()s in the right spot to preserve accuracy...
+            return (ulong)(1 / (rpm / 60.0) * 1000 * MsecToNsec);
+        }
+
+        /// <summary>
         /// Convert a timer count to a standard baud rate.  Returns 0 if TC does
         /// not map to a standard rate (from 110 to 9600).
         /// </summary>

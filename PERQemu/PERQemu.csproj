@@ -646,7 +646,7 @@
     </None>
     <None Include="Disks\f1.phd">
     </None>
-    <None Include="ChangeLog.txt" />
+    <None Include="ChangeLog-Old.txt" />
     <None Include="PROM\cioboot.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -713,6 +713,7 @@
     <None Include="Conf\s6lisp.cfg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="ChangeLog.txt" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">

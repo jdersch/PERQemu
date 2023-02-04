@@ -1,5 +1,6 @@
 ﻿PERQemu Readme
 
+2/3/2023 - skeezicsb - v0.5.1 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
@@ -71,15 +72,14 @@ and adds a number of additional IO options.
 PERQemu versions through 0.4.5 focused exclusively on PERQ-1 support.  Before
 the Great Refactoring (v0.5.0 and beyond) the WinForms-based emulator could run
 only the PERQ-1 "old" Z80 with a single Shugart hard disk.  While the emulation
-was fairly complete, the options for OS and software to run were limited.
+was fairly complete, the options for OS and software to run were limited.  While
+the v0.5.0 release is a pretty major leap in functionality and the available
+software base has expanded greatly, it still only emulates PERQ-1 configurations.
 
-This current experimental branch is undergoing major structural changes to
-allow all of the PERQ-1 and PERQ-2 models to be emulated.  This includes the
-"new" Z80 (enabling PERQ-1 models to run newer OS versions) and support for all
-of the PERQ-2 models as well.  As soon as the experimental branch is stable and
-can reliably run the PERQ-1 as before, it will be merged back into "master" and
-released.  Ongoing development will bring additional releases as new models,
-features and peripherals are incorporated.  Please check back often for updates!
+Work on the experimental branch now shifts to expanded emulation options, adding
+new peripheral support (Ethernet, laser printer) and bug fixes, plus some new UI
+features along the way.  PERQ-2 support will then follow; see the (tentative)
+roadmap below.  Please check back often for updates!
 
 
 1.3 System Requirements
@@ -436,20 +436,20 @@ v1.0 - TBD
   Sometime before the heat death of the universe:
   - Feature complete, with a nice GUI, full screen mode, VR, scratch 'n sniff
   - Massive software library organized, catalogued, available for use and study
-
-v0.9 - TBD
-  Additional I/O Options once the baseline devices are complete:
-  - Ethernet!
-  - Canon laser printer
   - Working audio output :-)
 
-v0.7 - TBD
+v0.9 - TBD
   Leverage the new architecture to roll out new models, new peripherals and
   open up the full range of available operating systems!
   - PERQ-2 EIO emulation support: expanded IO Board with faster Z80, second
     serial port, RTC chip, support for two hard disks
-  - PERQ-2 peripherals: 8" and 5.25" disk drives, VT100-style keyboard,
-    landscape display option, 24-bit "T4" model with larger memory
+  - PERQ-2 peripherals: 8" and 5.25" disk drives, VT100-style keyboard
+  - 24-bit "T4" model with larger memory
+
+v0.7 - TBD
+  Additional I/O Options once the baseline devices are complete:
+  - Ethernet!
+  - Canon laser printer
   - Get screenshots working again
 
 v0.5 - New baseline
@@ -459,6 +459,7 @@ v0.5 - New baseline
   - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
   - 64-bit Mono/MacOS build (no 32-bit WinForms limitation)
   - SDL2 for improved display performance
+  - Landscape display!
   - Unified PERQ media storage architecture and file format
   - Dynamic runtime configuration of all PERQ models and features
   - Enhanced command line interface with more prompts, in-line help

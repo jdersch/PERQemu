@@ -26,7 +26,7 @@ namespace PERQemu.Processor
     /// the PERQ CPU.  Defined as a low half and high half, can be treated as a
     /// single integer value (up to 32 bits).  Represents the 12-, 14- or 16-bit
     /// microaddress, Victim and S registers, or the 20- or 24-bit CPU and ALU
-    /// registers.
+    /// registers.  Useful for glomming DMA addresses together too.
     /// </summary>
     public struct ExtendedRegister
     {
@@ -54,6 +54,11 @@ namespace PERQemu.Processor
             }
         }
 
+        /// <summary>
+        /// Gets or sets the low word as a 16-bit unsigned value.  This is used
+        /// frequently in the CPU for variable-length quantities up to 16 bits,
+        /// so we return as ushort for convenience (avoiding extra casting).
+        /// </summary>
         public ushort Lo
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -63,16 +68,25 @@ namespace PERQemu.Processor
             set { _lo = (ushort)(value & _loMask); }
         }
 
-        public ushort Hi
+        /// <summary>
+        /// This is kinda weird and bad.  CPU doesn't actually use this, but I/O
+        /// does; for combining DMA addresses, we take the high bits unshifted
+        /// (as written to the IO register) and then return them shifted so they
+        /// can easily be recombined after unfrobbing.  This is pretty corny.
+        /// </summary>
+        public int Hi
         {
-            get { return (ushort)(_hi << _loBits); }
-            set { _hi = (ushort)((value >> _loBits) & _hiMask); }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return (_hi << _loBits); }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set { _hi = (ushort)(value & _hiMask); }
         }
 
         public override string ToString()
         {
 #if DEBUG
-            return $"[ExtendedRegister: Value={Value}, Lo={_lo}, Hi={_hi}]";
+            return $"[ExtendedRegister: Value={Value:x8}, Hi={_hi:x4}, Lo={_lo:x4}]";
 #else
             return Value.ToString();
 #endif

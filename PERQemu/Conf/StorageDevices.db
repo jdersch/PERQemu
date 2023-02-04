@@ -61,20 +61,14 @@ done
 # Standard 8" drives
 
 define Disk8Inch Microp21
-description "Micropolis 1201 21MB hard disk"
+description "Micropolis 1202 21MB hard disk"
 geometry Microp21 580 3 24 512 16
-performance M1200 3600 10000 25000 4 96 8 889000
+performance M1200 3600 10000 25000 4 96 8 705000
 done
 
 define Disk8Inch Microp35
-description "Micropolis 1202 35MB hard disk"
+description "Micropolis 1203 35MB hard disk"
 geometry Microp35 580 5 24 512 16
-performance M1200
-done
-
-define Disk8Inch Microp70
-description "Micropolis 1203 70MB hard disk"
-geometry Microp70 1160 5 24 512 16
 performance M1200
 done
 

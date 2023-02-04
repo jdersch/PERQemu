@@ -521,11 +521,11 @@ namespace PERQemu
         {
             if (!CheckSys()) return;
 
-            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
+            var endAddr = Math.Min(startAddress + length, CPU.WCSSize - 1);
 
-            if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
+            if (startAddress > CPU.WCSSize - 1)
             {
-                Console.WriteLine("Address out of range 0..{0}", PERQemu.Sys.CPU.Microcode.Length - 1);
+                Console.WriteLine("Address out of range 0..{0}", CPU.WCSSize - 1);
                 return;
             }
 
@@ -542,10 +542,9 @@ namespace PERQemu
         {
             if (!CheckSys()) return;
 
-            if (nextPC > PERQemu.Sys.CPU.Microcode.Length - 1)
+            if (nextPC > CPU.WCSSize - 1)
             {
-                Console.WriteLine("Address out of range 0..{0}; PC not modified.",
-                                  PERQemu.Sys.CPU.Microcode.Length - 1);
+                Console.WriteLine("Address out of range 0..{0}; PC not modified.", CPU.WCSSize - 1);
             }
             else
             {

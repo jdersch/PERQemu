@@ -176,10 +176,13 @@ namespace PERQemu.Memory
                     // so the cursor's Y position isn't fixed properly.  Try to
                     // Accommodate that here; assumes that the new VBlank state
                     // has been set up *before* initializing line count.  Ugh.
-                    if (!_startOver && _state == VideoState.VBlank && _lineCounterInit == 40)
+                    if (_lineCounterInit == 40 && _state == VideoState.VBlank && !_startOver)
                     {
-                        // We could check that DDS == 255 to be sure it's PNX :-)
-                        _startOver = true;
+                        // In PNX 2, however, they set up a 40-line block at
+                        // line 960, THEN set up a 64-line Vblank field to do
+                        // the last 24 visible lines from 1000..1023 AND the
+                        // 40 lines of blanking, which is all kinds of wrong.
+                        _startOver = (_scanLine > _lastVisibleScanLine);
                     }
 
                     // Clear interrupt

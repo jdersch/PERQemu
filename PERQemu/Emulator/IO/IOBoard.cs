@@ -23,6 +23,7 @@ using PERQmedia;
 using PERQemu.Config;
 using PERQemu.IO.Z80;
 using PERQemu.IO.DiskDevices;
+using PERQemu.Processor;
 
 namespace PERQemu.IO
 {
@@ -147,7 +148,9 @@ namespace PERQemu.IO
                 return floppy;
             }
 
-            if (dev.Type == DeviceType.Disk14Inch)
+            // Allow all of these, although the "CIO"-specific types are kinda redundant
+            if (dev.Type == DeviceType.Disk14Inch || dev.Type == DeviceType.DCIOShugart ||
+                 dev.Type == DeviceType.Disk8Inch || dev.Type == DeviceType.DCIOMicrop)
             {
                 var hard = new HardDisk(_sys.Scheduler, dev.MediaPath);
 
@@ -158,6 +161,29 @@ namespace PERQemu.IO
             }
 
             throw new InvalidOperationException("Wrong disk type for this IO Board");
+        }
+
+        /// <summary>
+        /// Unfrob a DMA address like the hardware do.  This is common to IOB
+        /// and CIO, and any OIO device that uses DMA.  Not sure about EIO yet.
+        /// </summary>
+        /// <remarks>
+        ///                                 ! Explained:
+        /// tmp := 176000;                  ! Need to compliment upper 6 bits
+        ///                                 ! of buffer address. The hardware
+        ///                                 ! has an inversion for the upper
+        ///                                 ! 10 bits of the 20 bit address.
+        /// Buffer xor tmp, IOB(LHeadAdrL); ! Send lower 16 bits of logical
+        ///                                 ! header address to channel ctrl.
+        /// not 0, IOB(LHeadAdrH);          ! Send higher 4 bits of logical
+        ///                                 ! header address to channel ctrl.
+        ///                                 ! Remember, these bits are inverted.
+        /// </remarks>
+        public static int Unfrob(ExtendedRegister addr)
+        {
+            // Hi returns the upper 4 or 8 bits shifted; Lo needs to be unfrobbed
+            Log.Detail(Category.DMA, "Unfrobbing {0}", addr);
+            return addr.Hi | (~(0x3ff ^ addr.Lo) & 0xffff);
         }
 
         /// <summary>

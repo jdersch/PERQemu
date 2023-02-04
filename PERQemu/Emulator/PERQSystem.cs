@@ -443,19 +443,20 @@ namespace PERQemu
             // Hand it off to the IO or Option IO board
             switch (drive.Type)
             {
-                // case DriveType.Disk5Inch:
-                // case DriveType.Disk8Inch:
+                case DeviceType.Disk8Inch:
+                case DeviceType.DCIOMicrop:
                 case DeviceType.Disk14Inch:
+                case DeviceType.DCIOShugart:
                     // The UI shouldn't actually allow this but check anyway
                     if (_volumes[drive.Unit] != null)
                         throw new InvalidOperationException($"Drive {drive.Unit} is already loaded");
-
+                    
                     // Spin 'er up
                     _volumes[drive.Unit] = _iob.LoadDisk(drive);
 
                     // Load indicates success!
                     return _volumes[drive.Unit].IsLoaded;
-
+                                               
                 case DeviceType.Floppy:
                     // Add the drive?
                     if (_volumes[drive.Unit] == null)
@@ -489,7 +490,7 @@ namespace PERQemu
                     return (!string.IsNullOrEmpty(drive.MediaPath) && _volumes[drive.Unit].IsLoaded);
 
                 default:
-                    throw new UnimplementedHardwareException($"Drive type {drive.Type}");
+                    throw new UnimplementedHardwareException($"Unhandled drive type {drive.Type}");
             }
         }
 

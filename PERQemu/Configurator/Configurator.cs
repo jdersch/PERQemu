@@ -633,7 +633,7 @@ namespace PERQemu.Config
         /// For now, traditional configuration rules apply:
         ///     PERQ-1 only has 1 floppy, 1 Shugart 14" disk.
         ///     PERQ-2 only has 1 floppy, 1 Micropolis 8" disks.
-        ///     PERQTx only has 1 floppy, 1 or 2 Micropolis 8" or 5.25" disks.
+        ///     PERQTx only has 1 floppy, 1 Micropolis 8" or 1-2 5.25" disks.
         /// With the addition of the QIC Tape streamer (OIO only, currently) any
         /// configuration may attach a single drive as unit 3 iff the controller
         /// is available.  (Rather than throw an error, if OIO or MLO is selected
@@ -680,6 +680,7 @@ namespace PERQemu.Config
                         }
                         break;
 
+                    case DeviceType.DCIOShugart:
                     case DeviceType.Disk14Inch:
                         if ((conf.IOBoard == IOBoardType.EIO) || (conf.IOBoard == IOBoardType.NIO))
                         {
@@ -697,6 +698,7 @@ namespace PERQemu.Config
                         gotHard |= (drive.MediaPath != string.Empty);
                         break;
 
+                    case DeviceType.DCIOMicrop:
                     case DeviceType.Disk8Inch:
                     case DeviceType.Disk5Inch:
                         if ((conf.IOBoard == IOBoardType.IOB) ||

@@ -91,7 +91,7 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                case 0xc1:    // Shugart/Microp command/control register & Z80 status register
+                case 0xc1:    // Shugart/Microp command/control & Z80 status register
                     _hardDiskController.LoadRegister(port, value & 0x7f);
                     _z80System.WriteStatus(value & 0x80);
                     break;
@@ -100,11 +100,11 @@ namespace PERQemu.IO
                     _z80System.WriteData(value);
                     break;
 
-                case 0xc2:    // Shugart/Micropolis Head register
-                case 0xc8:    // Shugart/Micropolis Cylinder/Sector register
-                case 0xc9:    // Shugart/Micropolis File SN Low Register
-                case 0xca:    // Shugart/Micropolis File SN High register
-                case 0xcb:    // Shugart/Micropolis Block Number register
+                case 0xc2:    // Shugart Head register  / Micropolis nibble bus
+                case 0xc8:    // Shugart Cyl/Sector reg / Micropolis Zero reg
+                case 0xc9:    // Shugart File SN Low    / Micropolis Sync reg
+                case 0xca:    // Shugart File SN High   / Micropolis Cyl (low)
+                case 0xcb:    // Shugart Block Number   / Micropolis Cyl (hi)/Head
                 case 0xcc:    // Micropolis Sector Number register
                 case 0xd0:    // Shugart/Micropolis Data Buffer Address High register
                 case 0xd1:    // Shugart/Micropolis Header Address High register

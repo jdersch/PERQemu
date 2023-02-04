@@ -35,6 +35,12 @@ namespace PERQemu.IO.DiskDevices
             _system = system;
             _disk = null;
             _busyEvent = null;
+
+            // These are assembled from separate register writes, so let
+            // ExtendedRegisters do the work to combine 'em!
+            _dataBuffer = new ExtendedRegister(4, 16);
+            _headerAddress = new ExtendedRegister(4, 16);
+            _serialNumber = new ExtendedRegister(16, 16);
         }
 
         /// <summary>
@@ -52,8 +58,6 @@ namespace PERQemu.IO.DiskDevices
             _sector = 0;
             _seekState = SeekState.WaitForStepSet;
 
-            ClearBusyState();
-
             // Force a soft reset (calls ResetFlags)
             LoadCommandRegister((int)Command.Reset);
 
@@ -65,15 +69,12 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         void ResetFlags()
         {
-            _controllerBusy = false;
-
-            _serialNumberHigh = 0;
-            _serialNumberLow = 0;
             _blockNumber = 0;
-            _headerAddressLow = 0;
-            _headerAddressHigh = 0;
-            _dataBufferLow = 0;
-            _dataBufferHigh = 0;
+            _serialNumber.Value = 0;
+            _headerAddress.Value = 0;
+            _dataBuffer.Value = 0;
+
+            ClearBusyState();
         }
 
         /// <summary>
@@ -99,19 +100,13 @@ namespace PERQemu.IO.DiskDevices
         public int ReadStatus()
         {
             var stat = DiskStatus;
-            Log.Debug(Category.HardDisk, "Read Shugart status, returned {0:x4} ({1})", stat, (Status)stat);
+            Log.Debug(Category.HardDisk, "Shugart status: 0x{0:x4} ({1})", stat, (Status)stat);
             return stat;
         }
 
         /// <summary>
         /// Dispatch register writes.
         /// </summary>
-        /// <remarks>
-        /// Low words of Data and Header buffer addresses come in XNOR'd with
-        /// 0x3ff (for reasons to do with programming the hardware's address
-        /// counter).  To get the real address, we do the XNOR operation again.
-        /// Other values are clipped and manipulated as appropriate.
-        /// </remarks>
         public void LoadRegister(byte address, int value)
         {
             switch (address)
@@ -120,7 +115,7 @@ namespace PERQemu.IO.DiskDevices
                     LoadCommandRegister(value);
                     break;
 
-                case 0xc2:    // Head register
+                case 0xc2:    // Shugart Head register
                     // Hardware latches 4 bits
                     _head = (byte)(value & 0x0f);
                     _disk.HeadSelect(_head);
@@ -131,58 +126,60 @@ namespace PERQemu.IO.DiskDevices
                 case 0xc8:    // Shugart Cylinder/Sector register
                     _sector = (ushort)(value & 0x1f);
                     _head = (byte)((value & 0xe0) >> 5);
-                    _cylinder = (ushort)((value & 0xff80) >> 8);
+                    _cylinder = (ushort)((value & 0xff00) >> 8);
 
                     Log.Debug(Category.HardDisk, "Shugart cyl/head/sector set to {0}/{1}/{2}", _cylinder, _head, _sector);
                     break;
 
                 case 0xc9:    // Shugart File SN Low Register
-                    _serialNumberLow = value & 0xffff;
+                    _serialNumber.Lo = (ushort)value;
 
-                    Log.Debug(Category.HardDisk, "Shugart File Serial # Low set to {0:x4}", _serialNumberLow);
+                    Log.Debug(Category.HardDisk, "Shugart File Serial # Low set to 0x{0:x4}", _serialNumber.Lo);
                     break;
 
                 case 0xca:    // Shugart File SN High register
-                    _serialNumberHigh = value & 0xffff;
+                    _serialNumber.Hi = value;
 
-                    Log.Debug(Category.HardDisk, "Shugart File Serial # High set to {0:x4}", _serialNumberHigh);
+                    Log.Debug(Category.HardDisk, "Shugart File Serial # High set to 0x{0:x}", _serialNumber.Hi);
                     break;
 
                 case 0xcb:    // Shugart Block Number register
                     _blockNumber = value & 0xffff;
 
-                    Log.Debug(Category.HardDisk, "Shugart Block # set to {0:x4}", _blockNumber);
+                    Log.Debug(Category.HardDisk, "Shugart Block # set to 0x{0:x}", _blockNumber);
                     break;
 
                 case 0xcc:    // Micropolis Sector register
                     // Added to the CIO board but ignored by the Shugart controller
                     // May initially log things to see that it's always being set to 0
                     if (value != 0)
-                        Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x4} to MicropSec ignored!", value);
+                        Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x} to MicropSec ignored!", value);
                     break;
 
                 case 0xd0:    // Shugart Data Buffer Address High register (4 bits)
-                    _dataBufferHigh = (~value) & 0xf;
+                    _dataBuffer.Hi = ~value;
 
-                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to {0:x4}", _dataBufferHigh);
+                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to 0x{0:x}", _dataBuffer.Hi);
                     break;
 
                 case 0xd1:    // Shugart Header Address High register (4 bits)
-                    _headerAddressHigh = (~value) & 0xf;
+                    _headerAddress.Hi = ~value;
 
-                    Log.Debug(Category.HardDisk, "Shugart Header Address High set to {0:x4}", _headerAddressHigh);
+                    Log.Debug(Category.HardDisk, "Shugart Header Address High set to 0x{0:x}", _headerAddress.Hi);
                     break;
 
-                case 0xd8:    // Shugart Data Buffer Address Low register (unfrobbed)
-                    _dataBufferLow = (~(0x3ff ^ value)) & 0xffff;
+                case 0xd8:    // Shugart Data Buffer Address Low register (frobbed)
+                    //_dataBufferLow = (~(0x3ff ^ value)) & 0xffff;
+                    _dataBuffer.Lo = (ushort)value;
 
-                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to {0:x4}", _dataBufferLow);
+                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to 0x{0:x4}", _dataBuffer.Lo);
                     break;
 
-                case 0xd9:    // Shugart Header Address low register (unfrobbed)
-                    _headerAddressLow = (~(0x3ff ^ value)) & 0xffff;
+                case 0xd9:    // Shugart Header Address low register (frobbed)
+                    //_headerAddressLow = (~(0x3ff ^ value)) & 0xffff;
+                    _headerAddress.Lo = (ushort)value;
 
-                    Log.Debug(Category.HardDisk, "Shugart Header Address Low set to {0:x4}", _headerAddressLow);
+                    Log.Debug(Category.HardDisk, "Shugart Header Address Low set to 0x{0:x4}", _headerAddress.Lo);
                     break;
 
                 default:
@@ -205,12 +202,12 @@ namespace PERQemu.IO.DiskDevices
         /// </remarks>
         public void LoadCommandRegister(int data)
         {
-            var command = (Command)(data & 0x07);
+            _command = (Command)(data & 0x07);
             _seekCommand = (SeekCommand)(data & 0x78);
 
             // WHY, Three Rivers?
-            if ((command == Command.Reset && _seekCommand.HasFlag(SeekCommand.Step)) ||
-                (command == Command.Idle && _seekState == SeekState.WaitForStepRelease))
+            if ((_command == Command.Reset && _seekCommand.HasFlag(SeekCommand.Step)) ||
+                (_command == Command.Idle && _seekState == SeekState.WaitForStepRelease))
             {
                 // Command code 6 (Seek) is never actually sent to the hardware's
                 // disk state machine for some insane reason.  So a Step + Reset
@@ -218,14 +215,13 @@ namespace PERQemu.IO.DiskDevices
                 // AND the disk on EVERY BLOODY SEEK.  ARGH.  Similarly, an "idle"
                 // command can be the falling edge of a manual step pulse (by the
                 // microcode, not the Z80, typically during boot).  
-                command = Command.Seek;
+                _command = Command.Seek;
                 Log.Debug(Category.HardDisk, "'Hidden' Seek command! Step={0} Dir={1}",
                                              _seekCommand.HasFlag(SeekCommand.Step),
                                              _seekCommand.HasFlag(SeekCommand.Direction));
             }
 
-            Log.Detail(Category.HardDisk, "Shugart command data: {0:x4}", data);
-            Log.Debug(Category.HardDisk, "Shugart command is: {0}", command);
+            Log.Debug(Category.HardDisk, "Shugart command: 0x{0:x4} ({1})", data, _command);
 
             // If the FaultClear bit is set, send that to the drive now
             if (_seekCommand.HasFlag(SeekCommand.FaultClear))
@@ -234,7 +230,7 @@ namespace PERQemu.IO.DiskDevices
             }
 
             // Look at the command bits
-            switch (command)
+            switch (_command)
             {
                 case Command.Idle:
                     // Clear the busy status and the interrupt
@@ -275,7 +271,7 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 default:
-                    Log.Error(Category.HardDisk, "Unhandled Shugart command {0}", command);
+                    Log.Error(Category.HardDisk, "Unhandled Shugart command {0}", _command);
                     break;
             }
         }
@@ -389,26 +385,26 @@ namespace PERQemu.IO.DiskDevices
             // Read the sector from the disk
             var sec = _disk.GetSector(_cylinder, _head, _sector);
 
-            int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
-            int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
+            int data = IOBoard.Unfrob(_dataBuffer);
+            int header = IOBoard.Unfrob(_headerAddress);
 
             // Copy the data to the data buffer address
             for (int i = 0; i < sec.Data.Length; i += 2)
             {
                 int word = sec.Data[i] | (sec.Data[i + 1] << 8);
-                _system.Memory.StoreWord(dataAddr + (i >> 1), (ushort)word);
+                _system.Memory.StoreWord(data + (i >> 1), (ushort)word);
             }
 
             // And the header to the header address
             for (int i = 0; i < sec.Header.Length; i += 2)
             {
                 int word = sec.Header[i] | (sec.Header[i + 1] << 8);
-                _system.Memory.StoreWord(headerAddr + (i >> 1), (ushort)word);
+                _system.Memory.StoreWord(header + (i >> 1), (ushort)word);
             }
 
             Log.Debug(Category.HardDisk,
-                      "Shugart sector read complete from {0}/{1}/{2}, to memory at {3:x6}",
-                      _cylinder, _head, _sector, dataAddr);
+                      "Shugart sector read from {0}/{1}/{2} to memory 0x{3:x6}",
+                      _cylinder, _head, _sector, data);
 
             SetBusyState();
         }
@@ -428,12 +424,12 @@ namespace PERQemu.IO.DiskDevices
             // Todo: Should be a DMA op.  See above.
             var sec = _disk.GetSector(_cylinder, _head, _sector);
 
-            int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
-            int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
+            int data = IOBoard.Unfrob(_dataBuffer);
+            int header = IOBoard.Unfrob(_headerAddress);
 
             for (int i = 0; i < sec.Data.Length; i += 2)
             {
-                int word = _system.Memory.FetchWord(dataAddr + (i >> 1));
+                int word = _system.Memory.FetchWord(data + (i >> 1));
                 sec.Data[i] = (byte)(word & 0xff);
                 sec.Data[i + 1] = (byte)((word & 0xff00) >> 8);
             }
@@ -442,7 +438,7 @@ namespace PERQemu.IO.DiskDevices
             {
                 for (int i = 0; i < sec.Header.Length; i += 2)
                 {
-                    int word = _system.Memory.FetchWord(headerAddr + (i >> 1));
+                    int word = _system.Memory.FetchWord(header + (i >> 1));
                     sec.Header[i] = (byte)(word & 0xff);
                     sec.Header[i + 1] = (byte)((word & 0xff00) >> 8);
                 }
@@ -452,8 +448,8 @@ namespace PERQemu.IO.DiskDevices
             _disk.SetSector(sec);
 
             Log.Debug(Category.HardDisk,
-                      "Shugart sector write complete to {0}/{1}/{2}, from memory at {3:x6}",
-                      _cylinder, _head, _sector, dataAddr);
+                      "Shugart sector write to {0}/{1}/{2} from memory 0x{3:x6}",
+                      _cylinder, _head, _sector, data);
 
             SetBusyState();
         }
@@ -465,11 +461,11 @@ namespace PERQemu.IO.DiskDevices
         void FormatBlock()
         {
             var sec = new Sector(_cylinder, _head, _sector,
-                                    _disk.Geometry.SectorSize,
-                                    _disk.Geometry.HeaderSize);
+                                 _disk.Geometry.SectorSize,
+                                 _disk.Geometry.HeaderSize);
 
-            int dataAddr = _dataBufferLow | (_dataBufferHigh << 16);
-            int headerAddr = _headerAddressLow | (_headerAddressHigh << 16);
+            int dataAddr = IOBoard.Unfrob(_dataBuffer);
+            int headerAddr = IOBoard.Unfrob(_headerAddress);
 
             for (int i = 0; i < sec.Data.Length; i += 2)
             {
@@ -490,7 +486,7 @@ namespace PERQemu.IO.DiskDevices
             _disk.SetSector(sec);
 
             Log.Debug(Category.HardDisk,
-                      "Shugart sector format of {0}/{1}/{2} complete, from memory at {3:x6}",
+                      "Shugart sector format of {0}/{1}/{2} from memory 0x{3:x6}",
                       _cylinder, _head, _sector, dataAddr);
 
             SetBusyState();
@@ -512,9 +508,25 @@ namespace PERQemu.IO.DiskDevices
             // commands (reads, writes, etc) just fake up a short/fixed delay.
             _controllerBusy = true;
 
-            if (_seekState != SeekState.WaitForSeekComplete)
+            // Compute the delay for a block operation...
+            var delay = Settings.Performance.HasFlag(RateLimit.DiskSpeed) ?
+                                BlockDelayNsec :                // Accurate
+                                100 * Conversion.UsecToNsec;    // Fast
+
+            // Idle doesn't set busy to begin with; Reset should be quick (but
+            // do a minimal delay so the microcode can see the Busy transition
+            // and then reset happen).  Give it 1 usec for now?  PNX 2 seems
+            // sensitive to this.
+            if (_command == Command.Reset)
             {
-                _busyEvent = _system.Scheduler.Schedule(_busyDurationNsec, (skew, context) =>
+                delay = Conversion.UsecToNsec;
+            }
+
+            // Schedule the event to clear the busy bit and trigger an interrupt
+            // if we're NOT doing a seek -- because reasons okay
+            if (_command != Command.Seek)
+            {
+                _busyEvent = _system.Scheduler.Schedule(delay, (skew, context) =>
                 {
                     ClearBusyState(true);
                 });
@@ -608,26 +620,28 @@ namespace PERQemu.IO.DiskDevices
         byte _head;
         ushort _sector;
 
-        int _serialNumberLow;
-        int _serialNumberHigh;
-        int _blockNumber;
-        int _headerAddressLow;
-        int _headerAddressHigh;
-        int _dataBufferLow;
-        int _dataBufferHigh;
+        int _blockNumber;   // Not really used...
+
+        ExtendedRegister _serialNumber;
+        ExtendedRegister _headerAddress;
+        ExtendedRegister _dataBuffer;
 
         // Controller status
         bool _controllerBusy;
 
+        Command _command;
         SeekState _seekState;
         SeekCommand _seekCommand;
 
         // Work timing for reads/writes.  The mechanical delays are baked into
-        // the drive itself now; this accounts for the time to DMA the sector
-        // header and data (since we don't actually model that, currently).  The
-        // absolute best case at 100% utilization is 528 bytes (66 quads) * 680ns
-        // or 44.88usec, but let's make that a little more realistic?
-        ulong _busyDurationNsec = 100 * Conversion.UsecToNsec;
+        // the drive itself (seek, head settling, but not rotational latency);
+        // this accounts for the time to DMA the sector header and data (since
+        // we don't actually model that, currently).  The absolute best case at
+        // 100% utilization is 528 bytes (66 quads) * 680ns or 44.88usec, but
+        // the drive's specified 7Mbits/sec (875KB/sec) max transfer rate means
+        // at full tilt we could transfer a full block every ~585usec.  We can
+        // fiddle with this to make it more realistic.
+        readonly ulong BlockDelayNsec = 585 * Conversion.UsecToNsec;
 
         SchedulerEvent _busyEvent;
 
