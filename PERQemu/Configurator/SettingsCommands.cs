@@ -63,7 +63,7 @@ namespace PERQemu.UI
             Console.WriteLine("Pause when window minimized:    " + Settings.PauseWhenMinimized);
             Console.WriteLine("Cursor in PERQ display window:  " + Settings.CursorPreference);
             Console.WriteLine();
-            Console.WriteLine("Rate limiting options: " + Settings.Performance);
+            Console.WriteLine("Rate limiting options:  " + Settings.Performance);
             Console.WriteLine();
             Console.WriteLine("Default radix for CPU debugger: " + Settings.DebugRadix);
             Console.WriteLine("Default radix for Z80 debugger: " + Settings.Z80Radix);
@@ -80,6 +80,9 @@ namespace PERQemu.UI
             Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" :
                               Settings.RSBDevice == "RSX:" ? "RSX:" :
                               $"{Settings.RSBDevice} {Settings.RSBSettings}");
+            Console.Write("Host Ethernet device:       ");
+            Console.WriteLine(Settings.EtherDevice == string.Empty ? "<unassigned>" :
+                              $"{Settings.EtherDevice}");
 
             if (Settings.Changed)
             {
@@ -304,7 +307,7 @@ namespace PERQemu.UI
         }
 
         [Command("settings unassign rs232 device", "Unmap a device from a PERQ serial port")]
-        private void UnSetRS232Device(char port = 'a')
+        void UnSetRS232Device(char port = 'a')
         {
             var curDev = string.Empty;
 
@@ -343,7 +346,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Checks a host serial device specification.
         /// </summary>
-        private bool CheckDevice(ref string dev)
+        bool CheckDevice(ref string dev)
         {
             // Any host:  allow "rsx" or "rsx:", upcase it
             if (dev.ToUpper() == "RSX" || dev.ToUpper() == "RSX:")
@@ -373,8 +376,31 @@ namespace PERQemu.UI
             return false;
         }
 
+        [Command("settings assign ethernet device", "Map a host network adapter to the PERQ Ethernet device")]
+        public void SetEtherDev([KeywordMatch("NICs")] string hostDevice)
+        {
+            if (hostDevice != Settings.EtherDevice /* && hostDevice == "null" || it's a valid pcap device from the list */)
+            {
+                Settings.EtherDevice = hostDevice;
+                Settings.Changed = true;
+                QuietWrite($"Host adapter '{hostDevice}' assigned to the PERQ Ethernet device.");
+            }
+        }
+
+        [Command("settings unassign ethernet device", "Unmap a host network adapter (disable PERQ Ethernet)")]
+        public void UnsetEtherDev()
+        {
+            if (!string.IsNullOrEmpty(Settings.EtherDevice))
+            {
+                Settings.EtherDevice = string.Empty;
+                Settings.Changed = true;
+            }
+
+            QuietWrite("Ethernet device unassigned.");
+        }
+
         // Pure cheese.  Don't spew messages when reading on startup.
-        private void QuietWrite(string s)
+        void QuietWrite(string s)
         {
             if (PERQemu.Initialized) Console.WriteLine(s);
         }
@@ -398,17 +424,5 @@ namespace PERQemu.UI
 
 	settings::ethernet device [dev]         -- host interface to use
 	settings::ethernet encapsulation [raw, udp, 3to10bridge]
-	settings::ethernet use3rccPrefix        -- :-)
 	settings::audio device [dev]            -- audio output device?
-
-	When the PERQ Ethernet device is configured, we configure the
-	emulator-specific stuff with the particular Configuration:
-
-	configure::ethernet device [eio, oio]   -- only one or the other (automatic?)
-	configure::ethernet address [n] [m]     -- last two octets only
-											-- or just one for 3mbit!?
-
-	Can we use SDL2 for network access without requiring additional
-	libraries like Pcap?  Can we use the SDL2 audio without worrying
-	about extra configuration options?
 */

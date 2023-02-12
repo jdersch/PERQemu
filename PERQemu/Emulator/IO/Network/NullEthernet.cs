@@ -1,5 +1,5 @@
 ﻿//
-// FakeEthernet.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// NullEthernet.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -28,20 +28,20 @@ namespace PERQemu.IO.Network
     /// Accent properly start up its Net/Msg servers.  For now only responds
     /// to the OIO ports.  To be replaced by a proper Ethernet someday!
     /// </summary>
-    public class FakeEthernet
+    public class NullEthernet : INetworkController
     {
-        public FakeEthernet(PERQSystem sys)
+        public NullEthernet(PERQSystem sys)
         {
             _system = sys;
             _timer = null;
             _response = null;
 
             // Physical address is configurable, but fixed;
-            _physAddr = new MachineAddress(_system.Config.IOBoard);
+            _physAddr = new MachineAddress(_system.Config);
             _physAddr.Low = _system.Config.EtherAddress;
 
             // Receive address can be programmed; set to HW initially
-            _recvAddr = new MachineAddress(_system.Config.IOBoard);
+            _recvAddr = new MachineAddress(_system.Config);
             _recvAddr.Low = _physAddr.Low;
 
             _mcastGroups = new byte[6];
@@ -183,7 +183,7 @@ namespace PERQemu.IO.Network
         /// <summary>
         /// Write to the command register to control the action.
         /// </summary>
-        public void LoadCommand(byte address, int value)
+        public void LoadCommand(int value)
         {
             // Todo: For now, assume OIO (port 0x99) although I think the EIO
             // programming model at this level is identical?
@@ -297,7 +297,7 @@ namespace PERQemu.IO.Network
             }
         }
 
-        public int ReadStatus(byte address)
+        public int ReadStatus()
         {
             // Save the status we'll actually return to the caller
             var retVal = (int)_status;
@@ -383,7 +383,7 @@ namespace PERQemu.IO.Network
         // Debugging
         public void DumpEther()
         {
-            Console.WriteLine("Ethernet status:");
+            Console.WriteLine("Fake Ethernet status:");
             Console.WriteLine($"  My MAC address:    {_physAddr} ({_physAddr.High},{_physAddr.Mid},{_physAddr.Low})");
             Console.WriteLine($"  Receive address:   {_recvAddr} ({_recvAddr.High},{_recvAddr.Mid},{_recvAddr.Low})");
             Console.WriteLine($"  Control register:  {(int)_control:x} ({_control})");
@@ -414,6 +414,40 @@ namespace PERQemu.IO.Network
             Complete
         }
 
+        [Flags]
+        /// <summary>
+        /// OIO Ethernet control register bits.  NB: Reset is assert LOW.  Bits 7 and
+        /// 9..15 are undefined in the hardware but may be used by the microcode.
+        /// </summary>
+        enum Control
+        {
+            None = 0x0,
+            NetIntrEnable = 0x1,
+            ClockIntrEnable = 0x2,
+            ClockEnable = 0x4,
+            CounterEnable = 0x8,
+            Transmit = 0x10,
+            NotReset = 0x20,
+            Promiscuous = 0x40,
+            SleepFlag = 0x80,
+            Go = 0x100,
+            StartFlag = 0x200
+        }
+
+        [Flags]
+        enum Status
+        {
+            None = 0x0,
+            CRCError = 0x1,
+            Collision = 0x2,
+            Complete = 0x4,
+            Busy = 0x8,
+            Unused = 0x10,
+            Overflow = 0x20,
+            PacketInProgress = 0x40,
+            CarrierSense = 0x80
+        }
+
         State _state;
         Control _control;
         Status _status;
@@ -435,123 +469,5 @@ namespace PERQemu.IO.Network
         SchedulerEvent _response;
         SchedulerEvent _timer;
         PERQSystem _system;
-    }
-
-    [Flags]
-    /// <summary>
-    /// OIO Ethernet control register bits.  NB: Reset is assert LOW.  Bits 7 and
-    /// 9..15 are undefined in the hardware but may be used by the microcode.
-    /// </summary>
-    enum Control
-    {
-        None = 0x0,
-        NetIntrEnable = 0x1,
-        ClockIntrEnable = 0x2,
-        ClockEnable = 0x4,
-        CounterEnable = 0x8,
-        Transmit = 0x10,
-        NotReset = 0x20,
-        Promiscuous = 0x40,
-        SleepFlag = 0x80,
-        Go = 0x100,
-        StartFlag = 0x200
-    }
-
-    [Flags]
-    enum Status
-    {
-        None = 0x0,
-        CRCError = 0x1,
-        Collision = 0x2,
-        Complete = 0x4,
-        Busy = 0x8,
-        Unused = 0x10,
-        Overflow = 0x20,
-        PacketInProgress = 0x40,
-        CarrierSense = 0x80
-    }
-
-    /// <summary>
-    /// The PERQ's 48-bit Ethernet address.
-    /// </summary>
-    /// <remarks>
-    /// The hardware's fixed address is burned into the NET PROMs on the board.
-    /// For reasons lost to history, you don't just read the bytes directly; the
-    /// six octets are written via DMA into the header buffer in response to a
-    /// "special receive" command.  The first four bytes are fixed (three octets
-    /// 02:1c:7c assigned by Xerox, plus the board ID set by 3RCC) while the last
-    /// two are machine-specific, burned into the PROMs during manufacturing.
-    /// These aren't just returned as two bytes, though; they are given as four
-    /// nibbles, bit reversed, and must be flipped and reconstructed in software.
-    /// </remarks>
-    public struct MachineAddress
-    {
-        public MachineAddress(IOBoardType board)
-        {
-            _mac = new byte[6];
-
-            // First three octets allocated by Xerox 
-            _mac[0] = 0x02;
-            _mac[1] = 0x1c;
-            _mac[2] = 0x7c;
-
-            // Coded by 3RCC:  00 = OIO, 01 = EIO, 02 = 24-bit EIO!
-            _mac[3] = (byte)(board == IOBoardType.EIO ? 1 : 0);
-
-            // Read from the NET PROMs (or configured by the user)
-            _mac[4] = 0;
-            _mac[5] = 0;
-        }
-
-        // Just the bytes, ma'am
-        public byte[] MAC => _mac;
-
-        // These are fixed
-        public ushort High => (ushort)((_mac[0] << 8) | _mac[1]);
-        public ushort Mid => (ushort)((_mac[2] << 8) | _mac[3]);
-
-        // This one can be tweaked
-        public ushort Low
-        {
-            get
-            {
-                return (ushort)((_mac[4] << 8) | _mac[5]);
-            }
-
-            set
-            {
-                _mac[4] = (byte)(value >> 8);
-                _mac[5] = (byte)(value & 0xff);
-            }
-        }
-
-        // How the hardware returns the low word
-        public byte Hn => Mirror(_mac[4], 4);
-        public byte MHn => Mirror(_mac[4], 0);
-        public byte MLn => Mirror(_mac[5], 4);
-        public byte Ln => Mirror(_mac[5], 0);
-
-        // Return a bit-swapped nibble (OIO only)
-        byte Mirror(byte nibble, int offset)
-        {
-            var mirrored = 0;
-            nibble >>= offset;
-
-            // On OIO bits are stored in network order, so we have to flip them
-            for (var i = 0; i < 4; i++)
-            {
-                mirrored = (mirrored << 1) | (nibble & 0x1);
-                nibble >>= 1;
-            }
-
-            return (byte)(mirrored & 0xf);
-        }
-
-        public override string ToString()
-        {
-            return $"[MAC: {_mac[0]:x2}:{_mac[1]:x2}:{_mac[2]:x2}:{_mac[3]:x2}:{_mac[4]:x2}:{_mac[5]:x2}]";
-        }
-
-        byte[] _mac;
     }
 }

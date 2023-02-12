@@ -130,6 +130,16 @@
     <Reference Include="Z80dotNet, Version=1.0.6.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Z80dotNet.1.0.6.0\lib\net40-Client\Z80dotNet.dll</HintPath>
     </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.0.0\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="mscorlib" />
+    <Reference Include="PacketDotNet">
+      <HintPath>..\packages\PacketDotNet.1.4.7\lib\net47\PacketDotNet.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpPcap">
+      <HintPath>..\packages\SharpPcap.4.4.0\lib\SharpPcap.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Debugger\Z80Debugger.cs" />
@@ -214,7 +224,7 @@
     <Compile Include="Controller\Log.cs" />
     <Compile Include="Emulator\IO\DiskDevices\HardDisk.cs" />
     <Compile Include="Emulator\IO\DiskDevices\FloppyDisk.cs" />
-    <Compile Include="Emulator\IO\DiskDevices\ShugartController.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\ShugartDiskController.cs" />
     <Compile Include="Debugger\DebugAttribute.cs" />
     <Compile Include="Debugger\Debugger.cs" />
     <Compile Include="UI\SDL\EventLoop.cs" />
@@ -235,7 +245,12 @@
     <Compile Include="Emulator\IO\TapeDevices\Sidewinder.cs" />
     <Compile Include="Emulator\IO\TapeDevices\BlockBuffer.cs" />
     <Compile Include="Emulator\IO\TapeDevices\CartridgeTape.cs" />
-    <Compile Include="Emulator\IO\Network\FakeEthernet.cs" />
+    <Compile Include="Emulator\IO\Network\NullEthernet.cs" />
+    <Compile Include="Emulator\IO\Network\HostInterface.cs" />
+    <Compile Include="Emulator\IO\Network\Ether10MbitController.cs" />
+    <Compile Include="Emulator\IO\Network\Ether3MbitController.cs" />
+    <Compile Include="Emulator\IO\Network\MachineAddress.cs" />
+    <Compile Include="Emulator\IO\INetworkController.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

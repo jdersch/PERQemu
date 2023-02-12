@@ -52,11 +52,16 @@ namespace PERQemu.IO
 
             if (system.Config.IOOptions.HasFlag(IOOptionType.Ether))
             {
-                // The real one, someday
-                // _ether = new Ethernet10MbController();
-
-                // A hack to let Accent boot properly
-                _ether = new FakeEthernet(system);
+                if (Settings.EtherDevice == "null")
+                {
+                    // A minimal interface to let Accent boot properly
+                    _ether = new NullEthernet(system);
+                }
+                else
+                {
+                    // The real deal!
+                    _ether = new Ether10MbitController(system);
+                }
                 RegisterPorts(_etherPorts);
             }
 
@@ -70,7 +75,7 @@ namespace PERQemu.IO
             // _canon = new CanonPrinter();
         }
 
-        public FakeEthernet Ether => _ether;
+        public INetworkController Ether => _ether;
         public QICTapeController Streamer => _streamer;
 
         public override void Reset()
@@ -123,7 +128,7 @@ namespace PERQemu.IO
 
             switch (port)
             {
-                case 0x06:    // Fake Ethernet registers
+                case 0x06:    // Ethernet bit counter registers
                 case 0x07:
                     if (_ether != null)
                     {
@@ -135,7 +140,7 @@ namespace PERQemu.IO
                 case 0x0f:
                     if (_ether != null)
                     {
-                        retVal = _ether.ReadStatus(port);
+                        retVal = _ether.ReadStatus();
                         handled = true;
                     }
                     break;
@@ -204,17 +209,17 @@ namespace PERQemu.IO
                 case 0xd6:
                 case 0xd7:
                 case 0xde:
-                case 0xdf:    // Load (fake) Ethernet registers
+                case 0xdf:    // Load Ethernet registers
                     if (_ether != null)
                     {
                         _ether.LoadRegister(port, value);
                     }
                     break;
 
-                case 0x99:    // Load (fake) Ethernet control register
+                case 0x99:    // Load Ethernet control register
                     if (_ether != null)
                     {
-                        _ether.LoadCommand(port, value);
+                        _ether.LoadCommand(value);
                     }
                     break;
 
@@ -302,7 +307,7 @@ namespace PERQemu.IO
 
         // Attached devices
         PERQLink _link;
-        FakeEthernet _ether;
+        INetworkController _ether;
         QICTapeController _streamer;
     }
 }

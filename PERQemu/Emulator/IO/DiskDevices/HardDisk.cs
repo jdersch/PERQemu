@@ -230,7 +230,17 @@ namespace PERQemu.IO.DiskDevices
         {
             // Quick and dirty time delay, probably not very accurate; clamp it
             // to the max seek according to the specs (though if rate limiting
-            // is off, we could clip that to a "reasonable" minimum)
+            // is off, we could clip that to a "reasonable" minimum).
+
+            // NB: If the heads are already over the requested cylinder, we don't
+            // fire the SeekCompletion callback!  It _seems_ that the microcode
+            // generally checks for this and doesn't issue the seek in the first
+            // place, but we shouldn't rely on that; the question is whether the
+            // completion interrupt will cause more problems (at boot time) than
+            // treating a zero-track seek as a no-op solves.  This will have to
+            // be revisited when EIO is implemented (or if CIO Micropolis is ever
+            // figured out).  A 1usec delay for head switching isn't unreasonable
+            // if no head movement takes place?
             
             var steps = Math.Abs(_cyl - cyl);
             var delay = (Specs.MinimumSeek);

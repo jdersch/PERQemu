@@ -20,7 +20,10 @@
 using System;
 using System.IO;
 using System.IO.Ports;
+using System.Net.NetworkInformation;
 using System.Collections.Generic;
+
+using PERQemu.IO.Network;
 
 namespace PERQemu
 {
@@ -119,6 +122,7 @@ namespace PERQemu
 
             RSADevice = string.Empty;
             RSBDevice = string.Empty;
+            EtherDevice = string.Empty;
 
             RSASettings = new SerialSettings(9600, 8, Parity.None, StopBits.One);
             RSBSettings = new SerialSettings(9600, 8, Parity.None, StopBits.One);
@@ -164,10 +168,8 @@ namespace PERQemu
         public static SerialSettings RSASettings;
         public static SerialSettings RSBSettings;
 
+        public static string EtherDevice;
         //public static string AudioDevice;
-        //public static string EtherDevice;
-        //public static EtherEncapsulationType EtherEncapsulation;
-        //public static bool Use3RCCEtherMACPrefix;
 
         // Housekeeping
         public static string Reason;
@@ -182,6 +184,7 @@ namespace PERQemu
         {
             // Set the list of COM ports for the "assign rs232 device" command
             PERQemu.CLI.UpdateKeywordMatchHelpers("ComPorts", GetHostSerialPorts());
+            PERQemu.CLI.UpdateKeywordMatchHelpers("NICs", GetHostEthernetNICs());
 
             try
             {
@@ -266,7 +269,12 @@ namespace PERQemu
                         sw.WriteLine(RSBDevice == "RSX:" ? "RSX:" : $"{RSBDevice} {RSBSettings}");
                     }
 
-                    // todo: audio, Ethernet
+                    if (!string.IsNullOrEmpty(EtherDevice))
+                    {
+                        sw.WriteLine("assign ethernet device " + EtherDevice);
+                    }
+
+                    // todo: audio
 
                     if (!string.IsNullOrEmpty(OutputDirectory))
                         sw.WriteLine("output directory \"" + OutputDirectory + "\"");
@@ -338,6 +346,28 @@ namespace PERQemu
             }
 
             return ports.ToArray();
+        }
+
+        /// <summary>
+        /// Update the list of available Ethernet adapters (for the CLI).
+        /// </summary>
+        public static string[] GetHostEthernetNICs()
+        {
+            var nics = new List<string>();
+            var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+
+            // Add "null" for the NullEthernet device (to boot Accent without Ethernet)
+            nics.Add("null");
+
+            foreach (NetworkInterface adapter in interfaces)
+            {
+                if (HostInterface.IsEthernet(adapter.NetworkInterfaceType))
+                {
+                    nics.Add(adapter.Name);
+                }
+            }
+
+            return nics.ToArray();
         }
     }
 }

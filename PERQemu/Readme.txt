@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-2/3/2023 - skeezicsb - v0.5.1 (experimental)
+2/11/2023 - skeezicsb - v0.5.2 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
@@ -71,11 +71,11 @@ and adds a number of additional IO options.
 
 PERQemu versions through 0.4.5 focused exclusively on PERQ-1 support.  Before
 the Great Refactoring (v0.5.0 and beyond) the WinForms-based emulator could run
-only the PERQ-1 "old" Z80 with a single Shugart hard disk.  While the emulation
-was fairly complete, the options for OS and software to run were limited.  While
-the v0.5.0 release is a pretty major leap in functionality and the available
-software base has expanded greatly, it still only emulates PERQ-1 configurations.
+only the PERQ-1 "old" Z80 with a single Shugart hard disk.  The emulation was
+fairly complete, but the options for OS and software to run were limited.
 
+While the v0.5.0 release is a major leap in functionality and the available
+software base has expanded greatly, it still only emulates PERQ-1 configurations.
 Work on the experimental branch now shifts to expanded emulation options, adding
 new peripheral support (Ethernet, laser printer) and bug fixes, plus some new UI
 features along the way.  PERQ-2 support will then follow; see the (tentative)
@@ -157,10 +157,10 @@ There are several subdirectories:
             A bundle of the basic PNX 1.3 installation from the PERQmedia
             repository, but reformatted as a .prqm image.
 
-       Additional "stock" hard drive or floppy images may be included as
-       well.  Any custom disk images you create or import are loaded from
-       and saved in the Disks/ directory by default.  Please consult the
-       UserGuide for information about working with PERQemu media files.
+        Additional "stock" hard drive or floppy images may be included as
+        well.  Any custom disk images you create or import are loaded from
+        and saved in the Disks/ directory by default.  Please consult the
+        UserGuide for information about working with PERQemu media files.
 
     Output/
         When logging debug output to disk is enabled, log files go here by
@@ -355,9 +355,11 @@ The following hardware has been implemented in the emulator:
       any OS that supports it!
 
   Ethernet:
-    - A fake, bare-bones interface is now available when the "Ether" option for
-      the OIO option board is configured.  This is needed to allow Accent to
-      properly initialize.  Consult the User Guide for more details!
+    - A "null" bare-bones interface is now available when the "Ether" option for
+      the OIO option board is configured.  This allows Accent to initialize its
+      NetMsgServer so other peripheral server processes (floppy, serial, etc)
+      can start up.  Consult the User Guide for more details!
+    - Implementation of a real host Ethernet interface is underway.
 
 
 There is a ton of additional detail about the internals of PERQemu itself in
@@ -368,7 +370,7 @@ Docs/ directory for way, way more information than you need.  Way more.
 3.1 What's Not
 --------------
  
-- Ethernet.  Unimplemented, but on the list! [See above]
+- Ethernet.  Unimplemented, but in development! [See above]
 
 - Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
  
@@ -452,9 +454,8 @@ v0.7 - TBD
   - Canon laser printer
   - Get screenshots working again
 
-v0.5 - New baseline
-  Merge the experiments back into the master branch once the new Z80 and all
-  of the new features are reasonably stable:
+v0.5.0 - New baseline
+  (Pending) Merge the experiments back into the master branch:
   - True Z80 emulation
   - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
   - 64-bit Mono/MacOS build (no 32-bit WinForms limitation)

@@ -1019,6 +1019,11 @@ namespace PERQemu
             }
         }
 
+        [Command("debug show ethernet devices", "List available host Ethernet interfaces")]
+        public void ShowEtherDevices()
+        {
+            IO.Network.HostInterface.ShowInterfaceSummary();
+        }
 
         [Command("debug dump ethernet", "Dump the internal state of the fake Ethernet device")]
         public void ShowEtherStatus()

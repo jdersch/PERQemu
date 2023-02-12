@@ -8,6 +8,9 @@ avoid wasting precious time scrolling to the end. :-)
 
 February, 2023:
 
+    3. Start adding the framework for Ethernet support.  Bumped version to
+    distinguish from the abortive Micropolis effort.
+
     2. Fixed some small bugs that allowed PNX 2 to install itself and built up
     a Shugart disk image.  However, ICL's interpretation of the video hardware
     programming produces corrupted/inconsistent display.  Once that's debugged
@@ -32,4 +35,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Sat Feb  4 15:55:46 PST 2023
+Last update: skeezics    Sat Feb 11 18:59:03 PST 2023

@@ -101,7 +101,7 @@ namespace PERQemu.IO.DiskDevices
         /// <summary>
         /// Attach a drive.  For now, only a single unit is supported.
         /// </summary>
-		public void AttachDrive(uint unit, StorageDevice dev)
+        public void AttachDrive(uint unit, StorageDevice dev)
         {
             if (_disk != null)
                 throw new InvalidOperationException($"MicropolisController only supports 1 disk");
@@ -140,7 +140,7 @@ namespace PERQemu.IO.DiskDevices
                     //
                     // We save the low 4 bits here.  The nibble command byte tracks
                     // transitions of the BusEn pin to shift the low nibble into the
-                    // upper nibble latch (_busLatch) so that a full 8-bit byte is
+                    // upper nibble latch (_nibLatch) so that a full 8-bit byte is
                     // transferred to the drive.  In SOME versions of the microcode?
                     // In others this is still treated like the Shugart head select!?
                     // ARGH.
@@ -714,7 +714,7 @@ namespace PERQemu.IO.DiskDevices
             WriteChk = 3,       // Write Data - Check Header
             Write = 4,          // Write Data - Write Header
             Format = 5,         // Format Write
-            Seek = 6,           // Unused
+            Seek = 6,           // Seek (unused)
             Reset = 7           // Reset controller
         }
 

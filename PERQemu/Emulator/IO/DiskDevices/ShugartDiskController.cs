@@ -169,14 +169,12 @@ namespace PERQemu.IO.DiskDevices
                     break;
 
                 case 0xd8:    // Shugart Data Buffer Address Low register (frobbed)
-                    //_dataBufferLow = (~(0x3ff ^ value)) & 0xffff;
                     _dataBuffer.Lo = (ushort)value;
 
                     Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to 0x{0:x4}", _dataBuffer.Lo);
                     break;
 
                 case 0xd9:    // Shugart Header Address low register (frobbed)
-                    //_headerAddressLow = (~(0x3ff ^ value)) & 0xffff;
                     _headerAddress.Lo = (ushort)value;
 
                     Log.Debug(Category.HardDisk, "Shugart Header Address Low set to 0x{0:x4}", _headerAddress.Lo);
