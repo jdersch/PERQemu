@@ -19,16 +19,23 @@
 
 using System;
 
+using PERQemu.Config;
+using PERQemu.Processor;
+
 namespace PERQemu.IO.Network
 {
     /// <summary>
     /// PERQ side of the "homegrown" OIO or EIO 10Mbit Ethernet controller.
     /// </summary>
+    /// <remarks>
+    /// Some programming documentation in Docs/HW/Ethernet_Guide_Sep81.txt.
+    /// </remarks>
     public class Ether10MbitController : INetworkController
     {
         public Ether10MbitController(PERQSystem sys)
         {
             _system = sys;
+            _nic = null;
             _timer = null;
             _response = null;
 
@@ -42,6 +49,10 @@ namespace PERQemu.IO.Network
 
             _mcastGroups = new byte[6];
 
+            // Set interrupt vector based on board type
+            _irq = (_system.Config.IOBoard == IOBoardType.EIO ? InterruptSource.Network :
+                                                                InterruptSource.X);
+            
             Log.Debug(Category.Ethernet, "Interface created {0}", _physAddr);
         }
 
@@ -66,7 +77,7 @@ namespace PERQemu.IO.Network
 
             if (_clockInterrupt || _netInterrupt)
             {
-                _system.CPU.ClearInterrupt(Processor.InterruptSource.X);
+                _system.CPU.ClearInterrupt(_irq);
             }
             _clockInterrupt = false;
             _netInterrupt = false;
@@ -320,8 +331,8 @@ namespace PERQemu.IO.Network
 
             // Assume that reading the status register clears the interrupt
             // regardless of whether the net or timer raised it -- or both!?
-            _system.CPU.ClearInterrupt(Processor.InterruptSource.X);
-            Log.Debug(Category.Ethernet, "Read status: X interrupt cleared, returning {0}", retVal);
+            _system.CPU.ClearInterrupt(_irq);
+            Log.Debug(Category.Ethernet, "Read status: {0} interrupt cleared, returning {1}", _irq, retVal);
             return retVal;
         }
 
@@ -337,7 +348,7 @@ namespace PERQemu.IO.Network
             {
                 // Update our status and raise the interrupt
                 _status |= Status.Overflow;
-                _system.CPU.RaiseInterrupt(Processor.InterruptSource.X);
+                _system.CPU.RaiseInterrupt(_irq);
                 _timer = null;
             }
         }
@@ -373,7 +384,7 @@ namespace PERQemu.IO.Network
             _state = State.Complete;
             _status &= ~Status.Busy;
             _netInterrupt = true;
-            _system.CPU.RaiseInterrupt(Processor.InterruptSource.X);
+            _system.CPU.RaiseInterrupt(_irq);
         }
 
         // Debugging
@@ -399,6 +410,11 @@ namespace PERQemu.IO.Network
                               _bitCount);
 
             Console.WriteLine("\n  Multicast bytes:   {0}", string.Join(", ", _mcastGroups));
+
+            if (_nic == null) return;
+
+            Console.WriteLine($"\nHost adapter status:");
+            Console.WriteLine($"  NIC {_nic.Name} - {_nic.Description}");
         }
 
         enum State
@@ -448,6 +464,8 @@ namespace PERQemu.IO.Network
         Control _control;
         Status _status;
 
+        InterruptSource _irq;
+
         MachineAddress _physAddr;
         MachineAddress _recvAddr;
 
@@ -461,6 +479,8 @@ namespace PERQemu.IO.Network
 
         ushort _bitCount;
         ushort _usecClock;
+
+        HostInterface _nic;
 
         SchedulerEvent _response;
         SchedulerEvent _timer;

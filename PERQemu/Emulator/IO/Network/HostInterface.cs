@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.Net.NetworkInformation;
 
 using SharpPcap;
+using SharpPcap.LibPcap;
 using PacketDotNet;
 
 namespace PERQemu.IO.Network
@@ -34,6 +35,48 @@ namespace PERQemu.IO.Network
     {
         public HostInterface()
         {
+            _adapter = null;
+        }
+
+        public HostInterface(ICaptureDevice dev)
+        {
+            _adapter = dev;
+        }
+
+        public string Name => _adapter.Name;
+        public string Description => _adapter.Description;
+
+        public bool Start()
+        {
+            if (_adapter == null) return false;
+
+            _adapter.Open(DeviceMode.Promiscuous);
+            _adapter.OnPacketArrival += OnPacketArrival;
+            _adapter.StartCapture();
+
+            return _adapter.Started;
+        }
+
+        void OnPacketArrival(object s, CaptureEventArgs e)
+        {
+            Console.WriteLine(e.Packet);
+        }
+
+        public void Shutdown()
+        {
+            try
+            {
+                _adapter.StopCapture();
+            }
+            catch (Exception e)
+            {
+                // Log, but throw away exceptions since we're shutting down...
+                Log.Info(Category.Ethernet, "Exception on shutdown (ignored): {0}", e.Message);
+            }
+            finally
+            {
+                _adapter.Close();
+            }
         }
 
         // Weed out the non-Ethernet interfaces.  On Mac/Mono everything shows
@@ -54,69 +97,47 @@ namespace PERQemu.IO.Network
         // Debugging
         public static void ShowInterfaceSummary()
         {
+            // Show the C# runtime's view
             var interfaces = NetworkInterface.GetAllNetworkInterfaces();
 
             foreach (NetworkInterface adapter in interfaces)
             {
                 if (!IsEthernet(adapter.NetworkInterfaceType)) continue;
 
-                Console.WriteLine("Name: {0}", adapter.Name);
+                Console.WriteLine("ID: {0}  Name: {1}", adapter.Id, adapter.Name);
                 Console.WriteLine(adapter.Description);
                 Console.WriteLine(string.Empty.PadLeft(adapter.Description.Length, '='));
                 Console.WriteLine("  Interface type ......... : {0}", adapter.NetworkInterfaceType);
                 Console.WriteLine("  Operational status ..... : {0}", adapter.OperationalStatus);
                 Console.WriteLine("  Hardware address ....... : {0}", adapter.GetPhysicalAddress());
-
-                // Create a display string for the supported IP versions
-                //string versions = "";
-
-                //if (adapter.Supports(NetworkInterfaceComponent.IPv4))
-                //{
-                //    versions = "IPv4";
-                //}
-                //if (adapter.Supports(NetworkInterfaceComponent.IPv6))
-                //{
-                //    if (versions.Length > 0)
-                //    {
-                //        versions += " ";
-                //    }
-                //    versions += "IPv6";
-                //}
-                //Console.WriteLine("  IP version ............. : {0}", versions);
                 Console.WriteLine();
             }
             Console.WriteLine();
+
+            // Let's see what Pcap gives us...
+            var ver = SharpPcap.Version.VersionString;
+            Console.WriteLine("SharpPcap {0} devices:", ver);
+
+            // Retrieve the device list
+            var devices = CaptureDeviceList.New();
+
+            // If no devices were found print an error
+            if (devices.Count < 1)
+            {
+                Console.WriteLine("No devices were found on this machine");
+                return;
+            }
+
+            int i = 0;
+
+            // Print out the devices
+            foreach (var dev in devices)
+            {
+                Console.WriteLine("{0}) {1} {2}", i, dev.Name, dev.Description);
+                i++;
+            }
         }
+
+        ICaptureDevice _adapter;
     }
 }
-
-/*
-    Notes:
-
-    Constructor takes the name (string) to locate, initialize the interface?
-
-    How can we do NAT for the PERQs to see each other on a busy network?
-    Proxy ARP?  On Mac/Linux can probably rename or alias the MAC addr with
-    relative ease (mac: "sudo ifconfig en1 ether 02:1c:7c:00:ba:be") but that
-    gets a little annoying if you want to switch from OIO to EIO or change
-    the last word...
-
-       PERQemu  <-->    HW MAC        <==>     HW MAC   <-->   PERQemu
-    2:1c:7c:0:a:b   0:1D:4F:46:F8:2D        0:8:0:20:f:c    2:1c:7c:1:d:e
-    
-    We have to learn the address of the other hosts!  Build our own ARP/NAT
-    table?!  Hmm.  That's ugly.  Or impossible without a custom protocol!?
-    No!  Regular ARP would work?
-
-    Sender:     Sends packet addressed to 2:1c:7c:1:d:e
-                NAT translates local 2:1c:7c:0:a:b outbound -> 0:1d:4f:46:f8:2d
-
-    Receiver:   Host 0:8:0:20:f:c (in promiscuous mode) sees dest 2:1c:7c:1:d:e
-                That's me!  Replies (translated) 1:d:e is at 0:8:0:20etc
-
-    Sender:     Host 0:1d:4f:46:f8:2d (promisc) sees reply and translates response
-                Sees reply from 1:d:e (8:0:20 is rewritten)
-
-    Do we need to maintain a table of mappings?  Just for informational purposes?
-
- */

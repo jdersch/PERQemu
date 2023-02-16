@@ -50,15 +50,15 @@ Halfway through the implementation it was clear that separating the drive and
 controller into distinct parts (like the FloppyDisk/NECuPD765 implementation)
 would help keep the code more manageable.  So a third "half" (CartridgeTape.cs)
 provides the mechanical ops and wraps the underlying StorageDevice, while the
-intelligent controller is emulated by the Sidewinder class.  This 
+intelligent controller is emulated by the Sidewinder class. 
 
 The physical drive is built to fit the same mechanical dimensions as the Shugart
 8" floppy drives, and in theory (assuming the mounting holes line up) you could
 replace the SA851 with a 3020I inside the cabinet, but for emulation purposes we
 assume that the streamer is an external add-on.  Like the floppy the QIC-02 bus
 protocol and electrical interface can attach from 1-4 drives in a string.  But
-as with the floppy implementation, however, the PERQ only supports one drive at
-the default address (drive select 0, or "unit #3" in PERQemu configurations).
+as with the floppy implementation, the PERQ only supports one drive at the
+default address (drive select 0, or "unit #3" in PERQemu configurations).
 
 The command set is very simple, but the extremely low-level interface makes it
 cumbersome to implement.  There are seven commands issued by the controller.
@@ -167,11 +167,11 @@ Specs from the loaded file.  "Archive20" media is the default 20MB tape for the
 3020I (30IPS) drive.  Since the software doesn't seem to have any difficulty
 with the faster 9020I (90IPS) rate, turning off the TapeSpeed rate limit with
 the "settings rate limit" command uses the 90IPS specs.  Note that by definition
-the 30IPS uses 90IPS for positioning operations.
+the 30IPS drive runs at 90IPS for positioning operations.
 
 The Archive45 and Archive60 formats are included in the device configuration
 database to simulate the 9045I drive.  This is a 90IPS Sidewinder model that
-uses 9 tracks instead of 4, yielding capacitiese of 45MB on a 450' DC-300XL or 
+uses 9 tracks instead of 4, yielding capacities of 45MB on a 450' DC-300XL or 
 60MB on a 600' DC-600A.  Preliminary testing shows that these work fine, but
 the 24MB limit of the Shugart hard drive / PERQ-1 configuration doesn't allow
 for testing the full capacities.
