@@ -19,6 +19,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net.NetworkInformation;
 
 using PERQemu.Config;
 
@@ -119,27 +120,106 @@ namespace PERQemu.IO.Network
     /// Store an Ethernet address translation so that virtual PERQs can be easily
     /// mapped to their hosts.  Largely for stats/debugging?
     /// </summary>
-    public struct NATEntry
+    public class NATEntry
     {
-        //  PERQ's MAC
-        //  Host MAC
-        //  Last received
-        //  Count?
+        public NATEntry(PhysicalAddress host, PhysicalAddress perq)
+        {
+            Host = host;
+            Perq = perq;
+            FirstSeen = DateTime.Now;
+            LastReceived = DateTime.Now;
+            Sent = Received = 0;
+        }
 
-        MachineAddress _perq;
-        MachineAddress _host;
-        DateTime _firstSeen;
-        DateTime _lastReceived;
-        ulong _count;
+        public override string ToString()
+        {
+            return $"[Host: {Host}  Perq: {Perq}]";
+        }
+
+        public PhysicalAddress Host;        // Host MAC
+        public PhysicalAddress Perq;        // PERQ's MAC
+        public DateTime FirstSeen;          // Date/time mapping established
+        public DateTime LastReceived;       // Date/time last packet/update received
+        public ulong Received;              // Count Host->Perq mappings
+        public ulong Sent;                  // Count Perq->Host mappings
     }
 
+    /// <summary>
+    /// A (very) simple Network Address Translation table, mapping a given host
+    /// MAC address to an emulated PERQ address.
+    /// </summary>
     public class NATTable
     {
-        //  Add a discovered host
-        //  Update the count/timestamp when new packets received
-        //  Age out old entries?  Check for conflicts/address changes?
-        //  Dump the table for debugging/info
+        public NATTable()
+        {
+            _entries = new Dictionary<PhysicalAddress, NATEntry>();
+        }
 
-        Dictionary<MachineAddress, NATEntry> _entries;
+        public void Reset()
+        {
+        }
+
+        /// <summary>
+        /// Flush the entire table.
+        /// </summary>
+        public void Flush()
+        {
+            _entries.Clear();
+            Log.Info(Category.Ethernet, "NAT table flushed");
+        }
+
+        /// <summary>
+        /// Add a new mapping.  We leave initialization up to the caller.
+        /// </summary>
+        public void Add(NATEntry ent)
+        {
+            // Make sure it isn't already there...
+            if (_entries.ContainsValue(ent))
+            {
+                Log.Debug(Category.Ethernet, "Can't add duplicate NAT entry, ignored {0}", ent);
+            }
+
+            _entries.Add(ent.Host, ent);
+            Log.Debug(Category.Ethernet, "NAT entry added {0}", ent);
+        }
+
+        /// <summary>
+        /// Search the table to see if we've seen PERQ traffic from a given source
+        /// MAC address before.  If so, return the NAT entry; otherwise, null.
+        /// </summary>
+        public NATEntry LookupHost(PhysicalAddress host)
+        {
+            if (_entries.ContainsKey(host))
+            {
+                return _entries[host];
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Look up another PERQ (real or virtual) in the inverse map and return
+        /// the host entry for it.
+        /// </summary>
+        public NATEntry LookupPerq(PhysicalAddress perq)
+        {
+            return LookupHost(_perqToHost[perq]);
+        }
+
+        /// <summary>
+        /// Bump the access/packet count and receive time for the given host.
+        /// Quietly no-op if not in table?
+        /// </summary>
+        public void Update(PhysicalAddress host)
+        {
+            if (_entries.ContainsKey(host))
+            {
+                _entries[host].LastReceived = DateTime.Now;
+                _entries[host].Received++;
+            }
+        }
+
+        Dictionary<PhysicalAddress, NATEntry> _entries;
+        Dictionary<PhysicalAddress, PhysicalAddress> _perqToHost;
     }
 }

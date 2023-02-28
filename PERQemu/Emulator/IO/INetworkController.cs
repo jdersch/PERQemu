@@ -17,17 +17,23 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+using System.Net.NetworkInformation;
+
 namespace PERQemu.IO
 {
     public interface INetworkController
     {
         void Reset();
+        void Shutdown();
 
         void LoadCommand(int value);
         void LoadRegister(byte address, int value);
 
         int ReadStatus();
         int ReadRegister(byte address);
+
+        bool WantReceive(PhysicalAddress dest);
+        void DoReceive(byte[] packet);
 
         void DumpEther();
     }

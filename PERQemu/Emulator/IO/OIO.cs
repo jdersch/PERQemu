@@ -244,6 +244,17 @@ namespace PERQemu.IO
             return 1;
         }
 
+        public override void Shutdown()
+        {
+            // Make sure our Ethernet (if configured) is properly shut down!
+            if (_ether != null && _ether.GetType() == typeof(Ether10MbitController))
+            {
+                _ether.Shutdown();
+            }
+
+            base.Shutdown();
+        }
+
         /// <summary>
         /// Complete list of IO ports used by the Option IO boards.  At present
         /// we only emulate the Link and Streamer options.
@@ -262,7 +273,7 @@ namespace PERQemu.IO
 
         byte[] _etherPorts =
         {
-            // Ethernet ports (TODO: not yet implemented)
+            // Ethernet ports
             0x06,   // 006 E10ORdBCLow: read Ethernet bit count low byte
             0x07,   // 007 E10ORdBCHgh:   "      "     "    "   high byte
             0x0f,   // 017 E10ORdNetCR:   "      "    control register

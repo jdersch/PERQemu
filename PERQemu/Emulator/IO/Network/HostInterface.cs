@@ -24,6 +24,7 @@ using System.Net.NetworkInformation;
 using SharpPcap;
 using SharpPcap.LibPcap;
 using PacketDotNet;
+using PacketDotNet.Utils;
 
 namespace PERQemu.IO.Network
 {
@@ -33,35 +34,105 @@ namespace PERQemu.IO.Network
     /// </summary>
     public class HostInterface
     {
-        public HostInterface()
+        public HostInterface(INetworkController controller, string devName)
         {
-            _adapter = null;
-        }
+            _nat = new NATTable();
+            _controller = controller;
+            _adapter = GetAdapter(devName);
 
-        public HostInterface(ICaptureDevice dev)
-        {
-            _adapter = dev;
+            if (_adapter == null)
+            {
+                Log.Warn(Category.Ethernet, "Adapter is not present; no Ethernet available.");
+            }
+            else
+            {
+                // Open the device and register our receive callback
+                // Todo: catch in case the open fails?
+                _adapter.Open(DeviceMode.Promiscuous, 0);
+                _adapter.OnPacketArrival += OnPacketArrival;
+            }
         }
 
         public string Name => _adapter.Name;
         public string Description => _adapter.Description;
+        public bool Running => (_adapter != null && _adapter.Started);
 
-        public bool Start()
+        /// <summary>
+        /// There's nothing to reset, really; we just use this to lazily start
+        /// packet capture once the rest of the virtual PERQ is set up.
+        /// </summary>
+        public void Reset()
         {
-            if (_adapter == null) return false;
-
-            _adapter.Open(DeviceMode.Promiscuous);
-            _adapter.OnPacketArrival += OnPacketArrival;
-            _adapter.StartCapture();
-
-            return _adapter.Started;
+            if (!Running)
+            {
+                _adapter.StartCapture();
+            
+                Log.Write(Category.Ethernet, "Adapter reset (packet capture started)");
+            }
         }
 
+        /// <summary>
+        /// Send a raw Ethernet packet straight from the PERQ, baybee!!
+        /// </summary>
+        public bool SendPacket(byte[] packet)
+        {
+            try
+            {
+                // Todo: NAT the addresses here!!
+
+                EthernetPacket raw = new EthernetPacket(new ByteArraySegment(packet));
+                Console.WriteLine(raw.PrintHex());
+
+                _adapter.SendPacket(packet);
+                return true;
+            }
+            catch (PcapException ex)
+            {
+                Log.Write(Category.Ethernet, "Failed to send packet: {0}", ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Callback for incoming packets.
+        /// </summary>
         void OnPacketArrival(object s, CaptureEventArgs e)
         {
+            // See what SharpPcap dumps out
             Console.WriteLine(e.Packet);
+
+            // Start with the raw Ethernet frame
+            if (e.Packet.LinkLayerType == LinkLayers.Ethernet)
+            {
+                EthernetPacket raw = null;
+
+                try
+                {
+                    raw = (EthernetPacket)Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+                }
+                catch (PcapException ex)
+                {
+                    Log.Warn(Category.Ethernet, "Failed to parse packet: {0}", ex.Message);
+                    raw = null;
+                }
+
+                // TODO: Is it a RARP?  Then parse it locally to update our NAT
+                // table to track other PERQs out on the net
+
+                // Ask the controller if it wants the packet and has room for it
+                if (_controller.WantReceive(raw.DestinationHwAddress))
+                {
+                    // Yep!  Queue it up and return
+                    _controller.DoReceive(raw.Bytes);
+                }
+                // else: discard it
+            }
+            // else: log that it was something we couldn't read?
         }
 
+        /// <summary>
+        /// Stop packet capture, detach the callback and shutdown this instance.
+        /// </summary>
         public void Shutdown()
         {
             try
@@ -75,15 +146,23 @@ namespace PERQemu.IO.Network
             }
             finally
             {
+                _adapter.OnPacketArrival -= OnPacketArrival;
                 _adapter.Close();
+
+                Log.Write(Category.Ethernet, "Adapter shutdown");
             }
         }
 
-        // Weed out the non-Ethernet interfaces.  On Mac/Mono everything shows
-        // up as plain Ethernet (and most of these will never appear) but let's
-        // be complete.  I find it vaguely hilarious that MS includes 3Mbit as
-        // an enumeration.  That port of Windows to Alto, PDP-11 or PERQ coming
-        // along any day now?
+        /// <summary>
+        /// Weed out the non-Ethernet interfaces.  On Mac/Mono everything shows
+        /// up as plain Ethernet (and most of these will never appear) but let's
+        /// be complete.  I find it vaguely hilarious that MS includes 3Mbit as
+        /// an enumeration.  That port of Windows to Alto, PDP-11 or PERQ coming
+        /// along any day now?
+        /// 
+        /// This will probably go away since I'll probably have to use the #Pcap
+        /// names to make it simpler to store/match names.  Ugh.
+        /// </summary>
         public static bool IsEthernet(NetworkInterfaceType t)
         {
             return (t == NetworkInterfaceType.Ethernet ||
@@ -93,6 +172,30 @@ namespace PERQemu.IO.Network
                     t == NetworkInterfaceType.GigabitEthernet);
         }
 
+        /// <summary>
+        /// Find the adapter that matches the interface name.  OF COURSE the C#
+        /// runtime has a completely different way of doing this from SharpPcap,
+        /// so I have no idea how the hell we're supposed to store this value in
+        /// a sane way.  Windows gives back a stupid GUID-long-ass-path-thing
+        /// rather than just "en0" or "eth1" or even a Windowsy "NET0:".  UGH.
+        /// </summary>
+        public static ICaptureDevice GetAdapter(string name)
+        {
+            var devices = CaptureDeviceList.Instance;
+
+            // Run through the list and try to match exactly...
+            if (devices.Count > 0)
+            {
+                foreach (var dev in devices)
+                {
+                    if (dev.Name.ToLowerInvariant() == name.ToLowerInvariant())
+                        return dev;
+                }
+            }
+
+            Log.Write("Could not find a match for Ethernet adapter '{0}'", name);
+            return null;
+        }
 
         // Debugging
         public static void ShowInterfaceSummary()
@@ -119,12 +222,12 @@ namespace PERQemu.IO.Network
             Console.WriteLine("SharpPcap {0} devices:", ver);
 
             // Retrieve the device list
-            var devices = CaptureDeviceList.New();
+            var devices = CaptureDeviceList.Instance;
 
             // If no devices were found print an error
             if (devices.Count < 1)
             {
-                Console.WriteLine("No devices were found on this machine");
+                Console.WriteLine("No Ethernet adapters were found on this machine");
                 return;
             }
 
@@ -133,11 +236,14 @@ namespace PERQemu.IO.Network
             // Print out the devices
             foreach (var dev in devices)
             {
-                Console.WriteLine("{0}) {1} {2}", i, dev.Name, dev.Description);
+                Console.WriteLine("{0}) {1} - {2}", i, dev.Name, dev.Description);
                 i++;
             }
         }
 
         ICaptureDevice _adapter;
+        INetworkController _controller;
+
+        NATTable _nat;
     }
 }

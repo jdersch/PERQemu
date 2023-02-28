@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Net.NetworkInformation;
 
 namespace PERQemu.IO.Network
 {
@@ -25,7 +26,7 @@ namespace PERQemu.IO.Network
     /// PERQ side of the rare 3Mbit Ethernet controller.  To be implemented like
     /// ContrAlto using 3-in-10 encapsulation.  A placeholder for now.
     /// </summary>
-    public class Ether3MbitController
+    public class Ether3MbitController : INetworkController
     {
         public Ether3MbitController(PERQSystem sys)
         {
@@ -34,7 +35,10 @@ namespace PERQemu.IO.Network
 
         public void Reset()
         {
+        }
 
+        public void Shutdown()
+        {
         }
 
         public void LoadRegister(byte address, int value)
@@ -42,9 +46,9 @@ namespace PERQemu.IO.Network
             throw new InvalidOperationException($"Unhandled write to port 0x{address:x}");
         }
 
-        public void LoadCommand(byte address, int value)
+        public void LoadCommand(int value)
         {
-            throw new InvalidOperationException($"Unhandled write to port 0x{address:x}");
+            throw new InvalidOperationException("Unhandled write to command port");
         }
 
         public int ReadRegister(byte address)
@@ -52,9 +56,19 @@ namespace PERQemu.IO.Network
             throw new InvalidOperationException($"Unhandled read from port 0x{address:x}");
         }
 
-        public int ReadStatus(byte address)
+        public int ReadStatus()
         {
             return -1;
+        }
+
+        public bool WantReceive(PhysicalAddress dest)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DoReceive(byte[] packet)
+        {
+            throw new NotImplementedException();
         }
 
         // Debugging
@@ -62,7 +76,6 @@ namespace PERQemu.IO.Network
         {
             Console.WriteLine("3Mbit Ethernet status:  Not yet implemented");
         }
-
 
         PERQSystem _system;
     }

@@ -18,7 +18,7 @@
 //
 
 using System;
-
+using System.Net.NetworkInformation;
 using PERQemu.Config;
 
 namespace PERQemu.IO.Network
@@ -87,7 +87,11 @@ namespace PERQemu.IO.Network
                 _mcastGroups[i] = 0;
             }
 
-            Log.Debug(Category.Ethernet, "Interface reset");
+            Log.Debug(Category.Ethernet, "Controller reset");
+        }
+
+        public void Shutdown()
+        {
         }
 
         public void LoadRegister(byte address, int value)
@@ -378,6 +382,15 @@ namespace PERQemu.IO.Network
             _status &= ~Status.Busy;
             _netInterrupt = true;
             _system.CPU.RaiseInterrupt(Processor.InterruptSource.X);
+        }
+
+        public bool WantReceive(PhysicalAddress dest)
+        {
+            return false;
+        }
+
+        public void DoReceive(byte[] packet)
+        {
         }
 
         // Debugging
