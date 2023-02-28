@@ -23,6 +23,8 @@ namespace PERQemu.IO
 {
     public interface INetworkController
     {
+        PhysicalAddress MACAddress { get; }
+
         void Reset();
         void Shutdown();
 

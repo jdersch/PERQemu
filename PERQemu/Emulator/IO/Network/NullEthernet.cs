@@ -49,7 +49,7 @@ namespace PERQemu.IO.Network
             Log.Debug(Category.Ethernet, "Interface created {0}", _physAddr);
         }
 
-        public MachineAddress HWAddress => _physAddr;
+        public PhysicalAddress MACAddress => _physAddr.PA;
 
         // The Multicast Command Byte
         public byte MCB => _mcastGroups[0];

@@ -33,6 +33,8 @@ namespace PERQemu.IO.Network
             _system = sys;
         }
 
+        public PhysicalAddress MACAddress => PhysicalAddress.None;
+
         public void Reset()
         {
         }

@@ -65,8 +65,8 @@ namespace PERQemu.IO.Network
             Log.Write(Category.Ethernet, "Interface created {0}", _physAddr);
         }
 
-        // Give back the PERQ-formatted MAC address
-        public MachineAddress HWAddress => _physAddr;
+        // Give back the hardware MAC address
+        public PhysicalAddress MACAddress => _physAddr.PA;
 
         // The Multicast Command Byte
         public byte MCB => _mcastGroups[0];
@@ -108,7 +108,6 @@ namespace PERQemu.IO.Network
             {
                 _mcastGroups[i] = 0;
             }
-
 
             Log.Write(Category.Ethernet, "Controller reset");
         }
@@ -254,13 +253,11 @@ namespace PERQemu.IO.Network
                 }
                 else
                 {
-                    // Waiting for Godot... the only receive we'll actually handle
-                    // is the special one required to get our Ethernet address back
-                    // from the hardware
-
+                    // Start a receive!
                     _state = State.Receiving;
                     _status |= Status.Busy;
 
+                    // Is it the "special" one to fetch our own address?
                     if (MCB == 0xfe)
                     {
                         Log.Write(Category.Ethernet, "Special receive to fetch address!");
@@ -365,8 +362,11 @@ namespace PERQemu.IO.Network
                 if (_control.HasFlag(Control.Promiscuous)) return true;
 
                 // See if it's our hardware addr or current receive addr
-                if (dest.GetAddressBytes().Equals(_physAddr.MAC)) return true;
-                if (dest.GetAddressBytes().Equals(_recvAddr.MAC)) return true;
+                if (dest == _physAddr.PA) return true;
+                if (dest == _recvAddr.PA) return true;
+
+                // Always accept L2 broadcasts, too
+                if (dest == HostInterface.Broadcast) return true;
 
                 // Finally, loop through the multicast bytes (TODO)
             }
@@ -413,7 +413,7 @@ namespace PERQemu.IO.Network
             for (var i = 14; i < packet.Length; i += 2)
             {
                 data = (ushort)(packet[i] << 8);
-                if (i < packet.Length) data |= packet[i + 1];
+                if (i < packet.Length - 1) data |= packet[i + 1];
                 _system.Memory.StoreWord(addr++, data);
             }
 
@@ -581,11 +581,7 @@ namespace PERQemu.IO.Network
 
             Console.WriteLine("\n  Multicast bytes:   {0}", string.Join(", ", _mcastGroups));
 
-            if (_nic == null) return;
-
-            Console.WriteLine($"\nHost adapter status:");
-            Console.WriteLine($"  NIC {_nic.Name} - {_nic.Description}");
-            Console.WriteLine($"  Running: {_nic.Running}");
+            if (_nic != null) _nic.DumpStatus();
         }
 
         enum State

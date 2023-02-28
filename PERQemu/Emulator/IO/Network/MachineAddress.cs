@@ -56,10 +56,16 @@ namespace PERQemu.IO.Network
             // Read from the NET PROMs (or configured by the user)
             _mac[4] = 0;
             _mac[5] = 0;
+
+            // Store it in this format too
+            _physAddr = new PhysicalAddress(_mac);
         }
 
         // Just the bytes, ma'am
         public byte[] MAC => _mac;
+
+        // For convenience
+        public PhysicalAddress PA => _physAddr;
 
         // These are fixed
         public ushort High => (ushort)((_mac[0] << 8) | _mac[1]);
@@ -77,6 +83,8 @@ namespace PERQemu.IO.Network
             {
                 _mac[4] = (byte)(value >> 8);
                 _mac[5] = (byte)(value & 0xff);
+
+                _physAddr = new PhysicalAddress(_mac);  // Update
             }
         }
 
@@ -113,6 +121,7 @@ namespace PERQemu.IO.Network
         }
 
         byte[] _mac;
+        PhysicalAddress _physAddr;
     }
 
 
@@ -153,6 +162,7 @@ namespace PERQemu.IO.Network
         public NATTable()
         {
             _entries = new Dictionary<PhysicalAddress, NATEntry>();
+            _perqToHost = new Dictionary<PhysicalAddress, PhysicalAddress>();
         }
 
         public void Reset()
@@ -176,11 +186,18 @@ namespace PERQemu.IO.Network
             // Make sure it isn't already there...
             if (_entries.ContainsValue(ent))
             {
-                Log.Debug(Category.Ethernet, "Can't add duplicate NAT entry, ignored {0}", ent);
+                Log.Write(Category.Ethernet, "Can't add duplicate NAT entry, ignored {0}", ent);
+                return;
             }
-
             _entries.Add(ent.Host, ent);
-            Log.Debug(Category.Ethernet, "NAT entry added {0}", ent);
+
+            // Do the inverse index too
+            if (_perqToHost.ContainsKey(ent.Perq))
+            {
+                Log.Write(Category.Ethernet, "PERQ {0} already in index at different host?", ent.Perq);
+                return;
+            }
+            Log.Write(Category.Ethernet, "NAT entry added {0}", ent);
         }
 
         /// <summary>
@@ -203,19 +220,53 @@ namespace PERQemu.IO.Network
         /// </summary>
         public NATEntry LookupPerq(PhysicalAddress perq)
         {
-            return LookupHost(_perqToHost[perq]);
+            if (_perqToHost.ContainsKey(perq))
+            {
+                return LookupHost(_perqToHost[perq]);
+            }
+
+            return null;
         }
 
         /// <summary>
         /// Bump the access/packet count and receive time for the given host.
         /// Quietly no-op if not in table?
         /// </summary>
-        public void Update(PhysicalAddress host)
+        public void UpdateHost(PhysicalAddress host)
         {
             if (_entries.ContainsKey(host))
             {
                 _entries[host].LastReceived = DateTime.Now;
                 _entries[host].Received++;
+            }
+        }
+
+        public void UpdatePerq(PhysicalAddress perq)
+        {
+            var ent = LookupPerq(perq);
+            if (ent != null)
+            {
+                ent.Sent++;
+            }
+        }
+
+        // Debugging
+        public void DumpTable()
+        {
+            if (_entries.Count == 0)
+            {
+                Console.WriteLine("  NAT table is empty.");
+                return;
+            }
+
+            // messy as hell, gotta format this up all sweetly
+            Console.WriteLine("\nNAT table:");
+            Console.WriteLine("\nHost\tPerq\tFirst seen\tLast seen\t\tSent\tReceived");
+
+            foreach (var e in _entries.Values)
+            {
+                var seconds = e.LastReceived - e.FirstSeen;
+                Console.WriteLine($"{e.Host}  {e.Perq}  {e.FirstSeen}  {e.LastReceived}  (age {seconds})  {e.Sent}  {e.Received}");
             }
         }
 

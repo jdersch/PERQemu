@@ -179,6 +179,11 @@ namespace PERQemu
         {
             var dds = (int)a.Args[0];
             Console.Title = $"DDS {dds:d3}";
+
+            // POS G goes nuts running up the DDS at boot time, causing the
+            // old Mac OS Terminal to just lag out horribly; see if this makes
+            // it run a little smoother?
+            System.Threading.Thread.Sleep(2);
         }
 
         /// <summary>

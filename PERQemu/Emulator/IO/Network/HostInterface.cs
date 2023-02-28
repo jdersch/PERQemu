@@ -55,6 +55,7 @@ namespace PERQemu.IO.Network
 
         public string Name => _adapter.Name;
         public string Description => _adapter.Description;
+        public PhysicalAddress Address => (_adapter == null ? PhysicalAddress.None : _adapter.MacAddress);
         public bool Running => (_adapter != null && _adapter.Started);
 
         /// <summary>
@@ -66,8 +67,38 @@ namespace PERQemu.IO.Network
             if (!Running)
             {
                 _adapter.StartCapture();
-            
+
                 Log.Write(Category.Ethernet, "Adapter reset (packet capture started)");
+            }
+
+            // Say hello to my little friend
+            SendGreeting();
+        }
+
+        /// <summary>
+        /// Send a RARP request with our emulated address to let other PERQemu
+        /// (or real PERQ) nodes know we're here.  We don't expect a reply, but
+        /// issue these periodically just to check in.  Someday this might be
+        /// formalized into a way to allow PERQs to rendezvous over the Interwebs!
+        /// </summary>
+        public void SendGreeting()
+        {
+            try
+            {
+                var greeting = new ARPPacket(ARPOperation.InARPRequest,
+                                             Broadcast,
+                                             new System.Net.IPAddress(new byte[] { 0, 0, 0, 0 }),
+                                             _controller.MACAddress,
+                                             new System.Net.IPAddress(new byte[] { 0, 0, 0, 0 }));
+
+                Console.WriteLine(greeting.PrintHex());
+                _adapter.SendPacket(greeting);
+
+                Log.Info(Category.Ethernet, "Sent RARP request from {0}", _controller.MACAddress);
+            }
+            catch (PcapException ex)
+            {
+                Log.Write(Category.Ethernet, "Failed to send greeting packet: {0}", ex.Message);
             }
         }
 
@@ -78,12 +109,26 @@ namespace PERQemu.IO.Network
         {
             try
             {
-                // Todo: NAT the addresses here!!
+                var raw = new EthernetPacket(new ByteArraySegment(packet));
+                if (raw == null)
+                    Console.WriteLine($"RAW NULL ON SEND");
+                else
+                    Console.WriteLine(raw.PrintHex());
 
-                EthernetPacket raw = new EthernetPacket(new ByteArraySegment(packet));
-                Console.WriteLine(raw.PrintHex());
+                // Are we sending to another PERQ?
+                var dest = _nat.LookupPerq(raw.DestinationHwAddress);
+                if (dest != null)
+                {
+                    // Yes!  Swap the destination with the host's addr
+                    raw.DestinationHwAddress = dest.Host;
 
-                _adapter.SendPacket(packet);
+                    // Basic stats
+                    dest.Sent++;
+
+                    Log.Write(Category.Ethernet, "NAT send to Perq {0} => Host {1}", dest.Perq, dest.Host);
+                }
+
+                _adapter.SendPacket(raw);
                 return true;
             }
             catch (PcapException ex)
@@ -109,6 +154,23 @@ namespace PERQemu.IO.Network
                 try
                 {
                     raw = (EthernetPacket)Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+                    Console.WriteLine(raw.PrintHex());
+
+                    // If this is addressed to us specifically, NAT it!
+                    if (raw.DestinationHwAddress == _adapter.MacAddress)
+                    {
+                        raw.DestinationHwAddress = _controller.MACAddress;
+
+                        // Is it from a PERQ that we've seen before?
+                        var src = _nat.LookupHost(raw.SourceHwAddress);
+
+                        if (src != null)
+                        {
+                            // Yes!  Update the stats to show they're still active
+                            src.LastReceived = DateTime.Now;
+                            src.Received++;
+                        }
+                    }
                 }
                 catch (PcapException ex)
                 {
@@ -116,8 +178,35 @@ namespace PERQemu.IO.Network
                     raw = null;
                 }
 
-                // TODO: Is it a RARP?  Then parse it locally to update our NAT
-                // table to track other PERQs out on the net
+                //
+                // Look for RARPs, which are pretty rare these days and will
+                // almost certainly be PERQemu (or maybe QEMU :-) emulated hosts
+                // broadcasting a greeting
+                //
+                ARPPacket rarp = null;
+
+                try
+                {
+                    rarp = (ARPPacket)raw.Extract(typeof(ARPPacket));
+
+                    if (rarp != null)
+                    {
+                        Console.WriteLine(rarp.PrintHex());
+
+                        var seen = _nat.LookupPerq(rarp.SenderHardwareAddress);
+                        if (seen == null && IsPerqPrefix(rarp.SenderHardwareAddress.GetAddressBytes()))
+                        {
+                            // Woo!  Another Perqy came out to play!
+                            seen = new NATEntry(raw.SourceHwAddress, rarp.SenderHardwareAddress);
+                            _nat.Add(seen);
+                        }
+                    }
+                }
+                catch (PcapException ex)
+                {
+                    Log.Info(Category.Ethernet, "Not a RARP packet?  {0}", ex.Message);
+                    // No biggie, just continue
+                }
 
                 // Ask the controller if it wants the packet and has room for it
                 if (_controller.WantReceive(raw.DestinationHwAddress))
@@ -151,6 +240,17 @@ namespace PERQemu.IO.Network
 
                 Log.Write(Category.Ethernet, "Adapter shutdown");
             }
+        }
+
+        /// <summary>
+        /// Return true if a given address is in the official 3RCC address block.
+        /// </summary>
+        public static bool IsPerqPrefix(byte[] a)
+        {
+            return (a[0] == 0x02 &&
+                    a[1] == 0x1c &&
+                    a[2] == 0x7c &&
+                    a[3] >= 0 && a[3] <= 2);
         }
 
         /// <summary>
@@ -241,9 +341,21 @@ namespace PERQemu.IO.Network
             }
         }
 
+        public void DumpStatus()
+        {
+            Console.WriteLine($"\nHost adapter status:");
+            Console.WriteLine($"  NIC {Name} - {Description}");
+            Console.WriteLine($"  Address: {Address}\tRunning: {Running}");
+
+            _nat.DumpTable();
+        }
+
         ICaptureDevice _adapter;
         INetworkController _controller;
 
         NATTable _nat;
+
+        // All 1's broadcast
+        public static PhysicalAddress Broadcast = new PhysicalAddress(new byte[] { 255, 255, 255, 255, 255, 255 });
     }
 }
