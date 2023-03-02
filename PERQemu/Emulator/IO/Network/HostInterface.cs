@@ -52,7 +52,7 @@ namespace PERQemu.IO.Network
                 _adapter.OnPacketArrival += OnPacketArrival;
 
                 // Does this avoid the spurious exception on shutdown?
-                _adapter.StopCaptureTimeout = new TimeSpan(1000000000);
+                _adapter.StopCaptureTimeout = new TimeSpan(100000000);
             }
         }
 
@@ -63,7 +63,8 @@ namespace PERQemu.IO.Network
 
         /// <summary>
         /// There's nothing to reset, really; we just use this to lazily start
-        /// packet capture once the rest of the virtual PERQ is set up.
+        /// packet capture once the rest of the virtual PERQ is set up.  Any
+        /// subsequent calls will send out a "greeting", periodically.
         /// </summary>
         public void Reset()
         {
@@ -73,9 +74,11 @@ namespace PERQemu.IO.Network
 
                 Log.Write(Category.Ethernet, "Adapter reset (packet capture started)");
             }
-
-            // Say hello to my little friend
-            SendGreeting();
+            else
+            {
+                // Say hello to my little friend
+                SendGreeting();
+            }
         }
 
         /// <summary>
@@ -86,21 +89,27 @@ namespace PERQemu.IO.Network
         /// </summary>
         public void SendGreeting()
         {
+            // Don't spam the network with broadcasts!
+            TimeSpan ts = DateTime.Now - _lastGreeting;
+            if (ts.Seconds < GreetingInterval) return;
+
             try
             {
                 // Broadcast our request
-                var packet = new EthernetPacket(_controller.MACAddress,
+                var packet = new EthernetPacket(_adapter.MacAddress,
                                                 Broadcast,
                                                 EthernetPacketType.ReverseArp);
+                // Well hello there!
                 var greeting = new ARPPacket(ARPOperation.RequestReverse,
-                                             Broadcast,
-                                             new System.Net.IPAddress(new byte[] { 0, 0, 0, 0 }),
                                              _controller.MACAddress,
-                                             new System.Net.IPAddress(new byte[] { 0, 0, 0, 0 }));
+                                             System.Net.IPAddress.None,
+                                             _adapter.MacAddress,
+                                             System.Net.IPAddress.None);
 
                 packet.PayloadPacket = greeting;
                 Console.WriteLine(packet.PrintHex());
                 _adapter.SendPacket(packet);
+                _lastGreeting = DateTime.Now;
 
                 Log.Info(Category.Ethernet, "Sent RARP request from {0}", _controller.MACAddress);
             }
@@ -111,23 +120,27 @@ namespace PERQemu.IO.Network
         }
 
         /// <summary>
-        /// Send a RARP reply when we catch one from another PERQ.
+        /// Send a RARP reply when we catch one from another PERQ.  We're kinda
+        /// breaking the paradigm a little bit; PERQemu uses the "request" to
+        /// tell other PERQs out there about us, while the "reply" here is to
+        /// say "gotcha, here's my info in return".  That way when a new instance
+        /// comes online it quickly gathers up data for the others without doing
+        /// periodic broadcasts.  This is all kinda cheesy. :-)
         /// </summary>
         void SendReply(ARPPacket greeting)
         {
             try
             {
-                // Target the reply
-                var packet = new EthernetPacket(_controller.MACAddress,
-                                                greeting.TargetHardwareAddress,
+                // Return to sender
+                var packet = new EthernetPacket(_adapter.MacAddress,
+                                                greeting.SenderHardwareAddress,
                                                 EthernetPacketType.ReverseArp);
-
-                // Turn around the original packet with us as the sender
+                // Send back our data
                 var salutation = new ARPPacket(ARPOperation.ReplyReverse,
                                               _controller.MACAddress,
-                                               greeting.SenderProtocolAddress,
-                                              _controller.MACAddress,
-                                               greeting.TargetProtocolAddress);
+                                               System.Net.IPAddress.None,
+                                              _adapter.MacAddress,
+                                               System.Net.IPAddress.None);
 
                 packet.PayloadPacket = salutation;
                 Console.WriteLine(packet.PrintHex());
@@ -144,44 +157,65 @@ namespace PERQemu.IO.Network
         /// <summary>
         /// Send a raw Ethernet packet straight from the PERQ, baybee!!
         /// </summary>
-        public bool SendPacket(byte[] packet)
+        public bool SendPacket(byte[] raw)
         {
             try
             {
                 // Turn raw bytes from the PERQ provided into a packet
-                var raw = new EthernetPacket(new ByteArraySegment(packet));
-                if (raw == null)
-                    Console.WriteLine($"RAW NULL ON SEND");
-                else
-                    Console.WriteLine(raw.PrintHex());
-
-                // Are we sending to another known PERQ?
-                var map = _nat.LookupPerq(raw.DestinationHwAddress);
-                if (map != null)
+                var packet = new EthernetPacket(new ByteArraySegment(raw));
+                if (packet == null)
                 {
-                    // Yes!  Swap the destination with the host's addr
-                    raw.DestinationHwAddress = map.Host;
-
-                    // Basic stats
-                    map.Sent++;
-
-                    Log.Write(Category.Ethernet, "NAT send to Perq {0} => Host {1}", map.Perq, map.Host);
+                    Log.Error(Category.Ethernet, "Could not format packet on send");
+                    // dump more data (if this ever happens); drop it like it's hot
+                    return false;
                 }
 
-                // Are we sending a PERQ-specific EtherType?
-                if (IsPerqPrefix(raw.DestinationHwAddress) ||
-                    raw.DestinationHwAddress == Broadcast)
-                {
-                    // Translate the EtherType/Length field if necessary
-                    var perqType = PortMap((ushort)raw.Type);
+                Log.Write(Category.Ethernet, "Sending from {0} to {1} (type {2})",
+                          packet.SourceHwAddress, packet.DestinationHwAddress, packet.Type);
 
-                    if ((ushort)raw.Type != perqType)
+                // Always remap our source address to the host adapter
+                packet.SourceHwAddress = _adapter.MacAddress;
+
+                // Are we (potentially) sending to another PERQ?
+                if (IsPerqPrefix(packet.DestinationHwAddress) || packet.DestinationHwAddress.Equals(Broadcast))
+                {
+                    if (!packet.DestinationHwAddress.Equals(Broadcast))
                     {
-                        Log.Write(Category.Ethernet, "EtherType mapped from 0x{0:x4} => 0x{1:x4}", (ushort)raw.Type, perqType);
+                        // Look up the PERQ's host address
+                        var map = _nat.LookupPerq(packet.DestinationHwAddress);
+
+                        if (map != null)
+                        {
+                            // Translate it too
+                            packet.DestinationHwAddress = map.Host;
+
+                            // Basic stats
+                            map.Sent++;
+
+                            Log.Write(Category.Ethernet, "NAT send to Perq {0} via Host {1}", map.Perq, map.Host);
+                        }
+                        else
+                        {
+                            Log.Warn(Category.Ethernet, "Destination Perq {0} is unknown to me...", packet.DestinationHwAddress);
+                            // Should do an actual RARP here...?
+                        }
+                    }
+
+                    // Retranslate the EtherType/Length field if necessary
+                    var perqType = PortMap((ushort)packet.Type);
+
+                    if ((ushort)packet.Type != perqType)
+                    {
+                        Log.Write(Category.Ethernet, "EtherType mapped from 0x{0:x4} to 0x{1:x4}", (ushort)packet.Type, perqType);
+                        packet.Type = (EthernetPacketType)perqType;
                     }
                 }
 
-                _adapter.SendPacket(raw);
+                // Print the (modified) packet
+                Console.WriteLine(packet);
+
+                // So send it already, sheesh
+                _adapter.SendPacket(packet);
                 return true;
             }
             catch (PcapException ex)
@@ -196,9 +230,6 @@ namespace PERQemu.IO.Network
         /// </summary>
         void OnPacketArrival(object s, CaptureEventArgs e)
         {
-            // See what SharpPcap dumps out
-            Console.WriteLine(e.Packet);
-
             //
             // Start with the raw Ethernet frame
             //
@@ -209,21 +240,36 @@ namespace PERQemu.IO.Network
                 try
                 {
                     raw = (EthernetPacket)Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+                    if (raw == null)
+                    {
+                        Log.Warn(Category.Ethernet, "Failed to parse packet: {0}", e.Packet);
+                        return;
+                    }
+
+                    // The PERQ interface can't "see" its own transmissions, but
+                    // apparently SharpPcap does; silently drop 'em here
+                    if (raw.SourceHwAddress.Equals(_adapter.MacAddress)) return;
+
+                    Log.Write(Category.Ethernet, "Received from {0} to {1} (type {2})",
+                              raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type);
 
                     // If this is addressed to us specifically, NAT it!
-                    if (raw.DestinationHwAddress == _adapter.MacAddress)
+                    if (raw.DestinationHwAddress.Equals(_adapter.MacAddress))
                     {
                         raw.DestinationHwAddress = _controller.MACAddress;
+                    }
 
-                        // Is it from a PERQ that we've seen before?
-                        var src = _nat.LookupHost(raw.SourceHwAddress);
+                    // Is it from a PERQ that we've seen before?
+                    var src = _nat.LookupHost(raw.SourceHwAddress);
 
-                        if (src != null)
-                        {
-                            // Yes!  Update the stats to show they're still active
-                            src.LastReceived = DateTime.Now;
-                            src.Received++;
-                        }
+                    if (src != null)
+                    {
+                        // Yes!  Translate the source address too
+                        raw.SourceHwAddress = src.Perq;
+
+                        // Update the stats to show they're still active
+                        src.LastReceived = DateTime.Now;
+                        src.Received++;
                     }
 
                     // If source is a PERQ, see if the Type/Length field needs remappin'
@@ -234,14 +280,20 @@ namespace PERQemu.IO.Network
 
                         if ((ushort)raw.Type != perqType)
                         {
-                            Log.Write(Category.Ethernet, "EtherType mapped from 0x{0:x4} => 0x{1:x4}", (ushort)raw.Type, perqType);
+                            Log.Write(Category.Ethernet, "EtherType mapped from 0x{0:x4} to 0x{1:x4}", (ushort)raw.Type, perqType);
+                            raw.Type = (EthernetPacketType)perqType;
                         }
                     }
                 }
                 catch (PcapException ex)
                 {
-                    Log.Warn(Category.Ethernet, "Failed to parse packet: {0}", ex.Message);
-                    raw = null;
+                    Log.Warn(Category.Ethernet, "Failed to receive packet: {0}", ex.Message);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(Category.Ethernet, "Failed to receive packet: {0}", ex.Message);
+                    return;
                 }
 
                 //
@@ -255,39 +307,59 @@ namespace PERQemu.IO.Network
                 {
                     rarp = (ARPPacket)raw.Extract(typeof(ARPPacket));
 
-                    if (rarp != null && rarp.Operation == ARPOperation.RequestReverse)
+                    if (rarp != null)
                     {
-                        Console.WriteLine(rarp.PrintHex());
+                        Console.WriteLine(rarp);
 
-                        var seen = _nat.LookupPerq(rarp.SenderHardwareAddress);
-                        if (seen == null && IsPerqPrefix(rarp.SenderHardwareAddress))
+                        // The Op can be a Request (new host coming online) or a
+                        // Reply (from others responding after our Request sent);
+                        // In either case the payload contains a host+Perq pair
+                        // that we should add or update in our table!
+                        if (IsPerqPrefix(rarp.TargetHardwareAddress))
                         {
-                            // Woo!  Another Perqy came out to play!
-                            seen = new NATEntry(raw.SourceHwAddress, rarp.SenderHardwareAddress);
-                            _nat.Add(seen);
+                            var seen = _nat.LookupPerq(rarp.TargetHardwareAddress);
+                            if (seen == null)
+                            {
+                                // Woo!  Another Perqy came out to play!
+                                seen = new NATEntry(rarp.SenderHardwareAddress, rarp.TargetHardwareAddress);
+                                _nat.Add(seen);
 
-                            // Since this is the first time we've heard from this
-                            // host, send a RARP reply, since it's unlikely anyone
-                            // would have a in.rarpd running these days?
-                            SendReply(rarp);
+                                // Since this is the first time we've heard from this
+                                // host, send a RARP reply, since it's unlikely anyone
+                                // still has an in.rarpd running these days? :-)
+                                SendReply(rarp);
+                            }
+                            else
+                            {
+                                // Nice to see you again!
+                                seen.LastReceived = DateTime.Now;
+                                seen.Received++;
+                            }
                         }
-                        // Fall through?  Or give them to the PERQ as well?
+                        // I'm pretty sure we can safely drop these here and not
+                        // pass them on to the PERQ, which almost certainly won't
+                        // do RARP (even under Accent).  For now, send 'em and see
+                        // if they just get dropped or ignored
                     }
                     // Definitely fall through here
                 }
                 catch (PcapException ex)
                 {
-                    Log.Info(Category.Ethernet, "Not a RARP packet?  {0}", ex.Message);
+                    Log.Info(Category.Ethernet, "Failed to parse RARP packet: {0}", ex.Message);
                     // No biggie, just continue
                 }
 
                 //
                 // Finally, ask the PERQ if it wants the packet and has room for it
                 //
+                // Todo: there will almost certainly be some kind of buffer/queue
+                // scheme here instead, eventually, and the PERQ will just process
+                // incoming packets as it can.  For now, though...
+                //
                 if (_controller.WantReceive(raw.DestinationHwAddress))
                 {
                     // Only show the ones we're actually accepting...
-                    Console.WriteLine(raw.PrintHex());
+                    Console.WriteLine(raw);
 
                     // Yep!  Queue it up and return
                     _controller.DoReceive(raw.Bytes);
@@ -345,10 +417,7 @@ namespace PERQemu.IO.Network
         {
             var a = addr.GetAddressBytes();
 
-            return (a[0] == 0x02 &&
-                    a[1] == 0x1c &&
-                    a[2] == 0x7c &&
-                    a[3] <= 2);
+            return (a[0] == 0x02 && a[1] == 0x1c && a[2] == 0x7c && a[3] <= 2);
         }
 
         /// <summary>
@@ -399,21 +468,21 @@ namespace PERQemu.IO.Network
         public static void ShowInterfaceSummary()
         {
             // Show the C# runtime's view
-            var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+            //var interfaces = NetworkInterface.GetAllNetworkInterfaces();
 
-            foreach (NetworkInterface adapter in interfaces)
-            {
-                if (!IsEthernet(adapter.NetworkInterfaceType)) continue;
+            //foreach (NetworkInterface adapter in interfaces)
+            //{
+            //    if (!IsEthernet(adapter.NetworkInterfaceType)) continue;
 
-                Console.WriteLine("ID: {0}  Name: {1}", adapter.Id, adapter.Name);
-                Console.WriteLine(adapter.Description);
-                Console.WriteLine(string.Empty.PadLeft(adapter.Description.Length, '='));
-                Console.WriteLine("  Interface type ......... : {0}", adapter.NetworkInterfaceType);
-                Console.WriteLine("  Operational status ..... : {0}", adapter.OperationalStatus);
-                Console.WriteLine("  Hardware address ....... : {0}", adapter.GetPhysicalAddress());
-                Console.WriteLine();
-            }
-            Console.WriteLine();
+            //    Console.WriteLine("ID: {0}  Name: {1}", adapter.Id, adapter.Name);
+            //    Console.WriteLine(adapter.Description);
+            //    Console.WriteLine(string.Empty.PadLeft(adapter.Description.Length, '='));
+            //    Console.WriteLine("  Interface type ......... : {0}", adapter.NetworkInterfaceType);
+            //    Console.WriteLine("  Operational status ..... : {0}", adapter.OperationalStatus);
+            //    Console.WriteLine("  Hardware address ....... : {0}", adapter.GetPhysicalAddress());
+            //    Console.WriteLine();
+            //}
+            //Console.WriteLine();
 
             // Let's see what Pcap gives us...
             var ver = SharpPcap.Version.VersionString;
@@ -472,5 +541,8 @@ namespace PERQemu.IO.Network
         INetworkController _controller;
 
         NATTable _nat;
+
+        DateTime _lastGreeting = DateTime.Now;
+        const int GreetingInterval = 30;        // Minimum, in seconds
     }
 }

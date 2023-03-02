@@ -84,7 +84,8 @@ namespace PERQemu.IO.Network
                 _mac[4] = (byte)(value >> 8);
                 _mac[5] = (byte)(value & 0xff);
 
-                _physAddr = new PhysicalAddress(_mac);  // Update
+                // Update for compares
+                _physAddr = new PhysicalAddress(_mac);
             }
         }
 
@@ -261,12 +262,12 @@ namespace PERQemu.IO.Network
 
             // messy as hell, gotta format this up all sweetly
             Console.WriteLine("\nNAT table:");
-            Console.WriteLine("\nHost\tPerq\tFirst seen\tLast seen\t\tSent\tReceived");
+            Console.WriteLine("\nHost\t\tPerq\t\tFirst seen\tLast seen\t\tSent / Rcvd");
 
             foreach (var e in _entries.Values)
             {
-                var seconds = e.LastReceived - e.FirstSeen;
-                Console.WriteLine($"{e.Host}  {e.Perq}  {e.FirstSeen}  {e.LastReceived}  (age {seconds})  {e.Sent}  {e.Received}");
+                //var seconds = e.LastReceived - e.FirstSeen;
+                Console.WriteLine($"{e.Host}  {e.Perq}  {e.FirstSeen}  {e.LastReceived}  {e.Sent}  {e.Received}");
             }
         }
 

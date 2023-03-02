@@ -73,11 +73,6 @@ namespace PERQemu.IO.Network
 
         public void Reset()
         {
-            if (!_nic.Running)
-            {
-                _nic.Reset();
-            }
-
             if (_timer != null)
             {
                 _system.Scheduler.Cancel(_timer);
@@ -108,6 +103,8 @@ namespace PERQemu.IO.Network
             {
                 _mcastGroups[i] = 0;
             }
+
+            _nic.Reset();
 
             Log.Write(Category.Ethernet, "Controller reset");
         }
@@ -159,7 +156,9 @@ namespace PERQemu.IO.Network
 
                 case 0x90:  // Low word of MAC address
                     Log.Write(Category.Ethernet, "Wrote 0x{0:x4} to low address register 0x{1:x2}", value, address);
-                    _recvAddr.Low = (ushort)value;
+
+                    // Have to byte swap this, because reasons
+                    _recvAddr.Low = (ushort)(value << 8 | (value & 0xff00) >> 8);
                     break;
 
                 //
@@ -362,11 +361,11 @@ namespace PERQemu.IO.Network
                 if (_control.HasFlag(Control.Promiscuous)) return true;
 
                 // See if it's our hardware addr or current receive addr
-                if (dest == _physAddr.PA) return true;
-                if (dest == _recvAddr.PA) return true;
+                if (dest.Equals(_physAddr.PA)) return true;
+                if (dest.Equals(_recvAddr.PA)) return true;
 
                 // Always accept L2 broadcasts, too
-                if (dest == HostInterface.Broadcast) return true;
+                if (dest.Equals(HostInterface.Broadcast)) return true;
 
                 // Finally, loop through the multicast bytes (TODO)
 
@@ -398,7 +397,7 @@ namespace PERQemu.IO.Network
             ushort data;
 
             // The header is 14 bytes but the DMA always ships quad words; the
-            // first is a dummy.  Should I actually write a zero or just skip it?
+            // first word is a dummy, so write a zero.  Or could just skip it?
             addr = _headerAddress;
             _system.Memory.StoreWord(addr++, 0);
 
@@ -408,9 +407,9 @@ namespace PERQemu.IO.Network
                 _system.Memory.StoreWord(addr++, data);
             }
 
-            // Copy the data packet to the buffer location (n words).  Hoo boy,
-            // gotta figure out which order to copy the bytes in!  Also, deal with
-            // odd length packets and pad with an extra byte if necessary.
+            // Copy the data packet to the buffer location (n words).  Hope the
+            // byte ordering is correct.  And deal with odd length packets by
+            // padding with an extra byte
             addr = _bufferAddress;
 
             for (var i = 14; i < packet.Length; i += 2)
@@ -429,7 +428,7 @@ namespace PERQemu.IO.Network
             _response = _system.Scheduler.Schedule(delay, ReceiveComplete);
 
             Log.Write(Category.Ethernet, "Received {0} byte packet, callback in {1}usec",
-                                         _bitCount / 8, delay / 1000);
+                                         packet.Length, delay / 1000);
         }
 
         /// <summary>
@@ -443,6 +442,8 @@ namespace PERQemu.IO.Network
             // takes the two's complement in the microcode while Accent does it
             // in the Pascal code that sets up the DCB.  To compute transmission
             // delay, take the absolute value...
+            // Todo: make sure to test with older code that may rely on the earlier
+            // firmware versions that don't do it this way!  Math.Abs()?
             _bitCount = (ushort)(0 - _bitCount);
 
             // Sanity checks:  the microcode isn't supposed to start a new send
@@ -462,6 +463,7 @@ namespace PERQemu.IO.Network
             // Set up for sending!
             _state = State.Transmitting;
             _status |= (Status.CarrierSense | Status.Busy);
+
             var delay = (ulong)((_bitCount * .1) + 9.6) * Conversion.UsecToNsec;
             _response = _system.Scheduler.Schedule(delay, TransmitComplete);
 
@@ -553,6 +555,8 @@ namespace PERQemu.IO.Network
         /// </summary>
         void FinishCommand()
         {
+            Log.Write(Category.Ethernet, "{0} complete, raising {1} interrupt", _state, _irq);
+
             _response = null;
             _state = State.Complete;
             _status &= ~Status.Busy;
