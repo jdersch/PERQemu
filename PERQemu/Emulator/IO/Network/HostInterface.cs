@@ -209,7 +209,6 @@ namespace PERQemu.IO.Network
                 try
                 {
                     raw = (EthernetPacket)Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
-                    Console.WriteLine(raw.PrintHex());
 
                     // If this is addressed to us specifically, NAT it!
                     if (raw.DestinationHwAddress == _adapter.MacAddress)
@@ -287,6 +286,9 @@ namespace PERQemu.IO.Network
                 //
                 if (_controller.WantReceive(raw.DestinationHwAddress))
                 {
+                    // Only show the ones we're actually accepting...
+                    Console.WriteLine(raw.PrintHex());
+
                     // Yep!  Queue it up and return
                     _controller.DoReceive(raw.Bytes);
                 }

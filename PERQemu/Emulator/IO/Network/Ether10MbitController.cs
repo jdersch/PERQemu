@@ -369,10 +369,13 @@ namespace PERQemu.IO.Network
                 if (dest == HostInterface.Broadcast) return true;
 
                 // Finally, loop through the multicast bytes (TODO)
+
+                // Log the rejection
+                Log.Write(Category.Ethernet, "Rejecting packet for {0}", dest);
+                return false;
             }
 
-            Log.Write(Category.Ethernet, "Rejecting packet for {0}", dest);
-            // Gather stats (TODO)
+            Log.Write(Category.Ethernet, "Ignoring packet for {0} (not in Receive mode)", dest);
             return false;
         }
 
@@ -492,8 +495,8 @@ namespace PERQemu.IO.Network
                 for (var i = 0; i < 7; i++)
                 {
                     data = _system.Memory.FetchWord(addr++);
-                    packet[i * 2] = (byte)(data >> 8);      // High
-                    packet[i * 2 + 1] = (byte)data;         // Low
+                    packet[i * 2] = (byte)data;                 // Low byte
+                    packet[i * 2 + 1] = (byte)(data >> 8);      // High byte
                 }
 
                 // Now the payload
@@ -502,8 +505,8 @@ namespace PERQemu.IO.Network
                 for (var i = 14; i < packet.Length; i += 2)
                 {
                     data = _system.Memory.FetchWord(addr++);
-                    packet[i] = (byte)(data >> 8);
-                    if (i + 1 < packet.Length) packet[i + 1] = (byte)data;
+                    packet[i] = (byte)data;
+                    if (i + 1 < packet.Length) packet[i + 1] = (byte)(data >> 8);
                 }
 
                 // Hand off the complete packet!
