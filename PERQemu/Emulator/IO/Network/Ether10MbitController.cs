@@ -251,7 +251,7 @@ namespace PERQemu.IO.Network
                 else
                 {
                     // Start a receive!
-                    _state = State.Receiving;
+                    _state = State.ReceiveWait;
                     _status |= Status.Busy;
 
                     // Is it the "special" one to fetch our own address?
@@ -268,7 +268,8 @@ namespace PERQemu.IO.Network
                         _response = _system.Scheduler.Schedule(10 * Conversion.UsecToNsec, GetAddress);
                     }
 
-                    // DoReceive() handles live packet reception
+                    // Go see if the NIC has anything queued up!
+                    _nic.CheckReceive();
                 }
             }
         }
@@ -280,13 +281,13 @@ namespace PERQemu.IO.Network
             switch (address)
             {
                 case 0x06:
-                    retVal = (_bitCount & 0xff);
-                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
+                    retVal = (_bitCount >> 8) & 0xff;
+                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (high?)", retVal);
                     return retVal;
 
                 case 0x07:
-                    retVal = (_bitCount >> 8);
-                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
+                    retVal = (_bitCount & 0xff);
+                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (low?)", retVal);
                     return retVal;
 
                 default:
@@ -352,41 +353,50 @@ namespace PERQemu.IO.Network
         /// </summary>
         public bool WantReceive(PhysicalAddress dest)
         {
-            // Is the interface in the mood?
-            if (_state == State.Receiving)
-            {
-                // Like, REALLY in the mood?
-                if (_control.HasFlag(Control.Promiscuous)) return true;
+            // Gimme gimme gimme
+            if (_control.HasFlag(Control.Promiscuous)) return true;
 
-                // See if it's our hardware addr or current receive addr
-                if (dest.Equals(_physAddr.PA)) return true;
-                if (dest.Equals(_recvAddr.PA)) return true;
+            // Always accept L2 broadcasts, too
+            if (dest.Equals(HostInterface.Broadcast)) return true;
 
-                // Always accept L2 broadcasts, too
-                if (dest.Equals(HostInterface.Broadcast)) return true;
+            // See if it's our hardware addr or current receive addr
+            if (dest.Equals(_physAddr.PA)) return true;
+            if (dest.Equals(_recvAddr.PA)) return true;
 
-                // Finally, loop through the multicast bytes (TODO)
+            // Finally, loop through the multicast bytes (TODO)
 
-                // Log the rejection
-                Log.Write(Category.Ethernet, "Rejecting packet for {0}", dest);
-                return false;
-            }
-
-            Log.Debug(Category.Ethernet, "Ignoring packet for {0} (not in Receive mode)", dest);
+            // Otherwise log the rejection
+            Log.Write(Category.Ethernet, "Rejecting packet for {0}", dest);
             return false;
         }
+
+        /// <summary>
+        /// Are we in the mood to handle another packet?
+        /// </summary>
+        public bool CanReceive => _state == State.ReceiveWait;
 
         /// <summary>
         /// Handle the actual reception of an incoming packet.
         /// </summary>
         public void DoReceive(byte[] packet)
         {
-            // We must be actively receiving!
-            if (_state != State.Receiving)
+            // We must be actively receiving!  There's an obvious race here, if
+            // we don't make _state volatile or work out a MUCH saner way to have
+            // the controller *pull* packets from the NIC when ready, not have it
+            // push them at us.  Either strategy could lead to unsightly gaps or
+            // delays when there's a single packet in the queue and we miss the
+            // window between going into receive mode and the next packet arriving
+            // to prod the queue.  This is mostly to make sure we don't have a
+            // concurrency issue where the bit counter is getting overwritten!
+            if (_state != State.ReceiveWait)
             {
                 Log.Write(Category.Ethernet, "DoReceive in state {0}, packet dropped", _state);
                 return;
             }
+
+            // Update our state and status flag
+            _state = State.Receiving;
+            _status |= (Status.CarrierSense | Status.PacketInProgress);
 
             Log.Write(Category.Ethernet, "Receiving a packet!  {0} bytes, header @ 0x{1:x6}, data @ 0x{2:x6}",
                                          packet.Length, _headerAddress, _bufferAddress);
@@ -422,6 +432,7 @@ namespace PERQemu.IO.Network
             // byte ordering is correct.  And deal with odd length packets by
             // padding with an extra byte
             addr = _bufferAddress;
+            Console.WriteLine("Receive: mem[{0:x6}] <= {1} bytes to copy ", addr, packet.Length - 14);
 
             for (var i = 14; i < packet.Length; i += 2)
             {
@@ -430,8 +441,8 @@ namespace PERQemu.IO.Network
                 _system.Memory.StoreWord(addr++, data);
             }
 
-            // Update our status flag and bit count
-            _status |= (Status.CarrierSense | Status.PacketInProgress);
+            // NB: The PERQ expects the 4-byte FCS (CRC) included in the bit count!
+            //     (SharpPcap seems to include that for us on receives?)
             _bitCount = (ushort)(packet.Length * 8);
 
             // Compute delay for DMA copy and schedule the callback to complete
@@ -493,7 +504,7 @@ namespace PERQemu.IO.Network
         {
             if (_bitCount > 0)
             {
-                // Buffer (in bytes) for the complete raw packet
+                // Buffer (in bytes) for the complete raw packet, including header
                 byte[] packet = new byte[_bitCount / 8];
 
                 int addr;
@@ -620,6 +631,7 @@ namespace PERQemu.IO.Network
         {
             Idle = 0,
             Reset,
+            ReceiveWait,
             Receiving,
             Transmitting,
             Complete

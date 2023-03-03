@@ -54,6 +54,8 @@ namespace PERQemu.IO.Network
         // The Multicast Command Byte
         public byte MCB => _mcastGroups[0];
 
+        public bool CanReceive => true;
+
         public void Reset()
         {
             if (_timer != null)

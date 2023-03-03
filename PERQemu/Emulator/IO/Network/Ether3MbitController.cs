@@ -35,6 +35,8 @@ namespace PERQemu.IO.Network
 
         public PhysicalAddress MACAddress => PhysicalAddress.None;
 
+        public bool CanReceive => false;
+
         public void Reset()
         {
         }

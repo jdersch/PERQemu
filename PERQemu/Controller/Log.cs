@@ -93,11 +93,12 @@ namespace PERQemu
         Speech      = 0x1000000000,
         Link        = 0x2000000000,
         HardDisk    = 0x4000000000,
-        Ethernet    = 0x8000000000,
-        Canon       = 0x10000000000,
-        Streamer    = 0x20000000000,
-        Multibus    = 0x40000000000,
-        SMD         = 0x80000000000,
+        Streamer    = 0x8000000000,
+        Ethernet    = 0x10000000000,
+        NetAdapter  = 0x20000000000,
+        Canon       = 0x80000000000,
+        Multibus    = 0x100000000000,
+        SMD         = 0x200000000000,
         MediaLoader = 0x100000000000000,
         UI          = 0x1000000000000000,
         Timer       = 0x2000000000000000,
@@ -585,6 +586,7 @@ namespace PERQemu
             _colors.Add(Category.Multibus, ConsoleColor.DarkBlue);
             _colors.Add(Category.HardDisk, ConsoleColor.DarkGreen);
             _colors.Add(Category.Ethernet, ConsoleColor.Cyan);
+            _colors.Add(Category.NetAdapter, ConsoleColor.Gray);
             _colors.Add(Category.Streamer, ConsoleColor.Gray);
             _colors.Add(Category.Canon, ConsoleColor.Gray);
             _colors.Add(Category.Link, ConsoleColor.Gray);
