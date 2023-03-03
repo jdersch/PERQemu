@@ -270,6 +270,8 @@ namespace PERQemu.IO.Network
                         // Update the stats to show they're still active
                         src.LastReceived = DateTime.Now;
                         src.Received++;
+
+                        Log.Write(Category.Ethernet, "NAT receive from Perq {0} via Host {1}", src.Perq, src.Host);
                     }
 
                     // If source is a PERQ, see if the Type/Length field needs remappin'

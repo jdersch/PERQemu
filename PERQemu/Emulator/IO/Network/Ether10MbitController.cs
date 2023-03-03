@@ -63,7 +63,7 @@ namespace PERQemu.IO.Network
 
             _nic = new HostInterface(this, Settings.EtherDevice);
 
-            Log.Write(Category.Ethernet, "Interface created {0}", _physAddr);
+            Log.Info(Category.Ethernet, "Interface created {0}", _physAddr);
         }
 
         // Give back the hardware MAC address
@@ -107,7 +107,7 @@ namespace PERQemu.IO.Network
 
             _nic.Reset();
 
-            Log.Write(Category.Ethernet, "Controller reset");
+            Log.Info(Category.Ethernet, "Controller reset");
         }
 
         public void Shutdown()
@@ -125,16 +125,16 @@ namespace PERQemu.IO.Network
                 // timer; fires an interrupt up to 65535 microseconds from enable
                 //
                 case 0x88:  // Microsecond clock control
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (control)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (control)", value);
                     break;
 
                 case 0x89:  // uSec clock timer high byte
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (high)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (high)", value);
                     _usecClock = (ushort)((value << 8) | (_usecClock & 0xff));
                     break;
 
                 case 0x8a:  // uSec clock timer low byte
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (low)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (low)", value);
                     _usecClock = (ushort)((_usecClock & 0xff00) | (value & 0xff));
                     break;
 
@@ -170,7 +170,7 @@ namespace PERQemu.IO.Network
                 case 0x91:  // Multicast Grp1|Cmd
                 case 0x92:  // Multicast Grp3|Grp2
                 case 0x93:  // Multicast Grp5|Grp4
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x4} to multicast register 0x{1:x2}", value, address);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to multicast register 0x{1:x2}", value, address);
                     var offset = address - 0x91;
                     _mcastGroups[offset] = (byte)(value & 0xff);
                     _mcastGroups[offset + 1] = (byte)(value >> 8);
@@ -182,23 +182,23 @@ namespace PERQemu.IO.Network
                 // way.  Don't ask.
                 //
                 case 0xd6:  // Packet buffer addr, high 4 bits
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x} to DMA buffer address (high)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA buffer address (high)", value);
                     _bufferAddress = ((~value & 0xf) << 16) | (_bufferAddress & 0x0ffff);
                     break;
 
                 case 0xde:  // Packet buffer addr, low 16 bits
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x4} to DMA buffer address (low)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA buffer address (low)", value);
                     _bufferAddress = (_bufferAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
                     break;
 
                 case 0xd7:  // Packet header addr, high 4 bits
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x} to DMA header address (high)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA header address (high)", value);
                     _headerAddress = ((~value & 0xf) << 16) | (_headerAddress & 0x0ffff);
                     // If we cared, the header word count is bits <7:4> ??
                     break;
 
                 case 0xdf:  // Packet header addr, low 16 bits
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x4} to DMA header address (low)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA header address (low)", value);
                     _headerAddress = (_headerAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
                     break;
 
@@ -372,7 +372,7 @@ namespace PERQemu.IO.Network
                 return false;
             }
 
-            Log.Write(Category.Ethernet, "Ignoring packet for {0} (not in Receive mode)", dest);
+            Log.Debug(Category.Ethernet, "Ignoring packet for {0} (not in Receive mode)", dest);
             return false;
         }
 
@@ -400,17 +400,23 @@ namespace PERQemu.IO.Network
             // the order it expects.  Type has to get un-munged as well.  The
             // header is 14 bytes but the DMA always ships quad words, so again
             // the first word is a dummy.  We write a zero, but could just skip it?
+            //
             addr = _headerAddress;
             _system.Memory.StoreWord(addr++, 0);
 
-            for (var i = 0; i < 7; i++)
+            for (var i = 0; i < 6; i++)
             {
-                data = (ushort)(packet[i * 2] << 8 | packet[i * 2 + 1]);
+                data = (ushort)(packet[i * 2 + 1] << 8 | packet[i * 2]);
                 _system.Memory.StoreWord(addr++, data);
 
                 Console.WriteLine("Receive: mem[{0:x6}] <= packet[{1},{2}] = 0x{3:x4}",
-                                 addr, i * 2, i * 2 + 1, data);
+                                 addr, i * 2 + 1, i * 2, data);
             }
+
+            // And undo the insane length/type bitfuckery
+            data = (ushort)(packet[12] << 8 | packet[13]);
+            _system.Memory.StoreWord(addr, data);
+            Console.WriteLine("Receive: mem[{0:x6}] <= packet[13,12] = 0x{1:x4}", addr, data);
 
             // Copy the data packet to the buffer location (n words).  Hope the
             // byte ordering is correct.  And deal with odd length packets by
@@ -526,8 +532,8 @@ namespace PERQemu.IO.Network
                 for (var i = 14; i < packet.Length; i += 2)
                 {
                     data = _system.Memory.FetchWord(addr++);
-                    packet[i] = (byte)(data >> 8);
-                    if (i + 1 < packet.Length) packet[i + 1] = (byte)data;
+                    packet[i] = (byte)data;
+                    if (i + 1 < packet.Length) packet[i + 1] = (byte)(data >> 8);
                 }
 
                 // Hand off the complete packet!
