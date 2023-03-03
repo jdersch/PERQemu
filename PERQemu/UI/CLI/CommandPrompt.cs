@@ -43,6 +43,7 @@ namespace PERQemu.UI
             _lastHeight = Console.BufferHeight;
 
             InitEditKeyMap();
+            InitIntlKeyMap();
         }
 
         /// <summary>
@@ -188,13 +189,19 @@ namespace PERQemu.UI
                         break;
 
                     default:
-                        // Not a special key, just insert it if it's deemed printable
-                        if (char.IsLetterOrDigit(key.KeyChar) ||
-                            char.IsPunctuation(key.KeyChar) ||
-                            char.IsSymbol(key.KeyChar) ||
-                            char.IsWhiteSpace(key.KeyChar))
+                        // Not a special key; handle possible translation
+                        var c = key.KeyChar;
+
+                        if (_intlKeyMap.ContainsKey(c))
+                            c = _intlKeyMap[c];
+
+                        // Insert character if it's deemed "printable"
+                        if (char.IsLetterOrDigit(c) ||
+                            char.IsPunctuation(c) ||
+                            char.IsSymbol(c) ||
+                            char.IsWhiteSpace(c))
                         {
-                            InsertChar(key.KeyChar);
+                            InsertChar(c);
                         }
                         break;
                 }
@@ -634,7 +641,7 @@ namespace PERQemu.UI
 #if !DEBUG
                                 if (!c.Hidden)
 #endif
-                                result.Completions.Add(c.ToString());
+                                    result.Completions.Add(c.ToString());
                             }
                         }
 
@@ -823,6 +830,35 @@ namespace PERQemu.UI
             // todo: ^Y - yank word
         }
 
+        /// <summary>
+        /// This is a quick fix for mapping Unicode input characters to UTF-8/ASCII
+        /// equivalents, to allow the parser to read the English input files when a
+        /// non-English locale is in use.  See issue #1 (thanks blw) for info.
+        /// </summary>
+        void InitIntlKeyMap()
+        {
+            _intlKeyMap = new Dictionary<char, char>();
+
+            // For Turkish:
+            _intlKeyMap.Add('\u0130', 'I');
+            _intlKeyMap.Add('\u0131', 'i');
+            _intlKeyMap.Add('\u00fc', 'u');
+            _intlKeyMap.Add('\u00dc', 'U');
+            _intlKeyMap.Add('\u00f6', 'o');
+            _intlKeyMap.Add('\u00d6', 'O');
+            _intlKeyMap.Add('\u015f', 's');
+            _intlKeyMap.Add('\u015e', 'S');
+            _intlKeyMap.Add('\u00e7', 'c');
+            _intlKeyMap.Add('\u00c7', 'C');
+            _intlKeyMap.Add('\u011f', 'g');
+            _intlKeyMap.Add('\u011e', 'G');
+
+            // There must be a more general/simpler solution so that we can
+            // easily extend this for other input locales; that's a long term
+            // project, likely tied to moving toward a fully integrated GUI
+            // with ALL the bells & whistles. :-)  Hopefully this works for now!
+        }
+
         readonly int MAX_HISTORY = 100;     // Season to taste
 
         CommandNode _commandTree;
@@ -844,5 +880,30 @@ namespace PERQemu.UI
         int _historyIndex;
 
         Dictionary<ConsoleKey, ConsoleKey> _editKeyMap;
+        Dictionary<char, char> _intlKeyMap;
     }
 }
+
+/*
+    Notes:
+    
+    To map Turkish (and other Unicode) characters to their plain old UTF-8/ASCII-ish
+    equivalents, a separate map could be used:
+    
+char[] turkishChars = new char[] { 0x131, 0x130, 0xFC, 0xDC, 0xF6, 0xD6, 0x15F, 0x15E, 0xE7, 0xC7, 0x11F, 0x11E };
+char[] englishChars = new char[] { 'i', 'I', 'u', 'U', 'o', 'O', 's', 'S', 'c', 'C', 'g', 'G'};
+
+    Specifically for Turkish, the "i"/"I" (with their dotted and non-dotted variants)
+    should probably all map to the English so the parser can work...
+
+    Upper İ   I
+    U+0130  U+0049
+    Lower i   ı
+    U+0069  U+0131
+
+    _Every_ case where data is written to disk/floppy/tape should probably be
+    checked to make sure that it's strictly binary 8-bit values but I think
+    we're okay there?  All file I/O is in binary, while all (?) text comes in
+    through here -- so mapping inputs to (rough) UTF-8/ASCII equivalents ought
+    to at least allow the parser to work.
+*/
