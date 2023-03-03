@@ -107,7 +107,7 @@ namespace PERQemu.IO.Network
                                              System.Net.IPAddress.None);
 
                 packet.PayloadPacket = greeting;
-                Console.WriteLine(packet.PrintHex());
+                Console.WriteLine(packet);
                 _adapter.SendPacket(packet);
                 _lastGreeting = DateTime.Now;
 
@@ -143,7 +143,7 @@ namespace PERQemu.IO.Network
                                                System.Net.IPAddress.None);
 
                 packet.PayloadPacket = salutation;
-                Console.WriteLine(packet.PrintHex());
+                Console.WriteLine(packet);
                 _adapter.SendPacket(packet);
 
                 Log.Info(Category.Ethernet, "Sent RARP reply to {0}", greeting.TargetHardwareAddress);
@@ -212,7 +212,7 @@ namespace PERQemu.IO.Network
                 }
 
                 // Print the (modified) packet
-                Console.WriteLine(packet);
+                Console.WriteLine(packet.PrintHex());
 
                 // So send it already, sheesh
                 _adapter.SendPacket(packet);
@@ -324,10 +324,13 @@ namespace PERQemu.IO.Network
                                 seen = new NATEntry(rarp.SenderHardwareAddress, rarp.TargetHardwareAddress);
                                 _nat.Add(seen);
 
-                                // Since this is the first time we've heard from this
-                                // host, send a RARP reply, since it's unlikely anyone
-                                // still has an in.rarpd running these days? :-)
-                                SendReply(rarp);
+                                if (rarp.Operation == ARPOperation.RequestReverse)
+                                {
+                                    // Since this is the first time we've heard from this
+                                    // host, send a RARP reply, since it's unlikely anyone
+                                    // still has an in.rarpd running these days? :-)
+                                    SendReply(rarp);
+                                }
                             }
                             else
                             {
@@ -338,8 +341,11 @@ namespace PERQemu.IO.Network
                         }
                         // I'm pretty sure we can safely drop these here and not
                         // pass them on to the PERQ, which almost certainly won't
-                        // do RARP (even under Accent).  For now, send 'em and see
-                        // if they just get dropped or ignored
+                        // do RARP (even under Accent).  HOWEVER, Accent's "new"
+                        // message server (in S6+) will do actual IP ARPs, so we
+                        // don't want to get in the way of those.
+                        Log.Info(Category.Ethernet, "Local RARP handling complete");
+                        return;
                     }
                     // Definitely fall through here
                 }
@@ -359,7 +365,7 @@ namespace PERQemu.IO.Network
                 if (_controller.WantReceive(raw.DestinationHwAddress))
                 {
                     // Only show the ones we're actually accepting...
-                    Console.WriteLine(raw);
+                    Console.WriteLine(raw.PrintHex());
 
                     // Yep!  Queue it up and return
                     _controller.DoReceive(raw.Bytes);
@@ -387,6 +393,8 @@ namespace PERQemu.IO.Network
             {
                 _adapter.OnPacketArrival -= OnPacketArrival;
                 _adapter.Close();
+
+                _nat.Flush();
 
                 Log.Write(Category.Ethernet, "Adapter shutdown");
             }
@@ -442,9 +450,7 @@ namespace PERQemu.IO.Network
         /// <summary>
         /// Find the adapter that matches the interface name.  OF COURSE the C#
         /// runtime has a completely different way of doing this from SharpPcap,
-        /// so I have no idea how the hell we're supposed to store this value in
-        /// a sane way.  Windows gives back a stupid GUID-long-ass-path-thing
-        /// rather than just "en0" or "eth1" or even a Windowsy "NET0:".  UGH.
+        /// so this is going to require further consideration... :-/
         /// </summary>
         public static ICaptureDevice GetAdapter(string name)
         {

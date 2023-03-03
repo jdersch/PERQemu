@@ -203,6 +203,7 @@
     <Compile Include="Emulator\IO\Network\Ether3MbitController.cs" />
     <Compile Include="Emulator\IO\Network\MachineAddress.cs" />
     <Compile Include="Emulator\IO\INetworkController.cs" />
+    <Compile Include="Emulator\IO\Network\Translation.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -551,7 +552,6 @@
     <Content Include="Readme.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <None Include="Disks\d6orig.phd" />
     <None Include="Docs\Video.txt" />
     <None Include="Emulator\CPU\PERQ24A.cs" />
     <None Include="Docs\Configurator.png" />
@@ -608,10 +608,6 @@
     </None>
     <None Include="PROM\oioz80.lst">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Disks\d6.phd">
-    </None>
-    <None Include="Disks\f1.phd">
     </None>
     <None Include="ChangeLog-Old.txt" />
     <None Include="PROM\cioboot.rom">
@@ -684,7 +680,10 @@
     <None Include="SharpPcap.dll.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Disks\f15.prqm" />
+    <None Include="Disks\f15.prqm">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Docs\Network.txt" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">

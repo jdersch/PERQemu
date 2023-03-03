@@ -1,1 +1,324 @@
 ﻿
+PERQ Ethernet Notes
+===================
+
+Notes and discussion about the design of the PERQemu Ethernet interface.  The
+file Ethernet_Guide_Sep81.txt and other original 3RCC docs (many of which seem
+to be truncated or incomplete) provide background on the hardware interface as
+well as software interactions with the 2910-based state machine.
+
+As an early adopter of Ethernet, Three Rivers built their own implementation
+in discrete logic; at the time there weren't any "VLSI" solutions (like the AMD
+LANCE chip) available.  So while the original PERQ-1 IOB was intended to provide
+Ethernet (see schematics for IOB-F, 1981) that wasn't integrated until the EIO
+board shipped with the PERQ-2.  Instead an IO Option board was produced for the
+original PERQ.  There are slight differences between the OIO and EIO, though
+they are both emulated here by the general Ether10MbitController class:
+
+    PERQ-1/OIO uses different IOA ports and the IOB's DMA setup registers;
+    interrupts use the "X" line.  The MAC address fetch and programming of
+    the multicast registers are done a word at a time.
+
+    PERQ-2/EIO uses the designated "Network" interrupt and the EIO's DMA
+    registers.  Multicast bytes are programmed one byte at a time.
+
+
+The 3Mbit Ethernet option board was used extensively at CMU, but it doesn't
+appear that the wire-wrapped board was ever productized or shipped to regular
+customers.  When implemented, the completely different "experimental Ethernet"
+packet format and addressing scheme will encapsulate 3Mbit-style packets in a
+standard 10Mbit frame such as ContrAlto (and the CMU "3-to-10 gateway") used.
+This will be a standalone IO Option board.
+
+
+PERQ Controller
+---------------
+
+The PERQ's 10Mbit Ethernet controller offloads much of the packet processing
+work to the hardware.  Dedicated DMA channels for transmit and receive can be
+programmed with two addresses: like the hard disk controller, the packet header
+and data portion can come from different memory buffers, subject to alignment
+restrictions.  The Ethernet controller will only interrupt upon completion or
+error; there are no "real-time" processing requirements, which means that the
+emulator doesn't have to simulate the DMA transfer word-by-word.  Latency due
+to DMA is computed based on packet length to provide a flow rate between the
+virtual PERQ and the host interface.
+
+The hardware provides a microsecond clock that can be programmed to interrupt
+independently (but sharing the same physical interrupt line used for packet
+handling).  The clock is used by the Ethernet microcode to handle "exponential
+backoff" after a collision when attempting to transmit.  As the emulated PERQ
+will never have to deal directly with collisions or most errors, this isn't
+likely going to be used, but is still emulated in case software programs it to
+fire timed interrupts for testing or other purposes.
+
+A control register bit allows for "promiscuous receives," so in the initial
+PERQemu implementation the host interface is set for promiscuous mode (see
+below for the implications of this).  The PERQ also implemented Ethernet
+multicast reception with up to five "groups" -- though it's not yet known if
+any software ever used that feature.  Thus, the controller itself checks all
+incoming packets against a list of destination addresses to match:
+
+    1. Broadcast
+    2. Hardware address
+    3. Up to five multicast groups
+    4. Any address, in promiscuous mode
+
+
+Address Translation
+-------------------
+
+PERQemu tries to be true to the hardware, where we use the Three Rivers MAC
+prefix of 02:1c:7c in the first three octets of the address (while the fourth
+is set based on the interface type by the on-board PROM).  We let the user
+configure the last word through the Configurator.
+
+Rather than try to force users to configure a physical interface (which often
+isn't possible or desirable) PERQemu will quietly maintain an ARP table of
+sorts.  I may make this configurable through Settings; on my Mac with a second,
+unused Ethernet, I can configure en1 with the MAC of 02:1c:7c:0:nn:mm as I wish
+and just use that directly with no translation... otherwise a very simple
+packet rewriting routine could be devised that could allow the emulated PERQ
+to still "see" other machines with the same prefix?
+
+    On send, rewrite our source address in outgoing packets from the
+    user's configured 3RCC address to the actual Ethernet MAC of the
+    selected adapter;
+
+    On receive, recognize our destination address and rewrite the packet
+    with our emulated address.  On a fast enough host computer running
+    two instances of PERQemu, each would have to have a unique address
+    but with all receives in promiscuous mode we might get away with it!
+
+
+To "discover" other PERQemu instances a standard RARP packet is constructed,
+but with a slightly different use of the address fields.  The emulator sends a
+"greeting" when it starts up using the standard RequestReverse operation code;
+this lets other PERQemu machines know there's a new kid on the block.  In reply
+other active machines add this new host<->PERQ mapping to their tables and send
+back a ReplyReverse RARP to provide their data.  This lets the new host quickly
+populate its NAT table as well.  This use of RARP is inspired by QEMU which may
+also use it for similar purposes.
+
+When "greetings" are sent (RequestReverse):
+    Header source = host's MAC addr, dest = Ethernet broadcast
+    RARP SenderHwAddr = host's MAC, TargetHwAddr = PERQ's MAC
+
+When "salutations" are sent (ReplyReverse):
+    Header source = our host's MAC addr, dest = greeting's host MAC (unicast)
+    RARP SenderHwAddr = host's MAC, TargetHwAddr = PERQ's MAC
+
+This means that PERQemu can look for _any_ RARP and match the sender + target
+pair to a table entry.  These "special" packets are not passed on to the 
+PERQ; they're handled strictly by the HostInterface immediately upon reception.
+The virtual machine never knows that the address translation is happening.
+
+PERQemu strictly limits the number of greetings it sends to no more than once
+every 30 seconds.  This is tunable in the source.  OSes like POS that can't do
+TCP/IP natively use their own ad hoc mechanisms to locate other machines, while
+_later_ versions of Accent can actually use regular IPv4 ARP to find each other
+(though this hasn't yet been tested for interoperability with non-PERQ hosts).
+I'm not yet sure what PNX networking can do.
+
+Since the PERQ can do XNS, "raw" and TCP/IP (possibly others) depending on the
+OS and software in use, our private little RARP broadcast is mostly to let us
+run PERQ-to-PERQ connections like FTP or the print server or even do testing
+with the "echo server" built into "TestEther".  So we'll only ever look for and
+modify those packets which _specifically_ target other PERQemu instances and
+let the rest through unmodified.
+
+This also lets us do a fun little UI thing where we can "show network neighbors"
+(or something like that) and see other emulated machines on the local net.  If
+or _when_ the Global PERQemu Clearinghouse is created, users could "check in"
+to say "yo, I'm online!" and allow PERQ-to-PERQ traffic across the Internet! :-)
+
+
+Type Code Translation
+---------------------
+
+Oops.  Because the PERQ Ethernet was pre-IEEE 802.3, they still used the "type"
+field in the packet as the, um, type.  The mostly good news is that only a few
+were actually specified and used (AFAIK) by POS and Accent:
+
+    FTPByteStreamType   = 0;     
+    FTPEtherType        = 1; 
+    EchoServerType      = 6; 
+    TimeServerType      = 7; 
+    CSDXServerType      = 315; 
+    ServerRequest       = 8; 
+
+This means, though, that modern network stacks might balk at type/length fields
+set to 7, which appears to be the case in early testing -- they get sent, but
+are never received (on the Mac, at least).
+
+Fortunately, 3RCC actually did have some reserved codes!
+
+7035  - 7036  (hex)             Three Rivers       Protocol unavailable.
+28725 - 28726 (dec)             Three Rivers Computer Corporation
+70065 - 70066 (oct)             2600 Liberty Avenue, PO Box 2600
+                                Pittsburgh PA 15230
+                                UNITED STATES
+
+Both 805E-805F are reserved to "Perq Data Systems" as well, but I'm not so sure
+that's related.  What this means, however, is that I can possibly cheat a bit,
+and re-map those types...
+
+How gross should this be?  Set the type to 0x7035 and inject one extra word in
+the payload to include the original value?  Then trim that word on receive to
+deliver the original packet?  Oof.  Not pretty.  Set the high bit to push the
+code out of the IEEE 802.3 length range, then strip it out?  Let's see about
+conflicts:
+
+0       8000    free?       
+1       8001    free?
+6       8006    in use      Nestar
+7       8007    free?
+13b     813b    (dec 315)   8139-813D KTI
+8       8008    in use      AT&T/Stanford Univ. Local use
+
+IF instead I prefix those with 0xF000, then we're into uncharted/unassigned
+ranges that don't conflict.  It's cheesy, but it could be a reasonably clean
+solution, especially if limited only to rewriting the field when either source
+or destination is a (mapped) PERQ vendor prefix (0x021c7c).  Hmm.  I wonder if
+that'll do the trick?  One way to find out! :-)
+
+
+I AM GOING TO BLITHELY ASSUME THAT IF THIS WORKS AT ALL I CAN DEAL WITH IP
+CHECKSUM RECALCULATION IF NECESSARY BUT BOY WILL THAT GET UGLY FAST. :-)
+
+    Oh, wait!  Because the NAT is symmetric and we're in promiscuous mode,
+    any change we write going out gets reversed going in!  The checksums
+    should still match!  HA! Haaaahahahahahahahaha!  I'm a dork.
+
+Yeah.  PERQ-to-PERQ stuff has to be both or none, then.  Kewl.  Figuring it out,
+slowly. :-)
+
+A HUGE caveat to the above is that it could all be ripped out if it gets in the
+way of what Accent or PNX can do "natively" -- that is, I might have a big
+switch that says "use NAT" or not, depending on the needs of the particular OS
+being booted.
+
+
+Host/Emulator Interface
+-----------------------
+
+PERQemu uses the SharpPcap library to interface with the host.  This is a 
+cross-platform solution that uses libpcap for low-level packet operations.
+The C# interface is all managed code; no additional packages should be needed
+for Mac and Linux hosts as a libpcap (or bpf) interface is generally built-in.
+On Windows, the WinPcap (or NPcap) package may need to be installed separately,
+with all installation requirements [to be] documented in the User's Guide.
+
+In the first cut, PERQemu will have to run with sufficient privileges to open
+and access the configured host interface in promiscuous mode.  Because we are
+emulating the hardware at such a low level, we want to pass all traffic to the
+controller for filtering, rather than do it at the host interface.  While it's
+impossible for a PERQ to keep up with a 100Mbit Ethernet (let alone gigabit
+and greater speeds available today) the emulator tries to quickly filter and
+queue or drop incoming packets as quickly as possible.  How this is done when
+the emulator is paused may be a little tricky...
+
+SharpPcap provides thread management and a callback/event fired when a packet
+is received.  The PERQ can then quickly decide to keep or drop the incoming
+packet.  Transmits may be tricky as there may be difficulty or extra latency
+in getting error status back on failure; the PERQ expects to do collision and
+error processing so we'll have to see how that happens when SharpPcap and the
+host interface provide queues, retries, etc.
+
+
+Organization
+------------
+
+The PERQemu Ethernet implementation is in the Emulator/IO/Network folder.
+
+INetworkController provides an interface for the OIO and EIO to attach either
+the "live" device interface (in development) or the "null" interface, which
+can be used in any PERQ model when no physical network attachment is configured
+(as with the NIO variant of the EIO, for example).  The fake interface allows
+for Accent to boot properly, since it seems to require that the hardware be
+present even if the network isn't "plugged in".
+
+NullEthernet is the "fake" implementation that doesn't transmit or receive any
+packets and doesn't attempt to open the host device; it doesn't require that
+PERQemu be run with elevated priviliges.
+
+Ether10MbitController is the "standard" implementation that adapts itself for
+operation as an OIO or EIO device at runtime.  It is responsible for managing
+the host side as well.
+
+Ether3MbitController is not yet implemented.
+
+MachineAddress is a wrapper around the PERQ's 48-bit MAC address as returned
+by the hardware.  It handles unscrambling the bits based on the slightly crazy
+packing scheme used by the OIO and EIO implementations.  [TBD: it also maps to
+the PhysicalAddress class used by SharpPcap/NetworkInformation?]
+
+HostInterface provides the connection through SharpPcap to the physical network.
+It's meant to be a fairly simple Open/Start/Stop/Close type of interaction, with
+incoming packets delivered via event invocations of the callback provided by the
+emulator, with no packet interpretation or filtering.  [This could change if an
+efficient scheme to set up and manage filters based on the PERQ's addressing
+rules can be devised?]
+
+
+Operation
+---------
+
+The Settings subsystem provides the name of the configured Ethernet device on
+the host.  On a typical desktop with one interface this will likely be the
+primary (or only) physical Ethernet.  [We may have to allow WiFi networks in
+the selection, too?]  On my older Mac Pro with two on-board Ethernets, I use
+en1 as a dedicated PERQ interface, fixed at 10Mbits/half-duplex! ;-)  That's
+plugged into an older Ethernet hub so I can test the code on a "quiet" network
+where there's no "background noise" from other machines.
+
+The interface type is chosen through the Configurator as an OIO with the Ether
+option (PERQ-1) or as the EIO (PERQ-2).  In either case, if no physical host
+adapter is selected by Settings, the NullEthernet is attached, otherwise the
+Ether10 controller is instantiated.  The interface is opened at "power on" so
+that if an error occurs (misconfiguration or permissions problem) we can abort
+startup, rather than lazily open it when the OS pokes at the control registers.
+
+OIO (and EIO, when implemented) manages all interactions from the PERQ side
+through the usual IOBus register reads/writes.  Like all DMA devices (for now)
+the network copies packets directly to and from memory, so the CPU never has
+memory cycles stolen by the DMA engine.  This is slightly unrealistic, but to
+compensate the controller calculates a reasonable packet delay based on the
+number of octets transmitted or received.  Other status bits are simulated to
+allow the microcode to see things like "packet in progress" or "carrier detect"
+[TBD].
+
+The PERQ interface is half duplex and cannot "see" its own transmitted packets.
+
+
+Design
+------
+
+The StartCapture() method is only called when the PERQ transitions to the Run
+state, not at power on.  It's not yet determined what should/will happen if the
+user pauses execution; we may have the receiver buffer only one packet and drop
+the rest?  As a general rule, that may be the best approach, rather than trying
+to implement some queueing scheme.  In theory, for debugging, having a packet
+in the receive buffer while single stepping would allow us to interrogate state
+and walk through the state transitions even though the actual DMA copy happens
+in a single block copy directly into memory...
+
+So we'll have one packet buffer for send and one for receive in the Controller
+and use a busy flag/machine run state to determine if the packet arrival event
+should save the result or drop it?  Or regardless of the run state, we do the
+equivalent of the hardware's receive processing and drop packets not meant for
+us until the one (or n, for small values of n) buffer is full?
+
+
+Misc:
+
+The other possibility is to do IP encapsulation and see if the SDL_net library
+can dispatch on the existing event loop, so we'd process packets just like
+Display events?
+
+
+THIS IS ALL STILL VERY MUCH UNDER DEVELOPMENT AND IS IN NO WAY FINALIZED!
+
+
+---
+Last update: skeezics    Thu Mar  2 16:16:02 PST 2023

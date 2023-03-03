@@ -28,7 +28,8 @@ namespace PERQemu.IO.Network
     /// PERQ side of the "homegrown" OIO or EIO 10Mbit Ethernet controller.
     /// </summary>
     /// <remarks>
-    /// Some programming documentation in Docs/HW/Ethernet_Guide_Sep81.txt.
+    /// Some programming documentation in Docs/HW/Ethernet_Guide_Sep81.txt and
+    /// much more info about this implementation in Docs/Network.txt.
     /// </remarks>
     public class Ether10MbitController : INetworkController
     {
@@ -206,9 +207,6 @@ namespace PERQemu.IO.Network
             }
         }
 
-        /// <summary>
-        /// Write to the command register to control the action.
-        /// </summary>
         public void LoadCommand(int value)
         {
             // Todo: For now, assume OIO (port 0x99) although I think the EIO
@@ -275,7 +273,6 @@ namespace PERQemu.IO.Network
             }
         }
 
-
         public int ReadRegister(byte address)
         {
             var retVal = 0;
@@ -328,6 +325,7 @@ namespace PERQemu.IO.Network
             Log.Write(Category.Ethernet, "Read status: {0} interrupt cleared, returning {1}", _irq, retVal);
             return retVal;
         }
+
 
         void GetAddress(ulong nSkew, object context)
         {
@@ -396,8 +394,12 @@ namespace PERQemu.IO.Network
             int addr;
             ushort data;
 
-            // The header is 14 bytes but the DMA always ships quad words; the
-            // first word is a dummy, so write a zero.  Or could just skip it?
+            //
+            // Receiving is the same as sending: SharpPcap will return addresses
+            // formatted "normally" so we need to hand them back to the PERQ in
+            // the order it expects.  Type has to get un-munged as well.  The
+            // header is 14 bytes but the DMA always ships quad words, so again
+            // the first word is a dummy.  We write a zero, but could just skip it?
             addr = _headerAddress;
             _system.Memory.StoreWord(addr++, 0);
 
@@ -405,6 +407,9 @@ namespace PERQemu.IO.Network
             {
                 data = (ushort)(packet[i * 2] << 8 | packet[i * 2 + 1]);
                 _system.Memory.StoreWord(addr++, data);
+
+                Console.WriteLine("Receive: mem[{0:x6}] <= packet[{1},{2}] = 0x{3:x4}",
+                                 addr, i * 2, i * 2 + 1, data);
             }
 
             // Copy the data packet to the buffer location (n words).  Hope the
@@ -488,27 +493,41 @@ namespace PERQemu.IO.Network
                 int addr;
                 ushort data;
 
+                //
                 // DMA the header and data buffer from the PERQ's memory and hand it
                 // off to the host to construct and transmit the packet.  As in the
                 // receive case, we copy two quads for the header, but skip over the
-                // first (unused) word.
+                // first (unused) word.  NB: the addresses are presented in "normal"
+                // order (left to right), but the Length/Type field has to be swapped;
+                // SharpPcap will re-invert it for sending over the wire!  Argh.
+                //
                 addr = _headerAddress + 1;
 
-                for (var i = 0; i < 7; i++)
+                for (var i = 0; i < 6; i++)
                 {
                     data = _system.Memory.FetchWord(addr++);
                     packet[i * 2] = (byte)data;                 // Low byte
                     packet[i * 2 + 1] = (byte)(data >> 8);      // High byte
+
+                    Console.WriteLine("Send: mem[{0:x6}] => packet[{1}] = {2:x2}, packet[{3}] = {4:x2}",
+                                      addr - 1, i * 2, packet[i * 2], i * 2 + 1, packet[i * 2 + 1]);
                 }
 
-                // Now the payload
+                // Do the Length/Type field
+                data = _system.Memory.FetchWord(addr);
+                packet[12] = (byte)(data >> 8);
+                packet[13] = (byte)data;
+                Console.WriteLine("Send: mem[{0:x6}] => packet[12] = {1:x2}, packet[13] = {2:x2}",
+                                  addr - 1, packet[12], packet[13]);
+
+                // Now do the payload
                 addr = _bufferAddress;
 
                 for (var i = 14; i < packet.Length; i += 2)
                 {
                     data = _system.Memory.FetchWord(addr++);
-                    packet[i] = (byte)data;
-                    if (i + 1 < packet.Length) packet[i + 1] = (byte)(data >> 8);
+                    packet[i] = (byte)(data >> 8);
+                    if (i + 1 < packet.Length) packet[i + 1] = (byte)data;
                 }
 
                 // Hand off the complete packet!
