@@ -142,7 +142,7 @@ the graphical display has a number of critical benefits:
 
     fixes the keyboard problems (busted key translations in Mono on the Mac);
 
-    is much faster.  In theory.  In practice, so far?  Not so much. :-(
+    is much faster, on suitable hardware (>80 fps with rate limiting off).
 
 There are downsides, though:
 
@@ -186,14 +186,6 @@ On the SDL2 thread, the 8bpp buffer is expanded to 32bpp and copied to the GPU
 texture required to render it on the screen.  This is ugly and pointless and
 stupid but it yields around 10-12fps in performance and after trying 147,635
 other approaches I'm tired of screwing around with it.  Good enough.  Moving on.
-
-
-[Update:  Will "MAUI" finally make a _supported_ cross-platform GUI environment
-available?  I won't know for quite some time as I don't have any development box
-anywhere near current enough to run it, and adopting MAUI would impose the same
-requirements on client machines.  Preliminary reading of the spec makes it seem
-unlikely that the PERQ video display could be implemented directly as a MAUI
-object so SDL might always be required for rendering?]
 
 
 Video Controller State Machine
@@ -272,6 +264,16 @@ still faster than before, and at most it's only used to update 64 lines out of
 Other Stuff
 -----------
 
+In PNX 1 and PNX 2, ICL decided to do things differently.  PNX 1 only programs
+one 40-line vertical blanking band and doesn't set the StartOver bit.  PNX 2
+sets up two blanking bands and sets the StartOver bit, but seems to trigger the
+VBlank field around line 960, NOT when the line count reaches 1023, because...
+reasons.  Currently this produces a graphical glitch at the bottom of the frame
+(a visible band that isn't updated and obscures the cursor) but at least the
+screen doesn't break up... another hack/workaround in the emulator will be
+required.  POS, MPOS and Accent all work perfectly.  Why, ICL?  Why?
+
+
 The first four CursorFunctions just show the cursor over a blank screen.  This
 isn't terribly useful.  I can't remember the last time I tried
     "login /cursorfunction=0"
@@ -299,4 +301,4 @@ rendered by Windows (on a Sun-branded 23" display using the same panel).  Sigh.
 
 
 ---
-Last update: skeezics    Mon Oct  3 03:45:28 PDT 2022
+Last update: skeezics    Sat Feb 25 13:19:01 PST 2023

@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-2/11/2023 - skeezicsb - v0.5.2 (experimental)
+3/3/2023 - skeezicsb - v0.5.2 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
@@ -125,7 +125,7 @@ There are several subdirectories:
         Contains disk images that the emulator can access.  Included with
         the distribution are:
 
-        d6.phd:
+        d6.prqm:
             (Josh) A dump from my very own PERQ1's disk, which has POS
             D.61 and Accent S4 installed.
 
@@ -133,15 +133,17 @@ There are several subdirectories:
             (Skeezics) A dump of my POS F.0 drive, which has a working
             MPOS E.29 installation as well!
               
-        f1.phd:
+        f1.prqm:
             A disk containing a pretty complete installation of POS F.1,
             including source, documentation, the Pascal compiler and a
             number of games, demos, and applications.  This was created
             from floppy images on Bitsavers.
 
-        f15dev.phd:
-            Updated Shugart image containing a full source installation
-            of the offshoot POS F.15 distribution.  Includes Amendment 1.
+        f15.prqm:
+        f15dev.prqm:
+            Updated Shugart images containing the offshoot POS F.15
+            distribution, in both basic and developer (full source)
+            versions.  Includes Amendment 1.
 
         g7.prqm:
             The first PERQmedia-formatted Shugart image for use with the
@@ -254,8 +256,8 @@ As of v0.4.6, these PERQ operating systems also boot:
   - POS version G.7 (released by Accent Systems, 1986?);
   - Accent S6 (Release II from PERQ Systems Corporation, 1985).
 
-In addition, PNX 2 is able to run but the installer has bugs; we have not yet
-been able to create a working hard disk image.
+In addition, PNX 2 is able to run but the video display list processing is non-
+standard and we'll have to find a workaround.
 
 NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
 2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
@@ -296,9 +298,7 @@ The following hardware has been implemented in the emulator:
   Floppy disk:
     - Rewritten to work with the new Z80 and floppy disk controller;
     - Supports dynamic loading and unloading of all media types (single- and
-      double-sided diskettes, in single- and double-density);
-    - Operation is reliable for booting and data transfer, though testing and
-      debugging is ongoing.
+      double-sided diskettes, in single- and double-density).
 
   Tape drive:
     - The streaming tape drive is now available as the Tape option when the
@@ -310,7 +310,6 @@ The following hardware has been implemented in the emulator:
     - The 1280 x 1024 landscape display is supported and tested with POS G.7
       and Accent S6!  Although PERQ-1 landscape configurations were very rare,
       the emulator runs 'em just fine!
-    - Now rendered by SDL2, so 32-bit WinForms is finally retired.
 
   Z80 I/O Processor:
     - Simulation replaced by a real Z80 emulator running actual PERQ ROM code;
@@ -403,9 +402,9 @@ window and overwrite previous output, rather than scrolling, making it difficult
 to see the input prompt.  This seems most prevalent on Windows 10.
 
 Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
-seems to fix most of the glitches.  Mac and Linux terminal applications don't
-tend to misbehave as badly.  Hitting ^L now clears and resets the window in
-case things are messy.  Recent changes should fix the worst issues.
+seems to fix some of the glitches but it's still a mess.  Mac and Linux terminal
+applications don't tend to misbehave as badly.  Hitting ^L now clears and resets
+the window in case things are messy.
 
 
 2. Minimizing the Display window makes it disappear for good / very difficult
@@ -416,7 +415,6 @@ Symptoms:  Pressing the window's minimize button sends it to never-never-land.
 Workaround:  On Windows, disable "autohide" for the task bar.  Otherwise you
 have to do some weird Ctrl-right-click-Restore gyrations to force the Display
 window back onto the screen.  This was fixed?  Kind of?  Except when it isn't?
-My absolute loathing and utter disdain for Windows increases daily.
 
 
 3. Reading from the serial port is unreliable.

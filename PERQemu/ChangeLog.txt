@@ -6,7 +6,34 @@ notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
 avoid wasting precious time scrolling to the end. :-)
 
 
+March, 2023:
+
+    2. Provide a crude patch to map Turkish characters to UTF-8/ASCIIish so the
+    CLI can parse 'i' and 'I' (in their various forms).  In the longer term,
+    moving toward more awareness of and better handling of non-US/English input
+    locales and (in a future GUI!) possibly even language translations would be
+    great, to help spread the PERQ love globally. :-)
+
+    1. Ethernet is kind of happening.  In the first cut, it's a purely low-level
+    "raw" interface that runs in promiscuous mode so the PERQ can drive it as
+    close to its own view of the hardware as possible.  This is cool, since it
+    can run XNS, IPv4, and various undocumented/proprietary protocols and the
+    direct packet mashing is relatively easy.  However, it requires elevated
+    privileges (root/administrator) and... that ain't great.  In progress.
+    
+
 February, 2023:
+
+    5. Real Ethernet support is taking its first baby steps!  It's still fragile
+    and needs a ton of debugging.  The older versions of PacketDotNet/SharpPcap
+    that work with net48 are rather out of date, but the newer versions (which
+    claim to support both .NET Framework 4.8 and .NET Core apparently just lie.
+    Mama said there'd be days like this.
+
+    4. Found and fixed an esoteric microcode bug in POS F.15 and rolled that up
+    with the GPIB, RSX: fixes into an "Amendment 1" release (posted with a full
+    floppy set to the PERQmedia repo).  Updated the bundled f15 and f15dev.prqm
+    images in Disks/.
 
     3. Start adding the framework for Ethernet support.  Bumped version to
     distinguish from the abortive Micropolis effort.
@@ -35,4 +62,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Sat Feb 11 18:59:03 PST 2023
+Last update: skeezics    Fri Mar  3 14:15:52 PST 2023
