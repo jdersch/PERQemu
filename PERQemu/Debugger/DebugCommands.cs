@@ -1022,7 +1022,7 @@ namespace PERQemu
         [Command("debug show ethernet devices", "List available host Ethernet interfaces")]
         public void ShowEtherDevices()
         {
-            IO.Network.HostInterface.ShowInterfaceSummary();
+            IO.Network.HostAdapter.ShowInterfaceSummary();
         }
 
         [Command("debug dump ethernet", "Dump the internal state of the fake Ethernet device")]

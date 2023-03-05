@@ -1,4 +1,4 @@
-﻿//
+//
 // Settings.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
@@ -361,7 +361,7 @@ namespace PERQemu
 
             foreach (NetworkInterface adapter in interfaces)
             {
-                if (HostInterface.IsEthernet(adapter.NetworkInterfaceType))
+                if (HostAdapter.IsEthernet(adapter.NetworkInterfaceType))
                 {
                     nics.Add(adapter.Name);
                 }

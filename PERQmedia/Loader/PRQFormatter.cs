@@ -33,8 +33,11 @@ namespace PERQmedia
     {
         public PRQFormatter()
         {
-            // Our format helper should persist across header/data reads
+            // Our format helper should persist across header, data reads
             _helper = null;
+
+            // Save the partial CRC between header, data reads
+            _crc = 0;
         }
 
         public string Name => "PERQmedia Common Storage format";
@@ -73,7 +76,7 @@ namespace PERQmedia
             try
             {
                 // Reset the CRC
-                CRC32Stream.ResetChecksum();
+                fs.ResetChecksum();
 
                 // Reset the helper
                 _helper = new PRQFormatHelper();
@@ -152,7 +155,10 @@ namespace PERQmedia
                 var xferRate = fs.ReadInt();
                 dev.Specs = new DevicePerformance(rpm, pulse, delay, minSeek, maxSeek, settle, xferRate);
 
-                Log.Detail(Category.MediaLoader, "Read info, file pos={0}", fs.Position);
+                // Checkpoint the CRC so we can pass it forward
+                _crc = fs.ReadCRC;
+
+                Log.Detail(Category.MediaLoader, "Read info, file pos={0}, crc={1:x}", fs.Position, _crc);
                 return true;
             }
             catch (EndOfStreamException e)
@@ -169,10 +175,9 @@ namespace PERQmedia
         {
             if (fs.Position != _helper.DataStart)
             {
-                Log.Debug(Category.MediaLoader,
-                          "Not in start position {0}?! File pos={1}",
-                          _helper.DataStart, fs.Position);
-                // Seek there automatically?  Bomb?  (Implies as bad directory or header read)
+                Log.Debug(Category.MediaLoader, "Not in start position {0}?! File pos={1}",
+                                                _helper.DataStart, fs.Position);
+                // Seek there automatically?  Bomb?  (Implies a bad directory or header read)
             }
 
             // Directory tells us how much data space we'll need
@@ -180,7 +185,10 @@ namespace PERQmedia
 
             Log.Detail(Category.MediaLoader, "Allocated {0} bytes for data slurp", _helper.DataSize);
 
-            // Slurp it in!
+            // Restore the saved CRC from the header read
+            fs.ReadCRC = _crc;
+
+            // Slurp in the file!
             if (fs.Read(_helper.Data, 0, _helper.DataSize) != _helper.DataSize)
             {
                 // If we didn't get all the data, we're boned
@@ -188,27 +196,26 @@ namespace PERQmedia
             }
 
             // Grab the CRC through the end of data
-            var crcFromStream = CRC32Stream.ReadCRC;
+            var crcFromStream = fs.ReadCRC;
 
             // Read in the saved CRC and compare it to the computed result
             var crcFromFile = fs.OuterStream.ReadUInt();
 
             Log.Debug(Category.MediaLoader, "Stored CRC is {0:x8}, computed {1:x8}",
-                      crcFromFile, crcFromStream);
+                                             crcFromFile, crcFromStream);
 
             if (crcFromFile != crcFromStream)
             {
-                Log.Warn(Category.MediaLoader,
-                         "CRC32 mismatch: Stored CRC is {0:x8}, computed {1:x8}",
-                         crcFromFile, crcFromStream);
+                Log.Warn(Category.MediaLoader, "CRC32 mismatch: Stored CRC is {0:x8}, computed {1:x8}",
+                                                crcFromFile, crcFromStream);
                 return false;
             }
 
             // Make sure we didn't underrun (meaning, bad file)
             if (fs.Position != fs.Length)
             {
-                Log.Debug(Category.MediaLoader, "All done.  file pos = " + fs.Position);
-                Log.Debug(Category.MediaLoader, "Extra data? file len = " + fs.Length);
+                Log.Debug(Category.MediaLoader, "Finished read at file pos {0}, but file len = {1}!",
+                                                 fs.Position, fs.Length);
                 return false;
             }
 
@@ -219,7 +226,7 @@ namespace PERQmedia
             if (total > _helper.DataSize)
             {
                 Log.Debug(Category.MediaLoader, "Data size mismatch: computed {0} != dir {1}",
-                          total, _helper.DataSize);
+                                                 total, _helper.DataSize);
                 Log.Debug(Category.MediaLoader, "Assuming the data is compressed!");
 
                 // Decompress the data
@@ -227,9 +234,8 @@ namespace PERQmedia
 
                 if (_helper.Data.Length != total)
                 {
-                    Log.Warn(Category.MediaLoader,
-                              "Data size mismatch: computed {0} != actual {1}",
-                              total, _helper.Data.Length);
+                    Log.Warn(Category.MediaLoader, "Data size mismatch: computed {0} != actual {1}",
+                                                    total, _helper.Data.Length);
                     // Probably screwed at this point?
                 }
             }
@@ -272,7 +278,7 @@ namespace PERQmedia
         bool WriteWithCRC(CRC32Stream fs, StorageDevice dev)
         {
             // Reset the CRC
-            CRC32Stream.ResetChecksum();
+            fs.ResetChecksum();
 
             // Create a new helper object
             _helper = new PRQFormatHelper();
@@ -349,16 +355,17 @@ namespace PERQmedia
             fs.Write(_helper.Data, 0, _helper.DataSize);
 
             // Get the computed CRC
-            uint crc = CRC32Stream.WriteCRC;
+            _crc = fs.WriteCRC;
 
-            Log.Debug(Category.MediaLoader, "Saving computed CRC: {0:x8}", crc);
+            Log.Debug(Category.MediaLoader, "Saving computed CRC: {0:x8}", _crc);
 
-            // Write it to the file
-            fs.OuterStream.WriteUInt(crc);
+            // Write it to the file and we golden!
+            fs.OuterStream.WriteUInt(_crc);
 
             return true;
         }
 
+        uint _crc;
         PRQFormatHelper _helper;
     }
 }

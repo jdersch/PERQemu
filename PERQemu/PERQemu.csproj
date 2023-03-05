@@ -198,7 +198,7 @@
     <Compile Include="Emulator\IO\TapeDevices\BlockBuffer.cs" />
     <Compile Include="Emulator\IO\TapeDevices\CartridgeTape.cs" />
     <Compile Include="Emulator\IO\Network\NullEthernet.cs" />
-    <Compile Include="Emulator\IO\Network\HostInterface.cs" />
+    <Compile Include="Emulator\IO\Network\HostAdapter.cs" />
     <Compile Include="Emulator\IO\Network\Ether10MbitController.cs" />
     <Compile Include="Emulator\IO\Network\Ether3MbitController.cs" />
     <Compile Include="Emulator\IO\Network\MachineAddress.cs" />

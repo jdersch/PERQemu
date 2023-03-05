@@ -59,9 +59,6 @@ namespace PERQemu.IO.Network
             _physAddr = new PhysicalAddress(_mac);
         }
 
-        // Just the bytes, ma'am
-        public byte[] MAC => _mac;
-
         // For convenience
         public PhysicalAddress PA => _physAddr;
 

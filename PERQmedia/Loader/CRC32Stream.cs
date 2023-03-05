@@ -44,7 +44,6 @@ namespace PERQmedia
         static CRC32Stream()
         {
             GenerateTable();
-            ResetChecksum();
         }
 
         public CRC32Stream(Stream stream)
@@ -101,15 +100,16 @@ namespace PERQmedia
         /// <summary>
         /// Get the checksum of the data read by the stream thus far.
         /// </summary>
-        public static uint ReadCRC
+        public uint ReadCRC
         {
             get { return unchecked(_readCRC ^ 0xffffffff); }
+            set { _readCRC = unchecked(value ^ 0xffffffff); }   // XXX
         }
 
         /// <summary>
         /// Get the checksum of the data written to the stream thus far.
         /// </summary>
-        public static uint WriteCRC
+        public uint WriteCRC
         {
             get { return unchecked(_writeCRC ^ 0xffffffff); }
         }
@@ -117,7 +117,7 @@ namespace PERQmedia
         /// <summary>
         /// Reset the read and write checksums.
         /// </summary>
-        public static void ResetChecksum()
+        public void ResetChecksum()
         {
             _readCRC = unchecked(0xffffffff);
             _writeCRC = unchecked(0xffffffff);
@@ -145,7 +145,7 @@ namespace PERQmedia
         /// <summary>
         /// Calculate a running checksum (CRC-32B) on the stream data.
         /// </summary>
-        public uint CalculateCRC32(uint prev, byte[] buffer, int offset, int count)
+        public static uint CalculateCRC32(uint prev, byte[] buffer, int offset, int count)
         {
             uint crc = prev;
 
@@ -186,12 +186,12 @@ namespace PERQmedia
         // The underlying Stream
         Stream _stream;
 
+        // Running checksum values
+        uint _readCRC;
+        uint _writeCRC;
+
         // Standard polynomial
         public static uint Polynomial = 0xedb88320;
-
-        // Running checksum values
-        static uint _readCRC;
-        static uint _writeCRC;
 
         // Pre-generated table
         static uint[] _table;

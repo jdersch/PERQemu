@@ -221,7 +221,7 @@ namespace PERQemu
 
             foreach (var i in items)
             {
-                if (col + tabWidth > Console.BufferWidth)
+                if (col + tabWidth > Console.WindowWidth)
                 {
                     Console.WriteLine();
                     Console.Write(" ".PadLeft(leftCol));
@@ -237,7 +237,7 @@ namespace PERQemu
                     Console.Write(i);
                     col += i.Length;
 
-                    if ((col + tabWidth - extra) < Console.BufferWidth)
+                    if ((col + tabWidth - extra) < Console.WindowWidth)
                     {
                         Console.Write(" ".PadRight(tabWidth - extra));
                         col += tabWidth - extra;

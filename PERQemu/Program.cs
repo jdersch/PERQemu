@@ -147,11 +147,10 @@ namespace PERQemu
 #if DEBUG
             Console.WriteLine();
             Console.WriteLine("[DEBUG version]");
-            Console.WriteLine("[Working directory is {0}]", Environment.CurrentDirectory);
-            Console.WriteLine("[Host is configured for {0} processor(s)]", Environment.ProcessorCount);
-            Console.WriteLine("[High resolution timer {0} available]",
-                              HighResolutionTimer.IsHighResolution ? "is" : "is not");
-            Console.WriteLine("[Console is {0}x{1}]", Console.BufferWidth, Console.BufferHeight);
+            Console.WriteLine($"[Working directory is {Environment.CurrentDirectory}]");
+            Console.WriteLine($"[Host is configured for {Environment.ProcessorCount} processor(s)]");
+            Console.WriteLine($"[Console buffer is {Console.BufferWidth}x{Console.BufferHeight}]");
+            Console.WriteLine($"[Console window is {Console.WindowWidth}x{Console.WindowHeight}]");
 #endif
 #if TRACING_ENABLED
             Console.WriteLine("[Tracing is available]");
@@ -159,7 +158,7 @@ namespace PERQemu
         }
 
         public static string Copyright = "Copyright (c) 2006-2023, J. Dersch (derschjo@gmail.com)\n" +
-                                         "Feebly assisted by S. Boondoggle (skeezicsb@gmail.com)";
+                                         "With contributions from S. Boondoggle (skeezicsb@gmail.com)";
 
         public static string Version => _version;
         public static string BaseDir => _baseDir;

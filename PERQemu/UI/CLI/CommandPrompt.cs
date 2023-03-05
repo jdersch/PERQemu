@@ -39,8 +39,8 @@ namespace PERQemu.UI
 
             _prompt = "";
 
-            _lastWidth = Console.BufferWidth;
-            _lastHeight = Console.BufferHeight;
+            _lastWidth = Console.WindowWidth;
+            _lastHeight = Console.WindowHeight;
 
             InitEditKeyMap();
             InitIntlKeyMap();
@@ -253,15 +253,15 @@ namespace PERQemu.UI
         /// </summary>
         bool UpdateOrigin()
         {
-            if (Console.BufferHeight != _lastHeight || Console.BufferWidth != _lastWidth)
+            if (Console.WindowHeight != _lastHeight || Console.WindowWidth != _lastWidth)
             {
                 // Origin row is "sticky" relative to the bottom of the window
-                _originRow = Math.Max(0, Console.BufferHeight - (_lastHeight - _originRow));
-                _originRow = Math.Min(Console.BufferHeight - 1, _originRow);
+                _originRow = Math.Max(0, Console.WindowHeight - (_lastHeight - _originRow));
+                _originRow = Math.Min(Console.WindowHeight - 1, _originRow);
                 Console.SetCursorPosition(_originColumn, _originRow);
 
-                _lastWidth = Console.BufferWidth;
-                _lastHeight = Console.BufferHeight;
+                _lastWidth = Console.WindowWidth;
+                _lastHeight = Console.WindowHeight;
                 return true;
             }
 
@@ -277,14 +277,14 @@ namespace PERQemu.UI
             var changed = false;
 
             // Check if the cursor is out of bounds
-            if (col < 0 || col > (Console.BufferWidth - 1) ||
-                row < 0 || row > (Console.BufferHeight - 1))
+            if (col < 0 || col > (Console.WindowWidth - 1) ||
+                row < 0 || row > (Console.WindowHeight - 1))
             {
                 col = Math.Max(0, col);
-                col = Math.Min(Console.BufferWidth - 1, col);
+                col = Math.Min(Console.WindowWidth - 1, col);
 
                 row = Math.Max(0, row);
-                row = Math.Min(Console.BufferHeight - 1, row);
+                row = Math.Min(Console.WindowHeight - 1, row);
                 changed = true;
             }
 
@@ -322,19 +322,19 @@ namespace PERQemu.UI
             // Compute new cursor position
             int col = _originColumn + _textPosition;
             int row = _originRow;
-            int lines = ((_originColumn + Math.Max(_input.Length, _lastInputLength)) / Console.BufferWidth) + 1;
+            int lines = ((_originColumn + Math.Max(_input.Length, _lastInputLength)) / Console.WindowWidth) + 1;
 
             // Has input wrapped at the bottom of the screen?
-            if (row + lines > Console.BufferHeight)
+            if (row + lines > Console.WindowHeight)
             {
-                _originRow = Console.BufferHeight - lines;
+                _originRow = Console.WindowHeight - lines;
             }
 
             // Account for line wrap
-            if (col > Console.BufferWidth - 1)
+            if (col > Console.WindowWidth - 1)
             {
-                col = ((_originColumn + _textPosition) % Console.BufferWidth);
-                row = _originRow + ((_originColumn + _textPosition) / Console.BufferWidth);
+                col = ((_originColumn + _textPosition) % Console.WindowWidth);
+                row = _originRow + ((_originColumn + _textPosition) / Console.WindowWidth);
             }
 
             // Move cursor to text position for next input and turn it back on

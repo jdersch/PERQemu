@@ -22,9 +22,10 @@ using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
 
 using SharpPcap;
-using SharpPcap.LibPcap;
 using PacketDotNet;
 using PacketDotNet.Utils;
+
+using PERQemu.Config;
 
 namespace PERQemu.IO.Network
 {
@@ -32,9 +33,9 @@ namespace PERQemu.IO.Network
     /// Encapsulate a host Ethernet interface for sending and receiving PERQ
     /// packets on a real network.
     /// </summary>
-    public class HostInterface
+    public class HostAdapter
     {
-        public HostInterface(INetworkController controller, string devName)
+        public HostAdapter(INetworkController controller, string devName)
         {
             _nat = new NATTable();
             _pending = new ConcurrentQueue<EthernetPacket>();
@@ -44,22 +45,21 @@ namespace PERQemu.IO.Network
 
             if (_adapter == null)
             {
-                Log.Warn(Category.NetAdapter, "Adapter is not present; no Ethernet available.");
+                throw new UnimplementedHardwareException("Host adapter not found");
             }
-            else
-            {
-                // Open the device and register our receive callback
-                // Todo: catch in case the open fails?
-                _adapter.Open(DeviceMode.Promiscuous);
-                _adapter.OnPacketArrival += OnPacketArrival;
 
-                // Does this avoid the spurious exception on shutdown?
-                _adapter.StopCaptureTimeout = new TimeSpan(100000000);
-            }
+            // Open the device and register our receive callback
+            _adapter.Open(DeviceMode.Promiscuous);
+            _adapter.OnPacketArrival += OnPacketArrival;
+
+            // This _seems_ to avoid the spurious exception on shutdown
+            _adapter.StopCaptureTimeout = new TimeSpan(100000000);
+
+            Log.Info(Category.NetAdapter, "Device opened [Host MAC: {0}]", _adapter.MacAddress);
         }
 
-        public string Name => _adapter.Name;
-        public string Description => _adapter.Description;
+        public string Name => _adapter?.Name;
+        public string Description => _adapter?.Description;
         public PhysicalAddress Address => (_adapter == null ? PhysicalAddress.None : _adapter.MacAddress);
         public bool Running => (_adapter != null && _adapter.Started);
 
@@ -220,6 +220,11 @@ namespace PERQemu.IO.Network
                     }
                 }
 
+                // Now generate the checksum for the packet (for debugging);
+                // SharpPcap _will_ generate and append this for us, apparently
+                var crc = Crc32.Compute(packet.Bytes, 0, packet.Bytes.Length - 4);
+                Log.Write(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
+
                 // Print the (modified) packet
                 Console.WriteLine(packet.PrintHex());
 
@@ -265,13 +270,28 @@ namespace PERQemu.IO.Network
                 }
 
                 // The PERQ interface can't "see" its own transmissions, but
-                // apparently SharpPcap does; silently drop 'em here
+                // apparently SharpPcap does; silently drop 'em here.  Dump IPv6
+                // because it's too damned chatty even if you try to tell the Mac
+                // to shut it the hell OFF.  IPv6 just continues to FAIL SO HARD.
                 if (raw.SourceHwAddress.Equals(_adapter.MacAddress)) return;
+                if (raw.Type == EthernetPacketType.IpV6) return;
 
-                Log.Write(Category.NetAdapter, "Received from {0} to {1} (type {2})",
+                Log.Write(Category.NetAdapter, "\nReceived from {0} to {1} (type {2})",
                           raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type);
                 Log.Write(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
-                          raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);                
+                          raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);
+
+                // Recompute the checksum for the packet
+                var len = raw.Bytes.Length - 4;
+                var crc = Crc32.Compute(raw.Bytes, 0, len);
+                Log.Write(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
+
+                var check = ((raw.Bytes[len]     << 24) |
+                             (raw.Bytes[len + 1] << 16) |
+                             (raw.Bytes[len + 2] <<  8) |
+                              raw.Bytes[len + 3]);
+
+                Log.Write(Category.NetAdapter, "Received CRC is {0:x8}", check);
 
                 // If this is addressed to us specifically, NAT it!
                 if (raw.DestinationHwAddress.Equals(_adapter.MacAddress))
@@ -294,8 +314,8 @@ namespace PERQemu.IO.Network
                     Log.Write(Category.NetAdapter, "NAT receive from Perq {0} via Host {1}", src.Perq, src.Host);
                 }
 
-                // If source is a PERQ, see if the Type/Length field needs remappin'
-                if (IsPerqPrefix(raw.SourceHwAddress))
+                //// If source is a PERQ, see if the Type/Length field needs remappin'
+                if (IsPerqPrefix(raw.SourceHwAddress) || raw.DestinationHwAddress.Equals(Broadcast))
                 {
                     // Translate the EtherType/Length field if necessary
                     var perqType = PortMap((ushort)raw.Type);
@@ -306,10 +326,13 @@ namespace PERQemu.IO.Network
                         raw.Type = (EthernetPacketType)perqType;
                     }
                 }
+
+                // Print the packet post-rewrites
+                Console.WriteLine(raw.PrintHex());
             }
             catch (PcapException ex)
             {
-                Log.Warn(Category.NetAdapter, "Failed to receive packet: {0}", ex.Message);
+                Log.Warn(Category.NetAdapter, "(Pcap) Failed to receive packet: {0}", ex.Message);
                 return;
             }
             catch (Exception ex)
@@ -331,8 +354,9 @@ namespace PERQemu.IO.Network
 
                 if (rarp != null)
                 {
-                    Console.WriteLine(rarp);
-
+                    Log.Info(Category.NetAdapter, "RARP {0} received from {1}",
+                                                   rarp.Operation, rarp.TargetHardwareAddress);
+                    
                     // The Op can be a Request (new host coming online) or a
                     // Reply (from others responding after our Request sent);
                     // In either case the payload contains a host+Perq pair
@@ -366,7 +390,7 @@ namespace PERQemu.IO.Network
                     // do RARP (even under Accent).  HOWEVER, Accent's "new"
                     // message server (in S6+) will do actual IP ARPs, so we
                     // don't want to get in the way of those.
-                    Log.Info(Category.NetAdapter, "Local RARP handling complete");
+                    Log.Info(Category.NetAdapter, "Local RARP handling complete\n");
                     return;
                 }
                 // Definitely fall through here
@@ -440,7 +464,7 @@ namespace PERQemu.IO.Network
                 }
             }
         }
-        
+
         /// <summary>
         /// Stop packet capture, detach the callback and shutdown this instance.
         /// </summary>
@@ -477,7 +501,7 @@ namespace PERQemu.IO.Network
             {
                 if (etherType == pt)
                 {
-                    return (ushort)(etherType ^ 0xf000);
+                    return (ushort)(etherType ^ 0xa000);
                 }
             }
 
@@ -514,9 +538,10 @@ namespace PERQemu.IO.Network
         }
 
         /// <summary>
-        /// Find the adapter that matches the interface name.  OF COURSE the C#
-        /// runtime has a completely different way of doing this from SharpPcap,
-        /// so this is going to require further consideration... :-/
+        /// Find the adapter that matches the interface name.  The C# runtime
+        /// gives back completely different names than the list SharpPcap (or
+        /// its underlying LibPcap/WinPcap/AirPcap library) gives back, so this
+        /// is going to require further consideration and way more testing! :-/
         /// </summary>
         public static ICaptureDevice GetAdapter(string name)
         {
@@ -590,20 +615,22 @@ namespace PERQemu.IO.Network
         }
 
         // Ethernet Type codes defined in E10Types.Pas (plus mapped equivalents)
+        // Todo: probably just do ALL PERQ packets with a type code < 1500, since
+        // it's extremely unlikely I'll catch every case... this may be removed.
         public static ushort[] PerqEtherTypes =
         {
             0x0000,     // FTPByteStreamType   = 0
-            0xf000,
+            0xa000,
             0x0001,     // FTPEtherType        = 1
-            0xf001,
+            0xa001,
             0x0006,     // EchoServerType      = 6
-            0xf006,
+            0xa006,
             0x0007,     // TimeServerType      = 7
-            0xf007,
+            0xa007,
             0x013b,     // CSDXServerType      = 315; 
-            0xf13b,
+            0xa13b,
             0x0008,     // ServerRequest       = 8
-            0xf008
+            0xa008
         };
 
         // All 1's broadcast
@@ -615,7 +642,7 @@ namespace PERQemu.IO.Network
         NATTable _nat;
 
         DateTime _lastGreeting = DateTime.Now;
-        const int GreetingInterval = 30;        // Minimum, in seconds
+        const int GreetingInterval = 15;        // Minimum, in seconds
 
         ConcurrentQueue<EthernetPacket> _pending;
         const int MaxBacklog = 5;               // Don't queue without bound

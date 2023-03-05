@@ -61,7 +61,8 @@ namespace PERQemu.IO.Network
             _irq = (_system.Config.IOBoard == IOBoardType.EIO ? InterruptSource.Network :
                                                                 InterruptSource.X);
 
-            _nic = new HostInterface(this, Settings.EtherDevice);
+            // Open the host network adapter
+            _nic = new HostAdapter(this, Settings.EtherDevice);
 
             Log.Info(Category.Ethernet, "Interface created {0}", _physAddr);
         }
@@ -126,6 +127,7 @@ namespace PERQemu.IO.Network
                 //
                 case 0x88:  // Microsecond clock control
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (control)", value);
+                    // Todo: actually run the clock!?
                     break;
 
                 case 0x89:  // uSec clock timer high byte
@@ -143,6 +145,7 @@ namespace PERQemu.IO.Network
                 //
                 case 0x8c:  // Bit counter control
                     Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (control)", value);
+                    // Todo: Uh, actually do something?
                     break;
 
                 case 0x8d:  // Bit counter high byte
@@ -282,12 +285,12 @@ namespace PERQemu.IO.Network
             {
                 case 0x06:
                     retVal = (_bitCount >> 8) & 0xff;
-                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (high?)", retVal);
+                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
                     return retVal;
 
                 case 0x07:
                     retVal = (_bitCount & 0xff);
-                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (low?)", retVal);
+                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
                     return retVal;
 
                 default:
@@ -357,13 +360,22 @@ namespace PERQemu.IO.Network
             if (_control.HasFlag(Control.Promiscuous)) return true;
 
             // Always accept L2 broadcasts, too
-            if (dest.Equals(HostInterface.Broadcast)) return true;
+            if (dest.Equals(HostAdapter.Broadcast)) return true;
 
             // See if it's our hardware addr or current receive addr
             if (dest.Equals(_physAddr.PA)) return true;
             if (dest.Equals(_recvAddr.PA)) return true;
 
-            // Finally, loop through the multicast bytes (TODO)
+            // Todo: Finally, loop through the multicast bytes
+            //  Grp,, Cmd   1 word  The low order byte is the group address
+            //                      command byte.  The valid commands are:
+            //                          00: Respond to all groups.
+            //                          FF: Respond to no groups.
+            //                          FE: Return address of this device.
+            //                       Other: respond to set group addresses.
+            //                      The high byte is a group specifer.
+            //  Grp,, Grp   1 word  Two group specifies.
+            //  Grp,, Grp   1 word  Two more group specifiers.
 
             // Otherwise log the rejection
             Log.Write(Category.Ethernet, "Rejecting packet for {0}", dest);
@@ -398,8 +410,11 @@ namespace PERQemu.IO.Network
             _state = State.Receiving;
             _status |= (Status.CarrierSense | Status.PacketInProgress);
 
-            Log.Write(Category.Ethernet, "Receiving a packet!  {0} bytes, header @ 0x{1:x6}, data @ 0x{2:x6}",
-                                         packet.Length, _headerAddress, _bufferAddress);
+            Log.Write(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6}",
+                                          packet.Length, _headerAddress, _bufferAddress);
+            
+            ushort startCount = _bitCount;
+            Console.WriteLine($"Receive bit count initial = {startCount:x} ({(short)startCount})");
 
             int addr;
             ushort data;
@@ -419,38 +434,41 @@ namespace PERQemu.IO.Network
                 data = (ushort)(packet[i * 2 + 1] << 8 | packet[i * 2]);
                 _system.Memory.StoreWord(addr++, data);
 
-                Console.WriteLine("Receive: mem[{0:x6}] <= packet[{1},{2}] = 0x{3:x4}",
-                                 addr, i * 2 + 1, i * 2, data);
+                //Console.WriteLine("Receive: mem[{0:x6}] <= packet[{1},{2}] = 0x{3:x4}",
+                //                 addr, i * 2 + 1, i * 2, data);
             }
 
-            // And undo the insane length/type bitfuckery
+            // Undo the length/type field swap that the software does
             data = (ushort)(packet[12] << 8 | packet[13]);
             _system.Memory.StoreWord(addr, data);
-            Console.WriteLine("Receive: mem[{0:x6}] <= packet[13,12] = 0x{1:x4}", addr, data);
+            //Console.WriteLine("Receive: mem[{0:x6}] <= packet[13,12] = 0x{1:x4}", addr, data);
 
-            // Copy the data packet to the buffer location (n words).  Hope the
-            // byte ordering is correct.  And deal with odd length packets by
-            // padding with an extra byte
+            // Copy the data packet to the buffer location as n 16-bit words.
+            // odd-length packets will catch a stray byte (first byte of the
+            // FCS), but the PERQ DMA actually transfers full quads and may in
+            // reality drop up to 7 extra bytes.  Eh, close enough.
             addr = _bufferAddress;
-            Console.WriteLine("Receive: mem[{0:x6}] <= {1} bytes to copy ", addr, packet.Length - 14);
+            //Console.WriteLine("Receive: mem[{0:x6}] <= {1} bytes to copy ", addr, packet.Length - 14);
 
-            for (var i = 14; i < packet.Length; i += 2)
+            for (var i = 14; i < packet.Length - 4; i += 2)
             {
-                data = (ushort)(packet[i] << 8);
-                if (i < packet.Length - 1) data |= packet[i + 1];
+                data = (ushort)((packet[i] << 8) | packet[i + 1]);
                 _system.Memory.StoreWord(addr++, data);
             }
 
-            // NB: The PERQ expects the 4-byte FCS (CRC) included in the bit count!
-            //     (SharpPcap seems to include that for us on receives?)
-            _bitCount = (ushort)(packet.Length * 8);
+            // The PERQ expects the 4-byte FCS (CRC) included in the bit count,
+            // but we return it as if the hardware had counted UP from the value
+            // the microcode programmed -- the 2's complement of 1518 (the max
+            // packet size) -- because they use that to detect large packets!
+            _bitCount += (ushort)(packet.Length * 8);
 
-            // Compute delay for DMA copy and schedule the callback to complete
-            var delay = (ulong)((_bitCount * .1) + 9.6) * Conversion.UsecToNsec;
+            // Compute delay for DMA copy and schedule the callback to complete;
+            // include the standard "interpacket gap" for the heck of it
+            var delay = (ulong)((packet.Length * 8 * .1) + 9.6) * Conversion.UsecToNsec;
             _response = _system.Scheduler.Schedule(delay, ReceiveComplete);
 
-            Log.Write(Category.Ethernet, "Received {0} byte packet, callback in {1}usec",
-                                         packet.Length, delay / 1000);
+            Log.Write(Category.Ethernet, "Received {0} bytes ({1} bits), callback in {2}usec",
+                                          packet.Length, (short)_bitCount, delay / 1000);
         }
 
         /// <summary>
@@ -464,9 +482,7 @@ namespace PERQemu.IO.Network
             // takes the two's complement in the microcode while Accent does it
             // in the Pascal code that sets up the DCB.  To compute transmission
             // delay, take the absolute value...
-            // Todo: make sure to test with older code that may rely on the earlier
-            // firmware versions that don't do it this way!  Math.Abs()?
-            _bitCount = (ushort)(0 - _bitCount);
+            if ((short)_bitCount < 0) _bitCount = (ushort)(0 - _bitCount);
 
             // Sanity checks:  the microcode isn't supposed to start a new send
             // if the receiver is active, and we should check the bit count to
@@ -486,11 +502,12 @@ namespace PERQemu.IO.Network
             _state = State.Transmitting;
             _status |= (Status.CarrierSense | Status.Busy);
 
-            var delay = (ulong)((_bitCount * .1) + 9.6) * Conversion.UsecToNsec;
+            // Delay includes IPG and 32 bits of FCS
+            var delay = (ulong)((_bitCount + 32) * .1 + 9.6) * Conversion.UsecToNsec;
             _response = _system.Scheduler.Schedule(delay, TransmitComplete);
 
-            Log.Write(Category.Ethernet, "Transmitting {0} byte packet, callback in {1}usec",
-                                        _bitCount / 8, delay / 1000);
+            Log.Write(Category.Ethernet, "Transmitting {0} byte packet ({1} bits), callback in {2}usec",
+                                         _bitCount / 8, _bitCount, delay / 1000);
         }
 
         //
@@ -505,7 +522,9 @@ namespace PERQemu.IO.Network
             if (_bitCount > 0)
             {
                 // Buffer (in bytes) for the complete raw packet, including header
-                byte[] packet = new byte[_bitCount / 8];
+                // but NOT the FCS -- the hardware adds the CRC32 on send!  (In
+                // this case, SharpPcap seems to add it on our behalf!?)
+                byte[] packet = new byte[(_bitCount / 8)];
 
                 int addr;
                 ushort data;
@@ -526,16 +545,16 @@ namespace PERQemu.IO.Network
                     packet[i * 2] = (byte)data;                 // Low byte
                     packet[i * 2 + 1] = (byte)(data >> 8);      // High byte
 
-                    Console.WriteLine("Send: mem[{0:x6}] => packet[{1}] = {2:x2}, packet[{3}] = {4:x2}",
-                                      addr - 1, i * 2, packet[i * 2], i * 2 + 1, packet[i * 2 + 1]);
+                    //Console.WriteLine("Send: mem[{0:x6}] => packet[{1}] = {2:x2}, packet[{3}] = {4:x2}",
+                    //                  addr - 1, i * 2, packet[i * 2], i * 2 + 1, packet[i * 2 + 1]);
                 }
 
                 // Do the Length/Type field
                 data = _system.Memory.FetchWord(addr);
                 packet[12] = (byte)(data >> 8);
                 packet[13] = (byte)data;
-                Console.WriteLine("Send: mem[{0:x6}] => packet[12] = {1:x2}, packet[13] = {2:x2}",
-                                  addr - 1, packet[12], packet[13]);
+                //Console.WriteLine("Send: mem[{0:x6}] => packet[12] = {1:x2}, packet[13] = {2:x2}",
+                //                  addr - 1, packet[12], packet[13]);
 
                 // Now do the payload
                 addr = _bufferAddress;
@@ -591,7 +610,7 @@ namespace PERQemu.IO.Network
         /// </summary>
         void FinishCommand()
         {
-            Log.Write(Category.Ethernet, "{0} complete, raising {1} interrupt", _state, _irq);
+            Log.Write(Category.Ethernet, "{0} complete, raising {1} interrupt\n", _state, _irq);
 
             _response = null;
             _state = State.Complete;
@@ -604,8 +623,8 @@ namespace PERQemu.IO.Network
         public void DumpEther()
         {
             Console.WriteLine($"{_system.Config.IOBoard} Ethernet status:");
-            Console.WriteLine($"  My MAC address:    {_physAddr} ({_physAddr.High},{_physAddr.Mid},{_physAddr.Low})");
-            Console.WriteLine($"  Receive address:   {_recvAddr} ({_recvAddr.High},{_recvAddr.Mid},{_recvAddr.Low})");
+            Console.WriteLine($"  My MAC address:    {_physAddr.ToPERQFormat()} ({_physAddr})");
+            Console.WriteLine($"  Receive address:   {_recvAddr.ToPERQFormat()} ({_recvAddr})");
             Console.WriteLine($"  Control register:  {(int)_control:x} ({_control})");
             Console.WriteLine($"  Status register:   {(int)_status:x} ({_status})");
             Console.WriteLine("  Controller state:  {0}, scheduler callback {1} pending", _state,
@@ -693,7 +712,7 @@ namespace PERQemu.IO.Network
 
         static Random _random = new Random();
 
-        HostInterface _nic;
+        HostAdapter _nic;
 
         SchedulerEvent _response;
         SchedulerEvent _timer;

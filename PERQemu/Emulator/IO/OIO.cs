@@ -52,15 +52,26 @@ namespace PERQemu.IO
 
             if (system.Config.IOOptions.HasFlag(IOOptionType.Ether))
             {
-                if (Settings.EtherDevice == "null")
+                if (string.IsNullOrEmpty(Settings.EtherDevice) || Settings.EtherDevice == "null")
                 {
                     // A minimal interface to let Accent boot properly
                     _ether = new NullEthernet(system);
                 }
                 else
                 {
-                    // The real deal!
-                    _ether = new Ether10MbitController(system);
+                    try
+                    {
+                        // The real deal!
+                        _ether = new Ether10MbitController(system);
+                    }
+                    catch (UnimplementedHardwareException e)
+                    {
+                        // Failed to open - bad device, or no permissions?
+                        Log.Warn(Category.All, "{0}; no Ethernet available.", e.Message);
+
+                        // Fall back to the fake one and continue
+                        _ether = new NullEthernet(system);
+                    }
                 }
                 RegisterPorts(_etherPorts);
             }
@@ -101,12 +112,9 @@ namespace PERQemu.IO
             if (drive.Type != DeviceType.TapeQIC)
                 throw new InvalidOperationException($"OIO can't load tape type {drive.Type}");
 
-            // The streamer is a little different; create the Sidewinder and
-            // attach that to the _streamer, then load the CartridgeTape if a
-            // media path was given.
+            // Attach the drive/controller to the PERQ
             var controller = new Sidewinder(_sys.Scheduler);
 
-            // Attach the controller to the PERQ
             _streamer.AttachDrive((uint)drive.Unit, controller);
 
             // If a media path given, tell the Sidewinder to load it
