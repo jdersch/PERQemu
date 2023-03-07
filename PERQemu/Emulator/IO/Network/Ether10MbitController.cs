@@ -283,12 +283,12 @@ namespace PERQemu.IO.Network
 
             switch (address)
             {
-                case 0x06:
+                case 0x07:
                     retVal = (_bitCount >> 8) & 0xff;
                     Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
                     return retVal;
 
-                case 0x07:
+                case 0x06:
                     retVal = (_bitCount & 0xff);
                     Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
                     return retVal;
@@ -412,20 +412,16 @@ namespace PERQemu.IO.Network
 
             Log.Write(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6}",
                                           packet.Length, _headerAddress, _bufferAddress);
-            
+
             ushort startCount = _bitCount;
             Console.WriteLine($"Receive bit count initial = {startCount:x} ({(short)startCount})");
 
             int addr;
             ushort data;
 
-            //
-            // Receiving is the same as sending: SharpPcap will return addresses
-            // formatted "normally" so we need to hand them back to the PERQ in
-            // the order it expects.  Type has to get un-munged as well.  The
-            // header is 14 bytes but the DMA always ships quad words, so again
-            // the first word is a dummy.  We write a zero, but could just skip it?
-            //
+            // Write the Ethernet frame's header to PERQ memory.  The header is
+            // 14 bytes but the DMA always ships quad words, so the first word is
+            // a dummy.  We write a zero, but could just skip it?
             addr = _headerAddress;
             _system.Memory.StoreWord(addr++, 0);
 
@@ -433,37 +429,31 @@ namespace PERQemu.IO.Network
             {
                 data = (ushort)(packet[i * 2 + 1] << 8 | packet[i * 2]);
                 _system.Memory.StoreWord(addr++, data);
-
-                //Console.WriteLine("Receive: mem[{0:x6}] <= packet[{1},{2}] = 0x{3:x4}",
-                //                 addr, i * 2 + 1, i * 2, data);
             }
 
             // Undo the length/type field swap that the software does
             data = (ushort)(packet[12] << 8 | packet[13]);
             _system.Memory.StoreWord(addr, data);
-            //Console.WriteLine("Receive: mem[{0:x6}] <= packet[13,12] = 0x{1:x4}", addr, data);
 
-            // Copy the data packet to the buffer location as n 16-bit words.
-            // odd-length packets will catch a stray byte (first byte of the
-            // FCS), but the PERQ DMA actually transfers full quads and may in
-            // reality drop up to 7 extra bytes.  Eh, close enough.
+            // DMA the packet data to the PERQ, reconstituted as 16-bit words
             addr = _bufferAddress;
-            //Console.WriteLine("Receive: mem[{0:x6}] <= {1} bytes to copy ", addr, packet.Length - 14);
 
-            for (var i = 14; i < packet.Length - 4; i += 2)
+            for (var i = 14; i < packet.Length; i += 2)
             {
-                data = (ushort)((packet[i] << 8) | packet[i + 1]);
+                data = (ushort)packet[i];
+                if (i + 1 < packet.Length) data |= (ushort)(packet[i + 1] << 8);
                 _system.Memory.StoreWord(addr++, data);
             }
 
-            // The PERQ expects the 4-byte FCS (CRC) included in the bit count,
-            // but we return it as if the hardware had counted UP from the value
-            // the microcode programmed -- the 2's complement of 1518 (the max
-            // packet size) -- because they use that to detect large packets!
+            // Set the bit count as if the hardware had counted UP from the value
+            // the microcode programmed; on receives the counter is intialized to
+            // the 2's complement of 1518 (max frame size) because they use that
+            // to detect giant packets!  Note also that the PERQ expects that the
+            // 32-bit CRC is included in the bit count
             _bitCount += (ushort)(packet.Length * 8);
 
             // Compute delay for DMA copy and schedule the callback to complete;
-            // include the standard "interpacket gap" for the heck of it
+            // include the "interpacket gap" so we can do back-to-back receives
             var delay = (ulong)((packet.Length * 8 * .1) + 9.6) * Conversion.UsecToNsec;
             _response = _system.Scheduler.Schedule(delay, ReceiveComplete);
 
@@ -478,18 +468,23 @@ namespace PERQemu.IO.Network
         void DoTransmit()
         {
             // The bit count is written as a negative value and counts up;  the
-            // later EIO hardware automatically stops when it crosses zero?  POS
-            // takes the two's complement in the microcode while Accent does it
-            // in the Pascal code that sets up the DCB.  To compute transmission
-            // delay, take the absolute value...
+            // hardware automatically stops when it crosses zero.  POS takes the
+            // two's complement in the microcode while Accent does it in Pascal
+            // code that sets up the DCB.  To compute transmission delay, take
+            // the absolute value...
+            // Todo: Test this with older (pre-1983?) software that did it the
+            // old way!?
             if ((short)_bitCount < 0) _bitCount = (ushort)(0 - _bitCount);
 
             // Sanity checks:  the microcode isn't supposed to start a new send
-            // if the receiver is active, and we should check the bit count to
-            // make sure the value represents a legal packet length!
+            // if the receiver is active, so a Reset should have been done first
+            // to cancel the receive.  And we check the bit count to make sure
+            // the value represents a legal packet length.  (The PERQ should do
+            // these itself, so this might be removed after more testing.)
             if (_bitCount < 480 || _bitCount > 12144 || _state != State.Idle)
             {
-                Log.Write(Category.Ethernet, "Transmit requested while {0} or bad bit count: {1}", _state, _bitCount);
+                Log.Write(Category.Ethernet, "Transmit requested while {0} or bad bit count: {1}",
+                                             _state, (short)_bitCount);
 
                 // Uh, what to do?  There's no error provision in the spec!
                 // For now, set _bitCount to zero so that TransmitComplete()
@@ -507,7 +502,7 @@ namespace PERQemu.IO.Network
             _response = _system.Scheduler.Schedule(delay, TransmitComplete);
 
             Log.Write(Category.Ethernet, "Transmitting {0} byte packet ({1} bits), callback in {2}usec",
-                                         _bitCount / 8, _bitCount, delay / 1000);
+                                         _bitCount / 8, (ushort)_bitCount, delay / 1000);
         }
 
         //
@@ -523,40 +518,30 @@ namespace PERQemu.IO.Network
             {
                 // Buffer (in bytes) for the complete raw packet, including header
                 // but NOT the FCS -- the hardware adds the CRC32 on send!  (In
-                // this case, SharpPcap seems to add it on our behalf!?)
+                // this case, SharpPcap/host adapter adds it on our behalf)
                 byte[] packet = new byte[(_bitCount / 8)];
 
                 int addr;
                 ushort data;
 
-                //
-                // DMA the header and data buffer from the PERQ's memory and hand it
-                // off to the host to construct and transmit the packet.  As in the
-                // receive case, we copy two quads for the header, but skip over the
-                // first (unused) word.  NB: the addresses are presented in "normal"
-                // order (left to right), but the Length/Type field has to be swapped;
-                // SharpPcap will re-invert it for sending over the wire!  Argh.
-                //
+                // DMA the header buffer from the PERQ's memory.  The hardware
+                // always transfers two quads for the header, but skips over the
+                // first (unused) word.
                 addr = _headerAddress + 1;
 
                 for (var i = 0; i < 6; i++)
                 {
                     data = _system.Memory.FetchWord(addr++);
-                    packet[i * 2] = (byte)data;                 // Low byte
-                    packet[i * 2 + 1] = (byte)(data >> 8);      // High byte
-
-                    //Console.WriteLine("Send: mem[{0:x6}] => packet[{1}] = {2:x2}, packet[{3}] = {4:x2}",
-                    //                  addr - 1, i * 2, packet[i * 2], i * 2 + 1, packet[i * 2 + 1]);
+                    packet[i * 2] = (byte)data;
+                    packet[i * 2 + 1] = (byte)(data >> 8);
                 }
 
-                // Do the Length/Type field
+                // Do the header's Length/Type field (swapped!)
                 data = _system.Memory.FetchWord(addr);
                 packet[12] = (byte)(data >> 8);
                 packet[13] = (byte)data;
-                //Console.WriteLine("Send: mem[{0:x6}] => packet[12] = {1:x2}, packet[13] = {2:x2}",
-                //                  addr - 1, packet[12], packet[13]);
 
-                // Now do the payload
+                // Now copy the packet's payload from the buffer address
                 addr = _bufferAddress;
 
                 for (var i = 14; i < packet.Length; i += 2)
@@ -568,8 +553,13 @@ namespace PERQemu.IO.Network
 
                 // Hand off the complete packet!
                 var result = _nic.SendPacket(packet);
-                // Todo: The only error we get back is "collision"?  We'll just
-                // have to see what Pcap gives us after sending a few :-)
+
+                // Todo: The only error we give back is "collision"?  So there
+                // may not be any status to give, until/unless we handle events
+                // from Pcap indicating a change at the host itself?
+
+                // Set the bit counter to zero to indicate success
+                _bitCount = 0;
             }
 
             // Complete the transmission!

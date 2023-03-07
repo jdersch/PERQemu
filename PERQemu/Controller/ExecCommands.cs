@@ -167,6 +167,14 @@ namespace PERQemu
             PERQemu.Sys.Display.Restore();
             Console.WriteLine("Sent window restore event.");
         }
+
+        [Command("resize", "Resize the console display", Discreet = true)]
+        void Resize()
+        {
+            Console.SetWindowSize(80, 25);
+            Console.Clear();
+            Console.WriteLine("Console window reset.");
+        }
 #endif
 
     }

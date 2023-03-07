@@ -276,7 +276,7 @@ namespace PERQemu.IO.Network
                 if (raw.SourceHwAddress.Equals(_adapter.MacAddress)) return;
                 if (raw.Type == EthernetPacketType.IpV6) return;
 
-                Log.Write(Category.NetAdapter, "\nReceived from {0} to {1} (type {2})",
+                Log.Write(Category.NetAdapter, "Received from {0} to {1} (type {2})",
                           raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type);
                 Log.Write(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);
@@ -326,9 +326,6 @@ namespace PERQemu.IO.Network
                         raw.Type = (EthernetPacketType)perqType;
                     }
                 }
-
-                // Print the packet post-rewrites
-                Console.WriteLine(raw.PrintHex());
             }
             catch (PcapException ex)
             {
@@ -408,6 +405,9 @@ namespace PERQemu.IO.Network
             //
             if (_controller.WantReceive(raw.DestinationHwAddress))
             {
+                // Print the packet post-rewrites
+                Console.WriteLine(raw.PrintHex());
+
                 // Shortcut: is the receiver active and ready?
                 if (_controller.CanReceive)
                 {
