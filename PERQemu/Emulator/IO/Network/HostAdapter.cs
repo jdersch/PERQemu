@@ -276,22 +276,23 @@ namespace PERQemu.IO.Network
                 if (raw.SourceHwAddress.Equals(_adapter.MacAddress)) return;
                 if (raw.Type == EthernetPacketType.IpV6) return;
 
-                Log.Info(Category.NetAdapter, "Received from {0} to {1} (type {2})",
-                          raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type);
+                Log.Write(Category.NetAdapter, "Received from {0} to {1} (type {2:x}) [{3}]",
+                          raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type,
+                          System.Threading.Thread.CurrentThread.ManagedThreadId);
                 Log.Info(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);
 
                 // Recompute the checksum for the packet
                 var len = raw.Bytes.Length - 4;
                 var crc = Crc32.Compute(raw.Bytes, 0, len);
-                Log.Info(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
+                Log.Debug(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
 
                 var check = ((raw.Bytes[len] << 24) |
                              (raw.Bytes[len + 1] << 16) |
                              (raw.Bytes[len + 2] << 8) |
                               raw.Bytes[len + 3]);
 
-                Log.Info(Category.NetAdapter, "Received CRC is {0:x8}", check);
+                Log.Debug(Category.NetAdapter, "Received CRC is {0:x8}", check);
 
                 // If this is addressed to us specifically, NAT it!
                 if (raw.DestinationHwAddress.Equals(_adapter.MacAddress))
@@ -391,7 +392,7 @@ namespace PERQemu.IO.Network
                         // do RARP (even under Accent).  HOWEVER, Accent's "new"
                         // message server (in S6+) will do actual IP ARPs, so we
                         // don't want to get in the way of those.
-                        Log.Info(Category.NetAdapter, "Local RARP handling complete\n");
+                        Log.Info(Category.NetAdapter, "Local RARP handling complete");
                         return;
                     }
                 }
@@ -466,6 +467,10 @@ namespace PERQemu.IO.Network
                 if (_pending.TryDequeue(out packet))
                 {
                     _controller.DoReceive(packet.Bytes);
+                }
+                else
+                {
+                    Log.Warn(Category.NetAdapter, "Failure on TryDequeue!? Count = {0}", _pending.Count);
                 }
             }
         }

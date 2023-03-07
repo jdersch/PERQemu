@@ -144,22 +144,22 @@ namespace PERQemu.IO.Network
                 // Bit counter setup
                 //
                 case 0x8c:  // Bit counter control
-                    Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (control)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (control)", value);
                     // Todo: Uh, actually do something?
                     break;
 
                 case 0x8d:  // Bit counter high byte
-                    Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (high)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (high)", value);
                     _bitCount = (ushort)((value << 8) | (_bitCount & 0xff));
                     break;
 
                 case 0x8e:  // Bit counter low byte
-                    Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (low)", value);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (low)", value);
                     _bitCount = (ushort)((_bitCount & 0xff00) | (value & 0xff));
                     break;
 
                 case 0x90:  // Low word of MAC address
-                    Log.Info(Category.Ethernet, "Wrote 0x{0:x4} to low address register 0x{1:x2}", value, address);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to low address register 0x{1:x2}", value, address);
 
                     // Have to byte swap this, because reasons
                     _recvAddr.Low = (ushort)(value << 8 | (value & 0xff00) >> 8);
@@ -285,12 +285,12 @@ namespace PERQemu.IO.Network
             {
                 case 0x07:
                     retVal = (_bitCount >> 8) & 0xff;
-                    Log.Info(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
+                    Log.Debug(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
                     return retVal;
 
                 case 0x06:
                     retVal = (_bitCount & 0xff);
-                    Log.Info(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
+                    Log.Debug(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
                     return retVal;
 
                 default:
@@ -410,8 +410,9 @@ namespace PERQemu.IO.Network
             _state = State.Receiving;
             _status |= (Status.CarrierSense | Status.PacketInProgress);
 
-            Log.Info(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6}",
-                                         packet.Length, _headerAddress, _bufferAddress);
+            Log.Write(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6} [{3}]",
+                                         packet.Length, _headerAddress, _bufferAddress,
+                                         System.Threading.Thread.CurrentThread.ManagedThreadId);
             Log.Info(Category.Ethernet, "Receive bit count initial = {0:x} ({1})",
                                         _bitCount, (short)_bitCount);
 
@@ -562,7 +563,8 @@ namespace PERQemu.IO.Network
             }
 
             // Complete the transmission!
-            _status &= ~(Status.CarrierSense) | Status.Complete;
+            _status &= ~(Status.CarrierSense);
+            _status |= Status.Complete;
 
             FinishCommand();
         }

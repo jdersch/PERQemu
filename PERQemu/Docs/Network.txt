@@ -114,7 +114,7 @@ PERQ; they're handled strictly by the HostInterface immediately upon reception.
 The virtual machine never knows that the address translation is happening.
 
 PERQemu strictly limits the number of greetings it sends to no more than once
-every 30 seconds.  This is tunable in the source.  OSes like POS that can't do
+every n seconds.  This is tunable in the source.  OSes like POS that can't do
 TCP/IP natively use their own ad hoc mechanisms to locate other machines, while
 _later_ versions of Accent can actually use regular IPv4 ARP to find each other
 (though this hasn't yet been tested for interoperability with non-PERQ hosts).
@@ -136,22 +136,27 @@ to say "yo, I'm online!" and allow PERQ-to-PERQ traffic across the Internet! :-)
 Type Code Translation
 ---------------------
 
-Oops.  Because the PERQ Ethernet was pre-IEEE 802.3, they still used the "type"
-field in the packet as the, um, type.  The mostly good news is that only a few
-were actually specified and used (AFAIK) by POS and Accent:
+PERQ Ethernet was pre-IEEE 802.3, and there was/could be software developed when
+Ethernet I or II specifications were still in use.  To put it diplomatically,
+the lack of standardization meant that things like packet types were assigned
+pretty much at the whim of the programmers writing a particular protocol.  In
+other words, they pulled numbers out of... thin air... so even after IEEE 802.3
+came on the scene a lot of original software was already deployed.  The mostly
+good news is that only a few EtherType codes were actually specified and used
+(AFAIK) by POS and Accent:
 
     FTPByteStreamType   = 0;     
     FTPEtherType        = 1; 
     EchoServerType      = 6; 
     TimeServerType      = 7; 
-    CSDXServerType      = 315; 
     ServerRequest       = 8; 
+    CSDXServerType      = 315; 
 
-This means, though, that modern network stacks might balk at type/length fields
-set to 7, which appears to be the case in early testing -- they get sent, but
-are never received (on the Mac, at least).
-
-Fortunately, 3RCC actually did have some reserved codes!
+The bad news is there's no easy way to find any others that might fall into the
+0 - 1536 range, where the PERQ would still interpret them as EtherType codes
+but modern networks would see them as (mostly) illegal lengths.  In practice,
+it seems that modern network stacks can in fact filter out some PERQ traffic as
+"runts".  Fortunately, 3RCC actually did have some reserved codes!
 
 7035  - 7036  (hex)             Three Rivers       Protocol unavailable.
 28725 - 28726 (dec)             Three Rivers Computer Corporation
@@ -159,44 +164,23 @@ Fortunately, 3RCC actually did have some reserved codes!
                                 Pittsburgh PA 15230
                                 UNITED STATES
 
-Both 805E-805F are reserved to "Perq Data Systems" as well, but I'm not so sure
-that's related.  What this means, however, is that I can possibly cheat a bit,
-and re-map those types...
+    Note: Both 805E-805F are reserved to "Perq Data Systems" as well, but
+    I'm not so sure that's related.  What this means, however, is that I can
+    possibly use those for my own nefarious purposes in the future. :-)
 
-How gross should this be?  Set the type to 0x7035 and inject one extra word in
-the payload to include the original value?  Then trim that word on receive to
-deliver the original packet?  Oof.  Not pretty.  Set the high bit to push the
-code out of the IEEE 802.3 length range, then strip it out?  Let's see about
-conflicts:
+The initial approach to dealing with this is to re-map any type code in the list
+above to the 0xA000-0xAFFF range which is "uncharted territory" (an unassigned
+range) according to recent EtherType lists.  Basically, PERQemu does an xor with
+0xa000 at both the sending and receiving stations as part of the NAT rewriting
+so the packets on the wire aren't dropped.  It's cheesy, but seems a reasonably
+clean solution, especially as it's limited to rewriting when a PERQ vendor
+prefix (0x021c7c) is the source address.  In preliminary testing the virtual
+PERQs send and receive the original EtherType codes while the host and any
+intervening switches/hubs pass them along as some mysterious but valid type.
 
-0       8000    free?       
-1       8001    free?
-6       8006    in use      Nestar
-7       8007    free?
-13b     813b    (dec 315)   8139-813D KTI
-8       8008    in use      AT&T/Stanford Univ. Local use
-
-IF instead I prefix those with 0xF000, then we're into uncharted/unassigned
-ranges that don't conflict.  It's cheesy, but it could be a reasonably clean
-solution, especially if limited only to rewriting the field when either source
-or destination is a (mapped) PERQ vendor prefix (0x021c7c).  Hmm.  I wonder if
-that'll do the trick?  One way to find out! :-)
-
-
-I AM GOING TO BLITHELY ASSUME THAT IF THIS WORKS AT ALL I CAN DEAL WITH IP
-CHECKSUM RECALCULATION IF NECESSARY BUT BOY WILL THAT GET UGLY FAST. :-)
-
-    Oh, wait!  Because the NAT is symmetric and we're in promiscuous mode,
-    any change we write going out gets reversed going in!  The checksums
-    should still match!  HA! Haaaahahahahahahahaha!  I'm a dork.
-
-Yeah.  PERQ-to-PERQ stuff has to be both or none, then.  Kewl.  Figuring it out,
-slowly. :-)
-
-A HUGE caveat to the above is that it could all be ripped out if it gets in the
-way of what Accent or PNX can do "natively" -- that is, I might have a big
-switch that says "use NAT" or not, depending on the needs of the particular OS
-being booted.
+If necessary (as more software is tested) all outgoing PERQ packets with Type
+codes that could be improperly interpreted as Length fields could be remapped.
+Time and testing will tell!
 
 
 Host/Emulator Interface
@@ -214,16 +198,28 @@ and access the configured host interface in promiscuous mode.  Because we are
 emulating the hardware at such a low level, we want to pass all traffic to the
 controller for filtering, rather than do it at the host interface.  While it's
 impossible for a PERQ to keep up with a 100Mbit Ethernet (let alone gigabit
-and greater speeds available today) the emulator tries to quickly filter and
-queue or drop incoming packets as quickly as possible.  How this is done when
-the emulator is paused may be a little tricky...
+and greater speeds available today) the emulator tries to filter and queue or
+drop incoming packets reasonably quickly.
+
+How this is done when the emulator is paused is a little tricky; currently the
+background thread will continue to receive and queue packets up to a defined
+limit (MaxBacklog in HostAdapter.cs), at which point the oldest packet at the
+head of the queue is dropped.  When execution resumes, the PERQ and whatever
+protocol it was executing will have to deal with possible packet loss (but of
+course, that's always true in networking).
 
 SharpPcap provides thread management and a callback/event fired when a packet
-is received.  The PERQ can then quickly decide to keep or drop the incoming
-packet.  Transmits may be tricky as there may be difficulty or extra latency
-in getting error status back on failure; the PERQ expects to do collision and
-error processing so we'll have to see how that happens when SharpPcap and the
-host interface provide queues, retries, etc.
+is received.  PERQemu currently only filters out IPv6 traffic -- there's just
+no way the PERQ will ever support that and the protocol (even on a host NIC
+that's "turned off" still seems to produce a stupid amount of chatter).
+
+Transmits are assumed to always succeed; it doesn't appear there's any reliable
+or meaningful way to get an error status back from SharpPcap on failure?  The
+PERQ expects to do collision and error processing, but it's unlikely any modern
+interface or host OS network stack interfaced through LibPcap is going to expose
+the programmer to that, so a failure on Send will either go undetected or be
+reported as a CRC error (avoiding any need for the microcode to do collision
+backoff and retransmit).
 
 
 Organization
@@ -246,20 +242,22 @@ Ether10MbitController is the "standard" implementation that adapts itself for
 operation as an OIO or EIO device at runtime.  It is responsible for managing
 the host side as well.
 
-Ether3MbitController is not yet implemented.
+Ether3MbitController is not yet implemented.  This will be compatible with the
+UDP-encapsulated implementation used by ContrAlto so that emulated PERQs and
+emulated Xerox Altos can chat with each other.  MazeWar tourney, heck yeah!
+
+HostAdapter provides the connection through SharpPcap to the physical network.
+It's meant to be a fairly simple Open/Start/Stop/Close type of interaction, with
+incoming packets delivered via event invocations of the callback provided by the
+emulator, with no packet interpretation/filtering at the device level. (NAT and
+IPv6 filters mentioned above are handled in PERQemu, not LibPcap, but it may be
+worthwhile to investigate filtering at the OS level for efficiency once PERQemu
+is tested on a live, busy network instead of an isolated test hub.)
 
 MachineAddress is a wrapper around the PERQ's 48-bit MAC address as returned
 by the hardware.  It handles unscrambling the bits based on the slightly crazy
 packing scheme used by the OIO and EIO implementations.  [TBD: it also maps to
 the PhysicalAddress class used by SharpPcap/NetworkInformation?]
-
-HostInterface provides the connection through SharpPcap to the physical network.
-It's meant to be a fairly simple Open/Start/Stop/Close type of interaction, with
-incoming packets delivered via event invocations of the callback provided by the
-emulator, with no packet interpretation or filtering.  [This could change if an
-efficient scheme to set up and manage filters based on the PERQ's addressing
-rules can be devised?]
-
 
 Operation
 ---------
@@ -289,36 +287,89 @@ allow the microcode to see things like "packet in progress" or "carrier detect"
 [TBD].
 
 The PERQ interface is half duplex and cannot "see" its own transmitted packets.
+SharpPcap does seem to copy outbound packets to the input queue, so PERQemu
+expliclitly drops those.
 
 
 Design
 ------
 
-The StartCapture() method is only called when the PERQ transitions to the Run
-state, not at power on.  It's not yet determined what should/will happen if the
-user pauses execution; we may have the receiver buffer only one packet and drop
-the rest?  As a general rule, that may be the best approach, rather than trying
-to implement some queueing scheme.  In theory, for debugging, having a packet
-in the receive buffer while single stepping would allow us to interrogate state
-and walk through the state transitions even though the actual DMA copy happens
-in a single block copy directly into memory...
+The StartCapture() method is only called when the PERQ transitions to the Reset
+state, not at power on.  Incoming packets are checked against the Controller's
+list of addresses to determine if the PERQ should receive it.  If yes, the
+packet is queued for delivery.  (If the PERQ is actively receiving and there
+are no packets already queued, delivery is immediate.)
 
-So we'll have one packet buffer for send and one for receive in the Controller
-and use a busy flag/machine run state to determine if the packet arrival event
-should save the result or drop it?  Or regardless of the run state, we do the
-equivalent of the hardware's receive processing and drop packets not meant for
-us until the one (or n, for small values of n) buffer is full?
+If the user pauses execution, the HostAdapter will still quietly receive and
+check/queue packets in the background; this allows for some limited debugging
+(on a quiet network).  A maximum backlog (compiled, but could be user settable)
+prevents the queue from growing too long.  If the queue fills up and the PERQ
+isn't reading them (or can't keep up) the oldest packet is dropped so a newer
+one can take its place.  The default (for now) is 8; lots of testing/tuning is
+required to determine if that's reasonable.
+
+When the microcode enables the receiver, the Controller always checks for any
+queued packets, otherwise it simply waits for the OnPacketArrival event to
+trigger reception.  [There may need to be a regular Scheduler event to check the
+receive queue, and/or "aging out" packets that sit unreceived too long?]
+
+The host adapter stops capturing and shuts down at PowerOff.  At this point the
+NAT table is flushed as well, since the user might configure another interface
+or boot another OS or choose another (random) MAC address, so we rebuild the
+table at the start of every session.
+
+Because the PERQ presents a "half-duplex" hardware and programming model, the
+software has idle/reset the receiver before transmitting packets.  So this
+simplifies things as far as the controller/adapter interface goes; we can still
+receive and queue packets while the PERQ is sending but they'll only appear at
+the interface as if they just arrived.  For both sends and receives, the delay
+that normal packet processing would take is simulated so the throughput of the
+emulator shouldn't wildly exceed that of a real 10Mbit/half-duplex Ethernet.
 
 
-Misc:
+NAT and Checksums
+-----------------
 
-The other possibility is to do IP encapsulation and see if the SDL_net library
-can dispatch on the existing event loop, so we'd process packets just like
-Display events?
+SharpPcap makes just about ZERO mention of how checksums are handled.  At least
+I haven't found any obvious documentation references so far.  I guess they just
+ASSUME that you ASSUME they're handled, since through experimentation I've
+verified that SendPacket() always adds the CRC bytes automatically, which is
+convenient: that's how the PERQ does it too!  Upon receive, the full frame WITH
+the FCS (CRC) bytes is delivered, which again (thankfully) is aligned with the
+PERQ hardware.
+
+When sending, the PERQ sends the header (14 bytes) and data (usual Ethernet
+min/max of 46-1500 bytes) via DMA to the hardware, and programs the bit counter
+with the total packet size (in bits) _not_ including the FCS.  As the bits are
+sent and the counter reaches zero, the state machine automatically streams the
+32-bit CRC to complete the transmission.  When sending, PERQemu calculates the
+checksum on the full packet _after_ translation (if any) takes place, but this
+is only used for debugging; SharpPcap/LibPcap/the host OS/network stack actually
+appends the outgoing checksum.
+
+At the receiver, we validate the CRC of the payload and compare it to the actual
+received FCS.  Initial testing indicates that (at the Ethernet frame) checksums
+are perfect -- but it's likely that any incoming traffic with a bad CRC is just
+being dumped before LibPcap even sees it?  Thus, currently the emulated PERQ
+never sees any incoming runts, giants, CRC errors, collisions or other error
+conditions.
+
+
+Miscellany
+----------
+
+One option for IP/UDP encapsulation is to see if the SDL_net library can
+dispatch on the existing event loop, so we'd process packets just like
+Display events?  It'd be awesome if SDL_net had a "raw" option baked in...
+
+Want to find a way to do privilege separation and/or set up a VirtualBox-like
+driver/user-level interface that doesn't require administrative privs to run.
+A small, separate root process that could cleanly pass packets to and from
+the user-level emulator could also be a TimeServer for booting/login... 
 
 
 THIS IS ALL STILL VERY MUCH UNDER DEVELOPMENT AND IS IN NO WAY FINALIZED!
 
 
 ---
-Last update: skeezics    Thu Mar  2 16:16:02 PST 2023
+Last update: skeezics    Tue Mar  7 13:05:47 PST 2023
