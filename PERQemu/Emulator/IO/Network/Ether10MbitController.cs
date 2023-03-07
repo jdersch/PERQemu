@@ -326,7 +326,8 @@ namespace PERQemu.IO.Network
             // Assume that reading the status register clears the interrupt
             // regardless of whether the net or timer raised it -- or both!?
             _system.CPU.ClearInterrupt(_irq);
-            Log.Info(Category.Ethernet, "Read status: {0} interrupt cleared, returning {1}", _irq, retVal);
+            Log.Info(Category.Ethernet, "Read status: {0} interrupt cleared, flags {1} ({2:x})",
+                                        _irq, _status, retVal);
             return retVal;
         }
 
