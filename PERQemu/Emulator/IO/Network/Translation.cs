@@ -85,7 +85,7 @@ namespace PERQemu.IO.Network
             // Make sure it isn't already there...
             if (_entries.ContainsKey(ent.Host))
             {
-                Log.Write(Category.Ethernet, "Can't add duplicate NAT entry, ignored {0}", ent);
+                Log.Warn(Category.Ethernet, "Can't add duplicate NAT entry, ignored {0}", ent);
                 return;
             }
             _entries.Add(ent.Host, ent);
@@ -93,12 +93,12 @@ namespace PERQemu.IO.Network
             // Do the inverse index too
             if (_perqToHost.ContainsKey(ent.Perq))
             {
-                Log.Write(Category.Ethernet, "PERQ {0} already in index at different host?", ent.Perq);
+                Log.Warn(Category.Ethernet, "PERQ {0} already in index at different host?", ent.Perq);
                 return;
             }
             _perqToHost.Add(ent.Perq, ent.Host);
 
-            Log.Write(Category.Ethernet, "NAT entry added {0}", ent);
+            Log.Info(Category.Ethernet, "NAT entry added {0}", ent);
         }
 
         /// <summary>

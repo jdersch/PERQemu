@@ -144,22 +144,22 @@ namespace PERQemu.IO.Network
                 // Bit counter setup
                 //
                 case 0x8c:  // Bit counter control
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (control)", value);
+                    Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (control)", value);
                     // Todo: Uh, actually do something?
                     break;
 
                 case 0x8d:  // Bit counter high byte
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (high)", value);
+                    Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (high)", value);
                     _bitCount = (ushort)((value << 8) | (_bitCount & 0xff));
                     break;
 
                 case 0x8e:  // Bit counter low byte
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (low)", value);
+                    Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (low)", value);
                     _bitCount = (ushort)((_bitCount & 0xff00) | (value & 0xff));
                     break;
 
                 case 0x90:  // Low word of MAC address
-                    Log.Write(Category.Ethernet, "Wrote 0x{0:x4} to low address register 0x{1:x2}", value, address);
+                    Log.Info(Category.Ethernet, "Wrote 0x{0:x4} to low address register 0x{1:x2}", value, address);
 
                     // Have to byte swap this, because reasons
                     _recvAddr.Low = (ushort)(value << 8 | (value & 0xff00) >> 8);
@@ -216,7 +216,7 @@ namespace PERQemu.IO.Network
             // programming model at this level is identical?
 
             _control = (Control)value;
-            Log.Write(Category.Ethernet, "Wrote 0x{0:x2} to control register ({1})", value, _control);
+            Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to control register ({1})", value, _control);
 
             // If the NotReset signal is not asserted, then we reset :-)
             if (!_control.HasFlag(Control.NotReset))
@@ -242,7 +242,7 @@ namespace PERQemu.IO.Network
                 if (_control.HasFlag(Control.ClockEnable) && _usecClock > 0 && _timer == null)
                 {
                     // Start it up
-                    Log.Write(Category.Ethernet, "Timer enabled: will fire in {0}usec", _usecClock);
+                    Log.Info(Category.Ethernet, "Timer enabled: will fire in {0}usec", _usecClock);
                     _timer = _system.Scheduler.Schedule(_usecClock * Conversion.UsecToNsec, ClockOverflow);
                 }
 
@@ -260,7 +260,7 @@ namespace PERQemu.IO.Network
                     // Is it the "special" one to fetch our own address?
                     if (MCB == 0xfe)
                     {
-                        Log.Write(Category.Ethernet, "Special receive to fetch address!");
+                        Log.Info(Category.Ethernet, "Special receive to fetch address!");
 
                         // The minimum delay is as long as it takes to DMA one
                         // quad word, but the microcode seems to bank on the fact
@@ -285,12 +285,12 @@ namespace PERQemu.IO.Network
             {
                 case 0x07:
                     retVal = (_bitCount >> 8) & 0xff;
-                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
+                    Log.Info(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
                     return retVal;
 
                 case 0x06:
                     retVal = (_bitCount & 0xff);
-                    Log.Write(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
+                    Log.Info(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
                     return retVal;
 
                 default:
@@ -326,7 +326,7 @@ namespace PERQemu.IO.Network
             // Assume that reading the status register clears the interrupt
             // regardless of whether the net or timer raised it -- or both!?
             _system.CPU.ClearInterrupt(_irq);
-            Log.Write(Category.Ethernet, "Read status: {0} interrupt cleared, returning {1}", _irq, retVal);
+            Log.Info(Category.Ethernet, "Read status: {0} interrupt cleared, returning {1}", _irq, retVal);
             return retVal;
         }
 
@@ -378,7 +378,7 @@ namespace PERQemu.IO.Network
             //  Grp,, Grp   1 word  Two more group specifiers.
 
             // Otherwise log the rejection
-            Log.Write(Category.Ethernet, "Rejecting packet for {0}", dest);
+            Log.Info(Category.Ethernet, "Rejecting packet for {0}", dest);
             return false;
         }
 
@@ -402,7 +402,7 @@ namespace PERQemu.IO.Network
             // concurrency issue where the bit counter is getting overwritten!
             if (_state != State.ReceiveWait)
             {
-                Log.Write(Category.Ethernet, "DoReceive in state {0}, packet dropped", _state);
+                Log.Warn(Category.Ethernet, "DoReceive in state {0}, packet dropped", _state);
                 return;
             }
 
@@ -410,11 +410,10 @@ namespace PERQemu.IO.Network
             _state = State.Receiving;
             _status |= (Status.CarrierSense | Status.PacketInProgress);
 
-            Log.Write(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6}",
-                                          packet.Length, _headerAddress, _bufferAddress);
-
-            ushort startCount = _bitCount;
-            Console.WriteLine($"Receive bit count initial = {startCount:x} ({(short)startCount})");
+            Log.Info(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6}",
+                                         packet.Length, _headerAddress, _bufferAddress);
+            Log.Info(Category.Ethernet, "Receive bit count initial = {0:x} ({1})",
+                                        _bitCount, (short)_bitCount);
 
             int addr;
             ushort data;
@@ -440,7 +439,7 @@ namespace PERQemu.IO.Network
 
             for (var i = 14; i < packet.Length; i += 2)
             {
-                data = (ushort)packet[i];
+                data = packet[i];
                 if (i + 1 < packet.Length) data |= (ushort)(packet[i + 1] << 8);
                 _system.Memory.StoreWord(addr++, data);
             }
@@ -457,7 +456,7 @@ namespace PERQemu.IO.Network
             var delay = (ulong)((packet.Length * 8 * .1) + 9.6) * Conversion.UsecToNsec;
             _response = _system.Scheduler.Schedule(delay, ReceiveComplete);
 
-            Log.Write(Category.Ethernet, "Received {0} bytes ({1} bits), callback in {2}usec",
+            Log.Info(Category.Ethernet, "Received {0} bytes ({1} bits), callback in {2}usec",
                                           packet.Length, (short)_bitCount, delay / 1000);
         }
 
@@ -501,8 +500,8 @@ namespace PERQemu.IO.Network
             var delay = (ulong)((_bitCount + 32) * .1 + 9.6) * Conversion.UsecToNsec;
             _response = _system.Scheduler.Schedule(delay, TransmitComplete);
 
-            Log.Write(Category.Ethernet, "Transmitting {0} byte packet ({1} bits), callback in {2}usec",
-                                         _bitCount / 8, (ushort)_bitCount, delay / 1000);
+            Log.Info(Category.Ethernet, "Transmitting {0} byte packet ({1} bits), callback in {2}usec",
+                                         _bitCount / 8, (short)_bitCount, delay / 1000);
         }
 
         //
@@ -600,7 +599,7 @@ namespace PERQemu.IO.Network
         /// </summary>
         void FinishCommand()
         {
-            Log.Write(Category.Ethernet, "{0} complete, raising {1} interrupt\n", _state, _irq);
+            Log.Info(Category.Ethernet, "{0} complete, raising {1} interrupt", _state, _irq);
 
             _response = null;
             _state = State.Complete;

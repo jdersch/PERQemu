@@ -74,7 +74,7 @@ namespace PERQemu.IO.Network
             {
                 _adapter.StartCapture();
 
-                Log.Write(Category.NetAdapter, "Adapter reset (packet capture started)");
+                Log.Info(Category.NetAdapter, "Adapter reset (packet capture started)");
             }
             else
             {
@@ -123,7 +123,7 @@ namespace PERQemu.IO.Network
             }
             catch (PcapException ex)
             {
-                Log.Write(Category.NetAdapter, "Failed to send greeting packet: {0}", ex.Message);
+                Log.Error(Category.NetAdapter, "Failed to send greeting packet: {0}", ex.Message);
             }
         }
 
@@ -157,7 +157,7 @@ namespace PERQemu.IO.Network
             }
             catch (PcapException ex)
             {
-                Log.Write(Category.NetAdapter, "Failed to send greeting reply: {0}", ex.Message);
+                Log.Error(Category.NetAdapter, "Failed to send greeting reply: {0}", ex.Message);
             }
         }
 
@@ -173,13 +173,13 @@ namespace PERQemu.IO.Network
                 if (packet == null)
                 {
                     Log.Error(Category.NetAdapter, "Could not format packet on send");
-                    // dump more data (if this ever happens); drop it like it's hot
+                    // Dump more data (if this ever happens); drop it like it's hot
                     return false;
                 }
 
-                Log.Write(Category.NetAdapter, "Sending from {0} to {1} (type {2})",
+                Log.Info(Category.NetAdapter, "Sending from {0} to {1} (type {2})",
                           packet.SourceHwAddress, packet.DestinationHwAddress, packet.Type);
-                Log.Write(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
+                Log.Info(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           packet.Bytes.Length, packet.Header.Length, packet.PayloadData?.Length);
 
                 // Always remap our source address to the host adapter
@@ -201,7 +201,7 @@ namespace PERQemu.IO.Network
                             // Basic stats
                             map.Sent++;
 
-                            Log.Write(Category.NetAdapter, "NAT send to Perq {0} via Host {1}", map.Perq, map.Host);
+                            Log.Info(Category.NetAdapter, "NAT send to Perq {0} via Host {1}", map.Perq, map.Host);
                         }
                         else
                         {
@@ -215,7 +215,7 @@ namespace PERQemu.IO.Network
 
                     if ((ushort)packet.Type != perqType)
                     {
-                        Log.Write(Category.NetAdapter, "EtherType mapped from 0x{0:x4} to 0x{1:x4}", (ushort)packet.Type, perqType);
+                        Log.Info(Category.NetAdapter, "EtherType mapped from 0x{0:x4} to 0x{1:x4}", (ushort)packet.Type, perqType);
                         packet.Type = (EthernetPacketType)perqType;
                     }
                 }
@@ -223,10 +223,10 @@ namespace PERQemu.IO.Network
                 // Now generate the checksum for the packet (for debugging);
                 // SharpPcap _will_ generate and append this for us, apparently
                 var crc = Crc32.Compute(packet.Bytes, 0, packet.Bytes.Length - 4);
-                Log.Write(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
+                Log.Info(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
 
                 // Print the (modified) packet
-                Console.WriteLine(packet.PrintHex());
+                if (Log.Level < Severity.Info) Console.WriteLine(packet.PrintHex());
 
                 // So send it already, sheesh
                 _adapter.SendPacket(packet);
@@ -234,7 +234,7 @@ namespace PERQemu.IO.Network
             }
             catch (PcapException ex)
             {
-                Log.Write(Category.NetAdapter, "Failed to send packet: {0}", ex.Message);
+                Log.Error(Category.NetAdapter, "Failed to send packet: {0}", ex.Message);
                 return false;
             }
         }
@@ -251,7 +251,7 @@ namespace PERQemu.IO.Network
         {
             if (e.Packet.LinkLayerType != LinkLayers.Ethernet)
             {
-                Log.Write(Category.NetAdapter, "Non-Ethernet packet type {0} ignored", e.Packet.LinkLayerType);
+                Log.Warn(Category.NetAdapter, "Non-Ethernet packet type {0} ignored", e.Packet.LinkLayerType);
                 return;
             }
 
@@ -276,22 +276,22 @@ namespace PERQemu.IO.Network
                 if (raw.SourceHwAddress.Equals(_adapter.MacAddress)) return;
                 if (raw.Type == EthernetPacketType.IpV6) return;
 
-                Log.Write(Category.NetAdapter, "Received from {0} to {1} (type {2})",
+                Log.Info(Category.NetAdapter, "Received from {0} to {1} (type {2})",
                           raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type);
-                Log.Write(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
+                Log.Info(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);
 
                 // Recompute the checksum for the packet
                 var len = raw.Bytes.Length - 4;
                 var crc = Crc32.Compute(raw.Bytes, 0, len);
-                Log.Write(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
+                Log.Info(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
 
-                var check = ((raw.Bytes[len]     << 24) |
+                var check = ((raw.Bytes[len] << 24) |
                              (raw.Bytes[len + 1] << 16) |
-                             (raw.Bytes[len + 2] <<  8) |
+                             (raw.Bytes[len + 2] << 8) |
                               raw.Bytes[len + 3]);
 
-                Log.Write(Category.NetAdapter, "Received CRC is {0:x8}", check);
+                Log.Info(Category.NetAdapter, "Received CRC is {0:x8}", check);
 
                 // If this is addressed to us specifically, NAT it!
                 if (raw.DestinationHwAddress.Equals(_adapter.MacAddress))
@@ -311,7 +311,7 @@ namespace PERQemu.IO.Network
                     src.LastReceived = DateTime.Now;
                     src.Received++;
 
-                    Log.Write(Category.NetAdapter, "NAT receive from Perq {0} via Host {1}", src.Perq, src.Host);
+                    Log.Info(Category.NetAdapter, "NAT receive from Perq {0} via Host {1}", src.Perq, src.Host);
                 }
 
                 //// If source is a PERQ, see if the Type/Length field needs remappin'
@@ -322,7 +322,7 @@ namespace PERQemu.IO.Network
 
                     if ((ushort)raw.Type != perqType)
                     {
-                        Log.Write(Category.NetAdapter, "EtherType mapped from 0x{0:x4} to 0x{1:x4}", (ushort)raw.Type, perqType);
+                        Log.Info(Category.NetAdapter, "EtherType mapped from 0x{0:x4} to 0x{1:x4}", (ushort)raw.Type, perqType);
                         raw.Type = (EthernetPacketType)perqType;
                     }
                 }
@@ -353,7 +353,7 @@ namespace PERQemu.IO.Network
                 {
                     Log.Info(Category.NetAdapter, "RARP {0} received from {1}",
                                                    rarp.Operation, rarp.TargetHardwareAddress);
-                    
+
                     // The Op can be a Request (new host coming online) or a
                     // Reply (from others responding after our Request sent);
                     // In either case the payload contains a host+Perq pair
@@ -382,13 +382,18 @@ namespace PERQemu.IO.Network
                             seen.Received++;
                         }
                     }
-                    // I'm pretty sure we can safely drop these here and not
-                    // pass them on to the PERQ, which almost certainly won't
-                    // do RARP (even under Accent).  HOWEVER, Accent's "new"
-                    // message server (in S6+) will do actual IP ARPs, so we
-                    // don't want to get in the way of those.
-                    Log.Info(Category.NetAdapter, "Local RARP handling complete\n");
-                    return;
+
+                    if (rarp.Operation == ARPOperation.RequestReverse ||
+                        rarp.Operation == ARPOperation.ReplyReverse)
+                    {
+                        // I'm pretty sure we can safely drop these here and not
+                        // pass them on to the PERQ, which almost certainly won't
+                        // do RARP (even under Accent).  HOWEVER, Accent's "new"
+                        // message server (in S6+) will do actual IP ARPs, so we
+                        // don't want to get in the way of those.
+                        Log.Info(Category.NetAdapter, "Local RARP handling complete\n");
+                        return;
+                    }
                 }
                 // Definitely fall through here
             }
@@ -406,7 +411,7 @@ namespace PERQemu.IO.Network
             if (_controller.WantReceive(raw.DestinationHwAddress))
             {
                 // Print the packet post-rewrites
-                Console.WriteLine(raw.PrintHex());
+                if (Log.Level < Severity.Info) Console.WriteLine(raw.PrintHex());
 
                 // Shortcut: is the receiver active and ready?
                 if (_controller.CanReceive)
@@ -426,7 +431,7 @@ namespace PERQemu.IO.Network
                         return;
                     }
 
-                    Log.Write(Category.NetAdapter, "Tried to dequeue but couldn't?  Count now {0}", _pending.Count);
+                    Log.Info(Category.NetAdapter, "Tried to dequeue but couldn't?  Count now {0}", _pending.Count);
                     return;
                 }
 
@@ -435,7 +440,7 @@ namespace PERQemu.IO.Network
                 {
                     _pending.Enqueue(raw);
 
-                    Log.Write(Category.NetAdapter, "Queued for later, count now {0}", _pending.Count);
+                    Log.Info(Category.NetAdapter, "Queued for later, count now {0}", _pending.Count);
                     return;
                 }
 
@@ -445,7 +450,7 @@ namespace PERQemu.IO.Network
                 // inundate it with old traffic if it comes back online
                 _pending.Enqueue(raw);
                 _pending.TryDequeue(out raw);
-                Log.Write(Category.NetAdapter, "Max backlog {0} reached, dropped oldest packet", _pending.Count);
+                Log.Info(Category.NetAdapter, "Max backlog {0} reached, dropped oldest packet", _pending.Count);
             }
         }
 
@@ -486,7 +491,7 @@ namespace PERQemu.IO.Network
 
                 _nat.Flush();
 
-                Log.Write(Category.NetAdapter, "Adapter shutdown");
+                Log.Info(Category.NetAdapter, "Adapter shutdown");
             }
         }
 
@@ -645,6 +650,6 @@ namespace PERQemu.IO.Network
         const int GreetingInterval = 15;        // Minimum, in seconds
 
         ConcurrentQueue<EthernetPacket> _pending;
-        const int MaxBacklog = 5;               // Don't queue without bound
+        const int MaxBacklog = 8;               // Don't queue without bound
     }
 }

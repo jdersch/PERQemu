@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-3/3/2023 - skeezicsb - v0.5.2 (experimental)
+3/6/2023 - skeezicsb - v0.5.2 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
@@ -358,7 +358,7 @@ The following hardware has been implemented in the emulator:
       the OIO option board is configured.  This allows Accent to initialize its
       NetMsgServer so other peripheral server processes (floppy, serial, etc)
       can start up.  Consult the User Guide for more details!
-    - Implementation of a real host Ethernet interface is underway.
+    - Implementation of a real host Ethernet interface is underway!
 
 
 There is a ton of additional detail about the internals of PERQemu itself in
@@ -404,7 +404,8 @@ to see the input prompt.  This seems most prevalent on Windows 10.
 Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
 seems to fix some of the glitches but it's still a mess.  Mac and Linux terminal
 applications don't tend to misbehave as badly.  Hitting ^L now clears and resets
-the window in case things are messy.
+the window in case things are messy. [This is kinda broken at the moment and is
+being looked into.]
 
 
 2. Minimizing the Display window makes it disappear for good / very difficult

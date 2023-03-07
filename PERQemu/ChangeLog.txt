@@ -8,6 +8,13 @@ avoid wasting precious time scrolling to the end. :-)
 
 March, 2023:
 
+    3. WOO!  Ethernet is now ACTUALLY happening.  Still pretty raw, but packets
+    are now flowing: first successful POS FTP transfer, echo test with POS
+    diagnostic program "TestEther", and even Accent is sending Speak/Listen and
+    Sesame (remote filesystem!) traffic.  Super early, and nowhere close to
+    ready for "production", but the basic mechanism works.  So stoked.  Chuffed
+    to bits.  Tickled pink.  A little bit giddy, even. :-)
+
     2. Provide a crude patch to map Turkish characters to UTF-8/ASCIIish so the
     CLI can parse 'i' and 'I' (in their various forms).  In the longer term,
     moving toward more awareness of and better handling of non-US/English input
@@ -62,4 +69,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Fri Mar  3 14:15:52 PST 2023
+Last update: skeezics    Mon Mar  6 22:00:42 PST 2023
