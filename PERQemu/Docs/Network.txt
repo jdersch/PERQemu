@@ -59,10 +59,32 @@ multicast reception with up to five "groups" -- though it's not yet known if
 any software ever used that feature.  Thus, the controller itself checks all
 incoming packets against a list of destination addresses to match:
 
-    1. Broadcast
-    2. Hardware address
-    3. Up to five multicast groups
-    4. Any address, in promiscuous mode
+    1. Any address (when in promiscuous mode)
+    2. Broadcast
+    3. Hardware address
+    4. Up to five multicast groups
+
+The PERQ firmware (inside the NETxx PROMs on the board) specifically performs
+a layer 2 multicast address match as follows:
+
+    Grp,, Cmd   1 word  The low order byte is the group address
+                        command byte.  The valid commands are:
+                            00: Respond to all groups.
+                            FF: Respond to no groups.
+                            FE: Return address of this device.
+                         Other: respond to set group addresses.
+                        The high byte is a group specifer.
+    Grp,, Grp   1 word  Two group specifies.
+    Grp,, Grp   1 word  Two more group specifiers.
+
+    This explicitly matches 01:00:00:00:00:gg, where gg is any of the five
+    group bytes programmed into the register file and gg != 00.
+
+It isn't clear if _any_ PERQ software made use of Ethernet-layer multicasts,
+but we emulate the hardware's behavior just in case.  Note that for efficiency,
+we specifically strip away the (very chatty) Cisco spanning tree multicasts as
+the PERQ has no use for them.  It may be worthwhile to have a global switch to
+just turn off or ignore this extra bit of processing if it's never really used.
 
 
 Address Translation
@@ -71,15 +93,25 @@ Address Translation
 PERQemu tries to be true to the hardware, where we use the Three Rivers MAC
 prefix of 02:1c:7c in the first three octets of the address (while the fourth
 is set based on the interface type by the on-board PROM).  We let the user
-configure the last word through the Configurator.
+configure the last two octets through the Configurator; since the PERQ software
+generally treated addresses as three 16-bit words (high, middle, low) PERQemu
+does it that way too.
 
-Rather than try to force users to configure a physical interface (which often
-isn't possible or desirable) PERQemu will quietly maintain an ARP table of
-sorts.  I may make this configurable through Settings; on my Mac with a second,
-unused Ethernet, I can configure en1 with the MAC of 02:1c:7c:0:nn:mm as I wish
-and just use that directly with no translation... otherwise a very simple
-packet rewriting routine could be devised that could allow the emulated PERQ
-to still "see" other machines with the same prefix?
+    Note:  Three Rivers was also allocated 00:1c:7c and yes, they used
+    addresses from the 02:1c:7c block in all of the hardware PROMs.
+    While the latter is now considered "locally" administered and the
+    correct usage would have been to assign the "globally" administered
+    00 prefix to every PERQ interface, it's almost certain that the
+    distinction was either not made until later (post IEEE 802.3?) or
+    3RCC just didn't get the distinction.  Who knows?  Because real
+    PERQ hardware (and almost all the software) assumes 02:1c:7c as the
+    default vendor code, that's what the emulator uses too.
+
+Rather than require a separate physical interface on the host exclusively for
+its own use (which often isn't possible or desirable), PERQemu allows selection
+of any available Ethernet adapter and maintains a network address translation
+(or NAT) table so that it can communicate with other virtual (or real!) PERQs
+on the network:
 
     On send, rewrite our source address in outgoing packets from the
     user's configured 3RCC address to the actual Ethernet MAC of the
@@ -89,7 +121,6 @@ to still "see" other machines with the same prefix?
     with our emulated address.  On a fast enough host computer running
     two instances of PERQemu, each would have to have a unique address
     but with all receives in promiscuous mode we might get away with it!
-
 
 To "discover" other PERQemu instances a standard RARP packet is constructed,
 but with a slightly different use of the address fields.  The emulator sends a
@@ -136,8 +167,8 @@ to say "yo, I'm online!" and allow PERQ-to-PERQ traffic across the Internet! :-)
 Type Code Translation
 ---------------------
 
-PERQ Ethernet was pre-IEEE 802.3, and there was/could be software developed when
-Ethernet I or II specifications were still in use.  To put it diplomatically,
+PERQ Ethernet was pre-IEEE 802.3, and most early network software was developed
+when Ethernet I or II specifications were still in use.  Put diplomatically,
 the lack of standardization meant that things like packet types were assigned
 pretty much at the whim of the programmers writing a particular protocol.  In
 other words, they pulled numbers out of... thin air... so even after IEEE 802.3
@@ -149,7 +180,8 @@ good news is that only a few EtherType codes were actually specified and used
     FTPEtherType        = 1; 
     EchoServerType      = 6; 
     TimeServerType      = 7; 
-    ServerRequest       = 8; 
+    ServerRequest       = 8;
+    AccentTime          = 219;
     CSDXServerType      = 315; 
 
 The bad news is there's no easy way to find any others that might fall into the
@@ -168,10 +200,13 @@ it seems that modern network stacks can in fact filter out some PERQ traffic as
     I'm not so sure that's related.  What this means, however, is that I can
     possibly use those for my own nefarious purposes in the future. :-)
 
+The 0x7036 type appears to be used by Accent, possibly for some kind of address
+resolution by the NetMessageServer?
+
 The initial approach to dealing with this is to re-map any type code in the list
-above to the 0xA000-0xAFFF range which is "uncharted territory" (an unassigned
+above to the 0xB000-0xB5FF range which is "uncharted territory" (an unassigned
 range) according to recent EtherType lists.  Basically, PERQemu does an xor with
-0xa000 at both the sending and receiving stations as part of the NAT rewriting
+0xb000 at both the sending and receiving stations as part of the NAT rewriting
 so the packets on the wire aren't dropped.  It's cheesy, but seems a reasonably
 clean solution, especially as it's limited to rewriting when a PERQ vendor
 prefix (0x021c7c) is the source address.  In preliminary testing the virtual
@@ -358,9 +393,32 @@ conditions.
 Miscellany
 ----------
 
+The rudimentary NAT implementation seems to work well and is very simple.
+There are some enhancements to be added:
+
+    Allow for the possibility that one "beefy" host machine could run
+    more than one PERQ!
+
+    Implement aging, removal of "stale" entries?  It's hugely unlikely
+    that table size will ever become a problem. :-|
+
+    Be more intelligent about updates/additions:  if a host mapping is
+    in conflict but the entry is stale, replace it; if it's "me" and
+    both halves match just quietly return.  Otherwise, if the current
+    instances detects another PERQ at the same address but the config
+    address is zero, just generate a new random one and retry?
+
+    Potentially add IP (v4) address translation as well?  So the PERQs
+    can use fixed IP addresses even if the host is using DHCP and its
+    address is bouncing around, OR using MAC randomization, etc.  The
+    goal is to make it easier to configure the virtual PERQ to operate
+    without need for adjusting to a changing host environment...
+
+
 One option for IP/UDP encapsulation is to see if the SDL_net library can
 dispatch on the existing event loop, so we'd process packets just like
 Display events?  It'd be awesome if SDL_net had a "raw" option baked in...
+
 
 Want to find a way to do privilege separation and/or set up a VirtualBox-like
 driver/user-level interface that doesn't require administrative privs to run.
@@ -368,8 +426,17 @@ A small, separate root process that could cleanly pass packets to and from
 the user-level emulator could also be a TimeServer for booting/login... 
 
 
+Definitely want to add an option to spoof Time Server replies to make Accent
+boot/POS login more automatic!  The EIO will support the RTC, but for PERQ-1s
+it'd be nice to at least have the first one up be able to accurately set its
+own time...
+
+
 THIS IS ALL STILL VERY MUCH UNDER DEVELOPMENT AND IS IN NO WAY FINALIZED!
+
+Plus, this document (as usual) could use some editing.  Sheesh.  You'd think I
+get paid by the word.
 
 
 ---
-Last update: skeezics    Tue Mar  7 13:05:47 PST 2023
+Last update: skeezics    Thu Mar  9 19:41:31 PST 2023

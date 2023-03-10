@@ -72,6 +72,13 @@ namespace PERQemu.IO.Network
         {
             if (!Running)
             {
+                // Add our local NAT entry
+                if (!_nat.Add(new NATEntry(_adapter.MacAddress, _controller.MACAddress, true)))
+                {
+                    Log.Warn(Category.All, "Another PERQ detected with our MAC address!?");
+                }
+
+                // Fire up the receive thread
                 _adapter.StartCapture();
 
                 Log.Info(Category.NetAdapter, "Adapter reset (packet capture started)");
@@ -179,7 +186,7 @@ namespace PERQemu.IO.Network
 
                 Log.Info(Category.NetAdapter, "Sending from {0} to {1} (type {2})",
                           packet.SourceHwAddress, packet.DestinationHwAddress, packet.Type);
-                Log.Info(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
+                Log.Debug(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           packet.Bytes.Length, packet.Header.Length, packet.PayloadData?.Length);
 
                 // Always remap our source address to the host adapter
@@ -270,16 +277,20 @@ namespace PERQemu.IO.Network
                 }
 
                 // The PERQ interface can't "see" its own transmissions, but
-                // apparently SharpPcap does; silently drop 'em here.  Dump IPv6
-                // because it's too damned chatty even if you try to tell the Mac
-                // to shut it the hell OFF.  IPv6 just continues to FAIL SO HARD.
+                // apparently SharpPcap does; silently drop 'em here
                 if (raw.SourceHwAddress.Equals(_adapter.MacAddress)) return;
-                if (raw.Type == EthernetPacketType.IpV6) return;
 
-                Log.Write(Category.NetAdapter, "Received from {0} to {1} (type {2:x}) [{3}]",
+                // Stuff we just drop because it's completely irrelevant to the
+                // old PERQ and is just pure noise:  IPv6 and spanning tree
+                // multicasts every 2 seconds... probably more to add, like
+                // Appletalk (using atp:// 
+                if (raw.Type == EthernetPacketType.IpV6) return;
+                if ((ushort)raw.Type == 0x0026) return;
+
+                Log.Info(Category.NetAdapter, "Received from {0} to {1} (type {2:x}) [{3}]",
                           raw.SourceHwAddress, raw.DestinationHwAddress, raw.Type,
                           System.Threading.Thread.CurrentThread.ManagedThreadId);
-                Log.Info(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
+                Log.Debug(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);
 
                 // Recompute the checksum for the packet
@@ -380,6 +391,7 @@ namespace PERQemu.IO.Network
                         {
                             // Nice to see you again!
                             seen.LastReceived = DateTime.Now;
+                            seen.Flags &= ~(Flags.Stale);
                             seen.Received++;
                         }
                     }
@@ -511,7 +523,7 @@ namespace PERQemu.IO.Network
             {
                 if (etherType == pt)
                 {
-                    return (ushort)(etherType ^ 0xa000);
+                    return (ushort)(etherType ^ EtherTypeMask);
                 }
             }
 
@@ -624,26 +636,35 @@ namespace PERQemu.IO.Network
             _nat.DumpTable();
         }
 
+        // Mask for mapping PERQ EtherType codes that fall within the IEEE 802.3
+        // length range (0..1535) to an unused range and back again.  (The range
+        // is chosen from unassigned space that IANA hasn't officially allocated)
+        const ushort EtherTypeMask = 0xb000;
+
         // Ethernet Type codes defined in E10Types.Pas (plus mapped equivalents)
-        // Todo: probably just do ALL PERQ packets with a type code < 1500, since
-        // it's extremely unlikely I'll catch every case... this may be removed.
         public static ushort[] PerqEtherTypes =
         {
-            0x0000,     // FTPByteStreamType   = 0
-            0xa000,
-            0x0001,     // FTPEtherType        = 1
-            0xa001,
-            0x0006,     // EchoServerType      = 6
-            0xa006,
-            0x0007,     // TimeServerType      = 7
-            0xa007,
-            0x013b,     // CSDXServerType      = 315; 
-            0xa13b,
-            0x0008,     // ServerRequest       = 8
-            0xa008
+            0x0000, EtherTypeMask,              // FTPByteStreamType
+            0x0001, EtherTypeMask + 1,          // FTPEtherType
+            0x0006, EtherTypeMask + 6,          // EchoServerType
+            0x0007, EtherTypeMask + 7,          // TimeServerType
+            0x0008, EtherTypeMask + 8,          // ServerRequest
+            0x0090, EtherTypeMask + 144,        // Accent ConfigTest
+            0x00db, EtherTypeMask + 219,        // Accent Time/repeater discovery?
+            0x013b, EtherTypeMask + 315,        // CSDXServerType
+            0x01c0, EtherTypeMask + 448,        // Accent EchoMe
+            0x01c1, EtherTypeMask + 449         // Accent IAmAnEcho
         };
+        //
+        // PUP and the PUP "Addr Tran" (not explicitly noted in Accent?) are
+        // problematic; they should be reassigned to their relocated assigned
+        // numbers 0x0a00 and 0x0a01, but check with ContrAlto to see what if
+        // any remapping goes on there?  May need special handling here.
+        //  0x0200, EtherTypeMask + 512,        // PUP
+        //  0x0201, EtherTypeMask + 513         // PUP Addr Trans
+        //
 
-        // All 1's broadcast
+        // All 1's layer 2 broadcast
         public static PhysicalAddress Broadcast = new PhysicalAddress(new byte[] { 255, 255, 255, 255, 255, 255 });
 
         ICaptureDevice _adapter;

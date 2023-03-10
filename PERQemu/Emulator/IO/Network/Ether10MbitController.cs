@@ -367,16 +367,30 @@ namespace PERQemu.IO.Network
             if (dest.Equals(_physAddr.PA)) return true;
             if (dest.Equals(_recvAddr.PA)) return true;
 
-            // Todo: Finally, loop through the multicast bytes
-            //  Grp,, Cmd   1 word  The low order byte is the group address
-            //                      command byte.  The valid commands are:
-            //                          00: Respond to all groups.
-            //                          FF: Respond to no groups.
-            //                          FE: Return address of this device.
-            //                       Other: respond to set group addresses.
-            //                      The high byte is a group specifer.
-            //  Grp,, Grp   1 word  Two group specifies.
-            //  Grp,, Grp   1 word  Two more group specifiers.
+            // Finally, loop through the multicast bytes
+            // (See Docs/Network.txt for more information!)
+            var addr = dest.GetAddressBytes();
+            if (addr[0] == 1 &&
+                addr[1] == 0 &&
+                addr[2] == 0 &&
+                addr[3] == 0 &&
+                addr[4] == 0 &&
+                addr[5] != 0)
+            {
+                // No groups for you!
+                if (MCB == 0xFF) return false;
+
+                // Receive all?
+                if (MCB == 0) return true;
+
+                // Match any five specific groups
+                if (addr[5] == _mcastGroups[1] ||
+                    addr[5] == _mcastGroups[2] ||
+                    addr[5] == _mcastGroups[3] ||
+                    addr[5] == _mcastGroups[4] ||
+                    addr[5] == _mcastGroups[5])
+                    return true;
+            }
 
             // Otherwise log the rejection
             Log.Info(Category.Ethernet, "Rejecting packet for {0}", dest);
@@ -411,10 +425,10 @@ namespace PERQemu.IO.Network
             _state = State.Receiving;
             _status |= (Status.CarrierSense | Status.PacketInProgress);
 
-            Log.Write(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6} [{3}]",
+            Log.Info(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6} [{3}]",
                                          packet.Length, _headerAddress, _bufferAddress,
                                          System.Threading.Thread.CurrentThread.ManagedThreadId);
-            Log.Info(Category.Ethernet, "Receive bit count initial = {0:x} ({1})",
+            Log.Debug(Category.Ethernet, "Receive bit count initial = {0:x} ({1})",
                                         _bitCount, (short)_bitCount);
 
             int addr;

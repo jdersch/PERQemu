@@ -953,7 +953,7 @@ namespace PERQemu
         [Command("debug dump rs232a")]
         void ShowRS232Status()
         {
-            PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
+            if (CheckSys()) PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
         }
 
         [Command("debug dump streamer")]

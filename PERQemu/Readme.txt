@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-3/6/2023 - skeezicsb - v0.5.2 (experimental)
+3/8/2023 - skeezicsb - v0.5.2 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
@@ -369,7 +369,7 @@ Docs/ directory for way, way more information than you need.  Way more.
 3.1 What's Not
 --------------
  
-- Ethernet.  Unimplemented, but in development! [See above]
+- Ethernet.  In development! [See above]
 
 - Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
  
@@ -452,6 +452,11 @@ v0.7 - TBD
   - Ethernet!
   - Canon laser printer
   - Get screenshots working again
+
+v0.5.2 - Experimental branch
+  - Ethernet running (but requires root/admin access)
+  - Patch for Turkish keyboard in CLI
+  - Limited Micropolis 8" disk support
 
 v0.5.0 - New baseline
   (Pending) Merge the experiments back into the master branch:
