@@ -6,6 +6,16 @@ notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
 avoid wasting precious time scrolling to the end. :-)
 
 
+April, 2023:
+    1. Radio silence - fell off the map due to financial difficulties requiring
+    attention elsewhere.  Hope to return to PERQ development soon.  There is SO
+    much cool stuff still being unearthed in the archives, and I really want to
+    continue working on the emulator; getting EIO support in place will let me
+    finish development of a real-time clock chip programming board for updating
+    real PERQs (hardware is done, software TBD).  I also really don't want to
+    end up bankrupt and/or homeless, so that's consuming my time for now. :-|
+
+
 March, 2023:
 
     3. WOO!  Ethernet is now ACTUALLY happening.  Still pretty raw, but packets
