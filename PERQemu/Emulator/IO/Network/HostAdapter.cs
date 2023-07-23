@@ -82,19 +82,34 @@ namespace PERQemu.IO.Network
                 _adapter.StartCapture();
 
                 Log.Info(Category.NetAdapter, "Adapter reset (packet capture started)");
+                return;
             }
-            else
-            {
-                // Flush the backlog?
-                while (!_pending.IsEmpty)
-                {
-                    EthernetPacket tossIt;
-                    _pending.TryDequeue(out tossIt);
-                }
+            
+            // Announce our presence with authori-tie
+            SendGreeting();
+        }
 
-                // Announce our presence with authori-tie
-                SendGreeting();
+        /// <summary>
+        /// Flush oldest received packets to keep queue from growing too long.
+        /// </summary>
+        public void Flush()
+        {
+            int max = _pending.Count;
+            int count = 0;
+
+            // Todo: check a timestamp, or maybe keep most recent packet?
+            // POS programs must explicitly be in a polling mode and may ignore
+            // incoming traffic forever; Accent is more modern in that it tries
+            // to dispatch packets as they arrive so queues shouldn't back up;
+            // not sure about PNX (not enough testing/experience there).
+            while (_pending.Count >= MaxBacklog)
+            {
+                EthernetPacket tossIt;
+                if (_pending.TryDequeue(out tossIt)) count++;
             }
+
+            if (count > 0)
+                Log.Info(Category.NetAdapter, "Max backlog exceeded ({0}), flushed {1} packet(s)", max, count);
         }
 
         /// <summary>
@@ -230,7 +245,7 @@ namespace PERQemu.IO.Network
                 // Now generate the checksum for the packet (for debugging);
                 // SharpPcap _will_ generate and append this for us, apparently
                 var crc = Crc32.Compute(packet.Bytes, 0, packet.Bytes.Length - 4);
-                Log.Info(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
+                Log.Debug(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
 
                 // Print the (modified) packet
                 if (Log.Level < Severity.Info) Console.WriteLine(packet.PrintHex());
@@ -282,8 +297,7 @@ namespace PERQemu.IO.Network
 
                 // Stuff we just drop because it's completely irrelevant to the
                 // old PERQ and is just pure noise:  IPv6 and spanning tree
-                // multicasts every 2 seconds... probably more to add, like
-                // Appletalk (using atp:// 
+                // multicasts every 2 seconds... probably more we could add...
                 if (raw.Type == EthernetPacketType.IpV6) return;
                 if ((ushort)raw.Type == 0x0026) return;
 
@@ -293,6 +307,7 @@ namespace PERQemu.IO.Network
                 Log.Debug(Category.NetAdapter, "SIZES: packet {0}, header {1}, payload {2}",
                           raw.Bytes.Length, raw.Header.Length, raw.PayloadData?.Length);
 
+                // Todo: wrap this in a DEBUG or report the results, else it's wasted effort
                 // Recompute the checksum for the packet
                 var len = raw.Bytes.Length - 4;
                 var crc = Crc32.Compute(raw.Bytes, 0, len);
@@ -326,7 +341,7 @@ namespace PERQemu.IO.Network
                     Log.Info(Category.NetAdapter, "NAT receive from Perq {0} via Host {1}", src.Perq, src.Host);
                 }
 
-                //// If source is a PERQ, see if the Type/Length field needs remappin'
+                // If source is a PERQ, see if the Type/Length field needs remappin'
                 if (IsPerqPrefix(raw.SourceHwAddress) || raw.DestinationHwAddress.Equals(Broadcast))
                 {
                     // Translate the EtherType/Length field if necessary
@@ -444,7 +459,7 @@ namespace PERQemu.IO.Network
                         return;
                     }
 
-                    Log.Info(Category.NetAdapter, "Tried to dequeue but couldn't?  Count now {0}", _pending.Count);
+                    Log.Info(Category.NetAdapter, "Tried to dequeue but couldn't?  Count is {0}", _pending.Count);
                     return;
                 }
 
@@ -462,8 +477,7 @@ namespace PERQemu.IO.Network
                 // up, or it isn't actively receiving and we don't want to
                 // inundate it with old traffic if it comes back online
                 _pending.Enqueue(raw);
-                _pending.TryDequeue(out raw);
-                Log.Info(Category.NetAdapter, "Max backlog {0} reached, dropped oldest packet", _pending.Count);
+                Flush();
             }
         }
 
@@ -476,14 +490,13 @@ namespace PERQemu.IO.Network
             {
                 EthernetPacket packet;
 
-                if (_pending.TryDequeue(out packet))
+                if (!_pending.TryDequeue(out packet))
                 {
-                    _controller.DoReceive(packet.Bytes);
+                    Log.Warn(Category.NetAdapter, "Failure on TryDequeue!? Count is {0}", _pending.Count);
+                    return;
                 }
-                else
-                {
-                    Log.Warn(Category.NetAdapter, "Failure on TryDequeue!? Count = {0}", _pending.Count);
-                }
+
+                _controller.DoReceive(packet.Bytes);
             }
         }
 
@@ -672,10 +685,10 @@ namespace PERQemu.IO.Network
 
         NATTable _nat;
 
-        DateTime _lastGreeting = DateTime.Now;
+        DateTime _lastGreeting = DateTime.Today;
         const int GreetingInterval = 15;        // Minimum, in seconds
 
         ConcurrentQueue<EthernetPacket> _pending;
-        const int MaxBacklog = 8;               // Don't queue without bound
+        const int MaxBacklog = 15;              // Don't queue without bound
     }
 }

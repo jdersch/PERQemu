@@ -294,7 +294,7 @@ namespace PERQemu.IO.Network
                     return retVal;
 
                 default:
-                    throw new InvalidOperationException($"Unhandled write to port 0x{address:x}");
+                    throw new InvalidOperationException($"Unhandled read from port 0x{address:x}");
             }
         }
 
