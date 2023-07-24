@@ -7,6 +7,10 @@ avoid wasting precious time scrolling to the end. :-)
 
 
 July, 2023:
+    2. Fix two small bugs: don't try to shut down the OIO board if one isn't
+    configured; extend the PNX 1 video hack so that PNX 2 can now refresh the
+    display properly.
+
     1. Trying to get back into the swing of things.  Small adjustment to the
     Ethernet reset code improves things a bit; still some funkiness possibly
     due to the complexity of my home network.  Anyone testing this code will

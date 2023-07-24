@@ -266,12 +266,18 @@ Other Stuff
 
 In PNX 1 and PNX 2, ICL decided to do things differently.  PNX 1 only programs
 one 40-line vertical blanking band and doesn't set the StartOver bit.  PNX 2
-sets up two blanking bands and sets the StartOver bit, but seems to trigger the
-VBlank field around line 960, NOT when the line count reaches 1023, because...
-reasons.  Currently this produces a graphical glitch at the bottom of the frame
-(a visible band that isn't updated and obscures the cursor) but at least the
-screen doesn't break up... another hack/workaround in the emulator will be
-required.  POS, MPOS and Accent all work perfectly.  Why, ICL?  Why?
+sets up one 43-line blanking band and sets the StartOver bit, but at the wrong
+time -- not in the band when VSync is enabled, but in the first Active field at
+the top of the screen!  Why, ICL?  Why?  This must work on the hardware, but I
+cannot fathom why they do it this way, when POS, MPOS and Accent, the ROMs and
+all the diagnostic microcode pretty consistently does it the same way.
+
+The workaround in place for PNX 1 has been extended slighly to let PNX 2 drive
+the display properly now too, although it has a glitch where the window manager
+background and the left edge of windows looks as if it's shifted by one word --
+like they aren't properly passing a quad-aligned address to the display address
+register?  This isn't a showstopper but looks pretty bad; on the list of quirks
+to investigate and fix before a PNX 2 disk is bundled with the release.
 
 
 The first four CursorFunctions just show the cursor over a blank screen.  This
@@ -301,4 +307,4 @@ rendered by Windows (on a Sun-branded 23" display using the same panel).  Sigh.
 
 
 ---
-Last update: skeezics    Sat Feb 25 13:19:01 PST 2023
+Last update: skeezics    Mon Jul 24 03:09:26 PDT 2023

@@ -1057,7 +1057,7 @@ namespace PERQemu
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
         }
 
-        [Conditional("DEBUG")]
+        // [Conditional("DEBUG")]
         [Command("debug dump timers")]
         void DumpTimers()
         {

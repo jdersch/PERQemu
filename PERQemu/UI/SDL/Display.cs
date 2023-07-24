@@ -203,7 +203,7 @@ namespace PERQemu.UI
             if (_fpsTimerId < 0)
             {
                 _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
-                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
+                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback, "FPS");
                 HighResolutionTimer.Enable(_fpsTimerId, true);
             }
 

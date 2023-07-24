@@ -289,8 +289,6 @@ namespace PERQemu
                     break;
 
                 case RunState.ShuttingDown:
-                    _inputs.Shutdown();
-                    _display.Shutdown();
                     _state = RunState.Off;
                     Shutdown();
                     break;
@@ -351,12 +349,16 @@ namespace PERQemu
         /// Completely shut down this instance.
         /// </summary>
         public void Shutdown()
-        {
+        { 
             // Detach events
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
 
-            // Go away or I shall taunt you some more
-            _oio.Shutdown();
+            // Now go away or I shall taunt you some more
+            _inputs.Shutdown();
+            _display.Shutdown();
+
+            if (_oio != null) _oio.Shutdown();
+
             _iob.Shutdown();
             _cpu.Shutdown();
             _ioBus = null;

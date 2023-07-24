@@ -116,7 +116,7 @@ namespace PERQemu
             // return so we can check the Console for a keystroke.  Studies show
             // that the fastest typists in the world can't go much faster than
             // 50-60ms between keystrokes.  Yep.  I checked. :-)
-            var consoleTimerHandle = HighResolutionTimer.Register(50d, null);
+            var consoleTimerHandle = HighResolutionTimer.Register(50d, null, "Console");
             HighResolutionTimer.Enable(consoleTimerHandle, true);
 
             // Sign up for controller events

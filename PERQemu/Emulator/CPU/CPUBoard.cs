@@ -206,8 +206,9 @@ namespace PERQemu.Processor
 
         public void Shutdown()
         {
-            _processor = null;
+            _heartbeat.Shutdown();
             _heartbeat = null;
+            _processor = null;
             _scheduler = null;
             Log.Detail(Category.Emulator, "CPUBoard shutdown.");
         }

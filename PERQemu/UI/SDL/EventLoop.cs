@@ -96,7 +96,7 @@ namespace PERQemu.UI
 
             // Set up a timer to periodically run the SDL event loop.  To keep
             // overhead low when we start up, coalesce with the CLI timer (50ms)
-            _timerHandle = HighResolutionTimer.Register(50d, PERQemu.GUI.SDLMessageLoop);
+            _timerHandle = HighResolutionTimer.Register(50d, PERQemu.GUI.SDLMessageLoop, "MsgLoop");
             HighResolutionTimer.Enable(_timerHandle, true);
 
             Log.Debug(Category.UI, "Initialized SDL");
