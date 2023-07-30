@@ -226,7 +226,7 @@ namespace PERQemu.UI
 
                 if (perqCode != 0)
                 {
-                    _system.IOB.Z80System.Keyboard.QueueInput(perqCode);   // Ship it!
+                    _system.IOB.Z80System.QueueKeyboardInput(perqCode);   // Ship it!
                     handled = true;
                 }
             }

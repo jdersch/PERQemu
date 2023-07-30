@@ -155,7 +155,7 @@
     <Compile Include="Emulator\IO\Z80\IZ80Device.cs" />
     <Compile Include="Emulator\IO\Z80\Keyboard.cs" />
     <Compile Include="Emulator\IO\Z80\NECuPD765A.cs" />
-    <Compile Include="Emulator\IO\Z80\Z80toPERQFifo.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80ToPERQLatch.cs" />
     <Compile Include="Emulator\IO\Z80\TMS9914A.cs" />
     <Compile Include="Emulator\IO\Z80\Z80CTC.cs" />
     <Compile Include="Emulator\IO\Z80\Z80DMA.cs" />
@@ -181,7 +181,7 @@
     <Compile Include="Debugger\Debugger.cs" />
     <Compile Include="UI\SDL\EventLoop.cs" />
     <Compile Include="UI\SDL\InputDevices.cs" />
-    <Compile Include="Emulator\IO\Z80\PERQtoZ80Fifo.cs" />
+    <Compile Include="Emulator\IO\Z80\PERQToZ80Latch.cs" />
     <Compile Include="Emulator\IO\SerialDevices\KrizTablet.cs" />
     <Compile Include="Emulator\IO\SerialDevices\SerialKeyboard.cs" />
     <Compile Include="Emulator\IO\SerialDevices\Speech.cs" />
@@ -204,6 +204,12 @@
     <Compile Include="Emulator\IO\Network\MachineAddress.cs" />
     <Compile Include="Emulator\IO\INetworkController.cs" />
     <Compile Include="Emulator\IO\Network\Translation.cs" />
+    <Compile Include="Emulator\IO\Z80\Am9519.cs" />
+    <Compile Include="Emulator\IO\Z80\i8237DMA.cs" />
+    <Compile Include="Emulator\IO\Z80\i8254PIT.cs" />
+    <Compile Include="Emulator\IO\Z80\Oki5832RTC.cs" />
+    <Compile Include="Emulator\IO\Z80\CIOZ80.cs" />
+    <Compile Include="Emulator\IO\Z80\EIOZ80.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

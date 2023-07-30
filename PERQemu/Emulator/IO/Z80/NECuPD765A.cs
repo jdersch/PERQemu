@@ -1349,8 +1349,8 @@ namespace PERQemu.IO.Z80
         byte[] _ports;
         Scheduler _scheduler;
 
-        // I hate this, Konamiman.  I hate this So much.
-        public event EventHandler NmiInterruptPulse;
+        // Supress the spurious "event is never used" warning
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
     }
 }
 

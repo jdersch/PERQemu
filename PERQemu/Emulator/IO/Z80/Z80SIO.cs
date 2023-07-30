@@ -99,7 +99,7 @@ namespace PERQemu.IO.Z80
             return vector;
         }
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         //
         // IDMADevice implementation

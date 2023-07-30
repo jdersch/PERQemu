@@ -31,9 +31,9 @@ namespace PERQemu.IO.Z80
     /// requested by the PERQ, raises the Z80DataIn interrupt when the "fifo" is
     /// free and can accept new data.
     /// </remarks>
-    public class PERQToZ80FIFO : IZ80Device
+    public class PERQToZ80Latch : IZ80Device
     {
-        public PERQToZ80FIFO(PERQSystem system)
+        public PERQToZ80Latch(PERQSystem system)
         {
             _system = system;
             _lock = new object();
@@ -74,7 +74,7 @@ namespace PERQemu.IO.Z80
             set { _interruptsEnabled = value; }
         }
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         /// <summary>
         /// Writes a byte from the PERQ to the Z80.

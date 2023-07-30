@@ -19,7 +19,10 @@
 
 using System;
 
+using PERQmedia;
+using PERQemu.Config;
 using PERQemu.IO.Z80;
+using PERQemu.IO.Network;
 using PERQemu.IO.DiskDevices;
 
 namespace PERQemu.IO
@@ -34,7 +37,7 @@ namespace PERQemu.IO
         static EIO()
         {
             _name = "EIO";
-            _desc = "PERQ-2 I/O Board, new Z80, MFM, Ethernet";
+            _desc = "PERQ-2 I/O Board, new Z80, Microp/MFM, Ethernet";
 
             _z80CycleTime = 250;    // 4Mhz!
 
@@ -50,27 +53,63 @@ namespace PERQemu.IO
             _z80RamAddr = 0x4000;
             _z80RomSize = 0x1000;   // 4K of ROM
             _z80RomAddr = 0x0;
-
-            // TODO: load the correct Z80 ROM (eio vs. eio24?)
-            // TODO: identify the ports, memory config, addresses
-            // TODO: write the Micropolis and MFM controllers
-            // TODO: determine if 24-bit version or NIO version
-            //       warrants a separate class entirely... like
-            //       the "EIO5" for T2/T4 systems with MFM, and
-            //       plain EIO for Microp in T0/T1 configs
         }
 
         public EIO(PERQSystem system) : base(system)
         {
-            _hardDiskController = new ShugartDiskController(system);
-
-            // _ethernetController = new EthernetController(system);
-
-            _z80System = new Z80System(system);
-            _z80System.LoadZ80ROM("eioz80.bin");      // "new" Z80 ROM
+            // Set up the Z80 with the new firmware
+            _z80System = new EIOZ80(system);
+            _z80System.LoadZ80ROM("eioz80.bin");
 
             RegisterPorts(_handledPorts);
+
+            // What flavor of PERQ 2 are we?
+            if ((system.Config.Chassis == Config.ChassisType.PERQ2 ||
+                 system.Config.Chassis == Config.ChassisType.PERQ2Tx) &&
+                 system.Config.GetDrivesOfType(DeviceType.Disk8Inch).Length > 0)
+            {
+                // A PERQ-2 or 2/T1
+                _hardDiskController = new MicropolisDiskController(system);
+            }
+            else if (system.Config.Chassis == Config.ChassisType.PERQ2Tx &&
+                     system.Config.GetDrivesOfType(DeviceType.Disk5Inch).Length > 0)
+            {
+                // A PERQ-2/T2 or 2/T4
+                // _hardDiskController = new MFMDiskController(system);
+                throw new UnimplementedHardwareException("MFMDiskController not yet implemented");
+            }
+            else
+            {
+                throw new InvalidOperationException("EIO does not support this disk/chassis configuration");
+            }
+
+            // Set up the on-board Ethernet
+            if (system.Config.IOBoard == Config.IOBoardType.NIO ||
+                string.IsNullOrEmpty(Settings.EtherDevice) || Settings.EtherDevice == "null")
+            {
+                // A minimal interface to let Accent boot properly
+                _ethernetController = new NullEthernet(system);
+            }
+            else
+            {
+                try
+                {
+                    // The real deal!
+                    _ethernetController = new Ether10MbitController(system);
+                }
+                catch (UnimplementedHardwareException e)
+                {
+                    // Failed to open - bad device, or no permissions?
+                    Log.Warn(Category.All, "{0}; no Ethernet available.", e.Message);
+
+                    // Fall back to the fake one and continue
+                    _ethernetController = new NullEthernet(system);
+                }
+            }
+            RegisterPorts(_etherPorts);
         }
+
+        public INetworkController Ether => _ethernetController;
 
         /// <summary>
         /// Reads a word from the given I/O port.
@@ -79,23 +118,20 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                // TODO: update all of this for the EIO!
+                case 0x53:      // DskStat (SMStat): read disk status reg
+                    return _hardDiskController.ReadStatus();
 
-                //case 0x40:  // Read disk status
-                //    return _hardDiskController.ReadStatus();
+                case 0x54:       // 124 EioZ80In: dismiss Z80 interrupt
+                    return _z80System.ReadData();
 
-                //case 0x46:  // Read Z80 data
-                //    return _z80System.ReadData();
-
-                //case 0x55:  // Read Z80 status -- not used in IOB/CIO -- remove
-                //    return _z80System.ReadStatus();
+                case 0x55:       // 125 EioZ80Stat: read Z80 interface status
+                    return _z80System.ReadStatus();
 
                 default:
                     Log.Warn(Category.IO, "Unhandled EIO Read from port {0:x2}", port);
                     return 0xff;
             }
         }
-
         /// <summary>
         /// Writes a word to the given I/O port.
         /// </summary>
@@ -103,59 +139,65 @@ namespace PERQemu.IO
         {
             switch (port)
             {
-                // TODO: update all of this for the EIO!
+                case 0xc4:      // Z80 data port
+                    _z80System.WriteData(value);
+                    break;
 
-                //case 0xc1:  // Shugart command/control register & Z80 status register
-                //    _hardDiskController.LoadCommandRegister(value);
-                //    _z80System.WriteStatus(value);
-                //    break;
+                case 0xc5:      // Z80 control register
+                    _z80System.WriteStatus(value);
+                    break;
 
-                //case 0xc2:  // Shugart Head register
-                //    _hardDiskController.LoadHeadRegister(value);
-                //    break;
+                case 0xd0:
+                case 0xd1:
+                case 0xd2:
+                case 0xd3:      // Load disk registers
+                    _hardDiskController.LoadRegister(port, value);
+                    break;
 
-                //case 0xc7:  // Z80 data port
-                //    _z80System.WriteData(value);
-                //    break;
+                case 0xc0:
+                case 0xd4:
+                case 0xd5:
+                case 0xd6:
+                case 0xd7:      // Load DMA registers
+                    throw new InvalidOperationException($"EIO DMA not yet implemented (0x{port:x2})");
 
-                //case 0xc8:  // Shugart Cylinder/Sector register
-                //    _hardDiskController.LoadCylSecRegister(value);
-                //    break;
-
-                //case 0xc9:  // Shugart File SN Low Register
-                //    _hardDiskController.LoadSerialLowRegister(value);
-                //    break;
-
-                //case 0xca:  // Shugart File SN High register
-                //    _hardDiskController.LoadSerialHighRegister(value);
-                //    break;
-
-                //case 0xcb:  // Shugart Block Number register
-                //    _hardDiskController.LoadBlockRegister(value);
-                //    break;
-
-                //case 0xd0:  // Shugart Data Buffer Address High register
-                //    _hardDiskController.LoadDataBufferAddrHighRegister(value);
-                //    break;
-
-                //case 0xd1:  // Shugart Header Address High register
-                //    _hardDiskController.LoadHeaderAddrHighRegister(value);
-                //    break;
-
-                //// 0xd4,d5,dc,dd: load DMA registers -- Canon, Streamer interfaces?
-
-                //case 0xd8:  // Shugart Data Buffer Address Low register
-                //    _hardDiskController.LoadDataBufferAddrLowRegister(value);
-                //    break;
-
-                //case 0xd9:  // Shugart Header Address low register
-                //    _hardDiskController.LoadHeaderAddrLowRegister(value);
-                //    break;
+                case 0xc2:
+                case 0xc3:
+                case 0xc8:
+                case 0xc9:
+                case 0xca:
+                case 0xcb:
+                case 0xcd:
+                case 0xce:
+                case 0xcf:
+                case 0x93:
+                case 0xd8:
+                case 0xd9:
+                case 0xda:
+                case 0xdc:
+                case 0xdd:
+                case 0xde:      // Load Ethernet registers
+                    if (_ethernetController != null)
+                    {
+                        _ethernetController.LoadRegister(port, value);
+                    }
+                    break;
 
                 default:
                     Log.Warn(Category.IO, "Unhandled EIO Write to port {0:x2}, data {1:x4}", port, value);
                     break;
             }
+        }
+
+        public override void Shutdown()
+        {
+            // Make sure our Ethernet (if configured) is properly shut down!
+            if (_ethernetController != null && _ethernetController is Ether10MbitController)
+            {
+                _ethernetController.Shutdown();
+            }
+
+            base.Shutdown();
         }
 
         /// <summary>
@@ -181,9 +223,12 @@ namespace PERQemu.IO
             0xd0,       // 320 ConstPtr: constant register selector
             0xd1,       // 321 RamFile: constreg load and incr selector
             0xd2,       // 322 SmCtl: state machine control register
-            0xd3,       // 323 DskCtl: disk control register
+            0xd3        // 323 DskCtl: disk control register
+        };
 
-            // Ethernet
+        byte[] _etherPorts =
+        {
+            // Ethernet ports
             0x52,       // 122 E10ERdNetSR: read net status register
             0x5a,       // 132 E10ERdBCLow: read bit count low byte
             0x5b,       // 133 E10ERdBCHgh: read bit count high byte
@@ -192,11 +237,11 @@ namespace PERQemu.IO
             0xc8,       // 310 E10EWrNA0: load net addr low word byte 6
             0xc9,       // 311 E10EWrNA1: load net addr low word byte 5
             0xca,       // 312 E10EWrMCCmd: load multicast command byte
-            0xcb,       // 313 E10EWrMC0: load multcast reg grp 0
-            0xcc,       // 314 E10EWrMC1: load multcast reg grp 1
-            0xcd,       // 315 E10EWrMC2: load multcast reg grp 2
-            0xce,       // 316 E10EWrMC3: load multcast reg grp 3
-            0xcf,       // 317 E10EWrMC4: load multcast reg grp 4
+            0xcb,       // 313 E10EWrMC0: load multicast reg grp 1
+            0xcc,       // 314 E10EWrMC1: load multicast reg grp 2
+            0xcd,       // 315 E10EWrMC2: load multicast reg grp 3
+            0xce,       // 316 E10EWrMC3: load multicast reg grp 4
+            0xcf,       // 317 E10EWrMC4: load multicast reg grp 5
             0xd8,       // 330 E10OWrBCCR: load bit count control reg
             0xd9,       // 331 E10OWrBCHgh: load bit count high byte
             0xda,       // 332 E10OWrBCLow: load bit count low byte 
@@ -218,5 +263,8 @@ namespace PERQemu.IO
         /// so it's not likely they'll ever be needed except when poked at
         /// by very obscure bits of test microcode.  See NewIOPorts.txt.
         /// </remarks>
+
+        INetworkController _ethernetController;
+
     }
 }

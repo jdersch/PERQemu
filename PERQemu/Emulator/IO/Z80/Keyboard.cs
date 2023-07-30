@@ -49,7 +49,7 @@ namespace PERQemu.IO.Z80
             set { _interruptsEnabled = value; }
         }
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         public void QueueInput(byte key)
         {

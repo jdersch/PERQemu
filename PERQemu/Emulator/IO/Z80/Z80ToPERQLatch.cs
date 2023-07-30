@@ -30,9 +30,9 @@ namespace PERQemu.IO.Z80
     /// For the original I/O board (IOB, CIO) this is a single 8-bit latch.
     /// We incorporate I/O REG 1 (status bit) here.
     /// </remarks>
-    public class Z80ToPERQFIFO : IZ80Device
+    public class Z80ToPERQLatch : IZ80Device
     {
-        public Z80ToPERQFIFO(PERQSystem system)
+        public Z80ToPERQLatch(PERQSystem system)
         {
             _system = system;
             _lock = new object();
@@ -59,7 +59,7 @@ namespace PERQemu.IO.Z80
             get { lock (_lock) { return !_valid; } }
         }
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         /// <summary>
         /// Interface to the PERQ side of the "FIFO" to read bytes from the Z80.

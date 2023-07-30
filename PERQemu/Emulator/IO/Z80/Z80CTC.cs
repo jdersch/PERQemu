@@ -67,7 +67,7 @@ namespace PERQemu.IO.Z80
         public bool IntLineIsActive => _interruptActive;
         public byte? ValueOnDataBus => AcknowledgeInterrupt();
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
 
         public void AttachDevice(int channel, ICTCDevice dev)

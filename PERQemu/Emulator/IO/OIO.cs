@@ -55,14 +55,14 @@ namespace PERQemu.IO
                 if (string.IsNullOrEmpty(Settings.EtherDevice) || Settings.EtherDevice == "null")
                 {
                     // A minimal interface to let Accent boot properly
-                    _ether = new NullEthernet(system);
+                    _ethernet = new NullEthernet(system);
                 }
                 else
                 {
                     try
                     {
                         // The real deal!
-                        _ether = new Ether10MbitController(system);
+                        _ethernet = new Ether10MbitController(system);
                     }
                     catch (UnimplementedHardwareException e)
                     {
@@ -70,7 +70,7 @@ namespace PERQemu.IO
                         Log.Warn(Category.All, "{0}; no Ethernet available.", e.Message);
 
                         // Fall back to the fake one and continue
-                        _ether = new NullEthernet(system);
+                        _ethernet = new NullEthernet(system);
                     }
                 }
                 RegisterPorts(_etherPorts);
@@ -83,18 +83,24 @@ namespace PERQemu.IO
             }
 
             // Unimplemented:
-            // _canon = new CanonPrinter();
+            // if (system.Config.IOOptions.HasFlag(IOOptionType.Canon))
+            // {
+            //      _canon = new CanonPrinter();
+            //      RegisterPorts(_canonPorts);
+            // }
         }
 
-        public INetworkController Ether => _ether;
+        public INetworkController Ether => _ethernet;
         public QICTapeController Streamer => _streamer;
+        //public CanonPrinter Canon => _canon;
 
         public override void Reset()
         {
             _link.Reset();
 
-            if (_ether != null) _ether.Reset();
+            if (_ethernet != null) _ethernet.Reset();
             if (_streamer != null) _streamer.Reset();
+            //if (_canon != null) _canon.Reset();
 
             base.Reset();
         }
@@ -138,17 +144,17 @@ namespace PERQemu.IO
             {
                 case 0x06:    // Ethernet bit counter registers
                 case 0x07:
-                    if (_ether != null)
+                    if (_ethernet != null)
                     {
-                        retVal = _ether.ReadRegister(port);
+                        retVal = _ethernet.ReadRegister(port);
                         handled = true;
                     }
                     break;
 
                 case 0x0f:
-                    if (_ether != null)
+                    if (_ethernet != null)
                     {
-                        retVal = _ether.ReadStatus();
+                        retVal = _ethernet.ReadStatus();
                         handled = true;
                     }
                     break;
@@ -218,16 +224,16 @@ namespace PERQemu.IO
                 case 0xd7:
                 case 0xde:
                 case 0xdf:    // Load Ethernet registers
-                    if (_ether != null)
+                    if (_ethernet != null)
                     {
-                        _ether.LoadRegister(port, value);
+                        _ethernet.LoadRegister(port, value);
                     }
                     break;
 
                 case 0x99:    // Load Ethernet control register
-                    if (_ether != null)
+                    if (_ethernet != null)
                     {
-                        _ether.LoadCommand(value);
+                        _ethernet.LoadCommand(value);
                     }
                     break;
 
@@ -255,9 +261,9 @@ namespace PERQemu.IO
         public override void Shutdown()
         {
             // Make sure our Ethernet (if configured) is properly shut down!
-            if (_ether != null && _ether.GetType() == typeof(Ether10MbitController))
+            if (_ethernet != null && _ethernet.GetType() == typeof(Ether10MbitController))
             {
-                _ether.Shutdown();
+                _ethernet.Shutdown();
             }
 
             base.Shutdown();
@@ -326,7 +332,7 @@ namespace PERQemu.IO
 
         // Attached devices
         PERQLink _link;
-        INetworkController _ether;
+        INetworkController _ethernet;
         QICTapeController _streamer;
     }
 }

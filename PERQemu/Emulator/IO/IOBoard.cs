@@ -150,7 +150,8 @@ namespace PERQemu.IO
 
             // Allow all of these, although the "CIO"-specific types are kinda redundant
             if (dev.Type == DeviceType.Disk14Inch || dev.Type == DeviceType.DCIOShugart ||
-                 dev.Type == DeviceType.Disk8Inch || dev.Type == DeviceType.DCIOMicrop)
+                dev.Type == DeviceType.Disk8Inch || dev.Type == DeviceType.DCIOMicrop ||
+                dev.Type == DeviceType.Disk5Inch)
             {
                 var hard = new HardDisk(_sys.Scheduler, dev.MediaPath);
 

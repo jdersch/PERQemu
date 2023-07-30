@@ -81,7 +81,7 @@ namespace PERQemu.IO.Z80
         public byte? ValueOnDataBus => 0x22;    // GPIVEC
         public bool IntLineIsActive => _interruptActive;
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         public GPIBBus Bus => _bus;
 

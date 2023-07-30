@@ -55,6 +55,9 @@ namespace PERQemu.IO.Network
             // This _seems_ to avoid the spurious exception on shutdown
             _adapter.StopCaptureTimeout = new TimeSpan(100000000);
 
+            // Initialize statistics
+            _pktsSent = _pktsRecvd = _pktsIgnored = _pktsQueued = _pktsDropped = 0;
+
             Log.Info(Category.NetAdapter, "Device opened [Host MAC: {0}]", _adapter.MacAddress);
         }
 
@@ -84,7 +87,7 @@ namespace PERQemu.IO.Network
                 Log.Info(Category.NetAdapter, "Adapter reset (packet capture started)");
                 return;
             }
-            
+
             // Announce our presence with authori-tie
             SendGreeting();
         }
@@ -105,7 +108,11 @@ namespace PERQemu.IO.Network
             while (_pending.Count >= MaxBacklog)
             {
                 EthernetPacket tossIt;
-                if (_pending.TryDequeue(out tossIt)) count++;
+                if (_pending.TryDequeue(out tossIt))
+                {
+                    count++;
+                    _pktsDropped++;
+                }
             }
 
             if (count > 0)
@@ -139,6 +146,7 @@ namespace PERQemu.IO.Network
 
                 packet.PayloadPacket = greeting;
                 _adapter.SendPacket(packet);
+                _pktsSent++;
                 _lastGreeting = DateTime.Now;
 
                 Log.Info(Category.NetAdapter, "Sent RARP request from {0}", _controller.MACAddress);
@@ -174,6 +182,7 @@ namespace PERQemu.IO.Network
 
                 packet.PayloadPacket = salutation;
                 _adapter.SendPacket(packet);
+                _pktsSent++;
 
                 Log.Info(Category.NetAdapter, "Sent RARP reply to {0}", greeting.TargetHardwareAddress);
             }
@@ -252,6 +261,7 @@ namespace PERQemu.IO.Network
 
                 // So send it already, sheesh
                 _adapter.SendPacket(packet);
+                _pktsSent++;
                 return true;
             }
             catch (PcapException ex)
@@ -273,6 +283,7 @@ namespace PERQemu.IO.Network
         {
             if (e.Packet.LinkLayerType != LinkLayers.Ethernet)
             {
+                _pktsIgnored++;
                 Log.Warn(Category.NetAdapter, "Non-Ethernet packet type {0} ignored", e.Packet.LinkLayerType);
                 return;
             }
@@ -432,53 +443,64 @@ namespace PERQemu.IO.Network
             }
 
             //
-            // Finally, ask the PERQ if it wants the packet.  If it can
-            // handle it right away, pass it on through, otherwise deal
-            // with the pending queue.
+            // Does the PERQ want this packet?
             //
-            if (_controller.WantReceive(raw.DestinationHwAddress))
+            if (!_controller.WantReceive(raw.DestinationHwAddress))
             {
-                // Print the packet post-rewrites
-                if (Log.Level < Severity.Info) Console.WriteLine(raw.PrintHex());
-
-                // Shortcut: is the receiver active and ready?
-                if (_controller.CanReceive)
-                {
-                    if (_pending.IsEmpty)
-                    {
-                        _controller.DoReceive(raw.Bytes);
-                        return;
-                    }
-
-                    // Push the newest, then pop and process the oldest
-                    _pending.Enqueue(raw);
-
-                    if (_pending.TryDequeue(out raw))
-                    {
-                        _controller.DoReceive(raw.Bytes);
-                        return;
-                    }
-
-                    Log.Info(Category.NetAdapter, "Tried to dequeue but couldn't?  Count is {0}", _pending.Count);
-                    return;
-                }
-
-                // Controller is busy or not receiving; check if the queue has room
-                if (_pending.Count < MaxBacklog)
-                {
-                    _pending.Enqueue(raw);
-
-                    Log.Info(Category.NetAdapter, "Queued for later, count now {0}", _pending.Count);
-                    return;
-                }
-
-                // Queue is full, so toss the oldest packet.  If the PERQ is
-                // that far behind either the 'net is busy and it can't keep
-                // up, or it isn't actively receiving and we don't want to
-                // inundate it with old traffic if it comes back online
-                _pending.Enqueue(raw);
-                Flush();
+                _pktsIgnored++;
+                return;
             }
+
+            //
+            // We've run the gauntlet and received the packet; if we can handle it
+            // right away, pass it on through, otherwise deal with the pending queue
+            //
+
+            // DEBUGGING: Print the packet post-rewrites
+            if (Log.Level < Severity.Info) Console.WriteLine(raw.PrintHex());
+
+            // Shortcut: is the receiver active and ready?
+            if (_controller.CanReceive)
+            {
+                if (_pending.IsEmpty)
+                {
+                    _pktsRecvd++;
+                    _controller.DoReceive(raw.Bytes);
+                    return;
+                }
+
+                // Push the newest, then pop and process the oldest
+                _pending.Enqueue(raw);
+                _pktsQueued++;
+
+                if (_pending.TryDequeue(out raw))
+                {
+                    _pktsRecvd++;
+                    _controller.DoReceive(raw.Bytes);
+                    return;
+                }
+
+                Log.Info(Category.NetAdapter, "Tried to dequeue but couldn't?  Count is {0}", _pending.Count);
+                return;
+            }
+
+            // Controller is busy or not receiving; check if the queue has room
+            if (_pending.Count < MaxBacklog)
+            {
+                _pending.Enqueue(raw);
+                _pktsQueued++;
+
+                Log.Info(Category.NetAdapter, "Queued for later, count now {0}", _pending.Count);
+                return;
+            }
+
+            // Queue is full, so toss the oldest packet.  If the PERQ is
+            // that far behind either the 'net is busy and it can't keep
+            // up, or it isn't actively receiving and we don't want to
+            // inundate it with old traffic if it comes back online
+            _pending.Enqueue(raw);
+            _pktsQueued++;
+            Flush();
         }
 
         /// <summary>
@@ -496,6 +518,7 @@ namespace PERQemu.IO.Network
                     return;
                 }
 
+                _pktsRecvd++;
                 _controller.DoReceive(packet.Bytes);
             }
         }
@@ -642,9 +665,12 @@ namespace PERQemu.IO.Network
 
         public void DumpStatus()
         {
-            Console.WriteLine($"\nHost adapter status:");
+            Console.WriteLine("\nHost adapter status:");
             Console.WriteLine($"  NIC: {Name} - {Description}");
             Console.WriteLine($"  Address: {Address}\tRunning: {Running}\tPending: {_pending.Count}");
+            Console.WriteLine("\nInterface statistics:");
+            Console.WriteLine($"  Total sent: {_pktsSent}\tReceived: {_pktsRecvd}\tIgnored: {_pktsIgnored}");
+            Console.WriteLine($"  Deferred:   {_pktsQueued}\tDropped: {_pktsDropped}");
 
             _nat.DumpTable();
         }
@@ -690,5 +716,9 @@ namespace PERQemu.IO.Network
 
         ConcurrentQueue<EthernetPacket> _pending;
         const int MaxBacklog = 15;              // Don't queue without bound
+
+        ulong _pktsRecvd, _pktsSent;            // Some basic statistics,
+        ulong _pktsQueued, _pktsDropped;        // for debugging/curiosity
+        ulong _pktsIgnored;
     }
 }

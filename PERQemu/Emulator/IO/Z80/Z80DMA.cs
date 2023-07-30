@@ -78,7 +78,7 @@ namespace PERQemu.IO.Z80
         public byte? ValueOnDataBus => _interruptVector;    // TODO: implement dynamic vector based on type
         public bool IntLineIsActive => _interruptEnabled && _interruptActive;
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         public void AttachDeviceA(IDMADevice device)
         {

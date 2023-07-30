@@ -19,6 +19,7 @@
 
 using System;
 using System.Net.NetworkInformation;
+
 using PERQemu.Config;
 using PERQemu.Processor;
 
@@ -116,53 +117,92 @@ namespace PERQemu.IO.Network
             _nic.Shutdown();
         }
 
+        /// <summary>
+        /// Ethernet register loads.  Handles both OIO and EIO variants.
+        /// </summary>
+        /// <remarks>
+        /// The microsecond clock is used for "exponential backoff" when a collision
+        /// occurs, but Pcap insulates us from that.  It can also be programmed as a
+        /// general purpose timer; fires an interrupt up to 65535usec from enable.
+        /// 
+        /// The bit counter is used by the hardware to know how many bytes to send,
+        /// and by the receiver to count incoming bits (which must end as a multiple
+        /// of 8 to know if the final byte count is valid).  Here we basically ignore
+        /// the counter control register that the microcode uses to manage the counter
+        /// and just assume it's active when needed.
+        /// </remarks>
         public void LoadRegister(byte address, int value)
         {
+            // There's one port conflict between OIO and EIO that we manually tweak;
+            // this should be removed when the DMA address set-up is moved elsewhere
+            // (if/when we implement a "real" DMA interface).
+            if (_system.Config.IOBoard == IOBoardType.EIO && address == 0xde)
+            {
+                address = 0x8a; // hack; renumber to use OIO port (for now)
+            }
+
             switch (address)
             {
                 //
-                // Microsecond clock setup - used for "exponential backoff" when
-                // a collision occurs, can also be programmed as a general purpose
-                // timer; fires an interrupt up to 65535 microseconds from enable
+                // Microsecond clock
                 //
-                case 0x88:  // Microsecond clock control
+                case 0x88:      // OIO - Microsecond clock control
+                case 0xdc:      // EIO -      "        "      "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (control)", value);
                     // Todo: actually run the clock!?
                     break;
 
-                case 0x89:  // uSec clock timer high byte
+                case 0x89:      // OIO - uSec clock timer high byte
+                case 0xdd:      // EIO -  "     "     "    "    "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (high)", value);
                     _usecClock = (ushort)((value << 8) | (_usecClock & 0xff));
                     break;
 
-                case 0x8a:  // uSec clock timer low byte
+                case 0x8a:      // OIO - uSec clock timer low byte
+                //case 0xde:    // EIO -  "     "     "    "   "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (low)", value);
                     _usecClock = (ushort)((_usecClock & 0xff00) | (value & 0xff));
                     break;
 
                 //
-                // Bit counter setup
+                // Bit counter 
                 //
-                case 0x8c:  // Bit counter control
+                case 0x8c:      // OIO - Bit counter control
+                case 0xd8:      // EIO -  "     "       "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (control)", value);
                     // Todo: Uh, actually do something?
                     break;
 
-                case 0x8d:  // Bit counter high byte
+                case 0x8d:      // OIO - Bit counter high byte
+                case 0xd9:      // EIO -  "     "     "    "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (high)", value);
                     _bitCount = (ushort)((value << 8) | (_bitCount & 0xff));
                     break;
 
-                case 0x8e:  // Bit counter low byte
+                case 0x8e:      // OIO - Bit counter low byte
+                case 0xda:      // EIO -  "     "     "   "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to bit counter (low)", value);
                     _bitCount = (ushort)((_bitCount & 0xff00) | (value & 0xff));
                     break;
 
-                case 0x90:  // Low word of MAC address
+                //
+                // Receive address
+                //
+                case 0x90:      // OIO - Low word of MAC address
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to low address register 0x{1:x2}", value, address);
 
                     // Have to byte swap this, because reasons
                     _recvAddr.Low = (ushort)(value << 8 | (value & 0xff00) >> 8);
+                    break;
+
+                case 0xc9:      // EIO - Low word of MAC address (5th octet)
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to low address register (octet 5)", value & 0xff);
+                    _recvAddr.Low = (ushort)((value << 8) | (_recvAddr.Low & 0xff00));
+                    break;
+
+                case 0xc8:      // EIO - Low word of MAC address (6th octet)
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to low address register (octet 6)", value & 0xff);
+                    _recvAddr.Low = (ushort)((_recvAddr.Low & 0x00ff) | (value & 0xff));
                     break;
 
                 //
@@ -170,37 +210,50 @@ namespace PERQemu.IO.Network
                 // individually; on OIO, three 16-bit values are written and
                 // distributed to the MCB and group bytes (command + 5 groups)
                 //
-                case 0x91:  // Multicast Grp1|Cmd
-                case 0x92:  // Multicast Grp3|Grp2
-                case 0x93:  // Multicast Grp5|Grp4
-                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to multicast register 0x{1:x2}", value, address);
+                case 0x91:      // OIO - Multicast Grp1|Cmd
+                case 0x92:      // OIO - Multicast Grp3|Grp2
+                case 0x93:      // OIO - Multicast Grp5|Grp4
                     var offset = address - 0x91;
                     _mcastGroups[offset] = (byte)(value & 0xff);
                     _mcastGroups[offset + 1] = (byte)(value >> 8);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to multicast register 0x{1:x2}", value, address);
+                    break;
+
+                case 0xca:      // EIO - Multicast command byte
+                case 0xcb:      // EIO - Multicast group 1
+                case 0xcc:      // EIO - Multicast group 2
+                case 0xcd:      // EIO - Multicast group 3
+                case 0xce:      // EIO - Multicast group 4
+                case 0xcf:      // EIO - Multicast group 5
+                    var mcgb = address - 0xca;
+                    _mcastGroups[mcgb] = (byte)(value & 0xff);
+                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to multicast register 0x{1:x2}", value, address);
                     break;
 
                 //
                 // DMA setup - addresses for the header and data buffers.  Note
                 // that each part of the address provided is munged in some unique
-                // way.  Don't ask.
+                // way.  Don't ask.  Todo: move this to a "real" DMA handler?  EIO
+                // is very different... IOB has four fixed channels, while EIO has
+                // eight?  Hmm.
                 //
-                case 0xd6:  // Packet buffer addr, high 4 bits
+                case 0xd6:      // Packet buffer addr, high 4 bits
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA buffer address (high)", value);
                     _bufferAddress = ((~value & 0xf) << 16) | (_bufferAddress & 0x0ffff);
                     break;
 
-                case 0xde:  // Packet buffer addr, low 16 bits
+                case 0xde:      // Packet buffer addr, low 16 bits
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA buffer address (low)", value);
                     _bufferAddress = (_bufferAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
                     break;
 
-                case 0xd7:  // Packet header addr, high 4 bits
+                case 0xd7:      // Packet header addr, high 4 bits
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA header address (high)", value);
                     _headerAddress = ((~value & 0xf) << 16) | (_headerAddress & 0x0ffff);
                     // If we cared, the header word count is bits <7:4> ??
                     break;
 
-                case 0xdf:  // Packet header addr, low 16 bits
+                case 0xdf:      // Packet header addr, low 16 bits
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA header address (low)", value);
                     _headerAddress = (_headerAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
                     break;
@@ -210,11 +263,12 @@ namespace PERQemu.IO.Network
             }
         }
 
+        /// <summary>
+        /// Write to the Ethernet control register.  For now, assume that the OIO
+        /// (port 0x99) and EIO (port 0xc2) are programmed in the same way?
+        /// </summary>
         public void LoadCommand(int value)
         {
-            // Todo: For now, assume OIO (port 0x99) although I think the EIO
-            // programming model at this level is identical?
-
             _control = (Control)value;
             Log.Info(Category.Ethernet, "Wrote 0x{0:x2} to control register ({1})", value, _control);
 
@@ -283,12 +337,14 @@ namespace PERQemu.IO.Network
 
             switch (address)
             {
-                case 0x07:
+                case 0x07:      // OIO - Read bit counter high byte
+                case 0x5b:      // EIO -  "    "     "     "    "
                     retVal = (_bitCount >> 8) & 0xff;
                     Log.Debug(Category.Ethernet, "Read 0x{0:x2} from bit counter (high)", retVal);
                     return retVal;
 
-                case 0x06:
+                case 0x06:      // OIO - Read bit counter low byte
+                case 0x5a:      // EIO -  "    "     "     "   "
                     retVal = (_bitCount & 0xff);
                     Log.Debug(Category.Ethernet, "Read 0x{0:x2} from bit counter (low)", retVal);
                     return retVal;
@@ -298,6 +354,9 @@ namespace PERQemu.IO.Network
             }
         }
 
+        /// <summary>
+        /// Reads the status register.  OIO port 0017 (0x0f); EIO port 0122 (0x52)
+        /// </summary>
         public int ReadStatus()
         {
             // Save the status we'll actually return to the caller

@@ -47,7 +47,7 @@ namespace PERQemu.IO
         {
             _hardDiskController = new ShugartDiskController(system);
 
-            _z80System = new Z80System(system);
+            _z80System = new CIOZ80(system);
             _z80System.LoadZ80ROM("oioz80.bin");      // "old" Z80 ROM
 
             RegisterPorts(_handledPorts);

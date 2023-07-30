@@ -317,7 +317,7 @@ namespace PERQemu
             if (PERQemu.Sys.CPU.DDS < 152 && count > 0)
             {
                 // Send the key:
-                PERQemu.Sys.IOB.Z80System.Keyboard.QueueInput(_bootChar);
+                PERQemu.Sys.IOB.Z80System.QueueKeyboardInput(_bootChar);
 
                 // And do it again
                 PERQemu.Sys.Scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback, count);

@@ -953,7 +953,13 @@ namespace PERQemu
         [Command("debug dump rs232a")]
         void ShowRS232Status()
         {
-            if (CheckSys()) PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
+            if (CheckSys()) PERQemu.Sys.IOB.Z80System.DumpPortAStatus();
+        }
+
+        [Command("debug dump rs232b")]
+        void ShowRS232BStatus()
+        {
+            if (CheckSys()) PERQemu.Sys.IOB.Z80System.DumpPortBStatus();
         }
 
         [Command("debug dump streamer")]
@@ -1039,6 +1045,14 @@ namespace PERQemu
                     oio.Ether.DumpEther();
                     return;
                 }
+            }
+
+            if (PERQemu.Sys.IOB is IO.EIO)
+            {
+                var eio = PERQemu.Sys.IOB as IO.EIO;
+
+                eio.Ether.DumpEther();
+                return;
             }
 
             Console.WriteLine("No Ethernet interface configured.");

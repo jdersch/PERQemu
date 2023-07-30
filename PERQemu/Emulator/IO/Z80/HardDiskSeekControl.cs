@@ -48,7 +48,7 @@ namespace PERQemu.IO.Z80
         public bool IntLineIsActive => false;
         public byte? ValueOnDataBus => null;
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
 
         public byte Read(byte portAddress)

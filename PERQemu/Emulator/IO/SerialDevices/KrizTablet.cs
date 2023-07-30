@@ -37,6 +37,10 @@ namespace PERQemu.IO.SerialDevices
             _scheduler = scheduler;
             _system = system;
             _sendEvent = null;
+
+            // CIO and EIO use different sync characters!
+            _sync = (byte)(_system.Config.Chassis == Config.ChassisType.PERQ1 ? 0x81 : 0x7e);
+            
         }
 
         public void Reset()
@@ -98,7 +102,7 @@ namespace PERQemu.IO.SerialDevices
             var tab4 = (byte)~(tabY & 0xff);
 
             // Send the data off to the SIO
-            _rxDelegate(0x81);      // sync
+            _rxDelegate(_sync);     // sync
             _rxDelegate(tab1);      // high bits of X + flags
             _rxDelegate(tab2);      // low X
             _rxDelegate(tab3);      // high bits of Y + switch bits
@@ -117,6 +121,8 @@ namespace PERQemu.IO.SerialDevices
 
         static readonly ulong _dataInterval = (ulong)(16.666667 * Conversion.MsecToNsec);
 
+        byte _sync;
+
         ReceiveDelegate _rxDelegate;
         SchedulerEvent _sendEvent;
         Scheduler _scheduler;
@@ -131,8 +137,8 @@ namespace PERQemu.IO.SerialDevices
     serial port SIO B.  The message format is:
         <sync><data0>..<data4><pad0><pad1>
 
-    The Sync char is 0x81.  Two "junk" pad bytes are tacked on because, as the
-    ROM explains:
+    The Sync char is 0x81 (for CIO) or 0x7e (EIO).  Two "junk" pad bytes are
+    tacked on because, as the ROM explains:
     
         ; Note: A complete msg is only 4 chars.  But we count 2 extra chars
         ; and just throw them away.  This was done to overcome problem we had
@@ -158,8 +164,6 @@ namespace PERQemu.IO.SerialDevices
         ;   Byte4<7:0> = low Y
     
     The Z80 then reformats that into a different format to send to the PERQ.
-    Note that "kriz.doc" also states that the sync char is 0x7e in hex?  But we
-    are using 0x81, which came from the Z80 code directly?  (Should check this.)
     
     Also from v87.v80:
     

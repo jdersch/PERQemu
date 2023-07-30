@@ -7,6 +7,14 @@ avoid wasting precious time scrolling to the end. :-)
 
 
 July, 2023:
+    3. Tentatively starting to explore what it will actually take to add EIO
+    and PERQ 2 support.  The first hurdle is refactoring the Z80System into old
+    (IOB/CIO) and new (EIO) versions.  This introduces a small performance hit
+    (about 1fps or less?) but after chopping at it for a couple of hours we at
+    least seem to still be able to run existing configurations.  Now there's a
+    bunch of new controller chips to write and a mountain of Z80 code to comb
+    through to figure out all of the EIO's mysteries and subtleties...
+
     2. Fix two small bugs: don't try to shut down the OIO board if one isn't
     configured; extend the PNX 1 video hack so that PNX 2 can now refresh the
     display properly.
@@ -32,6 +40,9 @@ April, 2023:
     finish development of a real-time clock chip programming board for updating
     real PERQs (hardware is done, software TBD).  I also really don't want to
     end up bankrupt and/or homeless, so that's consuming my time for now. :-|
+
+    If I wasn't such a cynic or had the constitution to engage in "social media"
+    at any level, I'd say please visit https://buymeacoffee.com/skeezicsb...
 
 
 March, 2023:
@@ -97,4 +108,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Sat Jul 22 23:38:00 PDT 2023
+Last update: skeezics    Sat Jul 29 17:37:47 PDT 2023

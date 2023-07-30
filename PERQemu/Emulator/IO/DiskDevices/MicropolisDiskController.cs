@@ -78,7 +78,6 @@ namespace PERQemu.IO.DiskDevices
             Log.Info(Category.HardDisk, "Micropolis controller reset");
         }
 
-
         /// <summary>
         /// Resets the flags ("soft" reset under microcode control).
         /// </summary>
@@ -501,7 +500,6 @@ namespace PERQemu.IO.DiskDevices
             }
         }
 
-
         /// <summary>
         /// Single step pulse (used by Shugart, not by Micropolis).
         /// </summary>
@@ -647,7 +645,6 @@ namespace PERQemu.IO.DiskDevices
 
             SetBusyState();
         }
-
 
         /// <summary>
         /// Set the controller Busy status, allow for processing delay, then
@@ -800,9 +797,10 @@ namespace PERQemu.IO.DiskDevices
         bool _illegalAddr;
 
         // Work timing for reads/writes, assuming the interface's documented
-        // 5.64Mbit/sec (705KB/sec) max transfer rate (MFM, not GCR encoding).
-        // See ShugartController.cs for more info about how this is derived.
-        readonly ulong BlockDelayNsec = 750 * Conversion.UsecToNsec;
+        // 5.64Mbit/sec (705KB/sec) max transfer rate (MFM, not GCR encoding)
+        // transferring 528-byte sectors.  See ShugartController.cs for more
+        // info about how this is derived.
+        readonly ulong BlockDelayNsec = 749 * Conversion.UsecToNsec;
 
         SchedulerEvent _busyEvent;
 

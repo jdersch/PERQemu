@@ -151,7 +151,7 @@ namespace PERQemu.IO.DiskDevices
 
         /// <summary>
         /// Initiates or continues a Seek by pulsing the Disk Step line.
-        /// Direction is >0 for positive steps, or 0 or a negative steps.
+        /// Direction is >0 for positive steps, or 0 for negative steps.
         /// </summary>
         /// <remarks>
         /// Note: we ignore the RateLimit.DiskSpeed option here for Shugart 14"

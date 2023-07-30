@@ -14,32 +14,31 @@ This (undated) graphic was likely produced in 1984 or 1985?
 Confusion
 ---------
 
-The PERQ-1 I/O Board is typically referred to as "IOB".  In practice this
-means it contains a Z80 subsystem with one RS-232 port, GPIB, audio output
-channel, DMA hardware, and controllers for the Shugart floppy and hard disk
-drives.  The IOB Z80 runs at ~2.5Mhz and typically runs firmware version
-v8.7 (which is what the simulated Z80 in the earlier versions of PERQemu was
-designed to mimic).  This version of the firmware is known as the "old Z80"
-protocol.
+The PERQ-1 I/O Board is typically referred to as "IOB".  In practice this means
+it contains a Z80 subsystem with one RS-232 port, GPIB, audio output channel,
+DMA hardware, and controllers for the Shugart floppy and hard disk drives.  The
+IOB Z80 runs at ~2.5Mhz and typically runs firmware version v8.7 (which is what
+the simulated Z80 in the earlier versions of PERQemu was designed to mimic).
+This version of the firmware is known as the "old Z80" protocol.
 
-The PERQ-2 series contains an updated board called the "EIO", or "Ethernet
-IO" board.  It features a faster Z80 @ 4Mhz, an additional RS-232 port, an
-RTC chip, and a newer disk interface that supports 8" Micropolis or 5.25"
-ST-506/MFM type drives.  An version of the EIO board without the Ethernet
-controller, called the "NIO" board, was available as an option but how many
-of these were ever shipped is unclear;  I've never even seen one, but they
-are mentioned in various places including "PERQ_Chart.jpg" (included in the
-Docs directory).  The latest/most common version of the Z80 firmware is
-v10.017 (or thereabouts), which is known as the "new Z80".
+The PERQ-2 series contains an updated board called the "EIO", or "Ethernet IO"
+board.  It features a faster Z80 @ 4Mhz, an additional RS-232 port, an RTC chip,
+and a newer disk interface that supports 8" Micropolis or 5.25" ST-506/MFM type
+drives.  An version of the EIO board without the Ethernet controller, called the
+"NIO" board, was available as an option but how many of these were ever shipped
+is unclear;  I've never even seen one, but they are mentioned in various places
+including "PERQ_Chart.jpg" (included in the Docs directory).  The latest/most
+common version of the Z80 firmware is v10.017 (or thereabouts), which is known
+as the "new Z80".
 
-There is some confusion about what the "CIO" board is.  With later versions
-of POS, PNX and Accent, the "old Z80" protocols were dropped as the "new Z80"
-code is supposed to be faster, better maintained, and supports all of the
-new EIO/NIO features.  In order to not leave the installed base of PERQ-1s
-behind, firmware updates were made available so that the original IOBs could
-run the v10.x code, thus the old IOB with new firmware was called "current",
-or "CIO".  That's the theory, anyway.  Note that The Chart doesn't officially
-list the CIO as a hardware option.
+There is some confusion about what the "CIO" board is.  With later versions of
+POS, PNX and Accent, the "old Z80" protocols were dropped as the "new Z80" code
+is supposed to be faster, better maintained, and supports all of the new EIO/NIO
+features.  In order to not leave the installed base of PERQ-1s behind, firmware
+updates were made available so that the original IOBs could run the v10.x code,
+thus the old IOB with new firmware was called "current", or "CIO".  That's the
+theory, anyway.  Note that The Chart doesn't officially list the CIO as a
+hardware option.
 
 Microcode sources exist that imply that there was at least one subtle hardware
 and microcode change that would allow the CIO board to support the Micropolis
@@ -59,11 +58,12 @@ THUS, FOR THE PURPOSES OF EMULATION, the following assumptions are made:
 
     Configure the CIO with a Micropolis to run the "new Z80" and PNX 2.
     We may also discover if the ICL "POS R" release was modified to also
-    use the 8" drive.
+    use the 8" drive.  [It appears our copy is missing a critical file
+    that does, in fact, seem to support a PERQ-1 Micropolis. Sigh.] 
 
-    All PERQ-2 models will use the EIO and "new Z80".  One 8" drive will be
-    supported in the PERQ2 chassis -or- in the PERQ2Tx chassis as the T1 model.
-    The T2 and T4 models only support 5.25" drives.
+    All PERQ-2 models will use the EIO and "new Z80".  One 8" drive will
+    be supported in the PERQ2 chassis -or- in the PERQ2Tx chassis as the
+    T1 model.  The T2 and T4 models only support 5.25" drives.
 
 
 Options!
@@ -136,7 +136,8 @@ board into an EIO-equipped PERQ-2 to build a 3-to-10 bridge node [Josh HAS one
 of these now], but this was almost certainly not a standard/shipping config and
 was only used at CMU.  It is unlikely that PERQemu will ever support more than
 one Ethernet in one virtual machine, but it would be pretty cool.  A minimal
-Ethernet driver was introduced in v0.4.9 to allow Accent to boot properly.
+Ethernet driver was introduced in v0.4.9 to allow Accent to boot properly; in
+v0.5.2 an early/limited cut of a working Ethernet interface was introduced.
 
 
 What PERQemu Supports
@@ -175,9 +176,9 @@ and the type of hard disk interface are different:
               PERQemu does not allow that to be configured.
 
     NIO.cs  - wherever the EIO can go, the NIO is there without the network
-              interface.  Until we actually write the emulation of the
-              Ethernet and hook it up to an interface on the host, all of
-              the EIOs are essentially NIOs. :-)
+              interface.  (Because this is of dubious usefulness, the default
+              behavior when this board is configured may be to quietly attach
+              the "null Ethernet" device so that Accent can boot properly.)
 
 IOBoard.cs runs the Z80System on its own thread in "asynchronous execution mode"
 or on the CPU thread in "synchronous" mode.  The hard disk controller (and
@@ -222,5 +223,5 @@ This is a whole lot of typing that nobody else will read or care about...
 
 
 ---
-Last update: skeezics    Wed Jan 25 14:48:53 PST 2023
+Last update: skeezics    Wed Jul 26 21:37:45 PDT 2023
 
