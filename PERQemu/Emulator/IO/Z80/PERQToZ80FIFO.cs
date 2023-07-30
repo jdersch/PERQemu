@@ -1,5 +1,5 @@
 //
-// PERQToZ80Latch.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// PERQToZ80FIFO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -27,13 +27,12 @@ namespace PERQemu.IO.Z80
     /// Input TO the Z80, FROM the PERQ.
     /// </summary>
     /// <remarks>
-    /// For the original I/O board (IOB, CIO) this is a single 8-bit latch.  If
-    /// requested by the PERQ, raises the Z80DataIn interrupt when the "fifo" is
-    /// free and can accept new data.
+    /// TODO:  recreate the 16 x 8 FIFO for the EIO board.  This temporary
+    /// scaffolding is a copy of the simplified single latch used for IOB/CIO.
     /// </remarks>
-    public class PERQToZ80Latch : IZ80Device
+    public class PERQToZ80FIFO : IZ80Device
     {
-        public PERQToZ80Latch(PERQSystem system)
+        public PERQToZ80FIFO(PERQSystem system)
         {
             _system = system;
             _lock = new object();
@@ -42,7 +41,7 @@ namespace PERQemu.IO.Z80
 
         public void Reset()
         {
-            _latch = 0;
+            _fifo = 0;
             _valid = false;
 
             // Assume these reset as well
@@ -51,10 +50,10 @@ namespace PERQemu.IO.Z80
 
             _system.CPU.ClearInterrupt(InterruptSource.Z80DataIn);
 
-            Log.Debug(Category.FIFO, "PERQ->Z80 latch reset");
+            Log.Debug(Category.FIFO, "PERQ->Z80 FIFO reset");
         }
 
-        public string Name => "PERQ->Z80 Latch";
+        public string Name => "PERQ->Z80 FIFO";
         public byte[] Ports => _ports;
         public byte? ValueOnDataBus => 0x20;    // PRQVEC
 
@@ -100,21 +99,21 @@ namespace PERQemu.IO.Z80
 
                 if (_valid)
                 {
-                    Log.Warn(Category.FIFO, "PERQ overran latch, byte 0x{0:x2} will be lost", _latch);
+                    Log.Warn(Category.FIFO, "PERQ overran FIFO, byte 0x{0:x2} will be lost", _fifo);
                 }
 
                 // Latch the 8th bit of the incoming word
                 _dataReadyInterruptRequested = ((value & 0x100) != 0);
 
                 // Queue the byte
-                _latch = (byte)value;
+                _fifo = (byte)value;
                 _valid = true;
 
                 // Interrupt the Z80 to signal we have data to read
                 _interruptActive = true;
             }
 
-            Log.Detail(Category.FIFO, "PERQ wrote byte 0x{0:x2} to latch", value);
+            Log.Detail(Category.FIFO, "PERQ wrote byte 0x{0:x2} to FIFO", value);
         }
 
         /// <summary>
@@ -137,12 +136,12 @@ namespace PERQemu.IO.Z80
 
                 if (_valid)
                 {
-                    value = _latch;
+                    value = _fifo;
                     _valid = false;
                 }
                 else
                 {
-                    Log.Warn(Category.FIFO, "Z80 read from empty latch, returning 0");
+                    Log.Warn(Category.FIFO, "Z80 read from empty FIFO, returning 0");
                 }
 
                 // FIFO is empty; interrupt if the PERQ has asked us to
@@ -160,21 +159,21 @@ namespace PERQemu.IO.Z80
         {
             // Should never get called, this FIFO is read-only from the Z80 side.
             // If it does, we should yell about it.
-            throw new NotImplementedException("Z80 write to read-only latch");
+            throw new NotImplementedException("Z80 write to read-only FIFO");
         }
 
         // debug
         public void DumpFifo()
         {
-            Console.WriteLine($"PERQ->Z80 Latch: 0x{_latch:x2} (valid={_valid})");
-            Console.WriteLine($"PERQ->Z80 Latch: IRQ active={_interruptActive} enabled={_interruptsEnabled} requested={_dataReadyInterruptRequested}");
+            Console.WriteLine($"PERQ->Z80 FIFO: 0x{_fifo:x2} (valid={_valid})");
+            Console.WriteLine($"PERQ->Z80 FIFO: IRQ active={_interruptActive} enabled={_interruptsEnabled} requested={_dataReadyInterruptRequested}");
         }
 
         bool _interruptActive;
         bool _interruptsEnabled;
         bool _dataReadyInterruptRequested;
 
-        byte _latch;
+        byte _fifo;
         bool _valid;
         readonly object _lock;
 

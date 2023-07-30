@@ -210,6 +210,8 @@
     <Compile Include="Emulator\IO\Z80\Oki5832RTC.cs" />
     <Compile Include="Emulator\IO\Z80\CIOZ80.cs" />
     <Compile Include="Emulator\IO\Z80\EIOZ80.cs" />
+    <Compile Include="Emulator\IO\Z80\PERQToZ80FIFO.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80ToPERQFIFO.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />

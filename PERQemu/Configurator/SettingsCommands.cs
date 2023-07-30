@@ -48,6 +48,7 @@ namespace PERQemu.UI
         [Command("settings done", "Exit settings mode, return to top-level")]
         public void SettingsDone()
         {
+            CheckSerialPorts();
             PERQemu.CLI.ResetPrefix();
         }
 
@@ -374,6 +375,31 @@ namespace PERQemu.UI
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Checks the serial port assignments to make sure the same device isn't
+        /// assigned to both channels.
+        /// </summary>
+        /// <remarks>
+        /// For now (?) this is a warning only, since there's no harm in assigning
+        /// port B to the same device as port A when initializing a PERQ-1 -- since
+        /// there is no port B so it can't conflict.  But with PERQ-2/EIO configs,
+        /// opening the same physical port twice will either fail outright, or act
+        /// very strangely...
+        /// </remarks>
+        void CheckSerialPorts()
+        {
+            // If either (or both) is empty, or they don't match, no conflict!
+            if (string.IsNullOrEmpty(Settings.RSADevice) ||
+                string.IsNullOrEmpty(Settings.RSBDevice) ||
+               Settings.RSADevice != Settings.RSBDevice)
+                return;
+
+            // If they do match issue a warning
+            Log.Warn(Category.All,
+                     "Note: Both RS-232 ports assigned to the same device; some configurations\n" +
+                     "might not load properly.  Please check your settings to reassign ports.");
         }
 
         [Command("settings assign ethernet device", "Map a host network adapter to the PERQ Ethernet device")]

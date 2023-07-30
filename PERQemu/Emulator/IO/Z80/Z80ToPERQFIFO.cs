@@ -1,5 +1,5 @@
 //
-// Z80ToPERQLatch.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Z80ToPERQFIFO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -27,12 +27,14 @@ namespace PERQemu.IO.Z80
     /// Output TO the PERQ, FROM the Z80.
     /// </summary>
     /// <remarks>
-    /// For the original I/O board (IOB, CIO) this is a single 8-bit latch.
+    /// For the EIO board this is an actual 16 x 8 FIFO, much like the original
+    /// implementation from a much earlier version of PERQemu.  (This placeholder
+    /// is a copy of the simplified single latch design from the IOB/CIO.)
     /// We incorporate I/O REG 1 (status bit) here.
     /// </remarks>
-    public class Z80ToPERQLatch : IZ80Device
+    public class Z80ToPERQFIFO : IZ80Device
     {
-        public Z80ToPERQLatch(PERQSystem system)
+        public Z80ToPERQFIFO(PERQSystem system)
         {
             _system = system;
             _lock = new object();
@@ -40,16 +42,16 @@ namespace PERQemu.IO.Z80
 
         public void Reset()
         {
-            _latch = 0;
+            _fifo = 0;
             _valid = false;
 
             // Dismiss the interrupt
             _system.CPU.ClearInterrupt(InterruptSource.Z80DataOut);
 
-            Log.Debug(Category.FIFO, "Z80->PERQ latch reset");
+            Log.Debug(Category.FIFO, "Z80->PERQ FIFO reset");
         }
 
-        public string Name => "Z80->PERQ Latch";
+        public string Name => "Z80->PERQ FIFO";
         public byte[] Ports => _ports;
         public byte? ValueOnDataBus => null;
         public bool IntLineIsActive => false;       // Never interrupts
@@ -62,7 +64,7 @@ namespace PERQemu.IO.Z80
         public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         /// <summary>
-        /// Interface to the PERQ side of the latch to read bytes from the Z80.
+        /// Interface to the PERQ side of the FIFO to read bytes from the Z80.
         /// </summary>
         public byte Dequeue()
         {
@@ -75,16 +77,16 @@ namespace PERQemu.IO.Z80
 
                 if (!_valid)
                 {
-                    Log.Warn(Category.FIFO, "PERQ read from empty latch, returning 0");
+                    Log.Warn(Category.FIFO, "PERQ read from empty FIFO, returning 0");
                 }
                 else
                 {
-                    value = _latch;
+                    value = _fifo;
                     _valid = false;
                 }
             }
 
-            Log.Detail(Category.FIFO, "PERQ read byte 0x{0:x2} from latch", value);
+            Log.Detail(Category.FIFO, "PERQ read byte 0x{0:x2} from FIFO", value);
             return value;
         }
 
@@ -105,10 +107,10 @@ namespace PERQemu.IO.Z80
             {
                 if (_valid)
                 {
-                    Log.Warn(Category.FIFO, "Z80 overran latch, byte 0x{0:x2} will be lost", _latch);
+                    Log.Warn(Category.FIFO, "Z80 overran FIFO, byte 0x{0:x2} will be lost", _fifo);
                 }
 
-                _latch = value;
+                _fifo = value;
                 _valid = true;
 
                 // Let the PERQ know there's data available
@@ -121,10 +123,10 @@ namespace PERQemu.IO.Z80
         // debug
         public void DumpFifo()
         {
-            Console.WriteLine($"Z80->PERQ Latch: 0x{_latch:x2} (valid={_valid})");
+            Console.WriteLine($"Z80->PERQ FIFO: 0x{_fifo:x2} (valid={_valid})");
         }
 
-        byte _latch;
+        byte _fifo;
         bool _valid;
         readonly object _lock;
 
