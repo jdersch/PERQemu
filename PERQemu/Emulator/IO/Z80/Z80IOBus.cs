@@ -52,7 +52,7 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Debugging: print transitions of Z80 IRQ signals.  For EIO this might
-        /// become a standalone priority encoder (Am9517)?
+        /// become a standalone priority encoder (Am9519)?
         /// </summary>
         public void ActiveInterrupts()
         {

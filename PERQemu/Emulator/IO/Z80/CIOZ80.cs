@@ -64,7 +64,6 @@ namespace PERQemu.IO.Z80
             DeviceInit();
         }
 
-
         // Allow for external CTC triggers (disk seeks)
         public override Z80CTC CTC => _z80ctc;
 
@@ -151,26 +150,26 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Corresponds to IOB port 0xc1 (octal 301).
-        /// The PERQ1 microcode uses port c1 to control both the hard drive and
+        /// The PERQ-1 microcode uses port c1 to control both the hard drive and
         /// the Z80.  The lower 7 bits are hard disk control flags.
         /// </summary>
         /// <remarks>
         /// From sysb.mic:
         /// 
         /// ! Turn Z80 Off
-        /// Z80Off: 200, IOB(301), loc(7500);         ! shut off disk and Z80
-        ///         0, IOB(307), loc(7501);           ! shut off Z80 output interrupts
-        ///         IOB(106), loc(7502);              ! dismiss Z80 input interrupt
-        ///         IOB(147), return, loc(7503);      ! dismiss memory parity interrupt
+        /// Z80Off: 200, IOB(301), loc(7500);       ! shut off disk and Z80
+        ///         0, IOB(307), loc(7501);         ! shut off Z80 output interrupts
+        ///         IOB(106), loc(7502);            ! dismiss Z80 input interrupt
+        ///         IOB(147), return, loc(7503);    ! dismiss memory parity interrupt
         ///
         /// Elsewhere:
-        /// KeyRetry: 0, IOB(301);                    ! turn Z80 on
-        ///         Call(WaitAWhile);                 ! Let it start up
+        /// KeyRetry: 0, IOB(301);                  ! turn Z80 on
+        ///         Call(WaitAWhile);               ! Let it start up
         ///
-        /// From this I am assuming that if the Z80 is "off", writing "0" to the Status register
-        /// starts it up, and if it is "on" then writing 0x80 to it turns it off again.  NOTE in
-        /// particular the order of those instructions: we still have to look at the on/off flag
-        /// even if the Z80 isn't "running"!
+        /// From this I am assuming that if the Z80 is "off", writing "0" to the
+        /// Status register starts it up, and if it is "on" then writing 0x80 to
+        /// it turns it off again.  NOTE the particular order of those instructions:
+        /// we still have to look at the on/off flag even if the Z80 isn't "running"!
         /// </remarks>
         public override void WriteStatus(int status)
         {
@@ -194,8 +193,7 @@ namespace PERQemu.IO.Z80
         }
 
         /// <summary>
-        /// Reads the Z80 status register.  This isn't used by the IOB or CIO;
-        /// not yet defined for NIO/EIO (in progress).
+        /// Reads the Z80 status register.  This isn't used by the IOB or CIO.
         /// </summary>
         public override int ReadStatus()
         {

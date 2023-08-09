@@ -309,15 +309,18 @@ namespace PERQemu
         /// be such that a keyboard interrupt is generated within the window so
         /// that the keystroke is actually sent to the PERQ in a message -- it
         /// isn't enough to just have the boot character in the keyboard buffer!
+        /// 
+        /// NB: For the PERQ-2 keyboard, the data is sent inverted!
         /// </remarks>
         void BootCharCallback(ulong skewNsec, object context)
         {
             var count = (int)context - 1;
+            var keycode = (byte)(PERQemu.Sys.Config.Chassis == ChassisType.PERQ1 ? _bootChar : ~_bootChar);
 
             if (PERQemu.Sys.CPU.DDS < 152 && count > 0)
             {
                 // Send the key:
-                PERQemu.Sys.IOB.Z80System.QueueKeyboardInput(_bootChar);
+                PERQemu.Sys.IOB.Z80System.QueueKeyboardInput(keycode);
 
                 // And do it again
                 PERQemu.Sys.Scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback, count);

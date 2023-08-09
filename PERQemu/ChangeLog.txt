@@ -6,7 +6,15 @@ notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
 avoid wasting precious time scrolling to the end. :-)
 
 
+August, 2023:
+
+    1. Another tiny baby step toward EIO/PERQ-2 support: can instantiate EIO
+    configs.  Incomplete/untested: RTC chip implementation; restored PERQ<->Z80
+    FIFO code; PERQ-2 VT100-style keyboard mapping.  Long, long way to go...
+
+
 July, 2023:
+
     3. Tentatively starting to explore what it will actually take to add EIO
     and PERQ 2 support.  The first hurdle is refactoring the Z80System into old
     (IOB/CIO) and new (EIO) versions.  This introduces a small performance hit
@@ -33,6 +41,7 @@ July, 2023:
 
 
 April, 2023:
+
     1. Radio silence - fell off the map due to financial difficulties requiring
     attention elsewhere.  Hope to return to PERQ development soon.  There is SO
     much cool stuff still being unearthed in the archives, and I really want to

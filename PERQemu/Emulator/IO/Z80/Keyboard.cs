@@ -36,6 +36,7 @@ namespace PERQemu.IO.Z80
         {
             _interruptsEnabled = false;
             _interruptActive = false;
+            Log.Debug(Category.Keyboard, "Reset");
         }
 
         public string Name => "Keyboard";

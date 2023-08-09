@@ -43,7 +43,7 @@ namespace PERQemu.IO.SerialDevices
 
         public void Reset()
         {
-            throw new NotImplementedException();
+            Log.Debug(Category.Keyboard, "Reset");
         }
 
         public void Transmit(byte value)

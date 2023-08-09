@@ -94,17 +94,19 @@ namespace PERQemu
                 //
                 case IOBoardType.EIO:
                 case IOBoardType.NIO:
-                    //_iob = new EIO(this);
-                    //if (_conf.CPU == CPUType.PERQ24) // || disktype == Disk5Inch ...
-                    //{
-                    //    _cpu.LoadBootROM("eio5boot.bin");
-                    //}
-                    //else
-                    //{
-                    //    _cpu.LoadBootROM("eioboot.bin");
-                    //}
-                    //break;
-                    throw new UnimplementedHardwareException($"IO board type {_conf.IOBoard}");
+                    _iob = new EIO(this);
+
+                    if (_conf.Chassis == ChassisType.PERQ2Tx)
+                    {
+                        // PERQ-2/T2 or /T4 (5.25")
+                        _cpu.LoadBootROM("eio5boot.rom");
+                    }
+                    else
+                    {
+                        // Original PERQ-2 or /T1 model (8")
+                        _cpu.LoadBootROM("eioboot.rom");
+                    }
+                    break;
 
                 default:
                     throw new InvalidConfigurationException($"No such IO board type '{_conf.IOBoard}'");

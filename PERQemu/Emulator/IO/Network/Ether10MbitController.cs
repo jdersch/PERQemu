@@ -41,6 +41,10 @@ namespace PERQemu.IO.Network
             _timer = null;
             _response = null;
 
+            // Should be 20 bits for OIO, 20 or 24 bits for EIO!
+            _headerAddress = new ExtendedRegister(CPU.CPUBits - 16, 16);
+            _bufferAddress = new ExtendedRegister(CPU.CPUBits - 16, 16);
+
             // Physical address is configurable, but fixed;
             _physAddr = new MachineAddress(_system.Config);
             _physAddr.Low = _system.Config.EtherAddress;
@@ -237,25 +241,25 @@ namespace PERQemu.IO.Network
                 // is very different... IOB has four fixed channels, while EIO has
                 // eight?  Hmm.
                 //
-                case 0xd6:      // Packet buffer addr, high 4 bits
+                case 0xd6:      // Packet buffer addr, high bits
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA buffer address (high)", value);
-                    _bufferAddress = ((~value & 0xf) << 16) | (_bufferAddress & 0x0ffff);
+                    _bufferAddress.Hi = ~value;
                     break;
 
-                case 0xde:      // Packet buffer addr, low 16 bits
+                case 0xde:      // Packet buffer addr, low 16 bits (frobbed)
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA buffer address (low)", value);
-                    _bufferAddress = (_bufferAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
+                    _bufferAddress.Lo = (ushort)value;
                     break;
 
                 case 0xd7:      // Packet header addr, high 4 bits
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA header address (high)", value);
-                    _headerAddress = ((~value & 0xf) << 16) | (_headerAddress & 0x0ffff);
+                    _headerAddress.Hi = ~value;
                     // If we cared, the header word count is bits <7:4> ??
                     break;
 
-                case 0xdf:      // Packet header addr, low 16 bits
+                case 0xdf:      // Packet header addr, low 16 bits (frobbed)
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA header address (low)", value);
-                    _headerAddress = (_headerAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
+                    _headerAddress.Lo = (ushort)value;
                     break;
 
                 default:
@@ -393,7 +397,7 @@ namespace PERQemu.IO.Network
 
         void GetAddress(ulong nSkew, object context)
         {
-            var addr = _headerAddress;
+            var addr = IOBoard.Unfrob(_headerAddress);
 
             Log.Debug(Category.Ethernet, "Writing machine address to 0x{0:x6}", addr);
 
@@ -496,7 +500,7 @@ namespace PERQemu.IO.Network
             // Write the Ethernet frame's header to PERQ memory.  The header is
             // 14 bytes but the DMA always ships quad words, so the first word is
             // a dummy.  We write a zero, but could just skip it?
-            addr = _headerAddress;
+            addr = IOBoard.Unfrob(_headerAddress);
             _system.Memory.StoreWord(addr++, 0);
 
             for (var i = 0; i < 6; i++)
@@ -510,7 +514,7 @@ namespace PERQemu.IO.Network
             _system.Memory.StoreWord(addr, data);
 
             // DMA the packet data to the PERQ, reconstituted as 16-bit words
-            addr = _bufferAddress;
+            addr = IOBoard.Unfrob(_bufferAddress);
 
             for (var i = 14; i < packet.Length; i += 2)
             {
@@ -601,7 +605,7 @@ namespace PERQemu.IO.Network
                 // DMA the header buffer from the PERQ's memory.  The hardware
                 // always transfers two quads for the header, but skips over the
                 // first (unused) word.
-                addr = _headerAddress + 1;
+                addr = IOBoard.Unfrob(_headerAddress) + 1;
 
                 for (var i = 0; i < 6; i++)
                 {
@@ -616,7 +620,7 @@ namespace PERQemu.IO.Network
                 packet[13] = (byte)data;
 
                 // Now copy the packet's payload from the buffer address
-                addr = _bufferAddress;
+                addr = IOBoard.Unfrob(_bufferAddress);
 
                 for (var i = 14; i < packet.Length; i += 2)
                 {
@@ -694,7 +698,8 @@ namespace PERQemu.IO.Network
             Console.WriteLine($"  Status register:   {(int)_status:x} ({_status})");
             Console.WriteLine("  Controller state:  {0}, scheduler callback {1} pending", _state,
                               (_response != null ? "IS" : "is NOT"));
-            Console.WriteLine($"  DMA addresses:     Header: 0x{_headerAddress:x6}  Buffer: 0x{_bufferAddress:x6}");
+            Console.WriteLine($"  DMA addresses:     Header: 0x{_headerAddress.Value:x6}  " +
+                                                   $"Buffer: 0x{_bufferAddress.Value:x6}");
 
             Console.WriteLine("\n  Microsecond clock: {0} enabled, interrupt {1} enabled, {2} ticks",
                               (_control.HasFlag(Control.ClockEnable) ? "IS" : "Is NOT"),
@@ -766,8 +771,8 @@ namespace PERQemu.IO.Network
 
         byte[] _mcastGroups;
 
-        int _headerAddress;
-        int _bufferAddress;
+        ExtendedRegister _headerAddress;
+        ExtendedRegister _bufferAddress;
 
         bool _netInterrupt;
         bool _clockInterrupt;

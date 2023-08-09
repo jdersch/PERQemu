@@ -29,42 +29,35 @@ namespace PERQemu.IO.Z80
     /// <summary>
     /// The EIO board's Z80 subsystem, used in all PERQ-2 models.
     /// </summary>
-    /// <remarks>
-    /// TODO: A ton of work to add all the new controllers.
-    ///     Am9519 interrupt controller @ port ___
-    ///     i8254 programmable timers (2x) @ ports ___,___ (replaces Z80CTC)
-    ///     i8237 4-channel DMA chip @ port ___ (replaces Z80DMA)
-    ///     Second Z80SIO for RS232B, VT100-style keyboard
-    ///     Oki M5M5832 RTC chip @ port ___ (with write control lines!!)
-    ///     Updated ports, vectors for all the chippies
-    /// TODO: Figure out how the PERQ DMA will work
-    /// </remarks>
     public sealed class EIOZ80 : Z80System
     {
         public EIOZ80(PERQSystem system) : base(system)
         {
-            // Set up the EIO peripherals
-            _fdc = new NECuPD765A(0xa8, _scheduler);    // TODO: ports!?
-            _tms9914a = new TMS9914A(0xb8);             // TODO: ports
-            //_perqToZ80Fifo = new PERQToZ80FIFO(_system);  // TODO: actual FIFO implementation
-            //_z80ToPerqFifo = new Z80ToPERQFIFO(_system);  // TODO:    "     "         "
-            _z80sioA = new Z80SIO(0xb0, _scheduler);    // TODO: ports
-            _z80sioB = new Z80SIO(0xb4, _scheduler);    // TODO: ports!!
-            _keyboard = new SerialKeyboard();
+            // Set up the infrastructure
+            _perqToZ80Fifo = new PERQToZ80FIFO(_system);
+            _z80ToPerqFifo = new Z80ToPERQFIFO(_system);
 
-            // New stuff not yet implemented:
-            // TODO: ports, vectors, etc.
-            _irqControl = new Am9519();
-            _timerA = new i8254PIT();
-            _timerB = new i8254PIT();
-            _dmac = new i8237DMA();
-            _rtc = new Oki5832RTC();
+            _irqControl = new Am9519(0x60);
+            _dmac = new i8237DMA(0x38, 0x30);
+
+            // Set up the EIO peripherals
+            _keyboard = new SerialKeyboard();
+            _tms9914a = new TMS9914A(0);
+            _z80sioA = new Z80SIO(0x10, _scheduler, true);
+            _z80sioB = new Z80SIO(0x40, _scheduler, true);
+            _timerA = new i8254PIT(0x50);
+            _timerB = new i8254PIT(0x54);
+            _fdc = new NECuPD765A(0x20, _scheduler);
+            _rtc = new Oki5832RTC(0x76);
 
             // Not sure about this one yet
             //_ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc, _dmaRouter);
 
-            // Same code for EIO/NIO (TODO: all variants?  8"/5.25", 24-bit?)
+            // Same code for EIO/NIO
+            // TODO: verify for all variants?  8"/5.25", 24-bit?
             _z80Debugger = new Z80Debugger("eioz80.lst");
+
+            DeviceInit();
         }
 
         // Port "A" is public, since it's a DMA-capable device...
@@ -73,10 +66,10 @@ namespace PERQemu.IO.Z80
         // No hard disk seek circuit on the EIO
         public override Z80CTC CTC => null;
 
-        // TBD. I don't think the EIO injects wait states directly?
-        // (Status register provides ready bits?)
-        protected override bool FIFOInputReady => false;
-        protected override bool FIFOOutputReady => false;
+        // The EIO doesn't use the WAIT Z80 line like the IOB does; these are
+        // just returned via status registers instead...
+        protected override bool FIFOInputReady => _perqToZ80Fifo.IsReady;
+        protected override bool FIFOOutputReady => _z80ToPerqFifo.IsReady;
 
         void DeviceInit()
         {
@@ -140,12 +133,26 @@ namespace PERQemu.IO.Z80
                 _z80sioB.AttachPortDevice(0, new NullPort(this));
             }
 
-            // TODO: now attach everything to the bus
+            // All aboard the bus
+            _bus.RegisterDevice(_perqToZ80Fifo);
+            _bus.RegisterDevice(_z80ToPerqFifo);
+            _bus.RegisterDevice(_fdc);
+            _bus.RegisterDevice(_rtc);
+            _bus.RegisterDevice(_dmac);
+            _bus.RegisterDevice(_timerA);
+            _bus.RegisterDevice(_timerB);
+            _bus.RegisterDevice(_z80sioA);
+            _bus.RegisterDevice(_z80sioB);
+            _bus.RegisterDevice(_tms9914a);
         }
 
         protected override void DeviceReset()
         {
-            throw new NotImplementedException();
+            // Todo: verify all this with the schematics
+            _fdc.Reset();
+            _tms9914a.Reset();
+            _z80ToPerqFifo.Reset();
+            _perqToZ80Fifo.Reset();
         }
 
         protected override void DeviceShutdown()
@@ -160,34 +167,82 @@ namespace PERQemu.IO.Z80
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Writes the control register.  This part deals with the bits relevant
+        /// to the Z80:
+        ///     bit 2 - Z80 reset when clear
+        ///     bit 1 - Enable write channel; interrupt when set
+        ///     bit 0 - Enable read channel; interrupt when set
+        /// </summary>
         public override void WriteStatus(int status)
         {
-            throw new NotImplementedException();
+            bool prevState = _running;
+
+            //
+            // Check the Reset bit first
+            //
+            if (_running && ((status & 0x04) == 0))
+            {
+                Log.Debug(Category.Z80, "Shut down by write to Status register");
+                _running = false;
+            }
+            else if (!_running && ((status & 0x04) != 0))
+            {
+                Log.Debug(Category.Z80, "Started by write to Status register");
+                Reset(true);
+            }
+
+            if (_running != prevState)
+            {
+                _system.MachineStateChange(WhatChanged.Z80RunState, _running);
+            }
+
+            // Set the enable bits
+            _perqToZ80Fifo.InterruptEnabled = ((status & 0x02) != 0);
+            _z80ToPerqFifo.InterruptEnabled = ((status & 0x01) != 0);
         }
 
+        /// <summary>
+        /// Reads the status register.  Corresponds to IOA 125 (0x55).  The valid
+        /// bits reflect the status of the FIFOs:
+        ///     bit 15 - Read data ready when set       (i.e., data present)
+        ///     bit 7  - Write channel ready when set   (i.e., FIFO is empty)
+        /// </summary>
         public override int ReadStatus()
         {
-            throw new NotImplementedException();
+            int status = (_z80ToPerqFifo.IsReady ? 0x8000 : 0); // Bit 15: read ready
+            status |= (_perqToZ80Fifo.IsReady ? 0x0080 : 0);    // Bit 7: write ready
+
+            return status;
         }
 
+        /// <summary>
+        /// Writes a byte to the Z80's input FIFO.
+        /// </summary>
         public override void WriteData(int data)
         {
-            throw new NotImplementedException();
+            _perqToZ80Fifo.Enqueue(data & 0xff);
         }
 
+        /// <summary>
+        /// Reads a byte from the Z80's output FIFO.
+        /// </summary>
         public override int ReadData()
         {
-            throw new NotImplementedException();
+            return _z80ToPerqFifo.Dequeue();
         }
+
 
         public override void QueueKeyboardInput(byte keyCode)
         {
             throw new NotImplementedException();
         }
 
+        // debug
         public override void DumpFifos()
         {
-            throw new NotImplementedException();
+            _z80ToPerqFifo.DumpFifo();
+            _perqToZ80Fifo.DumpFifo();
         }
 
         public override void DumpPortAStatus()
@@ -209,5 +264,65 @@ namespace PERQemu.IO.Z80
         i8237DMA _dmac;
         Oki5832RTC _rtc;
         SerialKeyboard _keyboard;
+        PERQToZ80FIFO _perqToZ80Fifo;
+        Z80ToPERQFIFO _z80ToPerqFifo;
+
     }
 }
+
+/*
+    Notes:
+
+    FIFO interface from EIO.doc corresponds with the EIO source code defs:
+    
+    IOZ  REGISTER USE
+    160  Write FIFO         bits 0:7 - Data from CPU
+    161  Read FIFO          bits 0:7 - Data to CPU
+    162  Status register    bit 7  - Read FIFO not full
+							bit 6  - Write FIFO not empty
+    170  Control register   bit 0  - Output ready
+
+    //
+    //        PERQ READ AND WRITE PORTS
+    //
+    //PERQ.IN   equ 160Q    ; PERQ Input port
+    //PERQ.OUT  equ 161Q    ; PERQ Output port
+    //PERQ.STS  equ 162Q    ; PERQ Status port
+    //PERQ.Rdy  equ 170Q    ; PERQ Ready port
+
+    ----
+    GPIB
+    ----
+
+    ;
+    ;        GPIB
+    ;
+    ;              READ REGISTERS
+    ;
+    GPIntSt0   EQU 000Q         ; INTERRUPT STATUS 0
+    GPIntSt1   EQU 001Q         ; Interrupt status 1
+    GPAdrSt    EQU 002Q         ; Address status
+    GPBusSt    EQU 003Q         ; Bus Status
+    GPAdrSw1   EQU 004Q         ; Address switch 1
+    GPCmdPass  EQU 006Q         ; Command pass through
+    GPDIn      EQU 007Q         ; DATA IN
+
+    ;
+    ;              WRITE REGISTERS
+    ;
+    GPIMsk0     equ 000Q        ; INTERRUPT MASK 0
+    GPIMsk1     equ 001Q        ; INTERRUPT MASK 1
+    GPAux       equ 003Q        ; AUXILLIARY COMMAND
+    GPDOut      equ 007Q        ; DATA OUT
+
+    GPControl   equ 173Q        ; 0 = Not controller, 1 = controller
+    GPTriState  equ 174Q        ; 0 = Open Collector data, 1 = TriState
+
+    Did they RENUMBER THE DECODES for the 9914 registers!?  WHAT?
+    I'm assuming these are just remapped BY the Z80 code and presented to the
+    PERQ in the shuffled order and the hardware obviously hasn't changed; look
+    at the code in detail to see where this occurs.  SIMILARLY, double check if
+    the port f*ckery for the SIO chip(s) is strictly necessary.  (In that case
+    it DOES look like they specifically decode the addresses to swap regs 1&2.)
+
+ */

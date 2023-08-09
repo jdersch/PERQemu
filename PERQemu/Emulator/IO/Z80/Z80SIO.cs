@@ -33,19 +33,21 @@ namespace PERQemu.IO.Z80
     /// </summary>
     public partial class Z80SIO : IZ80Device, IDMADevice
     {
-        public Z80SIO(byte baseAddress, Scheduler scheduler)
+        public Z80SIO(byte baseAddress, Scheduler scheduler, bool isEio = false)
         {
             _baseAddress = baseAddress;
             _ports = new byte[] {
-                                baseAddress,
-                                (byte)(baseAddress + 1),
-                                (byte)(baseAddress + 2),
-                                (byte)(baseAddress + 3)
-            };
+                                    baseAddress,
+                                    (byte)(baseAddress + 1),
+                                    (byte)(baseAddress + 2),
+                                    (byte)(baseAddress + 3)
+                                };
 
             _channels = new Channel[2];
             _channels[0] = new Channel(0, scheduler);
             _channels[1] = new Channel(1, scheduler);
+
+            _isEIO = isEio;
         }
 
         public void Reset()
@@ -89,7 +91,8 @@ namespace PERQemu.IO.Z80
             {
                 // If an interrupt is pending on A, use it's offset; otherwise
                 // assume that B is interrupting...
-                var priority = (_channels[0].InterruptLatched ? _channels[0].InterruptOffset + 4 : _channels[1].InterruptOffset);
+                var priority = (_channels[0].InterruptLatched ? _channels[0].InterruptOffset + 4 :
+                                                                _channels[1].InterruptOffset);
 
                 // Now hack the offset into vector<3:1>
                 vector = (byte)((vector & 0xf1) | ((priority & 0x07) << 1));
@@ -134,6 +137,11 @@ namespace PERQemu.IO.Z80
             _channels[channel].DetachDevice();
         }
 
+        /// <summary>
+        /// Read from a chip register.  For EIO, they scrambled the bits when
+        /// the second SIO was added; the decoder puts data on 0+1, ctrl on 2+3.
+        /// This means ports base+1 and base+2 are swapped.  SIGH.
+        /// </summary>
         public byte Read(byte portAddress)
         {
             switch (portAddress - _baseAddress)
@@ -142,9 +150,15 @@ namespace PERQemu.IO.Z80
                     return _channels[0].ReadData();
 
                 case 1:
+                    if (_isEIO)
+                        return _channels[1].ReadData();
+                    
                     return _channels[0].ReadRegister();
 
                 case 2:
+                    if (_isEIO)
+                        return _channels[0].ReadRegister();
+                    
                     return _channels[1].ReadData();
 
                 case 3:
@@ -155,8 +169,12 @@ namespace PERQemu.IO.Z80
             }
         }
 
+        /// <summary>
+        /// Write to a register.  Same decoder screwiness as above for EIO.
+        /// </summary>
         public void Write(byte portAddress, byte value)
         {
+
             switch (portAddress - _baseAddress)
             {
                 case 0:
@@ -164,11 +182,17 @@ namespace PERQemu.IO.Z80
                     break;
 
                 case 1:
-                    _channels[0].WriteRegister(value);
+                    if (_isEIO)
+                        _channels[1].WriteData(value);
+                    else
+                        _channels[0].WriteRegister(value);
                     break;
 
                 case 2:
-                    _channels[1].WriteData(value);
+                    if (_isEIO)
+                        _channels[0].WriteRegister(value);
+                    else
+                        _channels[1].WriteData(value);
                     break;
 
                 case 3:
@@ -190,5 +214,6 @@ namespace PERQemu.IO.Z80
 
         byte _baseAddress;
         byte[] _ports;
+        bool _isEIO;
     }
 }
