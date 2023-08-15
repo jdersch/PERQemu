@@ -55,21 +55,9 @@ namespace PERQemu.IO.Z80
         public string Name => "i8254 PIT";
         public byte[] Ports => _ports;
 
-        public bool IntLineIsActive
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
-
-        public byte? ValueOnDataBus
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
+        // Fixme: placeholders until implemented so we can start debugging
+        public bool IntLineIsActive => false;
+        public byte? ValueOnDataBus => null;
 
         public event EventHandler NmiInterruptPulse { add { } remove { } }
 
@@ -80,12 +68,13 @@ namespace PERQemu.IO.Z80
 
         public byte Read(byte portAddress)
         {
-            throw new NotImplementedException();
+            Log.Debug(Category.CTC, "Read from 0x{0:x2}, returning 0 (unimplemented)", portAddress);
+            return 0;
         }
 
         public void Write(byte portAddress, byte value)
         {
-            throw new NotImplementedException();
+            Log.Debug(Category.CTC, "Write 0x{0:x2} to port 0x{1:x2} (unimplemented)", value, portAddress);
         }
 
         byte _baseAddress;

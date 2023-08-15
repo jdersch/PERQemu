@@ -164,7 +164,7 @@ namespace PERQemu.IO.Z80
 
         protected override void ClockDMA()
         {
-            throw new NotImplementedException();
+            _dmac.Clock();
         }
 
         /// <summary>

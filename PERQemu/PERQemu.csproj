@@ -212,6 +212,7 @@
     <Compile Include="Emulator\IO\Z80\EIOZ80.cs" />
     <Compile Include="Emulator\IO\Z80\PERQToZ80FIFO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80ToPERQFIFO.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\CIOMicropolisDiskController.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -693,6 +694,12 @@
     </None>
     <None Include="Docs\Network.txt" />
     <None Include="Docs\Hardware References\EIO.doc" />
+    <None Include="PROM\eioz80.bin">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\eioz80.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">

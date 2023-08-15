@@ -1,5 +1,5 @@
 ﻿//
-// MicropolisDiskController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CIOMicropolisDiskController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -42,9 +42,18 @@ namespace PERQemu.IO.DiskDevices
     /// 
     /// As with the Shugart, emulation for now is limited to a single drive. :-(
     /// </remarks>
-    public sealed class MicropolisDiskController : IStorageController
+    public sealed class CIOMicropolisDiskController : IStorageController
     {
-        public MicropolisDiskController(PERQSystem system)
+
+        //
+        //  THIS VERSION IS INCOMPLETE and is not part of the standard build.
+        //  The first attempt at a "CIO Micropolis" is saved here in case it
+        //  can be completed once additional source, documentation, or even a
+        //  good disassembly of a definitive microcode binary can be found.
+        //  The standard MicropolisDiskController is now EIO only.
+        //
+
+        public CIOMicropolisDiskController(PERQSystem system)
         {
             _system = system;
             _disk = null;
@@ -54,7 +63,7 @@ namespace PERQemu.IO.DiskDevices
             _cylinder = new ExtendedRegister(4, 8);
             _nibLatch = new ExtendedRegister(4, 4);
 
-            // 8" drives are only supported on the 20-bit machines, for now
+            // 8" drives are only supported on the 20-bit machines...
             _dataBuffer = new ExtendedRegister(4, 16);
             _headerAddress = new ExtendedRegister(4, 16);
         }
@@ -75,7 +84,7 @@ namespace PERQemu.IO.DiskDevices
             // Force a soft reset (calls ResetFlags)
             LoadCommandRegister((int)Command.Reset);
 
-            Log.Info(Category.HardDisk, "Micropolis controller reset");
+            Log.Info(Category.HardDisk, "CIO Micropolis controller reset");
         }
 
         /// <summary>
@@ -103,7 +112,7 @@ namespace PERQemu.IO.DiskDevices
         public void AttachDrive(uint unit, StorageDevice dev)
         {
             if (_disk != null)
-                throw new InvalidOperationException("MicropolisController only supports 1 disk");
+                throw new InvalidOperationException("CIO MicropolisController only supports 1 disk");
 
             _disk = dev as HardDisk;
             _disk.SetSeekCompleteCallback(SeekCompletionCallback);
@@ -120,7 +129,7 @@ namespace PERQemu.IO.DiskDevices
         public int ReadStatus()
         {
             var stat = DiskStatus;
-            Log.Write(Category.HardDisk, "Micropolis status: 0x{0:x4} ({1})", stat, (Status)stat);
+            Log.Write(Category.HardDisk, "CIO Micropolis status: 0x{0:x4} ({1})", stat, (Status)stat);
             return stat;
         }
 
@@ -129,8 +138,6 @@ namespace PERQemu.IO.DiskDevices
         /// </summary>
         public void LoadRegister(byte address, int value)
         {
-            // FIXME:  redo all of this for the EIO!
-
             switch (address)
             {
                 case 0xc1:      // Command register
@@ -814,56 +821,15 @@ namespace PERQemu.IO.DiskDevices
 /*
     Notes:
 
-    This is the EIO/PERQ-2 version which is described in the Rose/EIO document.
+    Have to reconcile the CIO/Shugart/mystery implementation (so-called ICL CIO
+    that is poorly documented) with the EIO/PERQ-2 version which is described in
+    the Rose document.  This version has to take precedence as it's by far the
+    more general case (PERQ-2 and 2/T1 models).
 
-    The bit assignments for DSKCTL<7:0> (port 323/0xd3) are:
-     
-        DSKCTL<7>:  DriveSelect<0>
-        DSKCTL<6>:  DriveSelect<1>
-        DSKCTL<5>:  BA<0>     \_______  RegSelect bits
-        DSKCTL<4>:  BA<1>     /
-        DSKCTL<3>:  B<3>      \
-        DSKCTL<2>:  B<2>       \______  Nibble bus
-        DSKCTL<1>:  B<1>       /
-        DSKCTL<0>:  B<0>      /
-
-    The bit assignments for SMCTL<7:0> (port 322/0xd2) are:
-     
-        SMCTL<7>:   T2 H - Makes CRC errors non-fatal (proposed)
-        SMCTL<6>:   BusEn H - latch data into drive control electronics via DSKCTL<5:0>
-        SMCTL<5>:   T H - Enables "DB" interrupt
-	    SMCTL<4>:   Interrupts On H - Enable all interrupts to PERQ
-	    SMCTL<3>:   Reset L - Reset disk controller when Low; must be set High
-						     before doing any disk operations
-	    SMCTL<2>:   F2      \
-	    SMCTL<1>:   F1       >--------  Command bits
-	    SMCTL<0>:   F0      /
-
-
-    SMSTAT (port 123/0x53) contains 11 bits, SMSTAT<10:0> as follows:
-     
-        SMSTAT<10>: DiskType<1>         - not mentioned in ucode
-        SMSTAT<9>:  DiskType<0>
-        SMSTAT<8>:  Index/2  (?)
-
-        SMSTAT<7>:  Unit Ready L    
-        SMSTAT<6>:  On Cylinder L
-        SMSTAT<5>:  Fault L
-
-        SMSTAT<4>:  Seek Error L
-        SMSTAT<3>:  State Machine Interrupt H
-
-        SMSTAT<2>:  Status<2>   \
-        SMSTAT<1>:  Status<1>    >----  Status bits
-        SMSTAT<0>:  Status<0>   /
-
-    SMSTAT<3>, SMSTAT<4>, SMSTAT<6>, and SMSTAT<7> also cause an interrupt
-    to PERQ when asserted. Unit Ready, SMSTAT<7> will also cause an interrupt
-    if de-asserted.SMCTL<4> must be High to enable interrupts to PERQ.
-
-    The new hard disk controller uses port 320 (0xd0) to set the register
-    select pointer; subsequent writes to port 321 (0xd1) then store a byte
-    and autoincrement for the next one.  This replaces the individual ports
-    called out by the Shugart/IOB where each port is addressed directly.
+    I had hoped to avoid having to load different microcode ROMs but it appears
+    unavoidable that eioboot and eio5boot will have to be distinguished by the
+    configured disk type.  If we ever manage to locate/disassemble the POS R.4
+    or PNX "CIO Micropolis" code the still-mostly-theoretical PERQ-1 support can
+    be added back in.
     
 */

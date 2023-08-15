@@ -64,14 +64,14 @@ namespace PERQemu.IO
             RegisterPorts(_handledPorts);
 
             // What flavor of PERQ 2 are we?
-            if ((system.Config.Chassis == Config.ChassisType.PERQ2 ||
-                 system.Config.Chassis == Config.ChassisType.PERQ2Tx) &&
+            if ((system.Config.Chassis == ChassisType.PERQ2 ||
+                 system.Config.Chassis == ChassisType.PERQ2Tx) &&
                  system.Config.GetDrivesOfType(DeviceType.Disk8Inch).Length > 0)
             {
                 // A PERQ-2 or 2/T1
                 _hardDiskController = new MicropolisDiskController(system);
             }
-            else if (system.Config.Chassis == Config.ChassisType.PERQ2Tx &&
+            else if (system.Config.Chassis == ChassisType.PERQ2Tx &&
                      system.Config.GetDrivesOfType(DeviceType.Disk5Inch).Length > 0)
             {
                 // A PERQ-2/T2 or 2/T4
@@ -84,7 +84,7 @@ namespace PERQemu.IO
             }
 
             // Set up the on-board Ethernet
-            if (system.Config.IOBoard == Config.IOBoardType.NIO ||
+            if (system.Config.IOBoard == IOBoardType.NIO ||
                 string.IsNullOrEmpty(Settings.EtherDevice) || Settings.EtherDevice == "null")
             {
                 // A minimal interface to let Accent boot properly
@@ -94,7 +94,6 @@ namespace PERQemu.IO
             {
                 try
                 {
-                    // The real deal!
                     _ethernetController = new Ether10MbitController(system);
                 }
                 catch (UnimplementedHardwareException e)

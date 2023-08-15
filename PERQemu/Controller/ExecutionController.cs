@@ -529,6 +529,14 @@ namespace PERQemu
                         new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
                 },
                 {
+                    new SMKey(RunState.RunInst, RunState.Halted), new List<Transition> {
+                        new Transition(() => { SetState(RunState.Halted); }, RunState.Halted) }
+                },
+                {
+                    new SMKey(RunState.SingleStep, RunState.Halted), new List<Transition> {
+                        new Transition(() => { SetState(RunState.Halted); }, RunState.Halted) }
+                },
+                {
                     new SMKey(RunState.Halted, RunState.Reset), new List<Transition> {
                         new Transition(() => { SetState(RunState.Reset); }, RunState.Paused) }
                 },

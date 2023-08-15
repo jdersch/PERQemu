@@ -52,7 +52,7 @@ namespace PERQemu.IO
             if (system.Config.GetDrivesOfType(DeviceType.Disk8Inch).Length > 0 ||
                 system.Config.GetDrivesOfType(DeviceType.DCIOMicrop).Length > 0)
             {
-                _hardDiskController = new MicropolisDiskController(system);
+                _hardDiskController = new CIOMicropolisDiskController(system);
             }
             else
             {
