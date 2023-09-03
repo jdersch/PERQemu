@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Runtime.CompilerServices;
 
 using PERQemu.Config;
 using PERQemu.Debugger;
@@ -221,6 +222,7 @@ namespace PERQemu.IO.Z80
             return _z80ToPerqFifo.Dequeue();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         protected override void ClockDMA()
         {
             _z80dma.Clock();

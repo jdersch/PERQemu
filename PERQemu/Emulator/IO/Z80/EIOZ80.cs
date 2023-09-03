@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Runtime.CompilerServices;
 
 using PERQemu.Config;
 using PERQemu.Debugger;
@@ -41,19 +42,19 @@ namespace PERQemu.IO.Z80
             _dmac = new i8237DMA(0x38, 0x30);
 
             // Set up the EIO peripherals
-            _keyboard = new SerialKeyboard();
             _tms9914a = new TMS9914A(0);
+            _fdc = new NECuPD765A(0x20, _scheduler);
             _z80sioA = new Z80SIO(0x10, _scheduler, true);
             _z80sioB = new Z80SIO(0x40, _scheduler, true);
             _timerA = new i8254PIT(0x50);
             _timerB = new i8254PIT(0x54);
-            _fdc = new NECuPD765A(0x20, _scheduler);
             _rtc = new Oki5832RTC(0x76);
 
-            // Not sure about this one yet
-            //_ioReg3 = new IOReg3(_perqToZ80Fifo, _keyboard, _fdc, _dmaRouter);
+            // Create our serial devices
+            _keyboard = new SerialKeyboard();
+            // _speech = new Speech(...)
 
-            // Same code for EIO/NIO
+            // Same Z80 code for EIO/NIO
             // TODO: verify for all variants?  8"/5.25", 24-bit?
             _z80Debugger = new Z80Debugger("eioz80.lst");
 
@@ -162,6 +163,7 @@ namespace PERQemu.IO.Z80
             _z80sioB.DetachDevice(0);   // RS232-B
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         protected override void ClockDMA()
         {
             _dmac.Clock();
@@ -232,10 +234,12 @@ namespace PERQemu.IO.Z80
             return _z80ToPerqFifo.Dequeue();
         }
 
-
+        /// <summary>
+        /// Pass keyboard input from the host to the emulated device.
+        /// </summary>
         public override void QueueKeyboardInput(byte keyCode)
         {
-            throw new NotImplementedException();
+            _keyboard.QueueInput(keyCode);
         }
 
         // debug

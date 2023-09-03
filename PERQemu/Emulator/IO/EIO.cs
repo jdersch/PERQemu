@@ -42,16 +42,21 @@ namespace PERQemu.IO
             _z80CycleTime = 250;    // 4Mhz!
 
             //
-            // The EIO schematic very clearly shows an 8Kx8 ROM (2764) chip
-            // and 8 x 16Kx1 SRAMs (2167s) but the ROM that's built seems to
-            // limit the Z80 assembler's view to 4K ROM and several other docs
-            // show that only 4K is used.  Since we're (eventually/ultimately)
-            // going to load from a actual ROM dumps, the ROM loader wants to
-            // match the RomSize to the length of the actual file...
+            // The EIO schematic very clearly shows that the board contains 8x
+            // 16Kx1 SRAMs (2167s), but the EIO sources have very strange values
+            // for the base address and length.  It must be that they reserve
+            // around 10K for loading from the Zboot file at startup, and only
+            // use 6K for data?  Why not use 16K ROM and avoid that whole mess?
+            // 
+            // Similarly, there's an 8Kx8 ROM (2764) chip on the board but the
+            // ROM that's built seems to limit the Z80 assembler's view to 4K
+            // and several other docs show that only 4K is used.  Since we're
+            // loading from actual ROM dumps, the ROM loader wants to match the
+            // RomSize to the length of the actual file.
             //
-            _z80RamSize = 0x4000;   // 16K of RAM
-            _z80RamAddr = 0x4000;
-            _z80RomSize = 0x1000;   // 4K of ROM
+            _z80RamSize = 0x1800;   // 6K (of 16K) RAM
+            _z80RamAddr = 0x6800;
+            _z80RomSize = 0x1000;   // 4K (of 8K) ROM
             _z80RomAddr = 0x0;
         }
 

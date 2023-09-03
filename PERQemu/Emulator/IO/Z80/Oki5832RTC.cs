@@ -51,6 +51,7 @@ namespace PERQemu.IO.Z80
             _ports = new byte[] { _baseAddress, (byte)(_baseAddress + 1) };
 
             _registers = new byte[16];
+            GetCurrentHostTime();
         }
 
         public string Name => "RTC";
@@ -61,12 +62,33 @@ namespace PERQemu.IO.Z80
 
         public event EventHandler NmiInterruptPulse { add { } remove { } }
 
+        public override string ToString()
+        {
+            try
+            {
+                // Convert the internal registers to a date time for formatting;
+                var dt = new DateTime(_registers[12] * 10 + _registers[11],     // yy
+                                      _registers[10] * 10 + _registers[9],      // mm
+                                      _registers[8] * 10 + _registers[7],       // dd
+                                      _registers[5] * 10 + _registers[4],       // hh
+                                      _registers[3] * 10 + _registers[2],       // mm
+                                      _registers[1] * 10 + _registers[0]);      // ss
+
+                return $"[{Name}: Date={dt.Month}/{dt.Day}/{dt.Year}, Time={dt.Hour}:{dt.Minute}:{dt.Second}, Day={dt.DayOfWeek}]";
+            }
+            catch
+            {
+                return "[BAD DATE TIME!]";
+            }
+        }
+
         public void Reset()
         {
             _busy = false;
             _writing = false;
             _command = Control.None;
             _regSelect = 0;
+
             Log.Debug(Category.RTC, "Reset");
         }
 
@@ -205,7 +227,7 @@ namespace PERQemu.IO.Z80
         bool _writing;
 
         byte _baseAddress;
-        byte[] _ports = { 0x36, 0x37 };
+        byte[] _ports;
     }
 }
 

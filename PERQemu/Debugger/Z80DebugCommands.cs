@@ -91,6 +91,15 @@ namespace PERQemu
             }
         }
 
+        [Command("debug z80 dump rtc")]
+        void DumpRTC()
+        {
+            var rtc = new IO.Z80.Oki5832RTC(0xaa);  // fake address for testing
+
+            // This is super basic for now; just verify the registers are valid
+            Console.WriteLine(rtc);
+        }
+
         // todo: rom disassembler, like the perq microcode disassembler?
         // todo: i/o port reads - and writes!?
         // todo: interrogate memory, fifos, peripheral controllers & registers, etc.

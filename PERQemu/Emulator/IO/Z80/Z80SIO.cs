@@ -89,7 +89,7 @@ namespace PERQemu.IO.Z80
 
             if (_channels[1].StatusAffectsVector)
             {
-                // If an interrupt is pending on A, use it's offset; otherwise
+                // If an interrupt is pending on A, use its offset; otherwise
                 // assume that B is interrupting...
                 var priority = (_channels[0].InterruptLatched ? _channels[0].InterruptOffset + 4 :
                                                                 _channels[1].InterruptOffset);
