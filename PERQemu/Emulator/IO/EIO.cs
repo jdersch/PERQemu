@@ -90,7 +90,8 @@ namespace PERQemu.IO
 
             // Set up the on-board Ethernet
             if (system.Config.IOBoard == IOBoardType.NIO ||
-                string.IsNullOrEmpty(Settings.EtherDevice) || Settings.EtherDevice == "null")
+                string.IsNullOrEmpty(Settings.EtherDevice) ||
+                Settings.EtherDevice == "null")
             {
                 // A minimal interface to let Accent boot properly
                 _ethernetController = new NullEthernet(system);
@@ -136,6 +137,7 @@ namespace PERQemu.IO
                     return 0xff;
             }
         }
+
         /// <summary>
         /// Writes a word to the given I/O port.
         /// </summary>
@@ -199,6 +201,9 @@ namespace PERQemu.IO
             }
         }
 
+        /// <summary>
+        /// Shutdown local devices that need extra attention.
+        /// </summary>
         public override void Shutdown()
         {
             // Make sure our Ethernet (if configured) is properly shut down!
@@ -206,6 +211,8 @@ namespace PERQemu.IO
             {
                 _ethernetController.Shutdown();
             }
+
+            // todo: Save the RTC offset? :-)
 
             base.Shutdown();
         }

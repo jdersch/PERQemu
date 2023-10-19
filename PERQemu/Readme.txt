@@ -1,6 +1,6 @@
 ﻿PERQemu Readme
 
-3/8/2023 - skeezicsb - v0.5.2 (experimental)
+10/18/2023 - skeezicsb - v0.5.3 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
@@ -453,10 +453,11 @@ v0.7 - TBD
   - Canon laser printer
   - Get screenshots working again
 
-v0.5.2 - Experimental branch
+v0.5.3 - Experimental branch
   - Ethernet running (but requires root/admin access)
   - Patch for Turkish keyboard in CLI
   - Limited Micropolis 8" disk support
+  - Refactored Z80 subsystem for EIO support
 
 v0.5.0 - New baseline
   (Pending) Merge the experiments back into the master branch:

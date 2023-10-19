@@ -6,6 +6,12 @@ notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
 avoid wasting precious time scrolling to the end. :-)
 
 
+October, 2023:
+    1. Minor refactoring of the Z80 Run() loop to account for EIO differences.
+    Still distracted by RL and didn't want to leave uncommitted changes laying
+    around.  Hope to get back to active development before year end?  Sigh.
+    
+
 August, 2023:
 
     1. Another tiny baby step toward EIO/PERQ-2 support: can instantiate EIO
@@ -117,4 +123,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Sat Jul 29 17:37:47 PDT 2023
+Last update: skeezics    Thu Oct 19 14:00:45 PDT 2023

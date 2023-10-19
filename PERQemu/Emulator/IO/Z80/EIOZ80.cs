@@ -164,9 +164,58 @@ namespace PERQemu.IO.Z80
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected override void ClockDMA()
+        public override void Run()
         {
+            // Is this thing on?
+            if (!_running)
+            {
+                if (_system.Mode == ExecutionMode.Asynchronous)
+                {
+                    // Pause the thread until the Z80 is turned back on
+                    _wakeup = long.MaxValue;
+                    _sync.Reset();
+                }
+                return;
+            }
+
+            // Is the master CPU clock ahead of us?
+            var diff = (long)(_system.Scheduler.CurrentTimeNsec - _scheduler.CurrentTimeNsec);
+
+            if (diff <= 0)
+            {
+                if (_system.Mode == ExecutionMode.Asynchronous)
+                {
+                    // If we are less than one full microcycle ahead of the CPU,
+                    // just spin; otherwise, block (when we return).  The PERQ
+                    // will wake us when it catches up.  The faster 4Mhz EIO Z80
+                    // still takes ~13-80 PERQ microcycles to execute a complete
+                    // instruction (using the typical 9-55 clocks per inst metric).
+                    diff = -diff;
+
+                    if ((ulong)diff > _system.Scheduler.TimeStepNsec)
+                    {
+                        // Pause the thread
+                        _sync.Reset();
+                    }
+                }
+                return;
+            }
+
+            // No WAIT line INIR/OTIR shenanigans on the EIO!
+            // TODO: However, we might have to clock the interrupt controller here?
+            // _irqControl.Clock();
+
+            // Run an instruction
+            var ticks = _cpu.ExecuteNextInstruction();
+
+            // Advance our wakeup time now so the CPU can chill a bit
+            _wakeup = (long)(_scheduler.CurrentTimeNsec + ((ulong)ticks * IOBoard.Z80CycleTime));
+
+            // Clock the EIO DMA
             _dmac.Clock();
+
+            // Run the scheduler
+            _scheduler.Clock(ticks);
         }
 
         /// <summary>

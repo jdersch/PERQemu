@@ -130,4 +130,28 @@ namespace PERQemu.IO.Z80
     PDMAFlush   equ 164Q    ; Flush DMA FiFo to PERQ
     PDMADirect  equ 172Q    ; 0 = DMA from PERQ, 1 = DMA to PERQ
 
+    Command codes:
+        In all the commands that follow, a bits 2:0 specify an individual bit
+        0x00            Reset
+        0x10 - 0x17     Clear all IRR and IMR bits
+        0x18 - 0x1f     Clear all IRR and specific IMR bit (bits 2:0)
+        0x20 - 0x27     Clear all IMR bits
+        0x28 - 0x2f     Clear specific IMR bit
+        0x30 - 0x37     Set all IMR bits
+        0x38 - 0x3f     Set specific IMR bit
+        0x40 - 0x47     Clear all IRR bits
+        0x48 - 0x4f     Clear specific IRR bit
+        0x50 - 0x57     Set all IRR bits
+        0x58 - 0x5f     Set specific IRR bit
+        0x60 - 0x6f     Clear highest priority ISR bit
+        0x70 - 0x77     Clear all ISR bits
+        0x78 - 0x7f     Clear specific ISR bit
+
+        Command codes 0x80 and above require specific decoding based on varying
+        bitfield assignments:
+        0x80 - 0xaf     Load Mode register
+        0xb0 - 0xbf     Preselected IMR for subsequent loading from data bus
+        0xc0 - 0xcf     Preselected Auto Clear reg for   "      "    "    "
+        0xd0 - 0xff     Load byte count reg and select response memory level
+
  */

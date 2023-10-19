@@ -101,7 +101,7 @@ namespace PERQemu.Processor
                 {
                     // Run the Z80 directly!  It no-ops to maintain synch rather
                     // than set the wait handle in this mode
-                    _system.IOB.Z80System.Run();
+                    _system.IOB.Run();
                 }
                 else
                 {

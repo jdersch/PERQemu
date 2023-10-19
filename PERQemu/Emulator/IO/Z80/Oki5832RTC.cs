@@ -74,7 +74,7 @@ namespace PERQemu.IO.Z80
                                       _registers[3] * 10 + _registers[2],       // mm
                                       _registers[1] * 10 + _registers[0]);      // ss
 
-                return $"[{Name}: Date={dt.Month}/{dt.Day}/{dt.Year}, Time={dt.Hour}:{dt.Minute}:{dt.Second}, Day={dt.DayOfWeek}]";
+                return $"[{Name}: Date={dt.Month}/{dt.Day}/{dt.Year}, Time={dt.Hour:D2}:{dt.Minute:D2}:{dt.Second:D2}, Day={dt.DayOfWeek}]";
             }
             catch
             {
