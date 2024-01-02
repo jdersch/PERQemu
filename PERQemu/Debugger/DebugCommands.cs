@@ -1,5 +1,5 @@
 //
-// DebugCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// DebugCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -1056,6 +1056,25 @@ namespace PERQemu
             }
 
             Console.WriteLine("No Ethernet interface configured.");
+        }
+
+        [Command("debug dump canon", "Dump the state of the Canon interface and printer")]
+        public void ShowCanonStatus()
+        {
+            if (!CheckSys()) return;
+
+            if (PERQemu.Sys.OIO != null)
+            {
+                var oio = PERQemu.Sys.OIO as IO.OIO;
+
+                if (oio.Canon != null)
+                {
+                    oio.Canon.DumpStatus();
+                    return;
+                }
+            }
+
+            Console.WriteLine("No Canon interface available.");
         }
 
         #endregion

@@ -1,5 +1,5 @@
 ﻿//
-// Unscrambler.cs - Copyright (c) 2022-2023 S. Boondoggle (skeezicsb@gmail.com)
+// Unscrambler.cs - Copyright (c) 2022-2024 S. Boondoggle (skeezicsb@gmail.com)
 //
 // This file is part of PERQemu.
 //

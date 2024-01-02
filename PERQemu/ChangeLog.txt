@@ -6,6 +6,34 @@ notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
 avoid wasting precious time scrolling to the end. :-)
 
 
+January, 2024:
+    2. So, the Canon got to the point where it wanted to use the IOB DMA regs
+    to set up a transfer, and it rudely reminded me that that had never been
+    implemented.  Whoops.  So I went berzerk and slapped a thing together to
+    handle all the DMA channels on both IOB/CIO and EIO and pulled a lot of
+    duplicated code out of the Shugart, Ethernet and Canon controllers.  It's
+    not pretty.  It's probably all wrong.  It's very weird.  But I'll push it
+    over to the test box and run it for a few hours to see if it's stable and
+    get back to the laser interface.
+
+    1. Reverse engineered the Canon PROMs and started working through the bugs
+    in the schematics and moderately horrible documentation to bring up a bare
+    bones interface.  For testing, ported the software suite to POS F.15 (since
+    that's the best documented source code base that I'm most familiar with)
+    but it should work with POS G and Accent too.  Settings added to select
+    printer model (LBP-10 or CX) and default paper size (anything you like, as
+    long as it's US Letter).
+
+
+December, 2023:
+    2. Roll the copyright date to close out a frustrating year.  I have high
+    hopes for completing PERQ-2 support in 2024, prior to the final collapse
+    of civilization.  We all gotta have goals, right?
+
+    1. Add a skeleton for starting the Canon laser printer interface.  This is
+    a universal option for PERQ-1 (OIO) or PERQ-2 (OIO, MLO).
+
+
 October, 2023:
     1. Minor refactoring of the Z80 Run() loop to account for EIO differences.
     Still distracted by RL and didn't want to leave uncommitted changes laying
@@ -123,4 +151,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Thu Oct 19 14:00:45 PDT 2023
+Last update: skeezics    Mon Jan  1 19:22:17 PST 2024

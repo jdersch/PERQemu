@@ -1,5 +1,5 @@
 //
-// CIO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CIO.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -62,6 +62,12 @@ namespace PERQemu.IO
             _z80System = new CIOZ80(system);
             _z80System.LoadZ80ROM("cioz80.bin");    // "new" Z80 ROM
 
+            // Same DMA channel mapping as IOB (four channels)
+            _dmaRegisters.Assign(0xd0, 0xd8, 0xd1, 0xd9);
+            _dmaRegisters.Assign(0xd2, 0xda, 0xd3, 0xdb);
+            _dmaRegisters.Assign(0xd4, 0xdc, 0xd5, 0xdd);
+            _dmaRegisters.Assign(0xd6, 0xde, 0xd7, 0xdf);
+
             RegisterPorts(_handledPorts);
         }
 
@@ -106,18 +112,36 @@ namespace PERQemu.IO
                 case 0xca:    // Shugart File SN High   / Micropolis Cyl (low)
                 case 0xcb:    // Shugart Block Number   / Micropolis Cyl (hi)/Head
                 case 0xcc:    // Micropolis Sector Number register
-                case 0xd0:    // Shugart/Micropolis Data Buffer Address High register
-                case 0xd1:    // Shugart/Micropolis Header Address High register
-                case 0xd8:    // Shugart/Micropolis Data Buffer Address Low register
-                case 0xd9:    // Shugart/Micropolis Header Address low register
                     _hardDiskController.LoadRegister(port, value);
                     break;
 
-                case 0xd4:
+                case 0xd0:      // DMA Registers: Hard disk (Shugart/Microp)
+                case 0xd1:
+                case 0xd8:
+                case 0xd9:
+                    _dmaRegisters.LoadRegister(ChannelName.HardDisk, port, value);
+                    break;
+
+                case 0xd2:      // DMA: Network (unused)
+                case 0xd3:
+                case 0xda:
+                case 0xdb:
+                    _dmaRegisters.LoadRegister(ChannelName.Network, port, value);
+                    break;
+
+                case 0xd4:      // DMA: Ext B (OIO Canon)
                 case 0xd5:
                 case 0xdc:
-                case 0xdd:    // Just to see if anything calls these...
-                    throw new InvalidOperationException($"CIO DMA not yet implemented (0x{port:x2})");
+                case 0xdd:
+                    _dmaRegisters.LoadRegister(ChannelName.ExtB, port, value);
+                    break;
+
+                case 0xd6:      // DMA: Ext A (OIO Ethernet or Ether3Mbit)
+                case 0xd7:
+                case 0xde:
+                case 0xdf:
+                    _dmaRegisters.LoadRegister(ChannelName.ExtA, port, value);
+                    break;
 
                 default:
                     Log.Warn(Category.IO, "Unhandled CIO Write to port {0:x2}, data {1:x4}", port, value);
@@ -143,16 +167,24 @@ namespace PERQemu.IO
             0xca,       // 312 DskFSNhi: (FileH)   "     "      "     "    high bits
             0xcb,       // 313 DskLBN: (Block) load Shugart logical block #
             0xcc,       // 314 MicSecNo: Micropolis sector # (CIO only)
-            0xd0,       // 320 DatAdrH: load Shugart data buffer address high bits
-            0xd1,       // 321 CWAdrH:    "     "    header  "      "      "    "
-            0xd8,       // 330 DatAdrL: load Shugart data buffer address low bits
-            0xd9,       // 331 CWAdrL:    "     "    header  "      "     "    "
 
-            // DMA
-            0xd4,       // 324 DMAhi: load DMA data buffer address high bits (Only used by Canon?)
-            0xd5,       // 325 HDRhi:   "   "  header  "      "      "    "           "
-            0xdc,       // 334 DMAlo: load DMA data buffer address low bits (Only used by Canon?)
-            0xdd        // 335 HDRlo:   "   "  header  "      "     "    "           "
+            // DMA (same as IOB)
+            0xd0,       // 320 Disk data addr, high bits (Shugart)
+            0xd1,       // 321 Disk header addr, high
+            0xd2,       // 322 Net data addr, high (unused)
+            0xd3,       // 323 Net header addr, high
+            0xd4,       // 324 ExtB data addr, high (Canon)
+            0xd5,       // 325 ExtB header addr, high
+            0xd6,       // 326 ExtA data addr, high (Ether3Mbit or OIO Ether10Mbit)
+            0xd7,       // 327 ExtA header addr, high
+            0xd8,       // 330 Disk data addr, low bits
+            0xd9,       // 331 Disk header addr, low
+            0xda,       // 332 Net data addr, low (unused)
+            0xdb,       // 333 Net header addr, low
+            0xdc,       // 334 ExtB data addr, low (Canon)
+            0xdd,       // 335 ExtB header addr, low
+            0xde,       // 336 ExtA data addr, low (Ether3Mbit or OIO Ether10Mbit)
+            0xdf        // 337 ExtA header addr, low
         };
     }
 }

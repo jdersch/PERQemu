@@ -1,5 +1,5 @@
 //
-// Settings.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Settings.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -23,6 +23,7 @@ using System.IO.Ports;
 using System.Net.NetworkInformation;
 using System.Collections.Generic;
 
+using PERQemu.IO;
 using PERQemu.IO.Network;
 
 namespace PERQemu
@@ -115,10 +116,13 @@ namespace PERQemu
             Z80Radix = Radix.Decimal;
 
             OutputDirectory = Paths.OutputDir;
-            ScreenshotFormat = ImageFormat.Jpeg;
-            ScreenshotTemplate = "{0}_{1:000}.{2}";
-            CanonFormat = ImageFormat.Tiff;
-            CanonTemplate = "{0}_{1:000}.{2}";
+            ScreenshotFormat = ImageFormat.Png;
+            ScreenshotTemplate = "{0}_{1:000}.{2}"; // Default: screenshot_nnn.png
+
+            CanonFormat = ImageFormat.Png;          // PDF, someday?
+            CanonTemplate = "{0}_{1:000}.{2}";      // Default: {canon,cx}_pg_000.png
+            CanonPaperSize = PaperCode.USLetter;    // Maybe set to A4 based on locale? :-)
+            CanonResolution = 300;                  // The CX is probably more popular
 
             RSADevice = string.Empty;
             RSBDevice = string.Empty;
@@ -153,6 +157,8 @@ namespace PERQemu
         public static ImageFormat ScreenshotFormat;
         public static string ScreenshotTemplate { get; private set; }
         public static ImageFormat CanonFormat;
+        public static PaperCode CanonPaperSize;
+        public static uint CanonResolution;
         public static string CanonTemplate { get; private set; }
 
         // Logging - see Log.cs
@@ -229,18 +235,18 @@ namespace PERQemu
                     // Write a small header, then enter configuration mode and
                     // write the basic things first.
                     //
-                    sw.WriteLine("# PERQemu settings file, written " + DateTime.Now);
-                    sw.WriteLine("# " + PERQemu.Version);
+                    sw.WriteLine($"# PERQemu settings file, written {DateTime.Now}");
+                    sw.WriteLine($"# {PERQemu.Version}");
                     sw.WriteLine("#\n# * Please take care if hand-editing this file! *");
                     sw.WriteLine("# *  Errors may cause PERQemu to fail to load.  *\n#");
                     sw.WriteLine("settings");
                     sw.WriteLine("default");
-                    sw.WriteLine("autosave harddisk " + SaveDiskOnShutdown);
-                    sw.WriteLine("autosave floppy " + SaveFloppyOnEject);
-                    sw.WriteLine("autosave tape " + SaveTapeOnUnload);
-                    sw.WriteLine("display cursor " + CursorPreference);
-                    sw.WriteLine("pause on reset " + PauseOnReset);
-                    sw.WriteLine("pause when minimized " + PauseWhenMinimized);
+                    sw.WriteLine($"autosave harddisk {SaveDiskOnShutdown}");
+                    sw.WriteLine($"autosave floppy {SaveFloppyOnEject}");
+                    sw.WriteLine($"autosave tape {SaveTapeOnUnload}");
+                    sw.WriteLine($"display cursor {CursorPreference}");
+                    sw.WriteLine($"pause on reset {PauseOnReset}");
+                    sw.WriteLine($"pause when minimized {PauseWhenMinimized}");
 
                     // Enumerate any rate limit options
                     if (Performance == RateLimit.None)
@@ -252,7 +258,7 @@ namespace PERQemu
                         foreach (RateLimit opt in Enum.GetValues(typeof(RateLimit)))
                         {
                             if (Performance.HasFlag(opt))
-                                sw.WriteLine("rate limit " + opt);
+                                sw.WriteLine($"rate limit {opt}");
                         }
                     }
 
@@ -271,20 +277,22 @@ namespace PERQemu
 
                     if (!string.IsNullOrEmpty(EtherDevice))
                     {
-                        sw.WriteLine("assign ethernet device " + EtherDevice);
+                        sw.WriteLine($"assign ethernet device {EtherDevice}");
                     }
 
                     // todo: audio
 
                     if (!string.IsNullOrEmpty(OutputDirectory))
-                        sw.WriteLine("output directory \"" + OutputDirectory + "\"");
+                        sw.WriteLine($"output directory \"{OutputDirectory}\"");
 
                     sw.WriteLine("#");
                     sw.WriteLine("# These options are not yet implemented:");
-                    sw.WriteLine("# debug radix " + DebugRadix);
-                    sw.WriteLine("# z80 debug radix " + Z80Radix);
-                    sw.WriteLine("# screenshot format " + ScreenshotFormat);
-                    sw.WriteLine("# canon format " + CanonFormat);
+                    sw.WriteLine($"# debug radix {DebugRadix}");
+                    sw.WriteLine($"# z80 debug radix {Z80Radix}");
+                    sw.WriteLine($"# screenshot format {ScreenshotFormat}");
+                    sw.WriteLine($"# canon format {CanonFormat}");
+                    sw.WriteLine($"# canon paper size {CanonPaperSize}");
+                    sw.WriteLine($"# canon resolution {CanonResolution}");
                     sw.WriteLine("#");
 
                     sw.WriteLine("done");
@@ -295,7 +303,7 @@ namespace PERQemu
                         PERQemu.Config.Current.Name != "default")
                     {
                         sw.WriteLine("#\n# Most recent loaded configuration:");
-                        sw.WriteLine("configure load " + PERQemu.Config.Current.Name);
+                        sw.WriteLine($"configure load {PERQemu.Config.Current.Name}");
                     }
 
                     sw.Close();

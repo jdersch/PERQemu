@@ -1,5 +1,5 @@
 ﻿//
-// Oki5832RTC.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Oki5832RTC.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -109,7 +109,7 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Writes to the control port select the register index (low nibble) and
-        /// control bits (high nibble).  Writes to the data port load once BCD
+        /// control bits (high nibble).  Writes to the data port load one BCD
         /// digit into the selected register.
         /// </summary>
         /// <remarks>
@@ -238,6 +238,7 @@ namespace PERQemu.IO.Z80
     ;        Clock
     ;
     Clk.CSR     equ 166Q        ; Control register for clock
+    Clk.DATA    equ 167Q        ; Data register
     ClkHold     equ 01000000B   ; Hold bit
     ClkWrite    equ 00100000B   ; Write bit
     ClkRead     equ 00010000B   ; Read bit
@@ -253,7 +254,6 @@ namespace PERQemu.IO.Z80
     ClkM1       equ 02H         ; Minute 1s
     ClkS10      equ 01H         ; Second 10s
     ClkS1       equ 00H         ; Second 1s
-    Clk.DATA    equ 167Q        ; Data register
 
     Note that the PERQ always selects 24-hour time and ignores the Day of Week
     register (6).  This chip only tracks 2-digit years, so it's not Y2K compliant.
@@ -264,15 +264,21 @@ namespace PERQemu.IO.Z80
     seems to include the write routine in the standard build!  This means we'll
     be able to use the emulator to recreate the date/time setting software...
 
-    It would be fun -- and extremely silly -- if the emulator had a configuration
-    option to save and restore the RTC's contents whenever a given PERQ-2 virtual
-    machine was run.  You could set the date/time and PERQemu would compute the
-    elapsed "real time" based on cpu cycles executed during the session, saving
-    this at shutdown.  Then we could slowly age the display phosphor -- "burning
-    in" the Accent Icons window title bar -- or slowly introduce random disk
-    errors as the number of "power on hours" increased... I mean, if you want a
-    true emulation experience, it's the little details that matter!  :-]  Yeah,
-    I'm clearly nuts.
+    The initial implementation always updates the chip's registers from the host
+    OS on every read.  This is likely sufficient for normal operation since the
+    RTC is only used by Login to set the system clock at bootup.  If the virtual
+    machine is paused, or the host runs the emulation too slowly (or too fast!)
+    subsequent reads will be inaccurate.  I should/may update the code to take a
+    snapshot of the initial time when instantiated, then compute the elapsed time
+    based on how many CPU cycles have run; this would let diagnostics or any user
+    software that reads the RTC get a locally accurate result.
     
+    Taking that to the next level of absurdity, we could save and restore the RTC
+    register contents between runs of the emulator for every configuration that
+    includes the EIO board, so each virtual machine would remember its own total
+    runtime.  Then we could slowly age the display phosphor -- "burning in" the
+    Accent Icons window title bar -- or slowly introduce random disk errors as
+    the number of "power on hours" increased... I mean, if you want a _true_
+    emulation experience, it's the little details that matter!  :-]
  */
 

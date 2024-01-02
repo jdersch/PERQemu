@@ -1,14 +1,5 @@
 ﻿PERQemu Readme
 
-10/18/2023 - skeezicsb - v0.5.3 (experimental)
-1/24/2023 - jdersch - v0.5.0
-1/17/2023 - skeezicsb - v0.4.9 (main)
-12/28/2022 - skeezicsb - v0.4.8 (main)
-11/1/2022 - skeezicsb - v0.4.6 (experimental)
-3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
-6/24/2018 - skeezicsb - v0.4 - v0.4.4
-6/24/2010 - jdersch - v0.1 - v0.3
-
 
 1.0 Introduction
 ================
@@ -59,7 +50,7 @@ The original PERQs feature a standard set of peripherals:
 Optional IO boards can be fitted, which provide:
 
     - 3Mbit or 10Mbit Ethernet interfaces
-    - Canon LBP-10 (and later Canon CX) laser printer interface
+    - Canon LBP-10 (or Canon CX) laser printer interface
     - QIC streamer tape connection
 
 A later PERQ-2 series extends the original design in some significant ways
@@ -256,12 +247,12 @@ As of v0.4.6, these PERQ operating systems also boot:
   - POS version G.7 (released by Accent Systems, 1986?);
   - Accent S6 (Release II from PERQ Systems Corporation, 1985).
 
-In addition, PNX 2 is able to run but the video display list processing is non-
-standard and we'll have to find a workaround.
+Fixed in v0.5.3:
+  - A workaround for PNX 2 video support is included (disk image TBA).
 
-NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
-2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
-trouble with a full megaword of memory.
+NOTE: PNX 1 drops into its microcode debugger (i.e., crashes) after booting if
+2MB of memory is configured; it runs fine with 1MB.  PNX 2, POS, MPOS and Accent
+have no trouble with a full megaword of memory.
 
 Accent mouse tracking takes a little getting used to since it runs in relative
 mode.  To simulate mouse "swipes" you have to use the Alt key (Option key on
@@ -360,6 +351,9 @@ The following hardware has been implemented in the emulator:
       can start up.  Consult the User Guide for more details!
     - Implementation of a real host Ethernet interface is underway!
 
+  Canon:
+    - Laser printer interface development is underway!
+
 
 There is a ton of additional detail about the internals of PERQemu itself in
 the source distribution.  See Readme-source.txt, or the copious notes in the
@@ -371,7 +365,7 @@ Docs/ directory for way, way more information than you need.  Way more.
  
 - Ethernet.  In development! [See above]
 
-- Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
+- Option boards:  3Mbit Ethernet.  On the list.
  
 - PERQLink.  Unimplemented other than a stub that tells the microcode that
   there's nothing connected to it.
@@ -430,8 +424,8 @@ C#/Mono System.IO.Ports.SerialPort implementation that will require a reworking
 of the emulator's port handling.
 
 
-5.0 History and Roadmap
-=======================
+5.0 Version History and Roadmap
+===============================
 
 v1.0 - TBD
   Sometime before the heat death of the universe:
@@ -453,11 +447,12 @@ v0.7 - TBD
   - Canon laser printer
   - Get screenshots working again
 
-v0.5.3 - Experimental branch
+v0.5.4 - Experimental branch
   - Ethernet running (but requires root/admin access)
   - Patch for Turkish keyboard in CLI
   - Limited Micropolis 8" disk support
   - Refactored Z80 subsystem for EIO support
+  - Patch to support PNX 2's non-standard video display list handling
 
 v0.5.0 - New baseline
   (Pending) Merge the experiments back into the master branch:
@@ -570,3 +565,14 @@ v0.2 - Second release
 
 v0.1 - First public release.
 
+
+Update history:
+
+12/31/2023 - skeezicsb - v0.5.4 (experimental)
+1/24/2023 - jdersch - v0.5.0
+1/17/2023 - skeezicsb - v0.4.9 (main)
+12/28/2022 - skeezicsb - v0.4.8 (main)
+11/1/2022 - skeezicsb - v0.4.6 (experimental)
+3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
+6/24/2018 - skeezicsb - v0.4 - v0.4.4
+6/24/2010 - jdersch - v0.1 - v0.3

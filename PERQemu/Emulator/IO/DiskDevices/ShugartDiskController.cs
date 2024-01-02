@@ -1,5 +1,5 @@
 //
-// ShugartController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// ShugartController.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -36,10 +36,8 @@ namespace PERQemu.IO.DiskDevices
             _disk = null;
             _busyEvent = null;
 
-            // These are assembled from separate register writes, so let
-            // ExtendedRegisters do the work to combine 'em!
-            _dataBuffer = new ExtendedRegister(4, 16);
-            _headerAddress = new ExtendedRegister(4, 16);
+            // This is assembled from separate register writes, so let
+            // ExtendedRegister do the work to combine 'em!
             _serialNumber = new ExtendedRegister(16, 16);
         }
 
@@ -71,8 +69,6 @@ namespace PERQemu.IO.DiskDevices
         {
             _blockNumber = 0;
             _serialNumber.Value = 0;
-            _headerAddress.Value = 0;
-            _dataBuffer.Value = 0;
 
             ClearBusyState();
         }
@@ -154,30 +150,6 @@ namespace PERQemu.IO.DiskDevices
                     // May initially log things to see that it's always being set to 0
                     if (value != 0)
                         Log.Warn(Category.HardDisk, "CIOShugart write of 0x{0:x} to MicropSec ignored!", value);
-                    break;
-
-                case 0xd0:    // Shugart Data Buffer Address High register (4 bits)
-                    _dataBuffer.Hi = ~value;
-
-                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address High set to 0x{0:x}", _dataBuffer.Hi);
-                    break;
-
-                case 0xd1:    // Shugart Header Address High register (4 bits)
-                    _headerAddress.Hi = ~value;
-
-                    Log.Debug(Category.HardDisk, "Shugart Header Address High set to 0x{0:x}", _headerAddress.Hi);
-                    break;
-
-                case 0xd8:    // Shugart Data Buffer Address Low register (frobbed)
-                    _dataBuffer.Lo = (ushort)value;
-
-                    Log.Debug(Category.HardDisk, "Shugart Data Buffer Address Low set to 0x{0:x4}", _dataBuffer.Lo);
-                    break;
-
-                case 0xd9:    // Shugart Header Address low register (frobbed)
-                    _headerAddress.Lo = (ushort)value;
-
-                    Log.Debug(Category.HardDisk, "Shugart Header Address Low set to 0x{0:x4}", _headerAddress.Lo);
                     break;
 
                 default:
@@ -383,8 +355,8 @@ namespace PERQemu.IO.DiskDevices
             // Read the sector from the disk
             var sec = _disk.GetSector(_cylinder, _head, _sector);
 
-            int data = IOBoard.Unfrob(_dataBuffer);
-            int header = IOBoard.Unfrob(_headerAddress);
+            int data = _system.IOB.DMARegisters.GetDataAddress(ChannelName.HardDisk);
+            int header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.HardDisk);
 
             // Copy the data to the data buffer address
             for (int i = 0; i < sec.Data.Length; i += 2)
@@ -422,8 +394,8 @@ namespace PERQemu.IO.DiskDevices
             // Todo: Should be a DMA op.  See above.
             var sec = _disk.GetSector(_cylinder, _head, _sector);
 
-            int data = IOBoard.Unfrob(_dataBuffer);
-            int header = IOBoard.Unfrob(_headerAddress);
+            int data = _system.IOB.DMARegisters.GetDataAddress(ChannelName.HardDisk);
+            int header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.HardDisk);
 
             for (int i = 0; i < sec.Data.Length; i += 2)
             {
@@ -462,8 +434,8 @@ namespace PERQemu.IO.DiskDevices
                                  _disk.Geometry.SectorSize,
                                  _disk.Geometry.HeaderSize);
 
-            int dataAddr = IOBoard.Unfrob(_dataBuffer);
-            int headerAddr = IOBoard.Unfrob(_headerAddress);
+            int dataAddr = _system.IOB.DMARegisters.GetDataAddress(ChannelName.HardDisk);
+            int headerAddr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.HardDisk);
 
             for (int i = 0; i < sec.Data.Length; i += 2)
             {
@@ -621,8 +593,6 @@ namespace PERQemu.IO.DiskDevices
         int _blockNumber;   // Not really used...
 
         ExtendedRegister _serialNumber;
-        ExtendedRegister _headerAddress;
-        ExtendedRegister _dataBuffer;
 
         // Controller status
         bool _controllerBusy;

@@ -1,5 +1,5 @@
 ﻿//
-// CIOMicropolisDiskController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CIOMicropolisDiskController.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -548,8 +548,8 @@ namespace PERQemu.IO.DiskDevices
             var sec = _disk.GetSector((ushort)_cylinder.Value, _head, _sector);
 
             // Unfrob the buffer addresses
-            var data = IOBoard.Unfrob(_dataBuffer);
-            var header = IOBoard.Unfrob(_headerAddress);
+            var data = _system.IOB.DMARegisters.GetDataAddress(ChannelName.HardDisk);
+            var header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.HardDisk);
 
             // Copy the data to the data buffer address
             for (int i = 0; i < sec.Data.Length; i += 2)
@@ -587,8 +587,8 @@ namespace PERQemu.IO.DiskDevices
             // Todo: Should be a DMA op.  See above.
 
             var sec = _disk.GetSector((ushort)_cylinder.Value, _head, _sector);
-            var data = IOBoard.Unfrob(_dataBuffer);
-            var header = IOBoard.Unfrob(_headerAddress);
+            var data = _system.IOB.DMARegisters.GetDataAddress(ChannelName.HardDisk);
+            var header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.HardDisk);
 
             for (int i = 0; i < sec.Data.Length; i += 2)
             {
@@ -627,8 +627,8 @@ namespace PERQemu.IO.DiskDevices
                                  _disk.Geometry.SectorSize,
                                  _disk.Geometry.HeaderSize);
 
-            var data = IOBoard.Unfrob(_dataBuffer);
-            var header = IOBoard.Unfrob(_headerAddress);
+            var data = _system.IOB.DMARegisters.GetDataAddress(ChannelName.HardDisk);
+            var header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.HardDisk);
 
             for (int i = 0; i < sec.Data.Length; i += 2)
             {

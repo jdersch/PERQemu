@@ -1,5 +1,5 @@
 ﻿//
-// Ether10MbitController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Ether10MbitController.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -41,10 +41,6 @@ namespace PERQemu.IO.Network
             _timer = null;
             _response = null;
 
-            // Should be 20 bits for OIO, 20 or 24 bits for EIO!
-            _headerAddress = new ExtendedRegister(CPU.CPUBits - 16, 16);
-            _bufferAddress = new ExtendedRegister(CPU.CPUBits - 16, 16);
-
             // Physical address is configurable, but fixed;
             _physAddr = new MachineAddress(_system.Config);
             _physAddr.Low = _system.Config.EtherAddress;
@@ -62,9 +58,20 @@ namespace PERQemu.IO.Network
 
             _mcastGroups = new byte[6];
 
-            // Set interrupt vector based on board type
-            _irq = (_system.Config.IOBoard == IOBoardType.EIO ? InterruptSource.Network :
-                                                                InterruptSource.X);
+            // Set interrupt vector, DMA channel based on board type
+            if (_system.Config.IOBoard == IOBoardType.EIO)
+            {
+                _irq = InterruptSource.Network;
+                _dmaTx = ChannelName.NetXmit;
+                _dmaRx = ChannelName.NetRecv;
+            }
+            else
+            {
+                // Assume the OIO interface
+                _irq = InterruptSource.X;
+                _dmaTx = ChannelName.Network;
+                _dmaRx = ChannelName.Network;
+            }
 
             // Open the host network adapter
             _nic = new HostAdapter(this, Settings.EtherDevice);
@@ -137,14 +144,6 @@ namespace PERQemu.IO.Network
         /// </remarks>
         public void LoadRegister(byte address, int value)
         {
-            // There's one port conflict between OIO and EIO that we manually tweak;
-            // this should be removed when the DMA address set-up is moved elsewhere
-            // (if/when we implement a "real" DMA interface).
-            if (_system.Config.IOBoard == IOBoardType.EIO && address == 0xde)
-            {
-                address = 0x8a; // hack; renumber to use OIO port (for now)
-            }
-
             switch (address)
             {
                 //
@@ -163,7 +162,7 @@ namespace PERQemu.IO.Network
                     break;
 
                 case 0x8a:      // OIO - uSec clock timer low byte
-                //case 0xde:    // EIO -  "     "     "    "   "
+                case 0xde:      // EIO -  "     "     "    "   "
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to usec clock (low)", value);
                     _usecClock = (ushort)((_usecClock & 0xff00) | (value & 0xff));
                     break;
@@ -232,34 +231,6 @@ namespace PERQemu.IO.Network
                     var mcgb = address - 0xca;
                     _mcastGroups[mcgb] = (byte)(value & 0xff);
                     Log.Debug(Category.Ethernet, "Wrote 0x{0:x2} to multicast register 0x{1:x2}", value, address);
-                    break;
-
-                //
-                // DMA setup - addresses for the header and data buffers.  Note
-                // that each part of the address provided is munged in some unique
-                // way.  Don't ask.  Todo: move this to a "real" DMA handler?  EIO
-                // is very different... IOB has four fixed channels, while EIO has
-                // eight?  Hmm.
-                //
-                case 0xd6:      // Packet buffer addr, high bits
-                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA buffer address (high)", value);
-                    _bufferAddress.Hi = ~value;
-                    break;
-
-                case 0xde:      // Packet buffer addr, low 16 bits (frobbed)
-                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA buffer address (low)", value);
-                    _bufferAddress.Lo = (ushort)value;
-                    break;
-
-                case 0xd7:      // Packet header addr, high 4 bits
-                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x} to DMA header address (high)", value);
-                    _headerAddress.Hi = ~value;
-                    // If we cared, the header word count is bits <7:4> ??
-                    break;
-
-                case 0xdf:      // Packet header addr, low 16 bits (frobbed)
-                    Log.Debug(Category.Ethernet, "Wrote 0x{0:x4} to DMA header address (low)", value);
-                    _headerAddress.Lo = (ushort)value;
                     break;
 
                 default:
@@ -397,7 +368,8 @@ namespace PERQemu.IO.Network
 
         void GetAddress(ulong nSkew, object context)
         {
-            var addr = IOBoard.Unfrob(_headerAddress);
+            // Get the header address from DMA
+            var addr = _system.IOB.DMARegisters.GetHeaderAddress(_dmaRx);
 
             Log.Debug(Category.Ethernet, "Writing machine address to 0x{0:x6}", addr);
 
@@ -484,43 +456,43 @@ namespace PERQemu.IO.Network
                 return;
             }
 
+            ushort data;
+
             // Update our state and status flag
             _state = State.Receiving;
             _status |= (Status.CarrierSense | Status.PacketInProgress);
 
+            // Fetch the header and data buffer addresses from the DMAC
+            var header = _system.IOB.DMARegisters.GetHeaderAddress(_dmaRx);
+            var buffer = _system.IOB.DMARegisters.GetDataAddress(_dmaRx);
+
             Log.Info(Category.Ethernet, "Receiving {0} bytes to header @ 0x{1:x6}, data @ 0x{2:x6} [{3}]",
-                                         packet.Length, _headerAddress, _bufferAddress,
+                                         packet.Length, header, buffer,
                                          System.Threading.Thread.CurrentThread.ManagedThreadId);
             Log.Debug(Category.Ethernet, "Receive bit count initial = {0:x} ({1})",
                                         _bitCount, (short)_bitCount);
 
-            int addr;
-            ushort data;
-
             // Write the Ethernet frame's header to PERQ memory.  The header is
             // 14 bytes but the DMA always ships quad words, so the first word is
             // a dummy.  We write a zero, but could just skip it?
-            addr = IOBoard.Unfrob(_headerAddress);
-            _system.Memory.StoreWord(addr++, 0);
+            _system.Memory.StoreWord(header++, 0);
 
             for (var i = 0; i < 6; i++)
             {
                 data = (ushort)(packet[i * 2 + 1] << 8 | packet[i * 2]);
-                _system.Memory.StoreWord(addr++, data);
+                _system.Memory.StoreWord(header++, data);
             }
 
             // Undo the length/type field swap that the software does
             data = (ushort)(packet[12] << 8 | packet[13]);
-            _system.Memory.StoreWord(addr, data);
+            _system.Memory.StoreWord(header, data);
 
             // DMA the packet data to the PERQ, reconstituted as 16-bit words
-            addr = IOBoard.Unfrob(_bufferAddress);
-
             for (var i = 14; i < packet.Length; i += 2)
             {
                 data = packet[i];
                 if (i + 1 < packet.Length) data |= (ushort)(packet[i + 1] << 8);
-                _system.Memory.StoreWord(addr++, data);
+                _system.Memory.StoreWord(buffer++, data);
             }
 
             // Set the bit count as if the hardware had counted UP from the value
@@ -605,7 +577,7 @@ namespace PERQemu.IO.Network
                 // DMA the header buffer from the PERQ's memory.  The hardware
                 // always transfers two quads for the header, but skips over the
                 // first (unused) word.
-                addr = IOBoard.Unfrob(_headerAddress) + 1;
+                addr = _system.IOB.DMARegisters.GetHeaderAddress(_dmaTx) + 1;
 
                 for (var i = 0; i < 6; i++)
                 {
@@ -620,7 +592,7 @@ namespace PERQemu.IO.Network
                 packet[13] = (byte)data;
 
                 // Now copy the packet's payload from the buffer address
-                addr = IOBoard.Unfrob(_bufferAddress);
+                addr = _system.IOB.DMARegisters.GetDataAddress(_dmaTx);
 
                 for (var i = 14; i < packet.Length; i += 2)
                 {
@@ -691,6 +663,9 @@ namespace PERQemu.IO.Network
         // Debugging
         public void DumpEther()
         {
+            var headerAddress = _system.IOB.DMARegisters.GetHeaderAddress(_dmaRx);
+            var bufferAddress = _system.IOB.DMARegisters.GetDataAddress(_dmaRx);
+
             Console.WriteLine($"{_system.Config.IOBoard} Ethernet status:");
             Console.WriteLine($"  My MAC address:    {_physAddr.ToPERQFormat()} ({_physAddr})");
             Console.WriteLine($"  Receive address:   {_recvAddr.ToPERQFormat()} ({_recvAddr})");
@@ -698,8 +673,20 @@ namespace PERQemu.IO.Network
             Console.WriteLine($"  Status register:   {(int)_status:x} ({_status})");
             Console.WriteLine("  Controller state:  {0}, scheduler callback {1} pending", _state,
                               (_response != null ? "IS" : "is NOT"));
-            Console.WriteLine($"  DMA addresses:     Header: 0x{_headerAddress.Value:x6}  " +
-                                                   $"Buffer: 0x{_bufferAddress.Value:x6}");
+
+            // IOB (OIO): One DMA for RX and TX
+            Console.WriteLine($"  DMA addresses:     Header: 0x{headerAddress:x6}  " +
+                              $"Buffer: 0x{bufferAddress:x6} ({_dmaRx})");
+
+            // EIO: Separate RX, TX DMA channels
+            if (_dmaRx != _dmaTx)
+            {
+                headerAddress = _system.IOB.DMARegisters.GetHeaderAddress(_dmaTx);
+                bufferAddress = _system.IOB.DMARegisters.GetDataAddress(_dmaTx);
+
+                Console.WriteLine($"  DMA addresses:     Header: 0x{headerAddress:x6}  " +
+                                  $"Buffer: 0x{bufferAddress:x6} ({_dmaTx})");
+            }
 
             Console.WriteLine("\n  Microsecond clock: {0} enabled, interrupt {1} enabled, {2} ticks",
                               (_control.HasFlag(Control.ClockEnable) ? "IS" : "Is NOT"),
@@ -765,14 +752,13 @@ namespace PERQemu.IO.Network
         Status _status;
 
         InterruptSource _irq;
+        ChannelName _dmaTx;
+        ChannelName _dmaRx;
 
         MachineAddress _physAddr;
         MachineAddress _recvAddr;
 
         byte[] _mcastGroups;
-
-        ExtendedRegister _headerAddress;
-        ExtendedRegister _bufferAddress;
 
         bool _netInterrupt;
         bool _clockInterrupt;

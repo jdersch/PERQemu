@@ -1,5 +1,5 @@
 //
-// Configurator.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Configurator.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -632,7 +632,7 @@ namespace PERQemu.Config
         /// <remarks>
         /// For now, traditional configuration rules apply:
         ///     PERQ-1 only has 1 floppy, 1 Shugart 14" disk.
-        ///     PERQ-2 only has 1 floppy, 1 Micropolis 8" disks.
+        ///     PERQ-2 only has 1 floppy, 1 Micropolis 8" disk.
         ///     PERQTx only has 1 floppy, 1 Micropolis 8" or 1-2 5.25" disks.
         /// With the addition of the QIC Tape streamer (OIO only, currently) any
         /// configuration may attach a single drive as unit 3 iff the controller

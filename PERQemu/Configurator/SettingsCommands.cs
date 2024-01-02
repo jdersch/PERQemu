@@ -1,5 +1,5 @@
 //
-// SettingsCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// SettingsCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -57,21 +57,23 @@ namespace PERQemu.UI
         {
             Console.WriteLine("Current settings:");
             Console.WriteLine("-----------------");
-            Console.WriteLine("Autosave harddisks on shutdown: " + Settings.SaveDiskOnShutdown);
-            Console.WriteLine("Autosave floppies on eject:     " + Settings.SaveFloppyOnEject);
-            Console.WriteLine("Autosave tapes on unload:       " + Settings.SaveTapeOnUnload);
-            Console.WriteLine("Pause execution after reset:    " + Settings.PauseOnReset);
-            Console.WriteLine("Pause when window minimized:    " + Settings.PauseWhenMinimized);
-            Console.WriteLine("Cursor in PERQ display window:  " + Settings.CursorPreference);
+            Console.WriteLine($"Autosave harddisks on shutdown: {Settings.SaveDiskOnShutdown}");
+            Console.WriteLine($"Autosave floppies on eject:     {Settings.SaveFloppyOnEject}");
+            Console.WriteLine($"Autosave tapes on unload:       {Settings.SaveTapeOnUnload}");
+            Console.WriteLine($"Pause execution after reset:    {Settings.PauseOnReset}");
+            Console.WriteLine($"Pause when window minimized:    {Settings.PauseWhenMinimized}");
+            Console.WriteLine($"Cursor in PERQ display window:  {Settings.CursorPreference}");
             Console.WriteLine();
-            Console.WriteLine("Rate limiting options:  " + Settings.Performance);
+            Console.WriteLine($"Rate limiting options:  {Settings.Performance}");
             Console.WriteLine();
-            Console.WriteLine("Default radix for CPU debugger: " + Settings.DebugRadix);
-            Console.WriteLine("Default radix for Z80 debugger: " + Settings.Z80Radix);
+            Console.WriteLine($"Default radix for CPU debugger: {Settings.DebugRadix}");
+            Console.WriteLine($"Default radix for Z80 debugger: {Settings.Z80Radix}");
             Console.WriteLine();
-            Console.WriteLine("Default output directory:   " + Settings.OutputDirectory);
-            Console.WriteLine("Screenshot file format:     " + Settings.ScreenshotFormat);
-            Console.WriteLine("Canon output file format:   " + Settings.CanonFormat);
+            Console.WriteLine($"Default output directory:   {Settings.OutputDirectory}");
+            Console.WriteLine($"Screenshot file format:     {Settings.ScreenshotFormat}");
+            Console.WriteLine($"Canon output file format:   {Settings.CanonFormat}");
+            Console.WriteLine($"Canon default paper type:   {Settings.CanonPaperSize}");
+            Console.WriteLine($"Canon default resolution:   {Settings.CanonResolution}dpi");
             Console.WriteLine();
             Console.Write("Host serial port A device:  ");
             Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" :
@@ -236,6 +238,10 @@ namespace PERQemu.UI
             }
         }
 
+        //
+        // Todo: set screenshot format and file naming scheme?
+        //       set Canon format, naming, default paper type, default resolution
+        //
 
         [Command("settings assign rs232 device", "Map a host device to a PERQ serial port")]
         public void SetRS232Device(char port, [KeywordMatch("ComPorts")] string hostDevice,
@@ -437,7 +443,9 @@ namespace PERQemu.UI
 	TODO:
 	settings::screenshot format [jpg, png, tiff, ?]
 	settings::screenshot template [str] -- really?  cmon...
-	settings::canon format [jpg, png, tiff, bmp, PDF!?]
+	settings::canon format [jpg|png|tiff|pdf|...]
+	settings::canon paper size [a4|usletter|...]
+	settings::canon model [lbp10|cx] or resolution [240|300] ?
 	settings::canon template [str]      -- same 
 	settings::logging directory         -- default: Output/
 	settings::logging template [str]    -- hmm.
@@ -448,7 +456,6 @@ namespace PERQemu.UI
 	Host interface to the network, serial and audio output devices
 	is globally set for all virtual machines:
 
-	settings::ethernet device [dev]         -- host interface to use
-	settings::ethernet encapsulation [raw, udp, 3to10bridge]
+	settings::ethernet encapsulation [raw, udp, ???]
 	settings::audio device [dev]            -- audio output device?
 */

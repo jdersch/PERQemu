@@ -213,6 +213,8 @@
     <Compile Include="Emulator\IO\Z80\PERQToZ80FIFO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80ToPERQFIFO.cs" />
     <Compile Include="Emulator\IO\DiskDevices\CIOMicropolisDiskController.cs" />
+    <Compile Include="Emulator\IO\CanonPrinter.cs" />
+    <Compile Include="Emulator\IO\CanonController.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -700,6 +702,7 @@
     <None Include="PROM\eioz80.lst">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Docs\LaserCanon.txt" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">

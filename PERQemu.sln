@@ -58,7 +58,7 @@ Global
 		$5.inheritsSet = null
 		$5.scope = text/x-asm
 		$0.StandardHeader = $6
-		$6.Text = @\n${FileName} - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)\n\nThis file is part of PERQemu.\n\nPERQemu is free software: you can redistribute it and/or modify it\nunder the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nPERQemu is distributed in the hope that it will be useful, but\nWITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with PERQemu.  If not, see <http://www.gnu.org/licenses/>.\n
+		$6.Text = @\n${FileName} - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)\n\nThis file is part of PERQemu.\n\nPERQemu is free software: you can redistribute it and/or modify it\nunder the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nPERQemu is distributed in the hope that it will be useful, but\nWITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nSee the GNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with PERQemu.  If not, see <http://www.gnu.org/licenses/>.\n
 		$6.IncludeInNewFiles = True
 		$0.DotNetNamingPolicy = $7
 		$7.DirectoryNamespaceAssociation = None

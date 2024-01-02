@@ -1,5 +1,5 @@
-﻿//
-// EIOZ80.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+//
+// EIOZ80.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -335,13 +335,13 @@ namespace PERQemu.IO.Z80
 							bit 6  - Write FIFO not empty
     170  Control register   bit 0  - Output ready
 
-    //
-    //        PERQ READ AND WRITE PORTS
-    //
-    //PERQ.IN   equ 160Q    ; PERQ Input port
-    //PERQ.OUT  equ 161Q    ; PERQ Output port
-    //PERQ.STS  equ 162Q    ; PERQ Status port
-    //PERQ.Rdy  equ 170Q    ; PERQ Ready port
+
+            PERQ READ AND WRITE PORTS
+
+    PERQ.IN   equ 160Q    ; PERQ Input port
+    PERQ.OUT  equ 161Q    ; PERQ Output port
+    PERQ.STS  equ 162Q    ; PERQ Status port
+    PERQ.Rdy  equ 170Q    ; PERQ Ready port
 
     ----
     GPIB

@@ -1,5 +1,5 @@
 //
-// Program.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Program.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -157,7 +157,7 @@ namespace PERQemu
 #endif
         }
 
-        public static string Copyright = "Copyright (c) 2006-2023, J. Dersch (derschjo@gmail.com)\n" +
+        public static string Copyright = "Copyright (c) 2006-2024, J. Dersch (derschjo@gmail.com)\n" +
                                          "With contributions from S. Boondoggle (skeezicsb@gmail.com)";
 
         public static string Version => _version;

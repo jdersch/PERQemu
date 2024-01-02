@@ -1,5 +1,5 @@
 ﻿//
-// Ether3MbitController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Ether3MbitController.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //

@@ -1,5 +1,5 @@
 ﻿//
-// IOBoard.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// IOBoard.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.Collections.Generic;
 
 using PERQmedia;
 using PERQemu.Config;
@@ -27,6 +28,22 @@ using PERQemu.Processor;
 
 namespace PERQemu.IO
 {
+    /// <summary>
+    /// A superset of the DMA channel descriptions for IOB and EIO.
+    /// </summary>
+    public enum ChannelName
+    {
+        Unused = 0,
+        uProc = 1,
+        HardDisk = 2,
+        Network = 3,
+        NetXmit = 3,
+        ExtA = 4,
+        ExtB = 5,
+        NetRecv = 6,
+        Idle = 7
+    }
+
     /// <summary>
     /// A base class for the PERQ's I/O boards.
     /// </summary>
@@ -47,6 +64,7 @@ namespace PERQemu.IO
         protected IOBoard(PERQSystem system)
         {
             _sys = system;
+            _dmaRegisters = new DMARegisterFile();
         }
 
         public static string Name => _name;
@@ -62,6 +80,7 @@ namespace PERQemu.IO
         public bool SupportsAsync => _z80System.SupportsAsync;
 
         public IStorageController DiskController => _hardDiskController;
+        public DMARegisterFile DMARegisters => _dmaRegisters;
 
         public bool HandlesPort(byte port)
         {
@@ -76,6 +95,7 @@ namespace PERQemu.IO
         {
             _z80System.Reset();
             _hardDiskController.Reset();
+            _dmaRegisters.Clear();
 
             Log.Info(Category.IO, "{0} board reset", _name);
         }
@@ -165,29 +185,6 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Unfrob a DMA address like the hardware do.  This is common to IOB
-        /// and CIO, and any OIO device that uses DMA.  Not sure about EIO yet.
-        /// </summary>
-        /// <remarks>
-        ///                                 ! Explained:
-        /// tmp := 176000;                  ! Need to compliment upper 6 bits
-        ///                                 ! of buffer address. The hardware
-        ///                                 ! has an inversion for the upper
-        ///                                 ! 10 bits of the 20 bit address.
-        /// Buffer xor tmp, IOB(LHeadAdrL); ! Send lower 16 bits of logical
-        ///                                 ! header address to channel ctrl.
-        /// not 0, IOB(LHeadAdrH);          ! Send higher 4 bits of logical
-        ///                                 ! header address to channel ctrl.
-        ///                                 ! Remember, these bits are inverted.
-        /// </remarks>
-        public static int Unfrob(ExtendedRegister addr)
-        {
-            // Hi returns the upper 4 or 8 bits shifted; Lo needs to be unfrobbed
-            Log.Detail(Category.DMA, "Unfrobbing {0}", addr);
-            return addr.Hi | (~(0x3ff ^ addr.Lo) & 0xffff);
-        }
-
-        /// <summary>
         /// Populate the port lookup table.
         /// </summary>
         protected void RegisterPorts(byte[] ports)
@@ -203,6 +200,7 @@ namespace PERQemu.IO
             }
         }
 
+
         // Describe the specific board
         protected static string _name;
         protected static string _desc;
@@ -212,14 +210,149 @@ namespace PERQemu.IO
         protected static int _z80RomSize;
         protected static int _z80RomAddr;
 
+        // Parent
+        protected PERQSystem _sys;
+
         // Devices required by all I/O boards
         protected Z80System _z80System;
         protected IStorageController _hardDiskController;
 
+        // DMA register file
+        protected DMARegisterFile _dmaRegisters;
+
         // I/O port map for this board
         static bool[] _portsHandled = new bool[256];
+    }
 
-        // Parent
-        PERQSystem _sys;
+
+    public delegate void LoadRegisterDelegate(ChannelName chan, int value);
+
+    public class DMARegisterFile
+    {
+        public DMARegisterFile()
+        {
+            _portToChannelAction = new Dictionary<byte, LoadRegisterDelegate>();
+
+            _channels = new DMAChannel[] {
+                new DMAChannel(ChannelName.Unused),
+                new DMAChannel(ChannelName.uProc),
+                new DMAChannel(ChannelName.HardDisk),
+                new DMAChannel(ChannelName.NetRecv),
+                new DMAChannel(ChannelName.ExtB),
+                new DMAChannel(ChannelName.ExtA),
+                new DMAChannel(ChannelName.NetXmit),
+                new DMAChannel(ChannelName.Idle)
+            };
+        }
+
+        public void Clear()
+        {
+            for (var i = 0; i < _channels.Length; i++)
+            {
+                _channels[i].DataAddr.Value = 0;
+                _channels[i].HeaderAddr.Value = 0;
+            }
+        }
+
+        public void Assign(byte dataHi, byte dataLo, byte hdrHi, byte hdrLo)
+        {
+            // Four actions for every address pair
+            _portToChannelAction.Add(dataHi, LoadDataHigh);
+            _portToChannelAction.Add(dataLo, LoadDataLow);
+            _portToChannelAction.Add(hdrHi, LoadHeaderHigh);
+            _portToChannelAction.Add(hdrLo, LoadHeaderLow);
+
+            Log.Info(Category.DMA, "DMA mapping assigned for ports {0:x}, {1:x}, {2:x}, {3:x}",
+                                    dataHi, dataLo, hdrHi, hdrLo);
+        }
+
+        public void LoadRegister(ChannelName chan, byte port, int value)
+        {
+            LoadRegisterDelegate doit;
+
+            if (_portToChannelAction.TryGetValue(port, out doit))
+            {
+                doit(chan, value);
+                return;
+            }
+
+            Log.Warn(Category.DMA, "Could not load DMA register 0x{0:2x}, delegate not found!", port);
+        }
+
+        public void LoadDataHigh(ChannelName chan, int value)
+        {
+            _channels[(int)chan].DataAddr.Hi = ~value;
+            Log.Detail(Category.DMA, "{0} data buffer addr (high) set to 0x{1:x}", chan, value);
+        }
+
+        public void LoadDataLow(ChannelName chan, int value)
+        {
+            _channels[(int)chan].DataAddr.Lo = (ushort)value;
+            Log.Detail(Category.DMA, "{0} data buffer addr (low) set to 0x{1:x4}", chan, value);
+        }
+
+        public void LoadHeaderHigh(ChannelName chan, int value)
+        {
+            _channels[(int)chan].HeaderAddr.Hi = ~value;
+            Log.Detail(Category.DMA, "{0} header buffer addr (high) set to 0x{1:x}", chan, value);
+        }
+
+        public void LoadHeaderLow(ChannelName chan, int value)
+        {
+            _channels[(int)chan].HeaderAddr.Lo = (ushort)value;
+            Log.Detail(Category.DMA, "{0} header buffer addr (low) set to 0x{1:x4}", chan, value);
+        }
+
+        public int GetDataAddress(ChannelName chan)
+        {
+            return Unfrob(_channels[(int)chan].DataAddr);
+        }
+
+        public int GetHeaderAddress(ChannelName chan)
+        {
+            return Unfrob(_channels[(int)chan].HeaderAddr);
+        }
+
+        /// <summary>
+        /// Unfrob a DMA address like the hardware do.  This is common to IOB
+        /// and CIO, and any OIO device that uses DMA.  Not sure about EIO yet.
+        /// </summary>
+        /// <remarks>
+        ///                                 ! Explained:
+        /// tmp := 176000;                  ! Need to compliment upper 6 bits
+        ///                                 ! of buffer address. The hardware
+        ///                                 ! has an inversion for the upper
+        ///                                 ! 10 bits of the 20 bit address.
+        /// Buffer xor tmp, IOB(LHeadAdrL); ! Send lower 16 bits of logical
+        ///                                 ! header address to channel ctrl.
+        /// not 0, IOB(LHeadAdrH);          ! Send higher 4 bits of logical
+        ///                                 ! header address to channel ctrl.
+        ///                                 ! Remember, these bits are inverted.
+        /// </remarks>
+        int Unfrob(ExtendedRegister addr)
+        {
+            // Hi returns the upper 4 or 8 bits shifted; Lo needs to be unfrobbed
+            Log.Detail(Category.DMA, "Unfrobbing {0}", addr);
+            return addr.Hi | (~(0x3ff ^ addr.Lo) & 0xffff);
+        }
+
+        internal struct DMAChannel
+        {
+            public DMAChannel(ChannelName chan)
+            {
+                Name = chan;
+
+                // Should be 20 bits for IOB/CIO, 20 or 24 bits for EIO!
+                HeaderAddr = new ExtendedRegister(CPU.CPUBits - 16, 16);
+                DataAddr = new ExtendedRegister(CPU.CPUBits - 16, 16);
+            }
+
+            public ChannelName Name;
+            public ExtendedRegister HeaderAddr;
+            public ExtendedRegister DataAddr;
+        }
+
+        DMAChannel[] _channels;
+        Dictionary<byte, LoadRegisterDelegate> _portToChannelAction;
     }
 }

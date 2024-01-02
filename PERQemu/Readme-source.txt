@@ -52,8 +52,9 @@ could use yet another rewrite...]
 The next release will incorporate expanded functionality while still primarily
 focused on PERQ-1 configurations: Ethernet and the Canon laser printer are the
 two major peripherals to be added, along with bug fixes and further refinements
-to the user interface.  It is currently in development on the "experiments"
-branch as PERQemu v0.5.2.
+to the user interface.  Additionally, first steps have been taken to refactor
+the I/O section and Z80 to support the EIO and PERQ-2 configurations.  It is
+currently in development on the "experiments" branch as PERQemu v0.5.4.
 
 PERQemu v0.5.0 is the milestone release, incorporating all of the changes
 since v0.4.4 and is stable enough for general use.
@@ -303,16 +304,34 @@ All devices hung off of the Z80 subsystem implement the IZ80Device interface.
 2.3.1  The Z80 Subsystem
 ------------------------
 
-[Differences between the PERQ-1 "IOB" and the PERQ-2 "EIO" boards are fairly
-significant; additional refactoring will likely be required in the next release
-to properly support the PERQ-2.  For now, the Z80 code is in one directory.]
-
 All of the Z80 subsystem resides in the Emulator/IO/Z80 directory.  There is a
 lot to unpack here!
 
 The Z80dotNet CPU is instantiated by the Z80System object; it requires two
 small objects that provide I/O bus mapping (Z80IOBus.cs) and a memory map
-(Z80MemoryBus.cs).
+(Z80MemoryBus.cs).  Z80System itself is now a superclass for CIOZ80.cs and
+EIOZ80.cs; these encapsulate the different peripherals attached to the old
+IOB and the new EIO:
+
+    - The "CIOZ80" class handles all PERQ-1 configurations using the original
+      I/O board.  For "IOB" the old v8.7 firmware is loaded; if configured as
+      "CIO" the new v10.17 firmware is run.  Only supports a Shugart hard disk.
+
+    - "EIOZ80" will manage all PERQ-2 configurations.  This board supports
+      the standard EIO (Ethernet interface built-in) as well as the NIO (no
+      Ethernet) variant.  Supports a Micropolis or MFM hard disk controller.
+
+ PERQ<->Z80 communication is facilitated by a hardware channel unique to each
+ I/O board type.  These byte-wide channels are used to send messages between the
+ main CPU and the Z80:
+
+    - In the PERQ-1 (IOB/CIO), these are simply latches with some special
+      control signals: PERQtoZ80Latch.cs and Z80toPERQLatch.cs are instantiated
+      by CIOZ80 and use the Z80's WAIT line to assist with flow control;
+
+    - The PERQ-2/2Tx (EIO) uses actual 16-byte FIFOs and the programming model
+      changed; thus, new implementations are being develeoped (PERQtoZ80Fifo.cs,
+      Z80ToPERQFifo.cs) for the EIOZ80.
 
 Numerous interfaces are defined (ISIODevice.cs, IZ80Device.cs, ICTCDevice.cs
 and IDMADevice.cs) to glue parts of the Z80 I/O system together.  These are
@@ -340,12 +359,6 @@ There are a bunch of Z80 devices:
       support up to 4 floppy drives; the PERQ only has the physical wiring to
       accommodate two drives (but only software support for a single drive);
 
-    - The PERQ<->Z80 FIFOs are a hardware channel used to send messages
-      between the main CPU and the Z80.  In the PERQ-1, these are simply
-      latches; in the PERQ-2 these are actual FIFOs.  Currently two classes
-      (PERQtoZ80Fifo.cs and Z80toPERQFifo.cs) implement the unidirectional
-      channels and their control registers;
-
     - The "TMS9914A" class emulates the TI GPIB controller chip and its
       interface to the Z80 I/O bus.  See below for more;
 
@@ -359,7 +372,17 @@ There are a bunch of Z80 devices:
     - The "Z80SIO" class emulates the Zilog SIO/2 chip used for RS-232,
       "speech", and the Kriz tablet.  The PERQ-1 has one SIO chip; the PERQ-2
       EIO will have two.  The "Z80SIOChannel" class does the heavy lifting.
-    
+
+Support for the EIO requires several new controller chips:
+
+    - The "Oki5832" class implements the real-time clock (RTC) chip.  This
+      battery-backed clock lets the PERQ set the time automatically at bootup;
+
+    - The "Am9519" class will handle the new interrupt controller for EIO;
+
+    - New Intel i8237 (DMAC) and i8254 (PIT) chips replace the Zilog DMA and
+      CTC chips used on the original IOB.  [TBD]
+
 
 2.3.2  Serial Devices
 ---------------------

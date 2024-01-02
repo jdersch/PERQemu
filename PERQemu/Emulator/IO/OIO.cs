@@ -1,5 +1,5 @@
 //
-// OIO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// OIO.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -50,19 +50,19 @@ namespace PERQemu.IO
             _link = new PERQLink();
             RegisterPorts(_handledPorts);
 
-            if (system.Config.IOOptions.HasFlag(IOOptionType.Ether))
+            if (_sys.Config.IOOptions.HasFlag(IOOptionType.Ether))
             {
                 if (string.IsNullOrEmpty(Settings.EtherDevice) || Settings.EtherDevice == "null")
                 {
                     // A minimal interface to let Accent boot properly
-                    _ethernet = new NullEthernet(system);
+                    _ethernet = new NullEthernet(_sys);
                 }
                 else
                 {
                     try
                     {
                         // The real deal!
-                        _ethernet = new Ether10MbitController(system);
+                        _ethernet = new Ether10MbitController(_sys);
                     }
                     catch (UnimplementedHardwareException e)
                     {
@@ -70,29 +70,28 @@ namespace PERQemu.IO
                         Log.Warn(Category.All, "{0}; no Ethernet available.", e.Message);
 
                         // Fall back to the fake one and continue
-                        _ethernet = new NullEthernet(system);
+                        _ethernet = new NullEthernet(_sys);
                     }
                 }
                 RegisterPorts(_etherPorts);
             }
 
-            if (system.Config.IOOptions.HasFlag(IOOptionType.Tape))
+            if (_sys.Config.IOOptions.HasFlag(IOOptionType.Tape))
             {
-                _streamer = new QICTapeController(system.Config.IOOptionBoard);
+                _streamer = new QICTapeController(_sys.Config.IOOptionBoard);
                 RegisterPorts(_streamerPorts);
             }
 
-            // Unimplemented:
-            // if (system.Config.IOOptions.HasFlag(IOOptionType.Canon))
-            // {
-            //      _canon = new CanonPrinter();
-            //      RegisterPorts(_canonPorts);
-            // }
+            if (_sys.Config.IOOptions.HasFlag(IOOptionType.Canon))
+            {
+                _canon = new CanonController(_sys);
+                RegisterPorts(_canonPorts);
+            }
         }
 
         public INetworkController Ether => _ethernet;
         public QICTapeController Streamer => _streamer;
-        //public CanonPrinter Canon => _canon;
+        public CanonController Canon => _canon;
 
         public override void Reset()
         {
@@ -100,7 +99,7 @@ namespace PERQemu.IO
 
             if (_ethernet != null) _ethernet.Reset();
             if (_streamer != null) _streamer.Reset();
-            //if (_canon != null) _canon.Reset();
+            if (_canon != null) _canon.Reset();
 
             base.Reset();
         }
@@ -137,73 +136,102 @@ namespace PERQemu.IO
         /// </summary>
         public override int IORead(byte port)
         {
-            int retVal = 0xffff;        // Unhandled things assume this?
-            var handled = false;        // Missing/optional devices fall thru
-
             switch (port)
             {
-                case 0x06:    // Ethernet bit counter registers
+                case 0x06:      // Ethernet bit counter registers
                 case 0x07:
                     if (_ethernet != null)
                     {
-                        retVal = _ethernet.ReadRegister(port);
-                        handled = true;
+                        return _ethernet.ReadRegister(port);
+                    }
+                    break;
+
+                case 0x08:      // Read Canon interrupt status
+                case 0x09:      // Read Canon mechanical status
+                    if (_canon != null)
+                    {
+                        return _canon.ReadStatus(port);
                     }
                     break;
 
                 case 0x0f:
                     if (_ethernet != null)
                     {
-                        retVal = _ethernet.ReadStatus();
-                        handled = true;
+                        return _ethernet.ReadStatus();
                     }
                     break;
 
-                case 0x0d:    // Read streamer status
+                case 0x0d:      // Read streamer status
                     if (_streamer != null)
                     {
-                        retVal = _streamer.ReadStatus();
-                        handled = true;
+                        return _streamer.ReadStatus();
                     }
                     break;
 
-                case 0x0e:    // Read streamer data
+                case 0x0e:      // Read streamer data
                     if (_streamer != null)
                     {
-                        retVal = _streamer.ReadData();
-                        handled = true;
+                        return _streamer.ReadData();
                     }
                     break;
 
-                case 0x20:    // PERQlink input status port
-                    retVal = _link.ReadCommandStatus();
-                    handled = true;
-                    break;
+                case 0x20:      // PERQlink input status port
+                    return _link.ReadCommandStatus();
 
-                case 0x22:    // PERQlink input data port
-                    retVal = _link.ReadData();
-                    handled = true;
+                case 0x22:      // PERQlink input data port
+                    return _link.ReadData();
+
+                default:
+                    // Log a warning for invalid or unknown port read attempts
+                    Log.Warn(Category.IO, "Unhandled OIO Read from port {0:x2}", port);
                     break;
             }
 
-            if (!handled)
-            {
-                Log.Warn(Category.IO, "Unhandled OIO Read from port {0:x2}", port);
-            }
-
-            return retVal;
+            // Unhandled things assume this?
+            return 0xffff;
         }
 
 
         /// <summary>
         /// Write to the given port.
         /// </summary>
+        /// <remarks>
+        /// There is a port conflict between the streamer and the Canon printer
+        /// on port 0x84 (oct 204) that I'm not sure how to resolve.  Either you
+        /// simply cannot use the printer when the streamer is running OR there
+        /// is some other mechanism to prevent conflicts?  I haven't seen any
+        /// mention in the microcode or higher-level software.  Hmmm. :-|
+        /// 
+        /// For now, any write to the port goes to either or both of the devices
+        /// depending on configuration.  This conflict is only likely to be a
+        /// problem under Accent (multitasking) and not on POS.  I assume (but
+        /// don't know) that PNX offers support for these peripherals and could
+        /// also have a conflict if both are accessed simultaneously?
+        /// </remarks>
         public override void IOWrite(byte port, int value)
         {
             switch (port)
             {
-                case 0x84:    // Load Streamer data
-                case 0x86:    // Load Streamer control
+                case 0x84:      // Load Streamer data AND/OR Canon line count
+                    if (_streamer != null)
+                    {
+                        _streamer.LoadRegister(port, value);
+                    }
+
+                    if (_canon != null)
+                    {
+                        _canon.LoadRegister(port, value);
+                    }
+                    break;
+
+                case 0x85:      // Load Canon control port
+                    if (_canon != null)
+                    {
+                        _canon.LoadCommand(value & 0x1f);
+                    }
+                    break;
+
+                case 0x86:      // Load Streamer control
                     if (_streamer != null)
                     {
                         _streamer.LoadRegister(port, value);
@@ -219,29 +247,34 @@ namespace PERQemu.IO
                 case 0x90:
                 case 0x91:
                 case 0x92:
-                case 0x93:
-                case 0xd6:
-                case 0xd7:
-                case 0xde:
-                case 0xdf:    // Load Ethernet registers
+                case 0x93:      // Load Ethernet registers
                     if (_ethernet != null)
                     {
                         _ethernet.LoadRegister(port, value);
                     }
                     break;
 
-                case 0x99:    // Load Ethernet control register
+                case 0x99:      // Load Ethernet control register
                     if (_ethernet != null)
                     {
                         _ethernet.LoadCommand(value);
                     }
                     break;
 
-                case 0xa1:    // PERQlink output status
+                case 0x94:      // Load Canon page margin control register
+                case 0x95:      // Load Canon left margin register
+                case 0x96:      // Load Canon line length register
+                    if (_canon != null)
+                    {
+                        _canon.LoadRegister(port, value);
+                    }
+                    break;
+
+                case 0xa1:      // PERQlink output status
                     _link.WriteCommandStatus(value);
                     break;
 
-                case 0xa3:    // PERQlink output data
+                case 0xa3:      // PERQlink output data
                     _link.WriteData(value);
                     break;
 
@@ -264,6 +297,12 @@ namespace PERQemu.IO
             if (_ethernet != null && _ethernet.GetType() == typeof(Ether10MbitController))
             {
                 _ethernet.Shutdown();
+            }
+
+            // If we stopped mid-print, tell Canon to close the file
+            if (_canon != null)
+            {
+                _canon.Shutdown();
             }
 
             base.Shutdown();
@@ -301,24 +340,19 @@ namespace PERQemu.IO
             0x91,   // 221 E10OWrMC1: load Ethernet multicast register (Grp1<<8|Cmd)
             0x92,   // 222 E10OWrMC2:   "      "        "         "    (Grp3<<8|Grp2)
             0x93,   // 223 E10OWrMC3:   "      "        "         "    (Grp5<<8|Grp4)
-            0x99,   // 231 E10OWrNetCR: load Ethernet control register
-            0xd6,   // 326 E10OWrBufHi: load Ethernet buffer address high 4 bits
-            0xd7,   // 327 E10OWrHdrHi:   "      "    header    "      "    "
-            0xde,   // 336 E10OWrBufLo:   "      "    buffer    "    low 16 bits
-            0xdf    // 337 E10OWrHdrLo:   "      "    header    "      "    "
+            0x99    // 231 E10OWrNetCR: load Ethernet control register
         };
 
         byte[] _canonPorts =
         {
-            // Canon ports (TODO: not yet implemented)
+            // Canon ports
             0x08,   // 010 IntStat: read Canon interrupt status (4 bits)
             0x09,   // 011 MechStat: read Canon mechanical status word
             0x84,   // 204 LineCount: load Canon lines-per-band register[*]
             0x85,   // 205 CanonCntl: load Canon control port (5 bits)
             0x94,   // 224 MargnCntl: load Canon page margin control port
             0x95,   // 225 LeftMar: load Canon blank words register (left margin)
-            0x96,   // 226 RightMar: load Canon line length register (right margin)
-            0xff    // 377 (??) dummy write used by Canon driver
+            0x96    // 226 RightMar: load Canon line length register (right margin)
         };
 
         byte[] _streamerPorts =
@@ -330,9 +364,11 @@ namespace PERQemu.IO
             0x86    // 206 StrCntrl: load streamer control
         };
 
+
         // Attached devices
         PERQLink _link;
         INetworkController _ethernet;
         QICTapeController _streamer;
+        CanonController _canon;
     }
 }

@@ -1,5 +1,5 @@
 //
-// EIO.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// EIO.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -66,6 +66,11 @@ namespace PERQemu.IO
             _z80System = new EIOZ80(system);
             _z80System.LoadZ80ROM("eioz80.bin");
 
+            // Set up the DMA channel mapping
+            _dmaRegisters.Assign(0xd5, 0xd4, 0xd7, 0xd6);
+            _chanSelect = ChannelName.Unused;
+
+            // Register the base I/O ports
             RegisterPorts(_handledPorts);
 
             // What flavor of PERQ 2 are we?
@@ -126,10 +131,10 @@ namespace PERQemu.IO
                 case 0x53:      // DskStat (SMStat): read disk status reg
                     return _hardDiskController.ReadStatus();
 
-                case 0x54:       // 124 EioZ80In: dismiss Z80 interrupt
+                case 0x54:      // 124 EioZ80In: dismiss Z80 interrupt
                     return _z80System.ReadData();
 
-                case 0x55:       // 125 EioZ80Stat: read Z80 interface status
+                case 0x55:      // 125 EioZ80Stat: read Z80 interface status
                     return _z80System.ReadStatus();
 
                 default:
@@ -166,11 +171,15 @@ namespace PERQemu.IO
 
                 // Load DMA registers
                 case 0xc0:
+                    _chanSelect = (ChannelName)(value & 0x7);
+                    break;
+
                 case 0xd4:
                 case 0xd5:
                 case 0xd6:
                 case 0xd7:
-                    throw new InvalidOperationException($"EIO DMA not yet implemented (0x{port:x2})");
+                    _dmaRegisters.LoadRegister(_chanSelect, port, value);
+                    break;
 
                 // Load Ethernet registers
                 case 0xc2:
@@ -282,7 +291,7 @@ namespace PERQemu.IO
         /// </remarks>
 
         INetworkController _ethernetController;
-
+        ChannelName _chanSelect;
     }
 }
 

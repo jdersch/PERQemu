@@ -1,5 +1,5 @@
 //
-// Z80System.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Z80System.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -19,11 +19,9 @@
 
 using System;
 using System.Threading;
-using System.Runtime.CompilerServices;
 
 using Konamiman.Z80dotNet;
 
-using PERQemu.Config;
 using PERQemu.Debugger;
 
 namespace PERQemu.IO.Z80
