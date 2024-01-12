@@ -152,6 +152,62 @@ namespace PERQemu
             }
         }
 
+        // todo: maybe consider a new "output commands" class for screen shots,
+        // canon printer, and future printer emulation (like a dot-matrix or
+        // daisy wheel gpib device, or the versatec v80 "electrostatic plotter")
+
+        bool FindCanon(out IO.CanonController ctrl)
+        {
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The system is not powered on; printer not available.");
+                ctrl = null;
+                return false;
+            }
+
+            // See if the printer is attached
+            if (PERQemu.Sys.Config.IOOptionBoard == Config.OptionBoardType.OIO &&
+                PERQemu.Sys.Config.IOOptions.HasFlag(Config.IOOptionType.Canon))
+            {
+                var board = PERQemu.Sys.OIO as IO.OIO;
+                ctrl = board.Canon;
+                return true;
+            }
+            //else if (PERQemu.Sys.Config.IOOptionBoard == Config.OptionBoardType.MLO)
+            //{
+            //    var board = PERQemu.Sys.OIO as IO.MLO;
+            //    ctrl = board.Canon;
+            //    return true;
+            //}
+
+            Console.WriteLine("No Canon laser printer configured in this system.");
+            ctrl = null;
+            return false;
+        }
+
+        [Command("load paper", "Reload the paper tray of the Canon laser printer")]
+        void LoadCanon()
+        {
+            IO.CanonController canon;
+
+            if (FindCanon(out canon))
+            {
+                LoadCanon(canon.Cassette);
+            }
+        }
+
+        [Command("load paper", "Load a new tray of paper into the Canon laser printer")]
+        void LoadCanon(IO.PaperCode size)
+        {
+            IO.CanonController canon;
+
+            if (FindCanon(out canon))
+            {
+                canon.Cassette = size;
+                if (size != IO.PaperCode.NoCassette) Console.WriteLine($"{size} paper loaded.");
+            }
+        }
+
 #if DEBUG
         // debugging
         [Command("hide", "Hide the PERQ display", Discreet = true)]

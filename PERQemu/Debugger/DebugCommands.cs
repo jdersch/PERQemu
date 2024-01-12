@@ -24,6 +24,7 @@ using System.Collections.Generic;
 
 using PERQemu.Debugger;
 using PERQemu.Processor;
+using PERQemu.IO;
 
 namespace PERQemu
 {
@@ -1083,7 +1084,7 @@ namespace PERQemu
         // Miscellany and temporary/debugging hacks
         //
 
-        [Conditional("DEBUG")]
+        // [Conditional("DEBUG")]
         [Command("debug dump scheduler queue")]
         void DumpScheduler()
         {
@@ -1095,6 +1096,12 @@ namespace PERQemu
         void DumpTimers()
         {
             HighResolutionTimer.DumpTimers();
+        }
+
+        [Command("debug dump dma registers")]
+        void DumpDMARegisters()
+        {
+            PERQemu.Sys.IOB.DMARegisters.DumpDMARegisters();
         }
 
         [Conditional("DEBUG")]

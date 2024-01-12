@@ -239,9 +239,37 @@ namespace PERQemu.UI
         }
 
         //
-        // Todo: set screenshot format and file naming scheme?
-        //       set Canon format, naming, default paper type, default resolution
+        // Todo: set image format and file naming scheme for Canon, screenshots
         //
+
+        [Command("settings canon resolution", "Set the resolution (model) of Canon laser printer to simulate")]
+        public void SetCanonResolution(int dpi)
+        {
+            if (dpi != 240 && dpi != 300)
+            {
+                QuietWrite($"{dpi}dots per inch is not valid.  Please choose 240 (LBP-10) or 300 (LBP-CX).");
+                dpi = 300;
+            }
+
+            if (Settings.CanonResolution != dpi)
+            {
+                Settings.CanonResolution = (uint)dpi;
+                Settings.Changed = true;
+
+                QuietWrite($"Canon printer resolution set to {dpi}dpi.");
+            }
+        }
+
+        [Command("settings canon paper type", "Set the default paper size for the Canon laser printer")]
+        public void SetCanonPaperType(IO.PaperCode size)
+        {
+            if (size != Settings.CanonPaperSize)
+            {
+                Settings.CanonPaperSize = size;
+                Settings.Changed = true;
+                QuietWrite($"Canon default paper size set to {size}.");
+            }
+        }
 
         [Command("settings assign rs232 device", "Map a host device to a PERQ serial port")]
         public void SetRS232Device(char port, [KeywordMatch("ComPorts")] string hostDevice,

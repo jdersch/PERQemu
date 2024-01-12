@@ -93,9 +93,10 @@ namespace PERQemu.IO
 
         public virtual void Reset()
         {
+            _dmaRegisters.Clear();
+
             _z80System.Reset();
             _hardDiskController.Reset();
-            _dmaRegisters.Clear();
 
             Log.Info(Category.IO, "{0} board reset", _name);
         }
@@ -282,25 +283,25 @@ namespace PERQemu.IO
         public void LoadDataHigh(ChannelName chan, int value)
         {
             _channels[(int)chan].DataAddr.Hi = ~value;
-            Log.Detail(Category.DMA, "{0} data buffer addr (high) set to 0x{1:x}", chan, value);
+            Log.Debug(Category.DMA, "{0} data buffer addr (high) set to {1:x}", chan, value);
         }
 
         public void LoadDataLow(ChannelName chan, int value)
         {
             _channels[(int)chan].DataAddr.Lo = (ushort)value;
-            Log.Detail(Category.DMA, "{0} data buffer addr (low) set to 0x{1:x4}", chan, value);
+            Log.Debug(Category.DMA, "{0} data buffer addr (low) set to {1:x4}", chan, value);
         }
 
         public void LoadHeaderHigh(ChannelName chan, int value)
         {
             _channels[(int)chan].HeaderAddr.Hi = ~value;
-            Log.Detail(Category.DMA, "{0} header buffer addr (high) set to 0x{1:x}", chan, value);
+            Log.Debug(Category.DMA, "{0} header buffer addr (high) set to {1:x}", chan, value);
         }
 
         public void LoadHeaderLow(ChannelName chan, int value)
         {
             _channels[(int)chan].HeaderAddr.Lo = (ushort)value;
-            Log.Detail(Category.DMA, "{0} header buffer addr (low) set to 0x{1:x4}", chan, value);
+            Log.Debug(Category.DMA, "{0} header buffer addr (low) set to {1:x4}", chan, value);
         }
 
         public int GetDataAddress(ChannelName chan)
@@ -332,9 +333,25 @@ namespace PERQemu.IO
         int Unfrob(ExtendedRegister addr)
         {
             // Hi returns the upper 4 or 8 bits shifted; Lo needs to be unfrobbed
-            Log.Detail(Category.DMA, "Unfrobbing {0}", addr);
-            return addr.Hi | (~(0x3ff ^ addr.Lo) & 0xffff);
+            var unfrobbed = addr.Hi | (~(0x3ff ^ addr.Lo) & 0xffff);
+            Log.Debug(Category.DMA, "Unfrobbed {0:x} -> {1:x}", addr.Value, unfrobbed);
+
+            return unfrobbed;
         }
+
+        // Debugging
+        public void DumpDMARegisters()
+        {
+            Console.WriteLine("DMA registers:");
+
+            for (var i = ChannelName.uProc; i < ChannelName.Idle; i++)
+            {
+                Console.WriteLine(_channels[(int)i]);
+                Console.WriteLine("Unfrobbed:          {0:x6}        {1:x6}",
+                                  GetHeaderAddress(i), GetDataAddress(i));
+            }
+        }
+
 
         internal struct DMAChannel
         {
@@ -345,6 +362,12 @@ namespace PERQemu.IO
                 // Should be 20 bits for IOB/CIO, 20 or 24 bits for EIO!
                 HeaderAddr = new ExtendedRegister(CPU.CPUBits - 16, 16);
                 DataAddr = new ExtendedRegister(CPU.CPUBits - 16, 16);
+            }
+
+            public override string ToString()
+            {
+                return string.Format("{0}  Header: {1:x6}  Data: {2:x6}",
+                                     $"{Name}".PadRight(10), HeaderAddr.Value, DataAddr.Value);
             }
 
             public ChannelName Name;

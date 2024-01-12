@@ -155,32 +155,6 @@ namespace PERQemu.IO.Network
                     _mcastGroups[offset + 1] = (byte)(value >> 8);
                     break;
 
-                //
-                // DMA setup - addresses for the header and data buffers.  Note
-                // that each part of the address provided is munged in some unique
-                // way.  Don't ask.
-                //
-                case 0xd6:  // Packet buffer addr, high 4 bits
-                    Log.Detail(Category.Ethernet, "Wrote 0x{0:x} to DMA buffer address (high)", value);
-                    _bufferAddress = ((~value & 0xf) << 16) | (_bufferAddress & 0x0ffff);
-                    break;
-
-                case 0xde:  // Packet buffer addr, low 16 bits
-                    Log.Detail(Category.Ethernet, "Wrote 0x{0:x4} to DMA buffer address (low)", value);
-                    _bufferAddress = (_bufferAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
-                    break;
-
-                case 0xd7:  // Packet header addr, high 4 bits
-                    Log.Detail(Category.Ethernet, "Wrote 0x{0:x} to DMA header address (high)", value);
-                    _headerAddress = ((~value & 0xf) << 16) | (_headerAddress & 0x0ffff);
-                    // If we cared, the header word count is bits <7:4> ??
-                    break;
-
-                case 0xdf:  // Packet header addr, low 16 bits
-                    Log.Detail(Category.Ethernet, "Wrote 0x{0:x4} to DMA header address (low)", value);
-                    _headerAddress = (_headerAddress & 0xf0000) | (~(value ^ 0x3ff) & 0xffff);
-                    break;
-
                 default:
                     throw new InvalidOperationException($"Unhandled write to port 0x{address:x}");
             }
@@ -362,7 +336,7 @@ namespace PERQemu.IO.Network
 
         void GetAddress(ulong nSkew, object context)
         {
-            var addr = _headerAddress;
+            var addr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.Network);
 
             Log.Debug(Category.Ethernet, "Writing machine address to 0x{0:x6}", addr);
 
@@ -398,6 +372,9 @@ namespace PERQemu.IO.Network
         // Debugging
         public void DumpEther()
         {
+            var header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.Network);
+            var buffer = _system.IOB.DMARegisters.GetDataAddress(ChannelName.Network);
+
             Console.WriteLine("Fake Ethernet status:");
             Console.WriteLine($"  My MAC address:    {_physAddr} ({_physAddr.High},{_physAddr.Mid},{_physAddr.Low})");
             Console.WriteLine($"  Receive address:   {_recvAddr} ({_recvAddr.High},{_recvAddr.Mid},{_recvAddr.Low})");
@@ -405,7 +382,7 @@ namespace PERQemu.IO.Network
             Console.WriteLine($"  Status register:   {(int)_status:x} ({_status})");
             Console.WriteLine("  Controller state:  {0}, scheduler callback {1} pending", _state,
                               (_response != null ? "IS" : "is NOT"));
-            Console.WriteLine($"  DMA addresses:     Header: 0x{_headerAddress:x6}  Buffer: 0x{_bufferAddress:x6}");
+            Console.WriteLine($"  DMA addresses:     Header: 0x{header:x6}  Buffer: 0x{buffer:x6}");
 
             Console.WriteLine("\n  Microsecond clock: {0} enabled, interrupt {1} enabled, {2} ticks",
                               (_control.HasFlag(Control.ClockEnable) ? "IS" : "Is NOT"),
@@ -471,9 +448,6 @@ namespace PERQemu.IO.Network
         MachineAddress _recvAddr;
 
         byte[] _mcastGroups;
-
-        int _headerAddress;
-        int _bufferAddress;
 
         bool _netInterrupt;
         bool _clockInterrupt;

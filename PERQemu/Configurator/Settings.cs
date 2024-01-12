@@ -63,12 +63,13 @@ namespace PERQemu
     [Flags]
     public enum RateLimit
     {
-        None = 0,                           // 110% on the reactor
-        CPUSpeed = 0x1,                     // strive for accuracy
-        DiskSpeed = 0x2,                    // feel the pain
-        TapeSpeed = 0x4,                    // is this a trick question?
-        StartupDelay = 0x10,                // for the truly hardcore
-        FrameSkipping = 0x20                // not implemented
+        None = 0,                       // 110% on the reactor!
+        CPUSpeed = 0x1,                 // Strive for accuracy
+        DiskSpeed = 0x2,                // Feel the pain
+        TapeSpeed = 0x4,                // Is this a trick question?
+        StartupDelay = 0x10,            // For the truly hardcore
+        FrameSkipping = 0x20,           // Not implemented (yet?)
+        PrinterSpeed = 0x40             // Realistic Canon printer delays?
     }
 
     public struct SerialSettings

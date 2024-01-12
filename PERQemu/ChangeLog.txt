@@ -7,6 +7,25 @@ avoid wasting precious time scrolling to the end. :-)
 
 
 January, 2024:
+    5. Hooray, Github just stopped working with my browser on El Capitan, with
+    zero warning.  At least Google Docs is giving a warning that Firefox ESR 78
+    is no longer supported _but the site still works_.  So now I really do have
+    to finally migrate all of my crap to (at least) High Sierra on my iMac, for
+    as long as that lasts.  Pointless churn FTW.  Anyone with an old PowerMac5,1
+    out there who's looking to donate or trade?  Being flat broke is officially
+    NO goddamned fun.
+
+    4. Have almost worked out the arcane workings of the Canon controller and
+    print engine, although it's quirky as hell and currently very spongy.  It
+    seems to fool POS into thinking that the output went somewhere, so now I
+    have to make SDL do something reasonable (or punt and just write the PNG
+    file directly, without SDL2's stupidities and limitations in the way).
+    Or I could just write a 2700 column wide x 3300 line text file to see if
+    the bitmap looks like an image!
+
+    3. Update the NullEthernet device to use the DMA registers (fixed a small
+    regression that affected POS G on CIO).
+
     2. So, the Canon got to the point where it wanted to use the IOB DMA regs
     to set up a transfer, and it rudely reminded me that that had never been
     implemented.  Whoops.  So I went berzerk and slapped a thing together to
@@ -151,4 +170,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Mon Jan  1 19:22:17 PST 2024
+Last update: skeezics    Thu Jan 11 19:17:47 PST 2024
