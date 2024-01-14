@@ -127,6 +127,27 @@ namespace PERQemu
         }
 
         /// <summary>
+        /// Return the common file extension for a given image format.
+        /// </summary>
+        public static string GetExtensionForImageFormat(ImageFormat img)
+        {
+            switch (img)
+            {
+                case ImageFormat.Jpeg:
+                    return "jpg";
+
+                case ImageFormat.Png:
+                    return "png";
+
+                case ImageFormat.Tiff:
+                    return "tiff";
+
+                default:
+                    return "unknown";
+            }
+        }
+
+        /// <summary>
         /// Try to qualify a file name by applying a few simple search rules:
         ///     1. Try 'file' as given
         ///     2. Try 'file' in 'dir'

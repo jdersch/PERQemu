@@ -485,6 +485,15 @@ CX, 3300 - ((10 + 15 + 10) * 8) = 3020 (10.06").  That doesn't match the Apple
 spec (10.78" for US Letter, 10.86" for A4) but "close enough".  Similarly, the
 240dpi LBP-10 spec would be 2400 - ((40 + 5) * 8) = 2280 (9.5").  Sigh.
 
+All the CX service manual says (or implies) is that the area where the VMSK
+signal (internal to the uproc driving the engine) is active is between a 2mm
+top and bottom blanking area.  That would seem to be the hardware-enforced
+top and bottom margin; left seems to be 3mm and right 7mm, but it's not clear
+if that's face up or down?  I'm guessing the right margin is wider because
+the paper pickup/jam detect sensors are on that side?  Who knows?  The doc says
+that "in a table below" the print area specs for all four paper trays are given
+but this table doesn't exist.  Yay.
+
 
 ! Define IOB adresses for Canon printer interface hardware
 
@@ -602,3 +611,54 @@ PrintBlank:
 "end of page" seems to be completely non-deterministic.  my hack solution is to
 count the supposed maximum number of clock pulses for the paper size (even though
 3300 seems to be hardcoded for the CX regardless).
+
+
+Stupid Idea Of The Week:  write a raw PNG stream and avoid faffing about with
+SDL, System.Drawing, or any third party stuff.  For monochrome bitmaps it's a
+simple copy from the PERQ directly into image chunks -- I think.  So we just
+write a header, blat out the data, and see if it works... 
+
+
+cookie: 89 50 4E 47 0D 0A 1A 0A
+
+IHDR:   49 48 44 52
+width   4 bytes (2700 or up to uint32)
+height  4 bytes (3300 or up to uint32)
+depth   1 byte  (1 = bpp)
+ctype   1 byte  (0 = greyscale)
+cmprss  1 byte  (0 = lz77/zip blah)
+filter  1 byte  (0 ?)
+intlce  1 byte  (0 = no interlace)
+crc32   4 bytes
+
+
+iTXt (unicode capable) or tEXt (latin-1 only) chunks
+
+standard keywords:
+Title           short description   "PERQ screenshot (portrait|landscape)"
+Creation Time   date stamp          format rfc3339 (or rfc1123)
+Software        short description   PERQemu vX.Y.Z
+
+tEXt:   74 45 58 74
+keywd   1-79 bytes      as above
+null    1 byte          0
+strign  0+ bytes        value
+
+pHYs:   70 48 59 73     for pixel size and aspect ratio?
+unitX   4 bytes     (11811 dots per meter = 300 dots per inch)
+unitY   4 bytes     (or 9449 for 240 dpi)
+unit    1 byte      (1 = meter)
+
+IDAT:   49 44 41 54
+
+data chunks of n bytes
+up to 2gb?  so no need to split up
+the zlib format requires some extra fudging
+and even though we say "no filter" in the header, EVERY DAMN SCANLINE needs to
+start with a filter type... of 0.  which is "no filter."  SMDH.
+follow by a crc
+
+IEND:   49 45 4e 44
+no data
+crc32
+(duh, just compute this once)

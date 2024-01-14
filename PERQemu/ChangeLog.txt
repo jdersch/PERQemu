@@ -7,6 +7,11 @@ avoid wasting precious time scrolling to the end. :-)
 
 
 January, 2024:
+    6. Holy crap, laser printing seems to work.  LOTS of testing and tweaking to
+    do but I got a screendump to print and CPrint almost output a proper listing
+    (though the margin is shifted improperly).  Interim check-in for pushing the
+    code to other machines for testing.
+
     5. Hooray, Github just stopped working with my browser on El Capitan, with
     zero warning.  At least Google Docs is giving a warning that Firefox ESR 78
     is no longer supported _but the site still works_.  So now I really do have
@@ -170,4 +175,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Thu Jan 11 19:17:47 PST 2024
+Last update: skeezics    Sun Jan 14 02:04:04 PST 2024

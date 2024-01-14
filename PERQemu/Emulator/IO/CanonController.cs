@@ -56,7 +56,7 @@ namespace PERQemu.IO
             set { _printer.LoadPaper(value); }
         }
 
-        
+
         // Interface signals
         public bool ControllerPowerReady => true;       // CPRDY (NC)
         public bool VSync => _printer.VSyncRequest;     // VSYNC (I TOP L)
@@ -69,7 +69,7 @@ namespace PERQemu.IO
         /// </summary>
         public void Reset()
         {
-            _lineBuffer = new ushort[CanonPrinter.MaxWidth / 16];
+            _lineBuffer = new ScanLineBuffer { Bytes = new byte[CanonPrinter.ScanWidthInBytes] };
 
             _printer.Reset();
             InterfaceReset();
@@ -87,6 +87,8 @@ namespace PERQemu.IO
             _marginDelay = _printer.GetMarginDelay();
             _lineCount = 0;
 
+            _bob = false;
+            _eop = false;
             _running = false;
             _testing = false;
             _irqEnabled = false;
@@ -240,12 +242,11 @@ namespace PERQemu.IO
             switch (address)
             {
                 case 0x84:      // LineCount
-                    //
+
                     // The hardware loads IOD<3:0> into an 'LS191 so clip it to
                     // 4 bits.  This might be spuriously written when the Streamer
                     // is active, so I assume this means you can't run the tape
                     // drive and printer at the same time. :-(
-                    //
                     _linesInBand = value & 0x0f;
                     break;
 
@@ -291,14 +292,23 @@ namespace PERQemu.IO
         /// </summary>
         void RunStateMachine(ControllerState next)
         {
-            Log.Info(Category.Canon, "[Controller SM  IN state={0} next={1}]", _state, next);
+            Log.Debug(Category.Canon, "[Controller SM  IN state={0} next={1}]", _state, next);
 
             if (_printer.Ready)
             {
                 switch (next)
                 {
                     case ControllerState.Idle:
-                        // Not much to do...
+                        //
+                        // Not much to do... but if we get here as a result of an
+                        // EOP or loss of RDY from the printer, clear interrupt
+                        // conditions just in case.  Screendump seems to need to
+                        // see EOP, while CPrint barfs and resends the last page.
+                        // It's all still stupidly inconsistent and mysterious so
+                        // just mess with it 'til it works. :-/
+                        // 
+                        _bob = false;
+                        _eop = false;
                         break;
 
                     case ControllerState.Reset:
@@ -384,7 +394,7 @@ namespace PERQemu.IO
                         if (_lineCount == 0)
                         {
                             _lineCount = _linesInBand;
-                            _bandAddr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.ExtB) >> 2;
+                            _bandAddr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.ExtB);
                             Log.Info(Category.Canon, "[Controller line count reloaded ({0} lines @ 0x{1:x})]", _lineCount, _bandAddr);
                         }
 
@@ -396,12 +406,12 @@ namespace PERQemu.IO
                             if (!_command.HasFlag(CanonControl.NotBlank))
                             {
                                 // Blank bit (active low) just counts BD pulses
-                                Log.Debug(Category.Canon, "[Controller sending a blank line]");
+                                Log.Detail(Category.Canon, "[Controller sending a blank line]");
                                 _printer.PrintBlank();
                             }
                             else
                             {
-                                Log.Debug(Category.Canon, "[Controller sending a normal line]");
+                                Log.Detail(Category.Canon, "[Controller sending a normal line]");
                                 PrintNormal();
                             }
 
@@ -468,7 +478,7 @@ namespace PERQemu.IO
             }
 
             _state = next;
-            Log.Info(Category.Canon, "[Controller SM OUT state={0}]", _state);
+            Log.Debug(Category.Canon, "[Controller SM OUT state={0}]", _state);
         }
 
         /// <summary>
@@ -490,26 +500,31 @@ namespace PERQemu.IO
             // the processor, so it's not 100% authentic.  Meh.
             //
 
-            // Todo: once this is working and tested with all the known software
-            // out there, see if setting up one fixed buffer is worthwhile to avoid
-            // a bit of dynamic memory allocation.  It's only a few KB...
-            var wordWidth = _rightMargin - _leftMargin;
+            var wordWidth = _rightMargin - _leftMargin;     // These better be
+            var addr = _bandAddr >> 2;                      // quad word aligned!
 
-            // Grab words from memory
-            for (var i = 0; i < wordWidth; i++)
+            // Debug
+            if ((wordWidth % 4) != 0 || (_bandAddr & 0x3) != 0)
+                Log.Warn(Category.Canon, "BAD WIDTH {0} OR DMA START ADDR 0x{1:x}", wordWidth, _bandAddr);
+            
+            // Grab quads from memory
+            for (var i = 0; i < wordWidth / 4; i++)
             {
-                _lineBuffer[i++] = _system.Memory.FetchWord(_bandAddr++);
+                // A hack: for PNG, invert the bits
+                _lineBuffer.Quads[i] = ~(_system.Memory.FetchQuad(addr++));
+                _bandAddr += 4;
             }
 
-            // Ship it
-            _printer.PrintLine(_leftMargin, wordWidth, _lineBuffer);
+            // Ship it as bytes
+            _printer.PrintLine(_leftMargin * 2, wordWidth * 2, _lineBuffer.Bytes);
         }
 
         public void Shutdown()
         {
             // If output in progress, close/kill it
-            if (_print) _printer.Reset();
+            if (_running) _printer.Reset();
 
+            _printer.SavePageCount();
             _printer = null;
         }
 
@@ -578,7 +593,7 @@ namespace PERQemu.IO
 
         int _bandAddr;
         int _lineCount;
-        ushort[] _lineBuffer;
+        ScanLineBuffer _lineBuffer;
 
         ulong _marginDelay;
         SchedulerEvent _delayEvent;

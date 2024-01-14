@@ -18,8 +18,13 @@
 //
 
 using System;
+using System.Text;
+using System.IO;
+using System.IO.Compression;
 
 using SDL2;
+
+using PERQmedia;
 
 namespace PERQemu.IO
 {
@@ -45,11 +50,12 @@ namespace PERQemu.IO
             _printableArea = new SDL.SDL_Rect();
 
             LoadPaper(_cassette);
-            // LoadPageCount(_resolution);      // Get saved page counter for this printer
+            LoadPageCount();
         }
 
         // Info
         public string Model => _resolution == 300 ? "LBP-CX" : "LBP-10";
+        public uint PageCount => _totalPages;
         public PaperCode PaperType => _cassette;
 
         // Interface signals
@@ -103,12 +109,16 @@ namespace PERQemu.IO
             var oldOpStat = _operStatus;
             var oReady = _ready;
 
+            bool _sensing = false;
             _status = 0;
             _operStatus = 0;
 
-            if (_running) _status |= Status0.PrintRequest;
+            // Update the Ready pin
+            _ready = (_cassette != PaperCode.NoCassette) && (_pagesLeft > 0); // && (!_jammed) && (!_paused)
+
             if (_standby) _status |= Status0.Wait;
-            //if (_feeding) _status |= Status0.PaperDelivery;
+            if (_ready && _sensing) _status |= Status0.PrintRequest;
+            if (_ready && _running) _status |= Status0.PaperDelivery;
             //if (_paused) _status |= Status0.Pause;
 
             if (_cassette == PaperCode.NoCassette) _operStatus |= Status1.NoCartridge;
@@ -120,9 +130,6 @@ namespace PERQemu.IO
 
             if (_status != oldStat) Log.Info(Category.Canon, "Status change: {0}", _status);
             if (_operStatus != oldOpStat) Log.Info(Category.Canon, "Operator call: {0}", _operStatus);
-
-            // Update the Ready pin
-            _ready = (_cassette != PaperCode.NoCassette) && (_pagesLeft > 0); // && (!_jammed) && (!_paused)
 
             // Did it change?
             if (_ready != oReady)
@@ -182,15 +189,15 @@ namespace PERQemu.IO
                 case PaperCode.USLetter:
                     _pageWidth = (int)(8.5 * _resolution);
                     _pageHeight = (int)(11 * _resolution);
-                    _printableArea.w = (int)(8.19 * _resolution);
-                    _printableArea.h = (int)(10.69 * _resolution);
+                    _printableArea.w = (int)(8.19 * _resolution);   // 8.11 max
+                    _printableArea.h = (int)(10.69 * _resolution);  // 10.82 max
                     break;
 
                 case PaperCode.USLegal:
                     _pageWidth = (int)(8.5 * _resolution);
                     _pageHeight = (int)(14 * _resolution);
-                    _printableArea.w = (int)(8.19 * _resolution);
-                    _printableArea.h = (int)(13.69 * _resolution);
+                    _printableArea.w = (int)(8.19 * _resolution);   // 8.11
+                    _printableArea.h = (int)(13.69 * _resolution);  // 13.85
                     break;
 
                 case PaperCode.A4:
@@ -269,7 +276,7 @@ namespace PERQemu.IO
         {
             ulong delay = 100;  // Default delay if debugging (or impatient)
 
-            Log.Info(Category.Canon, "[Printer SM  IN state={0} next={1}]", _state, next);
+            Log.Debug(Category.Canon, "[Printer SM  IN state={0} next={1}]", _state, next);
 
             switch (next)
             {
@@ -335,8 +342,8 @@ namespace PERQemu.IO
                         // eventual return to Standby mode
                         if (_sleepEvent == null)
                         {
-                            Log.Info(Category.Canon, "[Printer will sleep in 10 seconds]");
-                            _sleepEvent = _scheduler.Schedule(10000 * Conversion.MsecToNsec, Standby);
+                            Log.Info(Category.Canon, "[Printer will sleep in 20 seconds]");
+                            _sleepEvent = _scheduler.Schedule(20000 * Conversion.MsecToNsec, Standby);
                         }
                     }
                     break;
@@ -425,7 +432,7 @@ namespace PERQemu.IO
             }
 
             _state = next;
-            Log.Info(Category.Canon, "[Printer SM OUT state={0}]", _state);
+            Log.Debug(Category.Canon, "[Printer SM OUT state={0}]", _state);
         }
 
         /// <summary>
@@ -449,7 +456,8 @@ namespace PERQemu.IO
             Log.Info(Category.Canon, "[Printer starting page]");
 
             // Initialize the bitmap
-            _pageBuffer = new byte[MaxWidth * MaxHeight];
+            _pageBuffer = new byte[ScanWidthInBytes * MaxHeight];   // 1bpp version
+
             _lineCount = 0;
             SetPageDimensions();
 
@@ -474,59 +482,194 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Print a line of pixels into the page buffer.
+        /// Print a line of pixels into the page buffer.  In BYTES.
         /// </summary>
-        public void PrintLine(int margin, int width, ushort[] data)
+        public void PrintLine(int margin, int width, byte[] data)
         {
-            // Compute starting point   - FIXME to use the actual buffer offset?
-            var addr = (_lineCount * MaxWidth) + margin * 16;
+            // Compute starting point in bytes
+            var addr = (ScanWidthInBytes * _lineCount) + margin;
 
-            Log.Info(Category.Canon, "Printing (line={0} @ {1})", _lineCount, addr);
+            Log.Info(Category.Canon, "Printing (line={0} @ {1}, left={2}, width={3})",
+                                     _lineCount, addr, margin, width);
+
+            Array.Copy(data, 0, _pageBuffer, addr, width);
 
             // For all the words, expand each bit into an 8-bit pixel
-            for (var i = 0; i < width; i++)
-            {
-                // Inline this for "speed"
-                var word = data[i];
-                _pageBuffer[addr++] = (byte)((word & 0x8000) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x4000) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x2000) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x1000) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0800) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0400) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0200) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0100) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0080) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0040) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0020) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0010) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0008) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0004) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0002) != 0 ? 0 : 0xff);
-                _pageBuffer[addr++] = (byte)((word & 0x0001) != 0 ? 0 : 0xff);
-
-                // todo: As page count increases, fade the intensity of the
-                // black pixels to reflect toner level/cartridge wear :-)
-                // about every 1700 pages (max).  Start adding blotches and
-                // streaks until print quality is so bad they send me $35 +
-                // S & H to refill the virtual toner cartridge!
-            }
+            //for (var i = 0; i < width; i++)
+            //{
+            //    _pageBuffer[addr++] = (byte)~data[i];     // PNG 1bpp is inverted
+            //}
 
             _lineCount++;
             _blanking = false;
             RunStateMachine(PrinterState.Printing);
         }
 
+        /// <summary>
+        /// Save the completed page to the Output directory in the preferred
+        /// image format.  For now, write a monochrome PNG by hand. :-P  If this
+        /// actually _works_ I'll clean it up properly.
+        /// </summary>
         public void SavePage()
         {
-            Log.Info(Category.Canon, "[Save the page!  Save the page!]");
+            uint crc;
 
-            // It might actually be worth it to just write a 1bpp image straight
-            // from our memory buffer to a PNG that we create (with all the extra
-            // chunks like create date, dpi, etc) and then flush the bytes to a
-            // file.
+            // The fixed PNG header and trailer
+            byte[] cookie = { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
+            byte[] trailer = { 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82 };
 
-            _totalPages++;
+            // Some informative strings
+            string[] keys = { "Title", "Creation Time", "Software" };
+            string[] values = { $"PERQ Canon {Model} printer output",
+                                DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss.ffK"),
+                                PERQemu.Version };
+
+            // Build the output file name and path
+            var ext = Paths.GetExtensionForImageFormat(Settings.CanonFormat);
+            var filename = string.Format(Settings.CanonTemplate, Model, _totalPages, ext);
+            var fullpath = Paths.BuildOutputPath(filename);
+
+            Log.Info(Category.Canon, "[Save the page!]");
+
+            try
+            {
+                using (var fs = new FileStream(fullpath, FileMode.Create, FileAccess.Write))
+                {
+                    // Write the cookie
+                    fs.Write(cookie, 0, cookie.Length);
+
+                    // Write the header chunk length (fixed), data, and CRC
+                    fs.WriteUInt(13);
+
+                    using (var hdr = new CRC32Stream(fs))
+                    {
+                        hdr.ResetChecksum();
+                        hdr.Write(Encoding.ASCII.GetBytes("IHDR"), 0, 4);
+                        hdr.WriteUInt(MaxWidth);        // fixme: fixed size for testing
+                        hdr.WriteUInt(MaxHeight);
+                        hdr.WriteByte(1);               // 1 = 1 bpp
+                        hdr.WriteByte(0);               // 0 = grayscale color type
+                        hdr.WriteByte(0);               // 0 = deflate compression
+                        hdr.WriteByte(0);               // 0 = filter type
+                        hdr.WriteByte(0);               // 0 = no interlace
+                        crc = hdr.WriteCRC;
+                    }
+                    fs.WriteUInt(crc);
+
+                    // Write a chunk for DPI
+                    fs.WriteUInt(9);
+
+                    using (var phys = new CRC32Stream(fs))
+                    {
+                        phys.ResetChecksum();
+                        phys.Write(Encoding.ASCII.GetBytes("pHYs"), 0, 4);
+                        phys.WriteUInt(_resolution == 300 ? 11811U : 8849U);    // X
+                        phys.WriteUInt(_resolution == 300 ? 11811U : 8849U);    // Y
+                        phys.WriteByte(1);              // Pixels per meter!
+                        crc = phys.WriteCRC;
+                    }
+                    fs.WriteUInt(crc);
+
+                    // Write the string chunks
+                    for (var i = 0; i < keys.Length; i++)
+                    {
+                        // Compute the length for each one (with one specific null)
+                        fs.WriteUInt((uint)(keys[i].Length + values[i].Length + 1));
+
+                        using (var txt = new CRC32Stream(fs))
+                        {
+                            txt.ResetChecksum();
+                            txt.Write(Encoding.ASCII.GetBytes("tEXt"), 0, 4);
+                            txt.Write(Encoding.ASCII.GetBytes(keys[i]), 0, keys[i].Length);
+                            txt.WriteByte(0);
+                            txt.Write(Encoding.ASCII.GetBytes(values[i]), 0, values[i].Length);
+                            crc = txt.WriteCRC;
+                        }
+                        fs.WriteUInt(crc);
+                    }
+
+                    byte[] imageData;
+
+                    Log.Info(Category.Canon, "Image buffer: {0} bytes", _pageBuffer.Length);
+
+                    // Now compress the bitmap and write the data chunk!
+                    using (var mem = new MemoryStream())
+                    {
+                        // Write the Zlib style header
+                        mem.WriteByte(120);             // CM + CINFO
+                        mem.WriteByte(1);               // FCHECK Bits
+
+                        // Compute the Adler32 checksum as we go (ARGH THIS IS GETTING SILLY)
+                        var s1 = 1;
+                        var s2 = 0;
+
+                        // Deflate the bitmap data
+                        using (var cmp = new DeflateStream(mem, CompressionMode.Compress, true))
+                        {
+                            // This is SO ANNOYING, PNG.  At the start of every
+                            // scan line, inject the stupid filter type byte.  Do
+                            // it here rather than just cheating and embedding an
+                            // extra byte in the page buffer itself at PrintLine.
+                            // Sigh.  Should invert the data bytes here...
+                            for (var i = 0; i < MaxHeight; i++)
+                            {
+                                cmp.WriteByte(0);   // Filter type 0
+                                cmp.Write(_pageBuffer, ScanWidthInBytes * i, ScanWidthInBytes);
+
+                                // Include the fucking filter byte in the Adler32
+                                s1 = (s1 + 0) % 65521;
+                                s2 = (s1 + s2) % 65521;
+
+                                // And do the scanline
+                                for (var j = 0; j < ScanWidthInBytes; j++)
+                                 {
+                                    s1 = (s1 + _pageBuffer[i * ScanWidthInBytes + j]) % 65521;
+                                    s2 = (s1 + s2) % 65521;
+                                }
+                            }
+                        }
+
+                        Log.Info(Category.Canon, "Adler32 CRC: {0:x}", (uint)(s2 * 65536 + s1));
+                        mem.WriteUInt((uint)(s2 * 65536 + s1));
+
+                        // Now save the Zlib-format compressed data chunk
+                        imageData = mem.ToArray();
+                        Log.Info(Category.Canon, "Compressed: {0} bytes", imageData.Length);
+                    }
+
+                    // And write it into a PNG IDAT chunk!
+                    fs.WriteUInt((uint)(imageData.Length));
+
+                    using (var img = new CRC32Stream(fs))
+                    {
+                        img.ResetChecksum();
+                        img.Write(Encoding.ASCII.GetBytes("IDAT"), 0, 4);
+                        img.Write(imageData, 0, imageData.Length);
+                        crc = img.WriteCRC;
+                    }
+                    fs.WriteUInt(crc);
+
+                    // FINALLY write out the final chunk and save it!
+                    fs.Write(trailer, 0, trailer.Length);
+                    fs.Close();
+                }
+
+                // RAW DUMP (debugging)
+                //fullpath = fullpath.Substring(0, fullpath.Length - 3) + "raw";
+                //using (var fs = new FileStream(fullpath, FileMode.Create, FileAccess.Write))
+                //{
+                //    fs.Write(_pageBuffer, 0, _pageBuffer.Length);
+                //    fs.Close();
+                //}
+
+                // We did it!  Bump the count!
+                _totalPages++;
+                Log.Info(Category.Canon, "Saved output to '{0}'.", filename);
+            }
+            catch (Exception e)
+            {
+                Log.Info(Category.Canon, "Failed to save output: {0}", e.Message);
+            }
         }
 
         /// <summary>
@@ -610,6 +753,53 @@ namespace PERQemu.IO
             _delayEvent = _scheduler.Schedule(delay * Conversion.UsecToNsec, SendBD);
         }
 
+
+        /// <summary>
+        /// Loads the saved page count for this printer model.
+        /// </summary>
+        public void LoadPageCount()
+        {
+            try
+            {
+                using (var fs = new FileStream(Paths.BuildResourcePath($"{Model}.dat"),
+                                               FileMode.Open, FileAccess.Read))
+                {
+                    // Format:  one (binary) unsigned integer for total number of pages
+                    // printed successfully.  Used to generate the next output file name
+                    // when the default format is used.  This is total cheese.
+                    _totalPages = fs.ReadUInt();
+                    fs.Close();
+                }
+                Log.Info(Category.Canon, "Page counter loaded ({0})", _totalPages);
+            }
+            catch (Exception e)
+            {
+                Log.Info(Category.Canon, "Page counter initialized ({0})", e.Message);
+                _totalPages = 0;
+            }
+        }
+
+        /// <summary>
+        /// Saves the page count for this printer.
+        /// </summary>
+        public void SavePageCount()
+        {
+            try
+            {
+                using (var fs = new FileStream(Paths.BuildResourcePath($"{Model}.dat"),
+                                               FileMode.OpenOrCreate, FileAccess.Write))
+                {
+                    fs.WriteUInt(_totalPages);
+                    fs.Close();
+                }
+                Log.Info(Category.Canon, "Page counter saved");
+            }
+            catch (Exception e)
+            {
+                Log.Info(Category.Canon, "Page counter NOT saved: {0}", e.Message);
+            }
+        }
+
         // Debugging
         public void DumpStatus()
         {
@@ -634,8 +824,10 @@ namespace PERQemu.IO
         // sizes (or query the printer to see what cassette was loaded) this is
         // fine for now.
         //
-        public const int MaxWidth = 2700;
+        public const int MaxWidth = 2704;           // Round up to multiple of 8 bits
         public const int MaxHeight = 3300;
+
+        public const int ScanWidthInBytes = MaxWidth / 8;  // Used a lot
 
         CanonController _control;
         Scheduler _scheduler;

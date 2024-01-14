@@ -453,6 +453,7 @@ v0.5.4 - Experimental branch
   - Limited Micropolis 8" disk support
   - Refactored Z80 subsystem for EIO support
   - Patch to support PNX 2's non-standard video display list handling
+  - Canon laser printer support
 
 v0.5.0 - New baseline
   (Pending) Merge the experiments back into the master branch:
@@ -568,7 +569,7 @@ v0.1 - First public release.
 
 Update history:
 
-12/31/2023 - skeezicsb - v0.5.4 (experimental)
+1/14/2024 - skeezicsb - v0.5.4 (experimental)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)
