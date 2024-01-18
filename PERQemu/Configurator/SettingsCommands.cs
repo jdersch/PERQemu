@@ -242,7 +242,7 @@ namespace PERQemu.UI
         // Todo: set image format and file naming scheme for Canon, screenshots
         //
 
-        [Command("settings canon resolution", "Set the resolution (model) of Canon laser printer to simulate")]
+        [Command("settings canon resolution", "Set resolution (model) of Canon laser printer to simulate")]
         public void SetCanonResolution(int dpi)
         {
             if (dpi != 240 && dpi != 300)
@@ -260,7 +260,7 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("settings canon paper type", "Set the default paper size for the Canon laser printer")]
+        [Command("settings canon paper type", "Set default paper size for the Canon laser printer")]
         public void SetCanonPaperType(IO.PaperCode size)
         {
             if (size != Settings.CanonPaperSize)
@@ -268,6 +268,17 @@ namespace PERQemu.UI
                 Settings.CanonPaperSize = size;
                 Settings.Changed = true;
                 QuietWrite($"Canon default paper size set to {size}.");
+            }
+        }
+
+        [Command("settings canon output format", "Set image file format for Canon laser printer output")]
+        public void SetCanonOutputFormat(ImageFormat format)
+        {
+            if (format != Settings.CanonFormat)
+            {
+                Settings.CanonFormat = format;
+                Settings.Changed = true;
+                QuietWrite($"Canon default output format set to {format}.");
             }
         }
 
@@ -471,9 +482,6 @@ namespace PERQemu.UI
 	TODO:
 	settings::screenshot format [jpg, png, tiff, ?]
 	settings::screenshot template [str] -- really?  cmon...
-	settings::canon format [jpg|png|tiff|pdf|...]
-	settings::canon paper size [a4|usletter|...]
-	settings::canon model [lbp10|cx] or resolution [240|300] ?
 	settings::canon template [str]      -- same 
 	settings::logging directory         -- default: Output/
 	settings::logging template [str]    -- hmm.

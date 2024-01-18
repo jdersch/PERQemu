@@ -37,7 +37,7 @@ namespace PERQemu.IO
     /// <remarks>
     /// See the file Docs\LaserCanon.txt for implementation notes and details.
     /// </remarks>
-    public class CanonPrinter
+    public partial class CanonPrinter
     {
         public CanonPrinter(CanonController ctrl, Scheduler sched)
         {
@@ -494,12 +494,6 @@ namespace PERQemu.IO
 
             Array.Copy(data, 0, _pageBuffer, addr, width);
 
-            // For all the words, expand each bit into an 8-bit pixel
-            //for (var i = 0; i < width; i++)
-            //{
-            //    _pageBuffer[addr++] = (byte)~data[i];     // PNG 1bpp is inverted
-            //}
-
             _lineCount++;
             _blanking = false;
             RunStateMachine(PrinterState.Printing);
@@ -507,168 +501,45 @@ namespace PERQemu.IO
 
         /// <summary>
         /// Save the completed page to the Output directory in the preferred
-        /// image format.  For now, write a monochrome PNG by hand. :-P  If this
-        /// actually _works_ I'll clean it up properly.
+        /// image format.  Currently one page per file.
         /// </summary>
         public void SavePage()
         {
-            uint crc;
-
-            // The fixed PNG header and trailer
-            byte[] cookie = { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
-            byte[] trailer = { 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82 };
-
-            // Some informative strings
-            string[] keys = { "Title", "Creation Time", "Software" };
-            string[] values = { $"PERQ Canon {Model} printer output",
-                                DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss.ffK"),
-                                PERQemu.Version };
-
-            // Build the output file name and path
+            // Build the filename
             var ext = Paths.GetExtensionForImageFormat(Settings.CanonFormat);
             var filename = string.Format(Settings.CanonTemplate, Model, _totalPages, ext);
-            var fullpath = Paths.BuildOutputPath(filename);
 
-            Log.Info(Category.Canon, "[Save the page!]");
-
-            try
+            // Save the page in the specified format
+            switch (Settings.CanonFormat)
             {
-                using (var fs = new FileStream(fullpath, FileMode.Create, FileAccess.Write))
-                {
-                    // Write the cookie
-                    fs.Write(cookie, 0, cookie.Length);
+                case ImageFormat.None:
+                case ImageFormat.Jpeg:
+                    // not implemented
+                    break;
 
-                    // Write the header chunk length (fixed), data, and CRC
-                    fs.WriteUInt(13);
-
-                    using (var hdr = new CRC32Stream(fs))
+                case ImageFormat.Png:
+                    if (SavePageAsPNG(filename))
                     {
-                        hdr.ResetChecksum();
-                        hdr.Write(Encoding.ASCII.GetBytes("IHDR"), 0, 4);
-                        hdr.WriteUInt(MaxWidth);        // fixme: fixed size for testing
-                        hdr.WriteUInt(MaxHeight);
-                        hdr.WriteByte(1);               // 1 = 1 bpp
-                        hdr.WriteByte(0);               // 0 = grayscale color type
-                        hdr.WriteByte(0);               // 0 = deflate compression
-                        hdr.WriteByte(0);               // 0 = filter type
-                        hdr.WriteByte(0);               // 0 = no interlace
-                        crc = hdr.WriteCRC;
+                        Log.Write(Category.Canon, "Saved PNG output to '{0}'.", filename);
+                        _totalPages++;
                     }
-                    fs.WriteUInt(crc);
+                    break;
 
-                    // Write a chunk for DPI
-                    fs.WriteUInt(9);
-
-                    using (var phys = new CRC32Stream(fs))
+                case ImageFormat.Tiff:
+                    if (SavePageAsTIFF(filename))
                     {
-                        phys.ResetChecksum();
-                        phys.Write(Encoding.ASCII.GetBytes("pHYs"), 0, 4);
-                        phys.WriteUInt(_resolution == 300 ? 11811U : 8849U);    // X
-                        phys.WriteUInt(_resolution == 300 ? 11811U : 8849U);    // Y
-                        phys.WriteByte(1);              // Pixels per meter!
-                        crc = phys.WriteCRC;
+                        Log.Write(Category.Canon, "Saved TIFF output to '{0}'.", filename);
+                        _totalPages++;
                     }
-                    fs.WriteUInt(crc);
+                    break;
 
-                    // Write the string chunks
-                    for (var i = 0; i < keys.Length; i++)
-                    {
-                        // Compute the length for each one (with one specific null)
-                        fs.WriteUInt((uint)(keys[i].Length + values[i].Length + 1));
+                case ImageFormat.Raw:
+                    SavePageAsRaw(filename);
+                    Log.Write(Category.Canon, "Saved raw output to '{0}'.", filename);
+                    break;
 
-                        using (var txt = new CRC32Stream(fs))
-                        {
-                            txt.ResetChecksum();
-                            txt.Write(Encoding.ASCII.GetBytes("tEXt"), 0, 4);
-                            txt.Write(Encoding.ASCII.GetBytes(keys[i]), 0, keys[i].Length);
-                            txt.WriteByte(0);
-                            txt.Write(Encoding.ASCII.GetBytes(values[i]), 0, values[i].Length);
-                            crc = txt.WriteCRC;
-                        }
-                        fs.WriteUInt(crc);
-                    }
-
-                    byte[] imageData;
-
-                    Log.Info(Category.Canon, "Image buffer: {0} bytes", _pageBuffer.Length);
-
-                    // Now compress the bitmap and write the data chunk!
-                    using (var mem = new MemoryStream())
-                    {
-                        // Write the Zlib style header
-                        mem.WriteByte(120);             // CM + CINFO
-                        mem.WriteByte(1);               // FCHECK Bits
-
-                        // Compute the Adler32 checksum as we go (ARGH THIS IS GETTING SILLY)
-                        var s1 = 1;
-                        var s2 = 0;
-
-                        // Deflate the bitmap data
-                        using (var cmp = new DeflateStream(mem, CompressionMode.Compress, true))
-                        {
-                            // This is SO ANNOYING, PNG.  At the start of every
-                            // scan line, inject the stupid filter type byte.  Do
-                            // it here rather than just cheating and embedding an
-                            // extra byte in the page buffer itself at PrintLine.
-                            // Sigh.  Should invert the data bytes here...
-                            for (var i = 0; i < MaxHeight; i++)
-                            {
-                                cmp.WriteByte(0);   // Filter type 0
-                                cmp.Write(_pageBuffer, ScanWidthInBytes * i, ScanWidthInBytes);
-
-                                // Include the fucking filter byte in the Adler32
-                                s1 = (s1 + 0) % 65521;
-                                s2 = (s1 + s2) % 65521;
-
-                                // And do the scanline
-                                for (var j = 0; j < ScanWidthInBytes; j++)
-                                 {
-                                    s1 = (s1 + _pageBuffer[i * ScanWidthInBytes + j]) % 65521;
-                                    s2 = (s1 + s2) % 65521;
-                                }
-                            }
-                        }
-
-                        Log.Info(Category.Canon, "Adler32 CRC: {0:x}", (uint)(s2 * 65536 + s1));
-                        mem.WriteUInt((uint)(s2 * 65536 + s1));
-
-                        // Now save the Zlib-format compressed data chunk
-                        imageData = mem.ToArray();
-                        Log.Info(Category.Canon, "Compressed: {0} bytes", imageData.Length);
-                    }
-
-                    // And write it into a PNG IDAT chunk!
-                    fs.WriteUInt((uint)(imageData.Length));
-
-                    using (var img = new CRC32Stream(fs))
-                    {
-                        img.ResetChecksum();
-                        img.Write(Encoding.ASCII.GetBytes("IDAT"), 0, 4);
-                        img.Write(imageData, 0, imageData.Length);
-                        crc = img.WriteCRC;
-                    }
-                    fs.WriteUInt(crc);
-
-                    // FINALLY write out the final chunk and save it!
-                    fs.Write(trailer, 0, trailer.Length);
-                    fs.Close();
-                }
-
-                // RAW DUMP (debugging)
-                //fullpath = fullpath.Substring(0, fullpath.Length - 3) + "raw";
-                //using (var fs = new FileStream(fullpath, FileMode.Create, FileAccess.Write))
-                //{
-                //    fs.Write(_pageBuffer, 0, _pageBuffer.Length);
-                //    fs.Close();
-                //}
-
-                // We did it!  Bump the count!
-                _totalPages++;
-                Log.Info(Category.Canon, "Saved output to '{0}'.", filename);
-            }
-            catch (Exception e)
-            {
-                Log.Info(Category.Canon, "Failed to save output: {0}", e.Message);
+                default:
+                    throw new InvalidOperationException("Unknown or unimplemented Canon format");
             }
         }
 
@@ -861,13 +732,6 @@ namespace PERQemu.IO
         byte[] _pageBuffer;
         IntPtr _surface;
         SDL.SDL_Rect _printableArea;
-
-        // Output handling
-        // an SDL call?  a File.blah?
-        // file name (Settings or fixed TestPrint_blah)
-        // Maybe we can just hand the surface off to a common UI.SDL.SaveBitmap()
-        // so that SaveScreenshot and SaveCanonOutput don't have to duplicate any
-        // of the file handling code?
 
         SchedulerEvent _delayEvent;
         SchedulerEvent _sleepEvent;

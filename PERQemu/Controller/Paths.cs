@@ -140,7 +140,11 @@ namespace PERQemu
                     return "png";
 
                 case ImageFormat.Tiff:
-                    return "tiff";
+                    // "Nominal" per 6.0, not ".tiff" - we're not in NeXTstep anymore :-(
+                    return "tif";
+
+                case ImageFormat.Raw:
+                    return "raw";
 
                 default:
                     return "unknown";

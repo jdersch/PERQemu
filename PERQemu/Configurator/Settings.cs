@@ -57,7 +57,8 @@ namespace PERQemu
         None = 0,
         Jpeg,
         Png,
-        Tiff
+        Tiff,
+        Raw
     }
 
     [Flags]
@@ -117,10 +118,10 @@ namespace PERQemu
             Z80Radix = Radix.Decimal;
 
             OutputDirectory = Paths.OutputDir;
-            ScreenshotFormat = ImageFormat.Png;
+            ScreenshotFormat = ImageFormat.Png;     // More compact
             ScreenshotTemplate = "{0}_{1:000}.{2}"; // Default: screenshot_nnn.png
 
-            CanonFormat = ImageFormat.Png;          // PDF, someday?
+            CanonFormat = ImageFormat.Tiff;         // Multi-page capable; direct to PDF someday?
             CanonTemplate = "{0}_{1:000}.{2}";      // Default: {canon,cx}_pg_000.png
             CanonPaperSize = PaperCode.USLetter;    // Maybe set to A4 based on locale? :-)
             CanonResolution = 300;                  // The CX is probably more popular
@@ -286,14 +287,15 @@ namespace PERQemu
                     if (!string.IsNullOrEmpty(OutputDirectory))
                         sw.WriteLine($"output directory \"{OutputDirectory}\"");
 
+                    sw.WriteLine($"canon output format {CanonFormat}");
+                    sw.WriteLine($"canon paper size {CanonPaperSize}");
+                    sw.WriteLine($"canon resolution {CanonResolution}");
+
                     sw.WriteLine("#");
                     sw.WriteLine("# These options are not yet implemented:");
                     sw.WriteLine($"# debug radix {DebugRadix}");
                     sw.WriteLine($"# z80 debug radix {Z80Radix}");
-                    sw.WriteLine($"# screenshot format {ScreenshotFormat}");
-                    sw.WriteLine($"# canon format {CanonFormat}");
-                    sw.WriteLine($"# canon paper size {CanonPaperSize}");
-                    sw.WriteLine($"# canon resolution {CanonResolution}");
+                    sw.WriteLine($"# screenshot output format {ScreenshotFormat}");
                     sw.WriteLine("#");
 
                     sw.WriteLine("done");

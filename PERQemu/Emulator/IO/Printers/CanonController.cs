@@ -494,7 +494,7 @@ namespace PERQemu.IO
             // Here we cheat and do a whole scanline at a time directly from memory,
             // like the VideoController.  The microcode updates the DMA registers in
             // response to BOB interrupts to point to the start of the next block of
-            // memory (one band, or 8 scanlines worth), so the state machine inits
+            // memory (one band, or 1-16 scanlines worth), so the state machine inits
             // the starting address for us.  Note that unlike video refresh (which
             // has dedicated bandwidth) this cheat avoids DMA cycle stealing from
             // the processor, so it's not 100% authentic.  Meh.
@@ -506,11 +506,12 @@ namespace PERQemu.IO
             // Debug
             if ((wordWidth % 4) != 0 || (_bandAddr & 0x3) != 0)
                 Log.Warn(Category.Canon, "BAD WIDTH {0} OR DMA START ADDR 0x{1:x}", wordWidth, _bandAddr);
-            
+
             // Grab quads from memory
             for (var i = 0; i < wordWidth / 4; i++)
             {
-                // A hack: for PNG, invert the bits
+                // PNG needs the pixels inverted; TIFF we just tweak the IFD
+                // (but this is a temporary hack and will be corrected)
                 _lineBuffer.Quads[i] = ~(_system.Memory.FetchQuad(addr++));
                 _bandAddr += 4;
             }
@@ -533,19 +534,8 @@ namespace PERQemu.IO
         {
             // Run through the loop to test the printer!  Generate a bitmap and
             // send it to shake out functionality of the interface and printer
-            // emulation.  This is kinda goofy. :-)
-
-            // Refuse if printer is currently busy; else set _testing true
-            //      in _testing mode we don't send interrupts!
-            //      --> what if they try to print from the PERQ?
-            // Assert PRINT, set linecount and margin registers, wait for VSREQ
-            // Assert VSYNC, wait for BD
-            // Deassert VSYNC and do top margin, then follow with the generated
-            // test page (nice to include some fun things like page count...)
-            // Run through the test page and complete normally
-            //      --> printer saves the file as Canon_TestPrint_nnn.ext?
-            //      --> nnn is a datestamp or page count...
-            // Deassert _testing and return to idle
+            // emulation, different paper sizes and output formats, etc.  This is
+            // kinda goofy but there is a test button on the printer, so... :-)
         }
 
 

@@ -213,8 +213,9 @@
     <Compile Include="Emulator\IO\Z80\PERQToZ80FIFO.cs" />
     <Compile Include="Emulator\IO\Z80\Z80ToPERQFIFO.cs" />
     <Compile Include="Emulator\IO\DiskDevices\CIOMicropolisDiskController.cs" />
-    <Compile Include="Emulator\IO\CanonPrinter.cs" />
-    <Compile Include="Emulator\IO\CanonController.cs" />
+    <Compile Include="Emulator\IO\Printers\CanonController.cs" />
+    <Compile Include="Emulator\IO\Printers\CanonPrinter.cs" />
+    <Compile Include="Emulator\IO\Printers\CanonFormatter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -738,6 +739,7 @@
     <Folder Include="Resources\" />
     <Folder Include="Emulator\IO\TapeDevices\" />
     <Folder Include="Emulator\IO\Network\" />
+    <Folder Include="Emulator\IO\Printers\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

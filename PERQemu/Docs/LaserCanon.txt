@@ -612,6 +612,7 @@ PrintBlank:
 count the supposed maximum number of clock pulses for the paper size (even though
 3300 seems to be hardcoded for the CX regardless).
 
+=====
 
 Stupid Idea Of The Week:  write a raw PNG stream and avoid faffing about with
 SDL, System.Drawing, or any third party stuff.  For monochrome bitmaps it's a
@@ -662,3 +663,92 @@ IEND:   49 45 4e 44
 no data
 crc32
 (duh, just compute this once)
+
+References:
+    https://www.w3.org/TR/png/
+    https://www.rfc-editor.org/rfc/rfc1950
+    https://github.com/EliotJones/BigGustave
+    PERQmedia!  All the CRC, Deflate stream stuff already written!
+
+=====
+
+Now to do a homegrown TIFF...  looks kinda like a PRQM image, sorta.  huh.
+
+header:
+
+    offset      size        desc
+    0000        2 bytes     II or MM (intel or moto)
+    0002        2 bytes     version: '42'
+    0004        4 bytes     offset to 1st ifd, start on even byte
+
+    4d 4d 00 2a n n n n (moto) or 49 49 2a 00 n n n n (intel)
+
+ifd format:
+
+    offset      size        desc
+    0000        2 bytes     count of entries to follow
+    0002        2 bytes     field tag
+                2 bytes     field type:
+                            1 = byte, 2 = ascii string, 3 = word, 4 = double word
+                            5 = rational (2 dwords, num & denom)
+                4 bytes     length in type-sized units
+                4 bytes     data offset (or datum if <= 4 bytes)
+    N*12 + 2    4 bytes     offset to next IFD, 0 if none
+
+relevant tags:
+
+    id      type    name             default    desc
+    256     word    ImageWidth          -       width in pixels (X)
+    257     word    ImageLength         -       height in pixels (Y)
+    258     word    SamplesPerPixel     1       bits per sample
+    259     word    Compression         1       1 = no compression
+                                                4 = ccitt group 4
+                                                (others not relevant)
+    254     word    NewSubfileType      0       flag bits for subfile type hint
+                                                bit 1 = "image is single page of multi-page"
+    255     word    SubfileType         -       DEPRECATED; use 254 instead
+                                                1 = full res (width,length,stripoffs reqd)
+                                                2 = reduced res (i.e., thumbnail)
+                                                3 = single page of multi-page
+    262     word    PhotometricInterp   -       for grayscale: 0 = "0 is white", 1 = "0 is black"
+    284     word    PlanarConfiguration 1       1 = contiguous (one image plane)
+                                                2 = sample planes (2d array of SamplesPerPixel
+                                                    rows x StripsPerImage cols)
+    296     word    ResolutionUnit      2       1=none, 2=inch, 3=cm
+    278     d/word  RowsPerStrip       -1       num rows per strip; all ones = "infinity"
+                                                recommended strip size is 8k
+    277     word    SamplesPerPixel     1       1 for bw, 3 for rgb
+    279     d/word  StripByteCounts     -       # bytes in the strip
+    273     d/word  StripOffsets        -       byte offset (rel to FILE start) to start of each strip
+    282     rat     XResolution         -       # pixels per ResUnit in X
+    283     rat     YResolution         -       # pixels per ResUnit in Y
+    286     rat     XPosition           -       offset in ResUnits from left of page
+    287     rat     YPosition           -       offset in ResUnits from top of page
+    315     ascii   Artist              -       creator or copyright notice
+    306     ascii   DateTime            -       create time, 24hr, "YYYY:MM:DD HH:MM:SS" + null
+    316     ascii   HostComputer        -       "ENIAC" or whatever.  :-)
+    270     ascii   ImageDescription    -       user comment
+    271     ascii   Make                -       manufacturer of the scanner, digitizer, etc
+    272     ascii   Model               -       model name, etc.
+    305     ascii   Software            -       name and release # of software package used
+    293     dword   Group4Options       -       32 flag bits for g4 compressed fax images!
+                                                1 = uncompressed mode (only relevant bit)    
+    269     ascii   DocumentName        -       if we could get it from the perq... 
+    285     ascii   PageName            -       eh
+    297     word    PageNumber          -       two word values: 1st is page #, 2nd is total pages
+    274     word    Orientation         1       1 = 0th row is top, 0th col is left
+                                                2..8 = various rotations... 8 for landscape mode??
+    263     word    Threshholding       -       1 = "line art"              optional...
+    266     word    FillOrder           1       1 = MSB2LSB, 2 = LSB2MSB    implied by cookie?
+    434     word    DefaultImageColor   -       color value (0 or 1) for missing parts of image...
+
+... except this is WAY more annoying than PNG given the use of offsets that have
+to be calculated relative to the start of the FILE, not the IFD, aw crap.
+
+References:
+    https://www.fileformat.info/format/tiff/corion.htm
+    https://www.fileformat.info/format/tiff/egff.htm
+    https://jhove.sourceforge.net/tiff-hul.html
+    https://www.nilesritter.com/webdocs/tiff/
+    https://www.awaresystems.be/imaging/tiff/tifftags/baseline.html
+    https://www.ietf.org/rfc/rfc2301.txt
