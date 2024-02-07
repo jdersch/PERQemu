@@ -134,7 +134,7 @@ namespace PERQemu.IO
 
             _status = (_bob ? CanonStatus.BottomOfBand : 0) |
                       (_eop ? CanonStatus.EndOfPage : 0) |
-                      (_printer.Ready ? CanonStatus.NotReady : 0) |
+                      (_printer.Ready ? CanonStatus.Ready : 0) |
                       (_statFull ? CanonStatus.StatusAvailable : 0);
 
             if (_status != ostatus)
@@ -306,9 +306,10 @@ namespace PERQemu.IO
                         // see EOP, while CPrint barfs and resends the last page.
                         // It's all still stupidly inconsistent and mysterious so
                         // just mess with it 'til it works. :-/
-                        // 
+                        //
                         _bob = false;
                         _eop = false;
+                        Log.Debug(Category.Canon, "[Controller idle]");
                         break;
 
                     case ControllerState.Reset:
@@ -343,18 +344,21 @@ namespace PERQemu.IO
                     case ControllerState.WaitForVSReq:
                         //
                         // Wait for the printer to assert VSREQ to indicate that it
-                        // is at the top of the page and ready to print.  VSYNC is
-                        // asserted when the controller is ready to start sending.
-                        // There may be a delay of up to 10 seconds from PRINT to
-                        // VSREQ if the printer is coming out of standby mode or
-                        // we're waiting for the previous page to finish.
+                        // is at the top of the page and ready to print.  There may
+                        // be a delay of up to 10 seconds from PRINT to VSREQ if the
+                        // printer is coming out of standby mode or we're waiting
+                        // for the previous page to finish.
                         //
                         if (_printer.VSyncRequest)
                         {
                             Log.Debug(Category.Canon, "[Controller VSReq received]");
 
-                            // VSync gets asserted automatically!
-                            // Wait for the first horizontal clock pulse
+                            // VSync gets asserted automatically!  I TOP (VSReq)
+                            // also clears the I PRN (PRNT) flip flop and sets
+                            // the CN100 internal state to 7 (printing enabled)
+                            _print = false;
+
+                            // Start watching horizontal clock pulses
                             next = ControllerState.WaitForBD;
                         }
                         break;
@@ -406,12 +410,10 @@ namespace PERQemu.IO
                             if (!_command.HasFlag(CanonControl.NotBlank))
                             {
                                 // Blank bit (active low) just counts BD pulses
-                                Log.Detail(Category.Canon, "[Controller sending a blank line]");
                                 _printer.PrintBlank();
                             }
                             else
                             {
-                                Log.Detail(Category.Canon, "[Controller sending a normal line]");
                                 PrintNormal();
                             }
 
@@ -432,10 +434,9 @@ namespace PERQemu.IO
                     case ControllerState.EndOfBand:
                         //
                         // Fire the BOB interrupt; microcode handler will reload
-                        // LineCount, DMA registers on the next print command.  But
-                        // this might not actually be used by the microcode!?  SIGH.
+                        // LineCount, DMA registers on the next print command.
                         //
-                        Log.Info(Category.Canon, "[Controller BOB reached]");
+                        Log.Debug(Category.Canon, "[Controller BOB reached]");
 
                         if (!_bob)
                         {
@@ -443,7 +444,7 @@ namespace PERQemu.IO
                             UpdateStatus();
                             SetInterrupt(true);
                         }
-                        next = ControllerState.WaitForBD;
+                        next = ControllerState.Printing;
                         break;
 
                     case ControllerState.EndOfPage:
@@ -452,7 +453,7 @@ namespace PERQemu.IO
                         // counting its own clocks seems to be the only reliable
                         // way to figure out how the hell to end a page.  Ugh.
                         //
-                        Log.Info(Category.Canon, "[Controller EOP received]");
+                        Log.Debug(Category.Canon, "[Controller EOP received]");
 
                         _eop = true;
                         UpdateStatus();
@@ -510,14 +511,12 @@ namespace PERQemu.IO
             // Grab quads from memory
             for (var i = 0; i < wordWidth / 4; i++)
             {
-                // PNG needs the pixels inverted; TIFF we just tweak the IFD
-                // (but this is a temporary hack and will be corrected)
-                _lineBuffer.Quads[i] = ~(_system.Memory.FetchQuad(addr++));
+                _lineBuffer.Quads[i] = _system.Memory.FetchQuad(addr++);
                 _bandAddr += 4;
             }
 
             // Ship it as bytes
-            _printer.PrintLine(_leftMargin * 2, wordWidth * 2, _lineBuffer.Bytes);
+            _printer.PrintLine(_leftMargin, wordWidth * 2, _lineBuffer.Bytes);
         }
 
         public void Shutdown()
@@ -578,8 +577,8 @@ namespace PERQemu.IO
 
         bool _irqEnabled;
         bool _irqRaised;
-        bool _testing;
         bool _running;
+        bool _testing;
 
         int _bandAddr;
         int _lineCount;
@@ -596,9 +595,9 @@ namespace PERQemu.IO
     public enum CanonControl
     {
         NotBlank = 0x01,
-        NotReset = 0x2,
-        EnableVideo = 0x4,
-        StatusRead = 0x8,
+        NotReset = 0x02,
+        EnableVideo = 0x04,
+        StatusRead = 0x08,
         EnableInterrupts = 0x10
     }
 
@@ -608,10 +607,10 @@ namespace PERQemu.IO
     [Flags]
     public enum CanonStatus
     {
-        Clear = 0x0,
+        NotReady = 0x0,
         BottomOfBand = 0x01,
         EndOfPage = 0x02,
-        NotReady = 0x04,
+        Ready = 0x04,
         StatusAvailable = 0x08
     }
 

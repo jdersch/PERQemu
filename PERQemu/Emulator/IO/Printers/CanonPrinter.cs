@@ -18,9 +18,7 @@
 //
 
 using System;
-using System.Text;
 using System.IO;
-using System.IO.Compression;
 
 using SDL2;
 
@@ -68,13 +66,6 @@ namespace PERQemu.IO
 
         public void Reset()
         {
-            // Clobber any print in progress
-            if (_surface != IntPtr.Zero)
-            {
-                SDL.SDL_FreeSurface(_surface);
-                _surface = IntPtr.Zero;
-            }
-
             _pageBuffer = null;
             _lineCount = 0;
             _clocks = 0;
@@ -91,10 +82,12 @@ namespace PERQemu.IO
             _ready = false;
             _vsreq = false;
             _sbusy = false;
-            _standby = true;
             _running = false;
-            _testPrint = false;
+
+            // Reset status and state
             _state = PrinterState.Standby;
+            _status = _lastStatus = Status0.Wait;
+            _operStatus = _lastOperStatus = 0;
 
             UpdateStatus();
             Log.Info(Category.Canon, "Printer reset");
@@ -105,33 +98,34 @@ namespace PERQemu.IO
         /// </summary>
         void UpdateStatus()
         {
-            var oldStat = _status;
-            var oldOpStat = _operStatus;
             var oReady = _ready;
 
-            bool _sensing = false;
-            _status = 0;
-            _operStatus = 0;
-
             // Update the Ready pin
-            _ready = (_cassette != PaperCode.NoCassette) && (_pagesLeft > 0); // && (!_jammed) && (!_paused)
+            _ready = (_cassette != PaperCode.NoCassette) && (_pagesLeft > 0);
 
-            if (_standby) _status |= Status0.Wait;
-            if (_ready && _sensing) _status |= Status0.PrintRequest;
-            if (_ready && _running) _status |= Status0.PaperDelivery;
-            //if (_paused) _status |= Status0.Pause;
+            // Status updates if Ready changed?
+            if (!_ready && _status.HasFlag(Status0.PaperDelivery))
+            {
+                _status &= ~Status0.PaperDelivery;
+            }
 
-            if (_cassette == PaperCode.NoCassette) _operStatus |= Status1.NoCartridge;
-            if (_pagesLeft == 0) _operStatus |= Status1.PaperOut;
-            if (_testPrint) _operStatus |= Status1.TestPrinting;
-            //if (_jammed) _operStatus |= Status1.PaperJam;
+            // Operator status changed since last check?
+            if (_operStatus == 0 && _status.HasFlag(Status0.Call))
+            {
+                _status &= ~Status0.Call;
+            }
+            else if (_operStatus != 0)
+            {
+                _status |= Status0.Call;
+            }
 
-            if (_operStatus != 0) _status |= Status0.Call;
+            if (_status != _lastStatus) Log.Info(Category.Canon, "Printer status change: {0}", _status);
+            if (_operStatus != _lastOperStatus) Log.Info(Category.Canon, "Operator call: {0}", _operStatus);
 
-            if (_status != oldStat) Log.Info(Category.Canon, "Status change: {0}", _status);
-            if (_operStatus != oldOpStat) Log.Info(Category.Canon, "Operator call: {0}", _operStatus);
+            _lastStatus = _status;
+            _lastOperStatus = _operStatus;
 
-            // Did it change?
+            // React to Ready change
             if (_ready != oReady)
             {
                 // Clear our local state
@@ -153,15 +147,17 @@ namespace PERQemu.IO
                 case PaperCode.B5:
                 case PaperCode.USLetter:
                 case PaperCode.USLegal:
-                    _cassette = type;
                     _pagesLeft = (uint)(manualFeed ? 1 : 100);
+                    _cassette = type;
+                    _operStatus &= ~Status1.PaperOut;
 
                     Log.Info(Category.Canon, "Paper tray loaded: {0}, ({1} pages left)", _cassette, _pagesLeft);
                     break;
 
                 default:
-                    _cassette = PaperCode.NoCassette;
                     _pagesLeft = 0;
+                    _cassette = PaperCode.NoCassette;
+                    _operStatus |= Status1.PaperOut;
 
                     Log.Info(Category.Canon, "Paper tray unloaded!");
                     break;
@@ -289,16 +285,15 @@ namespace PERQemu.IO
                     // the final page of a print run.  When PRNT is asserted,
                     // schedule the transition to Ready to start a new print.
                     //
-                    _standby = true;
+                    _status |= Status0.Wait;
 
                     if (_control.PrintRequest)
                     {
                         if (Settings.Performance.HasFlag(RateLimit.PrinterSpeed))
                         {
-                            // Actual warm up time is around 10 seconds, but we
-                            // add up to 3.7 seconds in the Ready -> Start state
-                            var rand = new Random();
-                            delay = (ulong)rand.Next(3000, 6300);
+                            // Actual warm up time is around 5 seconds, for the
+                            // INTR (initial drum rotation) period
+                            delay = 5000;
                         }
 
                         Log.Info(Category.Canon, "[Printer warming up, starting in {0:n2} seconds]",
@@ -321,30 +316,54 @@ namespace PERQemu.IO
                             Log.Info(Category.Canon, "[Printer sleep timer canceled]");
                         }
 
+                        UpdateStatus();
+
                         // Are we good to go?
                         if (!_running && _ready)
                         {
-                            // Yep, set the flag and schedule the VSREQ transition
+                            // Yep, set the flag and start the clock
                             _running = true;
+                            _status |= Status0.PaperDelivery;
 
-                            if (Settings.Performance.HasFlag(RateLimit.PrinterSpeed))
-                            {
-                                delay = 3500;
-                            }
-                            Log.Info(Category.Canon, "[Printer sending VSReq in {0:n2} seconds]",
+                            _clocks = 0;
+                            next = PrinterState.Starting;
+
+                            // Don't ask. :-|
+                            _lineCount = (_resolution == 300) ? -80 : -312;
+
+                            // Minimum delay based on top margin approximation if not rate limiting
+                            delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 3500U :
+                                    (_resolution == 300) ? 145U : 665U;
+
+                            Log.Info(Category.Canon, "[Printer starting clock in {0:n2} seconds]",
                                                      delay * Conversion.MsecToSec);
                             _delayEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, SendVSReq);
                         }
                     }
                     else
                     {
-                        // The controller has deasserted PRNT, so schedule an
-                        // eventual return to Standby mode
+                        // The controller has deasserted PRNT, so schedule the
+                        // return to Standby mode after LSTR (last rotation)
                         if (_sleepEvent == null)
                         {
-                            Log.Info(Category.Canon, "[Printer will sleep in 20 seconds]");
-                            _sleepEvent = _scheduler.Schedule(20000 * Conversion.MsecToNsec, Standby);
+                            Log.Info(Category.Canon, "[Printer will sleep in 5.7 seconds]");
+                            _sleepEvent = _scheduler.Schedule(5700 * Conversion.MsecToNsec, Standby);
                         }
+                    }
+                    break;
+
+                case PrinterState.Starting:
+                    //
+                    // Loop for the mechanical delay between PRNT -> VSREQ to allow
+                    // for paper feed and the start of the BD clock.  Although the
+                    // printer starts the BD clock *before* VSREQ, the PERQ state
+                    // machine ignores them until after the VSREQ/VSYNC handshake.
+                    //
+                    Log.Info(Category.Canon, "[Printer starting]");
+
+                    if (_vsreq)
+                    {
+                        next = PrinterState.WaitForVSync;
                     }
                     break;
 
@@ -355,14 +374,29 @@ namespace PERQemu.IO
                     //
                     if (_control.VSync)
                     {
-                        Log.Debug(Category.Canon, "[Printer received VSync]");
+                        Log.Info(Category.Canon, "[Printer received VSync]");
 
                         // At this point, we've fed paper into the machine! :-)
-                        _pagesLeft--;
+                        _status &= ~Status0.PaperDelivery;
 
-                        // Turn off VSReq and start our BD clock
-                        _delayEvent = _scheduler.Schedule(1 * Conversion.MsecToNsec, StartPage);
-                        next = PrinterState.Printing;
+                        // Clear VSREQ and check our status
+                        _vsreq = false;
+                        UpdateStatus();
+
+                        if (!_ready)
+                        {
+                            // PRINT requests are ignored if we aren't ready... in the
+                            // emulator, this could only really happen if the paper tray
+                            // is yanked out (i.e., replaced by NoCassette)
+                            Log.Info(Category.Canon, "[Printer not ready, can't start page]");
+                            _running = false;
+                            next = PrinterState.Fault;
+                        }
+                        else
+                        {
+                            StartPage();
+                            next = PrinterState.Printing;
+                        }
                     }
                     break;
 
@@ -405,11 +439,14 @@ namespace PERQemu.IO
                     if (_running)
                     {
                         Log.Info(Category.Canon, "[Printer at EOP!]");
+                        _bd = false;
                         _running = false;
                         _ready = false;
                         _sbusy = true;
                         UpdateStatus();
                         _control.SignalStateChange();
+
+                        _clocks = 0;
 
                         // Go process the bitmap and save the file
                         SavePage();
@@ -436,38 +473,31 @@ namespace PERQemu.IO
         }
 
         /// <summary>
+        /// Come out of standby: spin the drum and scanner, warm the fixer, ready the laser!
+        /// </summary>
+        public void EngineStart(ulong skewNsec, object context)
+        {
+            Log.Info(Category.Canon, "[Printer is warmed up!]");
+
+            _delayEvent = null;
+            _status &= ~Status0.Wait;
+            _status |= Status0.PrintRequest;
+            UpdateStatus();
+            RunStateMachine(PrinterState.Ready);
+        }
+
+        /// <summary>
         /// Start a new page.
         /// </summary>
-        public void StartPage(ulong skewNsec, object context)
+        public void StartPage()
         {
-            // Clear VSREQ and check our status
-            _vsreq = false;
-            UpdateStatus();
-
-            if (!_ready)
-            {
-                // PRINT requests are ignored if we aren't ready...
-                Log.Info(Category.Canon, "[Printer not ready, can't start page]");
-
-                RunStateMachine(PrinterState.Fault);    // fixme
-                return;
-            }
-
             Log.Info(Category.Canon, "[Printer starting page]");
 
             // Initialize the bitmap
             _pageBuffer = new byte[ScanWidthInBytes * MaxHeight];   // 1bpp version
 
-            _lineCount = 0;
+            _pagesLeft--;
             SetPageDimensions();
-
-            // Start the line clock.  To reliably determine the end of a page,
-            // we count down the maximum number of BD pulses based on the
-            // paper length (loosely); the rated print speed is 8.1ppm for
-            // Letter (and, presumably, A4 and B5) and 6.9ppm for Legal.  This
-            // is as good a method as any, even if it seems a total hack.
-            _clocks = _pageHeight;
-            SendBD(0, null);
         }
 
         /// <summary>
@@ -475,10 +505,14 @@ namespace PERQemu.IO
         /// </summary>
         public void PrintBlank()
         {
-            Log.Info(Category.Canon, "Blanking (line={0})", _lineCount);
-            _lineCount++;
+            // Count lines in the visible area
+            if (_state == PrinterState.Printing)
+            {
+                Log.Debug(Category.Canon, "Blanking (line={0})", _lineCount);
+                _lineCount++;
+            }
             _blanking = true;
-            RunStateMachine(PrinterState.Printing);
+            RunStateMachine(_state);
         }
 
         /// <summary>
@@ -486,17 +520,23 @@ namespace PERQemu.IO
         /// </summary>
         public void PrintLine(int margin, int width, byte[] data)
         {
-            // Compute starting point in bytes
-            var addr = (ScanWidthInBytes * _lineCount) + margin;
+            // Debug
+            if (_state != PrinterState.Printing || _lineCount < 0 || _lineCount >= MaxHeight)
+            {
+                Log.Warn(Category.Canon, "PrintLine in state {0} at line {1}!?", _state, _lineCount);
+            }
 
-            Log.Info(Category.Canon, "Printing (line={0} @ {1}, left={2}, width={3})",
+            // Compute starting point in bytes
+            var addr = (ScanWidthInBytes * _lineCount) + margin - 1;
+
+            Log.Debug(Category.Canon, "Printing (line={0} @ {1}, left={2}, width={3})",
                                      _lineCount, addr, margin, width);
 
             Array.Copy(data, 0, _pageBuffer, addr, width);
 
             _lineCount++;
             _blanking = false;
-            RunStateMachine(PrinterState.Printing);
+            RunStateMachine(_state);
         }
 
         /// <summary>
@@ -544,41 +584,43 @@ namespace PERQemu.IO
         }
 
         /// <summary>
-        /// Come out of standby: spin the drum and scanner, warm the fixer, ready the laser!
-        /// </summary>
-        public void EngineStart(ulong skewNsec, object context)
-        {
-            Log.Info(Category.Canon, "[Printer is warmed up!]");
-
-            _standby = false;
-            _delayEvent = null;
-            UpdateStatus();
-            RunStateMachine(PrinterState.Ready);
-        }
-
-        /// <summary>
-        /// Return to standby mode to save power. :-)
+        /// Return to standby mode to save power and mechanical wear & tear. :-)
         /// </summary>
         public void Standby(ulong skewNsec, object context)
         {
             Log.Info(Category.Canon, "[Printer in standby mode]");
 
-            _standby = true;
             _sleepEvent = null;
+            _status = Status0.Wait;     // Clear any other flags
             UpdateStatus();
             RunStateMachine(PrinterState.Standby);
         }
 
+
         /// <summary>
-        /// Raise the VSREQ line to indicate the printer is ready to start printing.
+        /// Raise the VSREQ line to indicate the printer is ready to print,
+        /// then start the BD clock.
         /// </summary>
         public void SendVSReq(ulong skewNsec, object context)
         {
-            Log.Debug(Category.Canon, "[Printer sending VSReq]");
+            if (!_control.PrintRequest)
+            {
+                // PRNT must remain asserted until VSREQ turns it off, so
+                // if the controller reset or cancelled the request we bail!
+                _running = false;
+                RunStateMachine(PrinterState.Ready);
+            }
+            else
+            {
+                Log.Debug(Category.Canon, "[Printer sending VSReq]");
 
-            _vsreq = true;
-            _control.SignalStateChange();
-            RunStateMachine(PrinterState.WaitForVSync);
+                _vsreq = true;
+                _control.SignalStateChange();
+                RunStateMachine(_state);
+
+                // Start the horizontal clock!
+                SendBD(0, null);
+            }
         }
 
         /// <summary>
@@ -589,26 +631,29 @@ namespace PERQemu.IO
         {
             ulong delay;
 
-            _bd = !_bd;
-
             if (_bd)
             {
-                _clocks--;
+                _clocks++;  // debug only now
 
-                // Stop the clock?
-                if (_clocks <= 0 || !_ready || _sbusy)
+                // Have we run off the end of the page?
+                if (_lineCount > _pageHeight || !_ready)
                 {
-                    Log.Info(Category.Canon, "[Printer stopping BD clock]");
-                    _bd = false;
-                    _delayEvent = null;
+                    Log.Debug(Category.Canon, "[Printer stopping BD clock]");
+
+                    // "Accurate" mode means the clock actually runs for 6.2 seconds
+                    // after VSync; printing takes ~5.94 at nominal BD pulse rate
+                    delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 260000U : 1000U;
 
                     // Kick the state machine to process the page
-                    RunStateMachine(PrinterState.EndOfPage);
+                    _delayEvent = _scheduler.Schedule(delay, (skew, ctxt) =>
+                        {
+                            RunStateMachine(PrinterState.EndOfPage);
+                        });
                     return;
                 }
 
                 // Clock running: signal the controller
-                Log.Debug(Category.Canon, "[Printer sending BD ({0})]", _clocks);
+                Log.Detail(Category.Canon, "[Printer sending BD ({0})]", _clocks);
                 _control.SignalStateChange();
 
                 // BD pulse width (in usec)
@@ -619,6 +664,9 @@ namespace PERQemu.IO
                 // Microseconds between BD pulses
                 delay = (_resolution == 300) ? 1781U : 2226U;
             }
+
+            // Toggle now so we start false and count properly
+            _bd = !_bd;
 
             // Schedule the next transition
             _delayEvent = _scheduler.Schedule(delay * Conversion.UsecToNsec, SendBD);
@@ -681,7 +729,7 @@ namespace PERQemu.IO
             if (_operStatus != 0)
                 Console.WriteLine($"  Status 1:   {_operStatus}");
             Console.WriteLine();
-            Console.WriteLine($"Interface:  Standby={_standby} RDY={_ready} VSREQ={_vsreq} BD={_bd}");
+            Console.WriteLine($"Interface:  RDY={_ready} VSREQ={_vsreq} BD={_bd}");
             if (_lineCount > 0 && _clocks > 0)
                 Console.WriteLine($"[Printing at line {_lineCount} (clock={_clocks})]");
         }
@@ -705,7 +753,9 @@ namespace PERQemu.IO
 
         PrinterState _state;
         Status0 _status;
+        Status0 _lastStatus;
         Status1 _operStatus;
+        Status1 _lastOperStatus;
         PaperCode _cassette;
 
         uint _resolution;
@@ -716,10 +766,8 @@ namespace PERQemu.IO
         bool _sbusy;
         bool _bd;
 
-        bool _standby;
         bool _running;
         bool _blanking;
-        bool _testPrint;
 
         uint _pagesLeft;
         uint _totalPages;
@@ -730,7 +778,6 @@ namespace PERQemu.IO
         int _pageWidth;
         int _pageHeight;
         byte[] _pageBuffer;
-        IntPtr _surface;
         SDL.SDL_Rect _printableArea;
 
         SchedulerEvent _delayEvent;
@@ -792,6 +839,9 @@ namespace PERQemu.IO
     }
 
     //
+    //  Status 1 flags NoCartridge and PaperJam are for completeness only; we
+    //  don't simulate jams or missing/improperly installed toner cartridges. :-)
+    //
     //  Status 2 is the Service-call information status byte; the emulator
     //  always returns 0 when this status is requested (no malfunctions).
     //
@@ -824,6 +874,7 @@ namespace PERQemu.IO
     {
         Standby = 0,            // Power saving mode :-)
         Ready,                  // Idle, waiting for print command
+        Starting,               // BD clock started (top margin)
         WaitForVSync,           // Waiting to start (top of page)
         Printing,               // Receiving the image data
         EndOfPage,              // Render and save completed image

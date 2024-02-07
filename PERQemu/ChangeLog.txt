@@ -6,6 +6,15 @@ notes moved to ChangeLog-Old.txt.  New entries here will be added at the top, to
 avoid wasting precious time scrolling to the end. :-)
 
 
+February, 2024:
+    1. Canon printing is pretty solid; worked out most of the quirks of the
+    print engine and controller so that the test software (on POS F.15) can
+    produce output at 240- or 300-dpi reliably, in PNG or TIFF (uncompressed)
+    formats.  Refactoring so that the output drivers can be used for other
+    printer emulations and screenshots too!  (Yes, the bitmaps are inverted,
+    for now.)
+
+
 January, 2024:
     6. Holy crap, laser printing seems to work.  LOTS of testing and tweaking to
     do but I got a screendump to print and CPrint almost output a proper listing
@@ -175,4 +184,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Sun Jan 14 02:04:04 PST 2024
+Last update: skeezics    Tue Feb  6 16:36:41 PST 2024

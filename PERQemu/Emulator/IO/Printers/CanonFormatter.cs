@@ -95,8 +95,8 @@ namespace PERQemu.IO
                     {
                         phys.ResetChecksum();
                         phys.Write(Encoding.ASCII.GetBytes("pHYs"), 0, 4);
-                        phys.WriteUInt(_resolution == 300 ? 11811U : 8849U);    // X
-                        phys.WriteUInt(_resolution == 300 ? 11811U : 8849U);    // Y
+                        phys.WriteUInt(_resolution == 300 ? 11811U : 9449U);    // X
+                        phys.WriteUInt(_resolution == 300 ? 11811U : 9449U);    // Y
                         phys.WriteByte(1);              // Pixels per meter!
                         crc = phys.WriteCRC;
                     }
@@ -122,7 +122,7 @@ namespace PERQemu.IO
 
                     byte[] imageData;
 
-                    Log.Info(Category.Canon, "Image buffer: {0} bytes", _pageBuffer.Length);
+                    Log.Info(Category.Formatter, "Image buffer: {0} bytes", _pageBuffer.Length);
 
                     // Now compress the bitmap and write the data chunk!
                     using (var mem = new MemoryStream())
@@ -149,7 +149,7 @@ namespace PERQemu.IO
 
                         // Now save the complete Zlib-format compressed data chunk
                         imageData = mem.ToArray();
-                        Log.Info(Category.Canon, "Compressed: {0} bytes", imageData.Length);
+                        Log.Info(Category.Formatter, "Compressed: {0} bytes", imageData.Length);
                     }
 
                     // And write it into a PNG IDAT chunk!
@@ -174,7 +174,7 @@ namespace PERQemu.IO
             }
             catch (Exception e)
             {
-                Log.Info(Category.Canon, "Failed to save output: {0}", e.Message);
+                Log.Info(Category.Formatter, "Failed to save output: {0}", e.Message);
                 return false;
             }
         }
@@ -193,7 +193,7 @@ namespace PERQemu.IO
                 s2 = (s1 + s2) % 65521;
             }
 
-            Log.Info(Category.Canon, "Adler32 CRC: {0:x}", (uint)(s2 * 65536 + s1));
+            Log.Info(Category.Formatter, "Adler32 CRC: {0:x}", (uint)(s2 * 65536 + s1));
             return (uint)(s2 * 65536 + s1);
         }
 
@@ -271,7 +271,7 @@ namespace PERQemu.IO
             // in those tags as necessary
             var dataSize = ifd.DataSizeInBytes(offset);
 
-            Log.Info(Category.Canon, "Data block size: {0} bytes", dataSize);
+            Log.Info(Category.Formatter, "Data block size: {0} bytes", dataSize);
 
             // THIS is now the start of our IFD!
             offset += dataSize;
@@ -292,12 +292,12 @@ namespace PERQemu.IO
                     fs.WriteShort(42);
                     fs.WriteUInt(offset);
 
-                    Log.Info(Category.Canon, "TIFF header written, IFD at {0}", offset);
+                    Log.Info(Category.Formatter, "TIFF header written, IFD at {0}", offset);
 
                     // Write the entire bitmap in one strip
                     fs.Write(_pageBuffer, 0, _pageBuffer.Length);
 
-                    Log.Info(Category.Canon, "Bitmap data written, start of IFD overflow data at {0}", fs.Position);
+                    Log.Info(Category.Formatter, "Bitmap data written, start of IFD overflow data at {0}", fs.Position);
 
                     // Now write the extra data at the end of the image block
                     ifd.WriteExtendedData(fs);
@@ -315,7 +315,7 @@ namespace PERQemu.IO
             }
             catch (Exception e)
             {
-                Log.Info(Category.Canon, "Failed to save output: {0}", e.Message);
+                Log.Info(Category.Formatter, "Failed to save output: {0}", e.Message);
                 return false;
             }
         }
@@ -410,7 +410,7 @@ namespace PERQemu.IO
                         break;
 
                     default:
-                        Log.Warn(Category.Canon, "No setter for multibyte type {0}", TagType);
+                        Log.Warn(Category.Formatter, "No setter for multibyte type {0}", TagType);
                         break;
                 }
 
@@ -471,7 +471,7 @@ namespace PERQemu.IO
                         break;
 
                     default:
-                        Log.Warn(Category.Canon, "Unimplemented writer for field type {0}", TagType);
+                        Log.Warn(Category.Formatter, "Unimplemented writer for field type {0}", TagType);
                         break;
                 }
             }
@@ -539,7 +539,7 @@ namespace PERQemu.IO
                 {
                     if (Tags[i].SizeInBytes > 0)
                     {
-                        Log.Info(Category.Canon, "Writing out-of-band data for tag {0}, offset={1}, pos={2}",
+                        Log.Info(Category.Formatter, "Writing out-of-band data for tag {0}, offset={1}, pos={2}",
                                                  Tags[i].Tag, Tags[i].DataOffset, s.Position);
                         Tags[i].WriteExtendedDataToStream(s);
                     }
@@ -551,7 +551,7 @@ namespace PERQemu.IO
             /// </summary>
             public void WriteIFD(Stream s)
             {
-                Log.Info(Category.Canon, "Writing IFD at position {0}", s.Position);
+                Log.Info(Category.Formatter, "Writing IFD at position {0}", s.Position);
                 s.WriteShort(TagCount);
 
                 for (var i = 0; i < TagCount; i++)

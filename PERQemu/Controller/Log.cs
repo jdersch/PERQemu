@@ -96,10 +96,13 @@ namespace PERQemu
         Streamer    = 0x8000000000,
         Ethernet    = 0x10000000000,
         NetAdapter  = 0x20000000000,
-        Canon       = 0x80000000000,
-        Multibus    = 0x100000000000,
-        SMD         = 0x200000000000,
-        MediaLoader = 0x100000000000000,
+        Canon       = 0x40000000000,        // Canon laser printers
+        Printer     = 0x80000000000,        // Simulated GPIB/RS232 printer(s)
+        Multibus    = 0x100000000000,       // Host controller
+        SMD         = 0x200000000000,       // Ciprico
+        Tape        = 0x400000000000,       // Tapemaster
+        Formatter   = 0x1000000000000,      // Image output formatters
+        MediaLoader = 0x100000000000000,    // PERQmedia loader
         UI          = 0x1000000000000000,
         Timer       = 0x2000000000000000,
         All         = 0xffffffffffffffff
@@ -537,6 +540,7 @@ namespace PERQemu
             _colors.Add(Category.None, ConsoleColor.Black);     // HeartOfGold theme
             _colors.Add(Category.Emulator, ConsoleColor.White);
             _colors.Add(Category.MediaLoader, ConsoleColor.DarkYellow);
+            _colors.Add(Category.Formatter, ConsoleColor.DarkYellow);
             _colors.Add(Category.Controller, ConsoleColor.Yellow);
             _colors.Add(Category.Debugger, ConsoleColor.DarkYellow);
             _colors.Add(Category.Scheduler, ConsoleColor.Green);
@@ -588,6 +592,8 @@ namespace PERQemu
             _colors.Add(Category.Ethernet, ConsoleColor.Cyan);
             _colors.Add(Category.NetAdapter, ConsoleColor.Gray);
             _colors.Add(Category.Streamer, ConsoleColor.Gray);
+            _colors.Add(Category.Printer, ConsoleColor.Green);
+            _colors.Add(Category.Tape, ConsoleColor.DarkBlue);
             _colors.Add(Category.Canon, ConsoleColor.Gray);
             _colors.Add(Category.Link, ConsoleColor.Gray);
             _colors.Add(Category.SMD, ConsoleColor.DarkBlue);
