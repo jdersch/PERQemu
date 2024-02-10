@@ -216,6 +216,9 @@
     <Compile Include="Emulator\IO\Printers\CanonController.cs" />
     <Compile Include="Emulator\IO\Printers\CanonPrinter.cs" />
     <Compile Include="Emulator\IO\Printers\CanonFormatter.cs" />
+    <Compile Include="UI\Output\Page.cs" />
+    <Compile Include="UI\Output\PNGFormatter.cs" />
+    <Compile Include="UI\Output\TIFFFormatter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -740,6 +743,7 @@
     <Folder Include="Emulator\IO\TapeDevices\" />
     <Folder Include="Emulator\IO\Network\" />
     <Folder Include="Emulator\IO\Printers\" />
+    <Folder Include="UI\Output\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

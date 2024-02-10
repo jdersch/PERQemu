@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.IO;
 
 namespace PERQemu
 {
@@ -134,21 +135,40 @@ namespace PERQemu
             }
         }
 
-        // todo: obviously the machine has to be running
-        // todo: allow for png formatter (read Settings.ScreenFormat)
-        // todo: make path relative to Output/ (or Settings.OutputDir)
+
         [Command("save screenshot", "Save a screenshot of the current PERQ display")]
+        void SaveScreenshot()
+        {
+            var file = string.Format(Settings.ScreenshotTemplate,
+                                     DateTime.Now.ToString("yyyyMMdd-HHmmss"),
+                                     Paths.GetExtensionForImageFormat(Settings.ScreenshotFormat));
+
+            SaveScreenshot(Paths.BuildOutputPath(file));
+        }
+
+        [Command("save screenshot", "Save a named screenshot of the current PERQ display")]
         void SaveScreenshot(string file)
         {
-            string outputPath = file + ".jpg";  // FIXME
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The system is not powered on; screenshot not available.");
+                return;
+            }
+
+            if (!Path.HasExtension(file))
+            {
+                file = Path.ChangeExtension(file,
+                            Paths.GetExtensionForImageFormat(Settings.ScreenshotFormat));
+            }
 
             try
             {
-                PERQemu.Sys.Display.SaveScreenshot(outputPath);
+                PERQemu.Sys.Display.SaveScreenshot(file);
+                Console.WriteLine($"Screenshot saved to '{file}'.");
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Error saving screenshot to {outputPath}: {e.Message}");
+                Console.WriteLine($"Error saving screenshot to {file}: {e.Message}");
             }
         }
 

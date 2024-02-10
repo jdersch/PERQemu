@@ -7,6 +7,13 @@ avoid wasting precious time scrolling to the end. :-)
 
 
 February, 2024:
+    2. The CLI "save screenshot" command works again.  The default output format
+    is PNG so the compressed 1bpp screen capture is very compact.  The Canon can
+    now produce multi-page TIFF files!  These (large) files can be converted to
+    compressed PDFs using "tumble" as recommended for archival on Bitsavers.
+    Once bugs are shaken out and a visual progress indicator is added an interim
+    v0.5.5 update will be released with an updated User Guide.
+
     1. Canon printing is pretty solid; worked out most of the quirks of the
     print engine and controller so that the test software (on POS F.15) can
     produce output at 240- or 300-dpi reliably, in PNG or TIFF (uncompressed)
@@ -184,4 +191,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Tue Feb  6 16:36:41 PST 2024
+Last update: skeezics    Fri Feb  9 23:45:56 PST 2024

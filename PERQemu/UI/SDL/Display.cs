@@ -20,8 +20,11 @@
 using SDL2;
 
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using PERQemu.UI.Output;
 
 namespace PERQemu.UI
 {
@@ -275,10 +278,6 @@ namespace PERQemu.UI
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void RenderDisplay(SDL.SDL_Event e)
         {
-            // Adjust WHITE for slightly bluish tint of Clinton P-104 :-)
-            const uint WHITE = 0xfff3f3ff;
-            const uint BLACK = 0xff000000;
-
             IntPtr textureBits = IntPtr.Zero;
             int pitch = 0;
             int j = 0;
@@ -390,6 +389,8 @@ namespace PERQemu.UI
             _streamerActive = (bool)a.Args[0];
         }
 
+        // TODO: add Canon printer activity light!
+
         /// <summary>
         /// Close down the display and free SDL resources.
         /// </summary>
@@ -434,11 +435,54 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Save a screenshot.  Not yet implemented.
+        /// Save a screenshot.  Only PNG for now...
         /// </summary>
+        /// <remarks>
+        /// This uses the still-kinda-clunky Output routines to save 1bpp bitmaps
+        /// to bespoke PNG (and possibly other) files.  It should probably move to
+        /// another class or just use the bloody SDL_image routines to copy the
+        /// bitmap -> Surface -> .Save() and be done with it... Testing shows that
+        /// it isn't necessary to pause the PERQ during the capture, since this runs
+        /// on the CLI/main thread so there's no chance of "shearing" or capturing a
+        /// partial screen update.
+        /// </remarks>
         public void SaveScreenshot(string path)
         {
-            // TODO: have to rewrite for SDL2
+            // Use the last full frame
+            var screen = new byte[_32bppDisplayBuffer.Length / 8];
+            var screenAddr = 0;
+
+            // Convert back from 32bpp -> 1bpp (byte swap, bit swap and invert!)
+            for (var i = 0; i < _32bppDisplayBuffer.Length; i += 16)
+            {
+                ushort w = 0;
+                for (var j = 0; j < 16; j++)
+                {
+                    if ((_32bppDisplayBuffer[i + j] & 0x00ffffff) > 0) // WHITE
+                        w |= (ushort)(1 << (15 - j));
+                }
+                screen[screenAddr++] = (byte)(w >> 8);
+                screen[screenAddr++] = (byte)(w & 0xff);
+            }
+
+            // Set up the metadata
+            string[] keys = { "Title", "Creation Time", "Software" };
+            string[] values = { $"PERQ screenshot ({PERQemu.Config.Current.Name})",
+                                DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss.ffK"),
+                                PERQemu.Version };
+
+            // Pass 'em to the formatter
+            var png = new PNGFormatter(keys, values);
+
+            // Populate the page and save it
+            var page = new Page(100, new Region(0, 0, (uint)_displayWidth, (uint)_displayHeight));
+            page.CopyBits(screen);
+
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                png.Save(page, fs);
+                fs.Close();
+            }
         }
 
         /// <summary>
@@ -493,6 +537,10 @@ namespace PERQemu.UI
 
         // Table of precomputed pixel expansions
         static long[] _bitToPixel;
+
+        // Adjust WHITE for slightly bluish tint of Clinton P-104 :-)
+        const uint WHITE = 0xfff3f3ff;
+        const uint BLACK = 0xff000000;
 
         // Frame count
         long _frames;

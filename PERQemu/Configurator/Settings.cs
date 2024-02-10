@@ -119,7 +119,7 @@ namespace PERQemu
 
             OutputDirectory = Paths.OutputDir;
             ScreenshotFormat = ImageFormat.Png;     // More compact
-            ScreenshotTemplate = "{0}_{1:000}.{2}"; // Default: screenshot_nnn.png
+            ScreenshotTemplate = "Screenshot_{0}.{1}";  // Default: Screenshot_{date}.png
 
             CanonFormat = ImageFormat.Tiff;         // Multi-page capable; direct to PDF someday?
             CanonTemplate = "{0}_{1:000}.{2}";      // Default: {canon,cx}_pg_000.png

@@ -138,7 +138,7 @@ namespace PERQemu.IO
                       (_statFull ? CanonStatus.StatusAvailable : 0);
 
             if (_status != ostatus)
-                Log.Info(Category.Canon, "Controller status change: {0}", _status);
+                Log.Debug(Category.Canon, "Controller status change: {0}", _status);
         }
 
         /// <summary>
@@ -152,7 +152,7 @@ namespace PERQemu.IO
             {
                 UpdateStatus();
                 SetInterrupt(false);
-                Log.Info(Category.Canon, "Controller status read: {0} ({1:x})", _status, ~((int)_status) & 0x0f);
+                Log.Debug(Category.Canon, "Controller status read: {0} ({1:x})", _status, ~((int)_status) & 0x0f);
                 return ~((int)_status) & 0x0f;
             }
 
@@ -188,7 +188,7 @@ namespace PERQemu.IO
         public void LoadCommand(int value)
         {
             _command = (CanonControl)value;
-            Log.Info(Category.Canon, "Write 0x{0:x2} to command register: {1}", value, _command);
+            Log.Debug(Category.Canon, "Write 0x{0:x2} to command register: {1}", value, _command);
 
             // Update on every load
             _irqEnabled = _command.HasFlag(CanonControl.EnableInterrupts);
@@ -274,7 +274,7 @@ namespace PERQemu.IO
                     throw new InvalidOperationException($"Bad register write 0x{address:x2}");
             }
 
-            Log.Info(Category.Canon, "Write 0x{0:x2} to data register 0x{1:x2}", value, address);
+            Log.Debug(Category.Canon, "Write 0x{0:x2} to data register 0x{1:x2}", value, address);
         }
 
 
@@ -399,7 +399,7 @@ namespace PERQemu.IO
                         {
                             _lineCount = _linesInBand;
                             _bandAddr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.ExtB);
-                            Log.Info(Category.Canon, "[Controller line count reloaded ({0} lines @ 0x{1:x})]", _lineCount, _bandAddr);
+                            Log.Debug(Category.Canon, "[Controller line count reloaded ({0} lines @ 0x{1:x})]", _lineCount, _bandAddr);
                         }
 
                         // Another scanline to send?

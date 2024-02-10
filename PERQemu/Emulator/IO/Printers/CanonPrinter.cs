@@ -19,10 +19,10 @@
 
 using System;
 using System.IO;
-
-using SDL2;
+using System.Collections.Generic;
 
 using PERQmedia;
+using PERQemu.UI.Output;
 
 namespace PERQemu.IO
 {
@@ -45,7 +45,7 @@ namespace PERQemu.IO
             _cassette = Settings.CanonPaperSize;
             _resolution = Settings.CanonResolution;
 
-            _printableArea = new SDL.SDL_Rect();
+            _maxArea = new Region(0, 0, MaxWidth, MaxHeight);
 
             LoadPaper(_cassette);
             LoadPageCount();
@@ -67,8 +67,8 @@ namespace PERQemu.IO
         public void Reset()
         {
             _pageBuffer = null;
+            _pageCount = 0;
             _lineCount = 0;
-            _clocks = 0;
 
             // Clobber any outstanding events
             _scheduler.Cancel(_delayEvent);
@@ -183,46 +183,48 @@ namespace PERQemu.IO
             switch (_cassette)
             {
                 case PaperCode.USLetter:
-                    _pageWidth = (int)(8.5 * _resolution);
-                    _pageHeight = (int)(11 * _resolution);
-                    _printableArea.w = (int)(8.19 * _resolution);   // 8.11 max
-                    _printableArea.h = (int)(10.69 * _resolution);  // 10.82 max
+                    _pageArea.W = (uint)(8.5 * _resolution);
+                    _pageArea.H = (uint)(11 * _resolution);
+                    _printableArea.W = (uint)(8.19 * _resolution);   // 8.11 max
+                    _printableArea.H = (uint)(10.69 * _resolution);  // 10.82 max
                     break;
 
                 case PaperCode.USLegal:
-                    _pageWidth = (int)(8.5 * _resolution);
-                    _pageHeight = (int)(14 * _resolution);
-                    _printableArea.w = (int)(8.19 * _resolution);   // 8.11
-                    _printableArea.h = (int)(13.69 * _resolution);  // 13.85
+                    _pageArea.W = (uint)(8.5 * _resolution);
+                    _pageArea.H = (uint)(14 * _resolution);
+                    _printableArea.W = (uint)(8.19 * _resolution);   // 8.11
+                    _printableArea.H = (uint)(13.69 * _resolution);  // 13.85
                     break;
 
                 case PaperCode.A4:
-                    _pageWidth = (int)(8.27 * _resolution);
-                    _pageHeight = (int)(11.69 * _resolution);
-                    _printableArea.w = (int)(8 * _resolution);
-                    _printableArea.h = (int)(11.38 * _resolution);
+                    _pageArea.W = (uint)(8.27 * _resolution);
+                    _pageArea.H = (uint)(11.69 * _resolution);
+                    _printableArea.W = (uint)(8 * _resolution);
+                    _printableArea.H = (uint)(11.38 * _resolution);
                     break;
 
                 case PaperCode.B5:
-                    _pageWidth = (int)(6.93 * _resolution);
-                    _pageHeight = (int)(9.84 * _resolution);
-                    _printableArea.w = (int)(6.9 * _resolution);
-                    _printableArea.h = (int)(9.8 * _resolution);
+                    _pageArea.W = (uint)(6.93 * _resolution);
+                    _pageArea.H = (uint)(9.84 * _resolution);
+                    _printableArea.W = (uint)(6.9 * _resolution);
+                    _printableArea.H = (uint)(9.8 * _resolution);
                     break;
 
                 default:
-                    _pageWidth = MaxWidth;
-                    _pageHeight = MaxHeight;
-                    _printableArea.w = _pageWidth;
-                    _printableArea.h = _pageHeight;
+                    _pageArea.W = MaxWidth;
+                    _pageArea.H = MaxHeight;
+                    _printableArea.W = _pageArea.W;
+                    _printableArea.H = _pageArea.H;
                     break;
             }
 
             // Compute the upper left corner to center the result.  Eventually
             // I'll see some actual bitmaps and tweak these for best aesthetic
             // results.
-            _printableArea.x = ((_pageWidth - _printableArea.w) / 2);
-            _printableArea.y = ((_pageHeight - _printableArea.h) / 2);
+            _pageArea.X = ((_pageArea.W - _printableArea.W) / 2);
+            _pageArea.Y = ((_pageArea.H - _printableArea.H) / 2);
+            _printableArea.X = 0;
+            _printableArea.Y = 0;
         }
 
         /// <summary>
@@ -325,11 +327,10 @@ namespace PERQemu.IO
                             _running = true;
                             _status |= Status0.PaperDelivery;
 
-                            _clocks = 0;
                             next = PrinterState.Starting;
 
                             // Don't ask. :-|
-                            _lineCount = (_resolution == 300) ? -80 : -312;
+                            _lineCount = (_resolution == 300) ? -72 : -312;
 
                             // Minimum delay based on top margin approximation if not rate limiting
                             delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 3500U :
@@ -346,8 +347,10 @@ namespace PERQemu.IO
                         // return to Standby mode after LSTR (last rotation)
                         if (_sleepEvent == null)
                         {
-                            Log.Info(Category.Canon, "[Printer will sleep in 5.7 seconds]");
-                            _sleepEvent = _scheduler.Schedule(5700 * Conversion.MsecToNsec, Standby);
+                            delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 5700U : 2000U;
+
+                            Log.Info(Category.Canon, "[Printer will sleep in {0:N2} seconds]", delay / 1000.0);
+                            _sleepEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, Standby);
                         }
                     }
                     break;
@@ -359,10 +362,9 @@ namespace PERQemu.IO
                     // printer starts the BD clock *before* VSREQ, the PERQ state
                     // machine ignores them until after the VSREQ/VSYNC handshake.
                     //
-                    Log.Info(Category.Canon, "[Printer starting]");
-
                     if (_vsreq)
                     {
+                        Log.Info(Category.Canon, "[Printer starting]");
                         next = PrinterState.WaitForVSync;
                     }
                     break;
@@ -409,12 +411,12 @@ namespace PERQemu.IO
                     // point the BD clock stops and the EndOfPage transition is
                     // triggered.  Goofy as hell but more efficient that way.
                     //
-                    if (_lineCount > _printableArea.h && !_blanking)
+                    if (_lineCount > _printableArea.H && !_blanking)
                     {
                         // Debugging - warn if the PERQ has sent more data than
                         // we think we have room for
                         Log.Info(Category.Canon, "Scribbling outside the lines: {0} > {1}",
-                                                 _lineCount, _printableArea.h);
+                                                 _lineCount, _printableArea.H);
                     }
                     break;
 
@@ -446,13 +448,18 @@ namespace PERQemu.IO
                         UpdateStatus();
                         _control.SignalStateChange();
 
-                        _clocks = 0;
-
                         // Go process the bitmap and save the file
-                        SavePage();
+                        if (Settings.CanonFormat == ImageFormat.Tiff)
+                        {
+                            AddPage();      // Queue it up
+                        }
+                        else
+                        {
+                            SavePage();     // Write it out
+                        }
 
                         // Take a breather
-                        _delayEvent = _scheduler.Schedule(delay, (skewNsec, context) =>
+                        _delayEvent = _scheduler.Schedule(delay * Conversion.UsecToNsec, (skewNsec, context) =>
                         {
                             // And do it all again
                             _sbusy = false;
@@ -475,7 +482,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Come out of standby: spin the drum and scanner, warm the fixer, ready the laser!
         /// </summary>
-        public void EngineStart(ulong skewNsec, object context)
+        void EngineStart(ulong skewNsec, object context)
         {
             Log.Info(Category.Canon, "[Printer is warmed up!]");
 
@@ -489,7 +496,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Start a new page.
         /// </summary>
-        public void StartPage()
+        void StartPage()
         {
             Log.Info(Category.Canon, "[Printer starting page]");
 
@@ -498,6 +505,12 @@ namespace PERQemu.IO
 
             _pagesLeft--;
             SetPageDimensions();
+
+            // For TIFF, set up the list in case we're doing multiple pages
+            if (Settings.CanonFormat == ImageFormat.Tiff && _pageCount == 0)
+            {
+                _pageList = new List<Page>();
+            }
         }
 
         /// <summary>
@@ -521,7 +534,7 @@ namespace PERQemu.IO
         public void PrintLine(int margin, int width, byte[] data)
         {
             // Debug
-            if (_state != PrinterState.Printing || _lineCount < 0 || _lineCount >= MaxHeight)
+            if (_state != PrinterState.Printing || _lineCount < 0 || _lineCount >= _pageArea.H)
             {
                 Log.Warn(Category.Canon, "PrintLine in state {0} at line {1}!?", _state, _lineCount);
             }
@@ -540,10 +553,25 @@ namespace PERQemu.IO
         }
 
         /// <summary>
+        /// Adds the page to the list for multi-page TIFF output.
+        /// </summary>
+        void AddPage()
+        {
+            // Copy, crop and save the page (TIFF starts numbering at 0)
+            var page = new Page(_resolution, _pageArea, _pageCount);
+            page.CopyBits(_pageBuffer, _maxArea, _printableArea);
+
+            _pageList.Add(page);
+            _pageCount++;
+
+            Log.Info(Category.Canon, "[Saved page {0} to list]", _pageCount);
+        }
+
+        /// <summary>
         /// Save the completed page to the Output directory in the preferred
         /// image format.  Currently one page per file.
         /// </summary>
-        public void SavePage()
+        void SavePage()
         {
             // Build the filename
             var ext = Paths.GetExtensionForImageFormat(Settings.CanonFormat);
@@ -558,7 +586,7 @@ namespace PERQemu.IO
                     break;
 
                 case ImageFormat.Png:
-                    if (SavePageAsPNG(filename))
+                    if (SaveAsPNG(filename))
                     {
                         Log.Write(Category.Canon, "Saved PNG output to '{0}'.", filename);
                         _totalPages++;
@@ -566,15 +594,18 @@ namespace PERQemu.IO
                     break;
 
                 case ImageFormat.Tiff:
-                    if (SavePageAsTIFF(filename))
+                    if (SaveAsTIFF(filename))
                     {
-                        Log.Write(Category.Canon, "Saved TIFF output to '{0}'.", filename);
-                        _totalPages++;
+                        Log.Write(Category.Canon, "Saved TIFF output to '{0}' ({1}).", filename,
+                                  _pageCount == 1 ? "1 page" : $"{_pageCount} pages");
+                        _totalPages += _pageCount;
+                        _pageCount = 0;
+                        _pageList = null;
                     }
                     break;
 
                 case ImageFormat.Raw:
-                    SavePageAsRaw(filename);
+                    SaveAsRaw(filename);
                     Log.Write(Category.Canon, "Saved raw output to '{0}'.", filename);
                     break;
 
@@ -586,8 +617,16 @@ namespace PERQemu.IO
         /// <summary>
         /// Return to standby mode to save power and mechanical wear & tear. :-)
         /// </summary>
-        public void Standby(ulong skewNsec, object context)
+        void Standby(ulong skewNsec, object context)
         {
+            // If a multi-page output is pending, write it out now.  This extra
+            // delay isn't ideal, but I haven't yet come up with a reasonable
+            // way to determine when the PERQ is done with a document...
+            if (Settings.CanonFormat == ImageFormat.Tiff && _pageCount > 0)
+            {
+                SavePage();
+            }
+
             Log.Info(Category.Canon, "[Printer in standby mode]");
 
             _sleepEvent = null;
@@ -601,7 +640,7 @@ namespace PERQemu.IO
         /// Raise the VSREQ line to indicate the printer is ready to print,
         /// then start the BD clock.
         /// </summary>
-        public void SendVSReq(ulong skewNsec, object context)
+        void SendVSReq(ulong skewNsec, object context)
         {
             if (!_control.PrintRequest)
             {
@@ -627,21 +666,27 @@ namespace PERQemu.IO
         /// Toggle the BD signal (horizontal line clock).  When asserted, alerts
         /// the controller to start the next line.
         /// </summary>
-        public void SendBD(ulong skewNsec, object context)
+        void SendBD(ulong skewNsec, object context)
         {
             ulong delay;
 
             if (_bd)
             {
-                _clocks++;  // debug only now
+                // Have we run off the end of the page?  _pageArea is a hard stop,
+                // but the CX microcode actually counts a maximum of 3300 lines
+                // and just stops sending data... so either we hang until the
+                // controller issues a reset (gack! complicates the state a ton!)
+                // or we punt as soon as it starts blanking (the "bottom margin"
+                // that the microcode ignores but the Pascal pays attention to).
+                // This is all a big hack until more testing is done to see if a
+                // more reliable method can be worked out!
 
-                // Have we run off the end of the page?
-                if (_lineCount > _pageHeight || !_ready)
+                if (!_ready || _lineCount >= _pageArea.H || (_lineCount > _printableArea.H && _blanking))
                 {
-                    Log.Debug(Category.Canon, "[Printer stopping BD clock]");
+                    Log.Info(Category.Canon, "[Printer stopping BD clock]");
 
                     // "Accurate" mode means the clock actually runs for 6.2 seconds
-                    // after VSync; printing takes ~5.94 at nominal BD pulse rate
+                    // after VSync; printing takes ~5.94s at nominal BD pulse rate
                     delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 260000U : 1000U;
 
                     // Kick the state machine to process the page
@@ -653,7 +698,7 @@ namespace PERQemu.IO
                 }
 
                 // Clock running: signal the controller
-                Log.Detail(Category.Canon, "[Printer sending BD ({0})]", _clocks);
+                Log.Detail(Category.Canon, "[Printer sending BD]");
                 _control.SignalStateChange();
 
                 // BD pulse width (in usec)
@@ -676,7 +721,7 @@ namespace PERQemu.IO
         /// <summary>
         /// Loads the saved page count for this printer model.
         /// </summary>
-        public void LoadPageCount()
+        void LoadPageCount()
         {
             try
             {
@@ -730,8 +775,8 @@ namespace PERQemu.IO
                 Console.WriteLine($"  Status 1:   {_operStatus}");
             Console.WriteLine();
             Console.WriteLine($"Interface:  RDY={_ready} VSREQ={_vsreq} BD={_bd}");
-            if (_lineCount > 0 && _clocks > 0)
-                Console.WriteLine($"[Printing at line {_lineCount} (clock={_clocks})]");
+            if (_running && _lineCount > 0)
+                Console.WriteLine($"[Printing at line {_lineCount}]");
         }
 
         //
@@ -744,7 +789,7 @@ namespace PERQemu.IO
         // fine for now.
         //
         public const int MaxWidth = 2704;           // Round up to multiple of 8 bits
-        public const int MaxHeight = 3300;
+        public const int MaxHeight = 3600;          // To cover A4; 4200 if we support Legal...
 
         public const int ScanWidthInBytes = MaxWidth / 8;  // Used a lot
 
@@ -758,8 +803,6 @@ namespace PERQemu.IO
         Status1 _lastOperStatus;
         PaperCode _cassette;
 
-        uint _resolution;
-
         // Signals
         bool _ready;
         bool _vsreq;
@@ -769,16 +812,20 @@ namespace PERQemu.IO
         bool _running;
         bool _blanking;
 
+        int _lineCount;
+
         uint _pagesLeft;
         uint _totalPages;
 
-        int _lineCount;
-        int _clocks;
-
-        int _pageWidth;
-        int _pageHeight;
+        uint _resolution;
         byte[] _pageBuffer;
-        SDL.SDL_Rect _printableArea;
+        ushort _pageCount;
+
+        Region _maxArea;
+        Region _pageArea;
+        Region _printableArea;
+
+        List<Page> _pageList;
 
         SchedulerEvent _delayEvent;
         SchedulerEvent _sleepEvent;
