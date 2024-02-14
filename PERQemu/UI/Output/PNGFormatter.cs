@@ -25,6 +25,9 @@ using PERQmedia;
 
 namespace PERQemu.UI.Output
 {
+    /// <summary>
+    /// Write a Page as a 1bpp compressed PNG image file, with metadata.
+    /// </summary>
     public class PNGFormatter
     {
         public PNGFormatter(string[] keywords, string[] metadata)
@@ -99,7 +102,7 @@ namespace PERQemu.UI.Output
             // ANOTHER copy, with the bloody filter type bytes added (per scanline)
             byte[] imageData;
 
-            Log.Info(Category.Formatter, "Image buffer: {0} bytes", page.Buffer.Length);
+            Log.Debug(Category.Formatter, "Image buffer: {0} bytes", page.Buffer.Length);
 
             // Now compress the bitmap and write the data chunk!
             using (var mem = new MemoryStream())
@@ -123,7 +126,7 @@ namespace PERQemu.UI.Output
 
                 // Now save the complete Zlib-format compressed data chunk
                 imageData = mem.ToArray();
-                Log.Info(Category.Formatter, "Compressed: {0} bytes", imageData.Length);
+                Log.Debug(Category.Formatter, "Compressed: {0} bytes", imageData.Length);
             }
 
             // And write it into a PNG IDAT chunk!
@@ -157,7 +160,7 @@ namespace PERQemu.UI.Output
                 s2 = (s1 + s2) % 65521;
             }
 
-            Log.Info(Category.Formatter, "Adler32 CRC: {0:x}", (uint)(s2 * 65536 + s1));
+            Log.Debug(Category.Formatter, "Adler32 CRC: {0:x}", (uint)(s2 * 65536 + s1));
             return (uint)(s2 * 65536 + s1);
         }
 

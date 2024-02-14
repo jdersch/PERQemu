@@ -172,9 +172,6 @@ namespace PERQemu
             }
         }
 
-        // todo: maybe consider a new "output commands" class for screen shots,
-        // canon printer, and future printer emulation (like a dot-matrix or
-        // daisy wheel gpib device, or the versatec v80 "electrostatic plotter")
 
         bool FindCanon(out IO.CanonController ctrl)
         {
@@ -212,7 +209,8 @@ namespace PERQemu
 
             if (FindCanon(out canon))
             {
-                LoadCanon(canon.Cassette);
+                // If nothing loaded and no argument, load the default type!
+                LoadCanon(canon.Cassette == IO.PaperCode.NoCassette ? Settings.CanonPaperSize : canon.Cassette);
             }
         }
 

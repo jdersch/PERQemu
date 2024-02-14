@@ -61,6 +61,7 @@ namespace PERQemu
         HardDiskActivity,   // For blinkenlights
         FloppyActivity,     // Sure, why not
         StreamerActivity,   // Definitely this
+        PrinterActivity,    // Canon now, more to come
         PowerDown,          // PERQ 1 software power off
         Other
     }

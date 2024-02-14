@@ -22,6 +22,7 @@ using System.IO;
 using System.Collections.Generic;
 
 using PERQmedia;
+using PERQemu.UI;
 using PERQemu.UI.Output;
 
 namespace PERQemu.IO
@@ -69,6 +70,7 @@ namespace PERQemu.IO
             _pageBuffer = null;
             _pageCount = 0;
             _lineCount = 0;
+            _clocks = 0;
 
             // Clobber any outstanding events
             _scheduler.Cancel(_delayEvent);
@@ -76,6 +78,12 @@ namespace PERQemu.IO
 
             _scheduler.Cancel(_sleepEvent);
             _sleepEvent = null;
+
+            _scheduler.Cancel(_animEvent);
+            _animEvent = null;
+
+            // Clear the icon
+            _showIcon = false;
 
             // Reset signals
             _bd = false;
@@ -90,6 +98,7 @@ namespace PERQemu.IO
             _operStatus = _lastOperStatus = 0;
 
             UpdateStatus();
+            UpdateActivityIcon();
             Log.Info(Category.Canon, "Printer reset");
         }
 
@@ -119,7 +128,7 @@ namespace PERQemu.IO
                 _status |= Status0.Call;
             }
 
-            if (_status != _lastStatus) Log.Info(Category.Canon, "Printer status change: {0}", _status);
+            if (_status != _lastStatus) Log.Debug(Category.Canon, "Printer status change: {0}", _status);
             if (_operStatus != _lastOperStatus) Log.Info(Category.Canon, "Operator call: {0}", _operStatus);
 
             _lastStatus = _status;
@@ -185,15 +194,15 @@ namespace PERQemu.IO
                 case PaperCode.USLetter:
                     _pageArea.W = (uint)(8.5 * _resolution);
                     _pageArea.H = (uint)(11 * _resolution);
-                    _printableArea.W = (uint)(8.19 * _resolution);   // 8.11 max
-                    _printableArea.H = (uint)(10.69 * _resolution);  // 10.82 max
+                    _printableArea.W = (uint)(8.19 * _resolution);
+                    _printableArea.H = (uint)(10.86 * _resolution);
                     break;
 
                 case PaperCode.USLegal:
                     _pageArea.W = (uint)(8.5 * _resolution);
                     _pageArea.H = (uint)(14 * _resolution);
-                    _printableArea.W = (uint)(8.19 * _resolution);   // 8.11
-                    _printableArea.H = (uint)(13.69 * _resolution);  // 13.85
+                    _printableArea.W = (uint)(8.19 * _resolution);
+                    _printableArea.H = (uint)(13.82 * _resolution);
                     break;
 
                 case PaperCode.A4:
@@ -255,7 +264,7 @@ namespace PERQemu.IO
                     break;
             }
 
-            Log.Debug(Category.Canon, "[Margin delay is {0}usec]", delay);
+            Log.Detail(Category.Canon, "[Margin delay is {0}usec]", delay);
             return delay * Conversion.UsecToNsec;
         }
 
@@ -274,7 +283,7 @@ namespace PERQemu.IO
         {
             ulong delay = 100;  // Default delay if debugging (or impatient)
 
-            Log.Debug(Category.Canon, "[Printer SM  IN state={0} next={1}]", _state, next);
+            Log.Detail(Category.Canon, "[Printer SM  IN state={0} next={1}]", _state, next);
 
             switch (next)
             {
@@ -294,7 +303,8 @@ namespace PERQemu.IO
                         if (Settings.Performance.HasFlag(RateLimit.PrinterSpeed))
                         {
                             // Actual warm up time is around 5 seconds, for the
-                            // INTR (initial drum rotation) period
+                            // INTR (initial drum rotation) period.  (To show that
+                            // something is happening, blink the activity icon :-)
                             delay = 5000;
                         }
 
@@ -308,20 +318,25 @@ namespace PERQemu.IO
                     //
                     // Here when ready to start or continue printing.
                     //
-                    if (_control.PrintRequest)
+                    // Unless we aren't.  Trust, but verify. :-)
+                    UpdateStatus();
+
+                    if (!_ready)
+                    {
+                        next = PrinterState.Fault;
+                    }
+                    else if (_control.PrintRequest)
                     {
                         // Don't get sleepy
                         if (_sleepEvent != null)
                         {
                             _scheduler.Cancel(_sleepEvent);
                             _sleepEvent = null;
-                            Log.Info(Category.Canon, "[Printer sleep timer canceled]");
+                            Log.Debug(Category.Canon, "[Printer sleep timer canceled]");
                         }
 
-                        UpdateStatus();
-
                         // Are we good to go?
-                        if (!_running && _ready)
+                        if (!_running)
                         {
                             // Yep, set the flag and start the clock
                             _running = true;
@@ -329,14 +344,15 @@ namespace PERQemu.IO
 
                             next = PrinterState.Starting;
 
-                            // Don't ask. :-|
+                            // Ugh. Don't ask. :-|
                             _lineCount = (_resolution == 300) ? -72 : -312;
+                            _clocks = (int)((Math.Abs(_lineCount) + _pageArea.H + 7) / 8) * 8;
 
                             // Minimum delay based on top margin approximation if not rate limiting
                             delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 3500U :
                                     (_resolution == 300) ? 145U : 665U;
 
-                            Log.Info(Category.Canon, "[Printer starting clock in {0:n2} seconds]",
+                            Log.Debug(Category.Canon, "[Printer starting clock in {0:n2} seconds]",
                                                      delay * Conversion.MsecToSec);
                             _delayEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, SendVSReq);
                         }
@@ -349,7 +365,7 @@ namespace PERQemu.IO
                         {
                             delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 5700U : 2000U;
 
-                            Log.Info(Category.Canon, "[Printer will sleep in {0:N2} seconds]", delay / 1000.0);
+                            Log.Debug(Category.Canon, "[Printer will sleep in {0:N2} seconds]", delay / 1000.0);
                             _sleepEvent = _scheduler.Schedule(delay * Conversion.MsecToNsec, Standby);
                         }
                     }
@@ -364,7 +380,7 @@ namespace PERQemu.IO
                     //
                     if (_vsreq)
                     {
-                        Log.Info(Category.Canon, "[Printer starting]");
+                        Log.Debug(Category.Canon, "[Printer starting]");
                         next = PrinterState.WaitForVSync;
                     }
                     break;
@@ -376,7 +392,7 @@ namespace PERQemu.IO
                     //
                     if (_control.VSync)
                     {
-                        Log.Info(Category.Canon, "[Printer received VSync]");
+                        Log.Debug(Category.Canon, "[Printer received VSync]");
 
                         // At this point, we've fed paper into the machine! :-)
                         _status &= ~Status0.PaperDelivery;
@@ -390,7 +406,7 @@ namespace PERQemu.IO
                             // PRINT requests are ignored if we aren't ready... in the
                             // emulator, this could only really happen if the paper tray
                             // is yanked out (i.e., replaced by NoCassette)
-                            Log.Info(Category.Canon, "[Printer not ready, can't start page]");
+                            Log.Debug(Category.Canon, "[Printer not ready, can't start page]");
                             _running = false;
                             next = PrinterState.Fault;
                         }
@@ -415,7 +431,7 @@ namespace PERQemu.IO
                     {
                         // Debugging - warn if the PERQ has sent more data than
                         // we think we have room for
-                        Log.Info(Category.Canon, "Scribbling outside the lines: {0} > {1}",
+                        Log.Debug(Category.Canon, "Scribbling outside the lines: {0} > {1}",
                                                  _lineCount, _printableArea.H);
                     }
                     break;
@@ -440,10 +456,9 @@ namespace PERQemu.IO
                     //
                     if (_running)
                     {
-                        Log.Info(Category.Canon, "[Printer at EOP!]");
+                        Log.Debug(Category.Canon, "[Printer at EOP!]");
                         _bd = false;
                         _running = false;
-                        _ready = false;
                         _sbusy = true;
                         UpdateStatus();
                         _control.SignalStateChange();
@@ -463,7 +478,6 @@ namespace PERQemu.IO
                         {
                             // And do it all again
                             _sbusy = false;
-                            _ready = true;
                             UpdateStatus();
                             _control.SignalStateChange();
                             RunStateMachine(PrinterState.Ready);
@@ -476,7 +490,9 @@ namespace PERQemu.IO
             }
 
             _state = next;
-            Log.Debug(Category.Canon, "[Printer SM OUT state={0}]", _state);
+            Log.Detail(Category.Canon, "[Printer SM OUT state={0}]", _state);
+
+            UpdateActivityIcon();
         }
 
         /// <summary>
@@ -484,7 +500,7 @@ namespace PERQemu.IO
         /// </summary>
         void EngineStart(ulong skewNsec, object context)
         {
-            Log.Info(Category.Canon, "[Printer is warmed up!]");
+            Log.Debug(Category.Canon, "[Printer is warmed up!]");
 
             _delayEvent = null;
             _status &= ~Status0.Wait;
@@ -498,7 +514,7 @@ namespace PERQemu.IO
         /// </summary>
         void StartPage()
         {
-            Log.Info(Category.Canon, "[Printer starting page]");
+            Log.Debug(Category.Canon, "[Printer starting page]");
 
             // Initialize the bitmap
             _pageBuffer = new byte[ScanWidthInBytes * MaxHeight];   // 1bpp version
@@ -518,12 +534,8 @@ namespace PERQemu.IO
         /// </summary>
         public void PrintBlank()
         {
-            // Count lines in the visible area
-            if (_state == PrinterState.Printing)
-            {
-                Log.Debug(Category.Canon, "Blanking (line={0})", _lineCount);
-                _lineCount++;
-            }
+            Log.Detail(Category.Canon, "Blanking (line={0})", _lineCount);
+            _lineCount++;
             _blanking = true;
             RunStateMachine(_state);
         }
@@ -533,16 +545,23 @@ namespace PERQemu.IO
         /// </summary>
         public void PrintLine(int margin, int width, byte[] data)
         {
-            // Debug
+#if DEBUG
             if (_state != PrinterState.Printing || _lineCount < 0 || _lineCount >= _pageArea.H)
             {
-                Log.Warn(Category.Canon, "PrintLine in state {0} at line {1}!?", _state, _lineCount);
+                Log.Warn(Category.Canon, "PrintLine in state {0} at line {1} (clock {2})!?",
+                                         _state, _lineCount, _clocks);
+                return;
             }
 
+            if (_blanking)
+            {
+                Log.Detail(Category.Canon, "End of blanking at line {0} (clock {1})", _lineCount, _clocks);
+            }
+#endif
             // Compute starting point in bytes
             var addr = (ScanWidthInBytes * _lineCount) + margin - 1;
 
-            Log.Debug(Category.Canon, "Printing (line={0} @ {1}, left={2}, width={3})",
+            Log.Detail(Category.Canon, "Printing (line={0} @ {1}, left={2}, width={3})",
                                      _lineCount, addr, margin, width);
 
             Array.Copy(data, 0, _pageBuffer, addr, width);
@@ -564,7 +583,7 @@ namespace PERQemu.IO
             _pageList.Add(page);
             _pageCount++;
 
-            Log.Info(Category.Canon, "[Saved page {0} to list]", _pageCount);
+            Log.Debug(Category.Canon, "[Saved page {0} to list]", _pageCount);
         }
 
         /// <summary>
@@ -629,6 +648,7 @@ namespace PERQemu.IO
 
             Log.Info(Category.Canon, "[Printer in standby mode]");
 
+            _showIcon = false;
             _sleepEvent = null;
             _status = Status0.Wait;     // Clear any other flags
             UpdateStatus();
@@ -672,25 +692,26 @@ namespace PERQemu.IO
 
             if (_bd)
             {
-                // Have we run off the end of the page?  _pageArea is a hard stop,
-                // but the CX microcode actually counts a maximum of 3300 lines
-                // and just stops sending data... so either we hang until the
-                // controller issues a reset (gack! complicates the state a ton!)
-                // or we punt as soon as it starts blanking (the "bottom margin"
-                // that the microcode ignores but the Pascal pays attention to).
-                // This is all a big hack until more testing is done to see if a
-                // more reliable method can be worked out!
+                // Have we run off the end of the page?  The CX microcode counts
+                // a maximum of 3300 lines (hardcoded!) before it transitions to
+                // EOP, while the LBP10 version just stops sending data whenever
+                // it runs out of lines to print... so _lineCount won't increment
+                // if the controller leaps ahead to waiting for the next VSReq
+                // signal.  Sigh.  Running the clock until we've gone off the
+                // _pageArea limit seems to be the only reasonable compromise.
+                _clocks--;
 
-                if (!_ready || _lineCount >= _pageArea.H || (_lineCount > _printableArea.H && _blanking))
+                if (!_ready || _clocks <= 0)
                 {
-                    Log.Info(Category.Canon, "[Printer stopping BD clock]");
+                    Log.Debug(Category.Canon, "[Printer stopping BD clock at line {0} (clock {1})]", _lineCount, _clocks);
+                    _bd = false;
 
                     // "Accurate" mode means the clock actually runs for 6.2 seconds
                     // after VSync; printing takes ~5.94s at nominal BD pulse rate
                     delay = Settings.Performance.HasFlag(RateLimit.PrinterSpeed) ? 260000U : 1000U;
 
                     // Kick the state machine to process the page
-                    _delayEvent = _scheduler.Schedule(delay, (skew, ctxt) =>
+                    _delayEvent = _scheduler.Schedule(delay * Conversion.UsecToNsec, (skew, ctxt) =>
                         {
                             RunStateMachine(PrinterState.EndOfPage);
                         });
@@ -717,6 +738,109 @@ namespace PERQemu.IO
             _delayEvent = _scheduler.Schedule(delay * Conversion.UsecToNsec, SendBD);
         }
 
+        /// <summary>
+        /// Update the activity icon based on our current state (doing a little
+        /// animation to show progress, since printing is kinda slow in real time).
+        /// </summary>
+        /// <remarks>
+        /// Limits the rate of visual updates so the animations aren't too frenetic,
+        /// in emulator time (not real time).  Will vary according to the speed of
+        /// the host and the rate limit settings, but tuned for around 1/3rd sec at
+        /// the nominal 60Hz display refresh.
+        /// </remarks>
+        void UpdateActivityIcon()
+        {
+            var elapsed = _scheduler.CurrentTimeNsec - _lastIconChange;
+            var nextIcon = _lastIconShown;
+            var wasShown = _showIcon;
+            var doAnother = false;
+
+            switch (_state)
+            {
+                case PrinterState.Standby:
+                    //
+                    // For the 5 second warm up time, blink the icon to show the
+                    // printer is coming on-line.  Otherwise, it remains off.
+                    //
+                    if (_control.PrintRequest)
+                    {
+                        nextIcon = Display.PRINT_READY;
+                        _showIcon = !_showIcon;
+                        doAnother = true;
+                    }
+                    else
+                    {
+                        wasShown = true;    // Force it!
+                        _showIcon = false;
+                        _animEvent = null;
+                    }
+                    break;
+
+                case PrinterState.Ready:
+                case PrinterState.Starting:
+                case PrinterState.WaitForVSync:
+                case PrinterState.EndOfPage:
+                    //
+                    // When ready to print, turn on the plain icon (no blink).
+                    //
+                    _showIcon = true;
+                    nextIcon = Display.PRINT_READY;
+                    _animEvent = null;
+                    break;
+
+                case PrinterState.Printing:
+                    //
+                    // While actively printing animate the icon to show we're working!
+                    // I'm just gonna rely on the fact that the PRINT_P1..P3 icons
+                    // are numbered sequentially, and this is so bad, but la la la la la
+                    // Gepetto promises it'll all be rolled into a Real GUI someday
+                    //
+                    if (!_showIcon || elapsed > ANIM_RATE)
+                    {
+                        _showIcon = true;
+                        nextIcon++;
+                        if (nextIcon == Display.PRINT_ALERT) nextIcon = Display.PRINT_P1;
+                    }
+                    break;
+
+                case PrinterState.Fault:
+                    //
+                    // Ruh roh.  Blink the attention icon until the fault clears.
+                    //
+                    if (_lastIconShown != Display.PRINT_ALERT || !_showIcon)
+                    {
+                        _showIcon = true;
+                        nextIcon = Display.PRINT_ALERT;
+                    }
+                    else
+                    {
+                        nextIcon = Display.PRINT_READY;
+                    }
+                    doAnother = true;
+                    break;
+            }
+
+            // Anything changed?
+            if (nextIcon != _lastIconShown || wasShown != _showIcon)
+            {
+                // Update & send it
+                _lastIconShown = nextIcon;
+                _lastIconChange = _scheduler.CurrentTimeNsec;
+                PERQemu.Sys.MachineStateChange(WhatChanged.PrinterActivity, _showIcon, _lastIconShown);
+            }
+
+            // Do another "frame" of animation?
+            if (_animEvent == null && doAnother)
+            {
+                _animEvent = _scheduler.Schedule(ANIM_RATE, AnimationStep);
+            }
+        }
+
+        void AnimationStep(ulong skewNsec, object context)
+        {
+            _animEvent = null;
+            UpdateActivityIcon();
+        }
 
         /// <summary>
         /// Loads the saved page count for this printer model.
@@ -734,11 +858,11 @@ namespace PERQemu.IO
                     _totalPages = fs.ReadUInt();
                     fs.Close();
                 }
-                Log.Info(Category.Canon, "Page counter loaded ({0})", _totalPages);
+                Log.Debug(Category.Canon, "Page counter loaded ({0})", _totalPages);
             }
             catch (Exception e)
             {
-                Log.Info(Category.Canon, "Page counter initialized ({0})", e.Message);
+                Log.Debug(Category.Canon, "Page counter initialized ({0})", e.Message);
                 _totalPages = 0;
             }
         }
@@ -756,11 +880,11 @@ namespace PERQemu.IO
                     fs.WriteUInt(_totalPages);
                     fs.Close();
                 }
-                Log.Info(Category.Canon, "Page counter saved");
+                Log.Debug(Category.Canon, "Page counter saved");
             }
             catch (Exception e)
             {
-                Log.Info(Category.Canon, "Page counter NOT saved: {0}", e.Message);
+                Log.Debug(Category.Canon, "Page counter NOT saved: {0}", e.Message);
             }
         }
 
@@ -777,6 +901,13 @@ namespace PERQemu.IO
             Console.WriteLine($"Interface:  RDY={_ready} VSREQ={_vsreq} BD={_bd}");
             if (_running && _lineCount > 0)
                 Console.WriteLine($"[Printing at line {_lineCount}]");
+
+            Console.WriteLine($"Sugar:  Animation rate is {ANIM_RATE}");
+            Console.WriteLine("  Icon {0} {1} visible, animation {2} running, last change {3}",
+                              _lastIconShown,
+                              _showIcon ? "IS" : "is NOT",
+                              _animEvent != null ? "IS" : "is NOT",
+                              _lastIconChange);
         }
 
         //
@@ -813,6 +944,7 @@ namespace PERQemu.IO
         bool _blanking;
 
         int _lineCount;
+        int _clocks;
 
         uint _pagesLeft;
         uint _totalPages;
@@ -829,6 +961,14 @@ namespace PERQemu.IO
 
         SchedulerEvent _delayEvent;
         SchedulerEvent _sleepEvent;
+        SchedulerEvent _animEvent;
+
+        // Some visual sugar
+        bool _showIcon;
+        int _lastIconShown;
+        ulong _lastIconChange;
+
+        ulong ANIM_RATE = 333 * Conversion.MsecToNsec;    // Tune me
     }
 
     /// <summary>
@@ -925,7 +1065,6 @@ namespace PERQemu.IO
         WaitForVSync,           // Waiting to start (top of page)
         Printing,               // Receiving the image data
         EndOfPage,              // Render and save completed image
-        Fault,                  // Ready dropped during printing
-        Reset                   // Power cycle/fault clear
+        Fault                   // Ready dropped during printing
     }
 }

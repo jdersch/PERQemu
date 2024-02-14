@@ -187,6 +187,7 @@ namespace PERQemu
 
         public event MachineStateChangeEventHandler DDSChanged;
         public event MachineStateChangeEventHandler FloppyActivity;
+        public event MachineStateChangeEventHandler PrinterActivity;
         public event MachineStateChangeEventHandler StreamerActivity;
         public event MachineStateChangeEventHandler PowerDownRequested;
 
@@ -351,7 +352,7 @@ namespace PERQemu
         /// Completely shut down this instance.
         /// </summary>
         public void Shutdown()
-        { 
+        {
             // Detach events
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
 
@@ -454,13 +455,13 @@ namespace PERQemu
                     // The UI shouldn't actually allow this but check anyway
                     if (_volumes[drive.Unit] != null)
                         throw new InvalidOperationException($"Drive {drive.Unit} is already loaded");
-                    
+
                     // Spin 'er up
                     _volumes[drive.Unit] = _iob.LoadDisk(drive);
 
                     // Load indicates success!
                     return _volumes[drive.Unit].IsLoaded;
-                                               
+
                 case DeviceType.Floppy:
                     // Add the drive?
                     if (_volumes[drive.Unit] == null)
@@ -735,6 +736,10 @@ namespace PERQemu
 
                 case WhatChanged.StreamerActivity:
                     handler = StreamerActivity;
+                    break;
+
+                case WhatChanged.PrinterActivity:
+                    handler = PrinterActivity;
                     break;
 
                 case WhatChanged.Z80RunState:

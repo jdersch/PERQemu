@@ -238,10 +238,6 @@ namespace PERQemu.UI
             }
         }
 
-        //
-        // Todo: set image format and file naming scheme for Canon, screenshots
-        //
-
         [Command("settings canon resolution", "Set resolution (model) of Canon laser printer to simulate")]
         public void SetCanonResolution(int dpi)
         {

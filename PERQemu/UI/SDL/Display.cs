@@ -54,6 +54,7 @@ namespace PERQemu.UI
             _prevZ80Clock = 0;
             _floppyActive = false;
             _streamerActive = false;
+            _printerActive = false;
 
             // Keep a local copy
             _displayWidth = _system.VideoController.DisplayWidth;
@@ -170,6 +171,20 @@ namespace PERQemu.UI
             _streamerRect.x = _floppyRect.x - 36;
             _streamerRect.y = _floppyRect.y;
 
+            // Load five textures for the printer!  WOO!
+            _printerTextures[PRINT_READY] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("print-ready.png"));
+            _printerTextures[PRINT_P1] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("printing-1.png"));
+            _printerTextures[PRINT_P2] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("printing-2.png"));
+            _printerTextures[PRINT_P3] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("printing-3.png"));
+            _printerTextures[PRINT_ALERT] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("print-alert.png"));
+
+            // And the printer status to the left of the streamer
+            _printerRect = new SDL.SDL_Rect();
+            _printerRect.h = 32;
+            _printerRect.w = 32;
+            _printerRect.x = _streamerRect.x - 36;
+            _printerRect.y = _streamerRect.y;
+
             // Init the display texture
             SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
             SDL.SDL_RenderClear(_sdlRenderer);
@@ -198,6 +213,7 @@ namespace PERQemu.UI
 
             _system.FloppyActivity += OnFloppyActivity;
             _system.StreamerActivity += OnStreamerActivity;
+            _system.PrinterActivity += OnPrinterActivity;
 
             // Tell the SDL EventLoop we're here
             PERQemu.GUI.AttachDisplay(_sdlWindow);
@@ -319,6 +335,12 @@ namespace PERQemu.UI
                 SDL.SDL_RenderCopy(_sdlRenderer, _streamerTexture, IntPtr.Zero, ref _streamerRect);
             }
 
+            // Printer active?
+            if (_printerActive)
+            {
+                SDL.SDL_RenderCopy(_sdlRenderer, _printerTextures[_printerState], IntPtr.Zero, ref _printerRect);
+            }
+
             // And show it to us
             SDL.SDL_RenderPresent(_sdlRenderer);
 
@@ -389,7 +411,14 @@ namespace PERQemu.UI
             _streamerActive = (bool)a.Args[0];
         }
 
-        // TODO: add Canon printer activity light!
+        /// <summary>
+        /// Catch signals from the Canon laser printer controller to update status icon.
+        /// </summary>
+        void OnPrinterActivity(MachineStateChangeEventArgs a)
+        {
+            _printerActive = (bool)a.Args[0];
+            if (_printerActive) _printerState = (int)a.Args[1];
+        }
 
         /// <summary>
         /// Close down the display and free SDL resources.
@@ -414,6 +443,7 @@ namespace PERQemu.UI
 
             _system.FloppyActivity -= OnFloppyActivity;
             _system.StreamerActivity -= OnStreamerActivity;
+            _system.PrinterActivity -= OnPrinterActivity;
 
             // Tell the EventLoop we're going away
             PERQemu.GUI.DetachDisplay();
@@ -569,14 +599,26 @@ namespace PERQemu.UI
         HRTimerElapsedCallback _fpsTimerCallback;
 
         // Floppy activity "light"
-        static IntPtr _floppyTexture = IntPtr.Zero;
+        IntPtr _floppyTexture = IntPtr.Zero;
         SDL.SDL_Rect _floppyRect;
         bool _floppyActive;
 
         // Tape streamer activity light!
-        static IntPtr _streamerTexture = IntPtr.Zero;
+        IntPtr _streamerTexture = IntPtr.Zero;
         SDL.SDL_Rect _streamerRect;
         bool _streamerActive;
+
+        // Printer activity icons
+        IntPtr[] _printerTextures = new IntPtr[5];
+        SDL.SDL_Rect _printerRect;
+        bool _printerActive;
+        int _printerState;
+
+        public const int PRINT_READY = 0;
+        public const int PRINT_P1 = 1;
+        public const int PRINT_P2 = 2;
+        public const int PRINT_P3 = 3;
+        public const int PRINT_ALERT = 4;
 
         // Parent
         PERQSystem _system;

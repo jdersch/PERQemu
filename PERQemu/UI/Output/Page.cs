@@ -17,8 +17,6 @@
 // along with PERQemu.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-
 namespace PERQemu.UI.Output
 {
     /// <summary>
@@ -70,7 +68,7 @@ namespace PERQemu.UI.Output
             _dstRect = geom;
             PageNumber = pagenum;
 
-            Log.Info(Category.Formatter, "New Page: {0}", _dstRect.ToString());
+            Log.Debug(Category.Formatter, "New Page: {0}", _dstRect.ToString());
 
             // Compute the scan width and create the empty bitmap
             _bitmap = new byte[_dstRect.Bytes];
@@ -125,9 +123,9 @@ namespace PERQemu.UI.Output
             var srcAddr = clipRect.Y * srcRect.ScanWidth + offset;
             var dstAddr = _dstRect.Y * _dstRect.ScanWidth + offset;
 
-            Log.Info(Category.Formatter, "CopyBits:  X Offset={0}, srcAddr={1}, dstAddr={2}", offset, srcAddr, dstAddr);
-            Log.Info(Category.Formatter, "Src Rect:  {0}", srcRect.ToString());
-            Log.Info(Category.Formatter, "ClipRect:  {0}", clipRect.ToString());
+            Log.Debug(Category.Formatter, "CopyBits:  X Offset={0}, srcAddr={1}, dstAddr={2}", offset, srcAddr, dstAddr);
+            Log.Debug(Category.Formatter, "Src Rect:  {0}", srcRect.ToString());
+            Log.Debug(Category.Formatter, "ClipRect:  {0}", clipRect.ToString());
 
             // S l o w... copy the rectangle and invert the bytes, since PERQ
             // memory images are the opposite of what PNG/TIFF expect. :-|
@@ -164,7 +162,8 @@ namespace PERQemu.UI.Output
 }
 
 /*
-
+    Notes:
+    
     For Canon, _maxArea is the full-size buffer (9" x 11", or x 14" if/when Legal
     size is supported); Page is created with the actual paper size depending on
     which cassette is loaded (so, max 8.5" x 14") while the clipping rect is the

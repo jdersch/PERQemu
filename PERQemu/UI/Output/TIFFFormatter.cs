@@ -25,6 +25,12 @@ using PERQmedia;
 
 namespace PERQemu.UI.Output
 {
+    /// <summary>
+    /// Save a Page or list of Pages as an uncompressed, 1bpp TIFF 6.0 image file
+    /// with some identifying metadata.  Assumes the input data is in PERQ memory
+    /// format (byte/bit ordering, white = 0).  Output verified by DPF Manager
+    /// (https://github.com/EasyinnovaSL/DPFManager).
+    /// </summary>
     public class TIFFFormatter
     {
         public TIFFFormatter(string desc)
@@ -40,7 +46,7 @@ namespace PERQemu.UI.Output
             uint size = WritePage(page, fs, 0, 1);
 
             if (size != fs.Position)
-                Console.WriteLine($"Final offset doesn't match position: {size} != {fs.Position}");
+                Log.Warn(Category.Formatter, "Final offset doesn't match position: {0} != {1}", size, fs.Position);
         }
 
         /// <summary>
@@ -58,7 +64,7 @@ namespace PERQemu.UI.Output
             }
 
             if (offset != fs.Position)
-                Console.WriteLine($"Final offset doesn't match position: {offset} != {fs.Position}");
+                Log.Warn(Category.Formatter, "Final offset doesn't match position: {0} != {1}", offset, fs.Position);
         }
 
         /// <summary>
@@ -69,11 +75,10 @@ namespace PERQemu.UI.Output
             var first = (page.PageNumber == 0);
             var last = (page.PageNumber + 1 == numPages);
 
-            Log.Info(Category.Formatter, "Starting page {0} of {1} at offset {2}",
-                     page.PageNumber + 1, numPages, offset);
-            
+            Log.Debug(Category.Formatter, "Starting page {0} of {1} at offset {2}", page.PageNumber + 1, numPages, offset);
+
             if (first) offset = 8;      // Allow for header
-            
+
             //
             // Create a list of tags we'll use, and populate it without worrying
             // about order or offsets for out-of-line data
@@ -91,7 +96,7 @@ namespace PERQemu.UI.Output
             tags.Add(new TIFFtag(TagNames.DefaultImageColor, FieldType.Word, 1, 1));
 
             // Rational types are out-of-band (8 bytes)
-            var hack = (((ulong)page.Resolution * 10000U) << 32) + 10000U;                  // But why?
+            var hack = (((ulong)page.Resolution * 10000U) << 32) + 10000U;              // But why?
             tags.Add(new TIFFtag(TagNames.XResolution, FieldType.Rational, 1, 0, hack));
             tags.Add(new TIFFtag(TagNames.YResolution, FieldType.Rational, 1, 0, hack));
 
@@ -140,13 +145,13 @@ namespace PERQemu.UI.Output
             // in those tags as necessary
             var dataSize = ifd.DataSizeInBytes(offset);
 
-            Log.Info(Category.Formatter, "Data block size: {0} bytes", dataSize);
+            Log.Debug(Category.Formatter, "Data block size: {0} bytes", dataSize);
 
             // THIS is now the start of our IFD!
             offset += dataSize;
 
             // Debug
-            ifd.DumpIFD();
+            // ifd.DumpIFD();
 
             // First page?  Write the header
             if (first)
@@ -156,18 +161,18 @@ namespace PERQemu.UI.Output
                 fs.WriteShort(42);
                 fs.WriteUInt(offset);       // First IFD immediately follows
 
-                Log.Info(Category.Formatter, "TIFF header written, IFD at {0}", offset);
+                Log.Debug(Category.Formatter, "TIFF header written, IFD at {0}", offset);
             }
             else
             {
-                Log.Info(Category.Formatter, "Next IFD link at {0}", offset);
+                Log.Debug(Category.Formatter, "Next IFD link at {0}", offset);
                 fs.WriteUInt(offset);       // Pointer to here from PREVIOUS IFD
             }
 
             // Write the entire bitmap in one strip
             fs.Write(page.Buffer, 0, page.Buffer.Length);
 
-            Log.Info(Category.Formatter, "Bitmap data written, start of IFD overflow data at {0}", fs.Position);
+            Log.Debug(Category.Formatter, "Bitmap data written, start of IFD overflow data at {0}", fs.Position);
 
             // Now write the extra data at the end of the image block
             ifd.WriteExtendedData(fs);
@@ -285,7 +290,7 @@ namespace PERQemu.UI.Output
                     case FieldType.ASCII:
                         var str = (string)ExtendedData;
 
-                        Console.WriteLine($"Extended data: string '{str}'");
+                        Log.Detail(Category.Formatter, "Extended data: string '{0}'", str);
                         s.WriteString(str);     // includes null term
 
                         if (str.Length + 1 < _sizeInBytes)
@@ -299,7 +304,7 @@ namespace PERQemu.UI.Output
 
                         for (var i = 0; i < FieldLength; i++)
                         {
-                            Console.WriteLine($"Extended data: short {sa[i]}");
+                            Log.Detail(Category.Formatter, "Extended data: short {0}", sa[i]);
                             s.WriteShort(sa[i]);
                         }
                         break;
@@ -309,7 +314,7 @@ namespace PERQemu.UI.Output
 
                         for (var i = 0; i < FieldLength; i++)
                         {
-                            Console.WriteLine($"Extended data: uint {da[i]}");
+                            Log.Detail(Category.Formatter, "Extended data: uint {0}", da[i]);
                             s.WriteUInt(da[i]);
                         }
                         break;
@@ -390,7 +395,7 @@ namespace PERQemu.UI.Output
                 {
                     if (Tags[i].SizeInBytes > 0)
                     {
-                        Log.Info(Category.Formatter, "Writing out-of-band data for tag {0}, offset={1}, pos={2}",
+                        Log.Detail(Category.Formatter, "Writing out-of-band data for tag {0}, offset={1}, pos={2}",
                                                  Tags[i].Tag, Tags[i].DataOffset, s.Position);
                         Tags[i].WriteExtendedDataToStream(s);
                     }
@@ -404,7 +409,7 @@ namespace PERQemu.UI.Output
             /// </summary>
             public void WriteIFD(Stream s)
             {
-                Log.Info(Category.Formatter, "Writing IFD at position {0}, {1} bytes", s.Position, SizeInBytes());
+                Log.Debug(Category.Formatter, "Writing IFD at position {0}, {1} bytes", s.Position, SizeInBytes());
                 s.WriteShort(TagCount);
 
                 for (var i = 0; i < TagCount; i++)

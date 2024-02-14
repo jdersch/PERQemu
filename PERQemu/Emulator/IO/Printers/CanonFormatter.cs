@@ -25,18 +25,9 @@ using PERQemu.UI.Output;
 namespace PERQemu.IO
 {
     /// <summary>
-    /// Custom file formatters for Canon laser printer output.  These directly
+    /// Output file formatters for Canon laser printer output.  These directly
     /// transform a PERQ bitmap in the CanonPrinter's page buffer to a minimal
-    /// (but fully specification compliant!) monochrome image file WITHOUT the
-    /// absurd dance to upsample it to 8- or 32-bpp with SDL2, or requiring the
-    /// import of System.Drawing (which requires a dependency on an external
-    /// libgdi+ library which isn't typically found on Linux/Mac?).  Allows us
-    /// to also write creator strings, timestamps, version info, etc. which the
-    /// FAR simpler SDL_image or System.Drawing Bitmap classes don't seem to
-    /// support (even though they're like 5 lines of code instead of all this).
-    /// 
-    /// I know.  This is probably a Bad Idea.  May rip it all out later but for
-    /// now I'm having fun. :-P
+    /// monochrome image file.
     /// </summary>
     public partial class CanonPrinter
     {
@@ -73,15 +64,13 @@ namespace PERQemu.IO
             }
             catch (Exception e)
             {
-                Log.Info(Category.Formatter, "Failed to save output: {0}", e.Message);
+                Log.Write(Category.Formatter, "Failed to save output: {0}", e.Message);
                 return false;
             }
         }
 
         /// <summary>
-        /// Save the page (list) as a TIFF.  Exported as 1bpp bi-level without
-        /// compression; use 'tumble' to convert to PDF with CCITT Group 4 if
-        /// you want to produce Bitsavers-compatible output. :-)
+        /// Save the page list as an uncompressed, 1bpp bi-level TIFF.
         /// </summary>
         bool SaveAsTIFF(string filename)
         {
@@ -102,7 +91,7 @@ namespace PERQemu.IO
             }
             catch (Exception e)
             {
-                Log.Info(Category.Formatter, "Failed to save output: {0}", e.Message);
+                Log.Write(Category.Formatter, "Failed to save output: {0}", e.Message);
                 return false;
             }
         }
