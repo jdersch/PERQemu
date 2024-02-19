@@ -238,10 +238,10 @@ namespace PERQemu.IO
                 new DMAChannel(ChannelName.Unused),
                 new DMAChannel(ChannelName.uProc),
                 new DMAChannel(ChannelName.HardDisk),
-                new DMAChannel(ChannelName.NetRecv),
-                new DMAChannel(ChannelName.ExtB),
-                new DMAChannel(ChannelName.ExtA),
                 new DMAChannel(ChannelName.NetXmit),
+                new DMAChannel(ChannelName.ExtA),
+                new DMAChannel(ChannelName.ExtB),
+                new DMAChannel(ChannelName.NetRecv),
                 new DMAChannel(ChannelName.Idle)
             };
         }

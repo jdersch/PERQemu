@@ -257,7 +257,7 @@ namespace PERQemu.IO.Network
                 Log.Debug(Category.NetAdapter, "Computed CRC is {0:x8}", crc);
 
                 // Print the (modified) packet
-                if (Log.Level < Severity.Info) Console.WriteLine(packet.PrintHex());
+                // if (Log.Level < Severity.Info) Console.WriteLine(packet.PrintHex());
 
                 // So send it already, sheesh
                 _adapter.SendPacket(packet);
@@ -457,7 +457,7 @@ namespace PERQemu.IO.Network
             //
 
             // DEBUGGING: Print the packet post-rewrites
-            if (Log.Level < Severity.Info) Console.WriteLine(raw.PrintHex());
+            // if (Log.Level < Severity.Info) Console.WriteLine(raw.PrintHex());
 
             // Shortcut: is the receiver active and ready?
             if (_controller.CanReceive)
@@ -649,7 +649,7 @@ namespace PERQemu.IO.Network
             // If no devices were found print an error
             if (devices.Count < 1)
             {
-                Console.WriteLine("No Ethernet adapters were found on this machine");
+                Console.WriteLine("No Ethernet adapters were found on this machine (or no privileges)");
                 return;
             }
 

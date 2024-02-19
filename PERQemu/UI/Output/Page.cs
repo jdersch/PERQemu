@@ -97,7 +97,7 @@ namespace PERQemu.UI.Output
         /// </remarks>
         public void CopyBits(byte[] source, Region srcRect, Region clipRect)
         {
-            // Debug
+#if DEBUG
             if ((clipRect.Bytes) > (srcRect.Bytes))
             {
                 Log.Error(Category.Formatter, "Clipped area bigger than source!");
@@ -114,7 +114,7 @@ namespace PERQemu.UI.Output
             {
                 Log.Warn(Category.Formatter, "Byte count mismatch (Region={0}, Buffer={1})", _dstRect.Bytes, _bitmap.Length);
             }
-
+#endif
             // Canon computes the X,Y for the page area (_dstRect) when the paper
             // size and printable area are computed.  Convert to a byte offset
             var offset = _dstRect.X / 8;
@@ -173,7 +173,7 @@ namespace PERQemu.UI.Output
         
             SrcRect             Page                Printable
         W   9"  (2704 / 338)    8.5" (2550 / 319)   8.19" (2457 / 308)
-        H   12" (3600)          11" (3300)          10.86" (3258)
+        H   14" (4200)          11" (3300)          10.86" (3258)
 
     X is (2550 - 2457) / 2 = floor(46.5 / 8)  ->  floor((319 - 308) / 2) = 5
 
@@ -188,5 +188,4 @@ namespace PERQemu.UI.Output
 
     Screenshots are just direct saves of the display dimensions - no paper size
     or printable area concerns.
-
  */

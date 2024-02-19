@@ -82,8 +82,9 @@ namespace PERQemu.IO
             _scheduler.Cancel(_animEvent);
             _animEvent = null;
 
-            // Clear the icon
+            // Clear the icon, warning
             _showIcon = false;
+            _resolutionWarning = false;
 
             // Reset signals
             _bd = false;
@@ -545,6 +546,9 @@ namespace PERQemu.IO
         /// </summary>
         public void PrintLine(int margin, int width, byte[] data)
         {
+            // Compute starting point in bytes
+            var addr = (ScanWidthInBytes * _lineCount) + margin - 1;
+
 #if DEBUG
             if (_state != PrinterState.Printing || _lineCount < 0 || _lineCount >= _pageArea.H)
             {
@@ -558,8 +562,32 @@ namespace PERQemu.IO
                 Log.Detail(Category.Canon, "End of blanking at line {0} (clock {1})", _lineCount, _clocks);
             }
 #endif
-            // Compute starting point in bytes
-            var addr = (ScanWidthInBytes * _lineCount) + margin - 1;
+            // Guard rails to prevent a crash if configuration/client software mismatched
+            if (addr < 0 || addr - width > _pageBuffer.Length)
+            {
+                if (!_resolutionWarning)
+                {
+                    Log.Write(Severity.Warning, Category.All,
+                              "Canon: Attempting to print outside the page boundary!\n" +
+                              "Does the printer resolution match your CPrint configuration?");
+
+                    // Keep the clock running so the CX doesn't hang
+                    _clocks = 3300;     // Hardcoded in the PERQ microcode :-(
+                    _resolutionWarning = true;
+               }
+
+                // Reset to valid range, though the output will be whacked
+                if (addr < 0)
+                {
+                    addr = 0;
+                    _lineCount = -1;    // skip ahead
+                }
+                else
+                {
+                    addr = _pageBuffer.Length - width;
+                    _lineCount--;       // don't advance
+                }
+            }
 
             Log.Detail(Category.Canon, "Printing (line={0} @ {1}, left={2}, width={3})",
                                      _lineCount, addr, margin, width);
@@ -607,7 +635,7 @@ namespace PERQemu.IO
                 case ImageFormat.Png:
                     if (SaveAsPNG(filename))
                     {
-                        Log.Write(Category.Canon, "Saved PNG output to '{0}'.", filename);
+                        Log.Write("Saved PNG output to '{0}'.", filename);
                         _totalPages++;
                     }
                     break;
@@ -615,7 +643,7 @@ namespace PERQemu.IO
                 case ImageFormat.Tiff:
                     if (SaveAsTIFF(filename))
                     {
-                        Log.Write(Category.Canon, "Saved TIFF output to '{0}' ({1}).", filename,
+                        Log.Write("Saved TIFF output to '{0}' ({1}).", filename,
                                   _pageCount == 1 ? "1 page" : $"{_pageCount} pages");
                         _totalPages += _pageCount;
                         _pageCount = 0;
@@ -648,6 +676,7 @@ namespace PERQemu.IO
 
             Log.Info(Category.Canon, "[Printer in standby mode]");
 
+            _resolutionWarning = false;
             _showIcon = false;
             _sleepEvent = null;
             _status = Status0.Wait;     // Clear any other flags
@@ -901,26 +930,28 @@ namespace PERQemu.IO
             Console.WriteLine($"Interface:  RDY={_ready} VSREQ={_vsreq} BD={_bd}");
             if (_running && _lineCount > 0)
                 Console.WriteLine($"[Printing at line {_lineCount}]");
-
+#if DEBUG
             Console.WriteLine($"Sugar:  Animation rate is {ANIM_RATE}");
             Console.WriteLine("  Icon {0} {1} visible, animation {2} running, last change {3}",
                               _lastIconShown,
                               _showIcon ? "IS" : "is NOT",
                               _animEvent != null ? "IS" : "is NOT",
                               _lastIconChange);
+#endif
         }
 
         //
-        // Largest bitmap the PERQ could theoretically send us.  This is based
-        // on the sources (Pascal, microcode) and they don't really make sense;
-        // At 300dpi, this is a 9" x 11" bitmap, which is wider than any of the
-        // supported paper types but not long enough for USLegal.  Since there
-        // is no evidence yet found for PERQ software that could switch paper
-        // sizes (or query the printer to see what cassette was loaded) this is
-        // fine for now.
+        // Largest bitmap the PERQ could theoretically send us is based on the
+        // dimensions of a 9" x 11" bitmap, hardcoded into the sources (Pascal,
+        // microcode).  This is wider than any of the supported paper types but
+        // not long enough for A4 or USLegal.  Although there is no evidence yet
+        // found of PERQ software that could switch paper sizes (or query the
+        // printer to see what cassette was loaded), the max here allows for the
+        // Page formtter to output ALL the paper types, even if the PERQ never
+        // prints anything bigger than US Letter.  Yet.
         //
-        public const int MaxWidth = 2704;           // Round up to multiple of 8 bits
-        public const int MaxHeight = 3600;          // To cover A4; 4200 if we support Legal...
+        public const int MaxWidth = 2704;       // Round up to multiple of 8 bits
+        public const int MaxHeight = 4200;      // To cover US Legal...
 
         public const int ScanWidthInBytes = MaxWidth / 8;  // Used a lot
 
@@ -950,6 +981,8 @@ namespace PERQemu.IO
         uint _totalPages;
 
         uint _resolution;
+        bool _resolutionWarning;
+
         byte[] _pageBuffer;
         ushort _pageCount;
 

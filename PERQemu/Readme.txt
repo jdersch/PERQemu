@@ -72,6 +72,10 @@ new peripheral support (Ethernet, laser printer) and bug fixes, plus some new UI
 features along the way.  PERQ-2 support will then follow; see the (tentative)
 roadmap below.  Please check back often for updates!
 
+PERQemu v0.5.5 rolls up new Canon printer support and expanded (but still highly
+experimental!) Ethernet support.  It is an interim release to skeezicsb/main and
+won't be submitted for a merge into the master at this time.
+
 
 1.3 System Requirements
 -----------------------
@@ -134,7 +138,7 @@ There are several subdirectories:
         f15dev.prqm:
             Updated Shugart images containing the offshoot POS F.15
             distribution, in both basic and developer (full source)
-            versions.  Includes Amendment 1.
+            versions.  Includes Amendments 1 & 2.
 
         g7.prqm:
             The first PERQmedia-formatted Shugart image for use with the
@@ -349,10 +353,12 @@ The following hardware has been implemented in the emulator:
       the OIO option board is configured.  This allows Accent to initialize its
       NetMsgServer so other peripheral server processes (floppy, serial, etc)
       can start up.  Consult the User Guide for more details!
-    - Implementation of a real host Ethernet interface is underway!
+    - Implementation of a real host Ethernet interface is available for testing,
+      but with caveats.  Check the User Guide for details.
 
   Canon:
-    - Laser printer interface development is underway!
+    - Laser printer interface provides high quality output in PNG or TIFF format
+      at 240- or 300-dpi.
 
 
 There is a ton of additional detail about the internals of PERQemu itself in
@@ -444,16 +450,17 @@ v0.9 - TBD
 v0.7 - TBD
   Additional I/O Options once the baseline devices are complete:
   - Ethernet!
-  - Canon laser printer
-  - Get screenshots working again
+  - Expand available media library!
+  - (Progress toward) EIO/PERQ-2
 
-v0.5.4 - Experimental branch
+v0.5.5 - Experimental branch (v0.7.0 pre-release)
   - Ethernet running (but requires root/admin access)
   - Patch for Turkish keyboard in CLI
   - Limited Micropolis 8" disk support
   - Refactored Z80 subsystem for EIO support
   - Patch to support PNX 2's non-standard video display list handling
   - Canon laser printer support
+  - Screenshots available from the CLI
 
 v0.5.0 - New baseline
   (Pending) Merge the experiments back into the master branch:
@@ -569,7 +576,7 @@ v0.1 - First public release.
 
 Update history:
 
-1/14/2024 - skeezicsb - v0.5.4 (experimental)
+2/18/2024 - skeezicsb - v0.5.5 (main)
 1/24/2023 - jdersch - v0.5.0
 1/17/2023 - skeezicsb - v0.4.9 (main)
 12/28/2022 - skeezicsb - v0.4.8 (main)

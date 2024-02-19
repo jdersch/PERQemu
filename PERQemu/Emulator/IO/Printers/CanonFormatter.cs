@@ -64,7 +64,7 @@ namespace PERQemu.IO
             }
             catch (Exception e)
             {
-                Log.Write(Category.Formatter, "Failed to save output: {0}", e.Message);
+                Log.Write("Failed to save output: {0}", e.Message);
                 return false;
             }
         }
@@ -91,7 +91,7 @@ namespace PERQemu.IO
             }
             catch (Exception e)
             {
-                Log.Write(Category.Formatter, "Failed to save output: {0}", e.Message);
+                Log.Write("Failed to save output: {0}", e.Message);
                 return false;
             }
         }

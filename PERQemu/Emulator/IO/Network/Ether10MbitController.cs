@@ -69,8 +69,8 @@ namespace PERQemu.IO.Network
             {
                 // Assume the OIO interface
                 _irq = InterruptSource.X;
-                _dmaTx = ChannelName.Network;
-                _dmaRx = ChannelName.Network;
+                _dmaTx = ChannelName.ExtA;
+                _dmaRx = ChannelName.ExtA;
             }
 
             // Open the host network adapter

@@ -54,7 +54,10 @@ focused on PERQ-1 configurations: Ethernet and the Canon laser printer are the
 two major peripherals to be added, along with bug fixes and further refinements
 to the user interface.  Additionally, first steps have been taken to refactor
 the I/O section and Z80 to support the EIO and PERQ-2 configurations.  It is
-currently in development on the "experiments" branch as PERQemu v0.5.4.
+currently in development on the "experiments" branch as PERQemu v0.5.5.
+
+PERQemu v0.5.5 is a feature release, rolling up fixes and features added since
+v0.5.0 (Canon, Ethernet).  This is a pre-release to the main branch only.
 
 PERQemu v0.5.0 is the milestone release, incorporating all of the changes
 since v0.4.4 and is stable enough for general use.
@@ -132,16 +135,6 @@ excellent emulation projects, Contralto and Darkstar.
         The reorganized user interface is broken down into three folders (of
         which only two are currently integrated into the scheme):
 
-        Forms
-            A FrontPanel anchors the graphical interface.  Menus are provided
-            for all basic operations, while a graphical toolbar offers quick
-            access to the Configurator, a Settings panel, the Debuggers (CPU
-            and Z80) and extras like the DDS, power and reset switches, easy
-            one-click screenshots, etc.  It's all very snazzy, even with the
-            fairly limited functionality of the old crappy Mono Carbon-based
-            Winforms/libgdi+ implementation.  Alas.  "MAUI" may someday be a
-            possible cross-platform solution, but don't hold your breath.
-
         SDL
             The Display is a self-contained, minimal window that uses SDL-CS
             (a C# wrapper around SDL2) to pump the PERQ's video bits to your
@@ -163,6 +156,14 @@ excellent emulation projects, Contralto and Darkstar.
             the emulator is running on the CPU/Z80 threads; calls to read the
             console are multiplexed with the SDL event loop so that commands
             may be entered while the PERQ is running!
+
+        Output
+            Now contains custom PNG and TIFF output formatters, used by the
+            Canon laser printer interface and the screenshot command.  These
+            produce 1bpp monochrome images directly from PERQ memory in full
+            resolution with zero fat and no external dependencies.  Will be
+            used to capture output from other simulated RS-232 or GPIB printers
+            or plotters in the future.
 
 
 2.1  The CPU
@@ -606,6 +607,19 @@ The Ethernet code is in Emulator/IO/Network:
 There's a TON more information about this in Docs/Network.txt.
 
 
+2.3.9  Printers
+---------------
+
+The Canon laser printer interface lives here now.  There are extensive notes and
+ramblings about the details of its implementation in Docs/LaserCanon.txt.
+
+Getting this working wasn't a high priority, but I had an itch to scratch.  The
+output drivers should allow simulations of a bunch of other classic dot-matrix
+or daisywheel printers that had at least partial support in POS, as well as some
+OEM units that ICL sold and supported too.  Someday these devices will live in
+this folder too.
+
+
 2.4  The Debugger / Console interface
 -------------------------------------
 
@@ -731,6 +745,7 @@ PERQ info and lore.  More to come!
 
 Update history:
 
+v2.2 - 2/18/2024 - skeezics - updated for the v0.5.5 interim release
 v2.1 - 3/8/2023 - skeezics
 v2.0 - 1/24/2023 - skeezics - corresponds to the merge for v0.5.0
 v1.9 - 1/17/2023 - skeezics

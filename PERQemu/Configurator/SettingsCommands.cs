@@ -256,7 +256,7 @@ namespace PERQemu.UI
             }
         }
 
-        [Command("settings canon paper type", "Set default paper size for the Canon laser printer")]
+        [Command("settings canon paper size", "Set default paper size for the Canon laser printer")]
         public void SetCanonPaperType(IO.PaperCode size)
         {
             if (size != Settings.CanonPaperSize)
@@ -443,10 +443,17 @@ namespace PERQemu.UI
                      "might not load properly.  Please check your settings to reassign ports.");
         }
 
+
+        [Command("settings show ethernet devices", "List available host Ethernet interfaces")]
+        public void ShowEtherDevices()
+        {
+            IO.Network.HostAdapter.ShowInterfaceSummary();
+        }
+
         [Command("settings assign ethernet device", "Map a host network adapter to the PERQ Ethernet device")]
         public void SetEtherDev([KeywordMatch("NICs")] string hostDevice)
         {
-            if (hostDevice != Settings.EtherDevice /* && hostDevice == "null" || it's a valid pcap device from the list */)
+            if (hostDevice != Settings.EtherDevice)
             {
                 Settings.EtherDevice = hostDevice;
                 Settings.Changed = true;

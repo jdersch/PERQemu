@@ -449,7 +449,7 @@ The standard screendump algorithm just does a 2x expansion in portrait mode,
 where a 3x could work comfortably... but it takes more RAM for buffers and
 the resulting pixels might look too blocky?  Anyway, at least I have some
 idea of the actual maximum sizes required.  [Update:  Screendump for the CX
-seems to do a 3x expansion already!!]
+does a 3x expansion already!!  Documented it in the POS F.15 source port.]
 
 
 For PERQ 2.0, the hardware interface should a) use the real protocol to send
@@ -547,122 +547,8 @@ but the 240dpi CX and the 240dpi LBP-10 (different engines, same interface) may
 have had slightly different limits?  Sigh.
 
 
-! Define IOB adresses for Canon printer interface hardware
-
-Constant(LineCount,204);         ! load with ones complement of lines per band
-Constant(MarginCntl,224);        ! send this port a '3' before loading margins
-Constant(LeftMar,225);           ! load with ones complement of blank words
-Constant(RightMar,226);          ! load with ones complement of line length
-                                 ! in words
-Constant(CanonCntl,205);         ! five bit control for printer functions
-
-! addresses for Interrupt status info
-
-Constant(IntStat,10);            ! four bit interrupt status
-Constant(MechStat,11);           ! sixteen bit printer mechanical status
-
-! Define interrupt bits in IntStat port
-
-Constant(BOB,            1);     ! Bit 0 => Bottom Of Band interrupt
-Constant(IPRend,         2);     ! Bit 1 => End of Page interrupt
-Constant(IReady,         4);     ! bit 2 => Printer fault interrupt
-Constant(StatFull,      10);     ! Bit 3 => mechanical status available
-
-! sense of interrupt bits is as follows:
-!
-!   BOB = 1       ==>  NOT Bottom Of Band
-!   IPRend = 1    ==>  NOT End of Page
-!   IReady = 1    ==>  Printer is NOT read (i.e., there is a FAULT)
-!   StatFull = 1  ==>  Mechanical Status NOT available.
-
-
-! Define bits for CanonCntl control port
-
-Constant(CcNotBlank,1);          ! Bit 0 => print blank band (active LOW)
-Constant(CcNotReset,2);          ! Bit 1 => reset the interface (active LOW)
-Constant(CcEnbVideo,4);          ! Bit 2 => start printing a page (active hi)
-Constant(CcStatRead,10);         ! Bit 3 => read status & generate STATFULL
-                                 !     interrupt (active hi)
-Constant(CcEnbInt,20);           ! Bit 4 => enable interrupt (active hi)
-
-
-! Define CanonCntl bit combinations
-
-Constant(ResetCntl,  CcEnbInt);                                 ! Reset the interface
-Constant(GetReadyCntl, (CcEnbInt or CcNotReset));               ! Get the printer ready
-Constant(BlankCntl,  (CcEnbInt or CcNotReset));                 ! Print a blank band
-Constant(NormalCntl, (CcEnbInt or CcNotReset or CcNotBlank));   ! Print a band
-Constant(StartCntl,  (CcEnbInt or CcEnbVideo or CcNotReset));   ! Start printer
-Constant(StatusCntl, (CcEnbInt or CcStatRead or CcNotReset));   ! Request mechanical status
-Constant(QuietCntl, CcNotReset);                                ! Turn off interrupts
-
-
 Version 5.0 of Canon.MicroMac is the latest.  We have versions from 2.0-4.2 as
 well.  See ~/PERQ/Tapes/2014090117/Layered/canon/.
-
-
-Only three commands to implement?  Reset, StartPage, Quiet
-
-Reset:
-    sends command to controller, waits a cycle, reads back status
-
-StartPage:
-    sends a (literal) 3 to MarginCntl, nop
-    sends 1s compl of the left margin count, nop
-    sends 1s comp of the right margin
-    <addr trans, several cycles>
-    sets the linecount
-    sends StartCntl to CanonCntl (asserts PRNT)
-
-Quiet:
-    sends QuietCntl to CanonCntl    turns off interrupts
-
-That's it for commands!  Interrupt service:
-
-Canon (Y) interrupt:
-    reads IntStat (low 4 bits), followed by 8 nops?
-    then does a vector through a local table to catch continuous interrupts (fault)
-    but.  it uses intrpend.  after clearing the register.  this must be to catch
-    the specific case where Y fires continuously until it's shut off?  weird.
-
-ChkStat:
-    called to check/jump on IReady, IPREnd; StatFull isn't implemented!
-    BOB interrupt isn't either?!?  both fall through to BOBSrv?
-
-FaultSrv:
-    sends StatusCntl to CanonCntl
-    sets the status var
-    sends QuietCntl to CanonCntl
-    exits via IntDone
-
-    I'm assuming the StatusCntl command is intended to read the printer status
-    registers and interrupt when all the bits have been read (and assembled into
-    one 16-bit reg, NOT n separate ones), setting StatusFull to interrupt when
-    ready -- but StatSrv is commented out
-
-StatSrv:
-    yep, reads the MechStat reg and saves it, exits via IntDone
-
-EOPSrv:
-    end of page interrupt sets status and exits via IntDone
-
-BOBSrv:
-    "bottom of band" (NOT Beginning!) resets LineCount reg
-    counts off top margin lines (down to zero)
-    if blank, jumps to PrintBlank, otherwise sets up DMA for a filled band
-    once addrs set, sends a NormalCntl to CanonCntl
-    does some DCB housekeeping and returns via IntDone
-
-
-PrintBlank:
-    sends a StartCntl to CanonCntl and exits via IntDone
-    this just counts off time during the top/bottom(?) margins with the video
-    output disabled(?) so it's more aptly named VerticalBlank not PrintBlank
-
-
-"end of page" seems to be completely non-deterministic.  my hack solution is to
-count the supposed maximum number of clock pulses for the paper size (even though
-3300 seems to be hardcoded for the CX regardless).
 
 
 Multi-page / continuous output timing
@@ -680,165 +566,41 @@ For mechanical timing, I'm ignoring the ~120 sec wait time at power on since the
 PERQ can't detect the PPRDY signal.  We'll always assume the printer starts in
 Standby mode.
 
-My timing model (simplified) will be something like:
+Standby -> Ready when PRNT goes true is 5 seconds (or .1 if rate limiting off).
 
-    [1] Standby state
-        If there's a cassette loaded and paper available, RDY is true and the
-        printer is Sensing.  (If no paper, RDY remains false and the status 1
-        word indicates Paper Out.)
+Ready -> VSReq/VSync is ~ 3.7ish seconds (or .1 if rate limiting off).
 
-        Assuming RDY is true, controller asserts PRNT; "warm up" time is ~5
-        seconds (INTR in "accurate" mode), transitioning to Ready state.
+VSync -> Printing must follow the actual documented timing for the BD pulses,
+since the microcode is watching for the correct edge to time the start of VDO.
+This is a period of ~1800us for the CX, or ~2250us for the LBP10.
 
-        [To support multi-page, Standby->Ready initializes the list of output
-        pages, assuming TIFF output]
+Printing -> EndOfPage is based on shutting off the clock after "enough" BD clock
+cycles have fired.  The PERQ in most cases actually sees the EOP interrupt as an
+error condition -- it basically decides when it is done with the page and just
+goes back to waiting for VSReq regardless of how much time the mechanism needs
+to churn out the current page.  It's... ugly.
 
-    [2] Ready state
-        If PRNT is true we are starting or continuing: schedule the next VSREQ 
-        for +3.7 sec (since INTR is complete and the drum is spinning).
-
-        If PRNT is false, we schedule the return to standby mode at around 5.7
-        seconds after printing completes (to account for LSTR).  Realistically
-        this is more like 10ish seconds, where the unit lowers the heater temp
-        and stops the drum and scanner.  [If the full command set is implemented
-        the software could keep the drum/scanner going to reduce startup delay
-        for short pauses between pages, but Canon doesn't recommend keeping the
-        engine running/idle for excessively long periods to reduce mechanical
-        wear.]
-
-        There is a ~3.7 second window after print goes false where we return to
-        sensing?  Thus rendering delays shouldn't split a long run into multiple
-        files, but conversely we don't want a huge delay to incorrectly merge
-        separate prints into one.
-        
-        If PRNT is true, Sensing goes false and PaperFeed goes true; schedule
-        VSREQ for < 3.7 seconds (to maintain full throughput).  Canon's docs
-        tie paper feed _directly_ to assertion of PRNT (within some ill-/un-
-        defined time) and the next page is sensed/fed as early as half way down
-        the current page.  UGH.)
-
-        BD must start n lines *before* VSREQ to count off the top margin; the
-        microcode counts BOB interrupts until "BandsBeforeTop + TMargin" reaches
-        zero.  BUT the state machine doesn't even transition to processing BOB
-        interrupts until AFTER VSREQ is asserted, so... the TMargin count in the
-        microcode is always wrong?  But the top margin for CPrint output is right
-        at the top of the printable area, while SID/CSDX counts too many lines?
-        Head -> desk impact -> raise -> repeat.
-
-    [3] VSREQ -> Waiting for VSYNC state
-        Here we are signalling we're at top of page and ready to start to the
-        controller; VSYNC is automatic so we introduce a short delay to allow
-        the VSREQ/VSYNC "pulse" shapes to be expressed for the state machine to
-        transition.
-
-    [4] VSYNC -> Printing state
-        At VSYNC we start the BD clock, I think.  This is NOT clear!  At VSYNC +
-        n we start Sensing again.  Spec says PRNT is "don't care" from assertion
-        of VSYNC to "less than 3.5s" (or 4.6s for legal paper), so we start
-        Sensing again in the middle of the page to see if another one is coming
-        right away.  The PERQ seems to maintain PRNT=true (ccVidEnable) for at
-        least n scanlines, so maybe we just let the microcode timing toggle our
-        Sensing pin?
-
-        Printing continues through the pre-defined count of BD pulses.  This is
-        roughly what the (internal) VMSK signal in the print engine does?  It's
-        the video equivalent of the "visible" field between front/back porches.
-        Fills in the current page.
-
-    [5] Printing -> EOP
-        This is where things get squirrelly.  The EOP interrupt is problematic
-        since the microcode doesn't seem to expect it normally?  If a short page
-        is printed, the microcode just stops sending data and waits for the next
-        VSREQ?  Signally an EOP interrupt can actually confuse CPrint and cause
-        retransmission of pages, which is annoying (and wrong).  But it also is
-        waiting for SOME kind of final interrupt because sometimes it will hang
-        until it's received before returning to POS.  Sigh.
-
-        If output format is PNG (single page) we flush the file at EOP.  For
-        multi-page, we should already know if another is incoming, but there's
-        no special processing needed to end a Page; return to Ready.  If not,
-        go back to Idle?
-
-    [6] Flush, Return to Standby
-        For multi-page support, accommodate brief controller resets/delays by
-        waiting to close the file until the "return to standby" timer fires.
-        This is where we walk the list of IFDs to fix up the offsets, write the
-        page numbers, and flush the final output.
-
-I suppose the critical insight here is that print engine timing is mechanically
-driven; the time it takes to image the page is NOT the time required for a sheet
-to traverse the path from input tray -> processing -> output.  Canon's own docs
-are wildly inconsistent; "first rotation" to printing to "last rotation" can be
-10-20 seconds, which is nowhere near the ~7.5 seconds necessary to maintain the
-8.1/6.9ppm advertised page throughput.  ARGH.
-
-
-"Accurate" mode (RateLimit.PrinterSpeed set):
-
-    Standby -> Ready
-        Max 6.3 seconds     (tiny/no delay if not rate limiting)
-        Or 5.0 seconds??    (Initial rotation)
-        From PRNT true
-
-    Ready -> VSREQ
-        Max 3.7 seconds _from PRNT asserted!_
-        (trim this delay if not rate limiting)
-        BD starts BEFORE VSREQ!  For 240dpi, ~.72 seconds (320 lines, 40 bands)
-        This seems off; it's probably more like 296 lines (37 bands) since there
-        is about a 3mm top margin on the hardcopy...
-        @ 300dpi, .144 seconds (80 lines, 10 bands) + 40 (TMargin) == 216ms!!
-
-    VSREQ -> VSYNC
-        Max 5ms (pulse width 10ms)
-        irrelevant for the PERQ
-
-    VSYNC -> EOP
-        BD clocks * max lines = ~5.94 sec, ~7.56 sec (legal)
-        (True for BOTH models!  Engine speed is calibrated to BD pulses which
-        differs according to resolution, duh!)  Have to maintain this pulse
-        timing to allow the microcode/Pascal the time it needs to produce the
-        output bands (even when cheating the DMA)
-        YET the spec says BD is guaranteed "correct" from 6.52 seconds after
-        VSYNC, so that would generate around 12.09" (either dpi) of horizontal
-        clocks -- NOT enough to have a Legal print area of 13.68".  WTF CANON.
-
-    EOP -> Ready (next VSREQ)
-        Only 1.5 sec between end of page and VSREQ during continuous printing
-        to maintain 8.1ppm (or 1.13 sec for legal for 6.9ppm)  (this delay is
-        accounted for in the Ready->VSREQ state)  but there MUST be a minimum
-        span between VSREQ/VSYNC because the printer doesn't buffer the data,
-        so again, WTF CANON.
-
-        VSYNC + 3.5sec (4.6 legal): poll PRNT; if TRUE, it must remain so thru
-        the next VSYNC pulse!  if FALSE, and it remains FALSE for >5.3 sec, we
-        return to Standby.  if FALSE, but it transitions back to TRUE within
-        8.2 seconds of the last one, we continue (the drum does not spin down).
-        So the "sensing" period is from 3.5/4.6sec after VSYNC to 8.2 sec, and
-        VSREQ has to respect a MINIMUM time of ~7.2 sec (max throughput @ 8ppm)
-        and a MAXIMUM time of ~8.2 sec (or we go back into standby).  UGH.
-
-        BD is really the problematic one, though.  It just doesn't match with
-        any *actual hardcopies from the hardware.*
-            LBP-10 BBP is 40 with 0 for TMargin, 5 BMar -- but the actual
-            printout is ~3mm top and ~2mm bottom -- so right to the limits!
-            approx 28 lines top margin means 37 BD pulses or 296 lines are
-            counted off to account for the hardware's 212ms start delay from
-            VSync to VDO (including left margin processing on the first line)
-
-            CX BBP is 10 with 5 for TMar, 10 BMar, but the microcode actually
-            counts lines/bands, so 10 bands (80 lines) would occur before
-            VSReq, then the microcode would count off 5 bands (40 lines) to
-            meet the 212ms "requirement" before first valid VDO.  Naturally,
-            NONE of these timings actually work if you cross reference ANY
-            two documents, code, or physical samples of printed output from
-            the actual hardware.  <chews_off_own_leg>
-
+After EoP we immediately return to Ready and set a sleep timer (~5.7 seconds is
+realistic, 2 seconds if rate limiting off).  If the PERQ is printing multiple
+pages, PRNT goes true almost immediately and we continue; if not, transitioning
+back to Standby flushes any queued pages to the final output file before going
+back into sleep mode.  Memory consumption is around 1.5MB _per page_ for TIFF
+so printing a 100-page document (current max size of the paper cassette) would
+need some RAM, but that memory _is_ eventually reclaimed when the printer idles
+and there don't appear to be any serious memory issues.
 
 Return to standby time can be tuned or a CLI command could be explicitly added
 to give the user direct control over output of multi-page documents, though to
 generate Bitsavers-compatible CCITT G4 compressed PDFs they'll have to be run
 through "tumble" anyway... for now. :-)
 
+There's probably still a lot of debugging to do and other software to build or
+install and try out on all the different OSes, but basic CPrint or Screendumps
+from POS look pretty fantastic, so Soon POS F.15+ can generate new camera-ready
+copy for all of its documentation using the native tools (Prose, DP, etc) and
+printed using the original fonts!  Sweeeeet.
+
+
 ---
-Last update: skeezics   Tue Feb 13 15:12:46 PST 2024
+Last update: skeezics   Sun Feb 18 23:24:22 PST 2024
   

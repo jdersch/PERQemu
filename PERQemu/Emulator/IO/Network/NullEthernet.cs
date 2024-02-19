@@ -19,7 +19,6 @@
 
 using System;
 using System.Net.NetworkInformation;
-using PERQemu.Config;
 
 namespace PERQemu.IO.Network
 {
@@ -336,7 +335,7 @@ namespace PERQemu.IO.Network
 
         void GetAddress(ulong nSkew, object context)
         {
-            var addr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.Network);
+            var addr = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.ExtA);
 
             Log.Debug(Category.Ethernet, "Writing machine address to 0x{0:x6}", addr);
 
@@ -372,8 +371,8 @@ namespace PERQemu.IO.Network
         // Debugging
         public void DumpEther()
         {
-            var header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.Network);
-            var buffer = _system.IOB.DMARegisters.GetDataAddress(ChannelName.Network);
+            var header = _system.IOB.DMARegisters.GetHeaderAddress(ChannelName.ExtA);
+            var buffer = _system.IOB.DMARegisters.GetDataAddress(ChannelName.ExtA);
 
             Console.WriteLine("Fake Ethernet status:");
             Console.WriteLine($"  My MAC address:    {_physAddr} ({_physAddr.High},{_physAddr.Mid},{_physAddr.Low})");

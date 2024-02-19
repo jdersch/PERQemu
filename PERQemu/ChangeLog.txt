@@ -7,6 +7,24 @@ avoid wasting precious time scrolling to the end. :-)
 
 
 February, 2024:
+
+    4. Small Ethernet, DMA tweaks plus a few guardrails on the Canon driver to
+    keep a mismatch between the selected printer and the compiled PERQ software
+    from blowing chunks.  Rebuilt the Canon utilities from scratch for POS F.15
+    and updated the included hard disk images so that printing works out of the
+    box; an "Amendment 2" will be pushed to the PERQmedia archive too.  Other
+    OS images will be updated as I have time to build CPrint and install/test
+    it.  Since I'm calling this a pre-release, and it's been almost exactly a
+    year since v0.5.0 rolled out, time to push the button and turn it loose.
+
+    3. Updates to the User Guide and other documentation and some final tweaks
+    and fixes to get Canon output working pretty reliably.  Tested with Accent
+    CPrint too.  Working to clean-up and integrate the special POS F.15 build
+    so the bundled image can be updated to include Canon printing, as well as
+    updating the other POS G disk images so more configurations can laser print
+    "out of the box."  Also added some "visual sugar" (activity icons) for the
+    Canon to show when the printer is busy.
+
     2. The CLI "save screenshot" command works again.  The default output format
     is PNG so the compressed 1bpp screen capture is very compact.  The Canon can
     now produce multi-page TIFF files!  These (large) files can be converted to
@@ -23,6 +41,7 @@ February, 2024:
 
 
 January, 2024:
+
     6. Holy crap, laser printing seems to work.  LOTS of testing and tweaking to
     do but I got a screendump to print and CPrint almost output a proper listing
     (though the margin is shifted improperly).  Interim check-in for pushing the
@@ -66,6 +85,7 @@ January, 2024:
 
 
 December, 2023:
+
     2. Roll the copyright date to close out a frustrating year.  I have high
     hopes for completing PERQ-2 support in 2024, prior to the final collapse
     of civilization.  We all gotta have goals, right?
@@ -75,6 +95,7 @@ December, 2023:
 
 
 October, 2023:
+
     1. Minor refactoring of the Z80 Run() loop to account for EIO differences.
     Still distracted by RL and didn't want to leave uncommitted changes laying
     around.  Hope to get back to active development before year end?  Sigh.
@@ -191,4 +212,4 @@ February, 2023:
 
 
 ---
-Last update: skeezics    Fri Feb  9 23:45:56 PST 2024
+Last update: skeezics    Sun Feb 18 23:02:08 PST 2024

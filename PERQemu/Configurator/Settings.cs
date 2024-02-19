@@ -118,13 +118,13 @@ namespace PERQemu
             Z80Radix = Radix.Decimal;
 
             OutputDirectory = Paths.OutputDir;
-            ScreenshotFormat = ImageFormat.Png;     // More compact
+            ScreenshotFormat = ImageFormat.Png;         // More compact
             ScreenshotTemplate = "Screenshot_{0}.{1}";  // Default: Screenshot_{date}.png
 
-            CanonFormat = ImageFormat.Tiff;         // Multi-page capable; direct to PDF someday?
-            CanonTemplate = "{0}_{1:000}.{2}";      // Default: {canon,cx}_pg_000.png
-            CanonPaperSize = PaperCode.USLetter;    // Maybe set to A4 based on locale? :-)
-            CanonResolution = 300;                  // The CX is probably more popular
+            CanonFormat = ImageFormat.Tiff;             // Multi-page capable
+            CanonTemplate = "{0}_{1:000}.{2}";          // Default: {canon,cx}_pg_000.png
+            CanonPaperSize = PaperCode.USLetter;        // Set to A4 based on locale? :-)
+            CanonResolution = 300;                      // CX is probably more popular
 
             RSADevice = string.Empty;
             RSBDevice = string.Empty;
@@ -281,8 +281,6 @@ namespace PERQemu
                     {
                         sw.WriteLine($"assign ethernet device {EtherDevice}");
                     }
-
-                    // todo: audio
 
                     if (!string.IsNullOrEmpty(OutputDirectory))
                         sw.WriteLine($"output directory \"{OutputDirectory}\"");

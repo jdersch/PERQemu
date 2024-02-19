@@ -154,13 +154,6 @@ namespace PERQemu.IO
                     }
                     break;
 
-                case 0x0f:
-                    if (_ethernet != null)
-                    {
-                        return _ethernet.ReadStatus();
-                    }
-                    break;
-
                 case 0x0d:      // Read streamer status
                     if (_streamer != null)
                     {
@@ -172,6 +165,13 @@ namespace PERQemu.IO
                     if (_streamer != null)
                     {
                         return _streamer.ReadData();
+                    }
+                    break;
+
+                case 0x0f:      // Ethernet status register
+                    if (_ethernet != null)
+                    {
+                        return _ethernet.ReadStatus();
                     }
                     break;
 
