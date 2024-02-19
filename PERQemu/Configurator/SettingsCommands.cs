@@ -1,5 +1,5 @@
 //
-// SettingsCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// SettingsCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -48,6 +48,7 @@ namespace PERQemu.UI
         [Command("settings done", "Exit settings mode, return to top-level")]
         public void SettingsDone()
         {
+            CheckSerialPorts();
             PERQemu.CLI.ResetPrefix();
         }
 
@@ -56,21 +57,23 @@ namespace PERQemu.UI
         {
             Console.WriteLine("Current settings:");
             Console.WriteLine("-----------------");
-            Console.WriteLine("Autosave harddisks on shutdown: " + Settings.SaveDiskOnShutdown);
-            Console.WriteLine("Autosave floppies on eject:     " + Settings.SaveFloppyOnEject);
-            Console.WriteLine("Autosave tapes on unload:       " + Settings.SaveTapeOnUnload);
-            Console.WriteLine("Pause execution after reset:    " + Settings.PauseOnReset);
-            Console.WriteLine("Pause when window minimized:    " + Settings.PauseWhenMinimized);
-            Console.WriteLine("Cursor in PERQ display window:  " + Settings.CursorPreference);
+            Console.WriteLine($"Autosave harddisks on shutdown: {Settings.SaveDiskOnShutdown}");
+            Console.WriteLine($"Autosave floppies on eject:     {Settings.SaveFloppyOnEject}");
+            Console.WriteLine($"Autosave tapes on unload:       {Settings.SaveTapeOnUnload}");
+            Console.WriteLine($"Pause execution after reset:    {Settings.PauseOnReset}");
+            Console.WriteLine($"Pause when window minimized:    {Settings.PauseWhenMinimized}");
+            Console.WriteLine($"Cursor in PERQ display window:  {Settings.CursorPreference}");
             Console.WriteLine();
-            Console.WriteLine("Rate limiting options: " + Settings.Performance);
+            Console.WriteLine($"Rate limiting options:  {Settings.Performance}");
             Console.WriteLine();
-            Console.WriteLine("Default radix for CPU debugger: " + Settings.DebugRadix);
-            Console.WriteLine("Default radix for Z80 debugger: " + Settings.Z80Radix);
+            Console.WriteLine($"Default radix for CPU debugger: {Settings.DebugRadix}");
+            Console.WriteLine($"Default radix for Z80 debugger: {Settings.Z80Radix}");
             Console.WriteLine();
-            Console.WriteLine("Default output directory:   " + Settings.OutputDirectory);
-            Console.WriteLine("Screenshot file format:     " + Settings.ScreenshotFormat);
-            Console.WriteLine("Canon output file format:   " + Settings.CanonFormat);
+            Console.WriteLine($"Default output directory:   {Settings.OutputDirectory}");
+            Console.WriteLine($"Screenshot file format:     {Settings.ScreenshotFormat}");
+            Console.WriteLine($"Canon output file format:   {Settings.CanonFormat}");
+            Console.WriteLine($"Canon default paper type:   {Settings.CanonPaperSize}");
+            Console.WriteLine($"Canon default resolution:   {Settings.CanonResolution}dpi");
             Console.WriteLine();
             Console.Write("Host serial port A device:  ");
             Console.WriteLine(Settings.RSADevice == string.Empty ? "<unassigned>" :
@@ -80,6 +83,9 @@ namespace PERQemu.UI
             Console.WriteLine(Settings.RSBDevice == string.Empty ? "<unassigned>" :
                               Settings.RSBDevice == "RSX:" ? "RSX:" :
                               $"{Settings.RSBDevice} {Settings.RSBSettings}");
+            Console.Write("Host Ethernet device:       ");
+            Console.WriteLine(Settings.EtherDevice == string.Empty ? "<unassigned>" :
+                              $"{Settings.EtherDevice}");
 
             if (Settings.Changed)
             {
@@ -232,6 +238,45 @@ namespace PERQemu.UI
             }
         }
 
+        [Command("settings canon resolution", "Set resolution (model) of Canon laser printer to simulate")]
+        public void SetCanonResolution(int dpi)
+        {
+            if (dpi != 240 && dpi != 300)
+            {
+                QuietWrite($"{dpi}dots per inch is not valid.  Please choose 240 (LBP-10) or 300 (LBP-CX).");
+                dpi = 300;
+            }
+
+            if (Settings.CanonResolution != dpi)
+            {
+                Settings.CanonResolution = (uint)dpi;
+                Settings.Changed = true;
+
+                QuietWrite($"Canon printer resolution set to {dpi}dpi.");
+            }
+        }
+
+        [Command("settings canon paper size", "Set default paper size for the Canon laser printer")]
+        public void SetCanonPaperType(IO.PaperCode size)
+        {
+            if (size != Settings.CanonPaperSize)
+            {
+                Settings.CanonPaperSize = size;
+                Settings.Changed = true;
+                QuietWrite($"Canon default paper size set to {size}.");
+            }
+        }
+
+        [Command("settings canon output format", "Set image file format for Canon laser printer output")]
+        public void SetCanonOutputFormat(ImageFormat format)
+        {
+            if (format != Settings.CanonFormat)
+            {
+                Settings.CanonFormat = format;
+                Settings.Changed = true;
+                QuietWrite($"Canon default output format set to {format}.");
+            }
+        }
 
         [Command("settings assign rs232 device", "Map a host device to a PERQ serial port")]
         public void SetRS232Device(char port, [KeywordMatch("ComPorts")] string hostDevice,
@@ -304,7 +349,7 @@ namespace PERQemu.UI
         }
 
         [Command("settings unassign rs232 device", "Unmap a device from a PERQ serial port")]
-        private void UnSetRS232Device(char port = 'a')
+        void UnSetRS232Device(char port = 'a')
         {
             var curDev = string.Empty;
 
@@ -343,7 +388,7 @@ namespace PERQemu.UI
         /// <summary>
         /// Checks a host serial device specification.
         /// </summary>
-        private bool CheckDevice(ref string dev)
+        bool CheckDevice(ref string dev)
         {
             // Any host:  allow "rsx" or "rsx:", upcase it
             if (dev.ToUpper() == "RSX" || dev.ToUpper() == "RSX:")
@@ -373,8 +418,63 @@ namespace PERQemu.UI
             return false;
         }
 
+        /// <summary>
+        /// Checks the serial port assignments to make sure the same device isn't
+        /// assigned to both channels.
+        /// </summary>
+        /// <remarks>
+        /// For now (?) this is a warning only, since there's no harm in assigning
+        /// port B to the same device as port A when initializing a PERQ-1 -- since
+        /// there is no port B so it can't conflict.  But with PERQ-2/EIO configs,
+        /// opening the same physical port twice will either fail outright, or act
+        /// very strangely...
+        /// </remarks>
+        void CheckSerialPorts()
+        {
+            // If either (or both) is empty, or they don't match, no conflict!
+            if (string.IsNullOrEmpty(Settings.RSADevice) ||
+                string.IsNullOrEmpty(Settings.RSBDevice) ||
+               Settings.RSADevice != Settings.RSBDevice)
+                return;
+
+            // If they do match issue a warning
+            Log.Warn(Category.All,
+                     "Note: Both RS-232 ports assigned to the same device; some configurations\n" +
+                     "might not load properly.  Please check your settings to reassign ports.");
+        }
+
+
+        [Command("settings show ethernet devices", "List available host Ethernet interfaces")]
+        public void ShowEtherDevices()
+        {
+            IO.Network.HostAdapter.ShowInterfaceSummary();
+        }
+
+        [Command("settings assign ethernet device", "Map a host network adapter to the PERQ Ethernet device")]
+        public void SetEtherDev([KeywordMatch("NICs")] string hostDevice)
+        {
+            if (hostDevice != Settings.EtherDevice)
+            {
+                Settings.EtherDevice = hostDevice;
+                Settings.Changed = true;
+                QuietWrite($"Host adapter '{hostDevice}' assigned to the PERQ Ethernet device.");
+            }
+        }
+
+        [Command("settings unassign ethernet device", "Unmap a host network adapter (disable PERQ Ethernet)")]
+        public void UnsetEtherDev()
+        {
+            if (!string.IsNullOrEmpty(Settings.EtherDevice))
+            {
+                Settings.EtherDevice = string.Empty;
+                Settings.Changed = true;
+            }
+
+            QuietWrite("Ethernet device unassigned.");
+        }
+
         // Pure cheese.  Don't spew messages when reading on startup.
-        private void QuietWrite(string s)
+        void QuietWrite(string s)
         {
             if (PERQemu.Initialized) Console.WriteLine(s);
         }
@@ -385,7 +485,6 @@ namespace PERQemu.UI
 	TODO:
 	settings::screenshot format [jpg, png, tiff, ?]
 	settings::screenshot template [str] -- really?  cmon...
-	settings::canon format [jpg, png, tiff, bmp, PDF!?]
 	settings::canon template [str]      -- same 
 	settings::logging directory         -- default: Output/
 	settings::logging template [str]    -- hmm.
@@ -396,19 +495,6 @@ namespace PERQemu.UI
 	Host interface to the network, serial and audio output devices
 	is globally set for all virtual machines:
 
-	settings::ethernet device [dev]         -- host interface to use
-	settings::ethernet encapsulation [raw, udp, 3to10bridge]
-	settings::ethernet use3rccPrefix        -- :-)
+	settings::ethernet encapsulation [raw, udp, ???]
 	settings::audio device [dev]            -- audio output device?
-
-	When the PERQ Ethernet device is configured, we configure the
-	emulator-specific stuff with the particular Configuration:
-
-	configure::ethernet device [eio, oio]   -- only one or the other (automatic?)
-	configure::ethernet address [n] [m]     -- last two octets only
-											-- or just one for 3mbit!?
-
-	Can we use SDL2 for network access without requiring additional
-	libraries like Pcap?  Can we use the SDL2 audio without worrying
-	about extra configuration options?
 */

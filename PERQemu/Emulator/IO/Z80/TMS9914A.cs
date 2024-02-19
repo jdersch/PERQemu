@@ -1,5 +1,5 @@
 ﻿//
-// TMS9914A.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// TMS9914A.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -81,7 +81,7 @@ namespace PERQemu.IO.Z80
         public byte? ValueOnDataBus => 0x22;    // GPIVEC
         public bool IntLineIsActive => _interruptActive;
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         public GPIBBus Bus => _bus;
 

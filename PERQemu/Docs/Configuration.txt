@@ -192,7 +192,7 @@ The practical and maximum limits for devices in a single system:
 
     Hard disk:
         Disk14      1       2       Note 2
-        Disk8       2       2
+        Disk8       1       2
         Disk5       2       4
 
     Optional:
@@ -254,30 +254,48 @@ well as a few popular options from the period.
 
     It isn't clear how many 8" Micropolis 1200-series drives were actually
     shipped, or in which circumstances two could be fitted in one machine.
-    The practical limit is two drives, only in the T1/T2 type case (not the
-    weird skinny "ugly duckling" K0?)  All kinds of hints exist that there
-    may have been PERQ-1 "CIO" configurations where the Shugart 14" drive was
-    replaced by a Micropolis 8".  I have no idea if this was actually true.
-          
+    The practical limit is one drive, since only one was officially supported
+    in the original PERQ-2 cabinet or the ICL T1 cabinet.  HOWEVER, because
+    this drive shared roughly the same physical dimensions as the SA851 floppy
+    drive AND the 3RCC documentation does acknowledge that two units could be
+    supported (one 1223 w/controller + one extra 1203 bare drive), one might
+    conceivably build a two-drive machine with no floppy present.  But it's
+    unlikely that this was ever done, or tested?  A search of the microcode
+    sources would reveal if the unit select bit was ever exposed to software
+    or was just hard-coded to zero.
+
+    All kinds of hints exist that there may have been CIO configurations
+    where the Shugart 14" drive was replaced by a Micropolis 8" in the PERQ-1
+    chassis but I have no idea if this was actually true.  ICL's POS R.4 (no
+    source) and other bits of test code strongly hint that, for testing at
+    least, this was partially supported.  The SA4000->Micropolis adapter may
+    be just an early/development version of the eventual EIO disk controller?
+    There are just too many questions still, which may never be answered...
+
     Several places in the later PERQ literature allude to a 4-disk option in
     the 5.25"/MFM systems.  Did they intend to build a new DIB with all four
     channels present?  Or allow two 2-port DIBs to be daisy chained?  Unknown.
     But the POS G filesystem's volume support and the relative simplicity of
     expanding the I/O code to allow units 2 & 3 to be selected are something
-    of a no-brainer.
-       
-    Those little relaxations of the rules would allow for much larger emulated
-    systems to be built.  Bigger PERQs... <handwave>... world domination!  HA!
+    of a no-brainer.  This could, in fact simply imply that two internal 5.25"
+    drives and two MLO-attached SMD drives were supported.  Hmm.
+
+    The bottom line:  for PERQemu the initial focus is on accurate emulation
+    of the _supported_ configurations, while eventually relaxations of the
+    configuration rules and some custom/modified software would allow for
+    much larger emulated systems to be built.  Bigger PERQs... <handwave>...
+    world domination!  HA!
 
 [Note 3]
-    Because we don't yet support the MLO at all, and have never determined what
-    specific Multibus controllers Three Rivers wrote the code to support, it's
-    just an educated guess that four SMD hard drives is a reasonable maximum
-    that could be attached, but two is more likely given limits to how much 
-    space the filesystem/partition scheme could actually accommodate.  PERQ
-    literature suggests two CDC 9766's for a 600MB file server, for instance.
-    The 9-track tape drive is also a complete mystery, but we'll figure on
-    maybe one (or two?) Pertec-interfaced drives?  This is light years away.
+    The MLO board emulation is very far away, and a detailed assessment of
+    the specific Multibus microcode and OS support Three Rivers wrote for the
+    SMD controller has not been done.  It's just an educated guess that four
+    SMD hard drives is a reasonable maximum that could be attached, but two
+    is more likely given limits to how much space the filesystem/partition
+    scheme could actually accommodate.  PERQ literature suggests that two CDC
+    9766's for a 600MB file server was achievable, for instance.  The 9-track
+    tape drive is also a complete mystery, but we'll figure on maybe one (or
+    two?) Pertec-interfaced drives?  This is light years away.
 
 [Note 4]
     The possibility of supporting a number of GPIB-connected disk and tape
@@ -333,9 +351,15 @@ control the HardDisks using the appropriate protocols.  These are:
         - loads DeviceType.Disk8Inch images
         - provides an interface specific to the Micropolis 1200-series
           drives (21-70MB) used in early PERQ 2 models
-        - in theory, a "CIO" PERQ-1 could talk to this controller?  But
-          I expect normally it will attach to an NIO/EIO in a PERQ-2?
+        - the best documented/supported interface is PERQ-2/EIO only
         - [under development]
+
+    CIOMicropolisController.cs:  alternate 8" controller
+        - in theory, a "CIO" PERQ-1 could talk to this controller; a
+          photo of an actual ICL-produced board exists
+        - much confusion surrounding the software support for this
+        - development set aside for now until EIO version is complete
+          so that 8" disk support can be tested with real disk images
 
     MFMController.cs:  controller for all generic ST-506/MFM drives
         - loads DeviceType.Disk5Inch images
@@ -408,7 +432,8 @@ Ethernet is the #1 desired extra "peripheral" to support -- allowing the
 emulated PERQ to talk to the outside world.  Accent is a network OS, and it
 would be very, very cool to be able to run emulated PERQs on a network with
 each other and with real PERQ hardware -- providing virtually unlimited file
-service, tape backup, print/time/FTP servers, etc.  "Nerrrrd." :-P
+service, tape backup, print/time/FTP servers, etc.  [The first whack at this
+is in development and is being tested/refined.  See Network.txt for more!]
 
 
 The Canon laser printer interface is high on the list, since it should be a
@@ -424,4 +449,4 @@ Wow.  If you read all that, give yourself a cookie!
 
 
 --
-Last update: skeezics    Thu Dec 29 01:28:56 PST 2022
+Last update: skeezics    Sun Aug 13 11:17:38 PDT 2023

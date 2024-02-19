@@ -1,5 +1,5 @@
 //
-// IOReg3.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// IOReg3.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -27,7 +27,7 @@ namespace PERQemu.IO.Z80
     /// </summary>
     public class IOReg3 : IZ80Device
     {
-        public IOReg3(PERQToZ80FIFO perqZ80fifo, Keyboard keyboard, NECuPD765A fdc, DMARouter dmaRouter)
+        public IOReg3(PERQToZ80Latch perqZ80fifo, Keyboard keyboard, NECuPD765A fdc, DMARouter dmaRouter)
         {
             _perqZ80fifo = perqZ80fifo;
             _keyboard = keyboard;
@@ -45,7 +45,7 @@ namespace PERQemu.IO.Z80
         public bool IntLineIsActive => false;
         public bool InterruptsEnabled => false;
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         public byte Read(byte portAddress)
         {
@@ -81,7 +81,7 @@ namespace PERQemu.IO.Z80
 
         byte[] _ports = { 0xc8 };
 
-        PERQToZ80FIFO _perqZ80fifo;
+        PERQToZ80Latch _perqZ80fifo;
         Keyboard _keyboard;
         NECuPD765A _fdc;
         DMARouter _dmaRouter;

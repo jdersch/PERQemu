@@ -1,5 +1,5 @@
 //
-// HighResolutionTimer.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// HighResolutionTimer.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -51,15 +51,17 @@ namespace PERQemu
             Callback = null;
             Enabled = false;
             Free = true;
+            Name = string.Empty;
         }
 
-        public TimerRequest(double interval, HRTimerElapsedCallback handler)
+        public TimerRequest(double interval, HRTimerElapsedCallback handler, string name)
         {
             Interval = interval;
             NextTrigger = interval;
             Callback = handler;
             Enabled = false;
             Free = false;
+            Name = name;
         }
 
         public HRTimerElapsedCallback Callback { get; set; }
@@ -67,11 +69,12 @@ namespace PERQemu
         public double Interval { get; set; }
         public bool Enabled { get; set; }
         public bool Free { get; set; }
+        public string Name { get; set; }
 
         public override string ToString()
         {
-            return string.Format("NextTrigger={0}, Interval={1:N3}, Enabled={2}, Free={3}",
-                                 NextTrigger, Interval, Enabled, Free);
+            return string.Format("Name={0}, Interval={1:N3}, Next={2}, Enabled={3}, Free={4}",
+                                 Name, Interval, NextTrigger, Enabled, Free);
         }
     }
 
@@ -143,9 +146,10 @@ namespace PERQemu
         /// <summary>
         /// Register as a timer client to receive events at the specified
         /// interval and event handler.  Similar to SDL_Timer, returns an
-        /// ID so the specific timer can be referred to later.
+        /// ID so the specific timer can be referred to later.  To aid in
+        /// debugging, a name or description may be assigned.
         /// </summary>
-        public static int Register(double interval, HRTimerElapsedCallback cb)
+        public static int Register(double interval, HRTimerElapsedCallback cb, string name = "")
         {
             int tag = 0;
             double next = interval;
@@ -165,7 +169,7 @@ namespace PERQemu
                 }
             }
 
-            // Now find an empty slot for the new request and set it
+            // Now find a free slot for the new request and set it
             for (tag = 0; tag < _requesters.Count; tag++)
             {
                 if (_requesters[tag].Free)
@@ -175,7 +179,7 @@ namespace PERQemu
                     _requesters[tag].NextTrigger = next;
                     _requesters[tag].Callback = cb;
                     _requesters[tag].Free = false;
-
+                    _requesters[tag].Name = (string.IsNullOrEmpty(name) ? $"Timer{tag}" : name);
                     Log.Debug(Category.Timer,
                               "Registered timer {0}, interval {1:N3}, next trigger {2:N3}",
                               tag, interval, next);
@@ -185,7 +189,8 @@ namespace PERQemu
             }
 
             // None free?  Extend...
-            _requesters.Add(new TimerRequest(interval, cb));
+            if (string.IsNullOrEmpty(name)) name = $"Timer{tag}";
+            _requesters.Add(new TimerRequest(interval, cb, name));
 
             Log.Debug(Category.Timer,
                       "Added new timer {0}, interval {1:N3}, next trigger {2:N3}",
@@ -252,7 +257,7 @@ namespace PERQemu
             {
                 if (_requesters[tag].Free)
                 {
-                    Log.Error(Category.Timer, "Request to unregister alread freed timer {0}", tag);
+                    Log.Error(Category.Timer, "Request to unregister already freed timer {0}", tag);
                 }
                 else
                 {

@@ -1,0 +1,442 @@
+﻿
+PERQ Ethernet Notes
+===================
+
+Notes and discussion about the design of the PERQemu Ethernet interface.  The
+file Ethernet_Guide_Sep81.txt and other original 3RCC docs (many of which seem
+to be truncated or incomplete) provide background on the hardware interface as
+well as software interactions with the 2910-based state machine.
+
+As an early adopter of Ethernet, Three Rivers built their own implementation
+in discrete logic; at the time there weren't any "VLSI" solutions (like the AMD
+LANCE chip) available.  So while the original PERQ-1 IOB was intended to provide
+Ethernet (see schematics for IOB-F, 1981) that wasn't integrated until the EIO
+board shipped with the PERQ-2.  Instead an IO Option board was produced for the
+original PERQ.  There are slight differences between the OIO and EIO, though
+they are both emulated here by the general Ether10MbitController class:
+
+    PERQ-1/OIO uses different IOA ports and the IOB's DMA setup registers;
+    interrupts use the "X" line.  The MAC address fetch and programming of
+    the multicast registers are done a word at a time.
+
+    PERQ-2/EIO uses the designated "Network" interrupt and the EIO's DMA
+    registers.  Multicast bytes are programmed one byte at a time.
+
+
+The 3Mbit Ethernet option board was used extensively at CMU, but it doesn't
+appear that the wire-wrapped board was ever productized or shipped to regular
+customers.  When implemented, the completely different "experimental Ethernet"
+packet format and addressing scheme will encapsulate 3Mbit-style packets in a
+standard 10Mbit frame such as ContrAlto (and the CMU "3-to-10 gateway") used.
+This will be a standalone IO Option board.
+
+
+PERQ Controller
+---------------
+
+The PERQ's 10Mbit Ethernet controller offloads much of the packet processing
+work to the hardware.  Dedicated DMA channels for transmit and receive can be
+programmed with two addresses: like the hard disk controller, the packet header
+and data portion can come from different memory buffers, subject to alignment
+restrictions.  The Ethernet controller will only interrupt upon completion or
+error; there are no "real-time" processing requirements, which means that the
+emulator doesn't have to simulate the DMA transfer word-by-word.  Latency due
+to DMA is computed based on packet length to provide a flow rate between the
+virtual PERQ and the host interface.
+
+The hardware provides a microsecond clock that can be programmed to interrupt
+independently (but sharing the same physical interrupt line used for packet
+handling).  The clock is used by the Ethernet microcode to handle "exponential
+backoff" after a collision when attempting to transmit.  As the emulated PERQ
+will never have to deal directly with collisions or most errors, this isn't
+likely going to be used, but is still emulated in case software programs it to
+fire timed interrupts for testing or other purposes.
+
+A control register bit allows for "promiscuous receives," so in the initial
+PERQemu implementation the host interface is set for promiscuous mode (see
+below for the implications of this).  The PERQ also implemented Ethernet
+multicast reception with up to five "groups" -- though it's not yet known if
+any software ever used that feature.  Thus, the controller itself checks all
+incoming packets against a list of destination addresses to match:
+
+    1. Any address (when in promiscuous mode)
+    2. Broadcast
+    3. Hardware address
+    4. Up to five multicast groups
+
+The PERQ firmware (inside the NETxx PROMs on the board) specifically performs
+a layer 2 multicast address match as follows:
+
+    Grp,, Cmd   1 word  The low order byte is the group address
+                        command byte.  The valid commands are:
+                            00: Respond to all groups.
+                            FF: Respond to no groups.
+                            FE: Return address of this device.
+                         Other: respond to set group addresses.
+                        The high byte is a group specifer.
+    Grp,, Grp   1 word  Two group specifies.
+    Grp,, Grp   1 word  Two more group specifiers.
+
+    This explicitly matches 01:00:00:00:00:gg, where gg is any of the five
+    group bytes programmed into the register file and gg != 00.
+
+It isn't clear if _any_ PERQ software made use of Ethernet-layer multicasts,
+but we emulate the hardware's behavior just in case.  Note that for efficiency,
+we specifically strip away the (very chatty) Cisco spanning tree multicasts as
+the PERQ has no use for them.  It may be worthwhile to have a global switch to
+just turn off or ignore this extra bit of processing if it's never really used.
+
+
+Address Translation
+-------------------
+
+PERQemu tries to be true to the hardware, where we use the Three Rivers MAC
+prefix of 02:1c:7c in the first three octets of the address (while the fourth
+is set based on the interface type by the on-board PROM).  We let the user
+configure the last two octets through the Configurator; since the PERQ software
+generally treated addresses as three 16-bit words (high, middle, low) PERQemu
+does it that way too.
+
+    Note:  Three Rivers was also allocated 00:1c:7c and yes, they used
+    addresses from the 02:1c:7c block in all of the hardware PROMs.
+    While the latter is now considered "locally" administered and the
+    correct usage would have been to assign the "globally" administered
+    00 prefix to every PERQ interface, it's almost certain that the
+    distinction was either not made until later (post IEEE 802.3?) or
+    3RCC just didn't get the distinction.  Who knows?  Because real
+    PERQ hardware (and almost all the software) assumes 02:1c:7c as the
+    default vendor code, that's what the emulator uses too.
+
+Rather than require a separate physical interface on the host exclusively for
+its own use (which often isn't possible or desirable), PERQemu allows selection
+of any available Ethernet adapter and maintains a network address translation
+(or NAT) table so that it can communicate with other virtual (or real!) PERQs
+on the network:
+
+    On send, rewrite our source address in outgoing packets from the
+    user's configured 3RCC address to the actual Ethernet MAC of the
+    selected adapter;
+
+    On receive, recognize our destination address and rewrite the packet
+    with our emulated address.  On a fast enough host computer running
+    two instances of PERQemu, each would have to have a unique address
+    but with all receives in promiscuous mode we might get away with it!
+
+To "discover" other PERQemu instances a standard RARP packet is constructed,
+but with a slightly different use of the address fields.  The emulator sends a
+"greeting" when it starts up using the standard RequestReverse operation code;
+this lets other PERQemu machines know there's a new kid on the block.  In reply
+other active machines add this new host<->PERQ mapping to their tables and send
+back a ReplyReverse RARP to provide their data.  This lets the new host quickly
+populate its NAT table as well.  This use of RARP is inspired by QEMU which may
+also use it for similar purposes.
+
+When "greetings" are sent (RequestReverse):
+    Header source = host's MAC addr, dest = Ethernet broadcast
+    RARP SenderHwAddr = host's MAC, TargetHwAddr = PERQ's MAC
+
+When "salutations" are sent (ReplyReverse):
+    Header source = our host's MAC addr, dest = greeting's host MAC (unicast)
+    RARP SenderHwAddr = host's MAC, TargetHwAddr = PERQ's MAC
+
+This means that PERQemu can look for _any_ RARP and match the sender + target
+pair to a table entry.  These "special" packets are not passed on to the 
+PERQ; they're handled strictly by the HostInterface immediately upon reception.
+The virtual machine never knows that the address translation is happening.
+
+PERQemu strictly limits the number of greetings it sends to no more than once
+every n seconds.  This is tunable in the source.  OSes like POS that can't do
+TCP/IP natively use their own ad hoc mechanisms to locate other machines, while
+_later_ versions of Accent can actually use regular IPv4 ARP to find each other
+(though this hasn't yet been tested for interoperability with non-PERQ hosts).
+I'm not yet sure what PNX networking can do.
+
+Since the PERQ can do XNS, "raw" and TCP/IP (possibly others) depending on the
+OS and software in use, our private little RARP broadcast is mostly to let us
+run PERQ-to-PERQ connections like FTP or the print server or even do testing
+with the "echo server" built into "TestEther".  So we'll only ever look for and
+modify those packets which _specifically_ target other PERQemu instances and
+let the rest through unmodified.
+
+This also lets us do a fun little UI thing where we can "show network neighbors"
+(or something like that) and see other emulated machines on the local net.  If
+or _when_ the Global PERQemu Clearinghouse is created, users could "check in"
+to say "yo, I'm online!" and allow PERQ-to-PERQ traffic across the Internet! :-)
+
+
+Type Code Translation
+---------------------
+
+PERQ Ethernet was pre-IEEE 802.3, and most early network software was developed
+when Ethernet I or II specifications were still in use.  Put diplomatically,
+the lack of standardization meant that things like packet types were assigned
+pretty much at the whim of the programmers writing a particular protocol.  In
+other words, they pulled numbers out of... thin air... so even after IEEE 802.3
+came on the scene a lot of original software was already deployed.  The mostly
+good news is that only a few EtherType codes were actually specified and used
+(AFAIK) by POS and Accent:
+
+    FTPByteStreamType   = 0;     
+    FTPEtherType        = 1; 
+    EchoServerType      = 6; 
+    TimeServerType      = 7; 
+    ServerRequest       = 8;
+    AccentTime          = 219;
+    CSDXServerType      = 315; 
+
+The bad news is there's no easy way to find any others that might fall into the
+0 - 1536 range, where the PERQ would still interpret them as EtherType codes
+but modern networks would see them as (mostly) illegal lengths.  In practice,
+it seems that modern network stacks can in fact filter out some PERQ traffic as
+"runts".  Fortunately, 3RCC actually did have some reserved codes!
+
+7035  - 7036  (hex)             Three Rivers       Protocol unavailable.
+28725 - 28726 (dec)             Three Rivers Computer Corporation
+70065 - 70066 (oct)             2600 Liberty Avenue, PO Box 2600
+                                Pittsburgh PA 15230
+                                UNITED STATES
+
+    Note: Both 805E-805F are reserved to "Perq Data Systems" as well, but
+    I'm not so sure that's related.  What this means, however, is that I can
+    possibly use those for my own nefarious purposes in the future. :-)
+
+The 0x7036 type appears to be used by Accent, possibly for some kind of address
+resolution by the NetMessageServer?
+
+The initial approach to dealing with this is to re-map any type code in the list
+above to the 0xB000-0xB5FF range which is "uncharted territory" (an unassigned
+range) according to recent EtherType lists.  Basically, PERQemu does an xor with
+0xb000 at both the sending and receiving stations as part of the NAT rewriting
+so the packets on the wire aren't dropped.  It's cheesy, but seems a reasonably
+clean solution, especially as it's limited to rewriting when a PERQ vendor
+prefix (0x021c7c) is the source address.  In preliminary testing the virtual
+PERQs send and receive the original EtherType codes while the host and any
+intervening switches/hubs pass them along as some mysterious but valid type.
+
+If necessary (as more software is tested) all outgoing PERQ packets with Type
+codes that could be improperly interpreted as Length fields could be remapped.
+Time and testing will tell!
+
+
+Host/Emulator Interface
+-----------------------
+
+PERQemu uses the SharpPcap library to interface with the host.  This is a 
+cross-platform solution that uses libpcap for low-level packet operations.
+The C# interface is all managed code; no additional packages should be needed
+for Mac and Linux hosts as a libpcap (or bpf) interface is generally built-in.
+On Windows, the WinPcap (or NPcap) package may need to be installed separately,
+with all installation requirements [to be] documented in the User's Guide.
+
+In the first cut, PERQemu will have to run with sufficient privileges to open
+and access the configured host interface in promiscuous mode.  Because we are
+emulating the hardware at such a low level, we want to pass all traffic to the
+controller for filtering, rather than do it at the host interface.  While it's
+impossible for a PERQ to keep up with a 100Mbit Ethernet (let alone gigabit
+and greater speeds available today) the emulator tries to filter and queue or
+drop incoming packets reasonably quickly.
+
+How this is done when the emulator is paused is a little tricky; currently the
+background thread will continue to receive and queue packets up to a defined
+limit (MaxBacklog in HostAdapter.cs), at which point the oldest packet at the
+head of the queue is dropped.  When execution resumes, the PERQ and whatever
+protocol it was executing will have to deal with possible packet loss (but of
+course, that's always true in networking).
+
+SharpPcap provides thread management and a callback/event fired when a packet
+is received.  PERQemu currently only filters out IPv6 traffic -- there's just
+no way the PERQ will ever support that and the protocol (even on a host NIC
+that's "turned off" still seems to produce a stupid amount of chatter).
+
+Transmits are assumed to always succeed; it doesn't appear there's any reliable
+or meaningful way to get an error status back from SharpPcap on failure?  The
+PERQ expects to do collision and error processing, but it's unlikely any modern
+interface or host OS network stack interfaced through LibPcap is going to expose
+the programmer to that, so a failure on Send will either go undetected or be
+reported as a CRC error (avoiding any need for the microcode to do collision
+backoff and retransmit).
+
+
+Organization
+------------
+
+The PERQemu Ethernet implementation is in the Emulator/IO/Network folder.
+
+INetworkController provides an interface for the OIO and EIO to attach either
+the "live" device interface (in development) or the "null" interface, which
+can be used in any PERQ model when no physical network attachment is configured
+(as with the NIO variant of the EIO, for example).  The fake interface allows
+for Accent to boot properly, since it seems to require that the hardware be
+present even if the network isn't "plugged in".
+
+NullEthernet is the "fake" implementation that doesn't transmit or receive any
+packets and doesn't attempt to open the host device; it doesn't require that
+PERQemu be run with elevated priviliges.
+
+Ether10MbitController is the "standard" implementation that adapts itself for
+operation as an OIO or EIO device at runtime.  It is responsible for managing
+the host side as well.
+
+Ether3MbitController is not yet implemented.  This will be compatible with the
+UDP-encapsulated implementation used by ContrAlto so that emulated PERQs and
+emulated Xerox Altos can chat with each other.  MazeWar tourney, heck yeah!
+
+HostAdapter provides the connection through SharpPcap to the physical network.
+It's meant to be a fairly simple Open/Start/Stop/Close type of interaction, with
+incoming packets delivered via event invocations of the callback provided by the
+emulator, with no packet interpretation/filtering at the device level. (NAT and
+IPv6 filters mentioned above are handled in PERQemu, not LibPcap, but it may be
+worthwhile to investigate filtering at the OS level for efficiency once PERQemu
+is tested on a live, busy network instead of an isolated test hub.)
+
+MachineAddress is a wrapper around the PERQ's 48-bit MAC address as returned
+by the hardware.  It handles unscrambling the bits based on the slightly crazy
+packing scheme used by the OIO and EIO implementations.  [TBD: it also maps to
+the PhysicalAddress class used by SharpPcap/NetworkInformation?]
+
+Operation
+---------
+
+The Settings subsystem provides the name of the configured Ethernet device on
+the host.  On a typical desktop with one interface this will likely be the
+primary (or only) physical Ethernet.  [We may have to allow WiFi networks in
+the selection, too?]  On my older Mac Pro with two on-board Ethernets, I use
+en1 as a dedicated PERQ interface, fixed at 10Mbits/half-duplex! ;-)  That's
+plugged into an older Ethernet hub so I can test the code on a "quiet" network
+where there's no "background noise" from other machines.
+
+The interface type is chosen through the Configurator as an OIO with the Ether
+option (PERQ-1) or as the EIO (PERQ-2).  In either case, if no physical host
+adapter is selected by Settings, the NullEthernet is attached, otherwise the
+Ether10 controller is instantiated.  The interface is opened at "power on" so
+that if an error occurs (misconfiguration or permissions problem) we can abort
+startup, rather than lazily open it when the OS pokes at the control registers.
+
+OIO (and EIO, when implemented) manages all interactions from the PERQ side
+through the usual IOBus register reads/writes.  Like all DMA devices (for now)
+the network copies packets directly to and from memory, so the CPU never has
+memory cycles stolen by the DMA engine.  This is slightly unrealistic, but to
+compensate the controller calculates a reasonable packet delay based on the
+number of octets transmitted or received.  Other status bits are simulated to
+allow the microcode to see things like "packet in progress" or "carrier detect"
+[TBD].
+
+The PERQ interface is half duplex and cannot "see" its own transmitted packets.
+SharpPcap does seem to copy outbound packets to the input queue, so PERQemu
+expliclitly drops those.
+
+
+Design
+------
+
+The StartCapture() method is only called when the PERQ transitions to the Reset
+state, not at power on.  Incoming packets are checked against the Controller's
+list of addresses to determine if the PERQ should receive it.  If yes, the
+packet is queued for delivery.  (If the PERQ is actively receiving and there
+are no packets already queued, delivery is immediate.)
+
+If the user pauses execution, the HostAdapter will still quietly receive and
+check/queue packets in the background; this allows for some limited debugging
+(on a quiet network).  A maximum backlog (compiled, but could be user settable)
+prevents the queue from growing too long.  If the queue fills up and the PERQ
+isn't reading them (or can't keep up) the oldest packet is dropped so a newer
+one can take its place.  The default (for now) is 8; lots of testing/tuning is
+required to determine if that's reasonable.
+
+When the microcode enables the receiver, the Controller always checks for any
+queued packets, otherwise it simply waits for the OnPacketArrival event to
+trigger reception.  [There may need to be a regular Scheduler event to check the
+receive queue, and/or "aging out" packets that sit unreceived too long?]
+
+The host adapter stops capturing and shuts down at PowerOff.  At this point the
+NAT table is flushed as well, since the user might configure another interface
+or boot another OS or choose another (random) MAC address, so we rebuild the
+table at the start of every session.
+
+Because the PERQ presents a "half-duplex" hardware and programming model, the
+software has idle/reset the receiver before transmitting packets.  So this
+simplifies things as far as the controller/adapter interface goes; we can still
+receive and queue packets while the PERQ is sending but they'll only appear at
+the interface as if they just arrived.  For both sends and receives, the delay
+that normal packet processing would take is simulated so the throughput of the
+emulator shouldn't wildly exceed that of a real 10Mbit/half-duplex Ethernet.
+
+
+NAT and Checksums
+-----------------
+
+SharpPcap makes just about ZERO mention of how checksums are handled.  At least
+I haven't found any obvious documentation references so far.  I guess they just
+ASSUME that you ASSUME they're handled, since through experimentation I've
+verified that SendPacket() always adds the CRC bytes automatically, which is
+convenient: that's how the PERQ does it too!  Upon receive, the full frame WITH
+the FCS (CRC) bytes is delivered, which again (thankfully) is aligned with the
+PERQ hardware.
+
+When sending, the PERQ sends the header (14 bytes) and data (usual Ethernet
+min/max of 46-1500 bytes) via DMA to the hardware, and programs the bit counter
+with the total packet size (in bits) _not_ including the FCS.  As the bits are
+sent and the counter reaches zero, the state machine automatically streams the
+32-bit CRC to complete the transmission.  When sending, PERQemu calculates the
+checksum on the full packet _after_ translation (if any) takes place, but this
+is only used for debugging; SharpPcap/LibPcap/the host OS/network stack actually
+appends the outgoing checksum.
+
+At the receiver, we validate the CRC of the payload and compare it to the actual
+received FCS.  Initial testing indicates that (at the Ethernet frame) checksums
+are perfect -- but it's likely that any incoming traffic with a bad CRC is just
+being dumped before LibPcap even sees it?  Thus, currently the emulated PERQ
+never sees any incoming runts, giants, CRC errors, collisions or other error
+conditions.
+
+
+Miscellany
+----------
+
+The rudimentary NAT implementation seems to work well and is very simple.
+There are some enhancements to be added:
+
+    Allow for the possibility that one "beefy" host machine could run
+    more than one PERQ!
+
+    Implement aging, removal of "stale" entries?  It's hugely unlikely
+    that table size will ever become a problem. :-|
+
+    Be more intelligent about updates/additions:  if a host mapping is
+    in conflict but the entry is stale, replace it; if it's "me" and
+    both halves match just quietly return.  Otherwise, if the current
+    instances detects another PERQ at the same address but the config
+    address is zero, just generate a new random one and retry?
+
+    Potentially add IP (v4) address translation as well?  So the PERQs
+    can use fixed IP addresses even if the host is using DHCP and its
+    address is bouncing around, OR using MAC randomization, etc.  The
+    goal is to make it easier to configure the virtual PERQ to operate
+    without need for adjusting to a changing host environment...
+
+
+One option for IP/UDP encapsulation is to see if the SDL_net library can
+dispatch on the existing event loop, so we'd process packets just like
+Display events?  It'd be awesome if SDL_net had a "raw" option baked in...
+
+
+Want to find a way to do privilege separation and/or set up a VirtualBox-like
+driver/user-level interface that doesn't require administrative privs to run.
+A small, separate root process that could cleanly pass packets to and from
+the user-level emulator could also be a TimeServer for booting/login... 
+
+
+Definitely want to add an option to spoof Time Server replies to make Accent
+boot/POS login more automatic!  The EIO will support the RTC, but for PERQ-1s
+it'd be nice to at least have the first one up be able to accurately set its
+own time...
+
+
+THIS IS ALL STILL VERY MUCH UNDER DEVELOPMENT AND IS IN NO WAY FINALIZED!
+
+Plus, this document (as usual) could use some editing.  Sheesh.  You'd think I
+get paid by the word.
+
+
+---
+Last update: skeezics    Thu Mar  9 19:41:31 PST 2023

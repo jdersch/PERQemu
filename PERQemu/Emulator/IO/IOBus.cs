@@ -1,5 +1,5 @@
 //
-// IOBus.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// IOBus.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -73,11 +73,12 @@ namespace PERQemu.IO
             if (device != null)
             {
                 value = device.IORead(ioPort);
-
-                // Add this back in if there's too much log spewage
+#if DEBUG
+                // Reads from the video regs cause too much log spewage
                 if (!(_deviceDispatch[ioPort] is Memory.VideoController))
                     Log.Debug(Category.IO, "Read 0x{0:x4} from port 0x{1:x2} ({2})",
                                             value, ioPort, device.ToString());
+#endif
             }
             else
             {
@@ -96,11 +97,12 @@ namespace PERQemu.IO
             if (device != null)
             {
                 device.IOWrite(ioPort, value);
-
-                // Put this back if it spews too much
+#if DEBUG
+                // Cut down on too much noise; comment out to debug video
                 if (!(_deviceDispatch[ioPort] is Memory.VideoController))
                     Log.Debug(Category.IO, "Write 0x{0:x4} to port 0x{1:x2} ({2})",
                                             value, ioPort, device.ToString());
+#endif
             }
             else
             {

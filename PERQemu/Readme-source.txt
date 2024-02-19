@@ -49,11 +49,20 @@ could use yet another rewrite...]
 1.2  Version History
 --------------------
 
-The next release will incorporate major changes and expanded functionality.
-It is currently in development on the "experiments" branch as PERQemu 0.4.9
-but should warrant a bump to 0.5 given the scope of the changes.
+The next release will incorporate expanded functionality while still primarily
+focused on PERQ-1 configurations: Ethernet and the Canon laser printer are the
+two major peripherals to be added, along with bug fixes and further refinements
+to the user interface.  Additionally, first steps have been taken to refactor
+the I/O section and Z80 to support the EIO and PERQ-2 configurations.  It is
+currently in development on the "experiments" branch as PERQemu v0.5.5.
 
-PERQemu 0.4.9 adds a temporary "fake Ethernet" device and Shugart bug fix.
+PERQemu v0.5.5 is a feature release, rolling up fixes and features added since
+v0.5.0 (Canon, Ethernet).  This is a pre-release to the main branch only.
+
+PERQemu v0.5.0 is the milestone release, incorporating all of the changes
+since v0.4.4 and is stable enough for general use.
+
+PERQemu v0.4.9 adds a temporary "fake Ethernet" device and Shugart bug fix.
 The main branch is being bumped to v0.4.8 (streamer added).
 PERQemu 0.4.6 was a pre-release snapshot to preview v0.5.0 changes.
 PERQemu 0.4.5beta was an experimental/interim release for VCF PNW.
@@ -126,16 +135,6 @@ excellent emulation projects, Contralto and Darkstar.
         The reorganized user interface is broken down into three folders (of
         which only two are currently integrated into the scheme):
 
-        Forms
-            A FrontPanel anchors the graphical interface.  Menus are provided
-            for all basic operations, while a graphical toolbar offers quick
-            access to the Configurator, a Settings panel, the Debuggers (CPU
-            and Z80) and extras like the DDS, power and reset switches, easy
-            one-click screenshots, etc.  It's all very snazzy, even with the
-            fairly limited functionality of the old crappy Mono Carbon-based
-            Winforms/libgdi+ implementation.  Alas.  "MAUI" may someday be a
-            possible cross-platform solution, but don't hold your breath.
-
         SDL
             The Display is a self-contained, minimal window that uses SDL-CS
             (a C# wrapper around SDL2) to pump the PERQ's video bits to your
@@ -157,6 +156,14 @@ excellent emulation projects, Contralto and Darkstar.
             the emulator is running on the CPU/Z80 threads; calls to read the
             console are multiplexed with the SDL event loop so that commands
             may be entered while the PERQ is running!
+
+        Output
+            Now contains custom PNG and TIFF output formatters, used by the
+            Canon laser printer interface and the screenshot command.  These
+            produce 1bpp monochrome images directly from PERQ memory in full
+            resolution with zero fat and no external dependencies.  Will be
+            used to capture output from other simulated RS-232 or GPIB printers
+            or plotters in the future.
 
 
 2.1  The CPU
@@ -192,26 +199,36 @@ implements the decoding and execution logic, and provides debugger hooks for
 pulling out status information.  To make it a little more "wieldy" it has been
 refactored to break out many of the subordinate tasks:
 
-    - The "ALU" class implements the CPU's 20- or 24-bit ALU.
+    - The "ALU" class implements the CPU's 20- or 24-bit ALU;
+
     - The "CallStack" class implements the PERQ's hardware callstack (12 bit
       on 4K machines, 14 bit on 16K).  This is now internal to the Sequencer
-      class (see below).
-    - The "ControlStore" class manages the writable control store and boot ROM.
+      class (see below);
+
+    - The "ControlStore" class manages the writable control store and boot ROM;
+
     - The "ExpressionStack" class implements the 16-level, 20- or 24-bit push-
-      down stack and TOS register.
+      down stack and TOS register;
+
     - The "ExtendedRegister" class implements the odd two-part register types
       used in several places in the processor, with separate or combined 
-      access to the upper and lower parts of the register.
-    - The "Instruction" class caches instruction decoding to make things faster.
+      access to the upper and lower parts of the register;
+
+    - The "Instruction" class caches instruction decoding to make things faster;
+
     - The "InterruptEncoder" class handles priority encoding of 8 hardware
-      interrupt sources, and methods to raise or clear them.
+      interrupt sources, and methods to raise or clear them;
+
     - The "RasterOp" class emulates the hardware datapath for doing fast block
-      memory moves used in graphics operations.
+      memory moves used in graphics operations;
+
     - The "RegisterFile" class provides the XY register file of 256 general
-      purpose registers, either 20- or 24-bits wide.
+      purpose registers, either 20- or 24-bits wide;
+
     - The "Sequencer" class implements the Am2910 microsequencer and the PC, S
       and Victim registers.  These are all 12 bits wide in the 4K CPU, extended
-      by the "2 bit kluge" to 14 bits in the 16K CPUs.
+      by the "2 bit kluge" to 14 bits in the 16K CPUs;
+
     - The "Shifter" class implements the PERQ's Shift, Rotate and bitfield
       operations.
 
@@ -237,9 +254,11 @@ the 24-bit address space, but has only been fully tested with the 20-bit CPU.
 The memory/video board is implemented by the code in Emulator/Memory:
 
     - The "Memory" class (MemoryBoard.cs) implements the PERQ's memory store
-      and memory state machine.
+      and memory state machine;
+
     - The "MemoryController" class provides separate memory input and output
-      queues to support the overlapped Fetch/Store required by RasterOp.
+      queues to support the overlapped Fetch/Store required by RasterOp;
+
     - "VideoController" lives here now, as it's integral to the memory board;
       this is described in the Display section below.
 
@@ -286,16 +305,34 @@ All devices hung off of the Z80 subsystem implement the IZ80Device interface.
 2.3.1  The Z80 Subsystem
 ------------------------
 
-[Differences between the PERQ-1 "IOB" and the PERQ-2 "EIO" boards are fairly
-significant; additional refactoring will likely be required in the next release
-to properly support the PERQ-2.  For now, the Z80 code is in one directory.]
-
 All of the Z80 subsystem resides in the Emulator/IO/Z80 directory.  There is a
 lot to unpack here!
 
 The Z80dotNet CPU is instantiated by the Z80System object; it requires two
 small objects that provide I/O bus mapping (Z80IOBus.cs) and a memory map
-(Z80MemoryBus.cs).
+(Z80MemoryBus.cs).  Z80System itself is now a superclass for CIOZ80.cs and
+EIOZ80.cs; these encapsulate the different peripherals attached to the old
+IOB and the new EIO:
+
+    - The "CIOZ80" class handles all PERQ-1 configurations using the original
+      I/O board.  For "IOB" the old v8.7 firmware is loaded; if configured as
+      "CIO" the new v10.17 firmware is run.  Only supports a Shugart hard disk.
+
+    - "EIOZ80" will manage all PERQ-2 configurations.  This board supports
+      the standard EIO (Ethernet interface built-in) as well as the NIO (no
+      Ethernet) variant.  Supports a Micropolis or MFM hard disk controller.
+
+ PERQ<->Z80 communication is facilitated by a hardware channel unique to each
+ I/O board type.  These byte-wide channels are used to send messages between the
+ main CPU and the Z80:
+
+    - In the PERQ-1 (IOB/CIO), these are simply latches with some special
+      control signals: PERQtoZ80Latch.cs and Z80toPERQLatch.cs are instantiated
+      by CIOZ80 and use the Z80's WAIT line to assist with flow control;
+
+    - The PERQ-2/2Tx (EIO) uses actual 16-byte FIFOs and the programming model
+      changed; thus, new implementations are being develeoped (PERQtoZ80Fifo.cs,
+      Z80ToPERQFifo.cs) for the EIOZ80.
 
 Numerous interfaces are defined (ISIODevice.cs, IZ80Device.cs, ICTCDevice.cs
 and IDMADevice.cs) to glue parts of the Z80 I/O system together.  These are
@@ -304,36 +341,49 @@ pretty straightforward.
 There are a bunch of Z80 devices:
 
     - The "DMARouter" class enumerates the DMA-capable devices that may be
-      selected through "IOREG3".
+      selected through "IOREG3";
+
     - In the PERQ-1, the "HardDiskSeekControl" class provides glue logic for
       the seek pulse generator used to move Shugart hard disk heads; this
       complicated dance uses the Z80's CTC and custom hardware to issue pulses
-      to the (emulated) hard disk.
+      to the (emulated) hard disk;
+
     - The "IOReg3" device implements an addressible latch that sits on the
       Z80's I/O bus for managing DMA channel selection and several device
-      interrupt enable flags.
+      interrupt enable flags;
+
     - The "Keyboard" class provides an interface to the 8-bit parallel latch
-      for incoming PERQ-1 keyboard characters.
+      for incoming PERQ-1 keyboard characters;
+
     - The "NECuPD765A" class is a register-level emulation of the eponymous
       floppy disk controller chip.  It is a DMA-capable Z80 device that can
       support up to 4 floppy drives; the PERQ only has the physical wiring to
-      accommodate two drives (but only software support for a single drive).
-    - The PERQ<->Z80 FIFOs are a hardware channel used to send messages
-      between the main CPU and the Z80.  In the PERQ-1, these are simply
-      latches; in the PERQ-2 these are actual FIFOs.  Currently two classes
-      (PERQtoZ80Fifo.cs and Z80toPERQFifo.cs) implement the unidirectional
-      channels and their control registers.  Here thar be dragons.
+      accommodate two drives (but only software support for a single drive);
+
     - The "TMS9914A" class emulates the TI GPIB controller chip and its
-      interface to the Z80 I/O bus.  See below for more.
+      interface to the Z80 I/O bus.  See below for more;
+
     - The "Z80CTC" class is an emulation of the Zilog CTC chip used for timing
-      and baud rate generation on the PERQ-1 IOB.
+      and baud rate generation on the PERQ-1 IOB;
+
     - The "Z80DMA" class emulates the Zilog DMA controller, a single channel
       device that provides byte-wide DMA transfers between several devices and
-      the Z80's local RAM.
+      the Z80's local RAM;
+
     - The "Z80SIO" class emulates the Zilog SIO/2 chip used for RS-232,
       "speech", and the Kriz tablet.  The PERQ-1 has one SIO chip; the PERQ-2
       EIO will have two.  The "Z80SIOChannel" class does the heavy lifting.
-    
+
+Support for the EIO requires several new controller chips:
+
+    - The "Oki5832" class implements the real-time clock (RTC) chip.  This
+      battery-backed clock lets the PERQ set the time automatically at bootup;
+
+    - The "Am9519" class will handle the new interrupt controller for EIO;
+
+    - New Intel i8237 (DMAC) and i8254 (PIT) chips replace the Zilog DMA and
+      CTC chips used on the original IOB.  [TBD]
+
 
 2.3.2  Serial Devices
 ---------------------
@@ -345,13 +395,17 @@ these into the Emulator/IO/SerialDevices folder.
       "RealPort" uses the System.IO.Ports.SerialPort class to access a host
       serial device (including USB-to-serial adapters on modern PCs that lack
       actual, physical COM ports), while "NullPort" provides a data sink when
-      the user hasn't configured one.
+      the user hasn't configured one;
+
     - The POS "RSX:" pseudo device enables text file transfers to and from the
-      host.  It's implemented as the "RSXFilePort" class.
+      host.  It's implemented as the "RSXFilePort" class;
+
     - The "KrizTablet" class emulates the Three Rivers custom "Kriz tablets",
-      which use the SIO chip to transmit mouse coordinates.
+      which use the SIO chip to transmit mouse coordinates;
+
     - "SerialKeyboard" will contain the driver for the PERQ-2's "VT100-style"
-      keyboard, attached to the EIO board.  [Not yet implemented]
+      keyboard, attached to the EIO board;                 [Not yet implemented]
+
     - The "Speech" class will emulate the PERQ's CVSD chip to provide "telephone
       quality" (8Khz, mono) audio output.  This class will provide the glue to
       stream data from the SIO to the SDL audio routines.  [Not yet implemented]
@@ -370,9 +424,11 @@ likely needs additional work.  The code is in the Emulator/IO/GPIB directory:
     - The "GPIBBus" class provides the actual bus abstraction, allowing the
       controller (TMS9914A, in the Z80 folder) to set talker and listener
       addresses and exchange data with them.  All peripherals that attach to
-      the bus implement the IGPIBDevice interface.
+      the bus implement the IGPIBDevice interface;
+
     - The "BitPadOne" class emulates the classic Summagraphics tablet used
-      (primarily) with the PERQ-1.
+      (primarily) with the PERQ-1;
+
     - Additional peripherals may be added in a future release.
 
 
@@ -391,28 +447,33 @@ Emulator/IO/DiskDevices:
 
     - The "FloppyDisk" class is a wrapper around the PERQmedia StorageDevice
       class.  It works with the Z80 floppy disk controller (FDC) to emulate
-      the Shugart SA851 8" floppy drive.
+      the Shugart SA851 8" floppy drive;
+
     - The "HardDisk" class is a "generic" hard disk.  It wraps the PERQmedia
       StorageDevice class to provide the mechanical operations such as seeks,
-      sector operations, an index pulse, and so on.
+      sector operations, an index pulse, and so on;
+
     - The "ShugartDiskController" class implements the Shugart SA4000 interface
       (the "Disk14Inch" class of drives) common to all PERQ-1 configurations.
-      It works with the Z80's HardDiskSeek device to manage stepping the heads.
+      It works with the Z80's HardDiskSeek device to manage stepping the heads;
+
     - The "MicropolisDiskController" class is in development.  This will
       support the Micropolis 1200-series 8" hard disks that were originally
       introduced with the PERQ-2 and PERQ-2/T1.  This will allow configuration
-      of drives in the "Disk8Inch" storage class.
+      of drives in the "Disk8Inch" storage class;
+
     - The "MFMDiskController" and "SMDController" classes will someday provide
       support for Disk5Inch and DiskSMD devices (on PERQ-2 models).
 
 Several tape drives will also be supported, but PERQemu does not yet emulate
 the controllers for these.  Tape media will be accessed through the PERQmedia
-library just like disk devices.  The first of these is now in development, with
-the code in Emulator/IO/TapeDevices:
+library just like disk devices.  The first of these is now complete, with the
+code in Emulator/IO/TapeDevices:
 
     - QICTapeController is the thin PERQ interface to the QIC-02 "bus" that
       attaches one streaming tape drive.  It can be configured as the Tape
-      option when the OIO board is selected.
+      option when the OIO board is selected;
+
     - Sidewinder.cs contains the drive's controller logic, emulating the
       Archive Sidewinder 3020I drive.  The mechanical portion and wrapper
       around the StorageDevice is in CartridgeTape.cs, organized much like
@@ -481,7 +542,7 @@ by the KeyboardMap class, in UI/SDL/KeyboardMap.cs.  Testing for the PERQ-2's
 Z80 enhancements for the PERQ-2 line.  There are several fixed mappings for
 some special PERQ-specific keys that must be made configurable somehow, or a
 graphical keyboard provided so that a variety of host keyboards can be better
-accommodated.  See the UserGuide.pdf for more info about this.
+accommodated -- including mappings for non-US/English locales.
 
 Caps-lock, num-lock and scroll-lock tracking hasn't been tested under SDL2;
 the use of the Alt key (Option on Mac) to simulate the "mouse off tablet"
@@ -508,13 +569,55 @@ when the "CPUSpeed" RateLimit option setting is enabled.
 2.3.8  Network
 --------------
 
-An initial stab at implementing the PERQ side of the Ethernet interface is now
-included.  IO/Network/FakeEthernet.cs provides enough functionality to allow the
-OS to see that the hardware is present and retrieve the MAC address.  Packets
-queued for transmission just disappear; nothing is ever received.  This allows
-Accent to properly initialize.  It's the first step toward getting a real 
-Ethernet interface so that the emulator can talk to the outside world at speeds
-greater than 9600 baud. :-)
+PERQ Ethernet support comes in three flavors:  the 10Mbit interface on the OIO
+option board, the built-in 10Mbit interface on the EIO board, and the prototype
+3Mbit interface that came as a wire-wrapped option board.  The PERQ-1 OIO option
+is now in development.  EIO and the 3Mbit board will follow.
+
+The Ethernet code is in Emulator/IO/Network:
+
+    - NullEthernet.cs is the "fake" interface introduced with v0.4.9;
+      it provides enough functionality to allow the OS to see that the
+      hardware is present and retrieve the MAC address.  Packets queued
+      for transmission just disappear; nothing is ever received.  This
+      allows Accent to properly initialize;
+
+    - Ether10MbitController.cs is the PERQ side of the OIO (and future
+      EIO) interface.  It handles the control/status/registers and DMA
+      to and from memory.  Initially it requires root/admin privileges
+      to open the host adapter in "promiscuous mode" but should/will
+      support other encapsulations in the future;
+
+    - Ether3MbitController.cs is not yet implemented;
+
+    - HostAdapter.cs is the wrapper around SharpPcap which handles the
+      actual sending and receiving of packets through the host's network
+      adapter.  It also transparently implements the address translation
+      and type code remapping so that the virtual PERQ "sees" its own
+      address in the Ethernet frame header even though the host's MAC is
+      used on the wire.  It queues incoming packets so the PERQ can
+      receive them at its own pace;
+
+    - MachineAddress.cs provides the required bit scrambling for emulating
+      the hardware's slightly crazy way of reading its own address;
+
+    - Translation.cs defines the Network Address Translation (NAT) table
+      used by the host adapter to rewrite PERQ packet headers.
+
+There's a TON more information about this in Docs/Network.txt.
+
+
+2.3.9  Printers
+---------------
+
+The Canon laser printer interface lives here now.  There are extensive notes and
+ramblings about the details of its implementation in Docs/LaserCanon.txt.
+
+Getting this working wasn't a high priority, but I had an itch to scratch.  The
+output drivers should allow simulations of a bunch of other classic dot-matrix
+or daisywheel printers that had at least partial support in POS, as well as some
+OEM units that ICL sold and supported too.  Someday these devices will live in
+this folder too.
 
 
 2.4  The Debugger / Console interface
@@ -642,6 +745,8 @@ PERQ info and lore.  More to come!
 
 Update history:
 
+v2.2 - 2/18/2024 - skeezics - updated for the v0.5.5 interim release
+v2.1 - 3/8/2023 - skeezics
 v2.0 - 1/24/2023 - skeezics - corresponds to the merge for v0.5.0
 v1.9 - 1/17/2023 - skeezics
 v1.8 - 12/18/2022 - skeezics

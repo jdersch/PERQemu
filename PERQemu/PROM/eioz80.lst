@@ -1,0 +1,4 @@
+﻿ROM:0000 ; Placeholder until listing can be generated!
+ROM:0FFF ; End of ROM
+RAM:4000 ; Start of RAM
+RAM:7FFF ; End of RAM

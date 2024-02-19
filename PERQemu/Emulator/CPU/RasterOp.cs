@@ -1,5 +1,5 @@
 //
-// RasterOp.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// RasterOp.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -83,7 +83,7 @@ namespace PERQemu.Processor
         RightEdge = 0x04,       // word contains a right edge
         Both = 0x06,            // word contains both edges (shortcut)
         FullWord = 0x08,        // use all 16 bits
-        Leftover = 0x10         // pass word e 
+        Leftover = 0x10         // pass word; end of scan line
     }
 
     public enum MulDivCommand
@@ -764,18 +764,17 @@ namespace PERQemu.Processor
                 w.Address = _memory.MADR;
                 w.Index = _memory.MIndex;
                 w.Data = _memory.MDI;
+                return w;
             }
-            else
-            {
+
 #if DEBUG
-                // For debugging we just try to continue, but we're pretty hosed at this point...
-                Log.Error(Category.RasterOp, "FetchNextWord in {0} while MDI was invalid!", _state);
-                w.Clear();
-#else
-                throw new InvalidOperationException("FetchNextWord while MDI was invalid!");
-#endif
-            }
+            // For debugging we can try to continue, but we're pretty hosed at this point...
+            Log.Error(Category.RasterOp, "FetchNextWord in {0} while MDI was invalid!", _state);
+            w.Clear();
             return w;
+#else
+            throw new InvalidOperationException("FetchNextWord while MDI was invalid!");
+#endif
         }
 
         /// <summary>

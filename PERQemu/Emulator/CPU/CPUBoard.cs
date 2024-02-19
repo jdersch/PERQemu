@@ -1,5 +1,5 @@
 //
-// CPUBoard.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CPUBoard.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -101,7 +101,7 @@ namespace PERQemu.Processor
                 {
                     // Run the Z80 directly!  It no-ops to maintain synch rather
                     // than set the wait handle in this mode
-                    _system.IOB.Z80System.Run();
+                    _system.IOB.Run();
                 }
                 else
                 {
@@ -206,8 +206,9 @@ namespace PERQemu.Processor
 
         public void Shutdown()
         {
-            _processor = null;
+            _heartbeat.Shutdown();
             _heartbeat = null;
+            _processor = null;
             _scheduler = null;
             Log.Detail(Category.Emulator, "CPUBoard shutdown.");
         }

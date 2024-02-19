@@ -1,5 +1,5 @@
 ﻿//
-// InputDevices.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// InputDevices.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -226,7 +226,7 @@ namespace PERQemu.UI
 
                 if (perqCode != 0)
                 {
-                    _system.IOB.Z80System.Keyboard.QueueInput(perqCode);   // Ship it!
+                    _system.IOB.Z80System.QueueKeyboardInput(perqCode);   // Ship it!
                     handled = true;
                 }
             }

@@ -1,5 +1,5 @@
 //
-// Z80CTC.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Z80CTC.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -67,7 +67,7 @@ namespace PERQemu.IO.Z80
         public bool IntLineIsActive => _interruptActive;
         public byte? ValueOnDataBus => AcknowledgeInterrupt();
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
 
         public void AttachDevice(int channel, ICTCDevice dev)

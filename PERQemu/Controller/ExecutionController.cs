@@ -1,5 +1,5 @@
 //
-// ExecutionController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// ExecutionController.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -309,15 +309,18 @@ namespace PERQemu
         /// be such that a keyboard interrupt is generated within the window so
         /// that the keystroke is actually sent to the PERQ in a message -- it
         /// isn't enough to just have the boot character in the keyboard buffer!
+        /// 
+        /// NB: For the PERQ-2 keyboard, the data is sent inverted!
         /// </remarks>
         void BootCharCallback(ulong skewNsec, object context)
         {
             var count = (int)context - 1;
+            var keycode = (byte)(PERQemu.Sys.Config.Chassis == ChassisType.PERQ1 ? _bootChar : ~_bootChar);
 
             if (PERQemu.Sys.CPU.DDS < 152 && count > 0)
             {
                 // Send the key:
-                PERQemu.Sys.IOB.Z80System.Keyboard.QueueInput(_bootChar);
+                PERQemu.Sys.IOB.Z80System.QueueKeyboardInput(keycode);
 
                 // And do it again
                 PERQemu.Sys.Scheduler.Schedule(10 * Conversion.MsecToNsec, BootCharCallback, count);
@@ -524,6 +527,14 @@ namespace PERQemu
                 {
                     new SMKey(RunState.Running, RunState.Off), new List<Transition> {
                         new Transition(() => { SetState(RunState.ShuttingDown); }, RunState.Off) }
+                },
+                {
+                    new SMKey(RunState.RunInst, RunState.Halted), new List<Transition> {
+                        new Transition(() => { SetState(RunState.Halted); }, RunState.Halted) }
+                },
+                {
+                    new SMKey(RunState.SingleStep, RunState.Halted), new List<Transition> {
+                        new Transition(() => { SetState(RunState.Halted); }, RunState.Halted) }
                 },
                 {
                     new SMKey(RunState.Halted, RunState.Reset), new List<Transition> {

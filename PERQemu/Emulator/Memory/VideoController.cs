@@ -1,5 +1,5 @@
 //
-// VideoController.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// VideoController.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -166,20 +166,36 @@ namespace PERQemu.Memory
                     // StartOver bit signals the end of the display list
                     _startOver = (value & (int)StatusRegister.StartOver) != 0;
 
-                    // ** PNX 1 HACK **
-                    // Apparently PNX 1 does video a little differently: it only
-                    // sets up one Vblank band instead of two, and counts off 40
-                    // lines instead of 43.  Could this be to compensate for the
-                    // difference between UK 50Hz and US 60Hz power grids?  Who
-                    // knows.  But they also never set the StartOver bit, though,
-                    // which is a real problem: the scanline count never resets
-                    // so the cursor's Y position isn't fixed properly.  Try to
-                    // Accommodate that here; assumes that the new VBlank state
-                    // has been set up *before* initializing line count.  Ugh.
-                    if (!_startOver && _state == VideoState.VBlank && _lineCounterInit == 40)
+                    // Deal with some special cases :-|
+                    if (!_startOver && VSyncEnabled && (_lineCounterInit == 40 || _lineCounterInit == 43))                    
                     {
-                        // We could check that DDS == 255 to be sure it's PNX :-)
-                        _startOver = true;
+                        // ** PNX 1 & 2 HACK **
+                        //
+                        // For some reason ICL does video a little differently:
+                        // they only set up one Vblank band instead of two, and
+                        // don't set the StartOver bit properly.  This leads to
+                        // a garbled display and cursor Y positioning problems.
+                        //
+                        // Thus, for PNX we force _startOver to be set when the
+                        // VSync is true and the line count is off the end of
+                        // the visible area.  It may not need to be this exact;
+                        // more testing has to be done with ALL the other OSes
+                        // to see if this can be generalized.
+                        //
+                        // See Docs/Video.txt for more information.
+                        //
+                        _startOver = (_scanLine > _lastVisibleScanLine);
+                    }
+
+                    if (_startOver && DisplayEnabled)
+                    {
+                        // ** PNX 2 HACK (part two) **
+                        //
+                        // Although I could hack the state machine to ignore the
+                        // _startOver bit at the end of visible bands, resetting
+                        // it here works too and keeps all the cruft in one place.
+                        //
+                        _startOver = false;
                     }
 
                     // Clear interrupt
@@ -247,7 +263,7 @@ namespace PERQemu.Memory
                         RunStateMachine();
                     }
 
-                    Log.Debug(Category.Display, "Video status port set to {0}", _videoStatus);
+                    Log.Debug(Category.Display, "Video status port set to {0} @ line {1}", _videoStatus, _scanLine);
                     break;
 
                 case 0xe4:  // Load cursor X position

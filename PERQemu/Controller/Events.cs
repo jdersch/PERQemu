@@ -1,5 +1,5 @@
 ﻿//
-// Events.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Events.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -61,6 +61,7 @@ namespace PERQemu
         HardDiskActivity,   // For blinkenlights
         FloppyActivity,     // Sure, why not
         StreamerActivity,   // Definitely this
+        PrinterActivity,    // Canon now, more to come
         PowerDown,          // PERQ 1 software power off
         Other
     }

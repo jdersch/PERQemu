@@ -1,0 +1,2602 @@
+
+                                                                  14 Dec 83
+
+
+                                          
+
+
+
+
+
+                   Ethernet IO Board Programming Manual
+
+                             Project PRJ10516
+
+                                Bill Hulley
+
+                                Steve Clark
+
+
+
+
+     COMPANY CONFIDENTIAL - not for public release
+     This   document   is   the  property  of  Three  Rivers  Computer
+     Corporation and may not be transmitted  or  copied  in  any  form
+     without express written permission.
+
+
+     This  document  describes the software interface requirements for
+     the Ethernet IO board.  Included are  description  of  peripheral
+     interfaces,  addressing  and  contents  of control registers, and
+     references to  device  literature.   This  revision  details  the
+     recent additions to the EIO board, which consist of an additional
+     RS232 channel, a serial keyboard interface, and RS232 synchronous
+     communication.
+
+     Revised 22 Jun 82 - Release 1.1
+     Revised 02 Oct 82 - Release 2.0
+     Revised 01 Mar 83 - Release 3.0
+
+
+     Copyright (c) 1982
+     Three Rivers Computer Corp
+     Pittsburgh, Pennsylvania, USA
+     (412)621-6250
+
+
+
+
+
+
+                                -  1 -
+
+                                                                  14 Dec 83
+
+
+                        
+
+               TABLE OF CONTENTS
+
+
+               Introduction.......................................3
+
+               Document Revisions.................................4
+
+               Z80 Subsystem......................................5
+                 Real Time Clock..................................7
+                 GPIB Controller..................................9
+                 Floppy Drive Controller.........................11
+                 Z80 Interrupts..................................13
+                 Z80 DMA.........................................16
+                 Serial I/O Control..............................20
+                 Serial Rate Generation .........................26
+
+               IOB Interface.....................................28
+
+               Perq DMA..........................................30
+
+               Floating Point Unit...............................33
+
+               The Hard Disk.....................................36
+
+               Ethernet..........................................36
+                 Transmits.......................................38
+                 Receives........................................39
+                 Register Descriptions...........................43
+                 Microsecond clock...............................46
+                 Interrupts......................................47
+
+               Related Documents.................................50
+
+               Appendix A........................................51
+
+
+
+
+
+
+
+
+
+
+                                -  2 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          INTRODUCTION
+
+               This manual is intended to be a quick reference for the
+          programmer.  The information includes:
+
+          (1)  Perq IO Addresses for EIO access
+          (2)  Z80 IO Address for device control
+          (3)  basic register descriptions for each device
+          (4)  programming information for each device
+          (5)  references to complete programming information
+
+          This document is not intended to cover every aspect  of  the
+          controllers  that are used on the EIO board.  The details of
+          each LSI device are left to the referenced literature.  What
+          is described is the actual implementation of the controllers
+          and devices used.
+
+
+
+          Conventions and abbreviations used in this document:
+
+           PDMA            Perq DMA transfers using main memory
+           ZDMA            Z80 DMA transfer using  Z80 memory
+           IOP             Perq IO bus
+           IOZ             Z80 IO bus
+           option a/b/c    bit selection, always a 1/0/x choice
+
+
+               Figure 1 shows the basic structure of  the  EIO  board.
+          The  EIO  board  is the replacement for the current IO board
+          used in the Perq.  The new board consists of five  sections,
+          the   Z80   peripheral  device  controller,  the  hard  disk
+          interface, the Ethernet interface, the PDMA controller,  and
+          the  floating  point  hardware.  The Z80, hard disk and PDMA
+          hardware are all enhanced versions  of  our  current  board.
+          The  Ethernet  hardware  has been adapted from the OIO board
+          and the floating point is a totally new addition.
+
+               At the applications code level (Pascal, Fortran,  etc.)
+          the  EIO  board  will  not  appear  to  be  much  different.
+          However, there are significant  changes  in  both  the  Perq
+          microcode  and  in  the Z80 operating system.  This document
+          describes the various sections of the EIO board by  breaking
+          it  down  into  the  five listed groups.  The section on the
+          hard disk interface is not available at this time  and  will
+
+                                -  3 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          be incorporated into this document when it is finished.
+
+               Appendix A is a list of programs that have been written
+          by the project group for hardware validation.
+
+
+          DOCUMENT REVISIONS
+
+           Release 1.1 - Removed bit description of LSI registers.
+                         Improved register usage description.
+                         Rewrote some confusing sections on the SIO.
+                         Block diagrams of the board added.
+
+           Release 2.0 - Addition of the second SIO explained.
+                         Remote clock for RS232 added.
+                         DMA Daisy chain added.
+                         Serial Keyboard interface added.
+                         Revised block diagrams.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -  4 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          THE Z80 SUBSYSTEM
+
+          Introduction
+
+               The Z80 subsystem controls the IO device  interface  to
+          the  Perq.   There  are three main groups in the Z80 system,
+          the device interfaces,  the  PDMA  interface,  and  the  IOP
+          interface.   The  Z80  has  its  own  local  bus,  interrupt
+          structure, memory, and local DMA.  The devices that the  Z80
+          controls  use  this internal structure and do not know about
+          the rest of the Perq.  The devices  controlled  by  the  Z80
+          system are:
+
+           Floppy drive
+           GPIB
+           RS232
+           Speech
+           Tablet
+           Real time clock
+           Keyboard
+
+
+               Referring  to  figure  2,  the Z80 system also has some
+          hardware that  is  used  by  more  than  one  device.   This
+          hardware includes:
+
+           Interrupt priority encoder
+           Programmable timer
+           Clock generator
+           Local DMA controller
+           Device select logic
+           16 KBytes RAM
+           2 KBytes ROM
+
+
+               To  the  Perq, the Z80 system looks like a group of IOP
+          ports, a PDMA channel, and two interrupt lines.  The Z80 and
+          Perq do all information transfers using these facilities.
+
+               The IOP interface consists of one 16 word deep FIFO and
+          one Perq interrupt line in each direction.   The  FIFOs  are
+          byte wide in both directions.  The interrupt line associated
+          with each FIFO tells the Perq when it can pass data  to  the
+          Z80  (Z80  RDY  INT)  or  when the Z80 has data for the Perq
+          (uPROC INT).  The  Perq  uses  these  FIFOs  to  pass  small
+
+                                -  5 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          amounts of information (such as device commands) between the
+          Perq and the Z80.
+
+               The PDMA interface consists of one 16 byte deep FIFO in
+          each  direction  and  the necessary PDMA control lines.  The
+          PDMA FIFOs are byte (eight bits) wide on the  Z80  side  and
+          word  wide  (sixteen bits) on the Perq memory side.  The Z80
+          can transfer up to 16 bytes at a time into or out  of  these
+          FIFOs.  The Perq DMA controller will always read a quad word
+          in or out of the FIFOs.  The PDMA channel  is  dedicated  to
+          the  Z80 and is used to transfer large blocks of information
+          to the Z80 memory (such as a Floppy data sector).   The  Z80
+          side  of  the  FIFO is on a ZDMA channel so that information
+          transfers occur between the Z80 memory and Perq main memory.
+
+               There  is  one status port on the IOP bus that the Perq
+          can use to determine if Z80 RDY INT or uPROC INT are  valid.
+          These are the only defined bits in this register.
+
+               There  is  a  control port on the IOP bus that the Perq
+          can use to reset the Z80 or  selectively  enable  either  or
+          both of the IO interrupts.
+
+               The  Z80 local memory is in two sections, the ROM space
+          and the RAM space The ROM memory is located at Z80 addresses
+          0000  to  01FF  hex.   There  is  provision on the board for
+          expansion to 4 KBytes of ROM.  The RAM space is  located  at
+          Z80 addresses 4000 hex to 7FFF hex.  This provides 16 KBytes
+          of static RAM for program  and  data  space.   There  is  no
+          provision for expansion of the RAM space.
+
+               The   rest   of  this  section  describes  the  various
+          controllers in the Z80 subsystem.  There are  references  to
+          the data sheets for each device.  These references should be
+          used to find specific programming information
+
+
+
+
+
+
+
+
+
+
+
+                                -  6 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          REAL TIME CLOCK
+
+          Introduction
+
+               The Real Time Clock is based on the OKI  MSM5832  clock
+          chip.   The  hardware is designed so that the write function
+          is disabled after the chip  has  been  properly  initialized
+          (presumably  in  manufacturing).  The hardware is powered by
+          the Perq when it is  turned  on,  and  by  a  nickel-cadmium
+          battery when the Perq is powered down.  During normal system
+          operation, the battery is charging.  The backup  system  has
+          an  estimated  shelf  life  of  four months between charging
+          sessions of ten hours.
+
+
+          Register Description
+
+               There are two access ports to the clock, a control port
+          and  a  data  port.   The  control  port  is  write  only at
+          IOZ<166>.  The data port is  write/read  at  IOZ<167>.   The
+          fields for the two ports are:
+
+          Control Register
+          Field      Use
+           C<7>       Don't care
+           C<6>       Hold bit
+           C<5>       Write bit
+           C<4>       Read bit
+           C<3:0>     Data register select
+
+          Data Register
+          Field      Use
+           D<7:4>     Don't care
+           D<3:0>     Clock data
+
+          Programming
+
+                The basic write sequence follows the format below.
+
+               1)  write the hold bit
+               2)  wait 150 microseconds
+               3)  write the data bits
+               4)  write the register select bits
+               5)  wait 6 microseconds
+               6)  set the write bit
+
+                                -  7 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+               7)  wait 1 microsecond
+               8)  clear the write bit
+               9)  repeat 3) to 8) for each register to be written
+               10) wait 150 microseconds
+               11) clear the hold bit
+
+          To read a clock data register the following format is used:
+
+               1)  write the hold bit
+               2)  wait 150 microseconds
+               3)  write the read bit
+               4)  write the register select bits
+               5)  wait 6 microseconds
+               6)  read the register
+               7)  repeat 4) to 6) for each register to be read
+               8)  clear read bit
+               9)  wait 150 microseconds
+               10) clear the hold bit
+
+               The  control  register bits are all written at the same
+          time.  In the test programs an image of the control word  to
+          be  written  is  saved  and modified as needed.  The control
+          register is used to  point  at  a  specific  internal  clock
+          register  to  read  or  write  data.   All  of  the internal
+          registers are accessed through the one clock data port.
+
+
+          References
+
+               More information may be found in MSM5832 MICROPROCESSOR
+          REAL    TIME    CLOCK/CALENDAR    application    note,   OKI
+          Semiconductor, Feb 1981
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -  8 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          GPIB CONTROLLER
+
+
+          Introduction
+
+               The GPIB controller is a TI  TMS9914A  device  that  is
+          accessed  through  a  set  of  registers  and  a bus control
+          circuit.  Using this chip, the Perq can act  as  a  IEEE-488
+          system  controller or as a talker/listener.  The bus control
+          hardware allows the GPIB data bus to be set up in  tri-state
+          (interrupt  poll)  mode or in open collector (parallel poll)
+          mode.  The following listing shows  the  addresses  for  the
+          internal control registers.  The GPIB uses one Z80 interrupt
+          line (priority 4)and one ZDMA channel (priority 1).
+
+
+          Register Description
+
+               The GPIB controller is accessed through a set of  seven
+          write  and  seven  read registers.  These registers pass all
+          commands and data between the Z80 and  the  controller.   In
+          addition,  there  are  two  one  bit  registers that set the
+          controller up as a system controller and  set  the  bus  for
+          floating or parallel poll mode.
+
+          Read Registers               IOZ
+            Interrupt Status 0         000
+            Interrupt Status 1         001
+            Address Status             002
+            Bus Status                 003
+            Address Switch 1           004
+            Command Pass Through       006
+            Data In                    007
+
+          Write Registers              IOZ
+            Interrupt Mask 0           000
+            Interrupt Mask 1           001
+            Auxiliary Command          003
+            Address Register           004
+            Serial Poll                005
+            Parallel Poll              006
+            Data Out                   007
+
+
+
+
+                                -  9 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Bus Control Registers        IOZ
+            System Controller          173    '1'  Perq sys controller
+            TriState/Parallel          174    '1'  488 bus tri-state
+
+
+          Programming
+
+               Command transfers to the 9914  are  accomplished  using
+          Z80  IOZ  operations.   Data  transfers to and from the GBIP
+          controller are handled by ZDMA.  The  controller  should  be
+          set up to make transfers in this manner.  The interrupt line
+          is used to alert the Z80 to status changes on the GPIB.   To
+          make  the  Perq  a  System  Controller,  a one (1) should be
+          issued to IOZ<173>.  To use the tri-state bus mode a one (1)
+          should  be  issued to IOZ<174>.  The bus controller comes up
+          in the open collector mode and the Perq is  not  the  system
+          controller.
+
+
+          References
+
+               Programming information for the TMS9914 may be found in
+          the TMS 9914 GPIB Adapter Preliminary Data Manual, 1979  and
+          the IEEE-488 Standard.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   10 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          FLOPPY DRIVE CONTROLLER
+
+
+          Introduction
+
+               The  floppy  drive  controller  is  a  NEC  uPD765 that
+          contains two registers that are accessible by the  Z80,  the
+          Status  Register and the Data Register.  The controller also
+          uses one ZDMA channel (priority 0) and  one  interrupt  line
+          (priority 3).  All operations consist of three phases:
+
+          Command Phase     controller receives information
+                            to perform an operation
+          Execution Phase   controller performs operation
+                            specified by commands
+          Result Phase      controller returns status
+                            information and does some
+                            housekeeping
+
+          The controller will perform the following operations:
+
+           Read Data
+           Read ID
+           Read Deleted Data
+           Read a Track
+           Scan Equal
+           Scan High or Equal
+           Scan Low or Equal
+           Write Data
+           Format a Track
+           Write Deleted Data
+           Seek
+           Recalibrate (restore to track 0)
+           Sense interrupt status
+           Sense Drive status
+
+
+          Register Description
+
+               The  two  registers  on  the  controller are the Status
+          Register at IOZ<040> and the Data Register at IOZ<041>.  All
+          commands  and  data  pass  through  the  Data Register.  The
+          status Register holds current controller state  information.
+          The  Data  Register is context defined.  To commence a drive
+          operation, a predefined sequence of bytes are issued to  the
+
+                                -   11 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          controller  through  the  data register.  Any data transfers
+          also take place through this register.
+
+
+          Programming
+
+               The floppy controller uses the ZDMA channel to transfer
+          data  and  the  interrupt  line  to  alert the Z80 of floppy
+          status changes.  The  controller  should  be  programmed  to
+          transfer  all  data  in  the  ZDMA mode.  The actual command
+          sequences  for  the  floppy  controller  are  found  in  the
+          references.
+
+
+          References
+
+               Programming and command information for the NEC u765 or
+          the Intel  8272  floppy  controller  can  be  found  in  NEC
+          Microcomputers, 1981, pages 423 to 440 or in Intel Component
+          Data Catalog, 1982, pages 9-146 to 9-158.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   12 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Z80 INTERRUPT CONTROL
+
+
+
+               The Z80 interrupt (ZINT) has three sources, SIO A,  SIO
+          B,  and  an interrupt controller.  The interrupt sources are
+          daisy chained in the above order.  The Z80 should be set  up
+          to  operate  in  interrupt  mode  two.  All of the interrupt
+          sources will return a data byte that is used as the low byte
+          of a sixteen bit interrupt vector.  The Z80 supplies the top
+          byte of the address from an internal register.  This  vector
+          serves  as the address of a location that holds the starting
+          address of the interrupt service routine.  The  Z80  may  be
+          interrupted by the following devices (in order of priority):
+
+                 0: SIO A          Serial character xmit,
+                                   rcv, or error
+                 1: SIO B          Serial character xmit,
+                                   rcv, or error
+                 2: Int Cntrl      local interrupt from:
+                   0: End of DMA     End of Perq <-> Z80 DMA
+                   1: Perq           Perq accepted Z80 message
+                   2: Rd uProc data  Data or Cmd available from Perq
+                   3: Floppy         DMA complete or error
+                   4: GPIB           DMA complete or error
+                   5: EOP            End of any ZDMA
+
+          This section is concerned with devices 2  through  7,  which
+          are  handled by an AMD 9519A interrupt controller.  The SIOs
+          have a direct line to the Z80 that is described in  the  SIO
+          section.    The   interrupt   controller  prioritizes  these
+          individual interrupts and presents one interrupt to the  Z80
+          by  using  the Z80 INT line.  The interrupt hardware command
+          register  is  at  IOZ<141>  and  the  data  register  is  at
+          IOZ<140>.   The  command  register is used to issue commands
+          and read back internal status.  The six  internal  registers
+          in the interrupt controller are:
+
+            CR  -  command  Register.   (W)  Holds the last command
+            written to the controller.  This register  is  used  to
+            control  interrupt  operation  and  to  write  to other
+            registers.
+
+            IRR - Interrupt Request Register.  (R/W) Stores pending
+            interrupt  requests  from devices.  Register cleared by
+
+                                -   13 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+            RESET,  and  individual  requests   are   automatically
+            cleared  by acknowledging interrupt.  Modified by using
+            CR.
+
+            ISR -  Interrupt  Service  Register.   (R/W)  Indicates
+            pending  interrupt has been acknowledged.  If AutoClear
+            is  not  enabled,  software  must  clear  the  ISR  bit
+            associated  with  an  interrupt to allow lower priority
+            interrupts.  Register cleared by  RESET.   Modified  by
+            using CR and by interrupting devices.
+
+            IMR  - Interrupt Mask Register.  (R/W) Masks individual
+            interrupt bits.  Masking a bit  out  does  not  prevent
+            interrupts from being latched into the IRR, so a masked
+            request will cause an  interrupt  when  unmasked  at  a
+            later  time.   RESET masks all interrupts.  Modified by
+            using CR.
+
+            RM -  Response  Memory.   (W)  Holds  the  vector  byte
+            associated   with   each   interrupt.    The  interrupt
+            controller transfers this byte to  the  data  bus  upon
+            acknowledgement of an interrupt from the CPU.  Response
+            memory is not initialized on RESET.  Modified by  using
+            CR and can only be read by causing an interrupt.
+
+            ACR - Auto Clear Register.  (R/W) Bits is this register
+            enable the AutoClear function in the ISR.  Modified  by
+            using CR.  RESET clears the register.
+
+            MR  - Mode Register.  (W) Controls operating options of
+            the interrupt controller.  It can not be directly  read
+            but  bits  0, 2, and 7 are part of the status register.
+            Modified by using CR.
+
+            SR - Status Register.  (R) Contains the  current  state
+            of the interrupt controller.
+
+            BCR  -  Byte  Count  Register.  (W) Holds the number of
+            bytes programmed for interrupt response.   In  the  Z80
+            interrupt structure, this register should always hold a
+            one.  Modified by using CR.
+
+
+
+
+
+                                -   14 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Programming
+
+               All of the registers are  written  to  by  sending  the
+          proper  command  to  the CR.  While the SR is read directly,
+          the IRR, ISR, ACR, and IMR registers are read by writing the
+          MR first through the CR.
+
+               IOZ<140>  is  used  to  read  or  write the preselected
+          registers, and IOZ<141> is used to read the SR or write  the
+          CR.
+
+               The  MR  must  be programmed so that Priority is fixed,
+          Vector is individual, Interrupt  Mode  is  interrupt,  Group
+          Interrupt  Polarity is low and Interrupt Request Polarity is
+          high.  The Vector may be common, but this entails  a  longer
+          interrupt  response  time  because  another level of address
+          indirection must be imposed.  The Master Mask bit is used to
+          disable all interrupts without altering the IMR.
+
+               The interrupt lines to the 9519 are latched so that the
+          interrupt controller  will not recognize  further interrupts
+          at an input that has already been set. Individual interrupts
+          to the 9519  may be re-enabled using the  AutoClear  (during
+          the interrupt acknowledge  sequence) register or by software
+          command.
+
+
+          References
+
+               Further details on the AM9515 Interrupt Controller  are
+          found in  the  AMD 9500 Peripheral Products Interface guide,
+          1980, pages 4-90 to 4-95.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   15 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Z80 DMA CONTROL
+
+          Introduction
+
+               The ZDMA provides a  high  speed  channel  to  the  Z80
+          memory  using  an  Intel  8237  controller.   The  following
+          devices have ZDMA capability (in order of priority):
+
+             Floppy  Channel 0
+             GPIB    Channel 1
+             SIO     Channel 2
+             Perq    Channel 3
+
+          The channel has a maximum memory data transfer bandwidth  of
+          1  MByte/sec.   The  ZDMA  controller  should programmed for
+          single byte transfers that release the bus back to  the  Z80
+          at the completion of each transfer.  Using the controller in
+          this mode prevents the lock out of interrupts  and  Z80  bus
+          operations.  The following points are important.
+
+               Each  ZDMA  channel  is  completely  independent of all
+          others.  Each has its own ZDMA request and acknowledge line,
+          an independent interrupt line and address and word counters.
+
+               The Z80 will be able to gain control of the memory  and
+          address  busses at the end of each byte transfer (four clock
+          cycles are required for  one  ZDMA  memory  transfer).   For
+          maximum  DMA  speed, the Z80 should not take the bus between
+          data transfers.
+
+               The valid ZDMA transfer types are memory to IOZ and IOZ
+          to memory.  Direct IOZ to IOZ and memory to memory transfers
+          are not legal.  Buffer space in memory should be  set  aside
+          for device to device transfers (e.g.  GPIB to floppy).
+
+               The controller can be programmed at any time as long as
+          the Z80 has not acknowledged a bus control request (that is,
+          BUS  ACK  L is active).  The following sections describe the
+          programmable registers in the controller and how  they  must
+          be set up for the EIO board.
+
+
+
+
+
+
+                                -   16 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Register Description
+
+
+               The   ZDMA  hardware  contains  the  following  control
+          registers:
+
+           Name         Type      IOZ    notes
+             Command     Write     70
+             Status      Read      70
+             Request     Write     71    each channel has one
+             MaskBit     Write     72
+             Mode        Write     73    each channel has one
+             PointClr    Write     74    special - clear byte pointer
+             Temporary   Read      75
+             MasterClr   Write     75    special - software reset
+             MaskClr     Write     76    special - clear mask register
+             MaskWord    Write     77
+
+          A  write  to  a  special  register  is a software command to
+          perform the noted function, the data byte for  each  command
+          is  a  don't care.  In addition, each channel has a group of
+          word and address counters that are sixteen bits wide.  These
+          registers are written with two consecutive operations to the
+          same IOZ address.  The base registers  are  written  when  a
+          channel  is  initialized, and the current registers hold the
+          last address accessed or the number of words transferred  so
+          far.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   17 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+           Channel   Register                         IOZ
+              0       Base and Current Addr           60     Write
+                      Current Addr                    60     Read
+                      Base and Current WC             61     Write
+                      Current Word Count              61     Read
+
+              1       Base and Current Addr           62     Write
+                      Current Addr                    62     Read
+                      Base and Current WC             63     Write
+                      Current Word Count              63     Read
+
+              2       Base and Current Addr           64     Write
+                      Current Addr                    64     Read
+                      Base and Current WC             65     Write
+                      Current Word Count              65     Read
+
+              3       Base and Current Addr           66     Write
+                      Current Addr                    66     Read
+                      Base and Current WC             67     Write
+                      Current Word Count              67     Read
+
+
+               The  Current  Word  Count Register generates a terminal
+          count (TC) when the counter rolls over from FFFFH to  0000H.
+          Any  TC  will  generate  an  end  of process (EOP).  The EOP
+          signal affects the contents of other  registers  in  certain
+          cases.   It  can also be used to cause a Z80 interrupt.  The
+          current and base address and word count are  loaded  at  the
+          same  time,  but only the current address and word count are
+          available for reading.  In the loading operation  the  least
+          significant  counter  byte  is  loaded  first (Addr<7:0> and
+          WC<7:0>).  The 8237 has an internal pointer that is used  to
+          load  the  two  byte wide word and address counters from the
+          bye wide bus.  Refer to the Intel  product  description  for
+          details..
+
+               For  the EIO board, the control registers are set up so
+          that the when the controller is armed, DACK is  active  low,
+          DREQ  is  active  low, Write is extended, Priority is fixed,
+          Timing is normal, Channel 0 Addr hold is disabled,  and  Mem
+          to  Mem  is  disabled.   The  command register is cleared by
+          RESET.
+
+               The Mode Register sets  the  operation  for  each  ZDMA
+          channel.   In  particular,  the AutoInit bit, when set, will
+
+                                -   18 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          cause the Current Word and Address Counters to  be  reloaded
+          from   their  respective  base  registers  when  an  EOP  is
+          generated without processor intervention.
+
+               The Request Register allows software ZDMA  requests  to
+          be  generated.  Each bit is cleared upon generation of TC or
+          EOP for that channel.  A ZDMA channel must be in Block  Mode
+          to operate on software requests.
+
+               The  Mask Register can be written to in two ways, using
+          the MaskWord Register  (IOZ<77>)  or  the  MaskBit  Register
+          (IOZ<72>).  A set mask bit blocks requests for that channel.
+          The bit may be set by software control and is  automatically
+          set  after EOP if AutoInitialize mode is not used.  All bits
+          are set by RESET.  If a request is active when its mask  bit
+          is cleared, the controller will generate a ZDMA request.
+
+               The Status register indicates the current state of each
+          channel.  This register is cleared on each read and on RESET.
+
+               The  Temporary  register  contains  the  last data byte
+          transferred It has been cleared by RESET.
+
+
+          Programming
+
+               The ZDMA channels are allocated as:
+
+          Channel  Device    Data Rate Possible
+           0        Floppy    62.5 KBytes/sec
+           1        GPIB      1 MBytes/sec
+           2        Speech    4 KBytes/sec
+           3        Perq      11.7 MBytes/sec
+
+          Obviously, the maximum aggregate data rate exceeds the  ZDMA
+          bandwidth  by  a  great deal.  The ZDMA controller should be
+          set up to handle all  transfers  on  a  per  byte  basis  to
+          prevent ZDMA devices from locking out interrupts.
+
+
+          References
+
+               More  information  on the Intel 8237A-4 may be found in
+          the Intel Component Data Catalog, 1982,  pages 7-88 to 7-96.
+
+
+                                -   19 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          SERIAL IO CONTROL
+
+          Introduction
+
+               The  serial  I/O  port interfaces RS232, SpeechOut, the
+          keyboard, and the tablet to the Z80 bus using two Z80  SIO/2
+          Serial  IO  controllers from Zilog or Mostek.  In all of its
+          operation modes the SIO is initialized through a  series  of
+          command  registers  to set up transmit and receive protocols
+          for each device.  This initialization includes:
+            character length
+            clock rate
+            parity or CRC type
+            protocol type (monosync, bisync, SDLC, etc.)
+            interrupt mode
+            receive or transmit enable.
+
+          The protocols for SpeechOut, the keyboard,  and  the  tablet
+          are  fixed  but  the RS232 format may be chosen by the user.
+          The two SIOs are called SIO A and  SIO  B.   SIO  A  handles
+          RS232  port A, SpeechOut, and TabletIn.  SIO B handles RS232
+          port B and the serial keyboard.
+
+               Channel A of  SIO  A  is  dedicated  to  RS232  port  A
+          transmit  and  receive,  Channel  B  transmit  is  used  for
+          SpeechOut, and Channel B receive is used for TabletIn.
+
+               SIO A has access to one ZDMA channel and has  a  direct
+          interrupt line to the Z80.  The ZDMA channel can be used for
+          RS232 port A transmit or receive, or SpeechOut.  TabletIn is
+          always handled by interrupt driven code.  SIO B has a direct
+          interrupt line to the  Z80  but  no  ZDMA  capability.   The
+          interrupt  lines  are  used  to inform the Z80 of SIO status
+          changes.    The   following   section   describes   register
+          addressing and use.
+
+          Register Description
+
+               SIO A  has one command register and one status register
+          that  are  directly   written   or   read   (WR0   and   RR0
+          respectively).   There  is  also a SIO A data register and a
+          ZDMA selection register.   The  other  SIO  read  and  write
+          registers  are  accessed  by first preselecting the register
+          with a command written to WR0.  Certain registers are listed
+          as Channel B only.  These registers are written or read from
+
+                                -   20 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          only that Channel but their contents apply to both Channels.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   21 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          The directly written or read registers are:
+
+          Channel   Register  IOZ   Use
+                              171    Channel A/B ZDMA     Write
+             A                 20    Channel A Data       Read/Write
+             B                 21    Channel B Data       Read/Write
+             A        WR0      22    Channel A Commands   Write
+             A        RR0      22    Channel A Status     Read
+             B        WR0      23    Channel B Commands   Write
+             B        RR0      23    Channel B Status     Read
+
+          The indirectly accessed registers are:
+
+          Register  Use
+            WR1      interrupt and data transfer modes
+            WR2      interrupt vector (Ch B only)
+            WR3      receive parameters and control
+            WR4      miscellaneous parameters and modes
+            WR5      transmit parameters and control
+            WR6      sync character or SDLC address field
+            WR7      sync character or SDLC flag
+
+            RR1      special receive condition status
+            RR2      modified interrupt vector (Ch B only)
+
+          The content of each register is described in the references.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   22 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Programming
+
+               The RS232 and SpeechOut data can be bussed to and  from
+          SIO   A  in  two  ways,  by  ZDMA  or by interrupts.  Of the
+          choices, only one SIO A device can be  configured  for  ZDMA
+          transfers  at a time.  When selecting the device to use ZDMA
+          the following points should be kept in mind:
+
+          SpeechOut is a real time process and  using  interrupts  may
+          introduce  gaps  in the speech output if the Z80 system load
+          is heavy.  For RS232 transfers  it  should  be  possible  to
+          obtain  data  rates  up to 19200 baud using interrupt driven
+          code.  There is no envisioned need for the tablet to use the
+          ZDMA  channel  because  it is a relatively slow device.  The
+          ZDMA channel can be reconfigured at any time  to  deal  with
+          changing system requirements.
+
+               The  selection  of  RS232  port A as the DMA channel is
+          made by writing a one to IOZ<171>.   The  SIO  ZDMA  channel
+          selection register is initialized with a zero in IOZ<171> so
+          that SpeechOut is the default ZDMA device.
+
+               The following restrictions apply to setting up the  SIO
+          for data transfers.
+
+               For  tablet and speech, the valid protocol is monosync.
+          SpeechOut uses a sync character of 55 hex.  The tablet  uses
+          a sync character of 7E hex.
+
+          The  tablet  (receive  side)  will  always  receive  a  sync
+          character and four bytes of data.  The tablet data is in the
+          following format:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   23 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Byte     Format               Meaning
+
+           0         B<7:0>  =  7E       sync character
+
+           1         B<7>    =   0
+                     B<6>    =  OT       '1' if mouse is off tablet
+                     B<5:4>  =  DC       don't care
+                     B<3:0>  =  X<11:8>  X axis bits
+
+           2         B<7:0>  =  X<7:0>   X axis bits
+
+           3         B<7>    =  SW2      '1' is Switch 2 is pressed
+                     B<6>    =  SW1      '1' is Switch 1 is pressed
+                     B<5>    =  SW0      '1' is Switch 0 is pressed
+                     B<4>    =  DC       don't care
+                     B<3:0>  =  Y<11:8>  Y axis bits
+
+           4         B<7:0>  =  Y<7:0>   Y axis bits
+
+          SpeechOut (transmit side) will transmit a sync character and
+          a data character or characters to the CVSD hardware.  SIO  A
+          will   transmit  sync  characters  to  the  speech  hardware
+          whenever a transmit underrun condition exists.  Transmit and
+          receive character lengths are eight bits.
+
+               On  Channel  A - The RS232 channel can be set up in any
+          of the modes described in the references.
+
+               SIO B adds another RS232 port and the  serial  keyboard
+          interface.  This SIO has no ZDMA capabilities, but does have
+          an interrupt line to the Z80 as described previously.  SIO B
+          can  be  programmed  in  the  same manner as SIO A for RS232
+          transfers,  and  uses  an  asynchronous  protocol  for   the
+          keyboard.   The  following table shows the IOZ addresses for
+          SIO B.
+
+          Channel   Register  IOZ   Use
+             A                100    Channel A Data       Read/Write
+             B                101    Channel B Data       Read/Write
+             A        WR0     102    Channel A Commands   Write
+             A        RR0     102    Channel A Status     Read
+             B        WR0     103    Channel B Commands   Write
+             B        RR0     103    Channel B Status     Read
+
+
+
+                                -   24 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          The indirectly accessed registers are:
+
+          Register  Use
+            WR1      interrupt and data transfer modes
+            WR2      interrupt vector (Channel B only)
+            WR3      receive parameters and control
+            WR4      miscellaneous parameters and modes
+            WR5      transmit parameters and control
+            WR6      sync character or SDLC address field
+            WR7      sync character or SDLC flag
+
+            RR1      special receive condition status
+            RR2      modified interrupt vector (Channel B only)
+
+          RS232 port B is on Channel A of SIO B.  The serial  keyboard
+          is on Channel B of SIO B.  The keyboard data is asynchronous
+          with one start bit, eight  data  bits,  and  one  stop  bit.
+          Keyboard data is active high.
+
+          References
+
+               Detailed  programming information on the Z80 SIO/2-4 in
+          the Z80 Microcomputer Data Book, Mostek, 1981 on pages 3-163
+          to 3-221.
+
+               Information on CVSD speech encoding and decoding may be
+          found in "Motorola Linear  Interface  Integrated  Circuits",
+          MC3417  data  sheets,  Motorola  Inc., 1979 on pages 6-13 to
+          6-29.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   25 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          CTC - SIO CLOCK GENERATION
+
+
+          Introduction
+
+               There are two SIO clock generators, CTC A (for  SIO  A)
+          and  CTC  B (for SIO B).  The CTC chip is an Intel 8254 that
+          is  used  to  generate  a  square  set  at  the  appropriate
+          frequency  for a specific serial device.  CTC A provides the
+          local clock for RS232 port A, SpeechOut, and TabletIn.   CTC
+          B  provides the local clock for RS232 port B and KeyboardIn.
+          The clock rates for  the  RS232  can  be  set  at  different
+          frequencies   for   transmit   and   receive  and  are  user
+          selectable.  The Speech/Tablet clock frequency is 32 KHz and
+          the keyboard clock frequency is 30 Hz.
+
+               There  are  four  registers  on  the counter chip.  One
+          command register is used to select which  counter  is  being
+          programmed,  and  the  other  three  hold  count  or  status
+          information.
+
+          CTC A
+          Register    IOZ    Use
+           Cnt0       120     RS232 port A receive clock count/status
+           Cnt1       121     Speech/Tablet clock count/status
+           Cnt2       122     RS232 port A transmit clock count/status
+           CmdR       123     Command Register
+
+
+          CTC B
+          Register    IOZ    Use
+           Cnt0       124     RS232 port B receive clock count/status
+           Cnt1       125     RS232 port B transmit clock count/status
+           Cnt2       126     Keyboard clock count/status
+           CmdR       127     Command Register
+
+
+          Programming
+
+               The  programming  of  the  counter  for  SpeechOut  and
+          TabletIn,  KeyboardIn, and local RS232 clocks is done in the
+          same manner.  The CmdR has a field to select  which  counter
+          is  being  programmed.   The other fields should be coded so
+          that the counters will work in mode  3  (square  wave),  R/W
+          least  significant  byte,  most  significant byte, and using
+
+                                -   26 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          binary  count.   Each  counter  is  uniquely  addressed  and
+          loaded.
+
+               If the RS232 clock is to be provided by a remote source
+          (as  in  synchronous  RS232  protocols)   the   counter   is
+          programmed so that it is in mode zero (interrupt on terminal
+          count).  The counter is then  loaded  with  one  count  byte
+          instead of two.  By not loading the second byte, the counter
+          will never begin  the  count  sequence,  thus  allowing  the
+          remote source to provide a clock for RS232.
+
+          The proper count to be loaded is found by:
+              Count = (4 MHz / Output frequency wanted )
+
+          After  initial  programming, any clock rate changes are made
+          by writing a new value to the  correct  counter.   For  mode
+          three  operation, the counters are loaded on consecutive IOZ
+          cycles, by writing first the low byte, then the high byte of
+          the  count to its IOZ address.  For mode zero operation, the
+          count byte loaded (a single byte instead of two),  is  don't
+          care.  The CTC state is undefined after a RESET.
+
+
+          References
+
+               Detailed  programming information on the Intel 8254 may
+          be found in the Intel Component Data  Catalog,  1982,  pages
+          9-318 to 9-329.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   27 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          I/O BUS INTERFACE
+
+               The  I/O bus IOP provides two-way communication between
+          the CPU and the I/O Z80.  The interface to IOP is  separated
+          into two independent channels for I/O writes (transfers from
+          CPU to EIO) and I/O reads (transfers from EIO to CPU).   The
+          CPU  and  the  Z80  see  the  interface  as made up of 4 IOP
+          registers.  The format of these registers is  shown  in  the
+          tables below.
+
+           IOP  REGISTER          USE
+
+           125  Status register   bit 15 - Read data ready when set
+                                  bit 7  - Write channel ready
+                                           when set
+
+           305  Control register  bit 3  - Disable Ext A address
+                                           (see PERQ DMA)
+                                  bit 2  - Z80 reset when clear
+                                  bit 1  - Enable write channel;
+                                           interrupt when set
+                                  bit 0  - Enable read channel;
+                                           interrupt when set
+
+           304  Write FIFO        bits 0:7 - Data sent to Z80
+
+           124  Read FIFO         bits 0:7 - Data from Z80
+
+
+
+           IOZ  REGISTER          USE
+
+           162  Status register   bit 7  - Read FIFO not full
+                                  bit 6  - Write FIFO not empty
+
+           170  Control register  bit 0  - Output ready
+
+           160  Write FIFO        bits 0:7 - Data from CPU
+
+           161  Read FIFO         bits 0:7 - Data to CPU
+
+               CPU  IO writes occur in the following sequence:  First,
+          if the write channel interrupt is enabled and the write FIFO
+          is empty, the CPU will interrupt.  The CPU can also read the
+          write channel ready bit in status register bit 7.  When  the
+
+                                -   28 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          write  channel  is  ready,  the  CPU can write up to sixteen
+          bytes from the low half of the IO bus into the  write  FIFO.
+          Writing the first byte interrupts the Z80 and clears the CPU
+          interrupt after 300 ns.  The Z80 will  continue  to  receive
+          interrupts  until  it has read all bytes from the FIFO.  The
+          FIFO is cleared at RESET.
+
+               CPU IO reads also occur in 8-bit  transfers.   The  Z80
+          first  clears  the output ready bit.  It then loads the read
+          FIFO with the data, and sets the output ready bit.   If  the
+          Perq ready interrupt is enabled, the CPU will be interrupted
+          when output ready is set and will read the data.   When  the
+          CPU  has  read all the bytes, the interrupt will be cleared.
+          If the CPU does not read all the bytes, it can turn off  the
+          interrupt   by   clearing  the  Enable  bit,  otherwise  the
+          interrupt will remain on.  If the Z80 is  only  sending  one
+          byte,  it  does  not  need  to  alter  the output ready bit.
+          Leaving it set will signal  an  interrupt  immediately  upon
+          loading the byte if interrupts are enabled.
+
+               The  IOP control register has the interrupt enable bits
+          and controls the Z80 reset line.  Initially, all three  bits
+          are  clear  which  holds  the  Z80  reset  and disables both
+          interrupts.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   29 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          PERQ DMA CONTROLLER
+
+               The PDMA controller supports six PDMA channels  between
+          peripherals  and  PERQ main memory.  One is dedicated to the
+          hard disk, two to ethernet, one to the IO microprocessor and
+          the  other  two  are available for IO options.  Each channel
+          has three control registers which can be loaded from IOP  by
+          the  CPU.  These contain the 18-bit header quadword address,
+          the 18-bit data quadword address and the 4-bit header count.
+          PDMA  is  initiated  by a request from the peripheral.  Each
+          request results in one quadword transfer on the memory bus.
+
+               The header count determines at which  address  in  main
+          memory  the  transfer  will  take  place:  either the header
+          address  or  the  data  address.   Zero  to  fifteen  header
+          transfers  may  take  place before any data transfers occur.
+          The 4-bit one's complement of the desired number  of  header
+          quadwords  is  written  at the same time as the high part of
+          the header  address  (see  the  table  below).   After  each
+          quadword  transfer,  the  address (either header or data) is
+          increased by four.  If it was a header  transfer,  then  the
+          header  count  is  decremented  (actually, the complement is
+          incremented).  After the header  transfers  have  completed,
+          the  header  count will remain at the complement of zero and
+          the data address will be used for all transfers.
+
+               The  CPU  is  prevented  from  accessing  the   control
+          registers  or  the  memory  bus  when it would conflict with
+          PDMA.  PDMA prevents control register conflicts by  delaying
+          the conflicting CPU operation by one microcycle.  Memory bus
+          conflicts are prevented by  the  CPU  memory  state  machine
+          hardware.
+
+               Since  IOP  is  only  16  bits  wide,  4  addresses are
+          required to load the PDMA control registers for  a  channel.
+          A  channel  register  selects which of the 6 sets of address
+          registers is to be loaded.  The control register is used  to
+          program  a  special  mode  for the EXT A channel.  The first
+          table below shows the IOP addresses of  the  six  registers,
+          the second shows the formats of each word and the last gives
+          the channel numbers which must be loaded  into  the  channel
+          register  before  the  addresses  for  that  channel  can be
+          loaded.  The channel numbers are listed in  order  of  their
+          hardware  priority.  Register contents cannot be read by the
+          CPU.
+
+                                -   30 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+           IOP    REGISTER
+
+           300    Channel
+           324    Low data
+           325    High data
+           326    Low header
+           327    High header and inverted header count
+           305    Control
+
+
+          channel    <2:0>   = channel number
+                     <15:3>  = unused
+
+          low data   <1:0>   = unused
+                     <15:2>  = data address<15:2>
+
+          high data  <3:0>   = data address<19:16>
+                     <15:4>  = unused
+
+          low header <1:0>   = unused
+                     <15:2>  = header address<15:2>
+
+          high header<3:0>   = header address<19:16>
+                     <7:4>   = complement of header count<3:0>
+                     <15:8>  = unused
+
+          control    <15:4>  = unused
+                     <3>     = Disable DMA address generation
+                               for the EXT A channel when set.
+                     <2:0>   = Interrupt control (see I/O Bus
+                               Interface).
+
+           Number  Channel
+
+           4       External A (highest priority)
+           3       Ethernet transmits
+           6       Ethernet receives
+           2       Hard Disk
+           5       External B
+           1       Microprocessor
+
+
+               To set up PDMA for a channel the CPU  first  loads  the
+          channel  register.   Then  the header and data addresses and
+          header count are loaded by the  CPU  (in  any  order).   The
+
+                                -   31 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          device  attached  to  the  channel  should  be disabled from
+          making PDMA requests during loading to prevent any transfers
+          at  an  incorrect  address.   Other  channels  will  operate
+          normally during loading.  If the header count is loaded with
+          the complement of zero then the header address may be loaded
+          with any value since no header transfers will be  performed.
+          After  the  desired  registers have been loaded, PDMA may be
+          enabled.  The channel register has no subsequent  effect  on
+          PDMA  operation  and  may  be left with any contents.  It is
+          only used to direct loading to the set of  registers  for  a
+          particular channel.
+
+               Ethernet has two independent channels for transmits and
+          receives.  Altering the registers for one channel  will  not
+          affect operation of the other, and may be done concurrently.
+
+               When bit 3 of the control  register  is  set,  the  DMA
+          hardware  will not generate addresses for the EXT A channel.
+          It will respond to requests and generate all  of  the  other
+          control  and  timing signals.  This allows devices connected
+          to the EXT A channel to generate their own addresses.   When
+          bit  3  is  cleared,  EXT  A  operates the same as the other
+          channels.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   32 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          FLOATING POINT UNIT
+
+               The Floating Point Unit (FPU) consists of an Intel 8087
+          Numeric  Data  Processor with control and interfacing chips.
+          In this  application,  the  8087  is  used  as  an  outboard
+          processor  with  its  own clock and controller rather than a
+          co-processor to the CPU.  It communicates with the  CPU  via
+          three  I/O  bus  ports:   FP Inst for instructions and input
+          data, FP Result for output data and FP Stat for status.   FP
+          Inst  and FP Result are each 16-bit registers.  FP Stat uses
+          only the 4 bits shown in the second table below.
+
+           IOP   REGISTER
+
+           301   FP Inst
+           120   FP Result
+           121   FP Stat
+
+          Floating point register addresses
+
+
+
+           FR    bit 0   Set to indicate that FP Result  contains
+                         data, cleared when the data  is  read by
+                         the CPU.
+           FS    bit 7   Set when the CPU  writes an  instruction
+                         or data in FP Inst, cleared when read by
+                         the 8087.
+           INT   bit 1   Set when an exception occurs in the 8087.
+           BUSY  bit 15  Set when the 8087 is executing.
+
+          Floating point status bits
+
+
+               At power on or reboot, the  controlling  state  machine
+          clears  the  FS  bit  and the 8087 queue.  It then starts an
+          instruction fetch with AD0 and BHE held low to  indicate  to
+          the 8087 that 16-bit transfers are to be performed.  The CPU
+          should then clear the  FR  bit  by  reading  the  FP  Result
+          register,  and  initialize  the  8087  by  writing  an FINIT
+          instruction to FP Inst.  All four status bits  will  be  low
+          when the 8087 is correctly initialized.
+
+               8087   instructions   can  be  divided  into  3  types:
+          single-word, load and store instructions.  Operation of  the
+
+                                -   33 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          FPU depends on which type of instruction is to be performed.
+          All three types begin  by  writing  the  16-bit  instruction
+          opcode  to  FP Inst.  For the single-word instructions, this
+          is all that needs to be done.  For  the  load  instructions,
+          the  opcode  is followed by the word(s) to be loaded.  These
+          are written to FP Inst in order from low to high word.   For
+          store  instructions,  a single dummy word must be written to
+          FP Inst, then the CPU must read each  of  the  output  words
+          from FP Result.  Note that all transfers to and from the FPU
+          are 16 bits wide.  Byte transfers are never performed.
+
+               When writing a word to FP  Inst,  the  CPU  must  first
+          check  that  the  register  is empty (FS=0).  When reading a
+          word, the CPU must wait for the register to be loaded by the
+          8087 (FR=1).
+
+               Any of the 8087 floating point instructions may be used
+          except FWAIT, which has no meaning since there  is  no  8086
+          microprocessor.  The legal opcodes have the binary form:
+
+                15                             0
+                 M M x x x x x x 1 1 0 1 1 x x x
+
+          where MM = 11 for single-word instructions, and 00 for loads
+          and stores.  The first byte of the  opcode,  containing  the
+          ESCAPE  bits 11011, is in the lower half of the word and the
+          last byte of the opcode is in the upper half.   All  opcodes
+          are  two  bytes  long.   No address displacements are needed
+          since the MOD field is always  00.   Any  of  the  7  memory
+          formats  of the 8087 may be used.  Some instructions have an
+          R/M field;  this has no meaning.  The FSAVE and FSTENV  will
+          store IP and OP pointers;  these also have no meaning.
+
+               The  FPU  has  two  possible  responses  to  arithmetic
+          exceptions.  These depend on the 8087's  internal  interrupt
+          and  interrupt mask bits.  The exception will be signaled in
+          the internal 8087 status, and may be  available  in  the  FP
+          Stat register as described below.
+
+          1)   If 8087 interrupts are not enabled and the exception is
+          masked, then the 8087 will finish  the  instruction  and  an
+          8087  status  bit  will  be  set.  The CPU can read the 8087
+          status by issuing the FSTSW instruction.
+
+          2)  If interrupts are enabled and the exception is unmasked,
+
+                                -   34 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          then  the  8087  will remain active (BUSY=1) and the INT bit
+          will be set.  The  INT  bit  can  be  examined  in  FP  Stat
+          register bit 1, but it cannot cause an interrupt to the Perq
+          CPU.  The CPU may issue 8087 Processor Control  instructions
+          to  determine  the  cause of the error and correct it.  Note
+          that if an unmasked exception occurs and 8087 interrupts are
+          not  enabled,  the  CPU  cannot  tell  that an exception has
+          occurred and the FPU will hang up.
+
+               Example of a single-word instruction:
+
+          wtlp:  iob(121);           !read status
+                 iod and 200;        !look at FS
+                 if eql goto(wtlp);  !wait loop
+                 FPInst,iob(301);    !send instruction
+
+
+
+          REFERENCES
+
+               More information on the Intel 8087 can be found in  the
+          Intel iAPX 86,88 User's Manual.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   35 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          HARD DISK
+
+               The programmer interface for the Micropolis and Shugart
+          hard disk interface is not described yet.  This section will
+          be added if it becomes available.
+
+
+          ETHERNET
+
+
+          Introduction
+
+               This  section  describes the EIO board interface to the
+          10Mb Ethernet as defined  by  DEC,  XEROX  and  Intel.   The
+          reader  is  urged  to familiarize himself with the documents
+          describing the Ethernet (see reference).  Most  numbers  and
+          ethernet  addresses  in  this section are given in hex.  IOP
+          addresses and microcode examples use octal.
+
+               The interface appears to the programmer as a set of IOP
+          registers,   two   PDMA  channels  and  an  interrupt  line.
+          Commands and port address information  are  written  to  the
+          write ports on IOP.  Status is read from the IOP read ports.
+          The data  is  transferred  to  PERQ  memory  over  the  PDMA
+          channels.    The   interface  will  interrupt  the  Perq  on
+          successful or  unsuccessful  completion  of  a  transmit  or
+          receive.  This interrupt is maskable by a bit in the control
+          register.
+
+               The interface provides a microsecond clock/timer to aid
+          in resolving collisions.
+
+               The   interface   is   half  duplex,  i.e.,  it  cannot
+          simultaneously  transmit  and  receive.   This  prevents  an
+          interface from sending packets addressed to itself or to its
+          group address expecting to receive them.
+
+               Since EtherNet headers are 7 words long, PDMA is set up
+          to  transfer  two  header quadwords.  This leaves one unused
+          word in the header.  During transmits the  interface  throws
+          away the first word of the header buffer and during receives
+          the first word in the header buffer is  set  to  zero.   The
+          format of the header buffer must be as follows:
+
+
+
+                                -   36 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+                            WORD        Use
+
+                              0         Unused during transmits
+                                        Zero during receives
+                              1         Dest Addr<0>
+                              2         Dest Addr<1>
+                              3         Dest Addr<2>
+                              4         Src Addr<0>
+                              5         Src Addr<1>
+                              6         Src Addr<2>
+                              7         Type
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   37 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          TRANSMITS
+
+               When  a  program  wants to transmit it has to make sure
+          that the interface is  idle,  i.e., not  in  the  middle  of
+          transmit  or  receive.   This  can be done by monitoring the
+          busy bit in the status register.  When the interface is idle
+          the program has to do the following:
+
+               1)  Set  up  the  header and data buffers.  This can be
+          done ahead of time.
+
+               2) Set up the Ethernet Transmit PDMA channel.
+
+               3) Set up the bit counter.  See Programming Details  of
+          the bit counter.
+
+               4)  Set  the  Transmit, En Bit Cnt, En Interrupt and Go
+          bits in the control register.
+
+               The interface  will  interrupt  on  the  completion  or
+          abnormal  termination of the transmit.  The transmit will be
+          terminated abnormally in the case of a collision on the net.
+          A  bit in the status register will indicate that a collision
+          occurred.   The  program  will  have  to  retransmit   after
+          'backing off' as defined in the reference.
+
+               The  interface  has  a microsecond clock built in to do
+          the back off in an elegant manner.   The  microsecond  clock
+          can  be  used  as  a timer.  Please refer to the MICROSECOND
+          CLOCK section for  documentation  and  programming  details.
+          When  the  program  has  determined  how  long  to  wait, in
+          accordance with the  back  off  algorithm,  the  microsecond
+          clock  is  set  up  to  interrupt  the  PERQ after this wait
+          period.  At the end of this time  the  Perq  can  reset  the
+          PDMA  channel  and the net interface to try to transmit once
+          again.  During the wait period the interface may be  set  up
+          to receive any packets that may be sent across the net.
+
+
+
+
+
+
+
+
+
+                                -   38 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          RECEIVES
+
+               If  the  interface is not transmitting it may be set up
+          to receive packets from the net.  Receives  are  set  up  as
+          follows.
+             1) Set up the Ethernet Receive PDMA Channel.
+             2) Initialize the bit counter to zero.
+             3) Load the port physical address into the address
+                register file.
+             4) Set the Go, En Interrupt and En Bit Cnt bits in the
+                control register.
+
+               When  the interface has received a packet the Perq gets
+          an interrupt.  Reading the status register will indicate  if
+          the  packet  was received with the right CRC.  The number of
+          bits received, header and data, may be  read  from  the  bit
+          counter.   The  number of bits received must be divisible by
+          8, i.e. the packet must contain an integral number of bytes.
+          If this is not the case the packet received is in error.
+
+
+               Ethernet Addressing
+
+               There are three types of packets that the interface can
+          receive.   Packets  with  a   specific   physical   address,
+          multicast   packets  and  broadcast  packets.   The  address
+          register file is used to specify addresses.
+
+
+               The Address Register File      IOP  310:317
+
+               The register file is 8 bytes long.  The organization is
+          shown in the table below.  Each location must be loaded with
+          the complement of the desired value;  for example,  to  load
+          MCB with FE, the CPU should actually write 01.
+
+
+
+
+
+
+
+
+
+
+
+                                -   39 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+                          WORD   IOP          Byte
+
+                            0    310           PA0
+                            1    311           PA1
+                            2    312           MCB
+                            3    313          MAB0
+                            4    314          MAB1
+                            5    315          MAB2
+                            6    316          MAB3
+                            7    317          MAB4
+
+
+               Physical addresses
+
+          Physical  addresses  during receives are checked against the
+          six bytes (in hex): 02 1C 7C 01 PA0 PA1 in that order.
+
+               Broadcast addresses
+
+          Packets with their  destination  address  set  to  all  ones
+          (hex:  FF  FF  FF  FF  FF  FF)  are  broadcast packets.  The
+          interface will receive all broadcast packets.
+
+
+               Multicast addresses
+
+          Multicast addresses are implemented as follows.  One of  the
+          bytes  in  the  register file is designated as the Multicast
+          Command Byte (MCB) and  there  are  five  Multicast  Address
+          Bytes (MAB[0..5]).
+
+          The MCB is interpreted as follows:
+
+
+                  MCB          Interpretation
+
+                  00           Receive all multicast packets
+
+                  FF           Do not receive any multicast packets
+
+                  FE           Return the physical address.
+
+                  [01..FD]     Check to see if the packet is addressed
+                               to one of five groups  as specified  by
+                               the five MABs.
+
+                                -   40 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          The MABs are interpreted as follows:
+
+
+                  MAB       Interpretation
+
+                  00        This is not a valid multicast address
+
+                  [1..FF]   This specifies a valid multicast address.
+                         The  address of the group specified by MAB[i]
+                         is formed as follows: 01,00,00,00,00,MAB[i]
+
+               This scheme allows a Perq to belong to up  to  five  of
+          two  hundred and fifty five possible groups on the Ethernet.
+          The address 01,00,00,00,00,00 is not a legal group address.
+
+               Reading the Physical Address
+
+               This section deals with the mechanism for  reading  the
+          physical address of the interface.  The MCB should be set to
+          FE and the interface must be asked to  do  a  receive.   The
+          interface  will  then  PDMA  one  quad  word into the header
+          portion of the network buffer.  The 4 words will contain the
+          physical address of the interface in the following manner.
+
+
+                       WORD          HiByte      LoByte
+
+                         0             02          1C
+                         1             7C          01
+                         2           0,,Hn      0,,MHn
+                         3           0,,MLn     0,,Ln
+
+             where:      Hn   is  Physical address High Nibble
+                         MHn  is  Physical address Mid High Nibble
+                         MLn  is  Physical address Mid Low Nibble
+                         Ln   is  Physical address Low Nibble
+
+
+
+               The  6  bytes of the Physical address are (in Hex): 02,
+          1C, 7C, 01, (Hn,,MHn), (MLn,,Ln).
+
+               The Perq will be notified of  the  completion  of  this
+          operation by an interrupt.
+
+
+                                -   41 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Register Description
+
+               The Bit Counter
+
+               The  bit  counter  is  a 16 bit counter that counts the
+          number of bits in the packet that has been received or is to
+          be  sent.  For transmits the bit counter must be loaded with
+          the twos complement of the  total  number  of  bits  in  the
+          packet.   The  number  of  bits  to  be sent are computed by
+          adding the number of header bits (decimal 112) to the number
+          of  data  bits to be sent.  For receives the counter must be
+          set to zero.  When the packet has been received, the counter
+          will contain the number of bits received.
+
+
+               IO PORTS
+
+                Write Ports  IOP
+
+
+                   BCWtCntl  330  Control register for the bit counter
+                                  Currently this location has to be
+                                  initialized with the value 3.
+
+                   BCWtHB    331  Most significant byte of the counter
+                                  This byte can be set to any value.
+                                  The MSB is set to the value of
+                                  IOD<7:0>.  The high order IOD bits
+                                  are unused.
+
+                   BCWtLB    332  Least significant byte of the
+                                  counter.  This byte can be set
+                                  to any value.  The LSB is set to
+                                  the value of IOD<7:0>.  The high
+                                  order IOD bits are unused.
+
+                   WtNetCntl 302  Bit <3>    Enable the counter.
+                                  When 0 it disables the counter.  All
+                                  reads and writes should be done with
+                                  this bit cleared.
+                                  When 1 it enables the counter.  Any
+                                  reads and writes done when this bit
+                                  is set are invalid.  This bit should
+                                  be set during transmits and
+                                  receives.
+
+                                -   42 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+
+
+                   BCIntEnb  303  Bit <0>     Enables the bit count
+                                  interrupt when set.  No other bits
+                                  in this register are used.
+
+
+
+                 Read Ports  IOP
+
+
+                   BCRdHB    133  Most significant byte of the
+                                  counter.  Should be read with
+                                  the counter disabled.  IOD<7:0>
+                                  will have the value of the MSB.
+                                  IOD<15:8> are undefined.
+
+                   BCRdLB    132  Least significant byte of the
+                                  counter.  Should be read with
+                                  the counter disabled.  Yields
+                                  the current value of the clock.
+                                  IOD<7:0> will have the value of
+                                  the LSB.  IOD<15:8> are undefined.
+
+
+               Use of bit counter during transmits.
+
+          Following is the typical micro code.
+
+             ! Code to set initial values for the counter.
+             ! InitValueHB and InitValueLB contain the
+             ! initial values for the high and low bytes
+             ! of the counter.
+
+                0, IOB(WtNetCntl);         ! disable the counter
+                InitValueHB, IOB(BCWtHB);  ! Load the high byte
+                InitValueLB, IOB(BCWtLB);  ! Load the low byte
+                270, IOB(WtNetCntl);       ! Enable the counter,
+                                           ! turn on transmit
+
+
+               The   value  loaded  into  the  counter  is  the  two's
+          complement of the number of bits to be transmitted.
+
+
+
+                                -   43 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+               Use of bit counter during receives
+
+               Set  the  counter  to  zero when the interface is being
+          initialized for receives.  When a  packet  is  received  the
+          following  microcode  will  read  the  number of bits in the
+          packet.
+
+          ! Code to read the value of the counter.
+
+                  0, IOB(WtNetCntl);         ! Disable the counter
+                  IOB(BCRdHB);
+                  HB := IOD, IOB(BCRdLB);    ! Get the high byte
+                  LB := IOD;                 ! Get the low byte
+                  250, IOB(WtNetCntl);       ! Enable the counter,
+                                             ! Turn on receive
+
+          Initializing the bit counter
+
+               It  is  advisable  to  initialize  BCWtCntl during boot
+          time.  It must be done as follows.
+
+
+                  20,IOB(WtNetCntl);  ! Enable the interface
+                  nop;                ! Wait at least three cycles
+                  nop;                ! ...but not more than forty.
+                  nop;
+                  3,IOB(BCWtCntl);    ! Set up the bit counter
+
+          The NET CONTROL register   IOP  302
+
+               Setting the following bits in this register  cause  the
+          following:
+
+
+                  <1>  Enables interrupts from the microsecond clock.
+                  <2>  Enables the microsecond clock.
+                  <3>  Enables the bit counter.
+                  <4>  Interface transmits if this bit is set.
+                  <5>  Resets  the  interface.   This  bit has to be a
+                       one  during  normal  operation.   A  zero  will
+                       reset the interface.
+                  <6>  When    this   bit   is   set   the   interface
+                       will receive all the packets on the bus.
+                  <8>  Go.   Interface  will  begin  to  transmit   or
+                      receive.
+
+                                -   44 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+               The NET STATUS Register     IOP  122
+
+               Ones  in the following bit positions have the following
+          significance
+
+
+                  <0>   CRC Error in the received packet.
+                  <1>   Collision while transmitting.
+                  <2>   Clear if a receive has just completed.
+                        Set if a transmit has just completed.
+                  <3>   The interface is busy sending or
+                        receiving.
+                  <4>   Unused
+                  <5>   Microsecond clock overflow.
+                  <6>   Unused
+                  <7>   Carrier Sense.  There are bits in the ether.
+
+               The Address Register File     IOP  310:317
+
+          The register file is an 8-byte write port that  is  used  to
+          pass  addressing information to the interface.  Please refer
+          to 3.1.1 for more detail.
+
+
+          INTERRUPTS
+
+               The interface interrupts on the Net interrupt line, i.e.
+          interrupt  vector  at  Base + 14(8).  If interrupts from the
+          interface are enabled then the Perq is interrupted on normal
+          or  abnormal  completion  of  transmits  or  receives.   The
+          microsecond clock also shares this interrupt.  Bits  in  the
+          status  register  can  be  used  to  determine  which of the
+          devices interrupted.  Interrupts can be masked  by  clearing
+          the appropriate bits in the control register.
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   45 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          MICROSECOND CLOCK.
+
+               The  microsecond  clock  is  a 16-bit counter that is a
+          device on the PERQ I/O bus.  The counter is incremented once
+          every  microsecond  and rolls over every 64K microseconds or
+          approximately 65ms.  The clock may be used as   a  stopwatch
+          or  an  alarm.   This  clock was designed as a means for the
+          PERQ to handle collisions on the network elegantly.  However
+          it could be put to other uses.
+
+             Write Ports   IOP
+
+                 uSWtCntl  334  Control register for the clock
+                                Currently this location has to be
+                                initialized with the value 3
+
+                 uSWtHB    335  Most significant byte of the counter.
+                                This byte can be set to any value
+
+                 uSWtLB    336  Least significant byte of the counter.
+                                This byte can be set to any value
+
+                 WtClkCntl 302  Bit <2>    Enable clock
+                                When 0 it disables the clock.  All
+                                reads and writes should be done with
+                                this bit cleared.
+                                When 1 it enables the clock.  Any
+                                reads and writes done when this bit
+                                is set are invalid.
+
+                                Bit <1>    Enable interrupts
+                                When 0, interrupts from the clock
+                                are disabled.  When 1, interrupts are
+                                enabled.
+                                Interrupts are generated when the
+                                count overflows, i.e., goes from
+                                177777 to 0.
+
+
+
+
+
+
+
+
+
+                                -   46 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+             Read Ports    IOP
+
+                 uSRdHB    137  Most significant byte of the counter.
+                                Should be read with the clock
+                                disabled.
+
+                 uSRdLB    136  Least significant byte of the counter.
+                                Should be read with the clock
+                                disabled.  Yields the current value of
+                                the clock.
+
+                 RdClkStat 122  Bit <5>    Clock interrupt
+                                The interrupt used by the clock is
+                                also used by the network.  This bit
+                                distinguishes the two interrupts.
+                                If set, an interrupt was generated
+                                by the clock.
+
+
+               Use as stop watch.
+
+               Following is the typical micro code for use as a stop
+          watch.
+
+              ! Code to set initial values for the clock.
+              ! InitValueHB and InitValueLB contain the
+              ! initial values for the high and low bytes
+              ! of the clock.
+
+                  0, IOB(WtClkCntl);         ! disable the clock
+                  InitValueHB, IOB(uSWtHB);  ! Load the high byte
+                  InitValueLB, IOB(uSWtLB);  ! Load the low byte
+                  EnuSecClk, IOB(WtClkCntl); ! Enable the clock
+
+              ! Code to read the value of the clock.
+
+                  0, IOB(WtClkCntl);         ! disable the clock
+                  IOB(uSRdHB);
+                  HB := IOD, IOB(uSRdLB);    ! Get the high byte
+                  LB := IOD;                 ! Get the low byte
+                  EnuSecClk, IOB(WtClkCntl); ! Enable the clock
+                                             ! if necessary
+
+
+
+
+                                -   47 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          Use as an alarm.
+
+               This feature allows a program to be interrupted after N
+          microseconds where 0  <  N  <  64K.   The  clock  should  be
+          initialized  with  the 1's complement of N.  Typical code is
+          shown above.  After the counter is set, both the  clock  and
+          interrupts should be enabled.
+
+               After   N  microseconds  the  clock  will  generate  an
+          interrupt.  The interrupt can be cleared by reading a  clock
+          register  such  as  uSRdLB.   Bit <5> in the status register
+          will indicate if the interrupt was generated by the clock or
+          the network interface.
+
+
+          References
+
+
+          The Ethernet, A Local Area Network, Version 1.0, Xerox Corp.
+          Sept.  1980.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   48 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+          RELATED INTERNAL DOCUMENTS
+
+
+          IO Board Concept Document
+          08 Jan 82, Bill Hulley, Steve Clark
+
+          IO Board Concept Summary
+          12 Jan 82, Steve Clark, Bill Hulley
+
+          Perq Ethernet I/O Board Design
+          25 Feb 82, Steve Clark, Bill Hulley
+
+          The Z80 System Design: PERQ <--> Z80 Communications
+          24 Sep 81, Dirk Kalp
+
+          Z80 REDO Preliminary Notes
+          28 Apr 82, John August
+
+          Perq New Drive Controller Board Interface Document
+          25 Mar 82, John Rose
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   49 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+                 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                   APPENDIX A
+
+
+
+          This  appendix  lists  the  programs  the  project  team has
+          developed for hardware validation.  The programs  manual  is
+          available upon request.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                -   50 -
+
+               EthernetIO Board Programming Manual                14 Dec 83
+
+
+                   
+
+
+
+
+
+          Microcode programs
+
+          Program name       Use
+
+           FPTEST.MICRO       tests the floating point unit
+
+           DMATEST.MICRO       PDMA  exerciser (requires modified Link
+          board).
+
+           EIOECHO.MICRO      tests ethernet transmits and receives.
+
+           EIOUSEC.MICRO      tests microsecond clock
+
+           EIOENB.MICRO       enables EIO board hardware
+
+
+          Z80 Assembly code programs
+
+          Program name       Use
+
+           WRCLK.ASM          writes data to real time clock
+
+           RDCLK.ASM          reads data from real time clock
+
+           SIOA.ASM           SIO A channel A RS232
+
+           SIOB.ASM           SIO A channel B speech/tablet
+
+           SIOPOLL.ASM        SIO A polled operation
+
+           KBD.ASM            reads parallel keyboard
+
+           EIOFDC.ASM         floppy disk controller
+
+           EIO488.ASM         GPIB controller
+
+
+
+
+
+                                -   51 -
+

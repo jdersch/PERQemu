@@ -1,5 +1,5 @@
 //
-// Z80IOBus.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Z80IOBus.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -52,7 +52,7 @@ namespace PERQemu.IO.Z80
 
         /// <summary>
         /// Debugging: print transitions of Z80 IRQ signals.  For EIO this might
-        /// become a standalone priority encoder (Am9517)?
+        /// become a standalone priority encoder (Am9519)?
         /// </summary>
         public void ActiveInterrupts()
         {

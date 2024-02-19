@@ -142,7 +142,7 @@ the graphical display has a number of critical benefits:
 
     fixes the keyboard problems (busted key translations in Mono on the Mac);
 
-    is much faster.  In theory.  In practice, so far?  Not so much. :-(
+    is much faster, on suitable hardware (>80 fps with rate limiting off).
 
 There are downsides, though:
 
@@ -186,14 +186,6 @@ On the SDL2 thread, the 8bpp buffer is expanded to 32bpp and copied to the GPU
 texture required to render it on the screen.  This is ugly and pointless and
 stupid but it yields around 10-12fps in performance and after trying 147,635
 other approaches I'm tired of screwing around with it.  Good enough.  Moving on.
-
-
-[Update:  Will "MAUI" finally make a _supported_ cross-platform GUI environment
-available?  I won't know for quite some time as I don't have any development box
-anywhere near current enough to run it, and adopting MAUI would impose the same
-requirements on client machines.  Preliminary reading of the spec makes it seem
-unlikely that the PERQ video display could be implemented directly as a MAUI
-object so SDL might always be required for rendering?]
 
 
 Video Controller State Machine
@@ -272,6 +264,22 @@ still faster than before, and at most it's only used to update 64 lines out of
 Other Stuff
 -----------
 
+In PNX 1 and PNX 2, ICL decided to do things differently.  PNX 1 only programs
+one 40-line vertical blanking band and doesn't set the StartOver bit.  PNX 2
+sets up one 43-line blanking band and sets the StartOver bit, but at the wrong
+time -- not in the band when VSync is enabled, but in the first Active field at
+the top of the screen!  Why, ICL?  Why?  This must work on the hardware, but I
+cannot fathom why they do it this way, when POS, MPOS and Accent, the ROMs and
+all the diagnostic microcode pretty consistently does it the same way.
+
+The workaround in place for PNX 1 has been extended slighly to let PNX 2 drive
+the display properly now too, although it has a glitch where the window manager
+background and the left edge of windows looks as if it's shifted by one word --
+like they aren't properly passing a quad-aligned address to the display address
+register?  This isn't a showstopper but looks pretty bad; on the list of quirks
+to investigate and fix before a PNX 2 disk is bundled with the release.
+
+
 The first four CursorFunctions just show the cursor over a blank screen.  This
 isn't terribly useful.  I can't remember the last time I tried
     "login /cursorfunction=0"
@@ -299,4 +307,4 @@ rendered by Windows (on a Sun-branded 23" display using the same panel).  Sigh.
 
 
 ---
-Last update: skeezics    Mon Oct  3 03:45:28 PDT 2022
+Last update: skeezics    Mon Jul 24 03:09:26 PDT 2023

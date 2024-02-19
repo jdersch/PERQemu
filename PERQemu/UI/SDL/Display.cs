@@ -1,5 +1,5 @@
 //
-// Display.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Display.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -20,8 +20,11 @@
 using SDL2;
 
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using PERQemu.UI.Output;
 
 namespace PERQemu.UI
 {
@@ -51,6 +54,7 @@ namespace PERQemu.UI
             _prevZ80Clock = 0;
             _floppyActive = false;
             _streamerActive = false;
+            _printerActive = false;
 
             // Keep a local copy
             _displayWidth = _system.VideoController.DisplayWidth;
@@ -167,6 +171,20 @@ namespace PERQemu.UI
             _streamerRect.x = _floppyRect.x - 36;
             _streamerRect.y = _floppyRect.y;
 
+            // Load five textures for the printer!  WOO!
+            _printerTextures[PRINT_READY] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("print-ready.png"));
+            _printerTextures[PRINT_P1] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("printing-1.png"));
+            _printerTextures[PRINT_P2] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("printing-2.png"));
+            _printerTextures[PRINT_P3] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("printing-3.png"));
+            _printerTextures[PRINT_ALERT] = SDL_image.IMG_LoadTexture(_sdlRenderer, Paths.BuildResourcePath("print-alert.png"));
+
+            // And the printer status to the left of the streamer
+            _printerRect = new SDL.SDL_Rect();
+            _printerRect.h = 32;
+            _printerRect.w = 32;
+            _printerRect.x = _streamerRect.x - 36;
+            _printerRect.y = _streamerRect.y;
+
             // Init the display texture
             SDL.SDL_SetTextureBlendMode(_displayTexture, SDL.SDL_BlendMode.SDL_BLENDMODE_NONE);
             SDL.SDL_RenderClear(_sdlRenderer);
@@ -195,6 +213,7 @@ namespace PERQemu.UI
 
             _system.FloppyActivity += OnFloppyActivity;
             _system.StreamerActivity += OnStreamerActivity;
+            _system.PrinterActivity += OnPrinterActivity;
 
             // Tell the SDL EventLoop we're here
             PERQemu.GUI.AttachDisplay(_sdlWindow);
@@ -203,7 +222,7 @@ namespace PERQemu.UI
             if (_fpsTimerId < 0)
             {
                 _fpsTimerCallback = new HRTimerElapsedCallback(RefreshFPS);
-                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback);
+                _fpsTimerId = HighResolutionTimer.Register(2000d, _fpsTimerCallback, "FPS");
                 HighResolutionTimer.Enable(_fpsTimerId, true);
             }
 
@@ -275,10 +294,6 @@ namespace PERQemu.UI
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void RenderDisplay(SDL.SDL_Event e)
         {
-            // Adjust WHITE for slightly bluish tint of Clinton P-104 :-)
-            const uint WHITE = 0xfff3f3ff;
-            const uint BLACK = 0xff000000;
-
             IntPtr textureBits = IntPtr.Zero;
             int pitch = 0;
             int j = 0;
@@ -318,6 +333,12 @@ namespace PERQemu.UI
             if (_streamerActive)
             {
                 SDL.SDL_RenderCopy(_sdlRenderer, _streamerTexture, IntPtr.Zero, ref _streamerRect);
+            }
+
+            // Printer active?
+            if (_printerActive)
+            {
+                SDL.SDL_RenderCopy(_sdlRenderer, _printerTextures[_printerState], IntPtr.Zero, ref _printerRect);
             }
 
             // And show it to us
@@ -391,6 +412,15 @@ namespace PERQemu.UI
         }
 
         /// <summary>
+        /// Catch signals from the Canon laser printer controller to update status icon.
+        /// </summary>
+        void OnPrinterActivity(MachineStateChangeEventArgs a)
+        {
+            _printerActive = (bool)a.Args[0];
+            if (_printerActive) _printerState = (int)a.Args[1];
+        }
+
+        /// <summary>
         /// Close down the display and free SDL resources.
         /// </summary>
         public void Shutdown()
@@ -413,6 +443,7 @@ namespace PERQemu.UI
 
             _system.FloppyActivity -= OnFloppyActivity;
             _system.StreamerActivity -= OnStreamerActivity;
+            _system.PrinterActivity -= OnPrinterActivity;
 
             // Tell the EventLoop we're going away
             PERQemu.GUI.DetachDisplay();
@@ -434,11 +465,54 @@ namespace PERQemu.UI
         }
 
         /// <summary>
-        /// Save a screenshot.  Not yet implemented.
+        /// Save a screenshot.  Only PNG for now...
         /// </summary>
+        /// <remarks>
+        /// This uses the still-kinda-clunky Output routines to save 1bpp bitmaps
+        /// to bespoke PNG (and possibly other) files.  It should probably move to
+        /// another class or just use the bloody SDL_image routines to copy the
+        /// bitmap -> Surface -> .Save() and be done with it... Testing shows that
+        /// it isn't necessary to pause the PERQ during the capture, since this runs
+        /// on the CLI/main thread so there's no chance of "shearing" or capturing a
+        /// partial screen update.
+        /// </remarks>
         public void SaveScreenshot(string path)
         {
-            // TODO: have to rewrite for SDL2
+            // Use the last full frame
+            var screen = new byte[_32bppDisplayBuffer.Length / 8];
+            var screenAddr = 0;
+
+            // Convert back from 32bpp -> 1bpp (byte swap, bit swap and invert!)
+            for (var i = 0; i < _32bppDisplayBuffer.Length; i += 16)
+            {
+                ushort w = 0;
+                for (var j = 0; j < 16; j++)
+                {
+                    if ((_32bppDisplayBuffer[i + j] & 0x00ffffff) > 0) // WHITE
+                        w |= (ushort)(1 << (15 - j));
+                }
+                screen[screenAddr++] = (byte)(w >> 8);
+                screen[screenAddr++] = (byte)(w & 0xff);
+            }
+
+            // Set up the metadata
+            string[] keys = { "Title", "Creation Time", "Software" };
+            string[] values = { $"PERQ screenshot ({PERQemu.Config.Current.Name})",
+                                DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss.ffK"),
+                                PERQemu.Version };
+
+            // Pass 'em to the formatter
+            var png = new PNGFormatter(keys, values);
+
+            // Populate the page and save it
+            var page = new Page(100, new Region(0, 0, (uint)_displayWidth, (uint)_displayHeight));
+            page.CopyBits(screen);
+
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                png.Save(page, fs);
+                fs.Close();
+            }
         }
 
         /// <summary>
@@ -494,6 +568,10 @@ namespace PERQemu.UI
         // Table of precomputed pixel expansions
         static long[] _bitToPixel;
 
+        // Adjust WHITE for slightly bluish tint of Clinton P-104 :-)
+        const uint WHITE = 0xfff3f3ff;
+        const uint BLACK = 0xff000000;
+
         // Frame count
         long _frames;
         ulong _prevClock;
@@ -521,14 +599,26 @@ namespace PERQemu.UI
         HRTimerElapsedCallback _fpsTimerCallback;
 
         // Floppy activity "light"
-        static IntPtr _floppyTexture = IntPtr.Zero;
+        IntPtr _floppyTexture = IntPtr.Zero;
         SDL.SDL_Rect _floppyRect;
         bool _floppyActive;
 
         // Tape streamer activity light!
-        static IntPtr _streamerTexture = IntPtr.Zero;
+        IntPtr _streamerTexture = IntPtr.Zero;
         SDL.SDL_Rect _streamerRect;
         bool _streamerActive;
+
+        // Printer activity icons
+        IntPtr[] _printerTextures = new IntPtr[5];
+        SDL.SDL_Rect _printerRect;
+        bool _printerActive;
+        int _printerState;
+
+        public const int PRINT_READY = 0;
+        public const int PRINT_P1 = 1;
+        public const int PRINT_P2 = 2;
+        public const int PRINT_P3 = 3;
+        public const int PRINT_ALERT = 4;
 
         // Parent
         PERQSystem _system;

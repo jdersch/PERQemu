@@ -1,5 +1,5 @@
 //
-// Keyboard.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Keyboard.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -36,6 +36,7 @@ namespace PERQemu.IO.Z80
         {
             _interruptsEnabled = false;
             _interruptActive = false;
+            Log.Debug(Category.Keyboard, "Reset");
         }
 
         public string Name => "Keyboard";
@@ -49,7 +50,7 @@ namespace PERQemu.IO.Z80
             set { _interruptsEnabled = value; }
         }
 
-        public event EventHandler NmiInterruptPulse;
+        public event EventHandler NmiInterruptPulse { add { } remove { } }
 
         public void QueueInput(byte key)
         {

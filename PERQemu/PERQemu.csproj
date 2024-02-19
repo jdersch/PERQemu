@@ -66,51 +66,6 @@
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
-    <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x86\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;TRACING_ENABLED</DefineConstants>
-    <DebugType>full</DebugType>
-    <PlatformTarget>x86</PlatformTarget>
-    <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>SIXTEEN_K TWO_MEG</DefineConstants>
-    <Optimize>true</Optimize>
-    <DebugType></DebugType>
-    <PlatformTarget>x86</PlatformTarget>
-    <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
-    <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <DebugType>full</DebugType>
-    <PlatformTarget>x64</PlatformTarget>
-    <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <OutputPath>bin\x64\Release\</OutputPath>
-    <DefineConstants></DefineConstants>
-    <Optimize>true</Optimize>
-    <DebugType></DebugType>
-    <PlatformTarget>x64</PlatformTarget>
-    <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
   <PropertyGroup />
   <PropertyGroup />
   <PropertyGroup>
@@ -129,6 +84,13 @@
     <Reference Include="System.Xml" />
     <Reference Include="Z80dotNet, Version=1.0.6.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Z80dotNet.1.0.6.0\lib\net40-Client\Z80dotNet.dll</HintPath>
+    </Reference>
+    <Reference Include="mscorlib" />
+    <Reference Include="PacketDotNet">
+      <HintPath>..\packages\PacketDotNet.0.16.0\lib\PacketDotNet.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpPcap">
+      <HintPath>..\packages\SharpPcap.4.4.0\lib\SharpPcap.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -193,7 +155,7 @@
     <Compile Include="Emulator\IO\Z80\IZ80Device.cs" />
     <Compile Include="Emulator\IO\Z80\Keyboard.cs" />
     <Compile Include="Emulator\IO\Z80\NECuPD765A.cs" />
-    <Compile Include="Emulator\IO\Z80\Z80toPERQFifo.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80ToPERQLatch.cs" />
     <Compile Include="Emulator\IO\Z80\TMS9914A.cs" />
     <Compile Include="Emulator\IO\Z80\Z80CTC.cs" />
     <Compile Include="Emulator\IO\Z80\Z80DMA.cs" />
@@ -214,12 +176,12 @@
     <Compile Include="Controller\Log.cs" />
     <Compile Include="Emulator\IO\DiskDevices\HardDisk.cs" />
     <Compile Include="Emulator\IO\DiskDevices\FloppyDisk.cs" />
-    <Compile Include="Emulator\IO\DiskDevices\ShugartController.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\ShugartDiskController.cs" />
     <Compile Include="Debugger\DebugAttribute.cs" />
     <Compile Include="Debugger\Debugger.cs" />
     <Compile Include="UI\SDL\EventLoop.cs" />
     <Compile Include="UI\SDL\InputDevices.cs" />
-    <Compile Include="Emulator\IO\Z80\PERQtoZ80Fifo.cs" />
+    <Compile Include="Emulator\IO\Z80\PERQToZ80Latch.cs" />
     <Compile Include="Emulator\IO\SerialDevices\KrizTablet.cs" />
     <Compile Include="Emulator\IO\SerialDevices\SerialKeyboard.cs" />
     <Compile Include="Emulator\IO\SerialDevices\Speech.cs" />
@@ -235,7 +197,28 @@
     <Compile Include="Emulator\IO\TapeDevices\Sidewinder.cs" />
     <Compile Include="Emulator\IO\TapeDevices\BlockBuffer.cs" />
     <Compile Include="Emulator\IO\TapeDevices\CartridgeTape.cs" />
-    <Compile Include="Emulator\IO\Network\FakeEthernet.cs" />
+    <Compile Include="Emulator\IO\Network\NullEthernet.cs" />
+    <Compile Include="Emulator\IO\Network\HostAdapter.cs" />
+    <Compile Include="Emulator\IO\Network\Ether10MbitController.cs" />
+    <Compile Include="Emulator\IO\Network\Ether3MbitController.cs" />
+    <Compile Include="Emulator\IO\Network\MachineAddress.cs" />
+    <Compile Include="Emulator\IO\INetworkController.cs" />
+    <Compile Include="Emulator\IO\Network\Translation.cs" />
+    <Compile Include="Emulator\IO\Z80\Am9519.cs" />
+    <Compile Include="Emulator\IO\Z80\i8237DMA.cs" />
+    <Compile Include="Emulator\IO\Z80\i8254PIT.cs" />
+    <Compile Include="Emulator\IO\Z80\Oki5832RTC.cs" />
+    <Compile Include="Emulator\IO\Z80\CIOZ80.cs" />
+    <Compile Include="Emulator\IO\Z80\EIOZ80.cs" />
+    <Compile Include="Emulator\IO\Z80\PERQToZ80FIFO.cs" />
+    <Compile Include="Emulator\IO\Z80\Z80ToPERQFIFO.cs" />
+    <Compile Include="Emulator\IO\DiskDevices\CIOMicropolisDiskController.cs" />
+    <Compile Include="Emulator\IO\Printers\CanonController.cs" />
+    <Compile Include="Emulator\IO\Printers\CanonPrinter.cs" />
+    <Compile Include="Emulator\IO\Printers\CanonFormatter.cs" />
+    <Compile Include="UI\Output\Page.cs" />
+    <Compile Include="UI\Output\PNGFormatter.cs" />
+    <Compile Include="UI\Output\TIFFFormatter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="COPYING.txt" />
@@ -584,7 +567,6 @@
     <Content Include="Readme.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <None Include="Disks\d6orig.phd" />
     <None Include="Docs\Video.txt" />
     <None Include="Emulator\CPU\PERQ24A.cs" />
     <None Include="Docs\Configurator.png" />
@@ -642,11 +624,7 @@
     <None Include="PROM\oioz80.lst">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Disks\d6.phd">
-    </None>
-    <None Include="Disks\f1.phd">
-    </None>
-    <None Include="ChangeLog.txt" />
+    <None Include="ChangeLog-Old.txt" />
     <None Include="PROM\cioboot.rom">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -713,6 +691,37 @@
     <None Include="Conf\s6lisp.cfg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="ChangeLog.txt" />
+    <None Include="SharpPcap.dll.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Disks\f15.prqm">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Docs\Network.txt" />
+    <None Include="Docs\Hardware References\EIO.doc" />
+    <None Include="PROM\eioz80.bin">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="PROM\eioz80.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Docs\LaserCanon.txt" />
+    <None Include="Resources\print-ready.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\print-alert.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\printing-1.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\printing-2.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\printing-3.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
@@ -748,6 +757,8 @@
     <Folder Include="Resources\" />
     <Folder Include="Emulator\IO\TapeDevices\" />
     <Folder Include="Emulator\IO\Network\" />
+    <Folder Include="Emulator\IO\Printers\" />
+    <Folder Include="UI\Output\" />
   </ItemGroup>
   <Import Project="..\PERQmedia\PERQmedia.projitems" Label="Shared" Condition="Exists('..\PERQmedia\PERQmedia.projitems')" />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

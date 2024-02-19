@@ -1,5 +1,5 @@
 //
-// CPU.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CPU.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -264,7 +264,7 @@ namespace PERQemu.Processor
         public bool OpFileEmpty => (BPC > 7);
         public bool IncrementBPC => _incrementBPC;
         public ulong Clocks => _clocks;
-        public ulong[] Microcode => _ustore.Microcode;
+
         public ControlStore WCS => _ustore;             // Debugging/temporary?
         public RasterOp RasterOp => _rasterOp;
 

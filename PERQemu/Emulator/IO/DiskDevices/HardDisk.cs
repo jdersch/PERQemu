@@ -1,5 +1,5 @@
 //
-// HardDisk.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// HardDisk.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -151,7 +151,7 @@ namespace PERQemu.IO.DiskDevices
 
         /// <summary>
         /// Initiates or continues a Seek by pulsing the Disk Step line.
-        /// Direction is >0 for positive steps, or 0 or a negative steps.
+        /// Direction is >0 for positive steps, or 0 for negative steps.
         /// </summary>
         /// <remarks>
         /// Note: we ignore the RateLimit.DiskSpeed option here for Shugart 14"
@@ -214,6 +214,50 @@ namespace PERQemu.IO.DiskDevices
 
                 // Update the seek event with the new delay time
                 _seekEvent = _scheduler.ReSchedule(_seekEvent, delay);
+            }
+        }
+
+        /// <summary>
+        /// Seek to the given cylinder.
+        /// </summary>
+        /// <remarks>
+        /// For 8" or 5.25" drives with embedded controllers, computes the timing
+        /// for a seek from the current head position to the requested cylinder.
+        /// Assumes the controller checks bounds and that it tracks busy status,
+        /// not initiating a new seek while one in progress...
+        /// </remarks>
+        public virtual void SeekTo(ushort cyl)
+        {
+            // Quick and dirty time delay, probably not very accurate; clamp it
+            // to the max seek according to the specs (though if rate limiting
+            // is off, we could clip that to a "reasonable" minimum).
+
+            // NB: If the heads are already over the requested cylinder, we don't
+            // fire the SeekCompletion callback!  It _seems_ that the microcode
+            // generally checks for this and doesn't issue the seek in the first
+            // place, but we shouldn't rely on that; the question is whether the
+            // completion interrupt will cause more problems (at boot time) than
+            // treating a zero-track seek as a no-op solves.  This will have to
+            // be revisited when EIO is implemented (or if CIO Micropolis is ever
+            // figured out).  A 1usec delay for head switching isn't unreasonable
+            // if no head movement takes place?
+            
+            var steps = Math.Abs(_cyl - cyl);
+            var delay = (Specs.MinimumSeek);
+
+            if (Settings.Performance.HasFlag(RateLimit.DiskSpeed))
+            {
+                delay = Math.Min(steps * Specs.MinimumSeek, Specs.MaximumSeek);
+            }
+
+            Log.Debug(Category.HardDisk, "Seek to cyl {0} from {1}, {2} steps in {3:n}ms",
+                                          cyl, _cyl, steps, delay);
+            _cyl = cyl;
+
+            if (delay > 0)
+            {
+                // Schedule the callback
+                _seekEvent = _scheduler.Schedule((ulong)delay * Conversion.MsecToNsec, SeekCompletion);
             }
         }
 
@@ -319,6 +363,15 @@ namespace PERQemu.IO.DiskDevices
             _startupEvent = null;
 
             Log.Info(Category.HardDisk, "{0} is online: {1}", Info.Description, Geometry);
+
+            // The change in Ready should trigger an interrupt, but many versions
+            // of the early Boot/Vfy/SysB microcode just barf if an unexpected
+            // interrupt occurs.  Fire the SeekCompletion callback if registered
+            // and let the controller decide to interrupt or not.
+            if (_seekCallback != null)
+            {
+                _seekCallback(0, _ready);
+            }
         }
 
         /// <summary>
@@ -347,11 +400,12 @@ namespace PERQemu.IO.DiskDevices
         public override void OnLoad()
         {
             // Compute the index pulse duration and gap
-            _discRotationTimeNsec = (ulong)(1 / (Specs.RPM / 60.0) * Conversion.MsecToNsec);
+            _discRotationTimeNsec = Conversion.RPMtoNsec(Specs.RPM);
             _indexPulseDurationNsec = (ulong)Specs.IndexPulse;
 
             Log.Info(Category.HardDisk, "{0} drive loaded!  Index is {1:n}us every {2:n}ms",
-                     Info.Name, _indexPulseDurationNsec / 1000.0, _discRotationTimeNsec / 1000.0);
+                     Info.Name, _indexPulseDurationNsec / 1000.0,
+                     _discRotationTimeNsec * Conversion.NsecToMsec);
 
             base.OnLoad();
         }

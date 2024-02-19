@@ -1,5 +1,5 @@
 //
-// Paths.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Paths.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -124,6 +124,31 @@ namespace PERQemu
         public static string BuildOutputPath(string file)
         {
             return Path.Combine(Settings.OutputDirectory, file);
+        }
+
+        /// <summary>
+        /// Return the common file extension for a given image format.
+        /// </summary>
+        public static string GetExtensionForImageFormat(ImageFormat img)
+        {
+            switch (img)
+            {
+                case ImageFormat.Jpeg:
+                    return "jpg";
+
+                case ImageFormat.Png:
+                    return "png";
+
+                case ImageFormat.Tiff:
+                    // "Nominal" per 6.0, not ".tiff" - we're not in NeXTstep anymore :-(
+                    return "tif";
+
+                case ImageFormat.Raw:
+                    return "raw";
+
+                default:
+                    return "unknown";
+            }
         }
 
         /// <summary>

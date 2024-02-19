@@ -1,5 +1,5 @@
 ﻿//
-// SystemTimer.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// SystemTimer.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -41,19 +41,6 @@ namespace PERQemu
                       _handle, _interval, _period);
         }
 
-        ~SystemTimer()
-        {
-            try
-            {
-                // Free up our callback in case we reconfigure and reinstantiate
-                HighResolutionTimer.Unregister(_handle);
-            }
-            catch
-            {
-                Log.Error(Category.Timer, "Barfed trying to unregister SystemTimer {0}", _handle);
-            }
-        }
-
         /// <summary>
         /// Period between heartbeats, in clock cycles.
         /// </summary>
@@ -92,6 +79,19 @@ namespace PERQemu
 
             // Always clear regardless of transition
             _sync.Set();
+        }
+
+        public void Shutdown()
+        {
+            try
+            {
+                // Free up our callback in case we reconfigure and reinstantiate
+                HighResolutionTimer.Unregister(_handle);
+            }
+            catch
+            {
+                Log.Error(Category.Timer, "Barfed trying to unregister SystemTimer {0}", _handle);
+            }
         }
 
         public void WaitForHeartbeat()

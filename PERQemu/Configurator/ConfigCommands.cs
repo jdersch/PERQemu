@@ -1,5 +1,5 @@
 ﻿//
-// ConfigCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// ConfigCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -438,7 +438,7 @@ namespace PERQemu.UI
                     }
                     else if (oioType == OptionBoardType.MLO)
                     {
-                        PERQemu.Config.Current.IOOptions = IOOptionType.SMD;
+                        PERQemu.Config.Current.IOOptions = IOOptionType.Canon;
                     }
                     else
                     {
@@ -479,6 +479,7 @@ namespace PERQemu.UI
                     // These are valid for OIO and MLO
                     case IOOptionType.Link:
                     case IOOptionType.Tape:
+                    case IOOptionType.Canon:
                         if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO ||
                             PERQemu.Config.Current.IOOptionBoard == OptionBoardType.MLO)
                         {
@@ -492,10 +493,9 @@ namespace PERQemu.UI
                         }
                         break;
 
-                    // These are only valid for OIO, but Ether may conflict
-                    // if the EIO board is selected.  Does it work with the NIO?
+                    // Ethernet is valid for OIO, unless the EIO is selected; in
+                    // theory you could use an NIO + OIO Ethernet but that's just silly.
                     case IOOptionType.Ether:
-                    case IOOptionType.Canon:
                         if (PERQemu.Config.Current.IOBoard == IOBoardType.NIO &&
                             opt.HasFlag(IOOptionType.Ether))
                         {
@@ -517,9 +517,16 @@ namespace PERQemu.UI
                         }
                         else if (PERQemu.Config.Current.IOOptionBoard == OptionBoardType.OIO)
                         {
-                            PERQemu.Config.Current.IOOptions |= opt;
-                            PERQemu.Config.Changed = true;
-                            Console.WriteLine($"IO option '{opt}' selected.");
+                            if (PERQemu.Config.Current.IOBoard == IOBoardType.EIO)
+                            {
+                                Console.WriteLine("That option is incompatible with the selected IO board.");
+                            }
+                            else
+                            {
+                                PERQemu.Config.Current.IOOptions |= opt;
+                                PERQemu.Config.Changed = true;
+                                Console.WriteLine($"IO option '{opt}' selected.");
+                            }
                         }
                         else
                         {

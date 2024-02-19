@@ -1,5 +1,5 @@
 //
-// PERQSystem.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// PERQSystem.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -94,17 +94,19 @@ namespace PERQemu
                 //
                 case IOBoardType.EIO:
                 case IOBoardType.NIO:
-                    //_iob = new EIO(this);
-                    //if (_conf.CPU == CPUType.PERQ24) // || disktype == Disk5Inch ...
-                    //{
-                    //    _cpu.LoadBootROM("eio5boot.bin");
-                    //}
-                    //else
-                    //{
-                    //    _cpu.LoadBootROM("eioboot.bin");
-                    //}
-                    //break;
-                    throw new UnimplementedHardwareException($"IO board type {_conf.IOBoard}");
+                    _iob = new EIO(this);
+
+                    if (_conf.Chassis == ChassisType.PERQ2Tx)
+                    {
+                        // PERQ-2/T2 or /T4 (5.25")
+                        _cpu.LoadBootROM("eio5boot.rom");
+                    }
+                    else
+                    {
+                        // Original PERQ-2 or /T1 model (8")
+                        _cpu.LoadBootROM("eioboot.rom");
+                    }
+                    break;
 
                 default:
                     throw new InvalidConfigurationException($"No such IO board type '{_conf.IOBoard}'");
@@ -185,6 +187,7 @@ namespace PERQemu
 
         public event MachineStateChangeEventHandler DDSChanged;
         public event MachineStateChangeEventHandler FloppyActivity;
+        public event MachineStateChangeEventHandler PrinterActivity;
         public event MachineStateChangeEventHandler StreamerActivity;
         public event MachineStateChangeEventHandler PowerDownRequested;
 
@@ -289,8 +292,6 @@ namespace PERQemu
                     break;
 
                 case RunState.ShuttingDown:
-                    _inputs.Shutdown();
-                    _display.Shutdown();
                     _state = RunState.Off;
                     Shutdown();
                     break;
@@ -355,8 +356,12 @@ namespace PERQemu
             // Detach events
             PERQemu.Controller.RunStateChanged -= OnRunStateChange;
 
-            // Go away or I shall taunt you some more
-            _oio.Shutdown();
+            // Now go away or I shall taunt you some more
+            _inputs.Shutdown();
+            _display.Shutdown();
+
+            if (_oio != null) _oio.Shutdown();
+
             _iob.Shutdown();
             _cpu.Shutdown();
             _ioBus = null;
@@ -443,9 +448,10 @@ namespace PERQemu
             // Hand it off to the IO or Option IO board
             switch (drive.Type)
             {
-                // case DriveType.Disk5Inch:
-                // case DriveType.Disk8Inch:
+                case DeviceType.Disk8Inch:
+                case DeviceType.DCIOMicrop:
                 case DeviceType.Disk14Inch:
+                case DeviceType.DCIOShugart:
                     // The UI shouldn't actually allow this but check anyway
                     if (_volumes[drive.Unit] != null)
                         throw new InvalidOperationException($"Drive {drive.Unit} is already loaded");
@@ -489,7 +495,7 @@ namespace PERQemu
                     return (!string.IsNullOrEmpty(drive.MediaPath) && _volumes[drive.Unit].IsLoaded);
 
                 default:
-                    throw new UnimplementedHardwareException($"Drive type {drive.Type}");
+                    throw new UnimplementedHardwareException($"Unhandled drive type {drive.Type}");
             }
         }
 
@@ -730,6 +736,10 @@ namespace PERQemu
 
                 case WhatChanged.StreamerActivity:
                     handler = StreamerActivity;
+                    break;
+
+                case WhatChanged.PrinterActivity:
+                    handler = PrinterActivity;
                     break;
 
                 case WhatChanged.Z80RunState:

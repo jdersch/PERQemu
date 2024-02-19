@@ -73,7 +73,7 @@ oct     hex     Name            Function                            Source
 121     51      FPResult        Read floating point result          fptest (diagnostic)
 122     52      E10ERdNetSR     Read net status register            ioe10
 123     53      DskStat         (SMStat) Read disk status reg       eio{5}allsysb, eio{5}disk
-124     54      EioZ80In        Dismiss Z80 interrupt               eio{5}allsysb, eioz80, iopas.dfs
+124     54      EioZ80In        Z80->PERQ / Dismiss Z80 interrupt   eio{5}allsysb, eioz80, iopas.dfs
 125     55      EioZ80Stat      Read Z80 interface status           eioz80, iopas.dfs
 132     5A      E10ERdBCLow     Read bit count low byte             ioe10
 133     5B      E10ERdBCHgh     Read bit count high byte            ioe10

@@ -1,5 +1,5 @@
 //
-// DebugCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// DebugCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -24,6 +24,7 @@ using System.Collections.Generic;
 
 using PERQemu.Debugger;
 using PERQemu.Processor;
+using PERQemu.IO;
 
 namespace PERQemu
 {
@@ -521,11 +522,11 @@ namespace PERQemu
         {
             if (!CheckSys()) return;
 
-            var endAddr = Math.Min(startAddress + length, PERQemu.Sys.CPU.Microcode.Length);
+            var endAddr = Math.Min(startAddress + length, CPU.WCSSize - 1);
 
-            if (startAddress > PERQemu.Sys.CPU.Microcode.Length - 1)
+            if (startAddress > CPU.WCSSize - 1)
             {
-                Console.WriteLine("Address out of range 0..{0}", PERQemu.Sys.CPU.Microcode.Length - 1);
+                Console.WriteLine("Address out of range 0..{0}", CPU.WCSSize - 1);
                 return;
             }
 
@@ -542,10 +543,9 @@ namespace PERQemu
         {
             if (!CheckSys()) return;
 
-            if (nextPC > PERQemu.Sys.CPU.Microcode.Length - 1)
+            if (nextPC > CPU.WCSSize - 1)
             {
-                Console.WriteLine("Address out of range 0..{0}; PC not modified.",
-                                  PERQemu.Sys.CPU.Microcode.Length - 1);
+                Console.WriteLine("Address out of range 0..{0}; PC not modified.", CPU.WCSSize - 1);
             }
             else
             {
@@ -954,7 +954,13 @@ namespace PERQemu
         [Command("debug dump rs232a")]
         void ShowRS232Status()
         {
-            PERQemu.Sys.IOB.Z80System.SIOA.DumpPortStatus(0);
+            if (CheckSys()) PERQemu.Sys.IOB.Z80System.DumpPortAStatus();
+        }
+
+        [Command("debug dump rs232b")]
+        void ShowRS232BStatus()
+        {
+            if (CheckSys()) PERQemu.Sys.IOB.Z80System.DumpPortBStatus();
         }
 
         [Command("debug dump streamer")]
@@ -1020,7 +1026,6 @@ namespace PERQemu
             }
         }
 
-
         [Command("debug dump ethernet", "Dump the internal state of the fake Ethernet device")]
         public void ShowEtherStatus()
         {
@@ -1037,7 +1042,34 @@ namespace PERQemu
                 }
             }
 
+            if (PERQemu.Sys.IOB is IO.EIO)
+            {
+                var eio = PERQemu.Sys.IOB as IO.EIO;
+
+                eio.Ether.DumpEther();
+                return;
+            }
+
             Console.WriteLine("No Ethernet interface configured.");
+        }
+
+        [Command("debug dump canon", "Dump the state of the Canon interface and printer")]
+        public void ShowCanonStatus()
+        {
+            if (!CheckSys()) return;
+
+            if (PERQemu.Sys.OIO != null)
+            {
+                var oio = PERQemu.Sys.OIO as IO.OIO;
+
+                if (oio.Canon != null)
+                {
+                    oio.Canon.DumpStatus();
+                    return;
+                }
+            }
+
+            Console.WriteLine("No Canon interface available.");
         }
 
         #endregion
@@ -1046,18 +1078,24 @@ namespace PERQemu
         // Miscellany and temporary/debugging hacks
         //
 
-        [Conditional("DEBUG")]
+        // [Conditional("DEBUG")]
         [Command("debug dump scheduler queue")]
         void DumpScheduler()
         {
             PERQemu.Sys.Scheduler.DumpEvents("CPU");
         }
 
-        [Conditional("DEBUG")]
+        // [Conditional("DEBUG")]
         [Command("debug dump timers")]
         void DumpTimers()
         {
             HighResolutionTimer.DumpTimers();
+        }
+
+        [Command("debug dump dma registers")]
+        void DumpDMARegisters()
+        {
+            PERQemu.Sys.IOB.DMARegisters.DumpDMARegisters();
         }
 
         [Conditional("DEBUG")]

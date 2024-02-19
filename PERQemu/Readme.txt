@@ -1,13 +1,5 @@
 ﻿PERQemu Readme
 
-1/24/2023 - jdersch - v0.5.0
-1/17/2023 - skeezicsb - v0.4.9 (main)
-12/28/2022 - skeezicsb - v0.4.8 (main)
-11/1/2022 - skeezicsb - v0.4.6 (experimental)
-3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
-6/24/2018 - skeezicsb - v0.4 - v0.4.4
-6/24/2010 - jdersch - v0.1 - v0.3
-
 
 1.0 Introduction
 ================
@@ -58,7 +50,7 @@ The original PERQs feature a standard set of peripherals:
 Optional IO boards can be fitted, which provide:
 
     - 3Mbit or 10Mbit Ethernet interfaces
-    - Canon LBP-10 (and later Canon CX) laser printer interface
+    - Canon LBP-10 (or Canon CX) laser printer interface
     - QIC streamer tape connection
 
 A later PERQ-2 series extends the original design in some significant ways
@@ -70,16 +62,19 @@ and adds a number of additional IO options.
 
 PERQemu versions through 0.4.5 focused exclusively on PERQ-1 support.  Before
 the Great Refactoring (v0.5.0 and beyond) the WinForms-based emulator could run
-only the PERQ-1 "old" Z80 with a single Shugart hard disk.  While the emulation
-was fairly complete, the options for OS and software to run were limited.
+only the PERQ-1 "old" Z80 with a single Shugart hard disk.  The emulation was
+fairly complete, but the options for OS and software to run were limited.
 
-This current experimental branch is undergoing major structural changes to
-allow all of the PERQ-1 and PERQ-2 models to be emulated.  This includes the
-"new" Z80 (enabling PERQ-1 models to run newer OS versions) and support for all
-of the PERQ-2 models as well.  As soon as the experimental branch is stable and
-can reliably run the PERQ-1 as before, it will be merged back into "master" and
-released.  Ongoing development will bring additional releases as new models,
-features and peripherals are incorporated.  Please check back often for updates!
+While the v0.5.0 release is a major leap in functionality and the available
+software base has expanded greatly, it still only emulates PERQ-1 configurations.
+Work on the experimental branch now shifts to expanded emulation options, adding
+new peripheral support (Ethernet, laser printer) and bug fixes, plus some new UI
+features along the way.  PERQ-2 support will then follow; see the (tentative)
+roadmap below.  Please check back often for updates!
+
+PERQemu v0.5.5 rolls up new Canon printer support and expanded (but still highly
+experimental!) Ethernet support.  It is an interim release to skeezicsb/main and
+won't be submitted for a merge into the master at this time.
 
 
 1.3 System Requirements
@@ -125,7 +120,7 @@ There are several subdirectories:
         Contains disk images that the emulator can access.  Included with
         the distribution are:
 
-        d6.phd:
+        d6.prqm:
             (Josh) A dump from my very own PERQ1's disk, which has POS
             D.61 and Accent S4 installed.
 
@@ -133,15 +128,17 @@ There are several subdirectories:
             (Skeezics) A dump of my POS F.0 drive, which has a working
             MPOS E.29 installation as well!
               
-        f1.phd:
+        f1.prqm:
             A disk containing a pretty complete installation of POS F.1,
             including source, documentation, the Pascal compiler and a
             number of games, demos, and applications.  This was created
             from floppy images on Bitsavers.
 
-        f15dev.phd:
-            Updated Shugart image containing a full source installation
-            of the offshoot POS F.15 distribution.  Includes Amendment 1.
+        f15.prqm:
+        f15dev.prqm:
+            Updated Shugart images containing the offshoot POS F.15
+            distribution, in both basic and developer (full source)
+            versions.  Includes Amendments 1 & 2.
 
         g7.prqm:
             The first PERQmedia-formatted Shugart image for use with the
@@ -157,10 +154,10 @@ There are several subdirectories:
             A bundle of the basic PNX 1.3 installation from the PERQmedia
             repository, but reformatted as a .prqm image.
 
-       Additional "stock" hard drive or floppy images may be included as
-       well.  Any custom disk images you create or import are loaded from
-       and saved in the Disks/ directory by default.  Please consult the
-       UserGuide for information about working with PERQemu media files.
+        Additional "stock" hard drive or floppy images may be included as
+        well.  Any custom disk images you create or import are loaded from
+        and saved in the Disks/ directory by default.  Please consult the
+        UserGuide for information about working with PERQemu media files.
 
     Output/
         When logging debug output to disk is enabled, log files go here by
@@ -254,12 +251,12 @@ As of v0.4.6, these PERQ operating systems also boot:
   - POS version G.7 (released by Accent Systems, 1986?);
   - Accent S6 (Release II from PERQ Systems Corporation, 1985).
 
-In addition, PNX 2 is able to run but the installer has bugs; we have not yet
-been able to create a working hard disk image.
+Fixed in v0.5.3:
+  - A workaround for PNX 2 video support is included (disk image TBA).
 
-NOTE: PNX drops into its microcode debugger (i.e., crashes) after booting if
-2MB of memory is configured; it runs fine with 1MB.  POS and Accent have no
-trouble with a full megaword of memory.
+NOTE: PNX 1 drops into its microcode debugger (i.e., crashes) after booting if
+2MB of memory is configured; it runs fine with 1MB.  PNX 2, POS, MPOS and Accent
+have no trouble with a full megaword of memory.
 
 Accent mouse tracking takes a little getting used to since it runs in relative
 mode.  To simulate mouse "swipes" you have to use the Alt key (Option key on
@@ -296,9 +293,7 @@ The following hardware has been implemented in the emulator:
   Floppy disk:
     - Rewritten to work with the new Z80 and floppy disk controller;
     - Supports dynamic loading and unloading of all media types (single- and
-      double-sided diskettes, in single- and double-density);
-    - Operation is reliable for booting and data transfer, though testing and
-      debugging is ongoing.
+      double-sided diskettes, in single- and double-density).
 
   Tape drive:
     - The streaming tape drive is now available as the Tape option when the
@@ -310,7 +305,6 @@ The following hardware has been implemented in the emulator:
     - The 1280 x 1024 landscape display is supported and tested with POS G.7
       and Accent S6!  Although PERQ-1 landscape configurations were very rare,
       the emulator runs 'em just fine!
-    - Now rendered by SDL2, so 32-bit WinForms is finally retired.
 
   Z80 I/O Processor:
     - Simulation replaced by a real Z80 emulator running actual PERQ ROM code;
@@ -355,9 +349,16 @@ The following hardware has been implemented in the emulator:
       any OS that supports it!
 
   Ethernet:
-    - A fake, bare-bones interface is now available when the "Ether" option for
-      the OIO option board is configured.  This is needed to allow Accent to
-      properly initialize.  Consult the User Guide for more details!
+    - A "null" bare-bones interface is now available when the "Ether" option for
+      the OIO option board is configured.  This allows Accent to initialize its
+      NetMsgServer so other peripheral server processes (floppy, serial, etc)
+      can start up.  Consult the User Guide for more details!
+    - Implementation of a real host Ethernet interface is available for testing,
+      but with caveats.  Check the User Guide for details.
+
+  Canon:
+    - Laser printer interface provides high quality output in PNG or TIFF format
+      at 240- or 300-dpi.
 
 
 There is a ton of additional detail about the internals of PERQemu itself in
@@ -368,9 +369,9 @@ Docs/ directory for way, way more information than you need.  Way more.
 3.1 What's Not
 --------------
  
-- Ethernet.  Unimplemented, but on the list! [See above]
+- Ethernet.  In development! [See above]
 
-- Option boards:  Canon laser, 3Mbit Ethernet.  On the list.
+- Option boards:  3Mbit Ethernet.  On the list.
  
 - PERQLink.  Unimplemented other than a stub that tells the microcode that
   there's nothing connected to it.
@@ -401,9 +402,10 @@ window and overwrite previous output, rather than scrolling, making it difficult
 to see the input prompt.  This seems most prevalent on Windows 10.
 
 Workaround:  On Windows, enable "legacy mode" in the console Properties.  This
-seems to fix most of the glitches.  Mac and Linux terminal applications don't
-tend to misbehave as badly.  Hitting ^L now clears and resets the window in
-case things are messy.  Recent changes should fix the worst issues.
+seems to fix some of the glitches but it's still a mess.  Mac and Linux terminal
+applications don't tend to misbehave as badly.  Hitting ^L now clears and resets
+the window in case things are messy. [This is kinda broken at the moment and is
+being looked into.]
 
 
 2. Minimizing the Display window makes it disappear for good / very difficult
@@ -414,7 +416,6 @@ Symptoms:  Pressing the window's minimize button sends it to never-never-land.
 Workaround:  On Windows, disable "autohide" for the task bar.  Otherwise you
 have to do some weird Ctrl-right-click-Restore gyrations to force the Display
 window back onto the screen.  This was fixed?  Kind of?  Except when it isn't?
-My absolute loathing and utter disdain for Windows increases daily.
 
 
 3. Reading from the serial port is unreliable.
@@ -429,36 +430,45 @@ C#/Mono System.IO.Ports.SerialPort implementation that will require a reworking
 of the emulator's port handling.
 
 
-5.0 History and Roadmap
-=======================
+5.0 Version History and Roadmap
+===============================
 
 v1.0 - TBD
   Sometime before the heat death of the universe:
   - Feature complete, with a nice GUI, full screen mode, VR, scratch 'n sniff
   - Massive software library organized, catalogued, available for use and study
-
-v0.9 - TBD
-  Additional I/O Options once the baseline devices are complete:
-  - Ethernet!
-  - Canon laser printer
   - Working audio output :-)
 
-v0.7 - TBD
+v0.9 - TBD
   Leverage the new architecture to roll out new models, new peripherals and
   open up the full range of available operating systems!
   - PERQ-2 EIO emulation support: expanded IO Board with faster Z80, second
     serial port, RTC chip, support for two hard disks
-  - PERQ-2 peripherals: 8" and 5.25" disk drives, VT100-style keyboard,
-    landscape display option, 24-bit "T4" model with larger memory
-  - Get screenshots working again
+  - PERQ-2 peripherals: 8" and 5.25" disk drives, VT100-style keyboard
+  - 24-bit "T4" model with larger memory
 
-v0.5 - New baseline
-  Merge the experiments back into the master branch once the new Z80 and all
-  of the new features are reasonably stable:
+v0.7 - TBD
+  Additional I/O Options once the baseline devices are complete:
+  - Ethernet!
+  - Expand available media library!
+  - (Progress toward) EIO/PERQ-2
+
+v0.5.5 - Experimental branch (v0.7.0 pre-release)
+  - Ethernet running (but requires root/admin access)
+  - Patch for Turkish keyboard in CLI
+  - Limited Micropolis 8" disk support
+  - Refactored Z80 subsystem for EIO support
+  - Patch to support PNX 2's non-standard video display list handling
+  - Canon laser printer support
+  - Screenshots available from the CLI
+
+v0.5.0 - New baseline
+  (Pending) Merge the experiments back into the master branch:
   - True Z80 emulation
   - PERQ-1 CIO (new Z80) support: updated to run new Z80 ROMs
   - 64-bit Mono/MacOS build (no 32-bit WinForms limitation)
   - SDL2 for improved display performance
+  - Landscape display!
   - Unified PERQ media storage architecture and file format
   - Dynamic runtime configuration of all PERQ models and features
   - Enhanced command line interface with more prompts, in-line help
@@ -563,3 +573,14 @@ v0.2 - Second release
 
 v0.1 - First public release.
 
+
+Update history:
+
+2/18/2024 - skeezicsb - v0.5.5 (main)
+1/24/2023 - jdersch - v0.5.0
+1/17/2023 - skeezicsb - v0.4.9 (main)
+12/28/2022 - skeezicsb - v0.4.8 (main)
+11/1/2022 - skeezicsb - v0.4.6 (experimental)
+3/14/2019 - skeezicsb - v0.4.5beta (unreleased)
+6/24/2018 - skeezicsb - v0.4 - v0.4.4
+6/24/2010 - jdersch - v0.1 - v0.3

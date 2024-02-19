@@ -1,5 +1,5 @@
 ﻿//
-// ExecCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// ExecCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -18,6 +18,7 @@
 //
 
 using System;
+using System.IO;
 
 namespace PERQemu
 {
@@ -134,21 +135,94 @@ namespace PERQemu
             }
         }
 
-        // todo: obviously the machine has to be running
-        // todo: allow for png formatter (read Settings.ScreenFormat)
-        // todo: make path relative to Output/ (or Settings.OutputDir)
+
         [Command("save screenshot", "Save a screenshot of the current PERQ display")]
+        void SaveScreenshot()
+        {
+            var file = string.Format(Settings.ScreenshotTemplate,
+                                     DateTime.Now.ToString("yyyyMMdd-HHmmss"),
+                                     Paths.GetExtensionForImageFormat(Settings.ScreenshotFormat));
+
+            SaveScreenshot(Paths.BuildOutputPath(file));
+        }
+
+        [Command("save screenshot", "Save a named screenshot of the current PERQ display")]
         void SaveScreenshot(string file)
         {
-            string outputPath = file + ".jpg";  // FIXME
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The system is not powered on; screenshot not available.");
+                return;
+            }
+
+            if (!Path.HasExtension(file))
+            {
+                file = Path.ChangeExtension(file,
+                            Paths.GetExtensionForImageFormat(Settings.ScreenshotFormat));
+            }
 
             try
             {
-                PERQemu.Sys.Display.SaveScreenshot(outputPath);
+                PERQemu.Sys.Display.SaveScreenshot(file);
+                Console.WriteLine($"Screenshot saved to '{file}'.");
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Error saving screenshot to {outputPath}: {e.Message}");
+                Console.WriteLine($"Error saving screenshot to {file}: {e.Message}");
+            }
+        }
+
+
+        bool FindCanon(out IO.CanonController ctrl)
+        {
+            if (PERQemu.Controller.State == RunState.Off)
+            {
+                Console.WriteLine("The system is not powered on; printer not available.");
+                ctrl = null;
+                return false;
+            }
+
+            // See if the printer is attached
+            if (PERQemu.Sys.Config.IOOptionBoard == Config.OptionBoardType.OIO &&
+                PERQemu.Sys.Config.IOOptions.HasFlag(Config.IOOptionType.Canon))
+            {
+                var board = PERQemu.Sys.OIO as IO.OIO;
+                ctrl = board.Canon;
+                return true;
+            }
+            //else if (PERQemu.Sys.Config.IOOptionBoard == Config.OptionBoardType.MLO)
+            //{
+            //    var board = PERQemu.Sys.OIO as IO.MLO;
+            //    ctrl = board.Canon;
+            //    return true;
+            //}
+
+            Console.WriteLine("No Canon laser printer configured in this system.");
+            ctrl = null;
+            return false;
+        }
+
+        [Command("load paper", "Reload the paper tray of the Canon laser printer")]
+        void LoadCanon()
+        {
+            IO.CanonController canon;
+
+            if (FindCanon(out canon))
+            {
+                // If nothing loaded and no argument, load the default type!
+                LoadCanon(canon.Cassette == IO.PaperCode.NoCassette ? Settings.CanonPaperSize : canon.Cassette);
+            }
+        }
+
+        [Command("load paper", "Load a new tray of paper into the Canon laser printer")]
+        void LoadCanon(IO.PaperCode size)
+        {
+            IO.CanonController canon;
+
+            if (FindCanon(out canon))
+            {
+                canon.Cassette = size;
+                if (size != IO.PaperCode.NoCassette) Console.WriteLine($"{size} paper loaded.");
             }
         }
 
@@ -166,6 +240,14 @@ namespace PERQemu
         {
             PERQemu.Sys.Display.Restore();
             Console.WriteLine("Sent window restore event.");
+        }
+
+        [Command("resize", "Resize the console display", Discreet = true)]
+        void Resize()
+        {
+            Console.SetWindowSize(80, 25);
+            Console.Clear();
+            Console.WriteLine("Console window reset.");
         }
 #endif
 

@@ -1,5 +1,5 @@
 ﻿//
-// PERQ24A.cs - Copyright (c) 2021-2023 S. Boondoggle (skeezicsb@gmail.com)
+// PERQ24A.cs - Copyright (c) 2021-2024 S. Boondoggle (skeezicsb@gmail.com)
 //
 // This file is part of PERQemu.
 //

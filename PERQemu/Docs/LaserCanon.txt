@@ -1,0 +1,606 @@
+﻿
+Canon Laser Printer Notes
+=========================
+
+These are my working notes for the development of the custom Canon laser printer
+controller, and will eventually document the completed implementation.
+
+
+Background
+----------
+
+Three Rivers jumped on the early Canon LBP-10 and offered it as the "PLP-10,"
+or "PERQ Laser Printer", at a list price of $18,000 (in 1981/82).  This was the
+first 240dpi "wet process" behemoth that weighed a ton and took up a whole desk
+or tabletop, but it cranked out around 6-8 pages per minute of text or graphics
+(screen dumps) almost silently, compared to the typical clattering daisy-wheel
+or dot-matrix printers popular at the time.  Plus they networked it, so a PERQ
+acting as a print server could spool up output from any machine on the Ethernet.
+This was slicker 'n snot at the time.
+
+Later the software was extended to support the 300dpi LBP-CX.  There are hints
+that 3RCC OEM'ed a CX-based printer but I've never seen any marketing materials,
+price lists, or memos that explicitly confirm it.  Since the interface uses the
+same 37-pin "video" interface it was a fairly simple upgrade.  I'd love to know
+if anyone out there remembers, or has, a PERQ-branded Canon CX printer!
+
+
+References
+----------
+
+There are a number of documents or information sources to familiarize yourself
+with the Canon laser printer interface and the PERQ implementation as it is
+emulated by PERQemu.
+
+The primary source of information about the Canon side of the interface:
+    Docs/Hardware Reverences/LBP-CX_Series_Video_Interface_Service_Manual.pdf
+
+The Canon CX Series Service Manual (Bitsavers) is also interesting as it mostly
+confirms (and sometimes contradicts) the Video Interface manual.  Sigh.
+
+PERQ references:
+    T2_schems_Vol2_Feb85.pdf - OIO-003 schematics (has a few errors) :-(
+    Numerous copies of the Canon "layered" software repository (tape archives)
+    Pinout of the laser printer cable (toned out and documented below)
+
+Full source code to the POS and Accent microcode (through V5.0, 1986) and Pascal
+library and utilities is available.  Additionally, the original code to generate
+the CN100/CN200 PROMs has allowed the controller state machine to be reverse-
+engineered.  These items may/will eventually be made available in the PERQmedia
+repo or included in disks bundled with PERQemu.
+
+
+User Interface
+--------------
+
+Software exists for just about every possible hardware configuration and OS.
+We have sources for POS G and Accent; I have confirmed that it also compiles
+(with minor modifications) on POS F!  It's not clear which PNX release first
+introduced Canon support, as memos from around 1983-84 suggest that it was not
+yet included, but it seems it was present in PNX 5.  Because this emulation is
+at the register/microcode level, it should Just Work if/when we get later
+versions of PNX running.
+
+The two printer models are easily distinguished by their resolution:  240 dpi
+for the LBP-10, or 300 dpi for the LBP-CX.  Currently a Settings command is
+used to set the default resolution/model, which means that any configuration
+that includes the OIO/Canon will use the same definition.  It could be made a
+Configuration option in the future.
+
+The PERQemu Configurator currently allows the Canon option to be enabled when
+the OIO board is selected, valid for any configuration.  It's also the "L" in
+MLO (Multibus/Laser Option) so it will eventually be available for PERQ-2
+models that configure MLO in place of the OIO.  As far as the operating system
+is concerned, microcode and Pascal library support don't seem to differentiate
+between board types as far as the software interface is concerned, so it should
+Just Work.
+
+Canon's printer documentation lists four different paper cassette sizes, so the
+CLI has options to set the default size.  Note, however, that none of the PERQ
+software seems to allow for specifying the paper size -- everything seems to
+assume US Letter regardless of what's installed.  I'll assume for now that the
+same settings worked well enough for A4 paper in ICL supported PERQs.
+
+Output is directed to the default output directory (can be changed in Settings)
+with the (fixed) file naming pattern "LBP-{10,CX}_nnn.ext", where the extension
+is either ".png" or ".tif".  The page number is remembered between invocations
+of PERQemu.  Other formats may be made available in the future, and the output
+file naming pattern might be made configurable.
+
+The emulator will provide an activity "light" (like the floppy and streamer
+icons) to show when the Canon is active.  This is to provide visual feedback
+that the printer is active, since there's no click, whirr or hint of ozone in
+the air from having a real printer spitting out pages.  A future enhancement to
+add a "default print device" could allow completed Canon output to be sent to
+a print queue on the local host as each page completes!
+
+Once configured, all interaction with the Canon is through the available PERQ
+software.  The User Guide will be updated to provide additional information.
+
+
+Controller Emulation
+--------------------
+
+The emulator is split into two parts, like the streamer tape implementation: a
+controller that is managed by the microcode, and a simulation of the printer
+with all of its mechanical timings.
+
+The PERQ side of the interface is in IO/Printers/CanonController.cs.  It is
+attached to the OIO board when the Canon option is selected in a configuration.
+The two Settings options CanonResolution and CanonPaperSize are consulted to set
+the model and paper size.  It comprises a set of control/status registers, a
+small set of IO addresses (part of the OIO board's decoder logic shared with
+other OIO peripherals), a clock oscillator and reset circuit, and a 16-byte FIFO
+that lets the DMA controller pump quad words from memory into it in parallel,
+while shifting the bits out serially to create the "video style bitstream" that
+reproduces the bitmap on the printed page.  A band counter and state machine
+drives the physical interface to the print engine through a Canonical (:-) set
+of line drivers connected to the I/O bulkhead.  For PERQ-1 this is through the
+"IO Option" 50-pin connector, which requires a split "Y" cable to break out the
+Ethernet AUI from the Canon interface.  For PERQ-Tx models, a dedicated 25-pin
+connector on the bulkhead is built-in.  Physical connection to the printer is
+through a 25-pin to 37-pin cable (pinout below).  
+
+The state machine is implemented in hardware as a set of registers and two
+PROMs, labeled CN100 and CN200.  The CN100 contains logic mostly devoted to
+reading status bits back from the printer; CN200 drives the output side, DMA
+transfers, and interrupts.  It handles timing of the video signals for each
+horizontal line output to the printer, which are delivered as "bands" of up
+to 8 scan lines at a time rendered by software into memory buffers.  Operation
+of the state machine is from reverse-engineering the code itself, examining the
+microcode and Pascal sources which drive it, and studying the (somewhat error-
+prone) available schematic of the interface.
+
+
+Printer Emulation
+-----------------
+
+The other half of the implementation is in IO/Printers/CanonPrinter.cs.  This
+simulates the mechanical part, including capturing the data from the PERQ and
+converting the resulting bitmap into an output file in a format the user can
+specify (Settings.CanonFormat).
+
+Documentation for the Canon video interface is, thankfully, provided -- although
+it is seriously vague and lacking in some specifics that makes implementation
+much more difficult than it ought to be (discussion below).  At a high level,
+the "video interface" is like that of a bitmapped display, essentially scanning
+one bitmapped "frame" to the marking engine to produce the image one line at a
+time.  There are margins surrounding the visible (printable) area on the page,
+much like the front porch/back porch in a video signal.  What is conspicuously
+lacking is a concrete description of how an "end of page" condition is detected.
+More on this below.
+
+To emulate the PERQ interface, it's important to note that the Canon command/
+status protocol is NOT fully implemented in the hardware.  The bi-directional
+"SC" and "SCLK" pins are wired as inputs only; the hardware handshake of the
+PRNT/RDY lines starts a print operation and none of the supplemental commands
+or status requests are available.  As documented by Three Rivers in the source
+code, the mechanical status bits are NOT available to the client software.  For
+the purposes of emulation, this means:
+
+    The Canon will never jam, is never turned off, never needs toner or
+    suffers mechanical breakdowns, and only runs out of paper if you 
+    enable "accurate" emulation mode.  It can also print much faster
+    than the 8.1 pages per minute the engine is rated for if the rate
+    limiting setting PrinterSpeed is turned off.
+
+Some ideas and notes about future enhancements is included below.
+
+
+Output
+------
+
+Two custom output formatters are now included in Printers/CanonFormatter.cs.
+Rather than hassle with SDL (which doesn't easily handle 1bpp bitmaps anymore)
+or require libgdi+ as a dependency on Mac/Linux to use System.Drawing, PERQemu
+now generates true 1bpp PNG or TIFF images directly, with some additional meta-
+data tags purely for fun.  One advantage of this scheme is that the bitmap data
+comes directly from PERQ memory as quad words, unaltered; it does NOT require
+conversion to 8- or 32-bit SDL textures and keeps memory usage very low (about
+1.1MB/page during rendering).
+
+    Note: the output of custom bitmaps is useful enough that the interface
+    is being extended to support the notion of a generic "page" of output,
+    which can be linked together to form multi-page output files for formats
+    that support it (currently TIFF, but possibly direct PDF writing someday).
+    This will allow direct capture of screenshots from the emulator and other
+    simulated printers to use the same output abstraction in the future.
+
+
+
+Theory of Operation
+-------------------
+
+There are two primary ways to print a page on the Canon:  use CPrint (a network-
+capable print spooler) to render a text file, or Screendump to dump the contents
+of the video frame.  Other applications (like DP, the Drawing Program) may have
+built-in output support for things like graphics.  More investigation is needed
+to identify and explore the range of output options for all the available OSes
+and applications.  POS G eventually had a special keystroke (Ctrl-Shift-P?) to
+do an immediate screendump; this was done through a module called "SID" (for
+Screen Image Dump) or, in earlier versions of POS, "CSDX" (presumably for "Canon
+screen dump" or something like that).  Accent uses CPrint as well.
+
+At the high level Pascal interface, there are only three commands:  Reset, Start
+Page, and Quiet.  Reading back status is incomplete.  The Pascal code creates a
+set of memory buffers that contain "bands" of up to 8 scan lines, and links
+these bands together into a list of Device Control Blocks (DCBs) that mediate
+the handoff of bitmap data to the microcode.  For printing, each line of text
+is rendered into these memory buffers, or in the case of a screen dump, each
+line from the frame buffer is pixel- and line-doubled to scale the 100dpi screen
+into the 240- or 300-dpi printer frame.  To keep up with the mechanical demands
+of the print engine (which must stream the bits to the laser in real time while
+the page rotates around the drum as it's fed through the mechanism) the software
+always maintains a minimum of two DCBs and buffers: Pascal is filling one with
+new data while the microcode streams the bits to the printer from the other.
+
+The Canon uses a DMA channel ("ExtB") to facilitate copying the data from the
+current memory buffer into a 16-word deep FIFO.  The CN200 PROM is the state
+machine that tracks the FIFO and issues DMA requests to keep it full as a line
+is scanned.  The 9403 FIFO chips (same type used in the PERQ hard disk and
+Ethernet controllers) support parallel in/serial out AND serial in/parallel out.
+A bit clock is generated by a 29.4912Mhz crystal oscillator (shown as "28MHz" on
+the schematic!) which shifts bits out when the VDO signal is needed.  A /16
+word clock is used to reload the FIFO as the horizontal scan counts words in
+the line.  The state machine issues DMA requests to transfer quad words into
+the FIFOs so that the PERQ is not involved until the end of a "band" is reached.
+
+The "Y" interrupt is used to signal an "end of band" (called "bottom of band" or
+BOB in various places) condition.  At this point the microcode marks the just-
+completed band as "free", then loads the next DCB in the chain and sets the
+address of the next band of scanline data into the DMA registers.  The Pascal
+code can then refill the empty buffers while the hardware works on shifting
+out the full ones, with the only contention coming from possible processor
+stalls due to DMA stealing memory cycles.  In hardware, a scanline nominally
+takes from 1.797ms (300dpi) to 2.246ms (240dpi) to complete (the width of the
+BD pulses, +-2%)  so the interrupt latency must be reasonably short; the minimum
+time required to DMA a band with no other memory contention is nearly 0.4ms, so
+Pascal buffers several bands in advance.  A missed or late band interrupt can
+result in gaps, shifted or garbled output.  (In the emulator we don't actually
+implement DMA cycle stealing, yet, so the CPU can run at full speed while the
+printer runs.)
+
+Other interrupts can be triggered by the printer going offline for any reason,
+an end of page condition, or when the status buffer is full and available to be
+read.  The status gathering is incomplete, as discussed below; the StatFull
+interrupt is not fired/handled.
+
+
+Paper Size
+----------
+
+One might think that a simple, clear definition of the size of a common sheet of
+paper would be, in the year 2024, easily obtained from any number of online
+reference sources.  And one would be tragically wrong.  In a post-truth world,
+no such unequivocal definition exists for anything, anywhere, anymore.  Give up.
+Everything is broken, nothing matters.
+
+Your first hint:  "resolution" is always expressed in "dots per inch", yet the
+documentation tends to define all of the page dimensions in millimeters.  It
+only gets worse after that.
+
+NO TWO SOURCES OF INFORMATION AGREE on what a "B5" page is, for example.  Or a
+simple table showing the maximum printable area of a page rendered by the CX
+engine, which was used in practically EVERY desktop laser printer produced by
+countless vendors in the 1980s (until the SX came along to replace it).  Scour
+the available documentation from Canon, Three Rivers, Apple, Wikipedia, or the
+entirety of the goddamned Internet and you WILL NOT FIND two charts that show
+the same numbers.  Giant Meteor, we need you NOW to end this madness.
+
+THESE are the numbers I have settled upon, for right or wrong:
+
+    Paper code      Width / Height      Printable Area
+    ----------      -----------------   -----------------
+    US Letter       8.5 x 11 (in)       8.19 x 10.86 (in)
+                    216 x 279 (mm)      208 x 276 (mm)
+
+    US Legal        8.5 x 14 (in)       8.19 x 13.85 (in)
+                    216 x 356 (mm)      208 x 352 (mm)
+
+    A4              8.27 x 11.69 (in)   8 x 11.38 (in)
+                    210 x 297 (mm)      203 x 289 (mm)
+
+    B5              6.93 x 9.84 (in)    6.9 x 9.8 (in)
+                    182 x 257 (mm)      175 x 249 (mm)
+
+Of course, it's all moot because the 3RCC software does whatever the hell it
+damn well pleases, and at 240dpi just barely leaves 2mm at the top and bottom:
+
+                    LBP-10      LBP-CX
+    DPI             240         300
+    HorzDots        2160        2700
+    VertDots        2640        3300
+    BandsBeforePage 40          10
+    WordsToPrint    128         160
+    TMargin         0           15
+    BMargin         5           10
+    LMargin         15          19
+    RMargin         143         179
+    MaxX            1800        2250        15 * BPI div 2 (7.5")
+
+These printer stats are defined in PrinterUtils.pas, BUT ALSO in multiple places
+in ModCPrint.pas, because of course.  ARGH.  There is no MaxY.  It is literally
+NOT MENTIONED ANYWHERE HOW TO DETERMINE WHEN THE END OF PAGE IS REACHED.  Some
+obscure notes in the CX documentation vaguely point to a signal in the print
+engine itself (NOT exposed to the controller or interface) that acts like the
+equivalent of a "visible area" in the vertical/length dimension.  NOTHING in the
+Pascal, microcode, state machine or hardware seems to indicate HOW the end of a
+page is determined; if the PERQ is done it just stops sending data and waits?
+I'm not making this up.  Let this stand as a warning to those with a delicate
+constitution or who cling to any pretense of rationality: if you start down this
+path, only total madness can result.  Go now, while you still can.
+
+That said, the current version of the PERQ software basically says "screw it,
+the size of a page is always 9" x 11" and the horizontal printable area is 7.5".
+That's all the guidance you get.  It makes NO sense.  Figure it out.
+
+When they find my body it will remain unexplained how a man could punch his own
+head clean off, but at least you'll know WHY.
+
+
+Signals and Interface
+---------------------
+
+The Canon Video Interface is fairly simple, with five input lines, five output
+lines, and two bidrectional lines.  On the PERQ, not all of these are used (see
+below).  And PERQ naming is different than the Canon naming.  <facepalm/>
+
+    Sig     Name                    Schematic       Direction (printer's view)
+    /BD     BD                      I BD            Output (pulse)
+    PPRDY   PRINTER POWER READY     --              Output (level)
+    /RDY    READY                   I RDY L         Output (level)
+    /VSREQ  VSYNC REQUEST           I TOP L         Output (level)
+    /SBSY   STATUS BUSY             I PRND L        Output (level)
+    /SC     STATUS/COMMAND          STATUS L        I/O (level)
+    /SCLK   SERIAL CLOCK            CLK <976> L     Clock signal (I/O, pulse)
+    /CBSY   COMMAND BUSY            I STATUS REQ L  Input (level)
+    /PRNT   PRINT                   I PRN L         Input (level)
+    /VSYNC  VERTICAL SYNC           I TOP L         Input (pulse)
+    CPRDY   CONTROLLER POWER READY  --              Input (level)
+    /VDO    VIDEO                   I VDO           Input (level)
+
+
+The cable is also custom and contains a surprise:
+
+   DD37 (Canon)         DB25 (PERQ)        26-pin ribbon (I/O bulkhead)
+   ------------         -----------        ----------------------------
+     2  /BD      ->      24  IBD-           22 AND 24!?
+     3  PPRDY    ->      --  NC             --
+     4  /RDY     ->       8  IRDY L         15
+     5  /VSREQ   ->      10  ITOP L         19      --.
+     6  /SBSY    ->       9  IPRND L        17        |
+     7  /SC     <->       4  STATUS L        7        |
+     8  /SCLK   <->       3  CLK 976         5        | Looped back!
+     9  /CBSY   <-        6  ISTATRQST L    11        |
+    10  /PRNT   <-        5  IPRN L          9        |
+    11  /VSYNC  <-       10  ITOP L         19      <-'
+    12  CPRDY   <-       --  NC             --
+    13  /VDO    <-       13  IVDO-          25
+    21  BD       ->      12  IBD+           23
+    32  VDO     <-        1  IVDO+           1
+                                            13  I PRFSP L (or I PFSP L)
+
+On the Canon side, pins 1, 14-20 and 33-37 are reserved (NC).  Pins 22-31 GND.
+
+The signal called IPFSP L (I PRFSP L on the schematic, to backplane pin J188)
+is an output from the controller not wired to anything on the DB-25 cable.  Was
+this supposed to be the CPRDY line?  What the hell does PFSP or PRFSP stand for?
+(PFSP looks like an error on the schematic; PRFSP might be "PERQ Read From
+Status Pointer" or "Status Page" or something like that?  One annotated PROM
+listing says "Paper Feed"?  WHY didn't they just use the Canon signal naming!?
+ARGH.)
+
+The PERQ-Tx chassis provides a DB-25 labeled LASER PTR on the rear I/O bulkhead
+and I assume that the 26-pin ribbon cable from the backplane carries the same
+signals whether an OIO or MLO is installed.  The PERQ-1 uses a split cable that
+breaks out the DD-50 IO Option connector on the backplane to an Ethernet AUI
+and the DB-25 described above for the laser printer.  (Rare PERQ-2 chassis?)
+
+The PERQ doesn't wire up the PPRDY or CPRDY pins at all, so it can't sense when
+the printer is powered on.  Ugh.  (On the actual hardware, if your printer is
+attached but not powered on when you boot the PERQ, it sees a constant stream
+of interrupts, which is massively annoying.)
+
+
+Command and Status bits are transmitted serially, so the Canon docs just
+list them in the order sent.  I assume this means the PERQ will store them
+in its "natural" bit order?
+
+1st bit = bit 7 = 0x80
+2nd bit = bit 6 = 0x40
+        .
+        .
+8th bit = bit 0 = 0x1
+
+This applies to the five Status codes and the transmission of Command codes.
+Note that the current hardware (and emulation) doesn't use this functionality.
+
+
+Limitations
+-----------
+
+What is not clear (and may never be) is whether the original LBP-10 and the CX
+have the same status reporting characteristics.  The PERQ software does NOT use
+any of the serial clocking to send command bytes -- the SC and SCLK pins are
+wired as inputs only.  So that means it cannot solicit a specific status byte
+and only seems to read whatever status byte (??) is sent by default.  Yet the
+Pascal implementation lays out a single 16-bit status register that contains
+bits that according to the Canon documentation would have to be spliced from
+several different status registers.  Hmm.  We would have to locate the earliest
+LBP-10 specific documentation, if any exists, to see what motivated 3RCC to set
+up this register in this way.  One possibility is that the state machine and
+microcode were simply incomplete, and the plan was to have the state machine
+do command/response transactions to read all five status bytes then assemble
+the resulting 16-bit status word (with the "StatFull" interrupt to signal when
+the complicated sequence was complete).
+
+    For a future enhancement to PERQemu and the POS/Accent printing
+    software, a much simpler approach would be to do what they do for
+    the GPIB, RS-232 or Floppy and just read/return the status bytes
+    as a small block of registers and let Pascal interpret it all.
+
+Instead, they just comment out the StatSrv routine and probably don't call it
+from Pascal.  The only stats returned are from the bits read off the  wire
+(/RDY, /SBSY) or generated (EOB to signal end of the linecount? and STATUS FULL,
+the FIFO status) by the state machine.
+
+
+Future Fun/Insanity
+-------------------
+
+Find out what the test page looked like and recreate it!  [Better still, find
+the money have my two CX engines thoroughly cleaned/repaired and just print one
+myself. :-(]  The CX has a button to generate a test print; add a CLI command
+to "print canon test page" or something like that.  Would be extra cool if it
+actually generated the page on the fly with some dynamic content like the total
+page count, current date and time, PERQ configuration, etc.  Totally silly.
+
+A future software project to improve PERQ printing support would be to add a
+one-page landscape option -- a 90deg rotation using RasterOp trickery ought to
+be decently fast, if I can find the algorithm and port it to Pascal or ucode.
+
+Assuming the printable area of 8" x 10.78" (2400 x 3234 pixels @ 300dpi, or
+1920 x 2587 @ 240) then two landscape pages at 1x could be printed 2-up,
+horizontally, on Letter.  Rotated we could do a 2x expansion (simple, fast)
+so the landscape display could print in landscape orientation, instead of the
+two-pages-in-portrait-mode hack.
+
+The standard screendump algorithm just does a 2x expansion in portrait mode,
+where a 3x could work comfortably... but it takes more RAM for buffers and
+the resulting pixels might look too blocky?  Anyway, at least I have some
+idea of the actual maximum sizes required.  [Update:  Screendump for the CX
+does a 3x expansion already!!  Documented it in the POS F.15 source port.]
+
+
+For PERQ 2.0, the hardware interface should a) use the real protocol to send
+commands and fetch status, and b) use a larger FIFO to make it less demanding
+on interrupt latency to refill the band buffer to maintain video timing.  At
+300dpi a single line takes 144 words (36 quads) or 288 bytes; replacing the
+four 9403s with two 256 x 8 (or even 512 x 8) chips would let the driver push
+the DMA at full speed and still leave bandwidth enough for the hard disk and
+Ethernet to run too.
+
+
+Implementation Notes/Reference
+            -or-
+A Journey Into Total Insanity.
+------------------------------
+
+Canon says the output clock and dot print times are:
+240 dpi:    1,192,840 Hz  =>  838.3ns
+300 dpi:    1,863,813 Hz  =>  536.5ns
+
+The OIO schematic shows a 28MHz crystal run through an 'LS393 counter to derive
+a /16 bit clock, then a second 'LS393 to derive the /16 word clock.  This means
+they're running the bit clock at 1.75Mhz?  But the *actual* OIO board has a
+29.4912Mhz CXO, so 1.8432Mhz (~542ns bit clock)?  "Close enough."  This means
+that the OIO-003 board is tuned for the 300dpi CX, rather than the older LBP10.
+Hmmm.  To compute the left margin, this table appears in both Canon docs:
+
+Paper sizes                     Left margin timing values (240 / 300)
+US Letter (215.9mm x 279.4mm)   135.5us / 108.4us
+A4 (210mm x 297mm)              182.2us / 145.8us
+B5 (182mm x 257mm)              404.0us / 323.2us
+
+The CX Service Manual gives 7.9us (240dpi) or 6.3us (300dpi) as the approximate
+timing to add or subtract 1mm from the margin; 108.4/6.3 = 17.2 clocks, or
+~0.67" (which is what the 3RCC comments indicate).  It seems there was a slight
+misinterpretation of the time->width conversion (or some variation in the chip
+timings in the clock circuit on the board).
+
+SO, we take the margin register as a count of word clocks at the approximate
+clock rate and figure out how many actual pixels/bytes to skip, NOT just as a
+byte count!  Doh.  This is roughly the 't' count for a 5-8mm margin ("typical"
+per Canon docs).
+
+(LMargin * word clock / bit time)              
+---------------------------------
+                8
+
+or, simply LMargin * 2. :-) to get the starting byte for drawing the scanline.
+
+Canon docs don't definitively specify the actual maximum printable area anywhere!
+The Apple LaserWriter (LBP-CX) says:
+
+Letter:  8.0 x 10.78 in         = 203.2 x 273.8 mm (printable)
+Legal:   6.75 x 12.84 in (!!)   = 171.4 x 326.1 mm
+A4:      7.41 x 10.86 in        = 188.2 x 275.8 mm
+B5:      7.69 x 10.16 in        = 195.3 x 258.1 mm
+
+(The LBP-SX based LW IINT says legal is 8 x 13.78 in, so that's probably
+the actual printable size but the original LW lacked RAM?  Who knows.)
+
+MORE guesswork, from the MAME src (lwriter.cpp):
+
+    // A guess based on not very much
+    static constexpr unsigned FB_HEIGHT = 3434;
+    static constexpr unsigned FB_WIDTH = 2520;
+
+Top margin (BandsBeforePage + TMargin * 8 lines per band, presumably) has to
+take "more than 212ms after VSYNC before VDO is valid" (per spec).  For LBP-10,
+then, 212ms / 2.246us is ~94 lines (0.393") of top margin imposed by the print
+engine; LBP-CX is 212ms / 1.797us is ~117 lines, or 0.393" @ 300lpi as well.
+The microcode counts off top margins based on the PrinterDefs TMargin values in
+a count of BD pulses, then adds to it -- but I hold in my hands a page printed
+on the actual hardware that defies this:  1/8" top and 1/16" bottom margins,
+which would mean a 3.175mm top margin or just ~66ms delay which would clearly
+violate the timing spec.  Does the BD clock start *before* VSREQ/VSYNC to allow
+for the paper pickup time?  Who the hell knows?  NONE of these numbers ever seem
+to line up.  Ugh.
+
+All the CX service manual shows is that the area where the VMSK signal (internal
+to the uproc driving the engine) is active is between a 2mm top and bottom
+blanking area.  That would _seem_ to be the hardware-enforced top and bottom
+margin; left seems to be 3mm and right 7mm, but it's not clear if that's face
+up or down?  I'm guessing the right margin is wider because the paper pickup/
+jam detect sensors are on that side?  Who knows?  The doc says that "in a table
+below" the print area specs for all four paper trays are given but this table
+doesn't exist.  Yay.
+
+PERQ microcode has some notion (for the CX) of a maximum number of lines (3300,
+hard coded) but the Pascal code always computes the maximum ScansPerPage at 
+11 * DPI (so, 11" x resolution - (top + bottom margins) * 8 (BandS, a const).
+Thus, for the CX, 3300 - ((10 + 15 + 10) * 8) = 3020 (10.06").  That doesn't
+match the Apple spec (10.78" for US Letter, 10.86" for A4) but "close enough".
+Similarly, the 240dpi LBP-10 spec would be 2400 - ((40 + 5) * 8) = 2280 (9.5"),
+but the 240dpi CX and the 240dpi LBP-10 (different engines, same interface) may
+have had slightly different limits?  Sigh.
+
+
+Version 5.0 of Canon.MicroMac is the latest.  We have versions from 2.0-4.2 as
+well.  See ~/PERQ/Tapes/2014090117/Layered/canon/.
+
+
+Multi-page / continuous output timing
+-------------------------------------
+
+According to the Video Interface document, the print engine is rated for 8.1
+pages per minute (6.9 ppm, legal size) -- but the timing in the CX Service doc
+says INTR + PRINT + LSTR times are "about" 20.7 seconds for a single page, so
+the best case is around 6ppm if the 8.6 seconds for print time (9.9 for Legal)
+is true.  INTR (initial drum rotation) + LSTR (last rotation) aside, these
+timings can't possibly allow for 8ppm on a CX.  Which is insane, because the
+machine was literally marketed as the LBP-8/CX and the older LBP-10 was 8ppm.
+
+For mechanical timing, I'm ignoring the ~120 sec wait time at power on since the
+PERQ can't detect the PPRDY signal.  We'll always assume the printer starts in
+Standby mode.
+
+Standby -> Ready when PRNT goes true is 5 seconds (or .1 if rate limiting off).
+
+Ready -> VSReq/VSync is ~ 3.7ish seconds (or .1 if rate limiting off).
+
+VSync -> Printing must follow the actual documented timing for the BD pulses,
+since the microcode is watching for the correct edge to time the start of VDO.
+This is a period of ~1800us for the CX, or ~2250us for the LBP10.
+
+Printing -> EndOfPage is based on shutting off the clock after "enough" BD clock
+cycles have fired.  The PERQ in most cases actually sees the EOP interrupt as an
+error condition -- it basically decides when it is done with the page and just
+goes back to waiting for VSReq regardless of how much time the mechanism needs
+to churn out the current page.  It's... ugly.
+
+After EoP we immediately return to Ready and set a sleep timer (~5.7 seconds is
+realistic, 2 seconds if rate limiting off).  If the PERQ is printing multiple
+pages, PRNT goes true almost immediately and we continue; if not, transitioning
+back to Standby flushes any queued pages to the final output file before going
+back into sleep mode.  Memory consumption is around 1.5MB _per page_ for TIFF
+so printing a 100-page document (current max size of the paper cassette) would
+need some RAM, but that memory _is_ eventually reclaimed when the printer idles
+and there don't appear to be any serious memory issues.
+
+Return to standby time can be tuned or a CLI command could be explicitly added
+to give the user direct control over output of multi-page documents, though to
+generate Bitsavers-compatible CCITT G4 compressed PDFs they'll have to be run
+through "tumble" anyway... for now. :-)
+
+There's probably still a lot of debugging to do and other software to build or
+install and try out on all the different OSes, but basic CPrint or Screendumps
+from POS look pretty fantastic, so Soon POS F.15+ can generate new camera-ready
+copy for all of its documentation using the native tools (Prose, DP, etc) and
+printed using the original fonts!  Sweeeeet.
+
+
+---
+Last update: skeezics   Sun Feb 18 23:24:22 PST 2024
+  

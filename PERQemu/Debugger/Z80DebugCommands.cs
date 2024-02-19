@@ -1,5 +1,5 @@
 ﻿//
-// Z80DebugCommands.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Z80DebugCommands.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -89,6 +89,15 @@ namespace PERQemu
             {
                 Console.WriteLine($"Couldn't read {addr}: {e.Message}");
             }
+        }
+
+        [Command("debug z80 dump rtc")]
+        void DumpRTC()
+        {
+            var rtc = new IO.Z80.Oki5832RTC(0xaa);  // fake address for testing
+
+            // This is super basic for now; just verify the registers are valid
+            Console.WriteLine(rtc);
         }
 
         // todo: rom disassembler, like the perq microcode disassembler?

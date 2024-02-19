@@ -1,5 +1,5 @@
 ﻿//
-// CommandPrompt.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CommandPrompt.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -39,10 +39,11 @@ namespace PERQemu.UI
 
             _prompt = "";
 
-            _lastWidth = Console.BufferWidth;
-            _lastHeight = Console.BufferHeight;
+            _lastWidth = Console.WindowWidth;
+            _lastHeight = Console.WindowHeight;
 
             InitEditKeyMap();
+            InitIntlKeyMap();
         }
 
         /// <summary>
@@ -188,13 +189,19 @@ namespace PERQemu.UI
                         break;
 
                     default:
-                        // Not a special key, just insert it if it's deemed printable
-                        if (char.IsLetterOrDigit(key.KeyChar) ||
-                            char.IsPunctuation(key.KeyChar) ||
-                            char.IsSymbol(key.KeyChar) ||
-                            char.IsWhiteSpace(key.KeyChar))
+                        // Not a special key; handle possible translation
+                        var c = key.KeyChar;
+
+                        if (_intlKeyMap.ContainsKey(c))
+                            c = _intlKeyMap[c];
+
+                        // Insert character if it's deemed "printable"
+                        if (char.IsLetterOrDigit(c) ||
+                            char.IsPunctuation(c) ||
+                            char.IsSymbol(c) ||
+                            char.IsWhiteSpace(c))
                         {
-                            InsertChar(key.KeyChar);
+                            InsertChar(c);
                         }
                         break;
                 }
@@ -246,15 +253,15 @@ namespace PERQemu.UI
         /// </summary>
         bool UpdateOrigin()
         {
-            if (Console.BufferHeight != _lastHeight || Console.BufferWidth != _lastWidth)
+            if (Console.WindowHeight != _lastHeight || Console.WindowWidth != _lastWidth)
             {
                 // Origin row is "sticky" relative to the bottom of the window
-                _originRow = Math.Max(0, Console.BufferHeight - (_lastHeight - _originRow));
-                _originRow = Math.Min(Console.BufferHeight - 1, _originRow);
+                _originRow = Math.Max(0, Console.WindowHeight - (_lastHeight - _originRow));
+                _originRow = Math.Min(Console.WindowHeight - 1, _originRow);
                 Console.SetCursorPosition(_originColumn, _originRow);
 
-                _lastWidth = Console.BufferWidth;
-                _lastHeight = Console.BufferHeight;
+                _lastWidth = Console.WindowWidth;
+                _lastHeight = Console.WindowHeight;
                 return true;
             }
 
@@ -270,14 +277,14 @@ namespace PERQemu.UI
             var changed = false;
 
             // Check if the cursor is out of bounds
-            if (col < 0 || col > (Console.BufferWidth - 1) ||
-                row < 0 || row > (Console.BufferHeight - 1))
+            if (col < 0 || col > (Console.WindowWidth - 1) ||
+                row < 0 || row > (Console.WindowHeight - 1))
             {
                 col = Math.Max(0, col);
-                col = Math.Min(Console.BufferWidth - 1, col);
+                col = Math.Min(Console.WindowWidth - 1, col);
 
                 row = Math.Max(0, row);
-                row = Math.Min(Console.BufferHeight - 1, row);
+                row = Math.Min(Console.WindowHeight - 1, row);
                 changed = true;
             }
 
@@ -315,19 +322,19 @@ namespace PERQemu.UI
             // Compute new cursor position
             int col = _originColumn + _textPosition;
             int row = _originRow;
-            int lines = ((_originColumn + Math.Max(_input.Length, _lastInputLength)) / Console.BufferWidth) + 1;
+            int lines = ((_originColumn + Math.Max(_input.Length, _lastInputLength)) / Console.WindowWidth) + 1;
 
             // Has input wrapped at the bottom of the screen?
-            if (row + lines > Console.BufferHeight)
+            if (row + lines > Console.WindowHeight)
             {
-                _originRow = Console.BufferHeight - lines;
+                _originRow = Console.WindowHeight - lines;
             }
 
             // Account for line wrap
-            if (col > Console.BufferWidth - 1)
+            if (col > Console.WindowWidth - 1)
             {
-                col = ((_originColumn + _textPosition) % Console.BufferWidth);
-                row = _originRow + ((_originColumn + _textPosition) / Console.BufferWidth);
+                col = ((_originColumn + _textPosition) % Console.WindowWidth);
+                row = _originRow + ((_originColumn + _textPosition) / Console.WindowWidth);
             }
 
             // Move cursor to text position for next input and turn it back on
@@ -634,7 +641,7 @@ namespace PERQemu.UI
 #if !DEBUG
                                 if (!c.Hidden)
 #endif
-                                result.Completions.Add(c.ToString());
+                                    result.Completions.Add(c.ToString());
                             }
                         }
 
@@ -823,6 +830,35 @@ namespace PERQemu.UI
             // todo: ^Y - yank word
         }
 
+        /// <summary>
+        /// This is a quick fix for mapping Unicode input characters to UTF-8/ASCII
+        /// equivalents, to allow the parser to read the English input files when a
+        /// non-English locale is in use.  See issue #1 (thanks blw) for info.
+        /// </summary>
+        void InitIntlKeyMap()
+        {
+            _intlKeyMap = new Dictionary<char, char>();
+
+            // For Turkish:
+            _intlKeyMap.Add('\u0130', 'I');
+            _intlKeyMap.Add('\u0131', 'i');
+            _intlKeyMap.Add('\u00fc', 'u');
+            _intlKeyMap.Add('\u00dc', 'U');
+            _intlKeyMap.Add('\u00f6', 'o');
+            _intlKeyMap.Add('\u00d6', 'O');
+            _intlKeyMap.Add('\u015f', 's');
+            _intlKeyMap.Add('\u015e', 'S');
+            _intlKeyMap.Add('\u00e7', 'c');
+            _intlKeyMap.Add('\u00c7', 'C');
+            _intlKeyMap.Add('\u011f', 'g');
+            _intlKeyMap.Add('\u011e', 'G');
+
+            // There must be a more general/simpler solution so that we can
+            // easily extend this for other input locales; that's a long term
+            // project, likely tied to moving toward a fully integrated GUI
+            // with ALL the bells & whistles. :-)  Hopefully this works for now!
+        }
+
         readonly int MAX_HISTORY = 100;     // Season to taste
 
         CommandNode _commandTree;
@@ -844,5 +880,30 @@ namespace PERQemu.UI
         int _historyIndex;
 
         Dictionary<ConsoleKey, ConsoleKey> _editKeyMap;
+        Dictionary<char, char> _intlKeyMap;
     }
 }
+
+/*
+    Notes:
+    
+    To map Turkish (and other Unicode) characters to their plain old UTF-8/ASCII-ish
+    equivalents, a separate map could be used:
+    
+char[] turkishChars = new char[] { 0x131, 0x130, 0xFC, 0xDC, 0xF6, 0xD6, 0x15F, 0x15E, 0xE7, 0xC7, 0x11F, 0x11E };
+char[] englishChars = new char[] { 'i', 'I', 'u', 'U', 'o', 'O', 's', 'S', 'c', 'C', 'g', 'G'};
+
+    Specifically for Turkish, the "i"/"I" (with their dotted and non-dotted variants)
+    should probably all map to the English so the parser can work...
+
+    Upper İ   I
+    U+0130  U+0049
+    Lower i   ı
+    U+0069  U+0131
+
+    _Every_ case where data is written to disk/floppy/tape should probably be
+    checked to make sure that it's strictly binary 8-bit values but I think
+    we're okay there?  All file I/O is in binary, while all (?) text comes in
+    through here -- so mapping inputs to (rough) UTF-8/ASCII equivalents ought
+    to at least allow the parser to work.
+*/

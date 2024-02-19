@@ -1,0 +1,616 @@
+﻿PERQemu "experiments" branch ChangeBlog
+
+If you don't wait with bated breath for more scintillating prose and/or lunatic
+ravings with every Git commit log entry, here's a summary of the significant
+changes to the experiments branch since I resumed hacking on it in late 2021.
+Newest entries added fresh regularly at the end.
+
+
+Summary of changes on this branch since October, 2021:
+
+    1. New SDL2 Display.cs has been hacked to allow it to run on Mono under
+    macOS.  The Windows version may be able to spawn a separate thread for
+    SDL's event loop, but on Mac (and Linux?) this is apparently impossible;
+    thus, I've clumsily forced it back onto the main thread.
+   
+    2. Verified that this version runs on MacOS X 10.11 (El Capitan) AND on
+    10.13 (High Sierra).  These are the newest versions I have available
+    for testing.  They run in both 32- and 64-bit mode!  The horrible Mac
+    keyboard hack is no longer required, which is good since we can't
+    support the old Mono 4.6.1 runtime anymore. :-/  Absolutely no idea
+    if anything runs on 10.14+, and I haven't tried to fire up the Linux VM
+    in quite some time... will get to that when we get closer to wrapping up
+    an actual release!
+
+    3. The CPU class has been refactored to include support for the 24-bit
+    processor!  Configurator allows up to 8MB (4MW) of memory, and the
+    VideoController should properly decode addresses for the >2MB configs.
+    Landscape display is supported but can't (yet) be tested until a newer
+    OS can boot (requires CIO/EIO for "new" Z80).
+
+    4. Enhancements to the CLI that make it more TOPS-20/Cisco IOS-like,
+    with tab-expansion providing matching for enumerated options and more
+    in-line help.  There are still some enhancements that Josh folded into
+    the old Debugger yet to be incorporated (the ":variable" syntax is
+    missing/busted at the moment).
+
+    5. If I could back-port a 64-bit Cocoa WinForms driver (<bashes head
+    on desk>) to run on 10.11-10.13, a pretty slick graphical configuration
+    tool and front end is already written, but abandoned due to 32-bit app
+    support being dropped by Apple.  Sigh.
+
+
+Updates in November, 2021:
+
+    1. Removed the old Z80 and moved Z80_new into its place.  Started to
+    refactor the IO so that different board types can be selected -- the
+    EIO for the PERQ-2 is rather different than the old IOB.  Have quite a
+    bit of work to do before we can start building virtual PERQ-2 machines
+    but there's a pinprick of light at the end of that long dark tunnel. :-)
+
+    2. Amazingly, with all of my ham-fisted shenanigans over the last month,
+    it still builds and runs!  Getting ~ 32fps pretty consistently on my
+    old Mac now, and really hope that moving the bulk of the CPU onto its
+    own thread will finally get me closer to 170ns/60fps emulation (on my
+    "old" hardware).  Then I can drop in the rate-limiting stuff for those
+    of you with hardware built in the last decade, where it should really fly.
+
+
+December, 2021 update:
+
+    1. The PERQ now runs on its own thread, and some "improvements" to speed
+    up video have been removed, because apparently writing worse code somehow
+    makes it go faster.  Sure.  Removing the 1bpp to 32bpp translation loop
+    adds 10-12fps (shaves 80-90ns off the average microcycle time) so there
+    has to be a way to speed that up and/or move it off the CPU thread that
+    isn't too horrible.  Although doing it in the most idiotic way possible
+    will probably make it go even faster, so I need to clearly bash myself
+    over the head with a shovel and snort a fifth of Chivas Regal before
+    coding that up.  Maybe throw in some GOTOs and really make it fly.
+
+    All of the documentation clearly needs to be rewritten.  More to come.
+
+
+Holy crap it's January, 2022:
+
+    1. PERQmedia is a new unified storage object complete with a new common
+    file format for storing PERQ hard disk, floppy and even tape images.  It
+    works with all the old formats, but removes ALL of the file reading and
+    writing grunge from the Emulator proper.  Included as a shared subproject
+    here, it is also used by PERQdisk (a POS filesystem interrogator and file
+    extractor) and will soon/eventually be integrated into PERQfloppy (RT-11
+    floppy utility) and Stut (which reads PERQ "STUT" QIC tapes).  Bunch o'
+    docs included in the PERQmedia project folder.
+
+    2. The first two storage devices have been converted to work with the new
+    PERQmedia StorageDevice class.  Now Shugart SA4000-series hard drives and
+    the SA851 floppy drive are split in half:  the "mechanical" operation and
+    block-level access to the data are in HardDisk and FloppyDisk classes,
+    while the ShugartDiskController and NECuPD765 (floppy disk controller)
+    provide the register-level interface to the PERQ and Z80 respectively.
+
+    3. Disk access is actually frighteningly realistic now.  The Z80 CTC,
+    HardDiskSeekControl and Scheduler classes were all updated to allow the
+    actual Z80 ROM code to drive the emulated disk drive using "buffered"
+    seeks.  To be truly perverse, PERQemu will even mimic the startup delay
+    of each drive type -- but after the first time you wait 90 actual seconds
+    for a simulated disk to "spin up" you'll want to turn off that option too.
+    :-)
+
+    4. An extensible database of supported media types is loaded at runtime
+    so the groundwork is there to allow all of the PERQ-2 disk types to be
+    created, formatted and mounted.  Soon...
+
+    5. There is a ton of work to do to make the new threading approach more
+    robust, and completely rethink the way the main application loop works.
+    While I flirted with 40-42fps performance in AoT/optimized Release mode
+    builds, having to introduce locking in the Scheduler was a hit; still,
+    my old Mac is consistently running at 37fps, up from ~30fps in the old
+    WinForms version.  Yes, it has to go much, much faster.  Or you can try
+    it on a machine that's less than a decade old.
+
+
+February, 2022:
+
+    Lots of stuff in progress.  The goal is to get the restructured Emulator
+    at least back to the level of stability as the current master branch
+    before attempting to sync "experiments" back up.  Lots of plumbing to do.
+    GPIB/Tablet support is a big hurdle since older OSes require the BitPad;
+    working out all the kinks in the ExecutionController so that virtual
+    machines can be reliably and accurately managed is top priority.  Adding
+    the CIO option (executing the new Z80 code from an actual ROM dump) gives
+    us the ability to finally let PERQ-1s run all the newer OSes and software!
+
+    PERQ-2 support will then follow, gracefully and effortlessly.  bwaaaahahahahahahaha no stop it hahahaha sigh.
+
+    1. Worked the Debugger and :var syntax back in, and integrated it with the
+    new CLI.  Still some work to do to make it more friendly - like adding tab
+    completion on the variable list?  Additional items on the to-do list for
+    the CLI are to add global commands, pathname expansion, and a more dynamic
+    way to expand the parse tree so that certain string variables can be used
+    like enumerated types but updated at runtime).
+
+    2. Hard and floppy disk support is stable again, and feeling more solid.
+    May have to implement the Shugart seek ramp timing to match the Z80's
+    crazy built-in timing scheme to avoid the occasional disk timeout (but
+    they are mostly evident on my slow machine, are not fatal, and just add
+    the authenticity of the PERQ experience!).
+
+    3. GPIB controller and bus rewritten to work with the new Z80, and the
+    BitPadOne tablet is working again.  A few rough edges and debugging to do.
+    (The Kriz tablet is much more efficient but to run Accent S4 or POS F.0 or
+    older OSes the BitPad is required.)
+
+    4. All of the hard/floppy disk loading, unloading and saving commands are
+    being cleaned up and revamped to work with the new storage architecture.
+    A simple search path is implemented to save typing -- "load foo" will look
+    for foo, Disks/foo, or apply various file known filename extensions.  New
+    commands to create blank disks or even describe the geometry and specs for
+    entirely new types of drives are included for advanced users.
+
+    5. Configurations are now loaded from the Conf/ directory, and a number of
+    "prefab" systems are included there.  Similar path rules apply so that
+    "configure load foo" will find Conf/foo.cfg.  You can assign media files
+    to disk drives and save them in the configuration so that the config can
+    be loaded and run directly.  In addition, the "preferences" file will
+    remember the last configuration you ran and load that by default the next
+    time you start PERQemu.
+
+    6. Believe it or not, this Readme has been trimmed substantially to create
+    a new UserGuide.  This wad of verbiage will be eventually pruned, rolled
+    into a history/change log...
+
+    7. You can now set a preference to turn off the system default arrow cursor
+    or change it to a smaller crosshairs cursor when in the Display window.
+    Not every change has to be Earth shattering, y'know?
+
+    8. Floppy updates: Write protected floppies are now write protected; status
+    change polling implemented; fixed a stooopid bug in the PRQM formatter that
+    broke CRCs; testing and refactoring of floppy formatting and debugging why
+    writes are failing.  Update: writes were working but the PERQ<->Z80 FIFOs
+    and Z80 DMA were/are randomly injecting nulls and corrupting the floppy data.
+    It's going to get worse before it gets better.  Or it'll just get worse, full
+    stop.  Entropy wins again.
+
+
+March, 2022:
+
+    1. No good deed goes unpunished.  Having almost nailed down an accurate and
+    reliable replacement for the old PERQ<->Z80 FIFOs, it is becoming clear
+    that the song and dance necessary to work around the extreme fragility of
+    the Z80 code requires that I back that all out and put in at least a short
+    queue to allow the Z80 to run properly during the boot phase.  The pre-boot
+    environment (SYSB) is so absurdly specific in its requirements that even
+    the slightest perturbation of the expected output from the Z80 derails the
+    entire process. [Update below]
+
+    2. Debug logging to files added.  Now you can fill up your hard disk with
+    frightening rapidity with debug output.  Creates the Output/ directory if
+    not already present, and rotates through up to 100 files of 10MB each (for
+    now, hardcoded but in future probably tunable through user settings).  Can
+    specify one "severity" level for logging to the console and another for the
+    file logs and enable/disable them separately.
+
+    3. Reworking the FDC, continued.  The old Z80 code is a complete train wreck
+    and the difference between the IOB and the EIO is night and day.  Currently
+    the debugging effort is like nailing jelly to a tree; tracing execution of
+    Z80 assembler line by line shows that the initialization process seems to be
+    completely non-deterministic.  To try to bring some measure of sanity to the
+    process, the Z80 is not rate-limited by its own heartbeat timer, and instead
+    now tracks the PERQ's Scheduler in a sort of "cooperative threading" model;
+    the Z80 only executes an instruction when it falls behind the PERQ CPU, and
+    spins when it's ahead (lacking a "nanosleep()" it's real ugly right now, but
+    it's accurate).  Since the whole emulated machine now runs in "virtual time"
+    the 2.4:1 ratio (1.48:1 for the EIO) of execution speeds is maintained, and
+    if the host can run the main processor at full speed the Z80 (and display)
+    will automatically be regulated as well.  That'll be the day...
+
+    4. FINALLY tracked down the data corruption issue: the old Z80 ROM uses the
+    "INIR" instruction to do block transfers from the PERQ with interrupts off;
+    turns out the hardware does provide a signal to pull the Z80 WAIT line low
+    so that reads from the PERQR register block.  This blocking behavior is now
+    incorporated into the Z80's execution loop; thus, when processing variable-
+    length messages from the PERQ using INIR the risk of overrunning the latch
+    and getting back zeros is eliminated.  This fixes: data corruption during
+    floppy sector transfers, keyboard and tablet enable/disable messages being
+    munged, and the problem of the boot character being ignored!  There are
+    STILL difficulties around getting the FDC to give back responses that the
+    POS FLOPPY program will accept when the media is ejected -- but at least now
+    files can be reliably read and written.  Double density works too!
+
+    5. Now that we can actually invoke alternate boots again, the GPIB tablet
+    has been verified to work with POS D.6, POS F.*, MPOS E.29, Accent S4 and
+    PNX 1.x.  A fix to GPIB protocol handling in the TMS9914 corrected the bug
+    where the pointer was jammed up against the left edge of the display; again,
+    POS ignored the errant behavior but Accent got tripped up by it, evoking a
+    mild flashback to The Great Comma Incident of 2018. <shudder>
+
+    The Kriz tablet works again too.  It wasn't being enabled.  Oops.
+
+    6. Debugging continues.  There are a number of annoyances and corner cases
+    that will require more digging; the intractable POS Floppy "misfeature" is
+    unsolved.  For now, don't attempt to access the floppy if there's no media
+    in the drive or it will hang until you load a file.  Setting the FDC status
+    bits that lets the Pascal code avoid these hangs confuses the Z80, but NOT
+    setting the bits lets the Z80 execute without complaint but screws up the
+    OS and higher layers.  I am throwing my hands up on this one after days of
+    fruitless struggle to move on to other things.
+
+    So while the emulator seems stable again, the execution controls are a
+    flimsy wreck and performance is steadily getting WORSE (so my quest to
+    actually invert the flow of time is proceeding apace!).  Typical frame
+    rates are now around 21-22fps.  What can I say?  It's a talent.
+    
+    7. Starting to reintegrate the RS232 port(s).  Added configuration and
+    settings commands for mapping a host device to the serial port(s) so both
+    "real" ports (almost always a USB->serial adapter, these days) or the RSX:
+    pseudo-device may be attached.  Have to rewrite the old interface to work
+    with the new Z80/SIO, however.
+
+    8. Refactoring to add in CIO and Micropolis 8" hard disk support.  Also
+    reworked the Z80 rate limiting to let the thread "breathe" a bit; average
+    frame rate jumped back to ~30fps.  Huh.
+
+    9. Some UI improvements: the "commands" output that went missing after the
+    command tree/CLI was restructured has been restored.  Some small changes to
+    the storage commands.  And the PERQmedia library now uses the logger instead
+    of naked writes to the console.  Taking a breather/gathering strength for
+    the ExecutionController rewrite...
+
+    10. Updated the PROM directory for CIO support: new CPU boot microcode and
+    the Z80 code dumped from the v10.17 PROMs.  Updated Z80 DMA to return status
+    info and am filling in the missing/changed parts that IOB doesn't use but
+    CIO needs.  Fixes to PERQmedia to make IMD-format floppy loading reliable
+    (was having issues with bootable POS floppies).  Work proceeding on the new
+    User's Guide (in PDF, text update to follow).
+
+    11. Emulator is running the new Z80 and CPU boot ROM code but is not yet
+    able to load VFY/SYSB to attempt booting.  Still, it's our first step into
+    a larger world...
+
+
+April, 2022:
+
+    1. Reorganized the CPU and Z80 ROMs a bit, since there were more variations
+    than realized.  Have ripped PB, SC, SD, MC and TC variants of the boot ROMs
+    and have v8.7 and v10.17 Z80 code.  Only the 24-bit set remains to be ripped
+    though full support for the T4 is a ways off.
+
+    2. Becoming evident that the CIO hardware and firmware changes -- ALL of
+    which are completely undocumented -- were more extensive and incompatible
+    with the original IOB than previously believed.  Tracing microinstruction
+    AND Z80 opcode execution manually, line by line, to reverse engineer the
+    changes is proving to be painstakingly slow and hugely frustrating.  THREE
+    versions of the boot ROMs, NONE of which agree, all of which hang or fail
+    in completely unique ways.  Sigh.
+
+    3. First successful floppy boot with CIO:  PNX 2.  Huh?  POS still hangs and
+    fails, but the OS I have _zero_ source code for stumbles across the finish
+    line.  Proves the actual PROM code works, so I got that goin' for me.
+
+    4. First successful hard disk boot with CIO:  POS G.7!  Have been able to
+    complete an install of Accent S6 but it will not boot from the hard disk;
+    some really obscure differences between the IOB and CIO are proving rather
+    difficult to track down, and ROM+microcode bugs and incongruities aren't
+    helping.  Kriz tablet not working on CIO due to unknown SIO/Z80 issue.
+
+    5. To aid debugging, can now switch Qcode sets in the debugger, and decode/
+    display 2-byte opcode sequences.  The older POS/Accent "V4" set is still the
+    default; Accent "V5" codes now available for Accent S6 and beyond.  Will add
+    PNX C-codes if/when any kind of source or description of them is found.
+
+
+May, 2022:
+
+    1. Still plugging away, slowly.  "Real life" and mundane crap like "mortgage
+    payments" are a bloody distraction from what actually matters: continuing to
+    improve the emulation of a machine nobody remembers for an audience that
+    numbers in the single digits while the world burns down around us.  La la la
+    so I'm adding breakpoint support and fixing bugs while staring bleary eyed
+    at millions of lines of instruction traces trying to pinpoint why Accent S6
+    won't boot; in the meantime, POS G.7 runs beautifully, so a first cut of a
+    POS G hard disk image (with Accent S6 loaded) that runs on "CIO" included!
+    Draft of the user's guide is coming along as well.
+
+    2. Improving breakpoint support. The point is to supplement the logging with
+    the ability to pause emulation, run a script, and more accurately pinpoint
+    specific conditions helpful to debugging the reeeeally esoteric bugs.  Also
+    adding commands to print and save command history, to aid in creating debug
+    scripts that can be executed when a breakpoint fires.  The best example is
+    to leave tracing turned off during the initial boot/Vfy/SysB steps, then
+    automatically pause emulation and enable highly detailed logging only when
+    a specific microinstruction is executed.  The issue with Accent not booting
+    on CIO will likely be headslappingly obvious once it's found...
+
+    3. Stumped.  Either Accent is relying on some correct, expected hardware
+    behavior that we don't properly emulate, or it's relying on a quirk or bug
+    that ISN'T there because we are emulating the hardware as documented.  At
+    startup it appears that the kernel initializes, jumps to the Pascal QCode
+    interpreter, starts executing then ends up looping in the microscheduler --
+    is it failing to swap in a code segment (hard disk or Z80 issue?) or is
+    there a more subtle glitch that is special to Accent and not POS?  MulDiv?
+    Video interrupt behavior?  (Anyone suggesting Mercury in retrograde will be
+    slapped about the head and neck.  But right now, actually, that seems as
+    valid a reason as any.  Sigh.)
+
+
+June, 2022: 
+
+    1. AHA!  Found the needle, now just have to extricate myself from this huge
+    haystack... full of needles, red herring, blind alleys, McGuffins, wild geese
+    and all manner of cliches.  Ugh.  [TIME PASSES]  So Accent now boots and
+    two-byte extended ops work correctly now; fixed a very obscure bug in micro-
+    address generation that's been there forever.  Now, however, we're back to
+    Z80 initialization issues; Accent completes its memory sizing loop and sets
+    up a bunch of memory management structures, then hangs waiting for the Z80
+    to initialize.  Problem with self-modifying code?  SIO/IRQ issue causing the
+    Z80 startup to loop/fail?  Yay.  Another fun one.
+
+    In other news; PNX 2 still can't poke at the hard disk, so clearly the CIO
+    Z80 still needs some lovin'.  I've patched the boot ROM file to correct what
+    I consider a microcode bug that causes CIO boots to hang at DDS 010.  The
+    "debug clear interrupt z80datain" workaround is no longer necessary.
+
+    2. Awwww, man, I am >this< close... there is clearly something extremely
+    specific to the CIO and/or 16K CPU that Accent S5/S6 relies on behaving a
+    little bit differently than POS G does, and it's driving me nuts.  With 256K
+    of memory configured, S6 seems to successfully start up the Z80 and even
+    appears to be running a few RasterOps (so, starting to clear the screen and
+    paint characters) but it never properly kicks off the video display list to
+    make it visible.  With 512K-2MB of memory, it loops forever running the
+    initialization routines and never gets to the Z80 startup.  Though I have
+    verified that we are able to jump into high banks to run extended two-byte
+    opcodes and properly return to bank 0, I'm guessing there's still some tiny
+    little glitch in the sequencer (best guess) or extended call stack (two bit
+    kluge) that might explain the behavior... The bleary-eyed search continues.
+
+    3. Second Accent boot bug resolved: the multiply/divide unit was giving back
+    bogus results.  Many of the 16K CPU's features weren't incorporated into POS
+    directly, but Accent S6 uses them (since support for the 4K CPU was dropped
+    after S4?).  Now the boot completes and Accent starts the window manager,
+    tracks the mouse, then hard hangs during Process Manager initialization in
+    what's likely an I/O or Z80-related issue (execution continues in a tight
+    loop and Accent hard hangs, but the emulator doesn't crash).  Funny how my
+    idle speculations in previous entries pointed right at the problem but I
+    didn't actually see it until I stepped on it like a cartoon rake to the face.
+
+    4. Found and corrected an extremely subtle issue with how BPC assignment
+    affects incrementing the counter, but it seems like it doesn't affect normal
+    operations.  That's pretty subtle, I guess.  Also found an actual bug in the
+    PNX 2.0 16K boot floppy version of VFY, which is not easily fixed or worked
+    around.  Still hoping to get a PNX 2 hard disk install using the 4K CPU, but
+    the primary focus is digging through 2.9GB of traces (51M lines in 295 log
+    files) looking for the reason Accent hangs as it brings up Process Manager.
+
+    5. Accent has regressed; the Mul/Div unit fix was just a happy accident
+    that allowed the boot to progress!  Fixing it to produce the correct result
+    has set us back.  Color me confused.  I have tested the landscape display
+    option, however, and the "g7.prqm" disk image now contains an "l" boot to
+    try it out.  Configure a PERQ-1A with landscape and CIO, then assign the
+    "g7" disk and bootchar l (lower case L).  Looks amazing on a Cinema (or
+    1080p) display.  Use the default "a" boot with the portrait.  Accent S6 is
+    "z" boot, or will be once the bug preventing initialization is fixed!
+
+    6. Added Unix/Emacs-style control characters to the command line editor,
+    so I can finally just type ^U instead of hitting ESC to erase the line.
+    More little tweaks/fixes/debugging but still the insanely picayune detail
+    that is preventing Accent boot eludes me.
+
+
+July, 2022:
+
+    1. Accent S6 runs now.  Available when 'z' boot is selected from the POS G.7
+    disk image.  As with the Accent S4 disk, the S6 Net/Msg servers are disabled
+    due to lack of Ethernet hardware emulation.  The cursor is a little glitchy.
+
+    2. Corrected a problem with the BitPad not resetting properly which caused
+    it to disconnect when the PERQ is reset.  Fixed the interrupt priority
+    encoding and Vector jump, so the patched CIO boot ROM has been reverted to
+    its original form.  Uploaded a DRAFT of the User Guide in PDF format.
+
+    3. Fixed a small SIO bug that stopped the Kriz tablet from working properly.
+    Turns out the IOB and CIO Z80 firmware uses different interrupt vectors for
+    the SIO chip, and programs the registers just a little differently.  Full
+    serial support not yet restored, but it's a step in the right direction.
+
+    4. Enhanced the CLI to do tab completion on more stuff, like configuration
+    names or drive types (and more to come).
+
+    5. Apply enough brute force to actually free up the virtual machine so it
+    can properly reinitialize.  This means completely blowing up SDL2 and re-
+    initializing from scratch every time we "power on" because there's no other
+    way to make the old Display go away.  This makes less and less sense the
+    deeper down the rabbit hole I go...
+
+    6. Lots of small changes, fixes and clarifications to the CLI and execution
+    controller to make managing the virtual machine more reliable.  The "pause
+    when minimized" feature works now (but only tested on MacOS).  Minor change,
+    clarification to the configurable chassis types, reflected in major updates
+    to the User Guide (draft, in PDF; text version TBD).
+
+
+August, 2022:
+
+    1. Some enhancements/fixes to the storage commands: now the "save as" for
+    floppy and hard disk allow a format specifier so you can transcribe media
+    files.  The "storage status" command produces a summary or detailed output
+    (including media label) for a particular unit.
+       
+    2. Small CLI fix so methods with one optional parameter can run properly.
+    Fixed the parsing of some settings and storage commands.  The PDF version
+    of the UserGuide now covers nearly everything as implemented in what should
+    become the v0.5.0 release!
+    
+    3. Rewrote RSXFilePort to work with the new Z80 and SIO.  Now RSX: (in POS)
+    can again be used to transfer (text) files to and from the host.  RealPort
+    driver for serial port access underway.  Some changes/updates to clarify the
+    rate limiting options, remove a dependency that prevents startup on Linux.
+    User Guide updates continuing.
+
+    4. Rewrite RealPort RS232 driver to work with the new Z80, SIO and CTC.  The
+    virtual machine can now attach to a "real" serial port to exchange data with
+    the outside world.  To simplify integration (and work around an ANNOYING bug
+    with a crappy USB cable) the host side is fixed at the speed you configure,
+    while the emulator limits data transfers to and from the virtual PERQ at the
+    rate it programs into the CTC/SIO.  Tested on Windows, Mac; Linux TBD.
+
+    5. Fixed SDL2 window handling on Windows and Linux (which was completely
+    broken).  Other small usability updates.
+
+
+September, 2022:
+
+    1. Ongoing documentation cleanup, testing, trying to get in some hours on
+    this while "life" has other plans.  Windows and Linux testing to identify
+    any show-stopping, platform-specific bugs; good news is that all three OS
+    platforms are roughly at bug parity! :-)  May have cleaned up enough of the
+    blue language to publish the actual to-do/status list?  Also: performance
+    on a more modern PC is around 58-62fps (portrait) and 55ish fps (landscape)
+    and is reasonably stable on Win10; Linux on a VM is substantially slower,
+    as the hypervisor (in this case, VirtualBox) dramatically slows memory
+    performance.  This jibes with the throughput limitations of my older Mac
+    (with 800Mhz memory), so finally we can characterize the requirements for
+    getting full performance of the emulator: a 6th-gen Intel CPU at around
+    3Ghz with RAM at 2133Mhz (minimum) is the floor for full speed emulation.
+    That's probably "ancient" to most folks nowadays, who don't live in a cave
+    full of pre-Y2K retrocomputers like yours truly. :-)
+
+    2. Small bug fixes and documentation updates continue; have finally begun
+    to assemble an archive of PDFs at the PERQmedia Github repo.  See Appendix B
+    in UserGuide.pdf for links.
+    
+    3. A bit o' fun: added a floppy drive activity indicator.  On the hardware,
+    the Shugart SA851 has a red LED that shows when it's busy, but the loud,
+    distinctive KERCHUNK sounds it makes are the unmistakable sign that the
+    drive is working.  When booting from floppy in the emulator, there's no
+    obvious indication that the thing hasn't hung, so I've kluged something up.
+    With some additional work to update SDL2 the code should be streamlined in
+    the future, but for now this is fine.  Rate limiting locks in at 60fps more
+    reliably now.  More work to fix bugs, clean up loose ends, try to finally
+    get this thing ready for release.
+
+    4. More small fixes: on Unix hosts, deal with Windows '\' characters in
+    pathnames more gracefully.  Mitigate some annoying behavior on the console
+    when output (or window resizing) clobbers the prompt.  Update the program
+    icon so it's much sharper and looks better on modern OSes.
+
+
+October, 2022:
+
+    1. Added Docs/Magic.txt, if you're a Unix nerd who wants to identify PERQ
+    media files from the shell with file(1).  [Hint: what should take 15 seconds
+    could be an odyssey of pain in the ``modern'' OS.  Full rant elided.]
+
+    2. Woo! Fixed a tricky little video problem that plagued older OSes running
+    older RasterOp microcode.  This has dramatically cleaned up the visible
+    artifacts (stutters or loss of frame rate, video tearing, strange cursor
+    jumping around in the Y axis).  Now I just need to address the pre-boot
+    state where the microcode isn't driving the video hardware at all, doing
+    something visually interesting rather than just leaving the screen blank.
+
+    3. For Mac and Linux, added an icon for the display window which shows up
+    in the Dock (rather than the generic or blank "mono-sgen" icon).  May need
+    to mention that SDL2_image is an explicit dependency in case that's not the
+    default for the various package managers or common OS distros... updates to
+    the distributed Windows DLLs are now 64 bit(?).
+
+    4. The windows minimize/restore problem is back?  Sometimes?  Just shoot me.
+
+    5. Small fix to video for PNX 1.  Now bundling two more disk images to play
+    with: PNX 1.3, and MPOS E.29 / POS F.0.  In addition, the conversion of the
+    original D.6 and F.1 images trims around 40MB off the download, not that
+    anyone worries about a few measly tens of megabytes these days...  Updates
+    to the UserGuide to include a few hints about how these interesting early
+    OSes work.  More to come!
+
+    6. Snapshot v0.4.6 and posted a download link on the Releases page!  After
+    a year of banging on it, it's in good enough shape to throw it out there...
+
+    7. Fixed two small bugs in POS F.15 and included a full source image in the
+    distribution.  Not sure why, but am now seeing 80+fps (portrait) and ~70fps
+    (landscape) with rate limiting turned off -- effectively overclocking the
+    PERQ up to 8Mhz!  I ain't complainin' when it makes massive compilations go
+    so much faster. :-)  Long overdue POS F.16 dev to resume?
+
+
+November, 2022:
+
+    1. Some fixes to the CLI editor to fix a few glitches and small bugs.
+
+    2. In related news, PERQdisk is now available for poking at archived media.
+    It lets you poke around inside a POS or RT-11 disk without firing up the
+    emulator, and will support ongoing efforts to curate a ton of additional
+    software for use with PERQemu!  https://github.com/skeezicsb/PERQdisk
+
+
+December, 2022:
+
+    1. A bunch of new tape images becoming available spurred development of the
+    QIC Tape driver and all of the related support - file formats, loading and
+    unloading (PERQmedia and Configurator) plus new Archive Sidewinder drive
+    emulation plus PERQ OIO board tape controller interface.  Since I'm still
+    not yet satisfied that enough of the "rough edges" have been smoothed off,
+    I'm bumping the version to v0.4.8 to differentiate this from the interim
+    release, rolling up a massive update for the new streamer functionality.
+
+    2. First snapshot with tape support, now that the first couple of commands
+    are implemented and seem to be proving out the concept.  Doesn't do any
+    tape reads or writes yet; tape motion and status reporting are working.
+    I hope to complete this and push out a v0.4.8 pre-release and possibly wrap
+    up v0.5.0 by the end of the year!
+
+    3. Tape writes are working; the ".tap" formatter now saves AND loads images
+    with custom markers to include all the same metadata as a ".prqm" archive.
+    While a .tap file only records the blocks actually written to the tape and
+    the .prqm file saves all the sectors (even the empty ones), the compression
+    feature means the PERQmedia format saves space.  In theory, though, tools
+    that can read or write .tap files to actual tape drives must exist, so it
+    would be cool to be able to produce tapes on a virtual PERQ and transport
+    them to a real one in 20MB chunks, rather than over a 9600-baud serial port!
+
+    4. Okay, NOW tape writes are working, saving, loading AND reading too.  That
+    makes it all much more useful.  There's a BUNCH of debugging and testing to
+    do but I might still squeeze in that release before the end of the year...
+
+    Todo: new tape images prepared, tons more testing, Stut port/update to use
+    PERQmedia, updates to the User's Guide.
+
+
+January, 2023!
+
+    1. Okay, I lied.  While the v0.4.8 pre-release was supposed to be the last
+    one, a couple of important bug fixes justify another point release:
+
+        Shugart hard disk "seek complete"/"on cylinder" status bit corrected;
+
+        Fake Ethernet driver is now loaded when the "OIO" option board is
+        selected; this now allows Accent S6 to initialize properly so its
+        floppy and serial port device servers can start up;
+
+        Linked the TestEther program in :boot>diags (POS G.7).
+
+    The bundled Disks/g7.prqm image incorporates these changes.  Updates to the
+    User's Guide explain how to configure the OIO to boot Accent.
+
+    2. Configurator now allows setting the Ethernet address (low word) so each
+    machine can have its address tailored.  In PERQ land this was generally seen
+    as three 16-bit (signed!) decimal values, not the more customary string of
+    six ':' separated hex bytes.  Accent S6 image updated to include a default
+    IP.Directory with hostname set to 'local', IP 127.0.0.1, assuming the low
+    Ethernet word is set to '1'.  Should probably reserve all-0 and all-1 to
+    mean "unset" and "generate a random one"? :-)
+
+    3. A few small fixes plus a new bundled disk image (with configuration file)
+    that includes Lisp.  Enough interest to justify rolling out another release
+    bundle!  User Guide updated.
+
+    4. Small tweak to the Kriz tablet: identified and now set the correct bit
+    to indicate the landscape tablet is attached.  Fixes cursor scaling when the
+    landscape display is selected.  Reading the Ethernet address was off by
+    four bits; it is now reported correctly.
+
+    === Submitted pull request for merge back into master branch as v0.5.0 ===
+
+
+---
+Last update: skeezics    Mon Jan 23 15:02:15 PST 2023

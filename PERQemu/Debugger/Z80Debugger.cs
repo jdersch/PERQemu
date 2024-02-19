@@ -1,5 +1,5 @@
 ﻿//
-// Z80Debugger.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// Z80Debugger.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -57,6 +57,15 @@ namespace PERQemu.Debugger
 
         public string GetSymbolForAddress(ushort address, out ushort offset)
         {
+            // Handle the case where the .lst file doesn't contain any symbols
+            // (for instance, debugging a new ROM with an empty/minimal listing)
+            if (_addressToSymbolMap.Count == 0)
+            {
+                offset = 0;
+                return "<origin>";
+            }
+
+            // Exact match?
             if (_addressToSymbolMap.ContainsKey(address))
             {
                 offset = 0;
@@ -66,6 +75,7 @@ namespace PERQemu.Debugger
             // Find the symbol nearest to the address
             // This could be done more efficiently.
             List<ushort> sortedAddresses = _addressToSymbolMap.Keys.ToList();
+
             sortedAddresses.Sort();
 
             for (int i = 0; i < sortedAddresses.Count; i++)
@@ -117,7 +127,7 @@ namespace PERQemu.Debugger
                     var address = ushort.Parse(line.Substring(4, 4), System.Globalization.NumberStyles.HexNumber);
                     var source = line.Substring(8);
 
-                    // Log.Detail(Category.Z80Inst, "Loaded Z80 addr {0}, line '{1}'", address, source);
+                    Log.Detail(Category.Z80Inst, "Loaded Z80 addr {0}, line '{1}'", address, source);
 
                     // Index the source
                     _sourceMap[address] = source;

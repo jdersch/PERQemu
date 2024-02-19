@@ -1,5 +1,5 @@
 //
-// CommandProcessor.cs - Copyright (c) 2006-2023 Josh Dersch (derschjo@gmail.com)
+// CommandProcessor.cs - Copyright (c) 2006-2024 Josh Dersch (derschjo@gmail.com)
 //
 // This file is part of PERQemu.
 //
@@ -116,7 +116,7 @@ namespace PERQemu
             // return so we can check the Console for a keystroke.  Studies show
             // that the fastest typists in the world can't go much faster than
             // 50-60ms between keystrokes.  Yep.  I checked. :-)
-            var consoleTimerHandle = HighResolutionTimer.Register(50d, null);
+            var consoleTimerHandle = HighResolutionTimer.Register(50d, null, "Console");
             HighResolutionTimer.Enable(consoleTimerHandle, true);
 
             // Sign up for controller events
@@ -179,6 +179,11 @@ namespace PERQemu
         {
             var dds = (int)a.Args[0];
             Console.Title = $"DDS {dds:d3}";
+
+            // POS G goes nuts running up the DDS at boot time, causing the
+            // old Mac OS Terminal to just lag out horribly; see if this makes
+            // it run a little smoother?
+            System.Threading.Thread.Sleep(2);
         }
 
         /// <summary>
@@ -216,7 +221,7 @@ namespace PERQemu
 
             foreach (var i in items)
             {
-                if (col + tabWidth > Console.BufferWidth)
+                if (col + tabWidth > Console.WindowWidth)
                 {
                     Console.WriteLine();
                     Console.Write(" ".PadLeft(leftCol));
@@ -232,7 +237,7 @@ namespace PERQemu
                     Console.Write(i);
                     col += i.Length;
 
-                    if ((col + tabWidth - extra) < Console.BufferWidth)
+                    if ((col + tabWidth - extra) < Console.WindowWidth)
                     {
                         Console.Write(" ".PadRight(tabWidth - extra));
                         col += tabWidth - extra;
